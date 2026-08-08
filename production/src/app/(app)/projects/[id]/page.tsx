@@ -409,6 +409,7 @@ export default function ProjectDetailPage() {
                   <p className="text-sm text-ink">{l.employeeName}{l.designation ? ` · ${l.designation}` : ""}</p>
                   <p className="text-[11px] text-ink-3">
                     {l.percent}% × {l.months} month{l.months === 1 ? "" : "s"} · {rupee(l.monthlyGross)}/mo
+                    {l.start_date && l.end_date ? ` · ${formatDate(l.start_date)} → ${formatDate(l.end_date)}` : ""}
                     {l.note ? ` · ${l.note}` : ""}
                   </p>
                 </button>
@@ -477,7 +478,8 @@ export default function ProjectDetailPage() {
         onClose={() => { setAddLabourOpen(false); setEditLabour(null); }}
         projectId={project.id}
         existing={editLabour}
-        defaultMonths={suggestedMonths}
+        projectStart={project.start_date}
+        projectTarget={project.target_date}
       />
 
       <RecordProjectPaymentDialog

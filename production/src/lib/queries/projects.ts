@@ -27,6 +27,11 @@ export type { ProjectSaleRow, ProjectMilestoneRow, ProjectPaymentRow, ProjectQuo
 export type ProjectSaleWithTotals = ProjectSaleRow & {
   paid:        number;   // Σ payments received
   receivable:  number;   // total − paid
+  // Costing — populated by useProjectSales (the list); optional elsewhere.
+  costTotal?:  number;   // external project costs (ex-GST)
+  labourTotal?: number;  // allocated employee labour
+  profit?:     number;   // taxable (ex-GST) contract − costs − labour
+  marginPct?:  number;
 };
 
 export type MilestoneInput = {
@@ -47,18 +52,35 @@ export function useProjectSales() {
         .order("created_at", { ascending: false });
       if (error) throw error;
 
-      const { data: pays, error: pErr } = await supabase
-        .from("project_payments")
-        .select("project_id, amount");
+      const [{ data: pays, error: pErr }, { data: exps, error: xErr }, { data: labourRows, error: lErr }, { data: emps, error: eErr }] = await Promise.all([
+        supabase.from("project_payments").select("project_id, amount"),
+        supabase.from("expenses").select("project_id, amount").not("project_id", "is", null),
+        supabase.from("project_labour").select("project_id, employee_id, percent, months"),
+        supabase.from("employees").select("id, monthly_gross"),
+      ]);
       if (pErr) throw pErr;
+      if (xErr) throw xErr;
+      if (lErr) throw lErr;
+      if (eErr) throw eErr;
 
       const paidBy = new Map<string, number>();
-      for (const p of pays ?? []) {
-        paidBy.set(p.project_id, (paidBy.get(p.project_id) ?? 0) + (p.amount ?? 0));
+      for (const p of pays ?? []) paidBy.set(p.project_id, (paidBy.get(p.project_id) ?? 0) + (p.amount ?? 0));
+      const costBy = new Map<string, number>();
+      for (const x of exps ?? []) if (x.project_id) costBy.set(x.project_id, (costBy.get(x.project_id) ?? 0) + (x.amount ?? 0));
+      const grossById = new Map((emps ?? []).map((e) => [e.id, e.monthly_gross ?? 0]));
+      const labourBy = new Map<string, number>();
+      for (const l of labourRows ?? []) {
+        const cost = Math.round((grossById.get(l.employee_id) ?? 0) * (l.percent / 100) * l.months);
+        labourBy.set(l.project_id, (labourBy.get(l.project_id) ?? 0) + cost);
       }
+
       return (projects ?? []).map((pr) => {
         const paid = paidBy.get(pr.id) ?? 0;
-        return { ...(pr as ProjectSaleRow), paid, receivable: Math.max(0, (pr.total_amount ?? 0) - paid) };
+        const costTotal = costBy.get(pr.id) ?? 0;
+        const labourTotal = labourBy.get(pr.id) ?? 0;
+        const profit = (pr.taxable_amount ?? 0) - costTotal - labourTotal;
+        const marginPct = (pr.taxable_amount ?? 0) > 0 ? Math.round((profit / (pr.taxable_amount ?? 1)) * 100) : 0;
+        return { ...(pr as ProjectSaleRow), paid, receivable: Math.max(0, (pr.total_amount ?? 0) - paid), costTotal, labourTotal, profit, marginPct };
       });
     },
     staleTime: 30_000,
@@ -293,7 +315,7 @@ export function useUpdateProjectDates() {
 export function useSaveProjectLabour() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id?: string; projectId: string; employeeId: string; percent: number; months: number; note?: string | null }) => {
+    mutationFn: async (input: { id?: string; projectId: string; employeeId: string; percent: number; months: number; startDate?: string | null; endDate?: string | null; note?: string | null }) => {
       const supabase = createClient();
       const { data: authData } = await supabase.auth.getUser();
       if (!authData?.user) throw new Error("Not authenticated");
@@ -307,6 +329,8 @@ export function useSaveProjectLabour() {
         employee_id: input.employeeId,
         percent:     input.percent,
         months:      input.months,
+        start_date:  input.startDate ?? null,
+        end_date:    input.endDate ?? null,
         note:        input.note ?? null,
       }, { onConflict: "tenant_id,project_id,employee_id" });
       if (error) throw error;

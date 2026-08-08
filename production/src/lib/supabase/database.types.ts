@@ -1616,6 +1616,8 @@ export type ProjectLabourRow = {
   employee_id: string;
   percent:     number;   // % of the employee's monthly gross on THIS project
   months:      number;
+  start_date:  string | null;   // migration 0195 — this person's period on the project
+  end_date:    string | null;
   note:        string | null;
   created_at:  string;
   updated_at:  string;
@@ -1627,6 +1629,8 @@ type ProjectLabourInsert = {
   employee_id: string;
   percent?:    number;
   months?:     number;
+  start_date?: string | null;
+  end_date?:   string | null;
   note?:       string | null;
 };
 type ProjectLabourUpdate = Partial<Omit<ProjectLabourInsert, "id" | "tenant_id" | "project_id" | "employee_id">>;

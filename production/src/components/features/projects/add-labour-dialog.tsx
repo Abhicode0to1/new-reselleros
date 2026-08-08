@@ -19,42 +19,47 @@ import {
 } from "@/components/ui/select";
 import { useEmployees } from "@/lib/queries/payroll";
 import { useSaveProjectLabour, type ProjectLabourLine } from "@/lib/queries/projects";
-import { rupee } from "@/lib/utils";
+import { rupee, formatDate, daysBetween } from "@/lib/utils";
 
 export function AddLabourDialog({
-  open, onClose, projectId, existing, defaultMonths = 1,
+  open, onClose, projectId, existing, projectStart, projectTarget,
 }: {
   open: boolean;
   onClose: () => void;
   projectId: string;
   /** Present = edit an existing allocation. */
   existing?: ProjectLabourLine | null;
-  /** Auto-suggested months from the project's start→target duration. */
-  defaultMonths?: number;
+  /** Project period — used to default this person's from/to dates. */
+  projectStart?: string | null;
+  projectTarget?: string | null;
 }) {
   const { data: employees = [] } = useEmployees();
   const save = useSaveProjectLabour();
 
   const [employeeId, setEmployeeId] = React.useState("");
   const [percent, setPercent] = React.useState("100");
-  const [months, setMonths] = React.useState("1");
+  const [fromDate, setFromDate] = React.useState("");
+  const [toDate, setToDate] = React.useState("");
   const [note, setNote] = React.useState("");
 
   React.useEffect(() => {
     if (!open) return;
     setEmployeeId(existing?.employee_id ?? "");
     setPercent(existing ? String(existing.percent) : "100");
-    // New allocation → default months to the project duration (auto). Editing →
-    // keep the saved value.
-    setMonths(existing ? String(existing.months) : String(defaultMonths || 1));
+    // Period defaults to the employee's saved dates, else the project's dates.
+    setFromDate(existing?.start_date ?? projectStart ?? "");
+    setToDate(existing?.end_date ?? projectTarget ?? "");
     setNote(existing?.note ?? "");
-  }, [open, existing, defaultMonths]);
+  }, [open, existing, projectStart, projectTarget]);
 
   const emp = employees.find((e) => e.id === employeeId);
   const pctN = Number(percent) || 0;
-  const monN = Number(months) || 0;
+  // Months derived from the period (kab se kab tak). Fall back to the saved
+  // months when dates aren't set. Rounded to the nearest half-month.
+  const monthsFromDates = fromDate && toDate ? Math.max(0.5, Math.round((daysBetween(fromDate, toDate) / 30.44) * 2) / 2) : 0;
+  const monN = monthsFromDates > 0 ? monthsFromDates : (existing?.months ?? 1);
   const cost = emp ? Math.round((emp.monthly_gross ?? 0) * (pctN / 100) * monN) : 0;
-  const valid = !!employeeId && pctN > 0 && pctN <= 100 && monN > 0;
+  const valid = !!employeeId && pctN > 0 && pctN <= 100 && monN > 0 && (!fromDate || !toDate || fromDate <= toDate);
 
   async function handleSave() {
     if (!valid) return;
@@ -64,6 +69,8 @@ export function AddLabourDialog({
       employeeId,
       percent: pctN,
       months: monN,
+      startDate: fromDate || null,
+      endDate: toDate || null,
       note: note.trim() || null,
     }).catch(() => {});
     onClose();
@@ -93,10 +100,15 @@ export function AddLabourDialog({
             </Select>
           </FormField>
 
+          <FormField label="Time on project (%)"><Input type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} /></FormField>
+
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Time on project (%)"><Input type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} /></FormField>
-            <FormField label="Months"><Input type="number" min={0.5} step={0.5} value={months} onChange={(e) => setMonths(e.target.value)} /></FormField>
+            <FormField label="From"><Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></FormField>
+            <FormField label="To"><Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></FormField>
           </div>
+          {fromDate && toDate && fromDate > toDate && (
+            <p className="text-[11px] text-rose">To date must be after From date.</p>
+          )}
 
           <FormField label="Note (optional)"><Input placeholder="e.g. backend development" value={note} onChange={(e) => setNote(e.target.value)} /></FormField>
 
@@ -105,6 +117,7 @@ export function AddLabourDialog({
               <span className="text-ink-3">Labour cost: </span>
               <span className="font-semibold text-ink">{rupee(cost)}</span>
               <span className="text-[11px] text-ink-3"> = {rupee(emp.monthly_gross ?? 0)}/mo × {pctN}% × {monN} month{monN === 1 ? "" : "s"}</span>
+              {fromDate && toDate && <span className="block text-[11px] text-ink-3">{formatDate(fromDate)} → {formatDate(toDate)}</span>}
             </div>
           )}
         </div>
