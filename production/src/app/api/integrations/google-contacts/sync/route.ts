@@ -22,7 +22,9 @@ export async function POST() {
 
   const admin = createAdminClient();
   try {
-    const result = await syncUserContacts(admin, user.id, me.tenant_id);
+    // Manual sync = full pull, so a just-created phone contact always shows up
+    // (Google's incremental sync can lag on brand-new contacts).
+    const result = await syncUserContacts(admin, user.id, me.tenant_id, { full: true });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     const msg = (e as Error).message || "Sync failed";

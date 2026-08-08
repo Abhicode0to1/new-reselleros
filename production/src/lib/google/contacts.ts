@@ -186,7 +186,10 @@ type SourceType = "contact" | "lead" | "customer";
 interface LinkRow { source_type: SourceType; source_id: string; resource_name: string; etag: string | null; synced_at: string }
 
 // ── The engine ───────────────────────────────────────────────────────────────
-export async function syncUserContacts(admin: Admin, userId: string, tenantId: string): Promise<SyncResult> {
+// opts.full forces a FULL pull (ignores the stored syncToken). Google's
+// incremental sync can lag on just-created contacts, so the manual "Sync now"
+// runs full (reliable), while the periodic cron stays incremental (efficient).
+export async function syncUserContacts(admin: Admin, userId: string, tenantId: string, opts?: { full?: boolean }): Promise<SyncResult> {
   const accessToken = await getFreshAccessToken(admin, userId);
 
   // Load this user's existing links.
@@ -208,7 +211,7 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
 
   // ── PULL ──
   const { data: tokRow } = await admin.from("user_google_tokens").select("sync_token").eq("user_id", userId).maybeSingle();
-  let syncToken = tokRow?.sync_token ?? null;
+  let syncToken = opts?.full ? null : (tokRow?.sync_token ?? null);
   let people: GPerson[] = [];
   let nextSyncToken: string | null = null;
   try {
