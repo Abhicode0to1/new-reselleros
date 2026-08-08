@@ -7,10 +7,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import type { GstinVerification } from "@/lib/supabase/database.types";
+import { isPlatformAdmin } from "@/lib/platform";
 
 export interface CurrentUserInfo {
   userId:        string;
   authEmail:     string;
+  /** ResellerOS founder (cross-tenant signups panel). Server re-checks too. */
+  isPlatformAdmin: boolean;
   fullName:      string | null;
   initials:      string | null;
   color:         string | null;
@@ -65,6 +68,7 @@ export function useCurrentUser() {
       return {
         userId:          me.id,
         authEmail:       authData.user.email ?? "",
+        isPlatformAdmin: isPlatformAdmin(authData.user.email),
         fullName:        me.full_name,
         initials:        me.initials,
         color:           me.color,

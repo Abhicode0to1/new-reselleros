@@ -234,6 +234,23 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
             </div>
           );
         })}
+
+        {/* Founder-only — cross-tenant signups. Gated by the platform-admin
+            allowlist (not a tenant role); the page + API re-check server-side. */}
+        {me?.isPlatformAdmin && (
+          <Link
+            href={"/platform" as never}
+            className={cn(
+              "group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors mt-1 border-t border-hairline pt-3",
+              pathname.startsWith("/platform")
+                ? "text-amber font-medium"
+                : "text-ink-2 hover:bg-paper-2 hover:text-ink",
+            )}
+          >
+            <Icon name="rocket" size={17} className={cn("flex-shrink-0", pathname.startsWith("/platform") ? "text-amber" : "text-ink-3 group-hover:text-ink-2")} />
+            {!collapsed && <span className="flex-1 text-left">Platform · Signups</span>}
+          </Link>
+        )}
       </nav>
 
       {/* Collapse toggle — desktop only (mobile sheet is always expanded) */}
