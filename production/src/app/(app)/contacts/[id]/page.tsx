@@ -83,6 +83,13 @@ export default function ContactDetailPage() {
     const d = phoneDigits(contact.whatsapp || contact.phone);
     return d.length === 10 ? `91${d}` : d;
   })();
+  const waFor = (n: string) => {
+    const d = phoneDigits(n);
+    return d.length === 10 ? `91${d}` : d;
+  };
+  // All emails/phones (fall back to the legacy single primary for old contacts).
+  const emails = contact.emails?.length ? contact.emails : (contact.email ? [{ value: contact.email, label: "other" }] : []);
+  const phones = contact.phones?.length ? contact.phones : (contact.phone ? [{ value: contact.phone, label: "mobile" }] : []);
 
   const socials: { kind: "linkedin" | "instagram" | "facebook" | "twitter"; icon: string; label: string; value: string | null }[] = [
     { kind: "linkedin",  icon: "link",     label: "LinkedIn",  value: contact.linkedin },
@@ -141,12 +148,45 @@ export default function ContactDetailPage() {
           <ReachButton show={!!contact.email}    href={`mailto:${contact.email}`}                   icon="mail"     label="Email"    tone="amber" />
           <ReachButton show={!!contact.website}  href={contact.website ? socialUrl("website", contact.website) : "#"} external icon="globe" label="Website" tone="slate" />
         </div>
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mt-4">
-          <Field label="Email"    value={contact.email}    mono />
-          <Field label="Phone"    value={contact.phone}    mono />
-          <Field label="WhatsApp" value={contact.whatsapp} mono />
-          <Field label="Website"  value={contact.website}  mono />
-        </dl>
+        <div className="mt-4 space-y-3">
+          {/* All phones — each with its label + call/WhatsApp shortcuts */}
+          {phones.length > 0 && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-ink-3 mb-1.5">Phones</div>
+              <ul className="space-y-1">
+                {phones.map((p, i) => (
+                  <li key={`ph-${i}`} className="flex items-center gap-2 text-sm">
+                    <span className="inline-flex items-center rounded-full bg-paper-2 text-ink-3 text-[10px] uppercase tracking-wide px-1.5 py-0.5 w-14 justify-center shrink-0">{p.label}</span>
+                    <span className="font-mono text-ink truncate">{p.value}</span>
+                    <a href={`tel:${p.value}`} className="ml-auto shrink-0 text-emerald hover:text-emerald/80" aria-label={`Call ${p.value}`}><Icon name="call" size={15} /></a>
+                    <a href={`https://wa.me/${waFor(p.value)}`} target="_blank" rel="noopener noreferrer" className="shrink-0 text-emerald hover:text-emerald/80" aria-label={`WhatsApp ${p.value}`}><Icon name="whatsapp" size={15} /></a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* All emails — each with its label + a mail shortcut */}
+          {emails.length > 0 && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-ink-3 mb-1.5">Emails</div>
+              <ul className="space-y-1">
+                {emails.map((e, i) => (
+                  <li key={`em-${i}`} className="flex items-center gap-2 text-sm">
+                    <span className="inline-flex items-center rounded-full bg-paper-2 text-ink-3 text-[10px] uppercase tracking-wide px-1.5 py-0.5 w-14 justify-center shrink-0">{e.label}</span>
+                    <span className="font-mono text-ink truncate">{e.value}</span>
+                    <a href={`mailto:${e.value}`} className="ml-auto shrink-0 text-amber-ink hover:text-amber" aria-label={`Email ${e.value}`}><Icon name="mail" size={15} /></a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+            <Field label="WhatsApp" value={contact.whatsapp} mono />
+            <Field label="Website"  value={contact.website}  mono />
+          </dl>
+        </div>
       </Panel>
 
       {/* Social — for advertising / outreach */}

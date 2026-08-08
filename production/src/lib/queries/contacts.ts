@@ -11,9 +11,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import type { ContactRow } from "@/lib/supabase/database.types";
+import type { ContactRow, ContactChannel } from "@/lib/supabase/database.types";
 
 export type Contact = ContactRow;
+export type { ContactChannel } from "@/lib/supabase/database.types";
 
 export type ContactSource = "lead" | "customer" | "imported";
 
@@ -158,6 +159,10 @@ export type ContactFormValues = {
    *  the contact detail page. null = free-text `company` only. */
   customer_id?: string | null;
   title?:    string | null;
+  /** All emails/phones (each labelled). The mutations mirror index 0 into the
+   *  legacy `email`/`phone` primary columns so existing consumers keep working. */
+  emails?:   ContactChannel[];
+  phones?:   ContactChannel[];
   email?:    string | null;
   phone?:    string | null;
   whatsapp?: string | null;
@@ -174,6 +179,30 @@ export type ContactFormValues = {
 
 function newContactId(): string {
   return "C-" + Date.now().toString(36).toUpperCase() + "-" + Math.floor(Math.random() * 1000).toString(36).toUpperCase();
+}
+
+/**
+ * Normalize form values before write: clean the email/phone arrays (drop blanks,
+ * default labels) and mirror the PRIMARY (index 0) into the legacy email/phone
+ * columns so the list, reach buttons, dedupe, campaigns and AI all keep working.
+ */
+function normalizeChannels(values: ContactFormValues): ContactFormValues {
+  const out = { ...values };
+  if (values.emails) {
+    const cleaned = values.emails
+      .map((e) => ({ value: (e.value ?? "").trim(), label: e.label || "other" }))
+      .filter((e) => e.value !== "");
+    out.emails = cleaned;
+    out.email = cleaned[0]?.value ?? null;
+  }
+  if (values.phones) {
+    const cleaned = values.phones
+      .map((p) => ({ value: (p.value ?? "").trim(), label: p.label || "mobile" }))
+      .filter((p) => p.value !== "");
+    out.phones = cleaned;
+    out.phone = cleaned[0]?.value ?? null;
+  }
+  return out;
 }
 
 /** Create a standalone contact (source='manual'). Resolves tenant_id from auth. */
@@ -194,7 +223,7 @@ export function useCreateContact() {
         tenant_id: me!.tenant_id,
         source:    "manual",
         status:    "engaged",
-        ...values,
+        ...normalizeChannels(values),
       });
       if (error) throw error;
       return id;
@@ -212,7 +241,7 @@ export function useUpdateContact() {
   return useMutation({
     mutationFn: async ({ id, values }: { id: string; values: ContactFormValues }) => {
       const supabase = createClient();
-      const { error } = await supabase.from("contacts").update(values).eq("id", id);
+      const { error } = await supabase.from("contacts").update(normalizeChannels(values)).eq("id", id);
       if (error) throw error;
       return id;
     },

@@ -2282,12 +2282,18 @@ type CampaignTemplateUpdate = Partial<Omit<CampaignTemplateInsert, "tenant_id" |
 export type ContactSource     = "manual" | "google_csv" | "google_api" | "outlook" | "linkedin" | "event" | "other";
 export type ContactStatus     = "pending" | "engaged" | "promoted" | "archived";
 
+/** One email/phone entry on a contact. label ∈ mobile|work|home|other. */
+export type ContactChannel = { value: string; label: string };
+
 export type ContactRow = {
   id:                  string;
   tenant_id:           string;
   full_name:           string;
   email:               string | null;
   phone:               string | null;
+  /** All emails/phones (each with a label). email/phone above mirror index 0. */
+  emails:              ContactChannel[];
+  phones:              ContactChannel[];
   company:             string | null;
   title:               string | null;
   source:              ContactSource;
@@ -2310,6 +2316,9 @@ export type ContactRow = {
   // Optional link to a customer company (migration 0188). null = no company /
   // free-text `company` only. FK is ON DELETE SET NULL.
   customer_id:         string | null;
+  // Google Contacts sync (migration 0189). external_id holds the resourceName.
+  google_etag:         string | null;
+  google_synced_at:    string | null;
   created_at:          string;
   updated_at:          string;
 };
@@ -2319,6 +2328,8 @@ type ContactInsert = {
   full_name:           string;
   email?:              string | null;
   phone?:              string | null;
+  emails?:             ContactChannel[];
+  phones?:             ContactChannel[];
   company?:            string | null;
   title?:              string | null;
   source?:             ContactSource;
@@ -2338,8 +2349,39 @@ type ContactInsert = {
   address?:            string | null;
   city?:               string | null;
   customer_id?:        string | null;
+  google_etag?:        string | null;
+  google_synced_at?:   string | null;
 };
 type ContactUpdate = Partial<Omit<ContactInsert, "id" | "tenant_id">>;
+
+// ── Per-user Google OAuth tokens (Contacts sync, migration 0190) ────────────
+export type UserGoogleTokenRow = {
+  user_id:         string;
+  tenant_id:       string;
+  google_email:    string | null;
+  access_token:    string | null;
+  refresh_token:   string | null;
+  token_expiry:    string | null;
+  scopes:          string | null;
+  sync_token:      string | null;
+  last_synced_at:  string | null;
+  last_error:      string | null;
+  created_at:      string;
+  updated_at:      string;
+};
+type UserGoogleTokenInsert = {
+  user_id:         string;
+  tenant_id:       string;
+  google_email?:   string | null;
+  access_token?:   string | null;
+  refresh_token?:  string | null;
+  token_expiry?:   string | null;
+  scopes?:         string | null;
+  sync_token?:     string | null;
+  last_synced_at?: string | null;
+  last_error?:     string | null;
+};
+type UserGoogleTokenUpdate = Partial<Omit<UserGoogleTokenInsert, "user_id">>;
 
 // ============================================================
 // Coupons — public buy-page promo codes (migration 0031)
@@ -2495,6 +2537,7 @@ export type Database = {
       campaign_sends:     { Row: CampaignSendRow;      Insert: CampaignSendInsert;      Update: CampaignSendUpdate;      Relationships: [] };
       campaign_templates: { Row: CampaignTemplateRow;  Insert: CampaignTemplateInsert;  Update: CampaignTemplateUpdate;  Relationships: [] };
       contacts:           { Row: ContactRow;           Insert: ContactInsert;           Update: ContactUpdate;           Relationships: [] };
+      user_google_tokens: { Row: UserGoogleTokenRow;   Insert: UserGoogleTokenInsert;   Update: UserGoogleTokenUpdate;   Relationships: [] };
       coupons:            { Row: CouponRow;            Insert: CouponInsert;            Update: CouponUpdate;            Relationships: [] };
       coupon_redemptions: { Row: CouponRedemptionRow;  Insert: CouponRedemptionInsert;  Update: CouponRedemptionUpdate;  Relationships: [] };
       site_promos:        { Row: SitePromoRow;         Insert: SitePromoInsert;         Update: SitePromoUpdate;         Relationships: [] };

@@ -10,7 +10,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -27,13 +27,22 @@ import { useCreateContact, useUpdateContact, type Contact, type ContactFormValue
 import { useCustomers } from "@/lib/queries/customers";
 import { CustomerCombobox } from "@/components/features/customers/customer-combobox";
 
+const EMAIL_LABELS = ["work", "home", "other"] as const;
+const PHONE_LABELS = ["mobile", "work", "home", "other"] as const;
+
 const schema = z.object({
   full_name: z.string().min(1, "Name is required"),
   company:   z.string().optional(),
   customer_id: z.string().optional(),
   title:     z.string().optional(),
-  email:     z.string().email("Enter a valid email").optional().or(z.literal("")),
-  phone:     z.string().optional(),
+  emails:    z.array(z.object({
+    value: z.string().email("Enter a valid email").or(z.literal("")),
+    label: z.string(),
+  })),
+  phones:    z.array(z.object({
+    value: z.string(),
+    label: z.string(),
+  })),
   whatsapp:  z.string().optional(),
   linkedin:  z.string().optional(),
   instagram: z.string().optional(),
@@ -66,12 +75,14 @@ export function ContactForm({
   const create = useCreateContact();
   const update = useUpdateContact();
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, reset, setValue, watch, control, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: toDefaults(contact),
   });
   const { data: customers = [] } = useCustomers();
   const customerId = watch("customer_id") ?? "";
+  const emailFields = useFieldArray({ control, name: "emails" });
+  const phoneFields = useFieldArray({ control, name: "phones" });
 
   // Re-seed the form whenever we open it (new contact vs a different edit target).
   React.useEffect(() => {
@@ -85,8 +96,10 @@ export function ContactForm({
       company:   clean(data.company),
       customer_id: clean(data.customer_id),
       title:     clean(data.title),
-      email:     clean(data.email),
-      phone:     clean(data.phone),
+      // Arrays go through as-is; the mutation cleans blanks + mirrors index 0
+      // into the primary email/phone columns.
+      emails:    data.emails.map((e) => ({ value: e.value.trim(), label: e.label })),
+      phones:    data.phones.map((p) => ({ value: p.value.trim(), label: p.label })),
       whatsapp:  clean(data.whatsapp),
       linkedin:  clean(data.linkedin),
       instagram: clean(data.instagram),
@@ -166,11 +179,62 @@ export function ContactForm({
               </div>
             </Section>
 
-            {/* Reach */}
+            {/* Reach — emails + phones are repeatable (a contact can have office +
+                personal). First entry is the primary used across the app. */}
             <Section title="How to reach">
+              {/* Emails */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-ink-2">Email{emailFields.fields.length > 1 ? "s" : ""}</label>
+                {emailFields.fields.map((f, i) => (
+                  <div key={f.id} className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <Input type="email" placeholder="e.g. rajesh@acme.com" error={errors.emails?.[i]?.value?.message} {...register(`emails.${i}.value`)} />
+                    </div>
+                    <select
+                      {...register(`emails.${i}.label`)}
+                      className="h-9 shrink-0 rounded-md border border-hairline bg-paper px-2 text-sm text-ink-2 focus:outline-none focus:ring-2 focus:ring-amber/40"
+                    >
+                      {EMAIL_LABELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                    {emailFields.fields.length > 1 && (
+                      <button type="button" onClick={() => emailFields.remove(i)} aria-label="Remove email" className="h-9 w-9 shrink-0 grid place-items-center rounded-md text-ink-3 hover:text-rose hover:bg-paper-2">
+                        <Icon name="x" size={15} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => emailFields.append({ value: "", label: "work" })} className="inline-flex items-center gap-1 text-xs font-medium text-amber-ink hover:text-amber">
+                  <Icon name="plus" size={13} /> Add email
+                </button>
+              </div>
+
+              {/* Phones */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-ink-2">Phone{phoneFields.fields.length > 1 ? "s" : ""}</label>
+                {phoneFields.fields.map((f, i) => (
+                  <div key={f.id} className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <Input placeholder="e.g. +91 98765 43210" {...register(`phones.${i}.value`)} />
+                    </div>
+                    <select
+                      {...register(`phones.${i}.label`)}
+                      className="h-9 shrink-0 rounded-md border border-hairline bg-paper px-2 text-sm text-ink-2 focus:outline-none focus:ring-2 focus:ring-amber/40"
+                    >
+                      {PHONE_LABELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                    {phoneFields.fields.length > 1 && (
+                      <button type="button" onClick={() => phoneFields.remove(i)} aria-label="Remove phone" className="h-9 w-9 shrink-0 grid place-items-center rounded-md text-ink-3 hover:text-rose hover:bg-paper-2">
+                        <Icon name="x" size={15} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => phoneFields.append({ value: "", label: "mobile" })} className="inline-flex items-center gap-1 text-xs font-medium text-amber-ink hover:text-amber">
+                  <Icon name="plus" size={13} /> Add phone
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <FormField label="Email"><Input type="email" placeholder="e.g. rajesh@acme.com" error={errors.email?.message} {...register("email")} /></FormField>
-                <FormField label="Phone"><Input placeholder="e.g. +91 98765 43210" {...register("phone")} /></FormField>
                 <FormField label="WhatsApp"><Input placeholder="e.g. +91 98765 43210" {...register("whatsapp")} /></FormField>
                 <FormField label="Website"><Input placeholder="e.g. acme.com" {...register("website")} /></FormField>
               </div>
@@ -225,13 +289,25 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function toDefaults(c?: Contact | null): FormData {
+  // Seed the arrays from the stored arrays; fall back to the legacy single
+  // email/phone for contacts created before multi-channel; else one blank row.
+  const emails = c?.emails?.length
+    ? c.emails
+    : c?.email
+    ? [{ value: c.email, label: "other" }]
+    : [{ value: "", label: "work" }];
+  const phones = c?.phones?.length
+    ? c.phones
+    : c?.phone
+    ? [{ value: c.phone, label: "mobile" }]
+    : [{ value: "", label: "mobile" }];
   return {
     full_name: c?.full_name ?? "",
     company:   c?.company ?? "",
     customer_id: c?.customer_id ?? "",
     title:     c?.title ?? "",
-    email:     c?.email ?? "",
-    phone:     c?.phone ?? "",
+    emails,
+    phones,
     whatsapp:  c?.whatsapp ?? "",
     linkedin:  c?.linkedin ?? "",
     instagram: c?.instagram ?? "",

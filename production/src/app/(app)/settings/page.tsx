@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useUpdateTenant, useSetTenantLogo } from "@/lib/queries/tenant";
-import { isValidGstin, gstStateFromGstin, validateGstin } from "@/lib/utils";
+import { isValidGstin, gstStateFromGstin, validateGstin, formatDate } from "@/lib/utils";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import SandboxConfigureDialog  from "@/components/features/integrations/sandbox-configure-dialog";
 import WhatsAppConfigureDialog from "@/components/features/integrations/whatsapp-configure-dialog";
@@ -655,6 +655,85 @@ function GoogleResellerIntegrationCard() {
   );
 }
 
+/**
+ * Google Contacts — per-user two-way sync. Connect kicks off the dedicated OAuth
+ * flow (full-page redirect); once connected we show the account + last-sync and
+ * offer "Sync now" / "Disconnect".
+ */
+function GoogleContactsIntegrationCard() {
+  const [busy, setBusy] = React.useState(false);
+  const { data: status, refetch } = useQuery({
+    queryKey: ["integrations", "google-contacts"],
+    queryFn: async () => {
+      const res = await fetch("/api/integrations/google-contacts");
+      return res.ok ? res.json() : null;
+    },
+  });
+  const configured = Boolean(status?.configured);
+  const connected = Boolean(status?.connected);
+  const lastSynced: string | null = status?.last_synced_at ?? null;
+
+  async function syncNow() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/integrations/google-contacts/sync", { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(body?.error ?? "Sync failed"); return; }
+      toast.success(`Synced — ${body.pulled} in, ${body.pushed + body.created} out`);
+      refetch();
+    } finally { setBusy(false); }
+  }
+
+  async function disconnect() {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/integrations/google-contacts", { method: "DELETE" });
+      if (!res.ok) { toast.error("Could not disconnect"); return; }
+      toast.success("Google Contacts disconnected");
+      refetch();
+    } finally { setBusy(false); }
+  }
+
+  const sub = !configured
+    ? "Add Google OAuth keys in env to enable"
+    : connected
+      ? (status?.email ? `${status.email}` : "Connected") + (lastSynced ? ` · synced ${formatDate(lastSynced)}` : " · not synced yet")
+      : "Two-way sync with your Google Contacts";
+
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-hairline p-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-paper-2 text-ink-3">
+          <Icon name="users" size={16} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-ink inline-flex items-center gap-1.5">
+            Google Contacts
+            {connected
+              ? <Badge size="sm" kind="success">Connected</Badge>
+              : configured
+                ? <Badge size="sm" kind="warning">Connect</Badge>
+                : <Badge size="sm" kind="muted">Setup</Badge>}
+          </p>
+          <p className="text-xs text-ink-3 truncate">{sub}</p>
+        </div>
+      </div>
+      {connected ? (
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button variant="primary" size="sm" onClick={syncNow} disabled={busy}>{busy ? "Syncing…" : "Sync now"}</Button>
+          <Button variant="ghost" size="sm" onClick={disconnect} disabled={busy}>Disconnect</Button>
+        </div>
+      ) : configured ? (
+        <Button asChild variant="primary" size="sm">
+          <a href="/api/integrations/google-contacts/connect">Connect</a>
+        </Button>
+      ) : (
+        <Button variant="ghost" size="sm" disabled>Setup</Button>
+      )}
+    </div>
+  );
+}
+
 function IntegrationsTab() {
   return (
     <>
@@ -666,6 +745,7 @@ function IntegrationsTab() {
         <SandboxIntegrationCard />
         <WhatsAppIntegrationCard />
         <GoogleResellerIntegrationCard />
+        <GoogleContactsIntegrationCard />
         {INTEGRATIONS.map((it) => (
           <div
             key={it.name}
