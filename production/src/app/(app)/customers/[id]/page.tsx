@@ -170,7 +170,8 @@ export default function CustomerDetailPage() {
   const usedPay = new Set<string>();
   for (const pr of allProjects) {
     const projKey = `proj:${pr.id}`;
-    hierRows.push({ key: projKey, parentKey: null, indent: 0, date: pr.created_at, type: "Project", ref: pr.title, amount: pr.total_amount, status: pr.status, onClick: () => router.push(`/projects/${pr.id}` as never) });
+    const projDue = Math.max(0, (pr.total_amount ?? 0) - (pr.paid ?? 0));
+    hierRows.push({ key: projKey, parentKey: null, indent: 0, date: pr.created_at, type: "Project", ref: pr.title, amount: pr.total_amount, status: pr.status, due: projDue > 0 ? projDue : undefined, onClick: () => router.push(`/projects/${pr.id}` as never) });
     for (const i of allInvoices.filter((iv) => invoiceProject[iv.id]?.projectId === pr.id)) {
       usedInv.add(i.id);
       const pPaid = invoicePaid[i.id] ?? 0;

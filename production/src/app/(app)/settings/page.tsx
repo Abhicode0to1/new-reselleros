@@ -94,6 +94,8 @@ const companySchema = z.object({
   phone:      z.string().trim().max(20).optional(),
   address:    z.string().trim().max(300).optional(),
   pin_code:   z.string().trim().regex(/^\d{0,6}$/, "6-digit PIN (or blank)").optional(),
+  lut_number:     z.string().trim().max(40).optional(),
+  lut_valid_upto: z.string().trim().optional(),
   grace_period_days: z.coerce
     .number({ invalid_type_error: "Must be a number" })
     .int("Whole days only")
@@ -118,6 +120,8 @@ function CompanyTab() {
       phone:        me?.tenantPhone       ?? "",
       address:      me?.tenantAddress     ?? "",
       pin_code:     me?.tenantPinCode     ?? "",
+      lut_number:     me?.tenantLutNumber    ?? "",
+      lut_valid_upto: me?.tenantLutValidUpto ?? "",
       grace_period_days: me?.tenantGracePeriodDays ?? 0,
     }),
     [me],
@@ -160,6 +164,8 @@ function CompanyTab() {
       phone:        values.phone?.trim()        || null,
       address:      values.address?.trim()      || null,
       pin_code:     values.pin_code?.trim()     || null,
+      lut_number:     values.lut_number?.trim()     || null,
+      lut_valid_upto: values.lut_valid_upto?.trim() || null,
       grace_period_days: values.grace_period_days,
     };
     updateTenant.mutate(patch, { onSuccess: () => reset(values) });
@@ -312,6 +318,24 @@ function CompanyTab() {
                   <p className="mt-1 text-xs text-rose">{errors.address.message}</p>
                 )}
               </Field>
+
+              {/* LUT — for exporters shipping without IGST (CGST Rule 96A). */}
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-4">
+                <Field label="LUT number (exports — optional)">
+                  <Input
+                    placeholder="e.g. AD290425000000X — for zero-rated exports"
+                    className="font-mono"
+                    error={errors.lut_number?.message}
+                    {...register("lut_number")}
+                  />
+                  <p className="mt-1 text-xs text-ink-3">
+                    Have an LUT for exports? Store its ARN here — it lets you bill international clients at 0% GST (no IGST) legally and label those sales correctly for GSTR-1.
+                  </p>
+                </Field>
+                <Field label="Valid up to">
+                  <Input type="date" error={errors.lut_valid_upto?.message} {...register("lut_valid_upto")} />
+                </Field>
+              </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 {isDirty && (

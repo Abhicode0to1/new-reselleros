@@ -60,6 +60,8 @@ type TenantRow = {
   contact_name: string | null;
   email: string;
   phone: string | null;
+  lut_number: string | null;       // migration 0185 — LUT for zero-rated exports
+  lut_valid_upto: string | null;   // LUT validity end date
   grace_period_days: number;
   setup_completed_at: string | null;
   gstin_verified_at: string | null;
@@ -81,6 +83,8 @@ type TenantInsert = {
   contact_name?: string | null;
   email: string;
   phone?: string | null;
+  lut_number?: string | null;
+  lut_valid_upto?: string | null;
   grace_period_days?: number;
   setup_completed_at?: string | null;
   gstin_verified_at?: string | null;
