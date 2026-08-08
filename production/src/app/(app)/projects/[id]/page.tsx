@@ -46,7 +46,6 @@ export default function ProjectDetailPage() {
   const [editCost, setEditCost] = React.useState<import("@/lib/queries/expenses").Expense | null>(null);
   const [addLabourOpen, setAddLabourOpen] = React.useState(false);
   const [editLabour, setEditLabour] = React.useState<ProjectLabourLine | null>(null);
-  const [labourSectionOpen, setLabourSectionOpen] = React.useState(true);
   const updateDates = useUpdateProjectDates();
   const [datesEdit, setDatesEdit] = React.useState(false);
   const [startVal, setStartVal] = React.useState("");
@@ -295,10 +294,7 @@ export default function ProjectDetailPage() {
       )}
 
       {/* Milestones */}
-      <Card className="mb-6 overflow-hidden">
-        <div className="px-5 py-3 border-b border-hairline">
-          <h2 className="text-sm font-semibold text-ink">Milestones</h2>
-        </div>
+      <CollapsibleCard title="Milestones" summary={`(${milestones.length})`} className="mb-6">
         <div className="divide-y divide-hairline">
           {milestones.map((m) => {
             const msPays  = payments.filter((p) => p.milestone_id === m.id);
@@ -359,13 +355,10 @@ export default function ProjectDetailPage() {
             </div>
           );})}
         </div>
-      </Card>
+      </CollapsibleCard>
 
       {/* Payments */}
-      <Card className="overflow-hidden">
-        <div className="px-5 py-3 border-b border-hairline">
-          <h2 className="text-sm font-semibold text-ink">Payments received</h2>
-        </div>
+      <CollapsibleCard title="Payments received" summary={`(${payments.length}) · ${rupee(paid)}`} className="mt-6">
         {payments.length === 0 ? (
           <p className="px-5 py-6 text-sm text-ink-3 text-center">No payments recorded yet.</p>
         ) : (
@@ -383,49 +376,39 @@ export default function ProjectDetailPage() {
             ))}
           </div>
         )}
-      </Card>
+      </CollapsibleCard>
 
-      {/* Team / Labour — employees allocated to this project (drive the P&L above).
-          The whole section collapses when you click the header. */}
-      <Card className="overflow-hidden mt-6">
-        <div className="px-5 py-3 border-b border-hairline flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => setLabourSectionOpen((o) => !o)}
-            className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
-            aria-expanded={labourSectionOpen}
-          >
-            <Icon name={labourSectionOpen ? "chevron_down" : "chevron_right"} size={15} className="text-ink-3 shrink-0" />
-            <h2 className="text-sm font-semibold text-ink">Team / Labour</h2>
-            {labour.length > 0 && <span className="text-[11px] text-ink-3 tabular-nums">({labour.length}) · {rupee(labourTotal)}</span>}
-          </button>
-          {!isQuote && (
-            <Button size="sm" variant="ghost" icon="plus" onClick={() => { setEditLabour(null); setAddLabourOpen(true); }}>Add labour</Button>
-          )}
-        </div>
-        {labourSectionOpen && (
-          labour.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-ink-3 text-center">
-              No employees on this project yet.{!isQuote && " Attach team members so their salary time counts in the profit."}
-            </p>
-          ) : (
-            <div className="divide-y divide-hairline">
-              {labour.map((l) => (
-                <LabourRow key={l.id} line={l} projectId={project.id} projectStart={project.start_date} projectTarget={project.target_date} />
-              ))}
-            </div>
-          )
+      {/* Team / Labour — employees allocated to this project (drive the P&L above). */}
+      <CollapsibleCard
+        title="Team / Labour"
+        summary={labour.length > 0 ? `(${labour.length}) · ${rupee(labourTotal)}` : undefined}
+        className="mt-6"
+        action={!isQuote ? (
+          <Button size="sm" variant="ghost" icon="plus" onClick={() => { setEditLabour(null); setAddLabourOpen(true); }}>Add labour</Button>
+        ) : undefined}
+      >
+        {labour.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-ink-3 text-center">
+            No employees on this project yet.{!isQuote && " Attach team members so their salary time counts in the profit."}
+          </p>
+        ) : (
+          <div className="divide-y divide-hairline">
+            {labour.map((l) => (
+              <LabourRow key={l.id} line={l} projectId={project.id} projectStart={project.start_date} projectTarget={project.target_date} />
+            ))}
+          </div>
         )}
-      </Card>
+      </CollapsibleCard>
 
       {/* Costs — expenses tagged to this project (drive the P&L above) */}
-      <Card className="overflow-hidden mt-6">
-        <div className="px-5 py-3 border-b border-hairline flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-ink">Costs</h2>
-          {!isQuote && (
-            <Button size="sm" variant="ghost" icon="plus" onClick={() => { setEditCost(null); setAddCostOpen(true); }}>Add cost</Button>
-          )}
-        </div>
+      <CollapsibleCard
+        title="Costs"
+        summary={costs.length > 0 ? `(${costs.length}) · ${rupee(costTotal)}` : undefined}
+        className="mt-6"
+        action={!isQuote ? (
+          <Button size="sm" variant="ghost" icon="plus" onClick={() => { setEditCost(null); setAddCostOpen(true); }}>Add cost</Button>
+        ) : undefined}
+      >
         {costs.length === 0 ? (
           <p className="px-5 py-6 text-sm text-ink-3 text-center">
             No costs recorded for this project yet.{!isQuote && " Add labour, subcontract, tools, etc. to see the real profit."}
@@ -452,7 +435,7 @@ export default function ProjectDetailPage() {
             ))}
           </div>
         )}
-      </Card>
+      </CollapsibleCard>
 
       {addCostOpen && (
         <AddExpenseDialog
@@ -479,6 +462,40 @@ export default function ProjectDetailPage() {
         projectId={project.id}
       />
     </div>
+  );
+}
+
+/** A card whose whole body collapses when you click its header (chevron).
+ *  Shows a small summary next to the title when collapsed. Optional right-side
+ *  action (e.g. an "Add" button) stays clickable and doesn't toggle. */
+function CollapsibleCard({
+  title, summary, action, defaultOpen = true, className, children,
+}: {
+  title: string;
+  summary?: React.ReactNode;
+  action?: React.ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <Card className={`overflow-hidden ${className ?? ""}`}>
+      <div className="px-5 py-3 border-b border-hairline flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
+          aria-expanded={open}
+        >
+          <Icon name={open ? "chevron_down" : "chevron_right"} size={15} className="text-ink-3 shrink-0" />
+          <h2 className="text-sm font-semibold text-ink">{title}</h2>
+          {summary && <span className="text-[11px] text-ink-3 tabular-nums">{summary}</span>}
+        </button>
+        {action}
+      </div>
+      {open && children}
+    </Card>
   );
 }
 
