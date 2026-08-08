@@ -3288,6 +3288,10 @@ export type Database = {
         Args: { p_bank_txn_id: string; p_expense_ids: string[] };
         Returns: undefined;
       };
+      reconcile_salary_advance_split: {
+        Args: { p_txn_id: string; p_salary_id: string; p_advance_amount: number; p_employee_name: string; p_notes?: string | null };
+        Returns: undefined;
+      };
       pay_statutory_dues: {
         Args: {
           p_amount:          number;

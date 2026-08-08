@@ -42,6 +42,7 @@ import {
   useBookBankAdvance,
   useBookBankTxnAsStatutory,
   useBookCreditAsInvoice,
+  useReconcileSalaryAdvanceSplit,
   type BankTransactionRow,
   type MatchSuggestion,
 } from "@/lib/queries/bank";
@@ -105,6 +106,29 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
         matchedToType: "salary",
         matchedToId:   salaryId,
         confidence:    "manual",
+      });
+      onOpenChange(false);
+    } catch { /* hook toasts */ }
+  };
+
+  // Overpaid a salary: split THIS line into salary (its remaining) + a recoverable
+  // advance (the excess), in one atomic RPC. Only offered when the line is bigger
+  // than the picked salary's balance.
+  const salarySplit = useReconcileSalaryAdvanceSplit();
+  const [splitSalaryId, setSplitSalaryId] = React.useState("");
+  React.useEffect(() => { setSplitSalaryId(""); }, [transaction?.id]);
+  const handleSalarySplit = async () => {
+    if (!transaction || !splitSalaryId) return;
+    const sal = (payableSalaries ?? []).find((s) => s.id === splitSalaryId);
+    if (!sal) return;
+    const advance = (transaction.debit ?? 0) - sal.remaining;
+    if (advance <= 0) return;
+    try {
+      await salarySplit.mutateAsync({
+        transactionId: transaction.id,
+        salaryId: sal.id,
+        advanceAmount: advance,
+        employeeName: sal.employee_name,
       });
       onOpenChange(false);
     } catch { /* hook toasts */ }
@@ -519,6 +543,44 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   : (isCredit ? "a loan received (liability)" : "a loan you repaid (liability)")}
               </Button>
             </div>
+
+            {/* Overpaid a salary — split THIS line into salary + recoverable
+                advance (one atomic RPC). Only when the line exceeds a salary's due. */}
+            {!isCredit && (payableSalaries ?? []).some((s) => s.remaining > 0 && s.remaining < amount) && (
+              <div className="rounded-md border border-indigo/40 bg-indigo-soft/20 p-3">
+                <p className="text-xs font-semibold text-ink-2 mb-1">Overpaid a salary? (salary + advance)</p>
+                <p className="text-[11px] text-ink-3 mb-2.5 leading-relaxed">
+                  Paid more than the salary by mistake? Pick the salary — its balance is settled and the EXTRA is booked as a recoverable <b>advance</b> (recover it later via a salary deduction). No double cash-out — this line is the payment.
+                </p>
+                <select
+                  value={splitSalaryId}
+                  onChange={(e) => setSplitSalaryId(e.target.value)}
+                  className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-indigo/40 mb-2"
+                >
+                  <option value="">Choose the salary…</option>
+                  {(payableSalaries ?? []).filter((s) => s.remaining > 0 && s.remaining < amount).map((s) => (
+                    <option key={s.id} value={s.id}>{s.employee_name} · {s.period} · {rupee(s.remaining)} due</option>
+                  ))}
+                </select>
+                {(() => {
+                  const sal = (payableSalaries ?? []).find((s) => s.id === splitSalaryId);
+                  if (!sal) return null;
+                  const advance = amount - sal.remaining;
+                  return (
+                    <>
+                      <p className="text-[11px] text-ink-2 mb-2">
+                        <span className="text-emerald font-medium">{rupee(sal.remaining)}</span> → salary (paid)
+                        {" · "}
+                        <span className="text-amber-ink font-medium">{rupee(advance)}</span> → advance (recoverable)
+                      </p>
+                      <Button size="sm" variant="primary" icon="check" loading={salarySplit.isPending} onClick={handleSalarySplit}>
+                        Pay salary + book {rupee(advance)} advance
+                      </Button>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
             {/* Book directly as an expense — money-out lines only. Creates the
                 expense (P&L) and reconciles this line, with NO extra cash leg. */}

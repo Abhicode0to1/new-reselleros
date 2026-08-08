@@ -547,6 +547,44 @@ export function useBookCreditAsInvoice() {
   });
 }
 
+/**
+ * Overpaid-salary split: reconcile ONE money-out line as salary + a recoverable
+ * employee advance in one atomic RPC (migration 0186). The salary portion (line
+ * − advance) settles the chosen salary; the excess becomes a salary-advance with
+ * NO new cash leg (this line is the cash-out). Recover it later via a salary
+ * deduction in Loans & Advances.
+ */
+export function useReconcileSalaryAdvanceSplit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      transactionId: string;
+      salaryId: string;
+      advanceAmount: number;
+      employeeName: string;
+      notes?: string | null;
+    }) => {
+      const supabase = createClient();
+      const { error } = await supabase.rpc("reconcile_salary_advance_split", {
+        p_txn_id:         input.transactionId,
+        p_salary_id:      input.salaryId,
+        p_advance_amount: Math.round(input.advanceAmount),
+        p_employee_name:  input.employeeName,
+        p_notes:          input.notes ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bank_transactions"] });
+      qc.invalidateQueries({ queryKey: ["salary-payments"] });
+      qc.invalidateQueries({ queryKey: ["employee-loans"] });
+      qc.invalidateQueries({ queryKey: ["balance-sheet"] });
+      toast.success("Reconciled — salary paid + advance booked");
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+}
+
 export function useReconcileTransaction() {
   const qc = useQueryClient();
   return useMutation({
