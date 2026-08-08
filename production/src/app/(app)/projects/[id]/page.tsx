@@ -31,7 +31,7 @@ import { useCustomer } from "@/lib/queries/customers";
 import { RecordProjectPaymentDialog } from "@/components/features/projects/record-project-payment-dialog";
 import { AddExpenseDialog } from "@/components/features/accounting/add-expense-dialog";
 import { AddLabourDialog } from "@/components/features/projects/add-labour-dialog";
-import { useRemoveProjectLabour, useUpdateProjectDates, type ProjectLabourLine } from "@/lib/queries/projects";
+import { useRemoveProjectLabour, useSaveProjectLabour, useUpdateProjectDates, type ProjectLabourLine } from "@/lib/queries/projects";
 import { Input } from "@/components/ui/input";
 
 export default function ProjectDetailPage() {
@@ -46,7 +46,6 @@ export default function ProjectDetailPage() {
   const [editCost, setEditCost] = React.useState<import("@/lib/queries/expenses").Expense | null>(null);
   const [addLabourOpen, setAddLabourOpen] = React.useState(false);
   const [editLabour, setEditLabour] = React.useState<ProjectLabourLine | null>(null);
-  const removeLabour = useRemoveProjectLabour();
   const updateDates = useUpdateProjectDates();
   const [datesEdit, setDatesEdit] = React.useState(false);
   const [startVal, setStartVal] = React.useState("");
@@ -400,29 +399,7 @@ export default function ProjectDetailPage() {
         ) : (
           <div className="divide-y divide-hairline">
             {labour.map((l) => (
-              <div key={l.id} className="px-5 py-3 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => { setEditLabour(l); setAddLabourOpen(true); }}
-                  className="min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
-                >
-                  <p className="text-sm text-ink">{l.employeeName}{l.designation ? ` · ${l.designation}` : ""}</p>
-                  <p className="text-[11px] text-ink-3">
-                    {l.percent}% × {l.months} month{l.months === 1 ? "" : "s"} · {rupee(l.monthlyGross)}/mo
-                    {l.start_date && l.end_date ? ` · ${formatDate(l.start_date)} → ${formatDate(l.end_date)}` : ""}
-                    {l.note ? ` · ${l.note}` : ""}
-                  </p>
-                </button>
-                <div className="font-mono text-sm text-ink whitespace-nowrap">{rupee(l.cost)}</div>
-                <button
-                  type="button"
-                  onClick={() => removeLabour.mutate(l.id)}
-                  aria-label="Remove"
-                  className="shrink-0 text-ink-3 hover:text-rose p-1"
-                >
-                  <Icon name="trash" size={14} />
-                </button>
-              </div>
+              <LabourRow key={l.id} line={l} projectId={project.id} />
             ))}
           </div>
         )}
@@ -488,6 +465,92 @@ export default function ProjectDetailPage() {
         milestone={payFor}
         projectId={project.id}
       />
+    </div>
+  );
+}
+
+/** One Team/Labour row — collapsed shows a summary; expands inline to edit
+ *  (%, from/to dates, note) with a live cost preview + Save / Remove. */
+function LabourRow({ line, projectId }: { line: ProjectLabourLine; projectId: string }) {
+  const save = useSaveProjectLabour();
+  const remove = useRemoveProjectLabour();
+  const [open, setOpen] = React.useState(false);
+  const [percent, setPercent] = React.useState(String(line.percent));
+  const [from, setFrom] = React.useState(line.start_date ?? "");
+  const [to, setTo] = React.useState(line.end_date ?? "");
+  const [note, setNote] = React.useState(line.note ?? "");
+
+  // Re-seed if the row's data changes underneath (after a save/refetch).
+  React.useEffect(() => {
+    setPercent(String(line.percent));
+    setFrom(line.start_date ?? "");
+    setTo(line.end_date ?? "");
+    setNote(line.note ?? "");
+  }, [line.percent, line.start_date, line.end_date, line.note]);
+
+  const pctN = Number(percent) || 0;
+  const months = from && to ? Math.max(0.5, Math.round((daysBetween(from, to) / 30.44) * 2) / 2) : line.months;
+  const previewCost = Math.round(line.monthlyGross * (pctN / 100) * months);
+  const dirty = pctN !== line.percent || (from || null) !== (line.start_date ?? null) || (to || null) !== (line.end_date ?? null) || (note.trim() || null) !== (line.note ?? null);
+  const valid = pctN > 0 && pctN <= 100 && months > 0 && (!from || !to || from <= to);
+
+  async function handleSave() {
+    if (!valid) return;
+    await save.mutateAsync({ id: line.id, projectId, employeeId: line.employee_id, percent: pctN, months, startDate: from || null, endDate: to || null, note: note.trim() || null }).catch(() => {});
+    setOpen(false);
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full text-left px-5 py-3 flex items-center gap-3 hover:bg-paper-2/40 transition-colors"
+        aria-expanded={open}
+      >
+        <Icon name={open ? "chevron_down" : "chevron_right"} size={14} className="text-ink-3 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-ink">{line.employeeName}{line.designation ? ` · ${line.designation}` : ""}</p>
+          <p className="text-[11px] text-ink-3">
+            {line.percent}% × {line.months} month{line.months === 1 ? "" : "s"} · {rupee(line.monthlyGross)}/mo
+            {line.start_date && line.end_date ? ` · ${formatDate(line.start_date)} → ${formatDate(line.end_date)}` : ""}
+            {line.note ? ` · ${line.note}` : ""}
+          </p>
+        </div>
+        <div className="font-mono text-sm text-ink whitespace-nowrap">{rupee(line.cost)}</div>
+      </button>
+
+      {open && (
+        <div className="px-5 pb-4 pt-1 bg-paper-2/30">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">Time (%)</label>
+              <Input type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">From</label>
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">To</label>
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">Note</label>
+            <Input placeholder="e.g. backend development" value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-[11px] text-ink-3">
+              Cost: <span className="font-semibold text-ink">{rupee(previewCost)}</span> = {rupee(line.monthlyGross)}/mo × {pctN}% × {months} mo
+            </p>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" icon="trash" onClick={() => remove.mutate(line.id)}>Remove</Button>
+              <Button size="sm" variant="primary" onClick={handleSave} disabled={!valid || !dirty} loading={save.isPending}>Save</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
