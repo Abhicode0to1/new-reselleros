@@ -18,7 +18,7 @@ import { useCustomer, useDeleteCustomer, useSetCustomerActive, useCustomerOpenCr
 import { useCustomerGroups } from "@/lib/queries/customer-groups";
 import { useCustomerSubscriptions } from "@/lib/queries/subscriptions";
 import { useCustomerInvoices, useCustomerQuotes } from "@/lib/queries/invoices";
-import { usePayments } from "@/lib/queries/payments";
+import { usePayments, useDeletePayment } from "@/lib/queries/payments";
 import { useCustomerProjects, useCustomerProjectPayments } from "@/lib/queries/projects";
 import { CreateProjectQuoteDialog } from "@/components/features/projects/create-project-quote-dialog";
 import { Card } from "@/components/ui/card";
@@ -73,6 +73,14 @@ export default function CustomerDetailPage() {
   const { data: agreements } = useReferralAgreements(params.id);
   const deleteCustomer = useDeleteCustomer();
   const setActive = useSetCustomerActive();
+  const deletePayment = useDeletePayment();
+
+  // Delete a customer payment (from the Transactions tab). The delete_payment RPC
+  // reverses balances and blocks if unsafe (GST invoice issued / bank-reconciled).
+  async function handleDeletePayment(id: string) {
+    if (!(await confirm({ title: "Delete this payment?", body: "This reverses the receipt and increases the customer's outstanding again. It can't be undone.", confirmLabel: "Delete", danger: true }))) return;
+    deletePayment.mutate(id);
+  }
 
   // Deep-link: /customers/[id]?edit=1 sends straight to the full-page edit form
   // (used by the "Complete customer" nudge on a project with missing GST info).
@@ -149,7 +157,7 @@ export default function CustomerDetailPage() {
       const status = pPaid <= 0 ? i.status : pPaid >= i.amount ? "paid" : "partially paid";
       return { date: i.invoice_date, type: "Invoice" as const, ref: i.id, amount: i.amount, status, onClick: undefined as (() => void) | undefined };
     }),
-    ...customerPayments.map((p) => ({ date: p.status === "refunded" ? (p.refunded_at ?? p.received_at) : p.received_at, type: p.status === "refunded" ? ("Refund" as const) : ("Payment" as const), ref: p.receipt_voucher_no ?? p.id, amount: p.amount, status: p.status, onClick: undefined as (() => void) | undefined })),
+    ...customerPayments.map((p) => ({ date: p.status === "refunded" ? (p.refunded_at ?? p.received_at) : p.received_at, type: p.status === "refunded" ? ("Refund" as const) : ("Payment" as const), ref: p.receipt_voucher_no ?? p.id, amount: p.amount, status: p.status, onClick: undefined as (() => void) | undefined, payId: p.id })),
     // Project milestone receipts — show as Payment rows so they're not invisible.
     ...projPayments.map((p) => ({ date: p.received_at, type: "Payment" as const, ref: p.reference?.trim() || p.project_title, amount: p.amount, status: p.bank_txn_id ? "reconciled" : "received", onClick: undefined as (() => void) | undefined })),
     ...allQuotes.map((q) => ({ date: q.created_date, type: "Quote" as const, ref: q.id, amount: q.amount, status: q.status, onClick: () => router.push(`/quotes/${q.id}` as never) })),
@@ -164,6 +172,8 @@ export default function CustomerDetailPage() {
     key: string; parentKey: string | null; indent: number;
     date: string; type: "Invoice" | "Payment" | "Refund" | "Quote" | "Project";
     ref: string; amount: number; status: string; due?: number; onClick?: () => void;
+    /** Set only on rows from the `payments` table → enables the delete action. */
+    payId?: string;
   };
   const hierRows: HRow[] = [];
   const usedInv = new Set<string>();
@@ -193,7 +203,7 @@ export default function CustomerDetailPage() {
     hierRows.push({ key: `inv:${i.id}`, parentKey: null, indent: 0, date: i.invoice_date, type: "Invoice", ref: i.id, amount: i.amount, status: i.status });
   }
   for (const p of customerPayments) {
-    hierRows.push({ key: `cpay:${p.id}`, parentKey: null, indent: 0, date: p.status === "refunded" ? (p.refunded_at ?? p.received_at) : p.received_at, type: p.status === "refunded" ? "Refund" : "Payment", ref: p.receipt_voucher_no ?? p.id, amount: p.amount, status: p.status });
+    hierRows.push({ key: `cpay:${p.id}`, parentKey: null, indent: 0, date: p.status === "refunded" ? (p.refunded_at ?? p.received_at) : p.received_at, type: p.status === "refunded" ? "Refund" : "Payment", ref: p.receipt_voucher_no ?? p.id, amount: p.amount, status: p.status, payId: p.id });
   }
   for (const q of allQuotes) {
     hierRows.push({ key: `q:${q.id}`, parentKey: null, indent: 0, date: q.created_date, type: "Quote", ref: q.id, amount: q.amount, status: q.status, onClick: () => router.push(`/quotes/${q.id}` as never) });
@@ -474,7 +484,7 @@ export default function CustomerDetailPage() {
                 </div>
                 {filteredTxns.length > 0 ? (
                   <RecordTable
-                    head={["Date", "Type", "Reference", "Amount", "Status"]}
+                    head={["Date", "Type", "Reference", "Amount", "Status", ""]}
                     rows={(txnFilter === "all"
                       // Hierarchical: hide a row if any ancestor is collapsed.
                       ? hierRows.filter((r) => {
@@ -486,6 +496,7 @@ export default function CustomerDetailPage() {
                     ).map((t) => {
                       const canExpand = txnFilter === "all" && hasKids.has(t.key);
                       const isCollapsed = collapsed.has(t.key);
+                      const payId = (t as { payId?: string }).payId;
                       return {
                       onClick: t.onClick,
                       cells: [
@@ -515,6 +526,18 @@ export default function CustomerDetailPage() {
                           )}
                         </span>,
                         <span key="s" className="text-ink-2 capitalize">{t.status}</span>,
+                        // Delete — only on payments from the `payments` table.
+                        payId ? (
+                          <IconButton
+                            key="del"
+                            icon="trash"
+                            size="sm"
+                            variant="ghost"
+                            aria-label="Delete payment"
+                            title="Delete this payment"
+                            onClick={(e) => { e.stopPropagation(); handleDeletePayment(payId); }}
+                          />
+                        ) : <span key="del" />,
                       ],
                     };})}
                   />
