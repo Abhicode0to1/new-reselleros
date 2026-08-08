@@ -51,6 +51,7 @@ export default function ContactsPage() {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [importOpen, setImportOpen] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
+  const [syncing, setSyncing] = React.useState(false);
   const [emailComposerOpen, setEmailComposerOpen] = React.useState(false);
   const [composerRecipients, setComposerRecipients] = React.useState<{ email: string; name?: string; company?: string }[]>([]);
   const [composerTotalSelected, setComposerTotalSelected] = React.useState(0);
@@ -74,6 +75,38 @@ export default function ContactsPage() {
       router.push(`/leads?lead=${json.leadId}` as never);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Network error");
+    }
+  }
+
+  // Two-way sync with Google Contacts (leads + customers + standalone contacts).
+  // If Google isn't connected yet, guide the operator to Settings to connect.
+  async function syncGoogle() {
+    setSyncing(true);
+    try {
+      const st = await fetch("/api/integrations/google-contacts").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (!st?.configured) {
+        toast.error("Google Contacts abhi set up nahi — Settings → Integrations me keys chahiye");
+        router.push("/settings?tab=integrations" as never);
+        return;
+      }
+      if (!st?.connected) {
+        toast.info("Pehle Google Contacts connect karo — Settings khol raha hoon");
+        router.push("/settings?tab=integrations" as never);
+        return;
+      }
+      const res = await fetch("/api/integrations/google-contacts/sync", { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(j?.error ?? "Sync failed");
+        return;
+      }
+      toast.success(`Google se sync ho gaya — ${j.pulled} aaye, ${j.pushed + j.created} bheje`);
+      qc.invalidateQueries({ queryKey: ["contacts", "all"] });
+      refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -188,8 +221,8 @@ export default function ContactsPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button icon="upload" onClick={() => setImportOpen(true)}>
-            Import from Google
+          <Button icon="refresh" onClick={syncGoogle} disabled={syncing}>
+            {syncing ? "Syncing…" : "Sync with Google Contacts"}
           </Button>
           <Button variant="primary" icon="plus" onClick={() => setAddOpen(true)}>
             Add contact

@@ -218,6 +218,11 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
     else throw e;
   }
 
+  // Records touched by PULL this run — skipped in PUSH so we never echo a
+  // just-pulled change straight back to Google (pull bumps the row's updated_at,
+  // which would otherwise look like a fresh local edit).
+  const touched = new Set<string>();
+
   let pulled = 0;
   for (const p of people) {
     if (!p.resourceName) continue;
@@ -244,6 +249,7 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
         await admin.from("customers").update({ contact_name: f.full_name, contact_email: f.email, contact_phone: f.phone }).eq("id", link.source_id).eq("tenant_id", tenantId);
       }
       await upsertLink(link.source_type, link.source_id, p.resourceName, p.etag ?? null);
+      touched.add(`${link.source_type}:${link.source_id}`);
     } else {
       // New Google contact → create a standalone app contact + link.
       const id = newContactId();
@@ -254,6 +260,7 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
         company: f.company, title: f.title, notes: f.notes, website: f.website,
       });
       await upsertLink("contact", id, p.resourceName, p.etag ?? null);
+      touched.add(`contact:${id}`);
     }
     pulled++;
   }
@@ -284,7 +291,9 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
 
   let pushed = 0, created = 0;
   for (const cand of candidates) {
-    const link = byRecord.get(`${cand.st}:${cand.id}`);
+    const key = `${cand.st}:${cand.id}`;
+    if (touched.has(key)) continue; // just pulled — don't echo back to Google
+    const link = byRecord.get(key);
     try {
       if (link) {
         const syncedAt = link.synced_at ? Date.parse(link.synced_at) : 0;
