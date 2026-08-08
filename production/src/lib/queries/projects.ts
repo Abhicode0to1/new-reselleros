@@ -272,6 +272,23 @@ export type ProjectLabourLine = ProjectLabourRow & {
   cost: number;
 };
 
+// ── Project dates (start + target/deadline) — plain client update (not money) ──
+export function useUpdateProjectDates() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, startDate, targetDate }: { id: string; startDate: string | null; targetDate: string | null }) => {
+      const supabase = createClient();
+      const { error } = await supabase.from("project_sales").update({ start_date: startDate, target_date: targetDate }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project_sales"] });
+      toast.success("Dates saved");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+}
+
 // ── Project labour (attach / update / remove an employee's allocation) ─────────
 export function useSaveProjectLabour() {
   const qc = useQueryClient();

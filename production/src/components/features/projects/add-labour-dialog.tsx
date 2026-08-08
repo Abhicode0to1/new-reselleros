@@ -22,13 +22,15 @@ import { useSaveProjectLabour, type ProjectLabourLine } from "@/lib/queries/proj
 import { rupee } from "@/lib/utils";
 
 export function AddLabourDialog({
-  open, onClose, projectId, existing,
+  open, onClose, projectId, existing, defaultMonths = 1,
 }: {
   open: boolean;
   onClose: () => void;
   projectId: string;
   /** Present = edit an existing allocation. */
   existing?: ProjectLabourLine | null;
+  /** Auto-suggested months from the project's start→target duration. */
+  defaultMonths?: number;
 }) {
   const { data: employees = [] } = useEmployees();
   const save = useSaveProjectLabour();
@@ -42,9 +44,11 @@ export function AddLabourDialog({
     if (!open) return;
     setEmployeeId(existing?.employee_id ?? "");
     setPercent(existing ? String(existing.percent) : "100");
-    setMonths(existing ? String(existing.months) : "1");
+    // New allocation → default months to the project duration (auto). Editing →
+    // keep the saved value.
+    setMonths(existing ? String(existing.months) : String(defaultMonths || 1));
     setNote(existing?.note ?? "");
-  }, [open, existing]);
+  }, [open, existing, defaultMonths]);
 
   const emp = employees.find((e) => e.id === employeeId);
   const pctN = Number(percent) || 0;

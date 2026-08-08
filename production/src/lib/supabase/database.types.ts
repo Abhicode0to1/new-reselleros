@@ -1601,6 +1601,8 @@ export type ProjectSaleRow = {
   status:         "draft" | "quoted" | "active" | "completed" | "cancelled";
   line_items:     ProjectQuoteLine[];
   accepted_at:    string | null;
+  start_date:     string | null;   // migration 0194
+  target_date:    string | null;   // migration 0194 — deadline
   created_at:     string;
   updated_at:     string;
 };

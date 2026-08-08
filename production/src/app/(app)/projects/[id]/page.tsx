@@ -24,14 +24,15 @@ import {
   type ProjectMilestoneRow,
   type ProjectQuoteLine,
 } from "@/lib/queries/projects";
-import { rupee, formatDate } from "@/lib/utils";
+import { rupee, formatDate, daysBetween } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Route } from "next";
 import { useCustomer } from "@/lib/queries/customers";
 import { RecordProjectPaymentDialog } from "@/components/features/projects/record-project-payment-dialog";
 import { AddExpenseDialog } from "@/components/features/accounting/add-expense-dialog";
 import { AddLabourDialog } from "@/components/features/projects/add-labour-dialog";
-import { useRemoveProjectLabour, type ProjectLabourLine } from "@/lib/queries/projects";
+import { useRemoveProjectLabour, useUpdateProjectDates, type ProjectLabourLine } from "@/lib/queries/projects";
+import { Input } from "@/components/ui/input";
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -46,6 +47,10 @@ export default function ProjectDetailPage() {
   const [addLabourOpen, setAddLabourOpen] = React.useState(false);
   const [editLabour, setEditLabour] = React.useState<ProjectLabourLine | null>(null);
   const removeLabour = useRemoveProjectLabour();
+  const updateDates = useUpdateProjectDates();
+  const [datesEdit, setDatesEdit] = React.useState(false);
+  const [startVal, setStartVal] = React.useState("");
+  const [targetVal, setTargetVal] = React.useState("");
 
   if (isLoading) {
     return (
@@ -81,6 +86,20 @@ export default function ProjectDetailPage() {
   const contractProfit = contractRevenue - totalCost;
   const bookedProfit = bookedRevenue - totalCost;
   const pct = (profit: number, rev: number) => (rev > 0 ? Math.round((profit / rev) * 100) : 0);
+
+  // ── Timeline: start → target, duration, days-left / overdue ──
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const durationDays = project.start_date && project.target_date ? daysBetween(project.start_date, project.target_date) : null;
+  // Auto-suggest labour months from the project duration (full automation:
+  // labour cost period follows the real project length).
+  const suggestedMonths = durationDays && durationDays > 0 ? Math.max(1, Math.round(durationDays / 30.44)) : 1;
+  const daysLeft = project.target_date ? daysBetween(todayStr, project.target_date) : null;
+  const isDone = project.status === "completed" || project.status === "cancelled";
+  const openDatesEditor = () => { setStartVal(project.start_date ?? ""); setTargetVal(project.target_date ?? ""); setDatesEdit(true); };
+  const saveDates = async () => {
+    await updateDates.mutateAsync({ id: project.id, startDate: startVal || null, targetDate: targetVal || null }).catch(() => {});
+    setDatesEdit(false);
+  };
 
   const handleRaise = async (m: ProjectMilestoneRow) => {
     await raise.mutateAsync({ milestoneId: m.id, projectId: project.id }).catch(() => {});
@@ -169,6 +188,53 @@ export default function ProjectDetailPage() {
           </div>
         </Card>
       )}
+
+      {/* Timeline — start → target, with days-left / overdue */}
+      <Card className="mb-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-x-6 gap-y-2 flex-wrap">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Start</p>
+              <p className="text-sm text-ink mt-0.5">{project.start_date ? formatDate(project.start_date) : "—"}</p>
+            </div>
+            <Icon name="arrow_right" size={14} className="text-ink-3" />
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Target</p>
+              <p className="text-sm text-ink mt-0.5">{project.target_date ? formatDate(project.target_date) : "—"}</p>
+            </div>
+            {durationDays != null && durationDays > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Duration</p>
+                <p className="text-sm text-ink mt-0.5">{durationDays} days (~{suggestedMonths} mo)</p>
+              </div>
+            )}
+            {project.target_date && !isDone && daysLeft != null && (
+              <span className={`text-xs font-medium rounded-full px-2.5 py-1 ${daysLeft < 0 ? "bg-rose-soft text-rose" : daysLeft <= 7 ? "bg-amber-soft text-amber-ink" : "bg-emerald-soft text-emerald"}`}>
+                {daysLeft < 0 ? `${-daysLeft} days overdue` : daysLeft === 0 ? "Due today" : `${daysLeft} days left`}
+              </span>
+            )}
+          </div>
+          {!datesEdit && (
+            <Button size="sm" variant="outline" icon="edit" onClick={openDatesEditor}>
+              {project.start_date || project.target_date ? "Edit dates" : "Set dates"}
+            </Button>
+          )}
+        </div>
+        {datesEdit && (
+          <div className="mt-3 flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">Start</label>
+              <Input type="date" value={startVal} onChange={(e) => setStartVal(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">Target</label>
+              <Input type="date" value={targetVal} onChange={(e) => setTargetVal(e.target.value)} />
+            </div>
+            <Button size="sm" variant="primary" onClick={saveDates} loading={updateDates.isPending}>Save</Button>
+            <Button size="sm" variant="ghost" onClick={() => setDatesEdit(false)}>Cancel</Button>
+          </div>
+        )}
+      </Card>
 
       {/* Money summary */}
       <Card className="mb-6">
@@ -411,6 +477,7 @@ export default function ProjectDetailPage() {
         onClose={() => { setAddLabourOpen(false); setEditLabour(null); }}
         projectId={project.id}
         existing={editLabour}
+        defaultMonths={suggestedMonths}
       />
 
       <RecordProjectPaymentDialog
