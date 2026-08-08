@@ -46,6 +46,7 @@ import CampaignComposerDialog from "@/components/features/campaigns/campaign-com
 import GoogleContactsImportDialog from "@/components/features/contacts/google-contacts-import-dialog";
 import SendWhatsAppDialog from "@/components/features/whatsapp/send-whatsapp-dialog";
 import { GeminiCard } from "@/components/shared/gemini-card";
+import { JunkAIReview } from "@/components/features/leads/junk-ai-review";
 import { EmptyState } from "@/components/shared/empty-state";
 import { AiDraftButton } from "@/components/shared/ai-draft-button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -669,6 +670,13 @@ function LeadsPageInner() {
           so they aren't constrained by the split. */}
       <div className="flex gap-6 flex-1 min-h-0">
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
+      {/* AI junk review — only in the Junk view. Lets the operator ask AI to
+          decide across the spam pile (verdict + reason + confidence), then
+          confirm with one tap. Reversible, human-in-the-loop. */}
+      {smartView === "junk" && filtered.length > 0 && (
+        <JunkAIReview leads={filtered} />
+      )}
+
       {/* AI lead intelligence
           "Hot leads" = highest-value rows in quote/trial stages — these
           convert at the highest rate per the prototype-era data, and they're

@@ -102,6 +102,35 @@ export function useSetLeadJunk() {
   });
 }
 
+/** AI junk verdict for one lead (returned by /api/ai/classify-junk). */
+export interface JunkAiVerdict {
+  id: string;
+  suspect: boolean;
+  reason: string;
+  confidence: number;
+}
+
+/**
+ * Ask the AI to classify a batch of leads as junk / genuine. Read-only — returns
+ * verdicts; the operator confirms + marks via useSetLeadJunk. Falls back to the
+ * deterministic heuristic server-side when no Gemini key is set (mode="stub").
+ */
+export function useClassifyJunk() {
+  return useMutation({
+    mutationFn: async (leadIds: string[]): Promise<{ verdicts: JunkAiVerdict[]; mode: "gemini" | "stub" }> => {
+      const res = await fetch("/api/ai/classify-junk", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ leadIds }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "Could not run AI review.");
+      return data as { verdicts: JunkAiVerdict[]; mode: "gemini" | "stub" };
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+}
+
 // ============================================================
 // Create — fetches current tenant_id, then inserts the lead
 // ============================================================
