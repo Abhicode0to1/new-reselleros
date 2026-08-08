@@ -1606,6 +1606,29 @@ export type ProjectSaleRow = {
 };
 export type ProjectQuoteLine = { name: string; qty: number; rate: number; amount: number };
 
+// ── Project labour allocation (migration 0193) — employee time as project cost ──
+export type ProjectLabourRow = {
+  id:          string;
+  tenant_id:   string;
+  project_id:  string;
+  employee_id: string;
+  percent:     number;   // % of the employee's monthly gross on THIS project
+  months:      number;
+  note:        string | null;
+  created_at:  string;
+  updated_at:  string;
+};
+type ProjectLabourInsert = {
+  id?:         string;
+  tenant_id:   string;
+  project_id:  string;
+  employee_id: string;
+  percent?:    number;
+  months?:     number;
+  note?:       string | null;
+};
+type ProjectLabourUpdate = Partial<Omit<ProjectLabourInsert, "id" | "tenant_id" | "project_id" | "employee_id">>;
+
 // ── Company Document Vault — migration 0107 ──────────────────────────────────
 export type DocumentCategory = "legal" | "finance" | "hr" | "operations" | "sales_marketing" | "admin" | "branding" | "other";
 export type DocumentRow = {
@@ -2539,6 +2562,7 @@ export type Database = {
       leave_entries:{ Row: LeaveEntryRow; Insert: LeaveEntryInsert; Update: LeaveEntryUpdate; Relationships: [] };
       salary_payments:{ Row: SalaryPaymentRow; Insert: SalaryPaymentInsert; Update: SalaryPaymentUpdate; Relationships: [] };
       project_sales:     { Row: ProjectSaleRow;      Insert: ProjectSaleInsert;      Update: ProjectSaleUpdate;      Relationships: [] };
+      project_labour:    { Row: ProjectLabourRow;    Insert: ProjectLabourInsert;    Update: ProjectLabourUpdate;    Relationships: [] };
       project_milestones:{ Row: ProjectMilestoneRow; Insert: ProjectMilestoneInsert; Update: ProjectMilestoneUpdate; Relationships: [] };
       project_payments:  { Row: ProjectPaymentRow;   Insert: ProjectPaymentInsert;   Update: ProjectPaymentUpdate;   Relationships: [] };
       documents:         { Row: DocumentRow;         Insert: DocumentInsert;         Update: DocumentUpdate;         Relationships: [] };

@@ -19,6 +19,7 @@ import type {
   ProjectPaymentRow,
   ProjectQuoteLine,
   ExpenseRow,
+  ProjectLabourRow,
 } from "@/lib/supabase/database.types";
 
 export type { ProjectSaleRow, ProjectMilestoneRow, ProjectPaymentRow, ProjectQuoteLine };
@@ -210,31 +211,110 @@ export function useProjectSale(id: string | null | undefined) {
     queryFn: async () => {
       if (!id) return null;
       const supabase = createClient();
-      const [{ data: project, error: e1 }, { data: milestones, error: e2 }, { data: payments, error: e3 }, { data: costs, error: e4 }] =
+      const [{ data: project, error: e1 }, { data: milestones, error: e2 }, { data: payments, error: e3 }, { data: costs, error: e4 }, { data: labourRows, error: e5 }, { data: employees, error: e6 }] =
         await Promise.all([
           supabase.from("project_sales").select("*").eq("id", id).single(),
           supabase.from("project_milestones").select("*").eq("project_id", id).order("seq", { ascending: true }),
           supabase.from("project_payments").select("*").eq("project_id", id).order("received_at", { ascending: false }),
           supabase.from("expenses").select("*").eq("project_id", id).order("expense_date", { ascending: false }),
+          supabase.from("project_labour").select("*").eq("project_id", id).order("created_at", { ascending: true }),
+          supabase.from("employees").select("id, name, monthly_gross, designation"),
         ]);
       if (e1) throw e1;
       if (e2) throw e2;
       if (e3) throw e3;
       if (e4) throw e4;
+      if (e5) throw e5;
+      if (e6) throw e6;
       const paid = (payments ?? []).reduce((s, p) => s + (p.amount ?? 0), 0);
       // Cost basis = ex-GST expense amount (GST is pass-through / input credit,
       // not a real cost) so profit compares like-with-like against ex-GST revenue.
       const costTotal = (costs ?? []).reduce((s, c) => s + (c.amount ?? 0), 0);
+
+      // Labour = allocated employee salary (management overlay; NOT an expense,
+      // so it never double-counts against payroll in the company P&L).
+      // cost = monthly_gross × percent% × months.
+      const empById = new Map((employees ?? []).map((e) => [e.id, e]));
+      const labour = (labourRows ?? []).map((l) => {
+        const emp = empById.get(l.employee_id);
+        const monthly = emp?.monthly_gross ?? 0;
+        const cost = Math.round(monthly * (l.percent / 100) * l.months);
+        return {
+          ...(l as ProjectLabourRow),
+          employeeName: emp?.name ?? "—",
+          designation:  emp?.designation ?? null,
+          monthlyGross: monthly,
+          cost,
+        };
+      });
+      const labourTotal = labour.reduce((s, l) => s + l.cost, 0);
+
       return {
         project:    project as ProjectSaleRow,
         milestones: (milestones ?? []) as ProjectMilestoneRow[],
         payments:   (payments ?? []) as ProjectPaymentRow[],
         costs:      (costs ?? []) as ExpenseRow[],
         costTotal,
+        labour,
+        labourTotal,
         paid,
         receivable: Math.max(0, (project?.total_amount ?? 0) - paid),
       };
     },
+  });
+}
+
+/** A labour allocation row enriched with the employee + computed cost. */
+export type ProjectLabourLine = ProjectLabourRow & {
+  employeeName: string;
+  designation: string | null;
+  monthlyGross: number;
+  cost: number;
+};
+
+// ── Project labour (attach / update / remove an employee's allocation) ─────────
+export function useSaveProjectLabour() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id?: string; projectId: string; employeeId: string; percent: number; months: number; note?: string | null }) => {
+      const supabase = createClient();
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData?.user) throw new Error("Not authenticated");
+      const { data: me, error: meErr } = await supabase.from("users").select("tenant_id").eq("id", authData.user.id).single();
+      if (meErr || !me) throw new Error("User not linked to a tenant");
+      // Upsert on (tenant, project, employee) so re-adding the same person edits.
+      const { error } = await supabase.from("project_labour").upsert({
+        ...(input.id ? { id: input.id } : {}),
+        tenant_id:   me.tenant_id,
+        project_id:  input.projectId,
+        employee_id: input.employeeId,
+        percent:     input.percent,
+        months:      input.months,
+        note:        input.note ?? null,
+      }, { onConflict: "tenant_id,project_id,employee_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project_sales"] });
+      toast.success("Labour saved");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+}
+
+export function useRemoveProjectLabour() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const supabase = createClient();
+      const { error } = await supabase.from("project_labour").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project_sales"] });
+      toast.success("Labour removed");
+    },
+    onError: (e) => toast.error((e as Error).message),
   });
 }
 
