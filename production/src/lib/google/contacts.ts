@@ -250,14 +250,29 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
   // which would otherwise look like a fresh local edit).
   const touched = new Set<string>();
 
+  // Handle a contact deleted on Google (the phone). SAFETY by source type:
+  //   • contact  → delete the app record too (it's just an address-book entry).
+  //   • lead/customer → NEVER delete the money-linked business record; just drop
+  //     the link. The app stays the source of truth, so it's re-pushed to Google
+  //     on the next sync (deleting a business contact on the phone brings it back
+  //     — manage those in the app).
+  const handledDead = new Set<string>();
+  const applyGoogleDeletion = async (l: LinkRow) => {
+    if (l.source_type === "contact") {
+      await admin.from("contacts").delete().eq("id", l.source_id).eq("tenant_id", tenantId);
+    }
+    await admin.from("google_contact_links").delete().eq("user_id", userId).eq("resource_name", l.resource_name);
+    handledDead.add(l.resource_name);
+  };
+
   let pulled = 0;
   for (const p of people) {
     if (!p.resourceName) continue;
     const link = byResource.get(p.resourceName);
 
     if (p.metadata?.deleted) {
-      // Deleted in Google → drop the link (keep the app record + history).
-      if (link) await admin.from("google_contact_links").delete().eq("user_id", userId).eq("resource_name", p.resourceName);
+      // Deleted in Google (reported on incremental syncs via this flag).
+      if (link) await applyGoogleDeletion(link);
       pulled++;
       continue;
     }
@@ -292,6 +307,18 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
     pulled++;
   }
 
+  // On a FULL pull Google returns ALL current contacts, so any link whose
+  // resourceName is absent = that contact was deleted on the phone. (Incremental
+  // syncs report deletions via metadata.deleted in the loop above instead.)
+  if (opts?.full) {
+    const returned = new Set(people.map((p) => p.resourceName).filter((r): r is string => !!r));
+    for (const l of links) {
+      if (returned.has(l.resource_name)) continue;
+      if (handledDead.has(l.resource_name)) continue;
+      await applyGoogleDeletion(l);
+    }
+  }
+
   // ── PUSH ── build the unified app-people list from all three sources.
   const [contactsRes, leadsRes, customersRes] = await Promise.all([
     admin.from("contacts").select("id, full_name, emails, phones, email, phone, company, title, notes, website, updated_at").eq("tenant_id", tenantId),
@@ -314,6 +341,7 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
       customer: new Set((customers ?? []).map((c) => c.id)),
     };
     for (const l of links) {
+      if (handledDead.has(l.resource_name)) continue; // already handled as a phone-side deletion
       if (existing[l.source_type].has(l.source_id)) continue; // fast path: still exists
       // Authoritative re-check before any destructive Google delete.
       if (await recordExists(admin, l.source_type, l.source_id, tenantId)) continue;
