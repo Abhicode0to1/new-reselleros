@@ -15,6 +15,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCustomers, useOpenCreditsByCustomer } from "@/lib/queries/customers";
+import { useProjectReceivablesByCustomer } from "@/lib/queries/projects";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useOutstandingReceivables } from "@/lib/queries/payments";
 import { FAB } from "@/components/ui/fab";
@@ -100,8 +101,10 @@ export default function CustomersPage() {
   const { data: subscriptions } = useSubscriptions();
   const { data: outstanding } = useOutstandingReceivables();
   const { data: creditsByCustomer = {} } = useOpenCreditsByCustomer();
+  const { data: projRecv = {} } = useProjectReceivablesByCustomer();
 
-  // customer_id → worst-case outstanding across their subs.
+  // customer_id → outstanding = subscription dues + project invoiced-but-unpaid,
+  // so project receivables show on the list too (matches the customer 360 page).
   const outstandingByCustomer = React.useMemo(() => {
     const map = new Map<string, { days: number; amount: number }>();
     for (const o of outstanding ?? []) {
@@ -111,8 +114,14 @@ export default function CustomersPage() {
         map.set(o.customer_id, { days: o.days_outstanding, amount: o.outstanding_amount });
       }
     }
+    // Add project receivables (invoiced milestones not yet paid).
+    for (const [custId, amt] of Object.entries(projRecv)) {
+      if (!amt) continue;
+      const prev = map.get(custId);
+      map.set(custId, { days: prev?.days ?? 0, amount: (prev?.amount ?? 0) + amt });
+    }
     return map;
-  }, [outstanding]);
+  }, [outstanding, projRecv]);
 
   const router = useRouter();
   const goAdd = () => router.push("/customers/new" as never);

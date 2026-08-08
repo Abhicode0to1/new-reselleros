@@ -147,6 +147,35 @@ export function useProjectInvoiceIds() {
   });
 }
 
+// ── Per-customer PROJECT receivable (invoiced-but-unpaid), for the Customers
+//    list — so project money shows there too, not just subscriptions. ──────────
+export function useProjectReceivablesByCustomer() {
+  return useQuery({
+    queryKey: ["project_receivables_by_customer"],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const supabase = createClient();
+      const [{ data: projects }, { data: ms }, { data: pays }] = await Promise.all([
+        supabase.from("project_sales").select("id, customer_id"),
+        supabase.from("project_milestones").select("project_id, total_amount, invoice_id"),
+        supabase.from("project_payments").select("project_id, amount"),
+      ]);
+      const custByProject = new Map((projects ?? []).map((p) => [p.id as string, p.customer_id as string | null]));
+      const invoicedBy = new Map<string, number>();
+      for (const m of ms ?? []) if (m.invoice_id) invoicedBy.set(m.project_id, (invoicedBy.get(m.project_id) ?? 0) + (m.total_amount ?? 0));
+      const paidBy = new Map<string, number>();
+      for (const p of pays ?? []) paidBy.set(p.project_id, (paidBy.get(p.project_id) ?? 0) + (p.amount ?? 0));
+      const out: Record<string, number> = {};
+      for (const [pid, cust] of custByProject) {
+        if (!cust) continue;
+        const recv = Math.max(0, (invoicedBy.get(pid) ?? 0) - (paidBy.get(pid) ?? 0));
+        if (recv > 0) out[cust] = (out[cust] ?? 0) + recv;
+      }
+      return out;
+    },
+    staleTime: 30_000,
+  });
+}
+
 // ── A customer's project sales (for the customer 360 page) ────────────────────
 export function useCustomerProjects(customerId: string | null | undefined) {
   return useQuery({
@@ -161,13 +190,21 @@ export function useCustomerProjects(customerId: string | null | undefined) {
       if (error) throw error;
       const ids = (projects ?? []).map((p) => p.id);
       const paidBy = new Map<string, number>();
+      const invoicedBy = new Map<string, number>();
       if (ids.length > 0) {
-        const { data: pays } = await supabase.from("project_payments").select("project_id, amount").in("project_id", ids);
+        const [{ data: pays }, { data: ms }] = await Promise.all([
+          supabase.from("project_payments").select("project_id, amount").in("project_id", ids),
+          supabase.from("project_milestones").select("project_id, total_amount, invoice_id").in("project_id", ids),
+        ]);
         for (const p of pays ?? []) paidBy.set(p.project_id, (paidBy.get(p.project_id) ?? 0) + (p.amount ?? 0));
+        for (const m of ms ?? []) if (m.invoice_id) invoicedBy.set(m.project_id, (invoicedBy.get(m.project_id) ?? 0) + (m.total_amount ?? 0));
       }
       return (projects ?? []).map((pr) => {
         const paid = paidBy.get(pr.id) ?? 0;
-        return { ...(pr as ProjectSaleRow), paid, receivable: Math.max(0, (pr.total_amount ?? 0) - paid) };
+        // Receivable = invoiced-but-unpaid (accrual) — only billed milestones are
+        // legally owed; un-invoiced future work isn't a receivable yet.
+        const receivable = Math.max(0, (invoicedBy.get(pr.id) ?? 0) - paid);
+        return { ...(pr as ProjectSaleRow), paid, receivable };
       });
     },
   });
