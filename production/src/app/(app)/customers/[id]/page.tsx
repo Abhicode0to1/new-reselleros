@@ -40,6 +40,7 @@ import {
 import { AddReferralDialog } from "@/components/features/referrals/add-referral-dialog";
 import { useReferralAgreements } from "@/lib/queries/referral-partners";
 import { InvoiceChooserDialog } from "@/components/features/invoices/invoice-chooser-dialog";
+import { DeleteBlockedDialog } from "@/components/shared/delete-blocked-dialog";
 import { useConfirm } from "@/components/providers/confirm-provider";
 
 export default function CustomerDetailPage() {
@@ -73,7 +74,10 @@ export default function CustomerDetailPage() {
   const { data: agreements } = useReferralAgreements(params.id);
   const deleteCustomer = useDeleteCustomer();
   const setActive = useSetCustomerActive();
-  const deletePayment = useDeletePayment();
+  // Blocked-delete dialog (dependency-aware): when a payment can't be deleted
+  // because a document depends on it, show what's linked + where to resolve it.
+  const [payBlock, setPayBlock] = React.useState<string | null>(null);
+  const deletePayment = useDeletePayment({ onBlocked: (msg) => setPayBlock(msg) });
 
   // Delete a customer payment (from the Transactions tab). The delete_payment RPC
   // reverses balances and blocks if unsafe (GST invoice issued / bank-reconciled).
@@ -591,6 +595,16 @@ export default function CustomerDetailPage() {
       <AddReferralDialog open={referralOpen} onOpenChange={setReferralOpen} customerId={c.id} customerName={c.name} />
       <InvoiceChooserDialog open={invoiceOpen} onOpenChange={setInvoiceOpen} customerId={c.id} onChooseProject={() => setProjInvoiceOpen(true)} />
       <CreateProjectQuoteDialog open={projInvoiceOpen} onOpenChange={setProjInvoiceOpen} mode="invoice" prefillCustomerId={c.id} />
+      <DeleteBlockedDialog
+        open={payBlock !== null}
+        onClose={() => setPayBlock(null)}
+        title="Can't delete this payment yet"
+        reason={payBlock ?? ""}
+        links={[
+          { label: "Open Invoices", href: "/invoices" },
+          { label: "Open Banking (to un-reconcile)", href: "/accounting/banking" },
+        ]}
+      />
     </div>
   );
 }
