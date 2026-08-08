@@ -123,6 +123,21 @@ export function formatDate(
 }
 
 /**
+ * Normalise an Indian phone to bare E.164 digits (no `+`, no spaces).
+ * Accepts free-form input ("+91 98765 43210", "9876543210", "098765 43210").
+ * A bare 10-digit number is assumed Indian and prefixed with 91.
+ * Returns null when there aren't enough digits to be a real number.
+ */
+export function toWhatsAppDigits(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  let d = phone.replace(/\D/g, "");
+  if (d.startsWith("0")) d = d.replace(/^0+/, "");     // strip STD leading zeros
+  if (d.length === 10) d = "91" + d;                    // bare Indian mobile → add country code
+  if (d.length < 10) return null;
+  return d;
+}
+
+/**
  * Days between two dates, IST-aware and date-only (ignores time of day).
  *
  * Old impl used millisecond diff + Math.round which was off-by-one for the

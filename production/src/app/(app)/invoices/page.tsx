@@ -674,7 +674,6 @@ function InvoiceRow({
   /** Invoice came from a project milestone (vs a subscription quote). */
   isProject?: boolean;
 }) {
-  const router = useRouter();
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const [delOpen, setDelOpen] = React.useState(false);
   const [payOpen, setPayOpen] = React.useState(false);
@@ -819,13 +818,9 @@ function InvoiceRow({
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="gap-2.5 py-2 cursor-pointer"
-                    onClick={() =>
-                      inv.customer_id
-                        ? router.push(`/customers/${inv.customer_id}` as any)
-                        : toast.info("This invoice has no linked customer to remind")
-                    }
+                    onClick={() => setPreviewOpen(true)}
                   >
-                    <Icon name="mail" size={15} /> Send reminder
+                    <Icon name="whatsapp" size={15} /> Send / remind on WhatsApp
                   </DropdownMenuItem>
                 </>
               )}
@@ -970,6 +965,7 @@ function InvoicePreviewContainer({
       interState={interState}
       customerGstin={customer?.gstin}
       customerEmail={customer?.contact_email}
+      customerPhone={customer?.contact_phone}
       customerState={customer?.state}
       customerCountry={customer?.country}
       currency={quote?.currency}
