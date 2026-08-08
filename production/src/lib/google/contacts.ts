@@ -170,6 +170,15 @@ async function createGoogleContact(accessToken: string, person: GPerson): Promis
   return (await res.json()) as GPerson;
 }
 
+async function deleteGoogleContact(accessToken: string, resourceName: string): Promise<void> {
+  const res = await fetch(`${BASE}/${resourceName}:deleteContact`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${accessToken}` },
+  });
+  // 404 = already gone on Google's side — treat as success.
+  if (!res.ok && res.status !== 404) throw new Error(`People delete failed: ${res.status} ${await res.text().catch(() => "")}`);
+}
+
 async function updateGoogleContact(accessToken: string, resourceName: string, etag: string | null, person: GPerson, mask: string): Promise<GPerson> {
   const res = await fetch(`${BASE}/${resourceName}:updateContact?updatePersonFields=${encodeURIComponent(mask)}`, {
     method: "PATCH",
@@ -180,10 +189,25 @@ async function updateGoogleContact(accessToken: string, resourceName: string, et
   return (await res.json()) as GPerson;
 }
 
-export interface SyncResult { pulled: number; pushed: number; created: number }
+export interface SyncResult { pulled: number; pushed: number; created: number; deleted: number }
 
 type SourceType = "contact" | "lead" | "customer";
 interface LinkRow { source_type: SourceType; source_id: string; resource_name: string; etag: string | null; synced_at: string }
+
+/** Authoritative single-row existence check — guards delete-propagation so a
+ *  truncated/partial bulk read can never be mistaken for a deletion. */
+async function recordExists(admin: Admin, type: SourceType, id: string, tenantId: string): Promise<boolean> {
+  if (type === "contact") {
+    const { data } = await admin.from("contacts").select("id").eq("id", id).eq("tenant_id", tenantId).maybeSingle();
+    return !!data;
+  }
+  if (type === "lead") {
+    const { data } = await admin.from("leads").select("id").eq("id", id).eq("tenant_id", tenantId).maybeSingle();
+    return !!data;
+  }
+  const { data } = await admin.from("customers").select("id").eq("id", id).eq("tenant_id", tenantId).maybeSingle();
+  return !!data;
+}
 
 // ── The engine ───────────────────────────────────────────────────────────────
 // opts.full forces a FULL pull (ignores the stored syncToken). Google's
@@ -269,11 +293,39 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
   }
 
   // ── PUSH ── build the unified app-people list from all three sources.
-  const [{ data: contacts }, { data: leads }, { data: customers }] = await Promise.all([
+  const [contactsRes, leadsRes, customersRes] = await Promise.all([
     admin.from("contacts").select("id, full_name, emails, phones, email, phone, company, title, notes, website, updated_at").eq("tenant_id", tenantId),
     admin.from("leads").select("id, company, contact_name, contact_email, contact_phone, is_junk, updated_at").eq("tenant_id", tenantId),
     admin.from("customers").select("id, name, contact_name, contact_email, contact_phone, updated_at").eq("tenant_id", tenantId),
   ]);
+  const contacts = contactsRes.data;
+  const leads = leadsRes.data;
+  const customers = customersRes.data;
+
+  // ── DELETE-PROPAGATION ── a link whose app record no longer exists means the
+  // record was deleted in the app → delete it from Google too (true two-way).
+  // SAFETY: only runs when ALL three source reads succeeded, so a transient DB
+  // error can never be mistaken for "everything was deleted" and wipe Google.
+  let deleted = 0;
+  if (!contactsRes.error && !leadsRes.error && !customersRes.error) {
+    const existing: Record<SourceType, Set<string>> = {
+      contact: new Set((contacts ?? []).map((c) => c.id)),
+      lead: new Set((leads ?? []).map((l) => l.id)),
+      customer: new Set((customers ?? []).map((c) => c.id)),
+    };
+    for (const l of links) {
+      if (existing[l.source_type].has(l.source_id)) continue; // fast path: still exists
+      // Authoritative re-check before any destructive Google delete.
+      if (await recordExists(admin, l.source_type, l.source_id, tenantId)) continue;
+      try {
+        await deleteGoogleContact(accessToken, l.resource_name);
+        await admin.from("google_contact_links").delete().eq("user_id", userId).eq("resource_name", l.resource_name);
+        deleted++;
+      } catch (e) {
+        console.error(`[google-contacts] delete failed for ${l.source_type}:${l.source_id}:`, e);
+      }
+    }
+  }
 
   interface Candidate { st: SourceType; id: string; updatedAt: number; person: GPerson; mask: string }
   const candidates: Candidate[] = [];
@@ -319,5 +371,5 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
     sync_token: nextSyncToken ?? syncToken, last_synced_at: now(), last_error: null,
   }).eq("user_id", userId);
 
-  return { pulled, pushed, created };
+  return { pulled, pushed, created, deleted };
 }

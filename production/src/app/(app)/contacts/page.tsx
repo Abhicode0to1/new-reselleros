@@ -100,7 +100,7 @@ export default function ContactsPage() {
         toast.error(j?.error ?? "Sync failed");
         return;
       }
-      toast.success(`Google se sync ho gaya — ${j.pulled} aaye, ${j.pushed + j.created} bheje`);
+      toast.success(`Google se sync ho gaya — ${j.pulled} aaye, ${j.pushed + j.created} bheje${j.deleted ? `, ${j.deleted} hataye` : ""}`);
       qc.invalidateQueries({ queryKey: ["contacts", "all"] });
       refetch();
     } catch (e) {

@@ -31,13 +31,14 @@ async function handle(req: NextRequest) {
 
   let ok = 0;
   let failed = 0;
-  const totals = { pulled: 0, pushed: 0, created: 0 };
+  const totals = { pulled: 0, pushed: 0, created: 0, deleted: 0 };
   for (const r of rows ?? []) {
     try {
       const res = await syncUserContacts(admin, r.user_id, r.tenant_id);
       totals.pulled += res.pulled;
       totals.pushed += res.pushed;
       totals.created += res.created;
+      totals.deleted += res.deleted;
       ok++;
     } catch (e) {
       failed++;

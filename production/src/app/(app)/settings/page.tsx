@@ -679,7 +679,7 @@ function GoogleContactsIntegrationCard() {
       const res = await fetch("/api/integrations/google-contacts/sync", { method: "POST" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(body?.error ?? "Sync failed"); return; }
-      toast.success(`Synced — ${body.pulled} in, ${body.pushed + body.created} out`);
+      toast.success(`Synced — ${body.pulled} in, ${body.pushed + body.created} out${body.deleted ? `, ${body.deleted} deleted` : ""}`);
       refetch();
     } finally { setBusy(false); }
   }
