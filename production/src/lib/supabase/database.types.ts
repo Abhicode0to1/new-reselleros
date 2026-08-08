@@ -1321,6 +1321,7 @@ export type ExpenseRow = {
   description:      string | null;
   attachment_url:   string | null;
   reconciled_txn_id: string | null;          // bank line this expense is reconciled to (migration 0123)
+  project_id:       string | null;           // migration 0192 — cost of a specific project (per-project P&L)
   created_at:       string;
   updated_at:       string;
 };
@@ -1345,6 +1346,7 @@ type ExpenseInsert = {
   description?:     string | null;
   attachment_url?:  string | null;
   reconciled_txn_id?: string | null;
+  project_id?:      string | null;
 };
 type ExpenseUpdate = Partial<ExpenseInsert>;
 

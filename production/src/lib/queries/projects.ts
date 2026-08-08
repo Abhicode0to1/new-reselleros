@@ -18,6 +18,7 @@ import type {
   ProjectMilestoneRow,
   ProjectPaymentRow,
   ProjectQuoteLine,
+  ExpenseRow,
 } from "@/lib/supabase/database.types";
 
 export type { ProjectSaleRow, ProjectMilestoneRow, ProjectPaymentRow, ProjectQuoteLine };
@@ -209,20 +210,27 @@ export function useProjectSale(id: string | null | undefined) {
     queryFn: async () => {
       if (!id) return null;
       const supabase = createClient();
-      const [{ data: project, error: e1 }, { data: milestones, error: e2 }, { data: payments, error: e3 }] =
+      const [{ data: project, error: e1 }, { data: milestones, error: e2 }, { data: payments, error: e3 }, { data: costs, error: e4 }] =
         await Promise.all([
           supabase.from("project_sales").select("*").eq("id", id).single(),
           supabase.from("project_milestones").select("*").eq("project_id", id).order("seq", { ascending: true }),
           supabase.from("project_payments").select("*").eq("project_id", id).order("received_at", { ascending: false }),
+          supabase.from("expenses").select("*").eq("project_id", id).order("expense_date", { ascending: false }),
         ]);
       if (e1) throw e1;
       if (e2) throw e2;
       if (e3) throw e3;
+      if (e4) throw e4;
       const paid = (payments ?? []).reduce((s, p) => s + (p.amount ?? 0), 0);
+      // Cost basis = ex-GST expense amount (GST is pass-through / input credit,
+      // not a real cost) so profit compares like-with-like against ex-GST revenue.
+      const costTotal = (costs ?? []).reduce((s, c) => s + (c.amount ?? 0), 0);
       return {
         project:    project as ProjectSaleRow,
         milestones: (milestones ?? []) as ProjectMilestoneRow[],
         payments:   (payments ?? []) as ProjectPaymentRow[],
+        costs:      (costs ?? []) as ExpenseRow[],
+        costTotal,
         paid,
         receivable: Math.max(0, (project?.total_amount ?? 0) - paid),
       };

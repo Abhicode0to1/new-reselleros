@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import type { Route } from "next";
 import { useCustomer } from "@/lib/queries/customers";
 import { RecordProjectPaymentDialog } from "@/components/features/projects/record-project-payment-dialog";
+import { AddExpenseDialog } from "@/components/features/accounting/add-expense-dialog";
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -38,6 +39,8 @@ export default function ProjectDetailPage() {
   const raise = useRaiseMilestoneInvoice();
   const accept = useAcceptProjectQuote();
   const [payFor, setPayFor] = React.useState<ProjectMilestoneRow | null>(null);
+  const [addCostOpen, setAddCostOpen] = React.useState(false);
+  const [editCost, setEditCost] = React.useState<import("@/lib/queries/expenses").Expense | null>(null);
 
   if (isLoading) {
     return (
@@ -55,9 +58,21 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const { project, milestones, payments, paid, receivable } = data;
+  const { project, milestones, payments, paid, receivable, costs, costTotal } = data;
   const isQuote = project.status === "quoted";
   const lines = (project.line_items ?? []) as ProjectQuoteLine[];
+
+  // ── Per-project P&L (all ex-GST, so revenue vs cost compare like-for-like) ──
+  // Contract view = the whole deal's expected margin (full contract vs all costs).
+  // Booked-to-date = realized so far (ex-GST value of INVOICED milestones vs costs).
+  const gstDiv = 1 + (project.gst_rate ?? 0) / 100;
+  const contractRevenue = project.taxable_amount ?? 0;
+  const bookedRevenue = Math.round(
+    milestones.filter((m) => m.invoice_id).reduce((s, m) => s + (m.total_amount ?? 0), 0) / (gstDiv || 1),
+  );
+  const contractProfit = contractRevenue - costTotal;
+  const bookedProfit = bookedRevenue - costTotal;
+  const pct = (profit: number, rev: number) => (rev > 0 ? Math.round((profit / rev) * 100) : 0);
 
   const handleRaise = async (m: ProjectMilestoneRow) => {
     await raise.mutateAsync({ milestoneId: m.id, projectId: project.id }).catch(() => {});
@@ -157,6 +172,29 @@ export default function ProjectDetailPage() {
         </div>
         <p className="text-[11px] text-ink-3 mt-3">
           Collected {rupee(paid)} of {rupee(project.total_amount)} · SAC {project.sac_code}
+        </p>
+      </Card>
+
+      {/* Profit & Loss — this project's costs vs revenue (all ex-GST). */}
+      <Card className="mb-6">
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <h2 className="text-sm font-semibold text-ink">Profit &amp; Loss</h2>
+          {!isQuote && (
+            <Button size="sm" variant="outline" icon="plus" onClick={() => { setEditCost(null); setAddCostOpen(true); }}>
+              Add cost
+            </Button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Sum label="Contract value" value={rupee(contractRevenue)} sub="ex-GST" />
+          <Sum label="Costs" value={rupee(costTotal)} tone={costTotal > 0 ? "rose" : "ink"} />
+          <Sum label="Expected profit" value={rupee(contractProfit)} tone={contractProfit >= 0 ? "emerald" : "rose"} strong />
+          <Sum label="Margin" value={`${pct(contractProfit, contractRevenue)}%`} tone={contractProfit >= 0 ? "emerald" : "rose"} />
+        </div>
+        <p className="text-[11px] text-ink-3 mt-3">
+          Booked to date: {rupee(bookedRevenue)} invoiced − {rupee(costTotal)} costs ={" "}
+          <span className={bookedProfit >= 0 ? "text-emerald" : "text-rose"}>{rupee(bookedProfit)}</span>{" "}
+          ({pct(bookedProfit, bookedRevenue)}%). Costs are ex-GST and also count in your overall P&amp;L.
         </p>
       </Card>
 
@@ -271,6 +309,51 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </Card>
+
+      {/* Costs — expenses tagged to this project (drive the P&L above) */}
+      <Card className="overflow-hidden mt-6">
+        <div className="px-5 py-3 border-b border-hairline flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-ink">Costs</h2>
+          {!isQuote && (
+            <Button size="sm" variant="ghost" icon="plus" onClick={() => { setEditCost(null); setAddCostOpen(true); }}>Add cost</Button>
+          )}
+        </div>
+        {costs.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-ink-3 text-center">
+            No costs recorded for this project yet.{!isQuote && " Add labour, subcontract, tools, etc. to see the real profit."}
+          </p>
+        ) : (
+          <div className="divide-y divide-hairline">
+            {costs.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => { setEditCost(c); setAddCostOpen(true); }}
+                className="w-full text-left px-5 py-3 flex items-center gap-3 hover:bg-paper-2/40 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-ink">{c.category}{c.vendor_name ? ` · ${c.vendor_name}` : ""}</p>
+                  <p className="text-[11px] text-ink-3">
+                    {formatDate(c.expense_date)}
+                    {c.description ? ` · ${c.description}` : ""}
+                    {!c.paid && <> · <span className="text-amber-ink">unpaid</span></>}
+                  </p>
+                </div>
+                <div className="font-mono text-sm text-ink whitespace-nowrap">{rupee(c.amount)}</div>
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {addCostOpen && (
+        <AddExpenseDialog
+          onClose={() => { setAddCostOpen(false); setEditCost(null); }}
+          expense={editCost}
+          projectId={project.id}
+          projectTitle={project.title}
+        />
+      )}
 
       <RecordProjectPaymentDialog
         open={payFor !== null}

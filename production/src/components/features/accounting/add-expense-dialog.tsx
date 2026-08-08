@@ -56,7 +56,18 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-export function AddExpenseDialog({ onClose, expense }: { onClose: () => void; expense?: Expense | null }) {
+export function AddExpenseDialog({
+  onClose,
+  expense,
+  projectId,
+  projectTitle,
+}: {
+  onClose: () => void;
+  expense?: Expense | null;
+  /** When set, this expense is tagged as a cost of that project (per-project P&L). */
+  projectId?: string | null;
+  projectTitle?: string;
+}) {
   const router = useRouter();
   const create = useCreateExpense();
   const update = useUpdateExpense();
@@ -389,6 +400,9 @@ export function AddExpenseDialog({ onClose, expense }: { onClose: () => void; ex
       paid,
       paid_date: paid ? values.expense_date : null,
       due_date:  paid ? null : (dueDate || null),
+      // Tag as a project cost (per-project P&L). Preset from the project page,
+      // else preserve whatever the expense already had on edit.
+      project_id: projectId ?? expense?.project_id ?? null,
     };
     // Cash only leaves petty cash once actually PAID — an unpaid bill must not.
     const pettyCash = paid && values.payment_method === "cash" ? (pettyCashAccountId || null) : null;
@@ -484,11 +498,20 @@ export function AddExpenseDialog({ onClose, expense }: { onClose: () => void; ex
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="md:!max-w-xl">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit expense" : "Add expense"}</DialogTitle>
+          <DialogTitle>{projectId ? (isEdit ? "Edit project cost" : "Add project cost") : (isEdit ? "Edit expense" : "Add expense")}</DialogTitle>
           <DialogDescription>
-            A running-the-business cost — rent, software, stationery, etc. (Products you resell → COGS Bills.)
+            {projectId
+              ? "A cost of this project — labour, subcontract, tools, etc. It counts against the project's profit and in your overall P&L."
+              : "A running-the-business cost — rent, software, stationery, etc. (Products you resell → COGS Bills.)"}
           </DialogDescription>
         </DialogHeader>
+
+        {projectId && projectTitle && (
+          <div className="rounded-lg border border-hairline bg-paper-2/50 px-3 py-2 text-xs text-ink-2 inline-flex items-center gap-1.5">
+            <Icon name="package" size={13} className="text-ink-3" />
+            Cost for project: <span className="font-medium text-ink">{projectTitle}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* ── STEP 1: What kind of bill? This shapes the whole form. ── */}

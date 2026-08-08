@@ -370,6 +370,7 @@ export function useCreateExpense() {
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["bank_accounts"] });
       qc.invalidateQueries({ queryKey: ["bank_transactions"] });
+      qc.invalidateQueries({ queryKey: ["project_sales"] });   // project cost → refresh project P&L
       toast.success("Expense added");
     },
     onError: (err) => toast.error((err as Error).message),
@@ -476,6 +477,7 @@ export function useUpdateExpense() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["project_sales"] });
       toast.success("Expense updated");
     },
     onError: (err) => toast.error((err as Error).message),
@@ -493,6 +495,7 @@ export function useDeleteExpense() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["project_sales"] });
       toast.success("Expense deleted");
     },
     onError: (err) => toast.error((err as Error).message),
