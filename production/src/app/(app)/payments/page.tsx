@@ -254,10 +254,11 @@ export default function PaymentsPage() {
               <div className="flex items-center gap-2.5">
                 <Icon name="alert" size={18} className="text-rose" />
                 <div>
-                  <h2 className="font-semibold text-ink">Outstanding receivables · {rupee(totalDue)} due</h2>
+                  <h2 className="font-semibold text-ink">Subscription dues · {rupee(totalDue)}</h2>
                   <p className="text-xs text-ink-3">
-                    {outstanding.length} customer{outstanding.length === 1 ? "" : "s"} have outstanding balance
+                    {outstanding.length} subscription{outstanding.length === 1 ? "" : "s"} with a balance
                     {overdueCount > 0 && <> · <b className="text-rose">{overdueCount} overdue 30+ days</b></>}
+                    {" · "}<Link href="/accounting/aging" className="text-amber-ink hover:text-amber">all receivables (incl. projects & invoices)</Link>
                   </p>
                 </div>
               </div>

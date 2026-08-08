@@ -85,19 +85,27 @@ export function useBalanceSheetAuto() {
       const receivables = (subs ?? []).reduce((s, r) => s + (r.outstanding_amount ?? 0), 0);
 
       // Project-sale receivable — one-time deals (custom software etc.):
-      // sum of (project total − payments received), floored at 0.
-      // Only real (accepted) projects are receivables — a 'quoted' project is
-      // an un-accepted quotation, not money owed yet.
+      // INVOICED-but-unpaid only (accrual): a milestone becomes a receivable when
+      // its Tax Invoice is raised, not the whole contract value (un-invoiced
+      // future milestones aren't owed yet). Mirrors the Customers list / 360.
       const { data: projs, error: prjErr } = await supabase
-        .from("project_sales").select("id, total_amount").in("status", ["active", "completed"]);
+        .from("project_sales").select("id").in("status", ["active", "completed"]);
       if (prjErr) throw prjErr;
-      const { data: projPays, error: ppErr } = await supabase
-        .from("project_payments").select("project_id, amount");
-      if (ppErr) throw ppErr;
-      const paidByProject = new Map<string, number>();
-      for (const p of projPays ?? []) paidByProject.set(p.project_id, (paidByProject.get(p.project_id) ?? 0) + (p.amount ?? 0));
-      const projectReceivable = (projs ?? []).reduce(
-        (s, pr) => s + Math.max(0, (pr.total_amount ?? 0) - (paidByProject.get(pr.id) ?? 0)), 0);
+      const projIds = (projs ?? []).map((p) => p.id);
+      let projectReceivable = 0;
+      if (projIds.length > 0) {
+        const [{ data: ms, error: msErr }, { data: projPays, error: ppErr }] = await Promise.all([
+          supabase.from("project_milestones").select("project_id, total_amount, invoice_id").in("project_id", projIds),
+          supabase.from("project_payments").select("project_id, amount").in("project_id", projIds),
+        ]);
+        if (msErr) throw msErr;
+        if (ppErr) throw ppErr;
+        const invoicedByProject = new Map<string, number>();
+        for (const m of ms ?? []) if (m.invoice_id) invoicedByProject.set(m.project_id, (invoicedByProject.get(m.project_id) ?? 0) + (m.total_amount ?? 0));
+        const paidByProject = new Map<string, number>();
+        for (const p of projPays ?? []) paidByProject.set(p.project_id, (paidByProject.get(p.project_id) ?? 0) + (p.amount ?? 0));
+        for (const id of projIds) projectReceivable += Math.max(0, (invoicedByProject.get(id) ?? 0) - (paidByProject.get(id) ?? 0));
+      }
 
       // TDS receivable — credits not yet claimed / written off.
       const { data: tds, error: tdsErr } = await supabase

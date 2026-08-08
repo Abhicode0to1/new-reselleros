@@ -144,13 +144,13 @@ function InvoicesPageInner() {
     return true;
   });
 
-  // KPIs
+  // KPIs — use net_payable (after any advance adjustment) to match the Aging report.
   const outstanding = (invoices ?? [])
     .filter((i) => i.status !== "paid")
-    .reduce((s, i) => s + i.amount, 0);
+    .reduce((s, i) => s + (i.net_payable ?? i.amount), 0);
   const overdueTotal = (invoices ?? [])
     .filter((i) => i.status === "overdue")
-    .reduce((s, i) => s + i.amount, 0);
+    .reduce((s, i) => s + (i.net_payable ?? i.amount), 0);
   const overdueCount = counts.overdue ?? 0;
   const collectedMTD = (invoices ?? [])
     .filter((i) => {
