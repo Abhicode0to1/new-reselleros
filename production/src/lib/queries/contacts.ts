@@ -43,7 +43,7 @@ export function useAllContacts() {
       const [leadsRes, customersRes, importedRes] = await Promise.all([
         supabase
           .from("leads")
-          .select("id, company, contact_name, contact_email, contact_phone, stage, created_at"),
+          .select("id, company, contact_name, contact_email, contact_phone, stage, created_at, is_junk"),
         supabase
           .from("customers")
           .select("id, name, contact_name, contact_title, contact_email, contact_phone, health, created_at"),
@@ -59,7 +59,9 @@ export function useAllContacts() {
       if (importedRes.error)  throw importedRes.error;
 
       const fromLeads: UnifiedContact[] = (leadsRes.data ?? [])
-        .filter((l) => l.contact_name || l.contact_email || l.contact_phone)
+        // Hide junk (spam/fake) leads here too — consistent with the Leads page
+        // and the Google sync, which both exclude them.
+        .filter((l) => !l.is_junk && (l.contact_name || l.contact_email || l.contact_phone))
         .map((l) => ({
           id:        `lead:${l.id}`,
           source:    "lead" as const,
