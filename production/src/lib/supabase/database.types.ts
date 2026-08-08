@@ -701,6 +701,7 @@ type LeadRow = {
   seats: number | null;
   value: number | null;
   stage: "new" | "contact" | "demo" | "trial" | "quote" | "won" | "lost";
+  is_junk: boolean;                 // migration 0187 — spam/fake; hidden from working views
   owner_id: string | null;
   source: string | null;
   /** Migration 0018 — structured domain captured at lead intake (trial / buy page) */
@@ -754,6 +755,7 @@ type LeadInsert = {
   state?:              string | null;
   country?:            string;
   subscription_type?:  "fresh" | "switch" | null;
+  is_junk?:            boolean;
 }
 type LeadUpdate = Partial<LeadInsert>;
 

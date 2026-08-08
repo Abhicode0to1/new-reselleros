@@ -22,7 +22,8 @@
 import * as React from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
-import { useLeads, useUpdateLeadStage, useDeleteLead } from "@/lib/queries/leads";
+import { useLeads, useUpdateLeadStage, useDeleteLead, useSetLeadJunk } from "@/lib/queries/leads";
+import { looksLikeJunk } from "@/lib/leads/junk";
 import { useLeadActivities, useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { LeadsBulkBar } from "@/components/features/leads/leads-bulk-bar";
 import { useQuotesByLead } from "@/lib/queries/quotes";
@@ -283,10 +284,25 @@ function LeadsPageInner() {
   // Non-destructive: it only flags; merging is an explicit action in the dialog.
   const dup = React.useMemo(() => computeDuplicates(leads ?? []), [leads]);
 
+  // Junk (spam/fake) — a stored flag. junkCount drives the Junk chip; suspects
+  // are non-junk leads the heuristic flags for review (surfaced in the Junk view).
+  const junkCount = React.useMemo(() => (leads ?? []).filter((l) => l.is_junk).length, [leads]);
+  const junkSuspectCount = React.useMemo(
+    () => (leads ?? []).filter((l) => !l.is_junk && looksLikeJunk(l).suspect).length,
+    [leads],
+  );
+
   // Search + filter both apply BEFORE the tab cut so each view respects them.
   const searched = React.useMemo(() => {
     if (!leads) return [];
     let list = leads;
+    // 0. Junk cut — confirmed junk is hidden from EVERY working view. The "Junk"
+    //    view is the cleanup workspace: confirmed junk + heuristic SUSPECTS (so
+    //    you can review + mark them). Suspects still appear in working views
+    //    (they're only flagged, not confirmed) until you mark them.
+    list = smartView === "junk"
+      ? list.filter((l) => l.is_junk || looksLikeJunk(l).suspect)
+      : list.filter((l) => !l.is_junk);
     // 1. Text search across company / contact name / email / plan
     if (search.trim()) {
       const s = search.toLowerCase();
@@ -348,7 +364,9 @@ function LeadsPageInner() {
   const qualifiedDeals = React.useMemo(() => searched.filter((l) => !isRaw(l)), [searched]);
 
   // The Kanban / List views consume this — points at whichever tab is active.
-  const filtered = tab === "leads" ? rawLeads : qualifiedDeals;
+  // Junk is stage-agnostic (spam is spam at any stage), so its view bypasses the
+  // raw/deals cut and shows every junk + suspect — matching the chip's count.
+  const filtered = smartView === "junk" ? searched : (tab === "leads" ? rawLeads : qualifiedDeals);
 
   // Tab-scoped UNFILTERED subset for the insight band, Smart Views chips,
   // Today strip, and right rail. Without this they show tenant-wide counts
@@ -632,6 +650,8 @@ function LeadsPageInner() {
           leads={leadsForTab}
           currentUserId={currentUser?.userId}
           duplicateCount={duplicateCountForTab}
+          junkCount={junkCount}
+          junkSuspectCount={junkSuspectCount}
           active={smartView}
           onChange={setSmartView}
         />
@@ -2092,6 +2112,7 @@ function RowActions({
   const hasPhone = phoneDigits.length >= 10;
   const hasEmail = Boolean(lead.contact_email);
   const logActivity = useLogLeadActivity();
+  const setJunk = useSetLeadJunk();
 
   const itemCls = "gap-2.5 py-2 cursor-pointer";
   // Primary quick actions inline (Call · WhatsApp · Quote) — ALWAYS fully visible
@@ -2193,6 +2214,17 @@ function RowActions({
               </a>
             </DropdownMenuItem>
           )}
+
+          <DropdownMenuSeparator />
+          {lead.is_junk ? (
+            <DropdownMenuItem className={itemCls} onClick={() => setJunk.mutate({ ids: [lead.id], isJunk: false })}>
+              <Icon name="check_circle" size={20} /> Restore from junk
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem className={cn(itemCls, "text-rose")} onClick={() => setJunk.mutate({ ids: [lead.id], isJunk: true })}>
+              <Icon name="alert" size={20} /> Mark as junk
+            </DropdownMenuItem>
+          )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -2267,6 +2299,7 @@ function LeadListView({
   // needing to open the full detail drawer.
   const updateStage = useUpdateLeadStage();
   const deleteLead  = useDeleteLead();
+  const setJunkBulk = useSetLeadJunk();
 
   // Open follow-up tasks per lead — surfaced as a chip on the row so the rep
   // sees at a glance which leads have a pending task (earliest/most-overdue).
@@ -2324,6 +2357,14 @@ function LeadListView({
     } catch {
       toast.error("Some leads failed to delete");
     }
+    clearSelection();
+  };
+
+  /** Bulk-mark selected leads as junk — one update, they leave the working views. */
+  const bulkMarkJunk = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try { await setJunkBulk.mutateAsync({ ids, isJunk: true }); } catch { /* hook toasts */ }
     clearSelection();
   };
   // Apply sort (memo so we don't resort on every render).
@@ -2658,6 +2699,7 @@ function LeadListView({
       onChangeStage={bulkChangeStage}
       onDeselectAll={clearSelection}
       onDelete={bulkDelete}
+      onMarkJunk={bulkMarkJunk}
     />
     </>
   );

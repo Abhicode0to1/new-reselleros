@@ -81,6 +81,27 @@ export function useUpdateLeadStage() {
   });
 }
 
+/**
+ * Mark one or more leads as junk (spam/fake) — or restore them. Junk leads drop
+ * out of every working view and show only under the "Junk" view.
+ */
+export function useSetLeadJunk() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, isJunk }: { ids: string[]; isJunk: boolean }) => {
+      const supabase = createClient();
+      const { error } = await supabase.from("leads").update({ is_junk: isJunk }).in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: (_r, { ids, isJunk }) => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["nav-badges"] });
+      toast.success(isJunk ? `${ids.length} lead${ids.length > 1 ? "s" : ""} marked junk` : "Restored from junk");
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+}
+
 // ============================================================
 // Create — fetches current tenant_id, then inserts the lead
 // ============================================================
