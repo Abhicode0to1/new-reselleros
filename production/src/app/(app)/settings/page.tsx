@@ -720,7 +720,7 @@ function GoogleContactsIntegrationCard() {
       </div>
       {connected ? (
         <div className="flex items-center gap-1.5 shrink-0">
-          <Button variant="primary" size="sm" onClick={syncNow} disabled={busy}>{busy ? "Syncing…" : "Sync now"}</Button>
+          <Button variant="primary" size="sm" onClick={syncNow} loading={busy}>{busy ? "Syncing…" : "Sync now"}</Button>
           <Button variant="ghost" size="sm" onClick={disconnect} disabled={busy}>Disconnect</Button>
         </div>
       ) : configured ? (

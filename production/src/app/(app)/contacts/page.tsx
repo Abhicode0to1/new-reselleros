@@ -221,7 +221,7 @@ export default function ContactsPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button icon="refresh" onClick={syncGoogle} disabled={syncing}>
+          <Button icon="refresh" onClick={syncGoogle} loading={syncing}>
             {syncing ? "Syncing…" : "Sync with Google Contacts"}
           </Button>
           <Button variant="primary" icon="plus" onClick={() => setAddOpen(true)}>
