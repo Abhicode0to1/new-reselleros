@@ -46,6 +46,7 @@ export default function ProjectDetailPage() {
   const [editCost, setEditCost] = React.useState<import("@/lib/queries/expenses").Expense | null>(null);
   const [addLabourOpen, setAddLabourOpen] = React.useState(false);
   const [editLabour, setEditLabour] = React.useState<ProjectLabourLine | null>(null);
+  const [labourSectionOpen, setLabourSectionOpen] = React.useState(true);
   const updateDates = useUpdateProjectDates();
   const [datesEdit, setDatesEdit] = React.useState(false);
   const [startVal, setStartVal] = React.useState("");
@@ -384,24 +385,36 @@ export default function ProjectDetailPage() {
         )}
       </Card>
 
-      {/* Team / Labour — employees allocated to this project (drive the P&L above) */}
+      {/* Team / Labour — employees allocated to this project (drive the P&L above).
+          The whole section collapses when you click the header. */}
       <Card className="overflow-hidden mt-6">
         <div className="px-5 py-3 border-b border-hairline flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-ink">Team / Labour</h2>
+          <button
+            type="button"
+            onClick={() => setLabourSectionOpen((o) => !o)}
+            className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
+            aria-expanded={labourSectionOpen}
+          >
+            <Icon name={labourSectionOpen ? "chevron_down" : "chevron_right"} size={15} className="text-ink-3 shrink-0" />
+            <h2 className="text-sm font-semibold text-ink">Team / Labour</h2>
+            {labour.length > 0 && <span className="text-[11px] text-ink-3 tabular-nums">({labour.length}) · {rupee(labourTotal)}</span>}
+          </button>
           {!isQuote && (
             <Button size="sm" variant="ghost" icon="plus" onClick={() => { setEditLabour(null); setAddLabourOpen(true); }}>Add labour</Button>
           )}
         </div>
-        {labour.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-ink-3 text-center">
-            No employees on this project yet.{!isQuote && " Attach team members so their salary time counts in the profit."}
-          </p>
-        ) : (
-          <div className="divide-y divide-hairline">
-            {labour.map((l) => (
-              <LabourRow key={l.id} line={l} projectId={project.id} />
-            ))}
-          </div>
+        {labourSectionOpen && (
+          labour.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-ink-3 text-center">
+              No employees on this project yet.{!isQuote && " Attach team members so their salary time counts in the profit."}
+            </p>
+          ) : (
+            <div className="divide-y divide-hairline">
+              {labour.map((l) => (
+                <LabourRow key={l.id} line={l} projectId={project.id} projectStart={project.start_date} projectTarget={project.target_date} />
+              ))}
+            </div>
+          )
         )}
       </Card>
 
@@ -471,7 +484,7 @@ export default function ProjectDetailPage() {
 
 /** One Team/Labour row — collapsed shows a summary; expands inline to edit
  *  (%, from/to dates, note) with a live cost preview + Save / Remove. */
-function LabourRow({ line, projectId }: { line: ProjectLabourLine; projectId: string }) {
+function LabourRow({ line, projectId, projectStart, projectTarget }: { line: ProjectLabourLine; projectId: string; projectStart: string | null; projectTarget: string | null }) {
   const save = useSaveProjectLabour();
   const remove = useRemoveProjectLabour();
   const [open, setOpen] = React.useState(false);
@@ -492,7 +505,11 @@ function LabourRow({ line, projectId }: { line: ProjectLabourLine; projectId: st
   const months = from && to ? Math.max(0.5, Math.round((daysBetween(from, to) / 30.44) * 2) / 2) : line.months;
   const previewCost = Math.round(line.monthlyGross * (pctN / 100) * months);
   const dirty = pctN !== line.percent || (from || null) !== (line.start_date ?? null) || (to || null) !== (line.end_date ?? null) || (note.trim() || null) !== (line.note ?? null);
-  const valid = pctN > 0 && pctN <= 100 && months > 0 && (!from || !to || from <= to);
+  // Bound the allocation inside the project's timeline.
+  const beforeStart = !!(projectStart && from && from < projectStart);
+  const afterTarget = !!(projectTarget && to && to > projectTarget);
+  const badRange = !!(from && to && from > to);
+  const valid = pctN > 0 && pctN <= 100 && months > 0 && !badRange && !beforeStart && !afterTarget;
 
   async function handleSave() {
     if (!valid) return;
@@ -540,6 +557,9 @@ function LabourRow({ line, projectId }: { line: ProjectLabourLine; projectId: st
             <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">Note</label>
             <Input placeholder="e.g. backend development" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
+          {badRange && <p className="mt-2 text-[11px] text-rose">To date must be after From date.</p>}
+          {beforeStart && <p className="mt-2 text-[11px] text-rose">Can&apos;t start before the project ({formatDate(projectStart!)}).</p>}
+          {afterTarget && <p className="mt-2 text-[11px] text-rose">Ends after the project target ({formatDate(projectTarget!)}).</p>}
           <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
             <p className="text-[11px] text-ink-3">
               Cost: <span className="font-semibold text-ink">{rupee(previewCost)}</span> = {rupee(line.monthlyGross)}/mo × {pctN}% × {months} mo

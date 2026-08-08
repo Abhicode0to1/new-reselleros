@@ -59,7 +59,12 @@ export function AddLabourDialog({
   const monthsFromDates = fromDate && toDate ? Math.max(0.5, Math.round((daysBetween(fromDate, toDate) / 30.44) * 2) / 2) : 0;
   const monN = monthsFromDates > 0 ? monthsFromDates : (existing?.months ?? 1);
   const cost = emp ? Math.round((emp.monthly_gross ?? 0) * (pctN / 100) * monN) : 0;
-  const valid = !!employeeId && pctN > 0 && pctN <= 100 && monN > 0 && (!fromDate || !toDate || fromDate <= toDate);
+  // Keep the allocation logical: it must sit inside the project's own timeline —
+  // an employee can't be bound before the project starts or after its target.
+  const beforeStart = !!(projectStart && fromDate && fromDate < projectStart);
+  const afterTarget = !!(projectTarget && toDate && toDate > projectTarget);
+  const badRange = !!(fromDate && toDate && fromDate > toDate);
+  const valid = !!employeeId && pctN > 0 && pctN <= 100 && monN > 0 && !badRange && !beforeStart && !afterTarget;
 
   async function handleSave() {
     if (!valid) return;
@@ -106,9 +111,9 @@ export function AddLabourDialog({
             <FormField label="From"><Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></FormField>
             <FormField label="To"><Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></FormField>
           </div>
-          {fromDate && toDate && fromDate > toDate && (
-            <p className="text-[11px] text-rose">To date must be after From date.</p>
-          )}
+          {badRange && <p className="text-[11px] text-rose">To date must be after From date.</p>}
+          {beforeStart && <p className="text-[11px] text-rose">Can&apos;t start before the project ({formatDate(projectStart!)}). Set the project&apos;s start earlier if needed.</p>}
+          {afterTarget && <p className="text-[11px] text-rose">Ends after the project target ({formatDate(projectTarget!)}). Extend the project&apos;s target date first.</p>}
 
           <FormField label="Note (optional)"><Input placeholder="e.g. backend development" value={note} onChange={(e) => setNote(e.target.value)} /></FormField>
 
