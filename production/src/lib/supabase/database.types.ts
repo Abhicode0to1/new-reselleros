@@ -2383,6 +2383,31 @@ type UserGoogleTokenInsert = {
 };
 type UserGoogleTokenUpdate = Partial<Omit<UserGoogleTokenInsert, "user_id">>;
 
+// ── App person ↔ Google resourceName link (migration 0191) ──────────────────
+export type GoogleContactLinkRow = {
+  id:            string;
+  tenant_id:     string;
+  user_id:       string;
+  source_type:   "contact" | "lead" | "customer";
+  source_id:     string;
+  resource_name: string;
+  etag:          string | null;
+  synced_at:     string;
+  created_at:    string;
+  updated_at:    string;
+};
+type GoogleContactLinkInsert = {
+  id?:           string;
+  tenant_id:     string;
+  user_id:       string;
+  source_type:   "contact" | "lead" | "customer";
+  source_id:     string;
+  resource_name: string;
+  etag?:         string | null;
+  synced_at?:    string;
+};
+type GoogleContactLinkUpdate = Partial<Omit<GoogleContactLinkInsert, "id">>;
+
 // ============================================================
 // Coupons — public buy-page promo codes (migration 0031)
 // ============================================================
@@ -2538,6 +2563,7 @@ export type Database = {
       campaign_templates: { Row: CampaignTemplateRow;  Insert: CampaignTemplateInsert;  Update: CampaignTemplateUpdate;  Relationships: [] };
       contacts:           { Row: ContactRow;           Insert: ContactInsert;           Update: ContactUpdate;           Relationships: [] };
       user_google_tokens: { Row: UserGoogleTokenRow;   Insert: UserGoogleTokenInsert;   Update: UserGoogleTokenUpdate;   Relationships: [] };
+      google_contact_links: { Row: GoogleContactLinkRow; Insert: GoogleContactLinkInsert; Update: GoogleContactLinkUpdate; Relationships: [] };
       coupons:            { Row: CouponRow;            Insert: CouponInsert;            Update: CouponUpdate;            Relationships: [] };
       coupon_redemptions: { Row: CouponRedemptionRow;  Insert: CouponRedemptionInsert;  Update: CouponRedemptionUpdate;  Relationships: [] };
       site_promos:        { Row: SitePromoRow;         Insert: SitePromoInsert;         Update: SitePromoUpdate;         Relationships: [] };
