@@ -24,10 +24,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { useCreateContact, useUpdateContact, type Contact, type ContactFormValues } from "@/lib/queries/contacts";
+import { useCustomers } from "@/lib/queries/customers";
+import { CustomerCombobox } from "@/components/features/customers/customer-combobox";
 
 const schema = z.object({
   full_name: z.string().min(1, "Name is required"),
   company:   z.string().optional(),
+  customer_id: z.string().optional(),
   title:     z.string().optional(),
   email:     z.string().email("Enter a valid email").optional().or(z.literal("")),
   phone:     z.string().optional(),
@@ -63,10 +66,12 @@ export function ContactForm({
   const create = useCreateContact();
   const update = useUpdateContact();
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: toDefaults(contact),
   });
+  const { data: customers = [] } = useCustomers();
+  const customerId = watch("customer_id") ?? "";
 
   // Re-seed the form whenever we open it (new contact vs a different edit target).
   React.useEffect(() => {
@@ -78,6 +83,7 @@ export function ContactForm({
     const values: ContactFormValues = {
       full_name: data.full_name.trim(),
       company:   clean(data.company),
+      customer_id: clean(data.customer_id),
       title:     clean(data.title),
       email:     clean(data.email),
       phone:     clean(data.phone),
@@ -132,8 +138,30 @@ export function ContactForm({
               <FormField label="Full name" required htmlFor="full_name">
                 <Input id="full_name" autoFocus placeholder="e.g. Rajesh Kumar" error={errors.full_name?.message} {...register("full_name")} />
               </FormField>
+
+              {/* Link to a customer company — surfaces that company's full records
+                  (invoices, subscriptions, projects, dues) on the contact page.
+                  Selecting one also fills the free-text Company below. */}
+              <FormField label="Link to a company" htmlFor="customer_id">
+                <CustomerCombobox
+                  id="customer_id"
+                  value={customerId}
+                  placeholder="Not linked — search your customers…"
+                  onChange={(id) => {
+                    setValue("customer_id", id, { shouldDirty: true });
+                    const c = customers.find((x) => x.id === id);
+                    // Auto-fill the display company name when linking; clearing the
+                    // link leaves the typed company text untouched.
+                    if (c) setValue("company", c.name, { shouldDirty: true });
+                  }}
+                />
+                <p className="text-[11px] text-ink-3">Connect this person to a customer to manage their company&apos;s records here.</p>
+              </FormField>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <FormField label="Company"><Input placeholder="e.g. Acme Corp" {...register("company")} /></FormField>
+                <FormField label="Company">
+                  <Input placeholder="e.g. Acme Corp" {...register("company")} />
+                </FormField>
                 <FormField label="Designation"><Input placeholder="e.g. Founder / IT Head" {...register("title")} /></FormField>
               </div>
             </Section>
@@ -200,6 +228,7 @@ function toDefaults(c?: Contact | null): FormData {
   return {
     full_name: c?.full_name ?? "",
     company:   c?.company ?? "",
+    customer_id: c?.customer_id ?? "",
     title:     c?.title ?? "",
     email:     c?.email ?? "",
     phone:     c?.phone ?? "",

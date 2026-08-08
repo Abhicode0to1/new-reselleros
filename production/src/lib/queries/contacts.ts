@@ -154,6 +154,9 @@ export function useContact(id: string | undefined) {
 export type ContactFormValues = {
   full_name: string;
   company?:  string | null;
+  /** Optional link to a customer company — surfaces that company's records on
+   *  the contact detail page. null = free-text `company` only. */
+  customer_id?: string | null;
   title?:    string | null;
   email?:    string | null;
   phone?:    string | null;

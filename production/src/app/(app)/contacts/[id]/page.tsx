@@ -12,6 +12,7 @@ import { useParams, useRouter } from "next/navigation";
 
 import { useContact, useDeleteContact } from "@/lib/queries/contacts";
 import { ContactForm } from "@/components/features/contacts/contact-form";
+import { ContactCompanyPanel } from "@/components/features/contacts/contact-company-panel";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button, IconButton } from "@/components/ui/button";
@@ -128,6 +129,9 @@ export default function ContactDetailPage() {
           <IconButton icon="trash" aria-label="Delete contact" onClick={handleDelete} />
         </div>
       </div>
+
+      {/* Company — full records of the linked customer company */}
+      {contact.customer_id && <ContactCompanyPanel customerId={contact.customer_id} />}
 
       {/* Reach — primary actions */}
       <Panel title="Reach out">

@@ -2307,6 +2307,9 @@ export type ContactRow = {
   website:             string | null;
   address:             string | null;
   city:                string | null;
+  // Optional link to a customer company (migration 0188). null = no company /
+  // free-text `company` only. FK is ON DELETE SET NULL.
+  customer_id:         string | null;
   created_at:          string;
   updated_at:          string;
 };
@@ -2334,6 +2337,7 @@ type ContactInsert = {
   website?:            string | null;
   address?:            string | null;
   city?:               string | null;
+  customer_id?:        string | null;
 };
 type ContactUpdate = Partial<Omit<ContactInsert, "id" | "tenant_id">>;
 
