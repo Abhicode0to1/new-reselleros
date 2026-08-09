@@ -36,7 +36,7 @@ export function useAssessments() {
 }
 
 /** Ask the AI (or stub) for reasoning MCQs. */
-export async function generateQuestions(input: { topic?: string; difficulty?: string; count?: number; language?: "en" | "hi" | "both" }): Promise<{ questions: AssessmentQuestion[]; mode: string }> {
+export async function generateQuestions(input: { topic?: string; difficulty?: string; count?: number; language?: "en" | "hi" | "both"; subject?: "reasoning" | "software" }): Promise<{ questions: AssessmentQuestion[]; mode: string }> {
   const res = await fetch("/api/ai/generate-assessment", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
   });

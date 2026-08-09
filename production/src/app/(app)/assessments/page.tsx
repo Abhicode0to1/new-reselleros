@@ -111,6 +111,7 @@ export default function AssessmentsPage() {
 
 function CreateTestDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateAssessment();
+  const [subject, setSubject] = React.useState<"reasoning" | "software">("reasoning");
   const [title, setTitle] = React.useState("Reasoning test");
   const [topic, setTopic] = React.useState("");
   const [difficulty, setDifficulty] = React.useState("medium");
@@ -120,10 +121,21 @@ function CreateTestDialog({ onClose }: { onClose: () => void }) {
   const [generating, setGenerating] = React.useState(false);
   const [stub, setStub] = React.useState(false);
 
+  // Switching test type resets the AI preview + gives a sensible default title.
+  function pickSubject(s: "reasoning" | "software") {
+    setSubject(s);
+    setQuestions([]);
+    setTitle((t) =>
+      t === "Reasoning test" || t === "Software knowledge test"
+        ? (s === "software" ? "Software knowledge test" : "Reasoning test")
+        : t,
+    );
+  }
+
   async function generate() {
     setGenerating(true);
     try {
-      const r = await generateQuestions({ topic: topic.trim() || undefined, difficulty, count: Number(count) || 8, language });
+      const r = await generateQuestions({ subject, topic: topic.trim() || undefined, difficulty, count: Number(count) || 8, language });
       setQuestions(r.questions);
       setStub(r.mode === "stub");
     } catch (e) { toast.error((e as Error).message); }
@@ -144,12 +156,24 @@ function CreateTestDialog({ onClose }: { onClose: () => void }) {
           <DialogDescription>AI reasoning MCQs banayega. Preview dekho, phir Save karke link share karo.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 max-h-[60vh] overflow-y-auto -mx-1 px-1">
+          <FormField label="Test about" htmlFor="at_subject">
+            <Select value={subject} onValueChange={(v) => pickSubject(v as "reasoning" | "software")}>
+              <SelectTrigger id="at_subject"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="reasoning">Reasoning / IQ</SelectItem>
+                <SelectItem value="software">This software (ResellerOS)</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
           <FormField label="Test title" required htmlFor="at_title">
             <Input id="at_title" value={title} onChange={(e) => setTitle(e.target.value)} />
           </FormField>
-          <FormField label="Topic (optional)" htmlFor="at_topic">
-            <Input id="at_topic" placeholder="e.g. IQ, logical reasoning, verbal, numerical" value={topic} onChange={(e) => setTopic(e.target.value)} />
+          <FormField label={subject === "software" ? "Focus area (optional)" : "Topic (optional)"} htmlFor="at_topic">
+            <Input id="at_topic" placeholder={subject === "software" ? "e.g. billing, leads, GST, accounting" : "e.g. IQ, logical reasoning, verbal, numerical"} value={topic} onChange={(e) => setTopic(e.target.value)} />
           </FormField>
+          {subject === "software" && (
+            <p className="text-[11px] text-ink-3">App ke features + money-flow ke aadhaar par questions banenge — jaanne ke liye ki employee software kitna samajh chuka hai.</p>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <FormField label="Language" htmlFor="at_lang" className="col-span-1">
               <Select value={language} onValueChange={(v) => setLanguage(v as "en" | "hi" | "both")}>
