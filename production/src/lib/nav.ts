@@ -216,6 +216,7 @@ export const APP_NAV: NavSection[] = [
     items: [
       { id: "employees",        href: "/accounting/employees",  label: "Employees",        icon: "users" },
       { id: "performance",      href: "/performance",           label: "Team Performance", icon: "award" },
+      { id: "assessments",      href: "/assessments",           label: "Reasoning Tests",  icon: "sparkles", hint: "AI-generated reasoning MCQ tests — share a link, employees take it, auto-graded A/B/C/D." },
       { id: "payroll",          href: "/accounting/payroll",    label: "Payroll",          icon: "rupee" },
       { id: "salary-register",  href: "/accounting/salary-register", label: "Salary Register", icon: "book" },
       { id: "esi-register",     href: "/accounting/esi-register", label: "ESI Register",   icon: "file" },
@@ -353,6 +354,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/aging":         ["Accounting", "Customer Aging"],
   "/accounting/esi-register":  ["Payroll", "ESI Register"],
   "/performance":              ["Payroll", "Team Performance"],
+  "/assessments":              ["Payroll", "Reasoning Tests"],
   "/accounting/tds-receivable":          ["Accounting", "TDS Receivable"],
   "/accounting/tds-receivable/year-end": ["Accounting", "TDS Receivable", "Year-End"],
   "/accounting/gst":      ["Accounting", "GST Reports"],

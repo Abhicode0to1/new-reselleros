@@ -2475,6 +2475,33 @@ type PrepaidAdvanceInsert = {
 };
 type PrepaidAdvanceUpdate = Partial<PrepaidAdvanceInsert>;
 
+// Employee reasoning assessments (migration 0207).
+export type AssessmentRow = {
+  id: string; tenant_id: string; title: string; topic: string | null;
+  difficulty: string; questions: unknown; public_token: string; pass_pct: number;
+  status: string; created_by: string | null; created_at: string;
+};
+type AssessmentInsert = {
+  id?: string; tenant_id: string; title: string; topic?: string | null;
+  difficulty?: string; questions?: unknown; public_token: string; pass_pct?: number;
+  status?: string; created_by?: string | null;
+};
+type AssessmentUpdate = Partial<AssessmentInsert>;
+
+export type AssessmentAttemptRow = {
+  id: string; tenant_id: string; assessment_id: string; employee_id: string | null;
+  candidate_name: string; answers: unknown; score: number; total: number; pct: number;
+  grade: string; submitted_at: string;
+  duration_seconds: number | null; focus_lost_count: number; focus_lost_seconds: number; paste_count: number;
+};
+type AssessmentAttemptInsert = {
+  id?: string; tenant_id: string; assessment_id: string; employee_id?: string | null;
+  candidate_name: string; answers?: unknown; score: number; total: number; pct: number;
+  grade: string;
+  duration_seconds?: number | null; focus_lost_count?: number; focus_lost_seconds?: number; paste_count?: number;
+};
+type AssessmentAttemptUpdate = Partial<AssessmentAttemptInsert>;
+
 // Statutory-compliance filing log (migration 0201).
 export type ComplianceLogRow = {
   id:             string;
@@ -2749,6 +2776,8 @@ export type Database = {
       contact_greeting_log:{ Row: ContactGreetingLogRow; Insert: ContactGreetingLogInsert; Update: ContactGreetingLogUpdate; Relationships: [] };
       compliance_log:{ Row: ComplianceLogRow; Insert: ComplianceLogInsert; Update: ComplianceLogUpdate; Relationships: [] };
       prepaid_advances:{ Row: PrepaidAdvanceRow; Insert: PrepaidAdvanceInsert; Update: PrepaidAdvanceUpdate; Relationships: [] };
+      assessments:{ Row: AssessmentRow; Insert: AssessmentInsert; Update: AssessmentUpdate; Relationships: [] };
+      assessment_attempts:{ Row: AssessmentAttemptRow; Insert: AssessmentAttemptInsert; Update: AssessmentAttemptUpdate; Relationships: [] };
       inbound_purchases:{ Row: InboundPurchaseRow; Insert: InboundPurchaseInsert; Update: InboundPurchaseUpdate; Relationships: [] };
       tds_receivable:     { Row: TdsReceivableRow;     Insert: TdsReceivableInsert;     Update: TdsReceivableUpdate;     Relationships: [] };
       customer_users:     { Row: CustomerUserRow;      Insert: CustomerUserInsert;      Update: CustomerUserUpdate;      Relationships: [] };
