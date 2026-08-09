@@ -33,6 +33,8 @@ import { ReconcileExpenseDialog } from "@/components/features/accounting/reconci
 import { useSalaryPayments } from "@/lib/queries/payroll";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 
 type DateRange = { from: string; to: string };
 
@@ -298,6 +300,51 @@ export default function ExpensesPage() {
     );
   const clearSelection = () => setSelectedIds(new Set());
 
+  // 26Q working — non-salary TDS you DEDUCTED (rent/professional/contractor…),
+  // deductee-wise, for the current date range. For the CA / TDS software (RPU →
+  // FVU); the app can't produce the FVU itself. PAN derived from vendor GSTIN.
+  async function export26Q() {
+    const supabase = createClient();
+    const { data: exps } = await supabase
+      .from("expenses")
+      .select("id, expense_date, vendor_name, vendor_id, amount, gst_paid, tds_section, tds_amount")
+      .gte("expense_date", range.from).lte("expense_date", range.to)
+      .gt("tds_amount", 0);
+    if (!exps || exps.length === 0) {
+      toast.error("Is range me koi TDS-deducted expense nahi. Pehle Add Expense me kisi vendor payment pe TDS record karo.");
+      return;
+    }
+    const vids = Array.from(new Set(exps.map((e) => e.vendor_id).filter(Boolean))) as string[];
+    const gstinByVid = new Map<string, string | null>();
+    if (vids.length) {
+      const { data: vends } = await supabase.from("vendors").select("id, gstin").in("id", vids);
+      for (const v of vends ?? []) gstinByVid.set(v.id, v.gstin ?? null);
+    }
+    const panFrom = (g: string | null | undefined) => (g && g.length >= 12 ? g.slice(2, 12) : "");
+    const rows = exps.slice()
+      .sort((a, b) => (a.vendor_name ?? "").localeCompare(b.vendor_name ?? "") || a.expense_date.localeCompare(b.expense_date))
+      .map((e) => [
+        e.vendor_name ?? "—",
+        panFrom(gstinByVid.get(e.vendor_id ?? "")),
+        e.tds_section ?? "",
+        e.expense_date,
+        (e.amount ?? 0) - (e.gst_paid ?? 0),   // amount on which TDS applies (ex-GST base)
+        e.tds_amount ?? 0,
+      ]);
+    const esc = (v: string | number) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const csv = [["Deductee (vendor)", "PAN", "Section", "Date", "Amount paid (ex-GST)", "TDS deducted"], ...rows]
+      .map((r) => r.map(esc).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `26Q-working-${range.from}-to-${range.to}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    const totalTds = exps.reduce((s, e) => s + (e.tds_amount ?? 0), 0);
+    const missingPan = rows.filter((r) => !r[1]).length;
+    let msg = `26Q working — ${rows.length} rows, TDS ${rupee(totalTds)}. Import into your TDS software / RPU (app can't make the FVU).`;
+    if (missingPan) msg += ` ⚠ ${missingPan} row(s) missing PAN — add the vendor's GSTIN.`;
+    toast.success(msg);
+  }
+
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
       {/* Header — eyebrow + title left, primary action pinned top-right.
@@ -307,14 +354,15 @@ export default function ExpensesPage() {
           <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Purchases</p>
           <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Expenses</h1>
         </div>
-        <Button
-          variant="primary"
-          icon="plus"
-          className="hidden md:inline-flex shrink-0"
-          onClick={() => setAddOpen(true)}
-        >
-          Add Expense
-        </Button>
+        <div className="hidden md:flex items-center gap-2 shrink-0">
+          <Button variant="outline" icon="download" onClick={export26Q}
+            title="26Q working — non-salary TDS you deducted (rent/professional/contractor) for the selected date range">
+            26Q (TDS)
+          </Button>
+          <Button variant="primary" icon="plus" onClick={() => setAddOpen(true)}>
+            Add Expense
+          </Button>
+        </div>
       </div>
 
       {/* About + how it works — one collapsed inline panel (above the KPIs) so

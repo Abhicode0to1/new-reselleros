@@ -53,6 +53,8 @@ const schema = z.object({
   gst_paid:       z.coerce.number().min(0).default(0),
   payment_method: z.string().optional(),
   description:    z.string().optional(),
+  tds_section:    z.string().optional(),        // 26Q — TDS deducted on this payment
+  tds_amount:     z.coerce.number().min(0).default(0),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -329,6 +331,8 @@ export function AddExpenseDialog({
           gst_paid:       expense.currency !== "INR" && expense.fx_rate ? Math.round((expense.gst_paid / expense.fx_rate) * 100) / 100 : expense.gst_paid,
           payment_method: expense.payment_method ?? "bank_transfer",
           description:    expense.description ?? "",
+          tds_section:    expense.tds_section ?? "",
+          tds_amount:     expense.tds_amount ?? 0,
         }
       : {
           expense_date: today,
@@ -336,6 +340,7 @@ export function AddExpenseDialog({
           payment_method: "bank_transfer",
           amount: 0,
           gst_paid: 0,
+          tds_amount: 0,
         },
   });
 
@@ -424,6 +429,9 @@ export function AddExpenseDialog({
       // Tag as a project cost (per-project P&L). Preset from the project page,
       // else preserve whatever the expense already had on edit.
       project_id: projectId ?? expense?.project_id ?? null,
+      // TDS deducted on this payment (26Q, deductor side). Stored in ₹ as typed.
+      tds_section: values.tds_section?.trim() || null,
+      tds_amount:  Math.round(values.tds_amount || 0),
     };
     // Cash only leaves petty cash once actually PAID — an unpaid bill must not.
     const pettyCash = paid && values.payment_method === "cash" ? (pettyCashAccountId || null) : null;
@@ -457,7 +465,7 @@ export function AddExpenseDialog({
         });
         if (!ok) return;
       }
-      for (const g of groups) {
+      for (const [gi, g] of groups.entries()) {
         await create.mutateAsync({
           ...shared,
           category:   g.category,
@@ -466,6 +474,9 @@ export function AddExpenseDialog({
           gst_paid:   isGstBill ? inr(g.gst) : 0,
           description: g.items.map((it) => it.name).filter(Boolean).join(", ") || null,
           pettyCashAccountId: pettyCash,   // each leg deducts its share → total correct
+          // TDS is one deduction for the whole bill — attach it to the first leg only.
+          tds_section: gi === 0 ? shared.tds_section : null,
+          tds_amount:  gi === 0 ? shared.tds_amount : 0,
         });
       }
       onClose();
@@ -881,6 +892,32 @@ export function AddExpenseDialog({
               <FormField label={itemiseActive ? "Amount (₹) — items ka jod" : "Amount (₹)"} required htmlFor="amount">
                 <Input id="amount" type="number" min={1} step="any" readOnly={itemiseActive} error={errors.amount?.message} {...register("amount")} />
               </FormField>
+            )}
+
+            {/* TDS deducted (26Q) — optional; for rent / professional / contractor payments. */}
+            <div className="grid grid-cols-12 gap-3">
+              <FormField label="TDS deducted?" htmlFor="tds_section" className="col-span-5 sm:col-span-5">
+                <Select value={watch("tds_section") || "none"} onValueChange={(v) => setValue("tds_section", v === "none" ? "" : v)}>
+                  <SelectTrigger id="tds_section"><SelectValue placeholder="No TDS" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No TDS</SelectItem>
+                    <SelectItem value="194C">194C · Contractor</SelectItem>
+                    <SelectItem value="194J">194J · Professional / technical</SelectItem>
+                    <SelectItem value="194I">194I · Rent</SelectItem>
+                    <SelectItem value="194H">194H · Commission / brokerage</SelectItem>
+                    <SelectItem value="194A">194A · Interest</SelectItem>
+                    <SelectItem value="194Q">194Q · Purchase of goods</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+              {(watch("tds_section") || "") !== "" && (
+                <FormField label="TDS amount (₹)" htmlFor="tds_amount" className="col-span-7 sm:col-span-4">
+                  <Input id="tds_amount" type="number" min={0} step="any" {...register("tds_amount")} />
+                </FormField>
+              )}
+            </div>
+            {(watch("tds_section") || "") !== "" && (
+              <p className="text-[10px] text-ink-3">Record the TDS you deducted while paying this vendor — it feeds your quarterly 26Q return.</p>
             )}
           </section>
 

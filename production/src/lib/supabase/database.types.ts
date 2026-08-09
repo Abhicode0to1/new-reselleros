@@ -1326,6 +1326,8 @@ export type ExpenseRow = {
   attachment_url:   string | null;
   reconciled_txn_id: string | null;          // bank line this expense is reconciled to (migration 0123)
   project_id:       string | null;           // migration 0192 — cost of a specific project (per-project P&L)
+  tds_section:      string | null;           // migration 0202 — TDS deducted section (26Q); null = none
+  tds_amount:       number;                   // migration 0202 — TDS deducted (₹) on this payment
   created_at:       string;
   updated_at:       string;
 };
@@ -1351,6 +1353,8 @@ type ExpenseInsert = {
   attachment_url?:  string | null;
   reconciled_txn_id?: string | null;
   project_id?:      string | null;
+  tds_section?:     string | null;
+  tds_amount?:      number;
 };
 type ExpenseUpdate = Partial<ExpenseInsert>;
 
