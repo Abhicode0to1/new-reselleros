@@ -28,7 +28,7 @@ import {
 } from "@/lib/queries/prepaid-advances";
 
 const CATEGORIES = ["Marketing", "Advertising", "Software / SaaS", "Hosting", "Subscriptions", "Other"];
-const METHODS = ["bank_transfer", "upi", "card", "cheque"];
+const METHODS = ["bank_transfer", "upi", "card", "cheque", "cash"];
 
 export default function PrepaidAdvancesPage() {
   const q = usePrepaidAdvances();
@@ -126,8 +126,7 @@ export default function PrepaidAdvancesPage() {
 function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
   const create = useCreatePrepaidAdvance();
   const { data: accounts } = useBankAccounts();
-  // All active accounts — bank AND petty cash (an advance can be paid in cash too).
-  const payAccounts = (accounts ?? []).filter((a) => a.is_active !== false);
+  const activeAccounts = (accounts ?? []).filter((a) => a.is_active !== false);
   const { data: vendors } = useVendors();
   const today = new Date().toISOString().slice(0, 10);
   const [vendor, setVendor] = React.useState("");
@@ -139,6 +138,13 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
   const [method, setMethod] = React.useState("bank_transfer");
   const [bankId, setBankId] = React.useState("");
   const [notes, setNotes] = React.useState("");
+
+  // Account list follows the "Paid by" method: cash → petty-cash accounts only,
+  // bank/UPI/card/cheque → bank accounts only. Switching method clears the pick.
+  const cashAccts = activeAccounts.filter((a) => a.account_type === "cash");
+  const bankAccts = activeAccounts.filter((a) => a.account_type !== "cash");
+  const accountsForMethod = method === "cash" ? cashAccts : bankAccts;
+  const changeMethod = (m: string) => { setMethod(m); setBankId(""); };
 
   const vName = vendor.trim();
   const vMatch = (vendors ?? []).find((v) => v.name.toLowerCase() === vName.toLowerCase());
@@ -212,26 +218,30 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
               <Input id="pa_date" type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} />
             </FormField>
             <FormField label="Paid by" htmlFor="pa_method">
-              <Select value={method} onValueChange={setMethod}>
+              <Select value={method} onValueChange={changeMethod}>
                 <SelectTrigger id="pa_method"><SelectValue /></SelectTrigger>
                 <SelectContent>{METHODS.map((m) => <SelectItem key={m} value={m}>{m.replace(/_/g, " ")}</SelectItem>)}</SelectContent>
               </Select>
             </FormField>
           </div>
-          {payAccounts.length > 0 && (
-            <FormField label="From which account?" htmlFor="pa_bank">
+          {accountsForMethod.length > 0 && (
+            <FormField label={method === "cash" ? "From which petty cash?" : "From which bank account?"} htmlFor="pa_bank">
               <Select value={bankId || "none"} onValueChange={(v) => setBankId(v === "none" ? "" : v)}>
                 <SelectTrigger id="pa_bank"><SelectValue placeholder="Select account" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Not sure / pick later</SelectItem>
-                  {payAccounts.map((a) => (
+                  {accountsForMethod.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.account_type === "cash" ? "💵 " : ""}{a.name}{a.bank_name ? ` · ${a.bank_name}` : ""}{a.account_type === "cash" ? " (cash)" : ""}
+                      {a.account_type === "cash" ? "💵 " : ""}{a.name}{a.bank_name ? ` · ${a.bank_name}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-ink-3 mt-1">Bank ho to Banking me usi debit line se reconcile karo; petty cash bhi chun sakte ho.</p>
+              <p className="text-[10px] text-ink-3 mt-1">
+                {method === "cash"
+                  ? "Cash-in-hand se diya — yahan wo petty-cash account chuno."
+                  : "Bank se gaya — Banking me isi account ki debit line se reconcile karo."}
+              </p>
             </FormField>
           )}
           <FormField label="Note (optional)" htmlFor="pa_notes">
