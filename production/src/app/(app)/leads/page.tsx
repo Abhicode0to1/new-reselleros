@@ -2384,21 +2384,11 @@ function LeadListView({
   const sorted = React.useMemo(() => {
     const out = [...leads];
     const dir = sortDir === "asc" ? 1 : -1;
-    const today = new Date().toISOString().slice(0, 10);
-    const dueRank = (l: Lead) => {
-      if (!l.follow_up_date || l.follow_up_date > today) return 1;       // not due → bottom group
-      if (l.stage === "won" || l.stage === "lost") return 1;              // closed leads — skip
-      return 0;                                                            // due / overdue → top group
-    };
+    // Sort strictly by the chosen column — default is "created" desc, so the
+    // newest lead is always on top. (Due/overdue follow-ups are surfaced by the
+    // banner + the Today/Overdue filter chips, so we don't secretly re-pin them
+    // here — a sortable table should obey its sort.)
     out.sort((a, b) => {
-      // 1. Due-today group first
-      const ra = dueRank(a), rb = dueRank(b);
-      if (ra !== rb) return ra - rb;
-      // 2. Within due-today, older follow_up_date first (most overdue)
-      if (ra === 0 && a.follow_up_date && b.follow_up_date && a.follow_up_date !== b.follow_up_date) {
-        return a.follow_up_date.localeCompare(b.follow_up_date);
-      }
-      // 3. User-chosen sort
       switch (sortBy) {
         case "value":   return ((a.value ?? 0) - (b.value ?? 0)) * dir;
         case "company": return a.company.localeCompare(b.company) * dir;
@@ -2678,10 +2668,13 @@ function LeadListView({
                 </td>
                 <td className="px-3 py-2 text-sm">
                   <span className={cn(
-                    "tabular-nums",
+                    "tabular-nums block",
                     stale ? "text-rose font-medium" : "text-ink-3",
                   )}>
                     {age === 0 ? "today" : age === 1 ? "1d ago" : `${age}d ago`}
+                  </span>
+                  <span className="block text-[10px] text-ink-4 tabular-nums">
+                    {formatDate(lead.updated_at)} · {fmtActTime(lead.updated_at)}
                   </span>
                 </td>
                 {/* Quick actions — dark panel that opens from the ⋯ (hover/click/
