@@ -21,11 +21,12 @@ import { useConfirm } from "@/components/providers/confirm-provider";
 import { rupee, formatDate } from "@/lib/utils";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useVendors, ensureVendor, } from "@/lib/queries/vendors";
-import { uploadBillAttachment } from "@/lib/queries/vendor-bills";
+import { uploadBillAttachment, getBillAttachmentUrl } from "@/lib/queries/vendor-bills";
 import { Icon } from "@/components/ui/icon";
 import { toast } from "sonner";
 import {
   usePrepaidAdvances, useCreatePrepaidAdvance, useConsumePrepaidAdvance, useDeletePrepaidAdvance,
+  useAdvanceExpenses,
   type PrepaidAdvance,
 } from "@/lib/queries/prepaid-advances";
 
@@ -72,49 +73,15 @@ export default function PrepaidAdvancesPage() {
         </Card>
       ) : (
         <ul className="space-y-2.5">
-          {rows.map((r) => {
-            const pct = r.total_amount > 0 ? Math.min(100, Math.round((r.consumed_amount / r.total_amount) * 100)) : 0;
-            const done = r.balance <= 0;
-            return (
-              <li key={r.id}>
-                <Card className="p-4">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-ink">{r.vendor_name}</span>
-                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-indigo/10 text-indigo">{r.category}</span>
-                        {done && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald/10 text-emerald">Fully used</span>}
-                      </div>
-                      <div className="text-[11px] text-ink-3 mt-0.5">
-                        Paid {formatDate(r.paid_date)}{r.payment_method ? ` · ${r.payment_method.replace(/_/g, " ")}` : ""}
-                        {r.notes ? ` · ${r.notes}` : ""}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-serif text-2xl text-ink leading-none">{rupee(r.balance)}</div>
-                      <div className="text-[10px] text-ink-3 mt-0.5">balance of {rupee(r.total_amount)}</div>
-                    </div>
-                  </div>
-                  {/* consumed bar */}
-                  <div className="mt-3 h-1.5 rounded-full bg-paper-2 overflow-hidden">
-                    <div className="h-full bg-emerald" style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="mt-1 flex items-center justify-between text-[11px] text-ink-3">
-                    <span>{rupee(r.consumed_amount)} used ({pct}%)</span>
-                    <div className="flex items-center gap-1">
-                      {!done && (
-                        <Button variant="primary" className="h-7 px-2.5 text-[11px]" icon="check" onClick={() => setConsume(r)}>Consume</Button>
-                      )}
-                      <Button variant="ghost" className="h-7 px-2 text-[11px]"
-                        onClick={async () => { if (await confirm({ title: `Delete this advance?`, body: "This removes the advance record. Expenses already booked from it stay.", danger: true, confirmLabel: "Delete" })) del.mutate(r.id); }}>
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              </li>
-            );
-          })}
+          {rows.map((r) => (
+            <li key={r.id}>
+              <AdvanceCard
+                r={r}
+                onConsume={() => setConsume(r)}
+                onDelete={async () => { if (await confirm({ title: `Delete this advance?`, body: "This removes the advance record. Expenses already booked from it stay.", danger: true, confirmLabel: "Delete" })) del.mutate(r.id); }}
+              />
+            </li>
+          ))}
         </ul>
       )}
 
@@ -122,6 +89,99 @@ export default function PrepaidAdvancesPage() {
       {addOpen && <AddAdvanceDialog onClose={() => setAddOpen(false)} />}
       {consume && <ConsumeDialog advance={consume} onClose={() => setConsume(null)} />}
     </div>
+  );
+}
+
+function AdvanceCard({ r, onConsume, onDelete }: { r: PrepaidAdvance; onConsume: () => void; onDelete: () => void }) {
+  const [open, setOpen] = React.useState(false);
+  const exp = useAdvanceExpenses(r.id, open);
+  const pct = r.total_amount > 0 ? Math.min(100, Math.round((r.consumed_amount / r.total_amount) * 100)) : 0;
+  const done = r.balance <= 0;
+  const items = exp.data ?? [];
+
+  async function openBill(path: string) {
+    try {
+      const url = await getBillAttachmentUrl(path);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      else toast.error("Bill link nahi bana — dobara try karo.");
+    } catch { toast.error("Bill khol nahi paaye."); }
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-ink">{r.vendor_name}</span>
+            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-indigo/10 text-indigo">{r.category}</span>
+            {done && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald/10 text-emerald">Fully used</span>}
+          </div>
+          <div className="text-[11px] text-ink-3 mt-0.5">
+            Paid {formatDate(r.paid_date)}{r.payment_method ? ` · ${r.payment_method.replace(/_/g, " ")}` : ""}
+            {r.notes ? ` · ${r.notes}` : ""}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-serif text-2xl text-ink leading-none">{rupee(r.balance)}</div>
+          <div className="text-[10px] text-ink-3 mt-0.5">balance of {rupee(r.total_amount)}</div>
+        </div>
+      </div>
+      {/* consumed bar */}
+      <div className="mt-3 h-1.5 rounded-full bg-paper-2 overflow-hidden">
+        <div className="h-full bg-emerald" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-ink-3">
+        {/* Click to expand the expenses booked against this advance. */}
+        <button type="button" onClick={() => setOpen((o) => !o)}
+          className="inline-flex items-center gap-1 hover:text-ink transition-colors"
+          aria-expanded={open}>
+          <Icon name={open ? "chevron_up" : "chevron_down"} size={13} />
+          <span>{rupee(r.consumed_amount)} used ({pct}%){r.consumed_amount > 0 ? " · view expenses" : ""}</span>
+        </button>
+        <div className="flex items-center gap-1">
+          {!done && (
+            <Button variant="primary" className="h-7 px-2.5 text-[11px]" icon="check" onClick={onConsume}>Consume</Button>
+          )}
+          <Button variant="ghost" className="h-7 px-2 text-[11px]" onClick={onDelete}>Delete</Button>
+        </div>
+      </div>
+
+      {/* Expanded: the expenses (each "Consume") booked against this advance. */}
+      {open && (
+        <div className="mt-3 rounded-lg border border-hairline bg-paper-2/40 divide-y divide-hairline">
+          {exp.isLoading ? (
+            <div className="p-3 space-y-2">{[1, 2].map((i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
+          ) : items.length === 0 ? (
+            <p className="p-3 text-[12px] text-ink-3">Abhi is advance se koi expense book nahi hua. &ldquo;Consume&rdquo; karke expense banao.</p>
+          ) : (
+            items.map((e) => (
+              <div key={e.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                <div className="min-w-0">
+                  <div className="text-[12px] text-ink">
+                    {formatDate(e.expense_date)}
+                    {e.gst_paid > 0 && <span className="text-ink-3"> · GST {rupee(e.gst_paid)}</span>}
+                  </div>
+                  {(e.notes || e.description) && (
+                    <div className="text-[11px] text-ink-3 truncate">{e.notes || e.description}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {e.attachment_url ? (
+                    <button type="button" onClick={() => openBill(e.attachment_url!)}
+                      className="inline-flex items-center gap-1 text-[11px] text-amber-ink hover:underline">
+                      <Icon name="file" size={12} /> Bill
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-ink-3">no bill</span>
+                  )}
+                  <span className="font-medium text-ink text-[12px] tabular-nums">{rupee(e.amount)}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 

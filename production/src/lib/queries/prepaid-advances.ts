@@ -10,11 +10,33 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
-import type { PrepaidAdvanceRow } from "@/lib/supabase/database.types";
+import type { PrepaidAdvanceRow, ExpenseRow } from "@/lib/supabase/database.types";
 
 const KEY = ["prepaid_advances"] as const;
 
 export type PrepaidAdvance = PrepaidAdvanceRow & { balance: number };
+
+/** The expenses booked against one advance (each "Consume"). Lazy — only runs
+ *  when a card is expanded. `enabled` gates the fetch. */
+export type AdvanceExpense = Pick<
+  ExpenseRow, "id" | "amount" | "gst_paid" | "expense_date" | "description" | "notes" | "attachment_url"
+>;
+export function useAdvanceExpenses(advanceId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["advance_expenses", advanceId],
+    enabled: enabled && !!advanceId,
+    queryFn: async (): Promise<AdvanceExpense[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("id, amount, gst_paid, expense_date, description, notes, attachment_url")
+        .eq("prepaid_advance_id", advanceId!)
+        .order("expense_date", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as AdvanceExpense[];
+    },
+  });
+}
 
 export function usePrepaidAdvances() {
   return useQuery({
@@ -82,6 +104,7 @@ export function useConsumePrepaidAdvance() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEY });
       qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["advance_expenses"] });
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
       toast.success("Consumed — expense booked to P&L, advance balance reduced.");
     },

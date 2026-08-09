@@ -235,14 +235,20 @@ export const APP_NAV: NavSection[] = [
       { id: "campaigns",     href: "/campaigns",     label: "Campaigns",      icon: "send" },
       { id: "online-promos", href: "/online-promos", label: "Online Promos",  icon: "zap" },
       { id: "coupons",       href: "/coupons",       label: "Coupons",        icon: "rupee" },
-      { id: "reports",       href: "/reports",       label: "Reports",        icon: "chart",
-        children: [
-          { id: "reports-profit",   href: "/reports/profit",           label: "Profit by product/service", icon: "package" },
-          { id: "reports-customer", href: "/accounting/profitability", label: "Profit by customer",        icon: "users" },
-          { id: "reports-purchases",href: "/reports/purchases",        label: "Purchase report",           icon: "cart" },
-        ],
-      },
       { id: "support",       href: "/support",       label: "Support",        icon: "ticket" },
+    ],
+  },
+  {
+    // Analytics / business reports — promoted to a top-level section so it's
+    // visible in the main menu (was buried under Engage).
+    section: "Reports",
+    icon: "chart",
+    roles: ["owner", "manager"],
+    items: [
+      { id: "reports",          href: "/reports",                  label: "All Reports",               icon: "chart", hint: "Every business report in one place." },
+      { id: "reports-profit",   href: "/reports/profit",           label: "Profit by product/service", icon: "package" },
+      { id: "reports-customer", href: "/accounting/profitability", label: "Profit by customer",        icon: "users" },
+      { id: "reports-purchases",href: "/reports/purchases",        label: "Purchase report",           icon: "cart" },
     ],
   },
   {
@@ -373,9 +379,9 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/campaigns":       ["Engage", "Campaigns"],
   "/online-promos":   ["Engage", "Online Promos"],
   "/coupons":         ["Engage", "Coupons"],
-  "/reports":         ["Engage", "Reports"],
-  "/reports/profit":  ["Engage", "Reports", "Profit by product/service"],
-  "/reports/purchases": ["Purchases", "Purchase Report"],
+  "/reports":         ["Reports", "All Reports"],
+  "/reports/profit":  ["Reports", "Profit by product/service"],
+  "/reports/purchases": ["Reports", "Purchase report"],
   "/purchases/inbox":   ["Purchases", "Purchase Inbox"],
   "/support":         ["Engage", "Support"],
   "/items":           ["Catalog"],
