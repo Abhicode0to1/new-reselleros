@@ -269,10 +269,44 @@ function ConsumeDialog({ advance, onClose }: { advance: PrepaidAdvance; onClose:
   const [note, setNote] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const [uploading, setUploading] = React.useState(false);
+  const [reading, setReading] = React.useState(false);
+  const [aiNote, setAiNote] = React.useState("");
   const amt = Math.round(Number(amount) || 0);
   const gstAmt = Math.round(Number(gst) || 0);
   const tooMuch = amt > advance.balance;
   const gstTooMuch = gstAmt > amt;
+
+  // On file pick: attach + let the AI read the invoice and auto-fill amount/GST/date.
+  async function onFile(f: File | null) {
+    setFile(f);
+    setAiNote("");
+    if (!f) return;
+    setReading(true);
+    try {
+      const base64 = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res((r.result as string).split(",")[1] ?? "");
+        r.onerror = () => rej(new Error("read failed"));
+        r.readAsDataURL(f);
+      });
+      const resp = await fetch("/api/ai/extract-bill", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fileBase64: base64, mimeType: f.type }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) { setAiNote(json.error ?? "Bill padh nahi paaye — fields haath se bhar do."); return; }
+      const fx = json.fields as Record<string, string | number | null>;
+      if (fx.total != null) setAmount(String(Math.round(Number(fx.total))));
+      const g = Number(fx.cgst ?? 0) + Number(fx.sgst ?? 0) + Number(fx.igst ?? 0);
+      if (g > 0) setGst(String(Math.round(g)));
+      if (fx.bill_date) setDate(String(fx.bill_date));
+      setAiNote(`✨ AI ne "${f.name}" se bhar diya — amount/GST/date check karke Book karo.`);
+    } catch {
+      setAiNote("Read fail — fields haath se bhar do (bill phir bhi attach ho jayega).");
+    } finally {
+      setReading(false);
+    }
+  }
 
   async function submit() {
     if (amt <= 0 || tooMuch || gstTooMuch) return;
@@ -311,10 +345,16 @@ function ConsumeDialog({ advance, onClose }: { advance: PrepaidAdvance; onClose:
             <Input id="cons_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </FormField>
           <FormField label="Attach bill (optional)" htmlFor="cons_bill">
-            <input id="cons_bill" type="file" accept="image/*,application/pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-[12px] text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-paper-2 file:px-3 file:py-1.5 file:text-ink file:cursor-pointer" />
-            <p className="text-[10px] text-ink-3 mt-1">Facebook/Google ka tax invoice yahan lagao — expense se juda rahega.</p>
+            <input id="cons_bill" type="file" accept="image/*,application/pdf" disabled={reading}
+              onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-[12px] text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-paper-2 file:px-3 file:py-1.5 file:text-ink file:cursor-pointer disabled:opacity-50" />
+            {reading ? (
+              <p className="text-[11px] text-amber-ink mt-1 inline-flex items-center gap-1"><Icon name="sparkles" size={12} /> AI bill padh raha hai — amount/GST/date bhar dega…</p>
+            ) : aiNote ? (
+              <p className="text-[11px] text-emerald mt-1">{aiNote}</p>
+            ) : (
+              <p className="text-[10px] text-ink-3 mt-1">Facebook/Google ka tax invoice lagao — AI amount/GST/date khud bhar dega, aur bill expense se juda rahega.</p>
+            )}
           </FormField>
           <FormField label="Note (optional)" htmlFor="cons_note">
             <Input id="cons_note" placeholder="e.g. ads run 1–15 Jan" value={note} onChange={(e) => setNote(e.target.value)} />
