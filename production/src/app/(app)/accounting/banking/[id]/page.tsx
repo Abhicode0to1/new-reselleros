@@ -286,12 +286,16 @@ export default function BankAccountDetailPage() {
               Description to read a full transaction line. Container scrolls if the
               table grows past it; widths are remembered per device. */}
           <Card flush className="hidden lg:block">
+            {/* Viewport-capped scroller so BOTH scrollbars sit inside the visible
+                frame — the horizontal bar is reachable without scrolling the whole
+                page to the bottom. Sticky header stays put while rows scroll. */}
+            <div className="overflow-auto max-h-[calc(100vh-24rem)]">
             <div className="relative" style={{ width: bankTableW }}>
               <table className="text-sm table-fixed w-full">
                 <colgroup>
                   {BANK_COL_ORDER.map((id) => <col key={id} style={{ width: colW[id] }} />)}
                 </colgroup>
-                <thead>
+                <thead className="[&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:z-10 [&>tr>th]:bg-paper-2">
                   <tr className="border-b border-hairline text-left text-[11px] uppercase tracking-wider text-ink-3">
                     <th className="px-4 py-2 font-semibold whitespace-nowrap">Date</th>
                     <th className="px-4 py-2 font-semibold whitespace-nowrap">Description</th>
@@ -311,6 +315,7 @@ export default function BankAccountDetailPage() {
                 </tbody>
               </table>
               <ResizableHandles colW={colW} order={BANK_COL_ORDER} startResize={startResize} />
+            </div>
             </div>
           </Card>
 
