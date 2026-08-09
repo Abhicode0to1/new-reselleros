@@ -181,6 +181,7 @@ export const APP_NAV: NavSection[] = [
     icon: "layout",
     roles: ["owner", "manager"],
     items: [
+      { id: "acc-overview",   href: "/accounting",                label: "Overview",        icon: "layout", hint: "Money cockpit — cash, owed-to-you, you-owe, GST due, and what needs your attention." },
       { id: "banking",        href: "/accounting/banking",        label: "Banking",         icon: "rupee" },
       { id: "business-loans", href: "/accounting/business-loans", label: "Business Loans",  icon: "rupee" },
       { id: "pnl",            href: "/accounting/pnl",            label: "P&L Report",      icon: "trending_up" },
@@ -337,6 +338,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/bill-payments": ["Purchases", "Payments Made"],
   "/accounting/expenses":      ["Purchases", "Expenses"],
   "/accounting/reimbursements": ["Purchases", "Reimbursements"],
+  "/accounting":               ["Accounting", "Overview"],
   "/accounting/saas-metrics":  ["Accounting", "SaaS Metrics"],
   "/accounting/banking":       ["Accounting", "Banking"],
   "/accounting/banking/[id]":  ["Accounting", "Banking", "Account"],
