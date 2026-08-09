@@ -697,60 +697,6 @@ export function AddExpenseDialog({
             </div>
           )}
 
-          {/* ── STEP 3: Who — vendor / payee. Full (with GSTIN) for GST bills. ── */}
-          <FormField label={isGstBill ? "Vendor (GST invoice)" : "Paid to (optional)"} htmlFor="vendor_name">
-            <div className="relative">
-              <Input
-                id="vendor_name"
-                autoComplete="off"
-                placeholder="e.g. Anthropic / Airtel / Office Landlord"
-                {...register("vendor_name", { onChange: () => { setVendorId(null); setVendorMatch(null); setVendorOpen(true); } })}
-                onFocus={() => setVendorOpen(true)}
-                onBlur={() => setTimeout(() => setVendorOpen(false), 130)}
-              />
-              {vendorOpen && (vendors ?? []).length > 0 && (() => {
-                const query = (watch("vendor_name") || "").trim().toLowerCase();
-                const matches = (vendors ?? []).filter((v) => !query || v.name.toLowerCase().includes(query)).slice(0, 8);
-                if (matches.length === 0) return null;
-                return (
-                  <div className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-md border border-hairline bg-paper shadow-lg">
-                    {matches.map((v) => (
-                      <button key={v.id} type="button"
-                        onMouseDown={(e) => { e.preventDefault(); setValue("vendor_name", v.name); setVendorId(v.id); setVendorMatch({ kind: "existing", name: v.name }); setVendorOpen(false); }}
-                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2">
-                        <span className="text-ink truncate">{v.name}</span>
-                        {v.gstin && <span className="text-[10px] text-ink-3 font-mono shrink-0">{v.gstin}</span>}
-                      </button>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-            {vendorMatch && (
-              vendorMatch.kind === "existing" ? (
-                <p className="mt-1 flex items-center gap-1.5 text-[11px] text-emerald">
-                  <Icon name="check_circle" size={12} /> Existing vendor mil gaya{aiGstin ? " (GSTIN se)" : ""} — isi se link hoga.
-                </p>
-              ) : isGstBill ? (
-                <p className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-ink">
-                  <Icon name="plus" size={12} /> Naya vendor &ldquo;{vendorMatch.name}&rdquo;{aiGstin ? ` (GSTIN ${aiGstin})` : ""} — Save par Vendors master me add hoga.
-                </p>
-              ) : (
-                <p className="mt-1 text-[11px] text-ink-3">Naya payee — kaccha/no-bill hone se Vendors master me add nahi hoga.</p>
-              )
-            )}
-          </FormField>
-
-          {/* Bill no — only a GST invoice has a number worth tracking (dedup). */}
-          {isGstBill && (
-            <FormField label="Bill / invoice no. (optional)" htmlFor="bill_no">
-              <Input id="bill_no" placeholder="e.g. INV-2026-0042" value={billNo} onChange={(e) => setBillNo(e.target.value)} />
-              <p className="text-[10px] text-ink-3 mt-1">
-                Ek hi invoice mein alag-alag category ka saaman? Har category ki <b>alag entry</b> banao — <b>same bill no.</b> daalo. Wo ek hi invoice ke hisse maane jayenge (duplicate warning nahi aayegi).
-              </p>
-            </FormField>
-          )}
-
           {/* ── STEP 4: What & how much ── */}
           <section className="rounded-lg border border-hairline bg-paper-2/30 p-3 space-y-3">
             <div className={cn("grid gap-3", showItems ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
@@ -993,6 +939,61 @@ export function AddExpenseDialog({
                 </SelectContent>
               </Select>
               <p className="text-[10px] text-ink-3 mt-1">Cash-in-hand se ye amount minus ho jayega.</p>
+            </FormField>
+          )}
+
+          {/* ── Who — vendor / payee (optional; lives at the end since it's the
+              last thing you fill after the money details). GSTIN for GST bills. ── */}
+          <FormField label={isGstBill ? "Vendor (GST invoice)" : "Paid to (optional)"} htmlFor="vendor_name">
+            <div className="relative">
+              <Input
+                id="vendor_name"
+                autoComplete="off"
+                placeholder="e.g. Anthropic / Airtel / Office Landlord"
+                {...register("vendor_name", { onChange: () => { setVendorId(null); setVendorMatch(null); setVendorOpen(true); } })}
+                onFocus={() => setVendorOpen(true)}
+                onBlur={() => setTimeout(() => setVendorOpen(false), 130)}
+              />
+              {vendorOpen && (vendors ?? []).length > 0 && (() => {
+                const query = (watch("vendor_name") || "").trim().toLowerCase();
+                const matches = (vendors ?? []).filter((v) => !query || v.name.toLowerCase().includes(query)).slice(0, 8);
+                if (matches.length === 0) return null;
+                return (
+                  <div className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-md border border-hairline bg-paper shadow-lg">
+                    {matches.map((v) => (
+                      <button key={v.id} type="button"
+                        onMouseDown={(e) => { e.preventDefault(); setValue("vendor_name", v.name); setVendorId(v.id); setVendorMatch({ kind: "existing", name: v.name }); setVendorOpen(false); }}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2">
+                        <span className="text-ink truncate">{v.name}</span>
+                        {v.gstin && <span className="text-[10px] text-ink-3 font-mono shrink-0">{v.gstin}</span>}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+            {vendorMatch && (
+              vendorMatch.kind === "existing" ? (
+                <p className="mt-1 flex items-center gap-1.5 text-[11px] text-emerald">
+                  <Icon name="check_circle" size={12} /> Existing vendor mil gaya{aiGstin ? " (GSTIN se)" : ""} — isi se link hoga.
+                </p>
+              ) : isGstBill ? (
+                <p className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-ink">
+                  <Icon name="plus" size={12} /> Naya vendor &ldquo;{vendorMatch.name}&rdquo;{aiGstin ? ` (GSTIN ${aiGstin})` : ""} — Save par Vendors master me add hoga.
+                </p>
+              ) : (
+                <p className="mt-1 text-[11px] text-ink-3">Naya payee — kaccha/no-bill hone se Vendors master me add nahi hoga.</p>
+              )
+            )}
+          </FormField>
+
+          {/* Bill no — only a GST invoice has a number worth tracking (dedup). */}
+          {isGstBill && (
+            <FormField label="Bill / invoice no. (optional)" htmlFor="bill_no">
+              <Input id="bill_no" placeholder="e.g. INV-2026-0042" value={billNo} onChange={(e) => setBillNo(e.target.value)} />
+              <p className="text-[10px] text-ink-3 mt-1">
+                Ek hi invoice mein alag-alag category ka saaman? Har category ki <b>alag entry</b> banao — <b>same bill no.</b> daalo. Wo ek hi invoice ke hisse maane jayenge (duplicate warning nahi aayegi).
+              </p>
             </FormField>
           )}
 
