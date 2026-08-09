@@ -243,12 +243,19 @@ export const APP_NAV: NavSection[] = [
     ],
   },
   {
-    section: "Catalog & Docs",
+    section: "Catalog",
     icon: "package",
     roles: ["owner", "manager"],
     items: [
-      { id: "items",     href: "/items",     label: "Items Catalog", icon: "package", roles: ["owner", "manager"] },
-      { id: "documents", href: "/documents", label: "Documents",     icon: "file",    roles: ["owner", "manager"] },
+      { id: "items", href: "/items", label: "Items Catalog", icon: "package", roles: ["owner", "manager"] },
+    ],
+  },
+  {
+    section: "Company Documents",
+    icon: "file",
+    roles: ["owner", "manager"],
+    items: [
+      { id: "documents", href: "/documents", label: "Documents",   icon: "file",  roles: ["owner", "manager"] },
       { id: "gdrive",    href: "https://drive.google.com", label: "Google Drive", icon: "globe", roles: ["owner", "manager"], external: true },
     ],
   },
@@ -365,8 +372,8 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/reports/purchases": ["Purchases", "Purchase Report"],
   "/purchases/inbox":   ["Purchases", "Purchase Inbox"],
   "/support":         ["Engage", "Support"],
-  "/items":           ["Catalog & Docs", "Items Catalog"],
-  "/documents":       ["Catalog & Docs", "Documents"],
+  "/items":           ["Catalog", "Items Catalog"],
+  "/documents":       ["Company Documents", "Documents"],
   "/settings":        ["Settings", "Settings"],
   "/team":            ["Settings", "Team"],
   "/partners":        ["Settings", "Partners"],
