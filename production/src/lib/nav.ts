@@ -172,6 +172,7 @@ export const APP_NAV: NavSection[] = [
       { id: "reimbursements",  href: "/accounting/reimbursements", label: "Reimbursements",  icon: "refresh" },
       { id: "purchase-orders", href: "/purchase-orders",           label: "Purchase Orders", icon: "cart" },
       { id: "purchase-report", href: "/reports/purchases",         label: "Purchase Report", icon: "chart", hint: "Auto-built spend report: by vendor (e.g. Amazon), category and month, with GST input credit. Read-only." },
+      { id: "purchase-inbox",  href: "/purchases/inbox",           label: "Purchase Inbox",  icon: "inbox", hint: "Amazon & co. order emails auto-captured here for one-tap add to expenses. Nothing hits your books until you review." },
     ],
   },
   {
@@ -342,6 +343,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/reports":         ["Engage", "Reports"],
   "/reports/profit":  ["Engage", "Reports", "Profit by product/service"],
   "/reports/purchases": ["Purchases", "Purchase Report"],
+  "/purchases/inbox":   ["Purchases", "Purchase Inbox"],
   "/support":         ["Engage", "Support"],
   "/items":           ["Catalog & Docs", "Items Catalog"],
   "/documents":       ["Catalog & Docs", "Documents"],

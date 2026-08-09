@@ -2434,6 +2434,46 @@ type ContactGreetingLogInsert = {
 };
 type ContactGreetingLogUpdate = Partial<ContactGreetingLogInsert>;
 
+// Inbound purchase capture — Amazon & co. order emails staged for review (migration 0200).
+export type InboundPurchaseItem = { name: string; qty: number; amount: number };
+export type InboundPurchaseRow = {
+  id:          number;
+  tenant_id:   string;
+  source:      string;
+  message_id:  string | null;
+  order_id:    string | null;
+  from_email:  string | null;
+  subject:     string | null;
+  order_date:  string | null;
+  currency:    string;
+  total:       number | null;
+  gst:         number | null;
+  items:       InboundPurchaseItem[];
+  raw_text:    string | null;
+  status:      "pending" | "imported" | "ignored";
+  expense_id:  string | null;
+  created_at:  string;
+  updated_at:  string;
+};
+type InboundPurchaseInsert = {
+  id?:          number;
+  tenant_id:    string;
+  source?:      string;
+  message_id?:  string | null;
+  order_id?:    string | null;
+  from_email?:  string | null;
+  subject?:     string | null;
+  order_date?:  string | null;
+  currency?:    string;
+  total?:       number | null;
+  gst?:         number | null;
+  items?:       InboundPurchaseItem[];
+  raw_text?:    string | null;
+  status?:      "pending" | "imported" | "ignored";
+  expense_id?:  string | null;
+};
+type InboundPurchaseUpdate = Partial<InboundPurchaseInsert>;
+
 // ── Per-user Google OAuth tokens (Contacts sync, migration 0190) ────────────
 export type UserGoogleTokenRow = {
   user_id:         string;
@@ -2635,6 +2675,7 @@ export type Database = {
       expense_claims:{ Row: ExpenseClaimRow; Insert: ExpenseClaimInsert; Update: ExpenseClaimUpdate; Relationships: [] };
       lead_activities:{ Row: LeadActivityRow; Insert: LeadActivityInsert; Update: LeadActivityUpdate; Relationships: [] };
       contact_greeting_log:{ Row: ContactGreetingLogRow; Insert: ContactGreetingLogInsert; Update: ContactGreetingLogUpdate; Relationships: [] };
+      inbound_purchases:{ Row: InboundPurchaseRow; Insert: InboundPurchaseInsert; Update: InboundPurchaseUpdate; Relationships: [] };
       tds_receivable:     { Row: TdsReceivableRow;     Insert: TdsReceivableInsert;     Update: TdsReceivableUpdate;     Relationships: [] };
       customer_users:     { Row: CustomerUserRow;      Insert: CustomerUserInsert;      Update: CustomerUserUpdate;      Relationships: [] };
       support_tickets:    { Row: SupportTicketRow;     Insert: SupportTicketInsert;     Update: SupportTicketUpdate;     Relationships: [] };
