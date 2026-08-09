@@ -16,7 +16,7 @@ import type { ContactRow, ContactChannel } from "@/lib/supabase/database.types";
 export type Contact = ContactRow;
 export type { ContactChannel } from "@/lib/supabase/database.types";
 
-export type ContactSource = "lead" | "customer" | "imported";
+export type ContactSource = "lead" | "customer" | "vendor" | "partner" | "imported";
 
 export interface UnifiedContact {
   id:        string;            // "lead:<id>" / "customer:<id>" / "imported:<id>"
@@ -43,8 +43,12 @@ export interface UnifiedContact {
 export type ContactKind = "lead" | "customer" | "partner" | "vendor" | "personal" | "other";
 
 export function contactKind(c: UnifiedContact): ContactKind {
-  if (c.source === "lead") return "lead";
-  if (c.source === "customer") return "customer";
+  // Hard business relations, derived from real data (no AI, no guessing):
+  if (c.source === "customer") return "customer";  // we sold to them
+  if (c.source === "vendor")   return "vendor";    // we buy from them
+  if (c.source === "partner")  return "partner";   // referral / commission
+  if (c.source === "lead")     return "lead";      // they enquired
+  // Standalone contact — its manually-set relationship, else "not decided".
   const rel = (c.relationship ?? "").toLowerCase();
   if (rel === "partner" || rel === "vendor" || rel === "personal") return rel;
   return "other";
@@ -56,13 +60,22 @@ export function useAllContacts() {
     queryFn: async (): Promise<UnifiedContact[]> => {
       const supabase = createClient();
 
-      const [leadsRes, customersRes, importedRes] = await Promise.all([
+      const [leadsRes, customersRes, vendorsRes, partnersRes, importedRes] = await Promise.all([
         supabase
           .from("leads")
           .select("id, company, contact_name, contact_email, contact_phone, stage, created_at, is_junk"),
         supabase
           .from("customers")
           .select("id, name, contact_name, contact_title, contact_email, contact_phone, health, created_at"),
+        // Vendors = people/companies we BUY from — a real business relation, so
+        // they belong in the contact book auto-classified as "Vendor".
+        supabase
+          .from("vendors")
+          .select("id, name, contact_name, contact_email, contact_phone, created_at"),
+        // Referral partners = people who send us business (commission) → "Partner".
+        supabase
+          .from("referral_partners")
+          .select("id, name, email, phone, is_active, created_at"),
         supabase
           .from("contacts")
           .select("id, full_name, email, phone, company, title, source, status, relationship, promoted_to_lead_id, created_at")
@@ -75,6 +88,8 @@ export function useAllContacts() {
 
       if (leadsRes.error)     throw leadsRes.error;
       if (customersRes.error) throw customersRes.error;
+      if (vendorsRes.error)   throw vendorsRes.error;
+      if (partnersRes.error)  throw partnersRes.error;
       if (importedRes.error)  throw importedRes.error;
 
       const fromLeads: UnifiedContact[] = (leadsRes.data ?? [])
@@ -109,6 +124,36 @@ export function useAllContacts() {
           createdAt: c.created_at,
         }));
 
+      const fromVendors: UnifiedContact[] = (vendorsRes.data ?? [])
+        .filter((v) => v.contact_name || v.contact_email || v.contact_phone || v.name)
+        .map((v) => ({
+          id:        `vendor:${v.id}`,
+          source:    "vendor" as const,
+          refId:     v.id,
+          name:      v.contact_name || v.name,
+          email:     v.contact_email,
+          phone:     v.contact_phone,
+          company:   v.name,
+          title:     null,
+          status:    null,
+          createdAt: v.created_at,
+        }));
+
+      const fromPartners: UnifiedContact[] = (partnersRes.data ?? [])
+        .filter((p) => p.name || p.email || p.phone)
+        .map((p) => ({
+          id:        `partner:${p.id}`,
+          source:    "partner" as const,
+          refId:     p.id,
+          name:      p.name,
+          email:     p.email,
+          phone:     p.phone,
+          company:   "—",
+          title:     null,
+          status:    p.is_active ? "active" : "inactive",
+          createdAt: p.created_at,
+        }));
+
       const fromImported: UnifiedContact[] = (importedRes.data ?? []).map((c) => ({
         id:           `imported:${c.id}`,
         source:       "imported" as const,
@@ -124,27 +169,25 @@ export function useAllContacts() {
         createdAt:    c.created_at,
       }));
 
-      // Combine + dedupe by email (a customer + lead with same email = 1 contact, prefer customer)
+      // Combine + dedupe by email. When the same person appears in several
+      // sources, keep the STRONGEST current business relation, in this order:
+      // Customer (we sold) > Vendor (we buy) > Partner (referral) > Lead
+      // (enquiry) > standalone contact. First to claim an email wins.
       const seenEmails = new Set<string>();
       const combined: UnifiedContact[] = [];
-
-      for (const c of fromCustomers) {
-        const key = c.email?.toLowerCase().trim();
-        if (key) seenEmails.add(key);
-        combined.push(c);
-      }
-      for (const l of fromLeads) {
-        const key = l.email?.toLowerCase().trim();
-        if (key && seenEmails.has(key)) continue;
-        if (key) seenEmails.add(key);
-        combined.push(l);
-      }
-      for (const i of fromImported) {
-        const key = i.email?.toLowerCase().trim();
-        if (key && seenEmails.has(key)) continue;
-        if (key) seenEmails.add(key);
-        combined.push(i);
-      }
+      const addAll = (list: UnifiedContact[]) => {
+        for (const c of list) {
+          const key = c.email?.toLowerCase().trim();
+          if (key && seenEmails.has(key)) continue;
+          if (key) seenEmails.add(key);
+          combined.push(c);
+        }
+      };
+      addAll(fromCustomers);
+      addAll(fromVendors);
+      addAll(fromPartners);
+      addAll(fromLeads);
+      addAll(fromImported);
 
       // Sort by created date desc
       combined.sort((a, b) => b.createdAt.localeCompare(a.createdAt));

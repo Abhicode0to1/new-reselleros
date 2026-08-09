@@ -34,12 +34,12 @@ const KIND_META: Record<ContactKind, { label: string; dot: TabBarItem["dot"]; ba
   partner:  { label: "Partners",  dot: "indigo",  badge: "info"    },
   vendor:   { label: "Vendors",   dot: "slate",   badge: "muted"   },
   personal: { label: "Personal",  dot: "rose",    badge: "info"    },
-  other:    { label: "Other",     dot: "slate",   badge: "muted"   },
+  other:    { label: "Not decided", dot: "slate", badge: "muted"   },
 };
 const KIND_ORDER: ContactKind[] = ["lead", "customer", "partner", "vendor", "personal", "other"];
 // Singular label for the per-row badge.
 const KIND_BADGE_LABEL: Record<ContactKind, string> = {
-  lead: "Lead", customer: "Customer", partner: "Partner", vendor: "Vendor", personal: "Personal", other: "Contact",
+  lead: "Lead", customer: "Customer", partner: "Partner", vendor: "Vendor", personal: "Personal", other: "Not decided",
 };
 
 const CONTACT_COL_ORDER = ["select", "name", "company", "email", "phone", "source", "action"];
@@ -125,8 +125,10 @@ export default function ContactsPage() {
   const openContact = (c: { source: string; refId: string }) => {
     const path =
       c.source === "imported" ? `/contacts/${c.refId}`
-      : c.source === "lead"   ? `/leads?lead=${c.refId}`
-      :                         `/customers/${c.refId}`;
+      : c.source === "lead"     ? `/leads?lead=${c.refId}`
+      : c.source === "vendor"   ? `/accounting/vendors`
+      : c.source === "partner"  ? `/referrals`
+      :                           `/customers/${c.refId}`;
     router.push(path as never);
   };
 
