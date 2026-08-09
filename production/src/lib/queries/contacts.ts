@@ -325,6 +325,11 @@ export type ContactFormValues = {
   customer_id?: string | null;
   /** Relationship classification: 'partner' | 'vendor' | 'personal' | 'other'. */
   relationship?: string | null;
+  /** Personal-profile fields (migration 0198). birthday/anniversary = YYYY-MM-DD. */
+  birthday?:    string | null;
+  anniversary?: string | null;
+  nickname?:    string | null;
+  family?:      string | null;
   title?:    string | null;
   /** All emails/phones (each labelled). The mutations mirror index 0 into the
    *  legacy `email`/`phone` primary columns so existing consumers keep working. */

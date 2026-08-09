@@ -45,6 +45,10 @@ const schema = z.object({
   company:   z.string().optional(),
   customer_id: z.string().optional(),
   relationship: z.string().optional(),
+  birthday:    z.string().optional(),
+  anniversary: z.string().optional(),
+  nickname:    z.string().optional(),
+  family:      z.string().optional(),
   title:     z.string().optional(),
   emails:    z.array(z.object({
     value: z.string().email("Enter a valid email").or(z.literal("")),
@@ -107,6 +111,10 @@ export function ContactForm({
       company:   clean(data.company),
       customer_id: clean(data.customer_id),
       relationship: clean(data.relationship),
+      birthday:    clean(data.birthday),
+      anniversary: clean(data.anniversary),
+      nickname:    clean(data.nickname),
+      family:      clean(data.family),
       title:     clean(data.title),
       // Arrays go through as-is; the mutation cleans blanks + mirrors index 0
       // into the primary email/phone columns.
@@ -282,6 +290,17 @@ export function ContactForm({
               <FormField label="City"><Input placeholder="e.g. Pune" {...register("city")} /></FormField>
             </Section>
 
+            {/* Personal — what you keep about a real relationship (birthday to
+                wish them, family context, what you call them). */}
+            <Section title="Personal">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormField label="Birthday"><Input type="date" {...register("birthday")} /></FormField>
+                <FormField label="Anniversary"><Input type="date" {...register("anniversary")} /></FormField>
+              </div>
+              <FormField label="Nickname"><Input placeholder="e.g. what you call them" {...register("nickname")} /></FormField>
+              <FormField label="Family"><Textarea rows={2} placeholder="Spouse, children, relations…" {...register("family")} /></FormField>
+            </Section>
+
             {/* Notes + tags */}
             <Section title="Notes">
               <FormField label="Tags"><Input placeholder="investor, warm, event-2026 (comma separated)" {...register("tags")} /></FormField>
@@ -332,6 +351,10 @@ function toDefaults(c?: Contact | null): FormData {
     company:   c?.company ?? "",
     customer_id: c?.customer_id ?? "",
     relationship: c?.relationship ?? "",
+    birthday:    c?.birthday ?? "",
+    anniversary: c?.anniversary ?? "",
+    nickname:    c?.nickname ?? "",
+    family:      c?.family ?? "",
     title:     c?.title ?? "",
     emails,
     phones,

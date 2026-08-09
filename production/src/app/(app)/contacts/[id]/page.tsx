@@ -234,6 +234,23 @@ export default function ContactDetailPage() {
         </Panel>
       )}
 
+      {/* Personal — birthday / anniversary / nickname / family */}
+      {(contact.birthday || contact.anniversary || contact.nickname || contact.family) && (
+        <Panel title="Personal">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <Field label="🎂 Birthday"    value={contact.birthday ? formatDate(contact.birthday) : null} />
+            <Field label="💍 Anniversary" value={contact.anniversary ? formatDate(contact.anniversary) : null} />
+            <Field label="Nickname"       value={contact.nickname} />
+          </dl>
+          {contact.family && (
+            <div className="mt-3">
+              <dt className="text-[11px] uppercase tracking-wider text-ink-3">Family</dt>
+              <dd className="text-sm text-ink-2 whitespace-pre-wrap leading-relaxed mt-0.5">{contact.family}</dd>
+            </div>
+          )}
+        </Panel>
+      )}
+
       {/* Notes + tags */}
       {(contact.notes || (contact.tags && contact.tags.length > 0)) && (
         <Panel title="Notes">

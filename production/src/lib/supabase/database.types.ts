@@ -2354,6 +2354,12 @@ export type ContactRow = {
   // Relationship classification for standalone contacts (migration 0196):
   // 'partner' | 'vendor' | 'personal' | 'other'. null = unclassified.
   relationship:        string | null;
+  // Personal-profile fields (migration 0198) — what you keep about a real
+  // relationship. birthday/anniversary are DATE (YYYY-MM-DD).
+  birthday:            string | null;
+  anniversary:         string | null;
+  nickname:            string | null;
+  family:              string | null;
   // Google Contacts sync (migration 0189). external_id holds the resourceName.
   google_etag:         string | null;
   google_synced_at:    string | null;
@@ -2388,6 +2394,10 @@ type ContactInsert = {
   city?:               string | null;
   customer_id?:        string | null;
   relationship?:       string | null;
+  birthday?:           string | null;
+  anniversary?:        string | null;
+  nickname?:           string | null;
+  family?:             string | null;
   google_etag?:        string | null;
   google_synced_at?:   string | null;
 };
