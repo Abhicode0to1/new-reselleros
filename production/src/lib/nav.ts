@@ -115,6 +115,7 @@ export const APP_NAV: NavSection[] = [
     items: [
       { id: "acc-pnl",     href: "/accounting/pnl",            label: "P&L Report",     icon: "trending_up" },
       { id: "acc-bs",      href: "/accounting/balance-sheet",  label: "Balance Sheet",  icon: "layout" },
+      { id: "acc-cf",      href: "/accounting/cash-flow",      label: "Cash Flow",      icon: "rupee" },
       { id: "acc-gst",     href: "/accounting/gst",            label: "GST Reports",    icon: "file" },
       { id: "acc-tds",     href: "/accounting/tds-receivable", label: "TDS Receivable", icon: "rupee" },
       { id: "acc-esi",     href: "/accounting/esi-register",   label: "ESI Register",   icon: "file" },
@@ -184,6 +185,7 @@ export const APP_NAV: NavSection[] = [
       { id: "business-loans", href: "/accounting/business-loans", label: "Business Loans",  icon: "rupee" },
       { id: "pnl",            href: "/accounting/pnl",            label: "P&L Report",      icon: "trending_up" },
       { id: "balance-sheet",  href: "/accounting/balance-sheet",  label: "Balance Sheet",   icon: "layout" },
+      { id: "cash-flow",      href: "/accounting/cash-flow",      label: "Cash Flow",       icon: "rupee", hint: "Real money in vs out of the bank, per month — plus runway. (P&L counts invoices; this counts actual cash.)" },
       { id: "profitability",  href: "/accounting/profitability",  label: "Customer Margin", icon: "users" },
       { id: "aging",          href: "/accounting/aging",          label: "Customer Aging",  icon: "clock" },
       { id: "tds-receivable", href: "/accounting/tds-receivable", label: "TDS Receivable",  icon: "rupee" },
@@ -321,6 +323,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/business-loans": ["Accounting", "Business Loans"],
   "/accounting/pnl":           ["Accounting", "P&L Report"],
   "/accounting/balance-sheet": ["Accounting", "Balance Sheet"],
+  "/accounting/cash-flow":     ["Accounting", "Cash Flow"],
   "/accounting/assets":        ["Accounting", "Assets & EMIs"],
   "/accounting/profitability": ["Accounting", "Customer Margin"],
   "/accounting/aging":         ["Accounting", "Customer Aging"],
