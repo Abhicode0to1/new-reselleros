@@ -1727,11 +1727,16 @@ export function QuoteBuilder() {
                 </div>
               </div>
 
-              {/* Margin pill */}
+              {/* Margin pill — flagged as an ESTIMATE: line costs default to an
+                  assumed ≈70% (or catalog wholesale), not your actual procurement
+                  cost, so we never show a guessed margin as hard fact. */}
               <div className="pt-3 mt-2 border-t border-hairline flex items-center justify-between">
-                <span className="text-xs text-ink-3 uppercase tracking-wider font-semibold">Your margin</span>
-                <MarginPill margin={margin} variant="default" period="one-time" />
+                <span className="text-xs text-ink-3 uppercase tracking-wider font-semibold">Est. margin</span>
+                <MarginPill margin={margin} variant="default" period="one-time" estimated />
               </div>
+              <p className="mt-1 text-[10px] text-ink-3 text-right">
+                Estimate — edit each line&apos;s cost to make this exact.
+              </p>
             </div>
           </div>
         )}
