@@ -586,7 +586,7 @@ export default function DashboardPage() {
           icon="target"
         />
         <KPI
-          label="MRR"
+          label="Monthly revenue"
           value={subscriptions ? rupee(activeMRR, { compact: true }) : "—"}
           accent={activeMRR > 0 ? "emerald" : "ink"}
           trend={

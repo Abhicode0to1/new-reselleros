@@ -256,9 +256,9 @@ function StepRazorpay() {
       <div className="flex items-start gap-2.5 rounded-lg bg-amber-soft p-3 text-sm text-amber-ink">
         <Icon name="info" size={14} className="mt-0.5 shrink-0" />
         <p>
-          Razorpay abhi connect karna zaroori nahi. Setup ke baad <strong>Settings →
-          Integrations</strong> me apni Razorpay keys daal ke 2 minute me live payments
-          on kar sakte hain. Tab tak aap quotes/invoices bana ke WhatsApp par bhej sakte hain.
+          You don't need Razorpay right now. After setup, add your Razorpay keys in{" "}
+          <strong>Settings → Integrations</strong> to turn on live payments in 2 minutes.
+          Until then you can still create quotes/invoices and send them on WhatsApp.
         </p>
       </div>
     </div>
@@ -305,9 +305,9 @@ function StepCsp() {
       <div className="flex items-start gap-2.5 rounded-lg bg-amber-soft p-3 text-sm text-amber-ink">
         <Icon name="info" size={14} className="mt-0.5 shrink-0" />
         <p>
-          CSP abhi zaroori nahi. Tab tak aap manually Google Partner console se tenants
-          provision kar sakte hain, aur ResellerOS me quotes/invoices/renewals sab chalenge.
-          CSP connect karne ka option baad me <strong>Settings → Integrations</strong> me aayega.
+          You don't need CSP right now. You can keep provisioning tenants manually from
+          the Google Partner console, and quotes/invoices/renewals all work without it.
+          The option to connect CSP will live in <strong>Settings → Integrations</strong> later.
         </p>
       </div>
     </div>

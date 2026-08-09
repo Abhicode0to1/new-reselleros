@@ -648,9 +648,9 @@ export default function OnlineOrdersPage() {
       <div className="mb-6 rounded-md border border-amber/30 bg-amber-soft px-4 py-3 text-sm text-amber-ink flex items-start gap-2">
         <Icon name="info" size={16} className="mt-0.5 shrink-0" />
         <span>
-          <strong>Preview — sample data.</strong> Ye online-store order pipeline ka
-          preview hai. Asli orders yahan tab aayenge jab aapka online buy page live
-          ho jayega. Abhi ke rows sirf demo ke liye hain.
+          <strong>Preview — sample data.</strong> This is a preview of your online-store
+          order pipeline. Real orders will appear here once your online buy page is live.
+          The rows below are demo data only.
         </span>
       </div>
 

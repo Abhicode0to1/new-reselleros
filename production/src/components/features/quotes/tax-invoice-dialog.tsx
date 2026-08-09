@@ -196,8 +196,8 @@ export function TaxInvoiceDialog({
       `Dhanyavaad,\n${tenantName}`;
     const digits = toWhatsAppDigits(customerPhone);
     if (!digits) {
-      toast.error("Is customer ka phone number nahi hai", {
-        description: "Customer profile me phone add karein, phir WhatsApp par bhej payenge.",
+      toast.error("No phone number for this customer", {
+        description: "Add a phone on the customer profile to send on WhatsApp.",
       });
       return;
     }
@@ -214,12 +214,12 @@ export function TaxInvoiceDialog({
     setSharing(true);
     try {
       await downloadPdf();
-      toast.success("Invoice PDF download ho gaya", {
-        description: "WhatsApp chat me isi PDF ko attach kar dein.",
+      toast.success("Invoice PDF downloaded", {
+        description: "Attach this PDF in the WhatsApp chat.",
       });
     } catch (err) {
       console.error("Invoice PDF failed:", err);
-      toast.error("PDF download nahi hua — WhatsApp khul gaya, PDF alag se download karein.");
+      toast.error("PDF didn't download — WhatsApp opened; download the PDF separately.");
     } finally {
       setSharing(false);
     }

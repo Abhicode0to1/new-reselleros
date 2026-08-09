@@ -370,13 +370,13 @@ function RenewalBucket({
                       Renewal date
                     </th>
                     <th className="px-4 py-2.5 text-right text-xs font-medium text-ink-3">
-                      MRR
+                      Monthly
                     </th>
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-ink-3">
-                      Cadence
+                      Reminders
                     </th>
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-ink-3">
-                      Churn risk
+                      Renewal risk
                     </th>
                     <th className="px-4 py-2.5 text-left text-xs font-medium text-ink-3">
                       Action
@@ -672,7 +672,7 @@ export default function RenewalsPage() {
   // Excel/Tally treat amounts as numbers. Replaces the old "coming soon" stub.
   const handleExport = () => {
     if (upcoming90.length === 0) {
-      toast.info("Abhi export karne ke liye koi renewal nahi hai (agle 90 din)");
+      toast.info("No renewals to export in the next 90 days");
       return;
     }
     const rows = upcoming90
@@ -699,7 +699,7 @@ export default function RenewalsPage() {
       ["Customer", "Plan", "Vendor", "Seats", "Used", "MRR (₹)", "ARR (₹)", "Renewal date", "Days until", "Outstanding (₹)", "Risk"],
       rows,
     );
-    toast.success(`${rows.length} renewal${rows.length === 1 ? "" : "s"} export ho gaye`);
+    toast.success(`Exported ${rows.length} renewal${rows.length === 1 ? "" : "s"}`);
   };
 
   // Real bulk reminder — actually calls the per-sub send-now endpoint for every
@@ -747,7 +747,7 @@ export default function RenewalsPage() {
               <>
                 {" · "}
                 <span className="font-medium text-rose-600">
-                  {rupee(arrAtRisk, { compact: true })} ARR at risk
+                  {rupee(arrAtRisk, { compact: true })} yearly value at risk
                 </span>
               </>
             )}
@@ -785,7 +785,7 @@ export default function RenewalsPage() {
           { label: "Urgent · ≤7d",       value: `${urgent.length} · ${rupee(urgentMrr, { compact: true })}`, tone: "rose" },
           { label: "Upcoming · 30d",     value: `${upcoming.length} · ${rupee(upcomingMrr, { compact: true })}` },
           { label: "Future · 31–90d",    value: `${future.length} · ${rupee(futureMrr, { compact: true })}`, tone: "emerald" },
-          { label: "High-risk · ARR",    value: `${highRiskSubs.length} · ${rupee(highRiskArr, { compact: true })}`, tone: "rose" },
+          { label: "High-risk · yearly", value: `${highRiskSubs.length} · ${rupee(highRiskArr, { compact: true })}`, tone: "rose" },
         ]}
       />
 

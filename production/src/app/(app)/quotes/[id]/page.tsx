@@ -307,8 +307,8 @@ export default function QuoteDetailPage() {
       `Dhanyavaad,\n${me?.tenantName ?? ""}`;
     const digits = toWhatsAppDigits(recipientPhone);
     if (!digits) {
-      toast.error("Is customer/lead ka phone number nahi hai", {
-        description: "Customer ya lead me phone add karein, phir WhatsApp par bhej payenge.",
+      toast.error("No phone number for this customer/lead", {
+        description: "Add a phone on the customer or lead to send on WhatsApp.",
       });
       return;
     }
@@ -325,12 +325,12 @@ export default function QuoteDetailPage() {
     setSharingWa(true);
     try {
       await downloadQuotePdfFile();
-      toast.success("Quote PDF download ho gaya", {
-        description: "WhatsApp chat me isi PDF ko attach kar dein.",
+      toast.success("Quote PDF downloaded", {
+        description: "Attach this PDF in the WhatsApp chat.",
       });
     } catch (err) {
       console.error("Quote PDF failed:", err);
-      toast.error("PDF download nahi hua — WhatsApp khul gaya, PDF alag se download karein.");
+      toast.error("PDF didn't download — WhatsApp opened; download the PDF separately.");
     } finally {
       setSharingWa(false);
     }

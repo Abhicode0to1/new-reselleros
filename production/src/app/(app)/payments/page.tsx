@@ -307,8 +307,8 @@ export default function PaymentsPage() {
                   <tr>
                     <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Customer</th>
                     <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Paid</th>
-                    <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Outstanding</th>
-                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Aging</th>
+                    <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Balance due</th>
+                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Age</th>
                     <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Status</th>
                     <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Last reminder</th>
                     <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3 w-72">Actions</th>
@@ -350,7 +350,7 @@ export default function PaymentsPage() {
 
             <p className="text-[11px] text-ink-3 mt-2 flex items-center gap-1">
               <Icon name="info" size={11} />
-              0–15 days: friendly reminder · 16–30 days: stronger nudge · 30+ days: consider suspending service · 60+ days: write off as bad debt
+              0–15 days: friendly reminder · 16–30 days: stronger nudge · 30+ days: consider suspending service · 60+ days: accept it as a loss (bad debt)
             </p>
           </Card>
         );

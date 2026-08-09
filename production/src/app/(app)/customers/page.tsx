@@ -224,10 +224,10 @@ export default function CustomersPage() {
   const stats: React.ComponentProps<typeof StatStrip>["items"] = [];
   if (!isLoading && customers) {
     stats.push({ label: "Customers", value: total });
-    if (totalMRR > 0) stats.push({ label: "Active MRR", value: rupee(totalMRR, { compact: true }) });
-    if (totalARR > 0) stats.push({ label: "ARR", value: rupee(totalARR, { compact: true }) });
+    if (totalMRR > 0) stats.push({ label: "Monthly revenue", value: rupee(totalMRR, { compact: true }) });
+    if (totalARR > 0) stats.push({ label: "Yearly revenue", value: rupee(totalARR, { compact: true }) });
     stats.push({
-      label: "Receivables due",
+      label: "To collect",
       value: rupee(totalReceivables, { compact: true }),
       tone: totalReceivables > 0 ? "rose" : "default",
       // The money-owed number is the action figure — tap it to see who owes.
@@ -461,8 +461,8 @@ export default function CustomersPage() {
                     <SortHead label="Customer"        sortKey="name"        sort={sort} onSort={toggleSort} />
                     <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Status</th>
                     <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Place of supply</th>
-                    <SortHead label="MRR"             sortKey="mrr"         sort={sort} onSort={toggleSort} align="right" />
-                    <SortHead label="Receivables"     sortKey="receivables" sort={sort} onSort={toggleSort} align="right" />
+                    <SortHead label="Monthly"         sortKey="mrr"         sort={sort} onSort={toggleSort} align="right" />
+                    <SortHead label="To collect"      sortKey="receivables" sort={sort} onSort={toggleSort} align="right" />
                     <SortHead label="Unused credits"  sortKey="credits"     sort={sort} onSort={toggleSort} align="right" />
                     <th className="px-2 py-2.5"><span className="sr-only">Actions</span></th>
                   </tr>
