@@ -16,7 +16,7 @@ import type { ContactRow, ContactChannel } from "@/lib/supabase/database.types";
 export type Contact = ContactRow;
 export type { ContactChannel } from "@/lib/supabase/database.types";
 
-export type ContactSource = "lead" | "customer" | "vendor" | "partner" | "imported";
+export type ContactSource = "lead" | "customer" | "vendor" | "partner" | "imported" | "employee";
 
 export interface UnifiedContact {
   id:        string;            // "lead:<id>" / "customer:<id>" / "imported:<id>"
@@ -52,13 +52,14 @@ export interface UnifiedContact {
 
 /** A contact's unified "kind" for filtering + badges. Leads/customers derive it
  *  from their source; standalone contacts from their `relationship` column. */
-export type ContactKind = "lead" | "customer" | "partner" | "vendor" | "personal" | "other";
+export type ContactKind = "lead" | "customer" | "partner" | "vendor" | "employee" | "personal" | "other";
 
 export function contactKind(c: UnifiedContact): ContactKind {
   // Hard business relations, derived from real data (no AI, no guessing):
   if (c.source === "customer") return "customer";  // we sold to them
   if (c.source === "vendor")   return "vendor";    // we buy from them
   if (c.source === "partner")  return "partner";   // referral / commission
+  if (c.source === "employee") return "employee";  // works for us
   if (c.source === "lead")     return "lead";      // they enquired
   // Standalone contact — its manually-set relationship, else "not decided".
   const rel = (c.relationship ?? "").toLowerCase();
@@ -72,7 +73,7 @@ export function useAllContacts() {
     queryFn: async (): Promise<UnifiedContact[]> => {
       const supabase = createClient();
 
-      const [leadsRes, customersRes, vendorsRes, partnersRes, importedRes] = await Promise.all([
+      const [leadsRes, customersRes, vendorsRes, partnersRes, importedRes, employeesRes] = await Promise.all([
         supabase
           .from("leads")
           .select("id, company, contact_name, contact_email, contact_phone, stage, created_at, is_junk, contact_id"),
@@ -102,6 +103,10 @@ export function useAllContacts() {
           // is SET NULL by the FK — then re-show the contact so a real person
           // never silently vanishes from the book after a lead delete.
           .or("status.neq.promoted,promoted_to_lead_id.is.null"),
+        // Employees are people too — they belong in the contact book (auto "Employee").
+        supabase
+          .from("employees")
+          .select("id, name, email, phone, designation, is_active, created_at"),
       ]);
 
       if (leadsRes.error)     throw leadsRes.error;
@@ -109,6 +114,7 @@ export function useAllContacts() {
       if (vendorsRes.error)   throw vendorsRes.error;
       if (partnersRes.error)  throw partnersRes.error;
       if (importedRes.error)  throw importedRes.error;
+      if (employeesRes.error) throw employeesRes.error;
 
       const fromLeads: UnifiedContact[] = (leadsRes.data ?? [])
         // Hide junk (spam/fake) leads here too — consistent with the Leads page
@@ -173,6 +179,21 @@ export function useAllContacts() {
           createdAt: p.created_at,
         }));
 
+      const fromEmployees: UnifiedContact[] = (employeesRes.data ?? [])
+        .filter((e) => e.name || e.email || e.phone)
+        .map((e) => ({
+          id:        `employee:${e.id}`,
+          source:    "employee" as const,
+          refId:     e.id,
+          name:      e.name,
+          email:     e.email,
+          phone:     e.phone,
+          company:   "—",
+          title:     e.designation ?? null,
+          status:    e.is_active === false ? "inactive" : "active",
+          createdAt: e.created_at,
+        }));
+
       const fromImported: UnifiedContact[] = (importedRes.data ?? []).map((c) => ({
         id:           `imported:${c.id}`,
         source:       "imported" as const,
@@ -198,11 +219,11 @@ export function useAllContacts() {
       // relation as its face: Customer (we sold) > Vendor (we buy) > Partner
       // (referral) > Lead (enquiry) > standalone contact.
       const all: UnifiedContact[] = [
-        ...fromCustomers, ...fromVendors, ...fromPartners, ...fromLeads, ...fromImported,
+        ...fromCustomers, ...fromVendors, ...fromPartners, ...fromEmployees, ...fromLeads, ...fromImported,
       ];
 
       const PRIORITY: Record<ContactSource, number> = {
-        customer: 0, vendor: 1, partner: 2, lead: 3, imported: 4,
+        customer: 0, vendor: 1, partner: 2, employee: 3, lead: 4, imported: 5,
       };
       const normEmail = (e?: string | null): string | null => {
         const s = (e ?? "").toLowerCase().trim();

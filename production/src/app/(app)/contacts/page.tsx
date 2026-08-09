@@ -33,13 +33,14 @@ const KIND_META: Record<ContactKind, { label: string; dot: TabBarItem["dot"]; ba
   customer: { label: "Customers", dot: "emerald", badge: "success" },
   partner:  { label: "Partners",  dot: "indigo",  badge: "info"    },
   vendor:   { label: "Vendors",   dot: "slate",   badge: "muted"   },
+  employee: { label: "Employees", dot: "emerald", badge: "success" },
   personal: { label: "Personal",  dot: "rose",    badge: "info"    },
   other:    { label: "Not decided", dot: "slate", badge: "muted"   },
 };
-const KIND_ORDER: ContactKind[] = ["lead", "customer", "partner", "vendor", "personal", "other"];
+const KIND_ORDER: ContactKind[] = ["lead", "customer", "partner", "vendor", "employee", "personal", "other"];
 // Singular label for the per-row badge.
 const KIND_BADGE_LABEL: Record<ContactKind, string> = {
-  lead: "Lead", customer: "Customer", partner: "Partner", vendor: "Vendor", personal: "Personal", other: "Not decided",
+  lead: "Lead", customer: "Customer", partner: "Partner", vendor: "Vendor", employee: "Employee", personal: "Personal", other: "Not decided",
 };
 
 const CONTACT_COL_ORDER = ["select", "name", "company", "email", "phone", "source", "action"];
