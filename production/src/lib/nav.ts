@@ -195,6 +195,18 @@ export const APP_NAV: NavSection[] = [
     ],
   },
   {
+    // Statutory compliance for a Private Limited company — ROC/MCA, Income Tax,
+    // TDS, GST and PF/ESI due-date tracking. Owner/manager + the CA (accountant).
+    section: "Compliance",
+    icon: "book",
+    roles: ["owner", "manager", "accountant"],
+    items: [
+      { id: "compliance-calendar", href: "/compliance",             label: "Compliance Calendar", icon: "calendar", hint: "Every statutory due date for your Pvt Ltd in one worklist — ROC, Income Tax, TDS, GST, PF/ESI. Confirm exact dates with your CA." },
+      { id: "compliance-roc",      href: "/compliance/roc",         label: "ROC / MCA",           icon: "book",     hint: "Annual Registrar of Companies filings — AOC-4, MGT-7, DIR-3 KYC, DPT-3, ADT-1, AGM." },
+      { id: "compliance-it",       href: "/compliance/income-tax",  label: "Income Tax & TDS",    icon: "rupee",    hint: "Company ITR, tax audit, advance tax, and TDS deposits + quarterly returns." },
+    ],
+  },
+  {
     section: "Payroll",
     icon: "users",
     roles: ["owner", "manager"],
@@ -332,6 +344,9 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/tds-receivable":          ["Accounting", "TDS Receivable"],
   "/accounting/tds-receivable/year-end": ["Accounting", "TDS Receivable", "Year-End"],
   "/accounting/gst":      ["Accounting", "GST Reports"],
+  "/compliance":            ["Compliance", "Compliance Calendar"],
+  "/compliance/roc":        ["Compliance", "ROC / MCA"],
+  "/compliance/income-tax": ["Compliance", "Income Tax & TDS"],
   "/accounting/loans":         ["Payroll", "Loans & Advances"],
   "/accounting/employees":     ["Payroll", "Employees"],
   "/accounting/payroll":       ["Payroll", "Payroll"],

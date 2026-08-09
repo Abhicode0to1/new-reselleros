@@ -2434,6 +2434,37 @@ type ContactGreetingLogInsert = {
 };
 type ContactGreetingLogUpdate = Partial<ContactGreetingLogInsert>;
 
+// Statutory-compliance filing log (migration 0201).
+export type ComplianceLogRow = {
+  id:             string;
+  tenant_id:      string;
+  obligation_key: string;
+  period_key:     string;
+  period_label:   string | null;
+  due_date:       string | null;
+  filed_date:     string;
+  reference:      string | null;
+  notes:          string | null;
+  created_by:     string | null;
+  created_at:     string;
+  updated_at:     string;
+};
+type ComplianceLogInsert = {
+  id?:             string;
+  tenant_id:       string;
+  obligation_key:  string;
+  period_key:      string;
+  period_label?:   string | null;
+  due_date?:       string | null;
+  filed_date?:     string;
+  reference?:      string | null;
+  notes?:          string | null;
+  created_by?:     string | null;
+  created_at?:     string;
+  updated_at?:     string;
+};
+type ComplianceLogUpdate = Partial<ComplianceLogInsert>;
+
 // Inbound purchase capture — Amazon & co. order emails staged for review (migration 0200).
 export type InboundPurchaseItem = { name: string; qty: number; amount: number };
 export type InboundPurchaseRow = {
@@ -2675,6 +2706,7 @@ export type Database = {
       expense_claims:{ Row: ExpenseClaimRow; Insert: ExpenseClaimInsert; Update: ExpenseClaimUpdate; Relationships: [] };
       lead_activities:{ Row: LeadActivityRow; Insert: LeadActivityInsert; Update: LeadActivityUpdate; Relationships: [] };
       contact_greeting_log:{ Row: ContactGreetingLogRow; Insert: ContactGreetingLogInsert; Update: ContactGreetingLogUpdate; Relationships: [] };
+      compliance_log:{ Row: ComplianceLogRow; Insert: ComplianceLogInsert; Update: ComplianceLogUpdate; Relationships: [] };
       inbound_purchases:{ Row: InboundPurchaseRow; Insert: InboundPurchaseInsert; Update: InboundPurchaseUpdate; Relationships: [] };
       tds_receivable:     { Row: TdsReceivableRow;     Insert: TdsReceivableInsert;     Update: TdsReceivableUpdate;     Relationships: [] };
       customer_users:     { Row: CustomerUserRow;      Insert: CustomerUserInsert;      Update: CustomerUserUpdate;      Relationships: [] };
