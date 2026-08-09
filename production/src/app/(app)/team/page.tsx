@@ -118,7 +118,6 @@ export default function TeamPage() {
 
       {/* Desktop / tablet — table (unchanged) */}
       <Card flush className="hidden md:block">
-        <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-paper-2 border-b border-hairline">
               <tr>
@@ -198,7 +197,6 @@ export default function TeamPage() {
               ))}
             </tbody>
           </table>
-        </div>
       </Card>
 
       {/* Mobile — member cards */}

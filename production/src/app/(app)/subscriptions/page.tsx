@@ -421,7 +421,6 @@ export default function SubscriptionsPage() {
       {/* Desktop table */}
       {!isLoading && !error && filtered.length > 0 && (
         <Card flush className="hidden md:block">
-          <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-paper-2 border-b border-hairline-strong">
                 <tr>
@@ -550,7 +549,6 @@ export default function SubscriptionsPage() {
                 })}
               </tbody>
             </table>
-          </div>
         </Card>
       )}
       {!isLoading && !error && tab !== "trials" && hasMore && (
@@ -564,7 +562,6 @@ export default function SubscriptionsPage() {
       {/* Trials tab — same column layout, virtual-sub rows */}
       {!isLoading && !error && tab === "trials" && filteredTrials.length > 0 && (
         <Card flush className="hidden md:block">
-          <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-paper-2 border-b border-hairline">
                 <tr>
@@ -636,7 +633,6 @@ export default function SubscriptionsPage() {
                 })}
               </tbody>
             </table>
-          </div>
         </Card>
       )}
 

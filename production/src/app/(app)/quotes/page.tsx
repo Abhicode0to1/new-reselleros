@@ -583,7 +583,8 @@ export default function QuotesPage() {
       {!isLoading && !error && filtered.length > 0 && (
         <div className="hidden md:block">
           <Card flush>
-            <div className="overflow-x-auto">
+            {/* Card `flush` already wraps children in one overflow-x-auto — do NOT
+                add another here or you get two stacked horizontal scrollbars. */}
             <table className="w-full min-w-[900px]">
               <thead className="bg-paper-2 border-b border-hairline-strong">
                 <tr>
@@ -794,7 +795,6 @@ export default function QuotesPage() {
                 })}
               </tbody>
             </table>
-            </div>
             {/* Table footer: closes the empty space visually + summary */}
             <div className="flex items-center justify-between gap-3 flex-wrap border-t border-hairline px-4 py-3 bg-paper-2/30 text-xs text-ink-3">
               <div className="flex items-center gap-2">

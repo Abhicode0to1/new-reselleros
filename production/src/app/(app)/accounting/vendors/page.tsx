@@ -125,7 +125,7 @@ export default function VendorsPage() {
       ) : (
         <>
           {/* Desktop table */}
-          <Card flush className="hidden md:block overflow-x-auto">
+          <Card flush className="hidden md:block">
             <table className="w-full text-sm">
               <thead className="bg-paper-2 border-b border-hairline-strong text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>

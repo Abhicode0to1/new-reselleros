@@ -285,7 +285,7 @@ export default function BankAccountDetailPage() {
               full-height divider between any two columns and drag; widen
               Description to read a full transaction line. Container scrolls if the
               table grows past it; widths are remembered per device. */}
-          <Card flush className="hidden lg:block overflow-x-auto">
+          <Card flush className="hidden lg:block">
             <div className="relative" style={{ width: bankTableW }}>
               <table className="text-sm table-fixed w-full">
                 <colgroup>
