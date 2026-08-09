@@ -1469,7 +1469,7 @@ function LeadDetailSheet({
     <Sheet open={!!lead} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
         side="right"
-        className="w-full sm:w-[var(--lead-w)] sm:max-w-[95vw] p-0 flex flex-col relative"
+        className="w-full sm:w-[var(--lead-w)] sm:max-w-[95vw] p-0 flex flex-col"
         style={{ ["--lead-w" as string]: panelWidth ? `${panelWidth}px` : "28rem" } as React.CSSProperties}
         hideClose
       >
