@@ -13,6 +13,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ export function ComplianceView({
   const unmark = useUnmarkComplianceFiled();
   const [catFilter, setCatFilter] = React.useState<ComplianceCategory | "all">("all");
   const [filing, setFiling] = React.useState<ComplianceRow | null>(null);
+  const [guide, setGuide] = React.useState<ComplianceRow | null>(null);
 
   const today = React.useMemo(() => new Date(), []);
   const filedMap = React.useMemo(() => toFiledMap(logQ.data), [logQ.data]);
@@ -148,7 +150,7 @@ export function ComplianceView({
                         )}
                       </div>
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 flex flex-col items-end gap-1">
                       {r.status === "filed" ? (
                         <Button variant="ghost" className="h-7 px-2 text-[11px]"
                           loading={unmark.isPending}
@@ -156,10 +158,18 @@ export function ComplianceView({
                           Undo
                         </Button>
                       ) : (
-                        <Button variant="default" icon="check" className="h-7 px-2.5 text-[11px]"
-                          onClick={() => setFiling(r)}>
-                          Mark filed
-                        </Button>
+                        <>
+                          {r.ob.filingSteps && (
+                            <Button variant="primary" icon="rocket" className="h-7 px-2.5 text-[11px]"
+                              onClick={() => setGuide(r)}>
+                              How to file
+                            </Button>
+                          )}
+                          <Button variant="default" icon="check" className="h-7 px-2.5 text-[11px]"
+                            onClick={() => setFiling(r)}>
+                            Mark filed
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -171,6 +181,14 @@ export function ComplianceView({
             <Card className="p-6 text-center text-sm text-ink-3">No obligations in this category.</Card>
           )}
         </ul>
+      )}
+
+      {guide && (
+        <FilingGuideDialog
+          row={guide}
+          onClose={() => setGuide(null)}
+          onMarkFiled={() => { const r = guide; setGuide(null); setFiling(r); }}
+        />
       )}
 
       {filing && (
@@ -193,6 +211,67 @@ export function ComplianceView({
         />
       )}
     </div>
+  );
+}
+
+function FilingGuideDialog({
+  row, onClose, onMarkFiled,
+}: {
+  row: ComplianceRow;
+  onClose: () => void;
+  onMarkFiled: () => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="md:!max-w-lg">
+        <DialogHeader>
+          <DialogTitle>How to file — {row.ob.name}</DialogTitle>
+          <DialogDescription>{row.inst.periodLabel} · due {formatDate(row.inst.dueDate)}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Honest scope: ResellerOS prepares the numbers; submission is on the portal. */}
+          <div className="flex items-start gap-2 rounded-md border border-hairline bg-paper-2/50 px-3 py-2 text-[12px] text-ink-2">
+            <Icon name="info" size={14} className="text-amber-ink shrink-0 mt-0.5" />
+            <p>
+              ResellerOS <b>prepares</b> the figures for this return. The actual submission happens on the
+              government portal — direct one-click e-filing needs a GST Suvidha Provider (a future add-on).
+            </p>
+          </div>
+
+          {row.ob.dataHref && (
+            <Link href={row.ob.dataHref.href as never}
+              className="flex items-center gap-2 rounded-md border border-amber/40 bg-amber-soft/40 px-3 py-2 text-[13px] font-medium text-amber-ink hover:bg-amber-soft/70">
+              <Icon name="chart" size={15} /> {row.ob.dataHref.label}
+              <Icon name="arrow_right" size={14} className="ml-auto" />
+            </Link>
+          )}
+
+          <ol className="space-y-2">
+            {row.ob.filingSteps?.map((step, i) => (
+              <li key={i} className="flex gap-2.5 text-[13px] text-ink-2 leading-relaxed">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-ink text-paper grid place-items-center text-[11px] font-semibold">{i + 1}</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+
+          {row.ob.link && (
+            <a href={row.ob.link} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[13px] text-amber-ink hover:underline">
+              <Icon name="external" size={14} /> Open {row.ob.authority} portal
+            </a>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="default" onClick={onClose}>Close</Button>
+          <Button type="button" variant="primary" icon="check" onClick={onMarkFiled}>
+            I&apos;ve filed — mark it
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

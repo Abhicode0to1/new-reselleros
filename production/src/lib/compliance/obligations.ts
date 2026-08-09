@@ -35,6 +35,10 @@ export interface Obligation {
   link?: string;
   /** Who it applies to — shown as a caveat (not every Pvt Ltd files every form). */
   applies?: string;
+  /** In-app page that already holds the numbers for this return (e.g. GST Report). */
+  dataHref?: { href: string; label: string };
+  /** Step-by-step to actually file it (portal flow) — shown in a "How to file" guide. */
+  filingSteps?: string[];
   /** Next actionable instance given today (upcoming, or a recently-passed one). */
   next: (today: Date) => ComplianceInstance;
 }
@@ -219,22 +223,41 @@ export const OBLIGATIONS: Obligation[] = [
   {
     key: "gst_gstr1", name: "GSTR-1 — outward supplies", authority: "GST",
     category: "gst", freq: "monthly", form: "GSTR-1",
-    penalty: "₹50/day (₹20 nil)", link: "https://www.gst.gov.in",
+    penalty: "₹50/day (₹20 nil)", link: "https://www.gst.gov.in/",
     applies: "Monthly filers — by the 11th of the next month.",
+    dataHref: { href: "/accounting/gst", label: "Open GST Report — Output GST (sales) + CSV" },
+    filingSteps: [
+      "In ResellerOS, open GST Report → set this return's month → note Output GST (sales) and download the Output CSV.",
+      "Go to gst.gov.in → Login → Returns Dashboard → pick the period → GSTR-1.",
+      "Prepare online, or use the GST Offline Tool with the CSV, and enter/upload your B2B + B2C sales.",
+      "These must match your issued invoices + the ResellerOS Output figure — reconcile any difference first.",
+      "Generate summary → verify totals → Submit → file with DSC or EVC (OTP).",
+      "Copy the ARN and come back here → Mark filed (paste the ARN in Reference).",
+    ],
     next: monthlyNext(11),
   },
   {
     key: "gst_gstr3b", name: "GSTR-3B — summary + tax", authority: "GST",
     category: "gst", freq: "monthly", form: "GSTR-3B",
-    penalty: "₹50/day + 18% interest", link: "https://www.gst.gov.in",
+    penalty: "₹50/day + 18% interest", link: "https://www.gst.gov.in/",
     applies: "Monthly filers — by the 20th of the next month.",
+    dataHref: { href: "/accounting/gst", label: "Open GST Report — net GST payable (output − input)" },
+    filingSteps: [
+      "File GSTR-1 for the month first (outward supplies feed 3B).",
+      "In ResellerOS, open GST Report → note Output GST (sales) and Input GST (ITC) for the month.",
+      "Go to gst.gov.in → Returns Dashboard → period → GSTR-3B → Prepare online.",
+      "Enter outward supplies + eligible ITC → the portal computes net tax payable.",
+      "Pay any balance via challan (net-banking / NEFT) → offset the liability.",
+      "Submit → file with DSC/EVC → copy the ARN → Mark filed here with the ARN.",
+    ],
     next: monthlyNext(20),
   },
   {
     key: "gst_gstr9", name: "GSTR-9 — annual return", authority: "GST",
     category: "gst", freq: "annual", form: "GSTR-9",
-    penalty: "₹200/day (max % of turnover)", link: "https://www.gst.gov.in",
+    penalty: "₹200/day (max % of turnover)", link: "https://www.gst.gov.in/",
     applies: "Turnover > ₹2 cr — by 31 Dec for the prior FY.",
+    dataHref: { href: "/accounting/gst", label: "Open GST Report for the year's figures" },
     next: annualNext(12, 31),
   },
 
