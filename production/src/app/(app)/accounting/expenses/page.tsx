@@ -160,6 +160,7 @@ export default function ExpensesPage() {
   const [catFilter, setCatFilter] = React.useState("");
   const [payeeFilter, setPayeeFilter] = React.useState("");
   const [unpaidOnly, setUnpaidOnly] = React.useState(false);
+  const [search, setSearch] = React.useState("");
   const [addOpen, setAddOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Expense | null>(null);
   const [detail, setDetail]   = React.useState<Expense | null>(null);
@@ -246,9 +247,12 @@ export default function ExpensesPage() {
 
   // Rows after the client-side filters (category is applied in the query;
   // payee + "to pay" are applied here).
+  const q_ = search.trim().toLowerCase();
   const rows = allRows.filter((e) =>
     (!payeeFilter || (e.vendor_name ?? "") === payeeFilter) &&
-    (!unpaidOnly || rowOwes(e)),
+    (!unpaidOnly || rowOwes(e)) &&
+    (!q_ || [e.category, e.vendor_name, e.description, e.payment_method, String(e.amount)]
+      .some((f) => (f ?? "").toString().toLowerCase().includes(q_))),
   );
 
   // Totals for whatever is currently filtered — count, amount, and input GST.
@@ -256,7 +260,7 @@ export default function ExpensesPage() {
     (acc, e) => { acc.amount += e.amount ?? 0; acc.gst += e.gst_paid ?? 0; return acc; },
     { amount: 0, gst: 0 },
   ), [rows]);
-  const isFiltered = Boolean(payeeFilter || catFilter || unpaidOnly);
+  const isFiltered = Boolean(payeeFilter || catFilter || unpaidOnly || search.trim());
 
   // ── Bulk mark-paid selection ──────────────────────────────────────────────
   // Only unpaid, non-payroll operating expenses can be batch-settled (payroll
@@ -439,6 +443,25 @@ export default function ExpensesPage() {
             {rows.length} {rows.length === 1 ? "entry" : "entries"}
           </span>
         </div>
+        <div className="mt-2">
+          <div className="relative">
+            <Icon name="search" size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search expenses — category, vendor, note or amount…"
+              aria-label="Search expenses"
+              className="w-full pl-8 pr-8 py-1.5 text-[13px] rounded-md border border-hairline bg-paper focus:outline-none focus:border-hairline-strong"
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink" aria-label="Clear search">
+                <Icon name="x" size={14} />
+              </button>
+            )}
+          </div>
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <input type="date" value={range.from} aria-label="From date"
             onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
@@ -464,7 +487,7 @@ export default function ExpensesPage() {
             ))}
           </select>
           {isFiltered && (
-            <button type="button" onClick={() => { setCatFilter(""); setPayeeFilter(""); setUnpaidOnly(false); }}
+            <button type="button" onClick={() => { setCatFilter(""); setPayeeFilter(""); setUnpaidOnly(false); setSearch(""); }}
               className="text-[11px] text-amber-ink hover:underline">Clear</button>
           )}
         </div>
