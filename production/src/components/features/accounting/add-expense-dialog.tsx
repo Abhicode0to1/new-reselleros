@@ -159,6 +159,19 @@ export function AddExpenseDialog({
   // The uploaded bill file — kept and attached to the expense on save (proof),
   // whether or not the AI read is confirmed.
   const [attachFile, setAttachFile] = React.useState<File | null>(null);
+  // Inline invoice preview — a thumbnail of the uploaded image so the bill is
+  // visibly "verified" in the form (PDFs keep the filename link). Object URL is
+  // revoked on change/unmount to avoid leaks.
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (attachFile && attachFile.type.startsWith("image/")) {
+      const u = URL.createObjectURL(attachFile);
+      setPreviewUrl(u);
+      return () => URL.revokeObjectURL(u);
+    }
+    setPreviewUrl(null);
+    return undefined;
+  }, [attachFile]);
   // What the AI extracted, held for the operator to CONFIRM before anything is
   // written into the form. Nothing auto-fills — a mis-read bill must never
   // silently push wrong amounts/items into a money entry. null = no pending read.
@@ -642,16 +655,28 @@ export function AddExpenseDialog({
                       <Button type="button" variant="default" size="sm" onClick={discardExtract}>Galat — main khud bharunga</Button>
                     </div>
                     <p className="mt-2 text-[10px] text-ink-3">Kaise bhi karo, 📎 <button type="button" onClick={openLocalFile} className="text-amber-ink underline hover:no-underline">{attachFile?.name}</button> bill attach ho jayega. (click karke dekho)</p>
+                    {previewUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={previewUrl} alt="Invoice preview" onClick={openLocalFile}
+                        className="mt-2 max-h-40 w-auto rounded-md border border-hairline cursor-zoom-in" />
+                    )}
                   </div>
                 );
               })()}
 
               {attachFile && !pending && (
-                <p className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-2">
-                  <Icon name="file" size={12} />
-                  <button type="button" onClick={openLocalFile} className="text-amber-ink underline hover:no-underline">{attachFile.name}</button>
-                  — expense ke saath attach hoga
-                </p>
+                <div className="mt-2">
+                  <p className="flex items-center gap-1.5 text-[11px] text-ink-2">
+                    <Icon name="file" size={12} />
+                    <button type="button" onClick={openLocalFile} className="text-amber-ink underline hover:no-underline">{attachFile.name}</button>
+                    — expense ke saath attach hoga
+                  </p>
+                  {previewUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={previewUrl} alt="Invoice preview" onClick={openLocalFile}
+                      className="mt-2 max-h-40 w-auto rounded-md border border-hairline cursor-zoom-in" />
+                  )}
+                </div>
               )}
             </div>
           )}
