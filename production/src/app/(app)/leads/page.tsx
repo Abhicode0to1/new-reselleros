@@ -1669,6 +1669,52 @@ function LeadDetailSheet({
             <Fact label="Created" value={formatDate(lead.created_at)} />
           </div>
 
+          {/* Recent communication — surfaced right here on the main Details view
+              (not hidden in the Activity tab) so every call / WhatsApp / email /
+              inbound reply is visible the moment you open the lead. Shows the
+              latest 3; "See all" opens the full timeline. */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold">Recent communication</div>
+              {activities.length > 3 && (
+                <button
+                  type="button"
+                  onClick={() => setDrawerTab("activity")}
+                  className="text-[11px] font-medium text-amber-ink hover:text-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+                >
+                  See all ({activities.length})
+                </button>
+              )}
+            </div>
+            {activities.length === 0 ? (
+              <div className="text-sm text-ink-3 italic p-3 bg-paper-2 rounded-md">
+                No communication yet. Call / WhatsApp / Email from here — it logs automatically.
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {[...activities]
+                  .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
+                  .slice(0, 3)
+                  .map((a) => {
+                    const meta = ACTIVITY_META[a.kind] ?? { icon: "clock" as const, label: a.kind };
+                    return (
+                      <li key={a.id} className="flex items-start gap-2.5">
+                        <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-paper-2 text-ink-3">
+                          <Icon name={meta.icon} size={12} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm text-ink truncate">{a.detail || meta.label}</div>
+                          <div className="text-[11px] text-ink-3">
+                            {meta.label} · {formatDate(a.created_at)} {fmtActTime(a.created_at)}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
+          </div>
+
           {/* Notes */}
           <div>
             <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Notes</div>
