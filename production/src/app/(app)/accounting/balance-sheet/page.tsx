@@ -73,6 +73,18 @@ export default function BalanceSheetPage() {
   const netWorth    = totalAssets - totalLiab;                 // = total equity
   const retained    = netWorth - sum(manualEqRows);            // balancing plug
 
+  // ── Solvency ratios (liquidity + leverage) ──────────────────────────────
+  // Current = liquid within a year. Long-term items (fixed assets, staff loans,
+  // EMI / business loans) are EXCLUDED from the current buckets.
+  const currentAssets =
+    (auto?.cashAndBank ?? 0) + (auto?.receivables ?? 0) + (auto?.projectReceivable ?? 0)
+    + (auto?.tdsReceivable ?? 0) + gstCredit + sum(manualAssetRows);
+  const currentLiab =
+    (auto?.payables ?? 0) + (auto?.salaryPayable ?? 0) + (auto?.salaryDuesPayable ?? 0)
+    + (auto?.reimbursementsPayable ?? 0) + (auto?.creditCardPayable ?? 0) + gstPayable + sum(manualLiabRows);
+  const currentRatio = currentLiab > 0 ? currentAssets / currentLiab : null;   // ≥1 = can cover short-term dues
+  const debtToEquity = netWorth > 0 ? totalLiab / netWorth : null;             // null = negative equity (insolvent)
+
   // Export the full sheet as a CSV the owner can hand to their CA (mirrors GST/P&L).
   function exportCSV() {
     if (!auto) return;
@@ -165,6 +177,39 @@ export default function BalanceSheetPage() {
           </span>
         </p>
       </Card>
+
+      {/* Financial-health / solvency indicator — prominent rose banner when net
+          worth is negative, subtle green strip when solvent. Shows the key
+          liquidity + leverage ratios with plain-English tooltips. */}
+      {!loading && auto && (
+        <Card className={`mb-6 p-4 ${netWorth < 0 ? "border-rose/40 bg-rose/5" : "border-emerald/30 bg-emerald-soft/20"}`}>
+          <div className="flex items-start gap-3">
+            <Icon name={netWorth < 0 ? "alert" : "check_circle"} size={18} className={`mt-0.5 shrink-0 ${netWorth < 0 ? "text-rose" : "text-emerald"}`} />
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold ${netWorth < 0 ? "text-rose" : "text-emerald"}`}>
+                {netWorth < 0
+                  ? `Net worth negative — liabilities exceed assets by ${rupee(Math.abs(netWorth))}`
+                  : "Solvent — assets exceed liabilities"}
+              </p>
+              <p className="text-[12px] text-ink-3 mt-0.5 leading-relaxed">
+                {netWorth < 0
+                  ? "Books show the business owes more than it owns. Add owner's capital, collect receivables, or clear dues to turn this positive."
+                  : "Healthy net worth. Keep the current ratio above 1 to comfortably cover short-term dues."}
+              </p>
+              <div className="flex gap-x-6 gap-y-2 flex-wrap mt-2.5">
+                <Ratio label="Current ratio"  value={currentRatio == null ? "—" : currentRatio.toFixed(2)}
+                  good={currentRatio != null && currentRatio >= 1}
+                  tip="Current assets ÷ current liabilities. ≥ 1 means short-term dues are covered." />
+                <Ratio label="Debt-to-equity" value={debtToEquity == null ? "n/a" : debtToEquity.toFixed(2)}
+                  good={debtToEquity != null && debtToEquity <= 2}
+                  tip="Total liabilities ÷ net worth. Lower = less leveraged. n/a when equity is negative." />
+                <Ratio label="Net worth" value={fmtBS(netWorth)} good={netWorth >= 0}
+                  tip="Total assets − total liabilities." />
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -290,6 +335,16 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 // Indian accounting notation — negatives in parentheses + red, e.g. (₹2,86,708).
 function fmtBS(amount: number): string {
   return amount < 0 ? `(${rupee(Math.abs(amount))})` : rupee(amount);
+}
+
+/** One solvency ratio chip inside the Financial-health banner. */
+function Ratio({ label, value, good, tip }: { label: string; value: string; good: boolean; tip: string }) {
+  return (
+    <div title={tip} className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
+      <div className={`font-serif text-lg tabular-nums leading-tight ${good ? "text-emerald" : "text-rose"}`}>{value}</div>
+    </div>
+  );
 }
 
 /** Source-origin badge: 'auto' (pulled from records) vs 'manual' (owner-added)
