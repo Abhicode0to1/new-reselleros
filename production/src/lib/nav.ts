@@ -171,6 +171,7 @@ export const APP_NAV: NavSection[] = [
       { id: "expenses",        href: "/accounting/expenses",       label: "Expenses",        icon: "rupee", hint: "Ask: do you RESELL this? NO → here. Costs to run the business — rent, salaries, internet, stationery, your OWN software (e.g. Anthropic / M365), bank charges. This is OPEX. (Bills for products you resell → COGS Bills.)" },
       { id: "reimbursements",  href: "/accounting/reimbursements", label: "Reimbursements",  icon: "refresh" },
       { id: "purchase-orders", href: "/purchase-orders",           label: "Purchase Orders", icon: "cart" },
+      { id: "purchase-report", href: "/reports/purchases",         label: "Purchase Report", icon: "chart", hint: "Auto-built spend report: by vendor (e.g. Amazon), category and month, with GST input credit. Read-only." },
     ],
   },
   {
@@ -219,6 +220,7 @@ export const APP_NAV: NavSection[] = [
         children: [
           { id: "reports-profit",   href: "/reports/profit",           label: "Profit by product/service", icon: "package" },
           { id: "reports-customer", href: "/accounting/profitability", label: "Profit by customer",        icon: "users" },
+          { id: "reports-purchases",href: "/reports/purchases",        label: "Purchase report",           icon: "cart" },
         ],
       },
       { id: "support",       href: "/support",       label: "Support",        icon: "ticket" },
@@ -339,6 +341,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/coupons":         ["Engage", "Coupons"],
   "/reports":         ["Engage", "Reports"],
   "/reports/profit":  ["Engage", "Reports", "Profit by product/service"],
+  "/reports/purchases": ["Purchases", "Purchase Report"],
   "/support":         ["Engage", "Support"],
   "/items":           ["Catalog & Docs", "Items Catalog"],
   "/documents":       ["Catalog & Docs", "Documents"],
