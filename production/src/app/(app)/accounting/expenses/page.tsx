@@ -28,6 +28,7 @@ import {
 import { AddExpenseDialog } from "@/components/features/accounting/add-expense-dialog";
 import { ExpenseDetailDialog } from "@/components/features/accounting/expense-detail-dialog";
 import { MarkPaidDialog } from "@/components/features/accounting/mark-paid-dialog";
+import { BulkMarkPaidDialog } from "@/components/features/accounting/bulk-mark-paid-dialog";
 import { ReconcileExpenseDialog } from "@/components/features/accounting/reconcile-expense-dialog";
 import { useSalaryPayments } from "@/lib/queries/payroll";
 import { useBankAccounts } from "@/lib/queries/bank";
@@ -162,6 +163,9 @@ export default function ExpensesPage() {
   const [detail, setDetail]   = React.useState<Expense | null>(null);
   const [payingExpense, setPayingExpense] = React.useState<Expense | null>(null);
   const [reconcilingExpense, setReconcilingExpense] = React.useState<Expense | null>(null);
+  // Bulk "Mark paid" — selected expense ids + the batch dialog.
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [bulkPayOpen, setBulkPayOpen] = React.useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const router = useRouter();
 
@@ -251,6 +255,48 @@ export default function ExpensesPage() {
     { amount: 0, gst: 0 },
   ), [rows]);
   const isFiltered = Boolean(payeeFilter || catFilter || unpaidOnly);
+
+  // ── Bulk mark-paid selection ──────────────────────────────────────────────
+  // Only unpaid, non-payroll operating expenses can be batch-settled (payroll
+  // flows through Payroll; cash/petty-cash needs per-row accounts).
+  const bulkEligible = React.useCallback(
+    (e: Expense) => !e.paid && !isPayrollExpense(e),
+    [],
+  );
+  const eligibleRows = React.useMemo(() => rows.filter(bulkEligible), [rows, bulkEligible]);
+  const selectedRows = React.useMemo(
+    () => eligibleRows.filter((e) => selectedIds.has(e.id)),
+    [eligibleRows, selectedIds],
+  );
+  const selectedTotal = selectedRows.reduce((s, e) => s + (e.amount ?? 0), 0);
+  const allEligibleSelected = eligibleRows.length > 0 && selectedRows.length === eligibleRows.length;
+
+  // Drop any selected id that's no longer an eligible row (filter/range change,
+  // or it just got paid) so the bulk bar count never lies.
+  React.useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(eligibleRows.map((e) => e.id));
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => { if (live.has(id)) next.add(id); else changed = true; });
+      return changed ? next : prev;
+    });
+  }, [eligibleRows]);
+
+  const toggleOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  const toggleAll = () =>
+    setSelectedIds((prev) =>
+      prev.size >= eligibleRows.length && eligibleRows.length > 0
+        ? new Set()
+        : new Set(eligibleRows.map((e) => e.id)),
+    );
+  const clearSelection = () => setSelectedIds(new Set());
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
@@ -386,6 +432,22 @@ export default function ExpensesPage() {
         )}
       </Card>
 
+      {/* Bulk action bar — appears once you tick payables. One date+method
+          settles the whole batch (non-cash). */}
+      {selectedRows.length > 0 && (
+        <div className="sticky top-2 z-20 mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber/40 bg-amber-soft/60 px-3 py-2 shadow-sm">
+          <span className="text-[13px] font-medium text-amber-ink">
+            {selectedRows.length} selected · <span className="font-mono tabular-nums">{rupee(selectedTotal)}</span>
+          </span>
+          <div className="ml-auto flex items-center gap-1.5">
+            <Button variant="ghost" className="h-7 px-2 text-[12px]" onClick={clearSelection}>Clear</Button>
+            <Button variant="primary" icon="check" className="h-7 px-3 text-[12px]" onClick={() => setBulkPayOpen(true)}>
+              Mark {selectedRows.length} paid
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* List */}
       {isLoading ? (
         <div className="space-y-3">
@@ -409,13 +471,24 @@ export default function ExpensesPage() {
             <div className="overflow-y-auto max-h-[calc(100vh-15rem)]">
             <table className="w-full table-fixed text-sm">
               <colgroup>
-                <col style={{ width: "44%" }} />
+                <col style={{ width: "4%" }} />
+                <col style={{ width: "40%" }} />
                 <col style={{ width: "20%" }} />
                 <col style={{ width: "16%" }} />
                 <col style={{ width: "20%" }} />
               </colgroup>
               <thead className="sticky top-0 z-10 bg-paper-2 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
+                  <th className="px-2 py-2.5">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all payable expenses"
+                      className="align-middle accent-amber cursor-pointer disabled:opacity-30"
+                      checked={allEligibleSelected}
+                      disabled={eligibleRows.length === 0}
+                      onChange={toggleAll}
+                    />
+                  </th>
                   <th className="text-left  px-3 py-2.5">Expense</th>
                   <th className="text-left  px-3 py-2.5">Vendor / payee</th>
                   <th className="text-right px-3 py-2.5">Amount</th>
@@ -426,7 +499,21 @@ export default function ExpensesPage() {
                 {rows.map((e) => {
                   const noBill = e.bill_type === "none" && !isPayrollExpense(e);
                   return (
-                  <tr key={e.id} className="hover:bg-paper-2/40 cursor-pointer align-top" onClick={() => openRow(e)}>
+                  <tr key={e.id}
+                    className={`hover:bg-paper-2/40 cursor-pointer align-top ${selectedIds.has(e.id) ? "bg-amber-soft/40" : ""}`}
+                    onClick={() => openRow(e)}>
+                    {/* Bulk-select checkbox — only for settle-able payables */}
+                    <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
+                      {bulkEligible(e) && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${e.category}`}
+                          className="align-middle accent-amber cursor-pointer"
+                          checked={selectedIds.has(e.id)}
+                          onChange={() => toggleOne(e.id)}
+                        />
+                      )}
+                    </td>
                     {/* Expense: category + status + bill chip, then a muted meta line */}
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -483,9 +570,19 @@ export default function ExpensesPage() {
           <ul className="md:hidden space-y-2.5">
             {rows.map((e) => (
               <li key={e.id}>
-                <Card className="p-4 cursor-pointer" onClick={() => openRow(e)}>
+                <Card className={`p-4 cursor-pointer ${selectedIds.has(e.id) ? "ring-1 ring-amber/50 bg-amber-soft/30" : ""}`} onClick={() => openRow(e)}>
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <div className="font-medium text-ink leading-tight">
+                    {bulkEligible(e) && (
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${e.category}`}
+                        className="mt-1 accent-amber cursor-pointer shrink-0"
+                        checked={selectedIds.has(e.id)}
+                        onClick={(ev) => ev.stopPropagation()}
+                        onChange={() => toggleOne(e.id)}
+                      />
+                    )}
+                    <div className="font-medium text-ink leading-tight flex-1">
                       {e.category}
                       {e.bill_type === "kaccha" && <span className="ml-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-soft/60 text-amber-ink align-middle">Kaccha bill</span>}
                       {e.bill_type === "none" && <span className="ml-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper-2 text-ink-3 align-middle">No bill</span>}
@@ -548,6 +645,13 @@ export default function ExpensesPage() {
       )}
       {payingExpense && (
         <MarkPaidDialog expense={payingExpense} onClose={() => setPayingExpense(null)} />
+      )}
+      {bulkPayOpen && selectedRows.length > 0 && (
+        <BulkMarkPaidDialog
+          expenses={selectedRows}
+          onClose={() => setBulkPayOpen(false)}
+          onDone={clearSelection}
+        />
       )}
       {reconcilingExpense && (
         <ReconcileExpenseDialog expense={reconcilingExpense} onClose={() => setReconcilingExpense(null)} />

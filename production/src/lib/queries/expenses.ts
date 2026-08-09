@@ -461,6 +461,35 @@ export function useMarkExpensePaid() {
   });
 }
 
+/**
+ * Bulk mark several operating expenses paid in one shot — the "clear my payables
+ * for the month" flow. Non-cash only (bank/UPI/card/cheque): a single UPDATE ...
+ * IN (ids) sets paid + date + method. Cash/petty-cash isn't bulk-able because
+ * each needs its own petty-cash account, so those stay on the single dialog.
+ * Payroll/statutory rows are never included by the caller.
+ */
+export function useBulkMarkExpensesPaid() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { ids: string[]; paid_date: string; payment_method: string }) => {
+      if (input.ids.length === 0) return 0;
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("expenses")
+        .update({ paid: true, paid_date: input.paid_date, payment_method: input.payment_method })
+        .in("id", input.ids)
+        .select("id");
+      if (error) throw error;
+      return (data ?? []).length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      toast.success(`${count} ${count === 1 ? "expense" : "expenses"} marked paid`);
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+}
+
 export function useUpdateExpense() {
   const qc = useQueryClient();
   return useMutation({
