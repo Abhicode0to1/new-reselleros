@@ -247,7 +247,7 @@ export const APP_NAV: NavSection[] = [
     icon: "package",
     roles: ["owner", "manager"],
     items: [
-      { id: "items", href: "/items", label: "Items Catalog", icon: "package", roles: ["owner", "manager"] },
+      { id: "items", href: "/items", label: "Catalog", icon: "package", roles: ["owner", "manager"] },
     ],
   },
   {
@@ -372,7 +372,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/reports/purchases": ["Purchases", "Purchase Report"],
   "/purchases/inbox":   ["Purchases", "Purchase Inbox"],
   "/support":         ["Engage", "Support"],
-  "/items":           ["Catalog", "Items Catalog"],
+  "/items":           ["Catalog"],
   "/documents":       ["Company Documents", "Documents"],
   "/settings":        ["Settings", "Settings"],
   "/team":            ["Settings", "Team"],
