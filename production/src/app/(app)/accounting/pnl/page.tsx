@@ -22,6 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Term } from "@/components/shared/term";
 import { Button } from "@/components/ui/button";
 import { rupee } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
@@ -328,16 +329,16 @@ export default function PnLPage() {
           ) : data ? (
             <div className="space-y-2.5">
               <Row label="Revenue"        amount={data.revenue}     hint={`${data.revenueCount} invoice${data.revenueCount === 1 ? "" : "s"}`} onHint={() => setDrill("revenue")} tone="ink" />
-              <Row label="− COGS"         amount={-data.cogs}       hint={`${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`} onHint={() => setDrill("cogs")} tone="rose" />
+              <Row label={<>− <Term k="cogs">COGS</Term></>}         amount={-data.cogs}       hint={`${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`} onHint={() => setDrill("cogs")} tone="rose" />
 
               <Divider />
-              <Row label="Gross Margin"
+              <Row label={<Term k="gross_margin">Gross Margin</Term>}
                    amount={data.grossMargin}
                    hint={`${data.marginPct.toFixed(1)}% margin`}
                    tone={data.grossMargin >= 0 ? "emerald" : "rose"}
                    emphasis />
 
-              <Row label="− Operating expenses"
+              <Row label={<>− <Term k="opex">Operating expenses</Term></>}
                    amount={-data.expenses}
                    hint={`${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"}`}
                    onHint={() => { setDrillExpenseCat(null); setDrill("expenses"); }}
@@ -393,15 +394,15 @@ export default function PnLPage() {
           ) : data ? (
             <div className="space-y-3 text-sm">
               <div className="flex justify-between items-baseline">
-                <span className="text-ink-3">Output GST (on sales)</span>
+                <span className="text-ink-3"><Term k="output_gst">Output GST</Term> (on sales)</span>
                 <span className="font-mono text-ink font-semibold">{rupee(data.outputGST)}</span>
               </div>
               <div className="flex justify-between items-baseline">
-                <span className="text-ink-3">− Input GST paid</span>
+                <span className="text-ink-3">− <Term k="input_gst">Input GST</Term> paid</span>
                 <span className="font-mono text-emerald">−{rupee(data.inputGST)}</span>
               </div>
               <div className="border-t-2 border-ink pt-3 flex justify-between items-baseline">
-                <span className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Net liability</span>
+                <span className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold"><Term k="net_liability">Net liability</Term></span>
                 <span className={`font-serif text-2xl ${data.netGST >= 0 ? "text-rose" : "text-emerald"}`}>
                   {rupee(data.netGST)}
                 </span>
@@ -455,7 +456,7 @@ export default function PnLPage() {
 function Row({
   label, amount, hint, onHint, tone, emphasis, xl,
 }: {
-  label: string;
+  label: React.ReactNode;
   amount: number;
   hint?: string;
   /** When set, the hint becomes a button that opens the drill-down popup. */

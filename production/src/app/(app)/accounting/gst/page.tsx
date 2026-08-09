@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/components/ui/icon";
 import { rupee, formatDate } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { Term } from "@/components/shared/term";
 
 // ────────────────────────────────────────────────────────────────
 // Date range helpers — month default (most common GST filing cadence)
@@ -556,14 +557,14 @@ export default function GstReportPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-6">
         <SummaryCard
-          label="Output GST (on sales)"
+          label={<><Term k="output_gst">Output GST</Term> (on sales)</>}
           taxable={data?.outputTotal ?? 0}
           gst={data?.outputGST ?? 0}
           rowCount={data?.outputRows.length ?? 0}
           rowLabel="invoice"
         />
         <SummaryCard
-          label="Input GST paid"
+          label={<><Term k="input_gst">Input GST</Term> paid</>}
           taxable={data?.inputTotal ?? 0}
           gst={data?.inputGST ?? 0}
           rowCount={data?.inputRows.length ?? 0}
@@ -571,7 +572,7 @@ export default function GstReportPage() {
         />
         <Card className="p-4 md:p-5 border-2 border-amber/30 bg-amber-soft/20">
           <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
-            Net liability
+            <Term k="net_liability">Net liability</Term>
           </div>
           {isLoading ? <Skeleton className="h-8 w-32 mt-2" /> : (
             <>
@@ -846,7 +847,7 @@ function SectionHeader({
 function SummaryCard({
   label, taxable, gst, rowCount, rowLabel,
 }: {
-  label: string;
+  label: React.ReactNode;
   taxable: number;
   gst: number;
   rowCount: number;
