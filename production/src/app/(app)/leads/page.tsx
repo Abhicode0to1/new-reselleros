@@ -1261,6 +1261,32 @@ function LeadDetailSheet({
   const [drawerTab, setDrawerTab] = React.useState<"details" | "followups" | "activity">("details");
   React.useEffect(() => { setDrawerTab("details"); }, [lead?.id]);
 
+  // Drag-to-resize the drawer (desktop only): the left edge is a grab handle;
+  // the chosen width is remembered per browser. Mobile stays full-width.
+  const [panelWidth, setPanelWidth] = React.useState<number | null>(null);
+  const widthRef = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    const saved = Number(localStorage.getItem("lead_drawer_w"));
+    if (saved >= 360) { setPanelWidth(saved); widthRef.current = saved; }
+  }, []);
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.max(360, Math.min(window.innerWidth - ev.clientX, window.innerWidth * 0.95));
+      widthRef.current = w;
+      setPanelWidth(w);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+      if (widthRef.current) localStorage.setItem("lead_drawer_w", String(Math.round(widthRef.current)));
+    };
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
   // History: every quote that's been sent to this lead
   const { data: quotesForLead = [] } = useQuotesByLead(lead?.id);
 
@@ -1441,7 +1467,21 @@ function LeadDetailSheet({
 
   return (
     <Sheet open={!!lead} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" hideClose>
+      <SheetContent
+        side="right"
+        className="w-full sm:w-[var(--lead-w)] sm:max-w-[95vw] p-0 flex flex-col relative"
+        style={{ ["--lead-w" as string]: panelWidth ? `${panelWidth}px` : "28rem" } as React.CSSProperties}
+        hideClose
+      >
+        {/* Drag handle on the left edge — grab to widen/narrow the panel (desktop). */}
+        <div
+          onMouseDown={startResize}
+          className="hidden sm:block absolute inset-y-0 left-0 z-30 w-2 -ml-1 cursor-ew-resize group"
+          title="Drag to resize"
+          aria-hidden
+        >
+          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-hairline group-hover:bg-amber group-hover:w-1 transition-all" />
+        </div>
         <SheetHeader className="!p-5 flex flex-row items-start justify-between gap-3 border-b border-hairline">
           <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold">Lead detail</p>
