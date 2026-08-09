@@ -47,6 +47,7 @@ export default function BalanceSheetPage() {
   const confirm = useConfirm();
   const [addOpen, setAddOpen] = React.useState(false);
   const [editItem, setEditItem] = React.useState<BalanceSheetItem | null>(null);
+  const [retainedInfoOpen, setRetainedInfoOpen] = React.useState(false);
   const today = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const loading = autoLoading || itemsLoading;
@@ -291,7 +292,28 @@ export default function BalanceSheetPage() {
                     hint="derived so the sheet balances"
                     amount={retained}
                     kind="derived"
+                    onInfo={() => setRetainedInfoOpen((o) => !o)}
                   />
+                  {retainedInfoOpen && (
+                    <div className="mt-1 mb-1 rounded-md border border-hairline bg-paper-2/40 p-3 text-[12px] text-ink-2 leading-relaxed">
+                      <p className="font-semibold text-ink mb-1.5 flex items-center gap-1.5">
+                        <Icon name="info" size={13} className="text-amber-ink" /> How retained earnings is derived
+                      </p>
+                      <p className="mb-2">
+                        This is a <b>balancing figure</b>, not a stored P&amp;L number — it&apos;s whatever makes
+                        <b> Assets = Liabilities + Equity</b> hold exactly.
+                      </p>
+                      <div className="font-mono text-[11px] space-y-1 bg-paper rounded p-2 border border-hairline">
+                        <div className="flex justify-between gap-3"><span>Total assets</span><span className="tabular-nums">{fmtBS(totalAssets)}</span></div>
+                        <div className="flex justify-between gap-3"><span>− Total liabilities</span><span className="tabular-nums">{fmtBS(totalLiab)}</span></div>
+                        <div className="flex justify-between gap-3"><span>− Owner&apos;s capital &amp; other manual equity</span><span className="tabular-nums">{fmtBS(sum(manualEqRows))}</span></div>
+                        <div className="flex justify-between gap-3 border-t border-hairline pt-1 font-semibold text-ink"><span>= Retained earnings</span><span className="tabular-nums">{fmtBS(retained)}</span></div>
+                      </div>
+                      <p className="mt-2 text-[11px] text-ink-3">
+                        A true P&amp;L-based figure (cumulative net income − owner drawings) needs closed-period books — a future enhancement. For now this keeps the sheet balanced and CA-explainable.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <TotalLine label="Total Equity" amount={netWorth} muted />
               </div>
@@ -363,12 +385,12 @@ function OriginBadge({ kind, source }: { kind: "auto" | "manual" | "derived"; so
 }
 
 function BSLine({
-  label, hint, amount, kind, source, href, onEdit, onDelete,
+  label, hint, amount, kind, source, href, onEdit, onDelete, onInfo,
 }: {
   label: string; hint?: string; amount: number;
   kind?: "auto" | "manual" | "derived";
   source?: string; href?: string;
-  onEdit?: () => void; onDelete?: () => void;
+  onEdit?: () => void; onDelete?: () => void; onInfo?: () => void;
 }) {
   const router = useRouter();
   const clickable = !!href;
@@ -386,6 +408,12 @@ function BSLine({
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm text-ink">{label}</span>
           {kind && <OriginBadge kind={kind} source={source} />}
+          {onInfo && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onInfo(); }}
+              className="text-ink-3 hover:text-amber-ink transition-colors" aria-label={`How ${label} is calculated`} title="How this is calculated">
+              <Icon name="info" size={13} />
+            </button>
+          )}
           {clickable && <Icon name="arrow_right" size={12} className="text-ink-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
           {onEdit && (
             <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(); }}
