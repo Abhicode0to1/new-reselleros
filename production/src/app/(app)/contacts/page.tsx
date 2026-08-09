@@ -137,11 +137,14 @@ export default function ContactsPage() {
     if (tab !== "all" && contactKind(c) !== tab) return false;
     if (search.trim()) {
       const s = search.toLowerCase();
+      const inArr = (arr?: string[]) => (arr ?? []).some((v) => v.toLowerCase().includes(s));
       if (
         !c.name?.toLowerCase().includes(s) &&
         !c.email?.toLowerCase().includes(s) &&
         !c.phone?.toLowerCase().includes(s) &&
-        !c.company.toLowerCase().includes(s)
+        !c.company.toLowerCase().includes(s) &&
+        !inArr(c.emails) &&
+        !inArr(c.phones)
       ) return false;
     }
     return true;
@@ -476,10 +479,18 @@ export default function ContactsPage() {
                       </div>
                     </td>
                     <td className="p-3 text-sm text-ink-2 truncate" title={c.company}>{c.company}</td>
-                    <td className="p-3 text-xs font-mono text-ink-2 truncate" title={c.email ?? undefined}>
+                    <td className="p-3 text-xs font-mono text-ink-2 truncate" title={(c.emails ?? []).join(", ") || undefined}>
                       {c.email ?? "—"}
+                      {(c.emails?.length ?? 0) > 1 && (
+                        <span className="ml-1 text-ink-3 font-sans" title={`${c.emails!.length} emails`}>+{c.emails!.length - 1}</span>
+                      )}
                     </td>
-                    <td className="p-3 text-xs font-mono text-ink-2 truncate">{c.phone ?? "—"}</td>
+                    <td className="p-3 text-xs font-mono text-ink-2 truncate" title={(c.phones ?? []).join(", ") || undefined}>
+                      {c.phone ?? "—"}
+                      {(c.phones?.length ?? 0) > 1 && (
+                        <span className="ml-1 text-ink-3 font-sans" title={`${c.phones!.length} phones`}>+{c.phones!.length - 1}</span>
+                      )}
+                    </td>
                     <td className="p-3">
                       <Badge
                         kind={KIND_META[contactKind(c)].badge}

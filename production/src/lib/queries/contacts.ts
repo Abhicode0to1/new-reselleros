@@ -36,6 +36,14 @@ export interface UnifiedContact {
    *  kind comes from the source). */
   relationship?: string | null;
   createdAt: string;
+  /** ALL emails/phones this identity is reachable at, merged across every source
+   *  row that shares an email OR phone with it (dedup, primary first). One real
+   *  person can enquire from several addresses — identity grouping collapses them
+   *  into ONE contact so the book never shows the same human twice. */
+  emails?: string[];
+  phones?: string[];
+  /** How many source rows were merged into this identity (1 = not merged). */
+  mergedCount?: number;
 }
 
 /** A contact's unified "kind" for filtering + badges. Leads/customers derive it
@@ -169,25 +177,104 @@ export function useAllContacts() {
         createdAt:    c.created_at,
       }));
 
-      // Combine + dedupe by email. When the same person appears in several
-      // sources, keep the STRONGEST current business relation, in this order:
-      // Customer (we sold) > Vendor (we buy) > Partner (referral) > Lead
-      // (enquiry) > standalone contact. First to claim an email wins.
-      const seenEmails = new Set<string>();
-      const combined: UnifiedContact[] = [];
-      const addAll = (list: UnifiedContact[]) => {
-        for (const c of list) {
-          const key = c.email?.toLowerCase().trim();
-          if (key && seenEmails.has(key)) continue;
-          if (key) seenEmails.add(key);
-          combined.push(c);
-        }
+      // ── Identity grouping ────────────────────────────────────────────────
+      // One real person can appear across several sources AND under several
+      // emails/phones (they enquire from a personal + an office address, call
+      // from a second number, etc.). We union every source row that shares an
+      // email OR a phone into a SINGLE identity, so the book never shows the
+      // same human twice. Each identity keeps the STRONGEST current business
+      // relation as its face: Customer (we sold) > Vendor (we buy) > Partner
+      // (referral) > Lead (enquiry) > standalone contact.
+      const all: UnifiedContact[] = [
+        ...fromCustomers, ...fromVendors, ...fromPartners, ...fromLeads, ...fromImported,
+      ];
+
+      const PRIORITY: Record<ContactSource, number> = {
+        customer: 0, vendor: 1, partner: 2, lead: 3, imported: 4,
       };
-      addAll(fromCustomers);
-      addAll(fromVendors);
-      addAll(fromPartners);
-      addAll(fromLeads);
-      addAll(fromImported);
+      const normEmail = (e?: string | null): string | null => {
+        const s = (e ?? "").toLowerCase().trim();
+        return s.includes("@") ? s : null;
+      };
+      const normPhone = (p?: string | null): string | null => {
+        // India: match on the last 10 significant digits so +91 / 0 / spaced
+        // variants of the same number unify. Ignore anything shorter (too weak
+        // an identity signal — would wrongly merge unrelated people).
+        const d = (p ?? "").replace(/\D/g, "");
+        return d.length >= 10 ? d.slice(-10) : null;
+      };
+
+      // Union-Find over row indices, keyed by shared email/phone.
+      const parent = all.map((_, i) => i);
+      const find = (i: number): number => {
+        while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; }
+        return i;
+      };
+      const union = (a: number, b: number) => {
+        const ra = find(a), rb = find(b);
+        if (ra !== rb) parent[Math.max(ra, rb)] = Math.min(ra, rb);
+      };
+      const keyToRow = new Map<string, number>();
+      all.forEach((c, i) => {
+        for (const key of [
+          normEmail(c.email) && `e:${normEmail(c.email)}`,
+          normPhone(c.phone) && `p:${normPhone(c.phone)}`,
+        ]) {
+          if (!key) continue;
+          const prev = keyToRow.get(key);
+          if (prev === undefined) keyToRow.set(key, i);
+          else union(prev, i);
+        }
+      });
+
+      // Collapse each union group into one identity.
+      const groups = new Map<number, number[]>();
+      all.forEach((_, i) => {
+        const r = find(i);
+        (groups.get(r) ?? groups.set(r, []).get(r)!).push(i);
+      });
+
+      const combined: UnifiedContact[] = [];
+      for (const idxs of groups.values()) {
+        // Face = strongest relation; tie-break = most recent.
+        const rep = idxs
+          .map((i) => all[i])
+          .sort((a, b) =>
+            PRIORITY[a.source] - PRIORITY[b.source] ||
+            b.createdAt.localeCompare(a.createdAt),
+          )[0];
+
+        // Merge all reachable channels (primary first, deduped, order-stable).
+        const emails: string[] = [];
+        const phones: string[] = [];
+        const seenE = new Set<string>();
+        const seenP = new Set<string>();
+        const ordered = [rep, ...idxs.map((i) => all[i]).filter((c) => c !== rep)];
+        for (const c of ordered) {
+          const e = (c.email ?? "").trim();
+          const ek = normEmail(e);
+          if (e && ek && !seenE.has(ek)) { seenE.add(ek); emails.push(e); }
+          const p = (c.phone ?? "").trim();
+          const pk = normPhone(p);
+          if (p && pk && !seenP.has(pk)) { seenP.add(pk); phones.push(p); }
+        }
+        // Prefer a real company name over a "—" placeholder from a weaker row.
+        const company =
+          rep.company && rep.company !== "—"
+            ? rep.company
+            : (idxs.map((i) => all[i]).find((c) => c.company && c.company !== "—")?.company ?? rep.company);
+
+        combined.push({
+          ...rep,
+          name:        rep.name ?? idxs.map((i) => all[i]).find((c) => c.name)?.name ?? null,
+          company,
+          email:       emails[0] ?? rep.email,
+          phone:       phones[0] ?? rep.phone,
+          emails,
+          phones,
+          mergedCount: idxs.length,
+        });
+      }
 
       // Sort by created date desc
       combined.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
