@@ -394,9 +394,13 @@ export default function ExpensesPage() {
         <>
           {/* Desktop table — scrolls horizontally rather than clipping so the
               Amount / Actions columns are never cut off on narrower laptops. */}
-          <Card className="hidden md:block overflow-x-auto">
+          <Card flush className="hidden md:block">
+            {/* Viewport-capped internal scroller so BOTH scrollbars sit inside
+                the visible frame — the horizontal bar is reachable without
+                scrolling the whole page to the bottom. Sticky header stays put. */}
+            <div className="overflow-auto max-h-[calc(100vh-15rem)]">
             <table className="w-full min-w-[760px] text-sm">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="sticky top-0 z-10 bg-paper-2 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-3 py-3 whitespace-nowrap">Date</th>
                   <th className="text-left  px-3 py-3">Category &amp; what for</th>
@@ -470,6 +474,7 @@ export default function ExpensesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </Card>
 
           {/* Mobile cards */}

@@ -301,9 +301,9 @@ export default function PaymentsPage() {
               })}
             </ul>
 
-            <div className="hidden md:block rounded-md border border-hairline bg-paper overflow-x-auto">
+            <div className="hidden md:block rounded-md border border-hairline bg-paper overflow-auto max-h-[calc(100vh-15rem)]">
               <table className="w-full">
-                <thead className="bg-paper-2 border-b border-hairline">
+                <thead className="sticky top-0 z-10 bg-paper-2 border-b border-hairline">
                   <tr>
                     <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Customer</th>
                     <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Paid</th>

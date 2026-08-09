@@ -319,9 +319,9 @@ export default function QuotesPage() {
               ))}
             </ul>
 
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden md:block overflow-auto max-h-[calc(100vh-15rem)]">
               <table className="w-full text-sm min-w-[620px]">
-                <thead className="bg-paper-2 border-b border-hairline text-[10px] uppercase tracking-wider text-ink-3">
+                <thead className="sticky top-0 z-10 bg-paper-2 border-b border-hairline text-[10px] uppercase tracking-wider text-ink-3">
                   <tr>
                     <th className="text-left px-4 py-2.5">Customer / Project</th>
                     <th className="text-left px-3 py-2.5">Type</th>

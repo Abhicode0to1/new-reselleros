@@ -39,7 +39,10 @@ const SECRET      = '<INBOUND_EMAIL_SECRET>';   // must match Cloud Run env
 // (Shipping/promo mails that slip through are auto-marked "ignored" by the app.)
 const SEARCH =
   '(from:amazon.in OR from:amazon.com) ' +
-  'subject:("order" OR "invoice" OR "tax invoice" OR "placed" OR "delivered") ' +
+  // Amazon India's order mail subject is literally `Ordered: "..."` — match that
+  // exact token plus invoice / shipping words. (Gmail treats "Ordered" and
+  // "order" as different tokens, so both are listed.)
+  '(subject:Ordered OR subject:order OR subject:invoice OR subject:"tax invoice" OR subject:shipped OR subject:dispatched OR subject:delivered) ' +
   'newer_than:3d';
 
 function forwardAmazon() {
