@@ -354,9 +354,12 @@ export function bankTxnKey(r: { txn_date?: string | null; debit?: number | null;
   const d = (r.txn_date ?? "").slice(0, 10);
   // date + amount + description only. Reference is NOT used — a re-uploaded
   // statement often omits it while the stored row has one (or vice-versa),
-  // which would make the same line look "new". Description is normalised
-  // (collapse whitespace, lowercase) so minor spacing differences still match.
-  const desc = (r.description ?? "").trim().toLowerCase().replace(/\s+/g, " ").slice(0, 80);
+  // which would make the same line look "new". Description is normalised by
+  // REMOVING ALL whitespace + lowercasing so re-parsed spacing/masking variants
+  // of the SAME line still match — e.g. "EXCEL TECHNO LOGIES" == "EXCEL
+  // TECHNOLOGIES" and "ICIC-XX XXXXXX4658" == "ICIC-XXXXXX4658". (Collapsing to a
+  // single space, as before, left those different and let duplicates slip in.)
+  const desc = (r.description ?? "").toLowerCase().replace(/\s+/g, "").slice(0, 60);
   return `${d}|${Math.round(r.debit ?? 0)}|${Math.round(r.credit ?? 0)}|${desc}`;
 }
 
