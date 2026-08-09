@@ -52,23 +52,29 @@ function fiscalYearStart(d: Date): Date {
 
 interface DateRange { from: string; to: string }
 
+// Presets span the FULL calendar period (1st → last day) to match the GST and
+// Expenses reports exactly — so the same month/quarter/FY reconciles across pages.
+// (Future days carry no transactions, so month-to-date totals are unchanged.)
 function thisMonth(): DateRange {
   const t = istToday();
   const first = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1));
-  return { from: yyyymmdd(first), to: yyyymmdd(t) };
+  const last  = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0));
+  return { from: yyyymmdd(first), to: yyyymmdd(last) };
 }
 
 function thisQuarter(): DateRange {
   const t = istToday();
-  const m = t.getUTCMonth();
-  const qStart = Math.floor(m / 3) * 3;
+  const qStart = Math.floor(t.getUTCMonth() / 3) * 3;
   const first = new Date(Date.UTC(t.getUTCFullYear(), qStart, 1));
-  return { from: yyyymmdd(first), to: yyyymmdd(t) };
+  const last  = new Date(Date.UTC(t.getUTCFullYear(), qStart + 3, 0));
+  return { from: yyyymmdd(first), to: yyyymmdd(last) };
 }
 
 function thisFY(): DateRange {
   const t = istToday();
-  return { from: yyyymmdd(fiscalYearStart(t)), to: yyyymmdd(t) };
+  const fy = fiscalYearStart(t);
+  const last = new Date(Date.UTC(fy.getUTCFullYear() + 1, 3, 0));   // 31 Mar next year
+  return { from: yyyymmdd(fy), to: yyyymmdd(last) };
 }
 
 const QUICK_RANGES: { label: string; build: () => DateRange }[] = [

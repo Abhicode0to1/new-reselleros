@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { rupee } from "@/lib/utils";
 import { useBalanceSheetAuto } from "@/lib/queries/balance-sheet";
 import { useOutstandingPayable, useUnreconciledExpenses } from "@/lib/queries/expenses";
+import { useBankAccounts } from "@/lib/queries/bank";
 
 type Tone = "emerald" | "rose" | "amber" | "indigo" | "ink";
 
@@ -24,6 +25,12 @@ export default function AccountingOverviewPage() {
   const autoQ = useBalanceSheetAuto();
   const payableQ = useOutstandingPayable();
   const unrecQ = useUnreconciledExpenses();
+  const accountsQ = useBankAccounts();
+
+  // Data-integrity: a cash account can't be negative in reality.
+  const negativeCash = (accountsQ.data ?? []).filter(
+    (a) => a.account_type === "cash" && (a.current_balance ?? a.opening_balance) < 0,
+  );
 
   const a = autoQ.data;
   const loading = autoQ.isLoading;
@@ -39,6 +46,7 @@ export default function AccountingOverviewPage() {
 
   // Needs-attention worklist — only actionable items surface.
   const nudges: { icon: string; tone: Tone; title: string; amount?: number; href: string; cta: string }[] = [];
+  if (negativeCash.length > 0) nudges.push({ icon: "alert", tone: "rose", title: `${negativeCash.length === 1 ? negativeCash[0].name : `${negativeCash.length} cash accounts`} showing negative — a deposit is likely unrecorded`, href: "/accounting/banking", cta: "Fix cash" });
   if (gstDue > 0) nudges.push({ icon: "file", tone: "rose", title: `GST net payable · ${fyLabel}`, amount: gstDue, href: "/accounting/gst", cta: "Review GST" });
   if ((payableQ.data?.count ?? 0) > 0) nudges.push({ icon: "clock", tone: "amber", title: `${payableQ.data!.count} bill${payableQ.data!.count === 1 ? "" : "s"} / expense${payableQ.data!.count === 1 ? "" : "s"} to pay`, amount: payableQ.data!.amount, href: "/accounting/expenses", cta: "Pay / settle" });
   if (owedToYou > 0) nudges.push({ icon: "rupee", tone: "amber", title: "To collect from customers", amount: owedToYou, href: "/accounting/aging", cta: "Chase" });
