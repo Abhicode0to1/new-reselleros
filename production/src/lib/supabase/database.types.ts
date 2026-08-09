@@ -1328,6 +1328,7 @@ export type ExpenseRow = {
   project_id:       string | null;           // migration 0192 — cost of a specific project (per-project P&L)
   tds_section:      string | null;           // migration 0202 — TDS deducted section (26Q); null = none
   tds_amount:       number;                   // migration 0202 — TDS deducted (₹) on this payment
+  bank_account_id:  string | null;            // migration 0203 — source bank account (bank/UPI/card/cheque)
   created_at:       string;
   updated_at:       string;
 };
@@ -1355,6 +1356,7 @@ type ExpenseInsert = {
   project_id?:      string | null;
   tds_section?:     string | null;
   tds_amount?:      number;
+  bank_account_id?: string | null;
 };
 type ExpenseUpdate = Partial<ExpenseInsert>;
 

@@ -77,7 +77,10 @@ export function AddExpenseDialog({
   const today  = new Date().toISOString().slice(0, 10);
   const { data: bankAccounts } = useBankAccounts();
   const cashAccounts = (bankAccounts ?? []).filter((a) => a.account_type === "cash");
+  const bankOnlyAccounts = (bankAccounts ?? []).filter((a) => a.account_type !== "cash");
   const [pettyCashAccountId, setPettyCashAccountId] = React.useState<string>("");
+  // Source bank account for a bank/UPI/card/cheque payment (which bank the money left).
+  const [bankAccountId, setBankAccountId] = React.useState<string>(expense?.bank_account_id ?? "");
 
   // Paid vs payable. Most expenses are already paid when recorded → default true.
   // "To pay" = a bill received on credit; it hits the P&L now (accrual) but must
@@ -432,6 +435,8 @@ export function AddExpenseDialog({
       // TDS deducted on this payment (26Q, deductor side). Stored in ₹ as typed.
       tds_section: values.tds_section?.trim() || null,
       tds_amount:  Math.round(values.tds_amount || 0),
+      // Source bank account for a bank/UPI/card/cheque payment (not cash).
+      bank_account_id: paid && values.payment_method !== "cash" ? (bankAccountId || null) : null,
     };
     // Cash only leaves petty cash once actually PAID — an unpaid bill must not.
     const pettyCash = paid && values.payment_method === "cash" ? (pettyCashAccountId || null) : null;
@@ -955,6 +960,24 @@ export function AddExpenseDialog({
             <FormField label="Kab tak dena hai? (due date — optional)" htmlFor="due_date">
               <Input id="due_date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               <p className="text-[10px] text-ink-3 mt-1">P&amp;L mein aaj hi count hoga; bank/cash tab minus hoga jab &quot;Mark paid&quot; karoge.</p>
+            </FormField>
+          )}
+
+          {/* Bank/UPI/card/cheque → which bank account did the money leave from? */}
+          {paid && watch("payment_method") !== "cash" && watch("payment_method") !== "statutory" && bankOnlyAccounts.length > 0 && (
+            <FormField label="From which account?" htmlFor="bank_account">
+              <Select value={bankAccountId || "none"} onValueChange={(v) => setBankAccountId(v === "none" ? "" : v)}>
+                <SelectTrigger id="bank_account"><SelectValue placeholder="Select bank account" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not sure / pick later</SelectItem>
+                  {bankOnlyAccounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}{a.bank_name ? ` · ${a.bank_name}` : ""}{a.account_number_last4 ? ` ••${a.account_number_last4}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-ink-3 mt-1">Kis bank se paisa gaya. Banking me isi account ki statement line se reconcile ho jayega.</p>
             </FormField>
           )}
 
