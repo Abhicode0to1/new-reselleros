@@ -728,7 +728,7 @@ export default function QuoteDetailPage() {
           </div>
         </Card>
 
-        <Card title="Your margin" sub="Post-discount">
+        <Card title="Est. margin" sub="Post-discount · assumed cost">
           <div className="text-center py-3">
             <div className={cn(
               "font-serif text-5xl leading-none mb-2",
@@ -738,8 +738,8 @@ export default function QuoteDetailPage() {
             )}>
               {rupee(margin.margin, { compact: true })}
             </div>
-            <div className="text-sm text-ink-3 mb-3 tabular-nums">{margin.marginPct}% margin</div>
-            <MarginPill margin={margin} period="one-time" />
+            <div className="text-sm text-ink-3 mb-3 tabular-nums">{margin.marginPct}% est. margin</div>
+            <MarginPill margin={margin} period="one-time" estimated />
             <div className="text-[11px] text-ink-3 mt-3 tabular-nums">
               Cost: {rupee(margin.cost)} · Price: {rupee(margin.price)}
             </div>
