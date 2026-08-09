@@ -2403,6 +2403,37 @@ type ContactInsert = {
 };
 type ContactUpdate = Partial<Omit<ContactInsert, "id" | "tenant_id">>;
 
+// Birthday / anniversary greeting audit + idempotency (migration 0199).
+export type ContactGreetingLogRow = {
+  id:            number;
+  tenant_id:     string;
+  contact_id:    string;
+  kind:          "birthday" | "anniversary";
+  channel:       string;
+  greeting_year: number;
+  recipient:     string | null;
+  subject:       string | null;
+  status:        string;
+  provider_id:   string | null;
+  error_message: string | null;
+  sent_at:       string;
+};
+type ContactGreetingLogInsert = {
+  id?:            number;
+  tenant_id:      string;
+  contact_id:     string;
+  kind:           "birthday" | "anniversary";
+  channel?:       string;
+  greeting_year:  number;
+  recipient?:     string | null;
+  subject?:       string | null;
+  status:         string;
+  provider_id?:   string | null;
+  error_message?: string | null;
+  sent_at?:       string;
+};
+type ContactGreetingLogUpdate = Partial<ContactGreetingLogInsert>;
+
 // ── Per-user Google OAuth tokens (Contacts sync, migration 0190) ────────────
 export type UserGoogleTokenRow = {
   user_id:         string;
@@ -2603,6 +2634,7 @@ export type Database = {
       business_loan_payments:{ Row: BusinessLoanPaymentRow; Insert: BusinessLoanPaymentInsert; Update: BusinessLoanPaymentUpdate; Relationships: [] };
       expense_claims:{ Row: ExpenseClaimRow; Insert: ExpenseClaimInsert; Update: ExpenseClaimUpdate; Relationships: [] };
       lead_activities:{ Row: LeadActivityRow; Insert: LeadActivityInsert; Update: LeadActivityUpdate; Relationships: [] };
+      contact_greeting_log:{ Row: ContactGreetingLogRow; Insert: ContactGreetingLogInsert; Update: ContactGreetingLogUpdate; Relationships: [] };
       tds_receivable:     { Row: TdsReceivableRow;     Insert: TdsReceivableInsert;     Update: TdsReceivableUpdate;     Relationships: [] };
       customer_users:     { Row: CustomerUserRow;      Insert: CustomerUserInsert;      Update: CustomerUserUpdate;      Relationships: [] };
       support_tickets:    { Row: SupportTicketRow;     Insert: SupportTicketInsert;     Update: SupportTicketUpdate;     Relationships: [] };
