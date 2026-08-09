@@ -13,6 +13,9 @@
 import * as React from "react";
 import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { toast } from "sonner";
+
+import { createClient } from "@/lib/supabase/client";
 
 import { HrPageShell } from "../payroll/screens";
 import { Card } from "@/components/ui/card";
@@ -34,6 +37,16 @@ function prevPeriod(): string {
 function monthLabel(period: string): string {
   const [y, m] = period.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+}
+/** TDS quarter (FY-aligned) for a YYYY-MM period → its 3 month strings + label.
+ *  Q1 Apr-Jun · Q2 Jul-Sep · Q3 Oct-Dec · Q4 Jan-Mar. */
+function quarterOf(period: string): { periods: string[]; label: string } {
+  const [y, m] = period.split("-").map(Number);
+  const startMonth = m >= 4 && m <= 6 ? 4 : m >= 7 && m <= 9 ? 7 : m >= 10 ? 10 : 1;
+  const periods = [0, 1, 2].map((i) => `${y}-${String(startMonth + i).padStart(2, "0")}`);
+  const qNum = startMonth === 4 ? 1 : startMonth === 7 ? 2 : startMonth === 10 ? 3 : 4;
+  const fy = m >= 4 ? y : y - 1;
+  return { periods, label: `Q${qNum} FY${fy}-${String((fy + 1) % 100).padStart(2, "0")}` };
 }
 function statusBadge(s: SalaryPayment["paid_status"]) {
   return (
@@ -127,6 +140,42 @@ function MonthRegister() {
     );
   };
 
+  // 24Q working — salary TDS (section 192), deductee-wise for the whole quarter
+  // that contains the selected month. Hand to the CA / import into TDS software
+  // (ClearTDS / RPU). The app can't produce the FVU itself.
+  const export24Q = async () => {
+    const { periods, label } = quarterOf(period);
+    const supabase = createClient();
+    const { data: pays } = await supabase
+      .from("salary_payments")
+      .select("employee_id, period, pay_date, gross, tds")
+      .in("period", periods);
+    if (!pays || pays.length === 0) { toast.error(`No salary runs in ${label}.`); return; }
+    const empIds = Array.from(new Set(pays.map((p) => p.employee_id)));
+    const { data: emps } = await supabase.from("employees").select("id, name, pan").in("id", empIds);
+    const emap = new Map((emps ?? []).map((e) => [e.id, e]));
+    let missingPan = 0;
+    const outRows = pays
+      .slice()
+      .sort((a, b) =>
+        (toTitleCase(emap.get(a.employee_id)?.name ?? "")).localeCompare(toTitleCase(emap.get(b.employee_id)?.name ?? "")) ||
+        a.period.localeCompare(b.period))
+      .map((p) => {
+        const e = emap.get(p.employee_id);
+        if (!e?.pan) missingPan++;
+        return [toTitleCase(e?.name ?? "Employee"), e?.pan ?? "", "192", monthLabel(p.period), p.pay_date ?? "", p.gross ?? 0, p.tds ?? 0];
+      });
+    downloadCsv(
+      `24Q-working-${label.replace(/\s+/g, "-")}.csv`,
+      ["Employee", "PAN", "Section", "Month", "Pay date", "Amount paid (Gross)", "TDS deducted"],
+      outRows,
+    );
+    const totalTds = pays.reduce((s, p) => s + (p.tds ?? 0), 0);
+    let msg = `24Q working for ${label} — ${outRows.length} rows, TDS ${rupee(totalTds)}. Import into your TDS software / RPU (the app can't make the FVU).`;
+    if (missingPan) msg += ` ⚠ ${missingPan} row(s) missing PAN — add it on the employee.`;
+    toast.success(msg);
+  };
+
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -138,6 +187,7 @@ function MonthRegister() {
         {rows.length > 0 && (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" icon="download" onClick={exportCsv}>Export CSV (for CA)</Button>
+            <Button variant="outline" size="sm" icon="download" onClick={export24Q} title="Salary-TDS deductee working for this month's quarter (section 192)">24Q working (TDS)</Button>
             <Button variant="ghost" size="sm" icon="file" onClick={() => window.print()}>Print</Button>
           </div>
         )}
