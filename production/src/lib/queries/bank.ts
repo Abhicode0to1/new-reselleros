@@ -359,7 +359,14 @@ export function bankTxnKey(r: { txn_date?: string | null; debit?: number | null;
   // of the SAME line still match — e.g. "EXCEL TECHNO LOGIES" == "EXCEL
   // TECHNOLOGIES" and "ICIC-XX XXXXXX4658" == "ICIC-XXXXXX4658". (Collapsing to a
   // single space, as before, left those different and let duplicates slip in.)
-  const desc = (r.description ?? "").toLowerCase().replace(/\s+/g, "").slice(0, 60);
+  // A SHORT prefix (first 25 non-space chars) — this captures the stable leading
+  // bank txn/UTR number (e.g. "50100784857219-TPT-SALARY", "IMPS-621856395591-")
+  // while EXCLUDING the variable tail where re-parses differ: payee name
+  // ("...-ABHI" vs "...-ABHISHEK") and masked account digits ("ICIC-XX XXXXXX4658"
+  // vs "ICIC-XXXXXX4658"). A longer prefix (60) let those tails break the match
+  // and duplicated the line on re-upload. Genuinely different lines still differ
+  // in this prefix (different UTR / party), so they stay separate.
+  const desc = (r.description ?? "").toLowerCase().replace(/\s+/g, "").slice(0, 25);
   return `${d}|${Math.round(r.debit ?? 0)}|${Math.round(r.credit ?? 0)}|${desc}`;
 }
 
