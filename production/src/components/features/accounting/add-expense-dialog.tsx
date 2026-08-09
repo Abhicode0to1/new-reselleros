@@ -341,6 +341,14 @@ export function AddExpenseDialog({
     if (s) { setValue("category", s); setCategoryAuto(true); }
   }, [catText, vendorNameWatch, categoryTouched, categoryAuto, setValue]);
 
+  // COGS-vs-OPEX guardrail: does the vendor / category / note look like a
+  // product this reseller RESELLS (so it belongs in COGS Bills, not Expenses)?
+  const resaleHint = React.useMemo(() => {
+    const hay = `${vendorNameWatch} ${watch("category") ?? ""} ${catText}`.toLowerCase();
+    return /(google ?workspace|g ?suite|workspace|microsoft ?365|\bm365\b|office ?365|\bo365\b|\bzoho\b|\bazure\b|\baws\b|google ?cloud|\bgcp\b|cloud ?hosting|reseller|\bcsp\b)/.test(hay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorNameWatch, catText, watch("category")]);
+
   // Itemised totals + the category split preview.
   const headerCategory = watch("category");
   const itemiseActive = showItems && lines.some((l) => l.description.trim() || l.amount);
@@ -728,6 +736,18 @@ export function AddExpenseDialog({
                 <Input id="expense_date" type="date" error={errors.expense_date?.message} {...register("expense_date")} />
               </FormField>
             </div>
+
+            {/* COGS vs OPEX guardrail — if the vendor/category/note looks like a
+                product you RESELL (Workspace / M365 / Zoho / cloud), nudge toward
+                COGS Bills so the P&L stays right. Gentle + non-blocking. */}
+            {resaleHint && (
+              <div className="flex items-start gap-2 rounded-md border border-amber/40 bg-amber-soft/40 p-2.5 text-[12px] text-amber-ink">
+                <Icon name="info" size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  Ye customer ko <b>resell</b> kar rahe ho? To ise <b>COGS Bills</b> me daalo (COGS), Expenses me nahi — tabhi P&amp;L sahi banega. Apne use ke liye hai to ignore karo.
+                </span>
+              </div>
+            )}
 
             {/* What for — a simple note by default; switch to line items for a
                 multi-line bill. Both feed the category + the saved description. */}

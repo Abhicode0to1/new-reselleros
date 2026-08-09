@@ -57,7 +57,7 @@ export const EXPENSE_CATEGORIES = [
 // like "client ke pass jane ke liye" (travel) or "team ke liye khana" (food).
 const CATEGORY_KEYWORDS: [RegExp, (typeof EXPENSE_CATEGORIES)[number]][] = [
   [/\b(rent|lease|kiraya|kiraaya)\b/i, "Office Rent"],
-  [/\b(cab|taxi|uber|ola|rapido|flight|air ?fare|train|irctc|hotel|stay|travel|petrol|diesel|fuel|toll|parking|mileage|conveyance|jaana|jaane|jana|jane|aana|aane|safar|yatra|gaadi|gadi|rickshaw|riksha|\bbus\b|\btel\b)\b/i, "Travel"],
+  [/\b(cab|taxi|uber|ola|rapido|flight|air ?fare|train|irctc|hotel|stay|travel|petrol|diesel|fuel|toll|parking|mileage|conveyance|jaana|jaane|jana|jane|aana|aane|safar|yatra|gaadi|gadi|rickshaw|riksha|\bbus\b|\btel\b|luggage|suitcase|trolley|backpack|travel ?bag)\b/i, "Travel"],
   [/\b(internet|wi-?fi|broadband|phone|mobile|airtel|jio|vodafone|\bvi\b|bsnl|recharge|data ?pack|\bsim\b|net ?pack)\b/i, "Internet & Phone"],
   [/(electric|bijli|power ?bill|water ?bill|paani|utilit|gas ?bill|generator|\bdg\b)/i, "Utilities"],
   [/\b(hosting|domain|server|cloud|aws|gcp|azure|vps|cpanel|\bssl\b|render|vercel|netlify)\b/i, "Hosting"],
