@@ -203,6 +203,7 @@ export const APP_NAV: NavSection[] = [
     items: [
       { id: "compliance-calendar", href: "/compliance",             label: "Compliance Calendar", icon: "calendar", hint: "Every statutory due date for your Pvt Ltd in one worklist — ROC, Income Tax, TDS, GST, PF/ESI. Confirm exact dates with your CA." },
       { id: "compliance-roc",      href: "/compliance/roc",         label: "ROC / MCA",           icon: "book",     hint: "Annual Registrar of Companies filings — AOC-4, MGT-7, DIR-3 KYC, DPT-3, ADT-1, AGM." },
+      { id: "compliance-gst",      href: "/compliance/gst",         label: "GST Returns",         icon: "file",     hint: "GSTR-1, GSTR-3B and annual GSTR-9 — due dates + one-tap 'How to file'. (Numbers live in Accounting → GST Reports.)" },
       { id: "compliance-it",       href: "/compliance/income-tax",  label: "Income Tax & TDS",    icon: "rupee",    hint: "Company ITR, tax audit, advance tax, and TDS deposits + quarterly returns." },
     ],
   },
@@ -346,6 +347,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/gst":      ["Accounting", "GST Reports"],
   "/compliance":            ["Compliance", "Compliance Calendar"],
   "/compliance/roc":        ["Compliance", "ROC / MCA"],
+  "/compliance/gst":        ["Compliance", "GST Returns"],
   "/compliance/income-tax": ["Compliance", "Income Tax & TDS"],
   "/accounting/loans":         ["Payroll", "Loans & Advances"],
   "/accounting/employees":     ["Payroll", "Employees"],

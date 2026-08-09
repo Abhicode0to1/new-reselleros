@@ -17,6 +17,7 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -72,6 +73,8 @@ interface OutputRow {
   invoiceDate:  string;
   customerName: string;
   customerGstin: string | null;
+  customerStateCode: string | null;  // buyer's GST state code (place of supply)
+  customerState:     string | null;
   amount:       number;        // GST-inclusive
   taxableValue: number;        // persisted (migration 0116), else reverse-derived
   gst:          number;        // total GST (persisted, else reverse-derived)
@@ -97,6 +100,8 @@ interface GstReport {
   inputTotal:    number;
   inputGST:      number;
   netLiability:  number;
+  sellerStateCode: string | null;   // your own state — place of supply for intra-state B2C
+  sellerState:     string | null;
 }
 
 function useGstReport(range: DateRange) {
@@ -131,14 +136,21 @@ function useGstReport(range: DateRange) {
         ...(creditNotes ?? []).map((n) => n.customer_id),
         ...(debitNotes ?? []).map((n) => n.customer_id),
       ].filter((x): x is string => !!x)));
-      const gstinByCustomerId = new Map<string, string | null>();
+      const custById = new Map<string, { gstin: string | null; stateCode: string | null; state: string | null }>();
       if (customerIds.length > 0) {
         const { data: customers } = await supabase
           .from("customers")
-          .select("id, gstin")
+          .select("id, gstin, state_code, state")
           .in("id", customerIds);
-        for (const c of customers ?? []) gstinByCustomerId.set(c.id, c.gstin ?? null);
+        for (const c of customers ?? []) custById.set(c.id, { gstin: c.gstin ?? null, stateCode: c.state_code ?? null, state: c.state ?? null });
       }
+      const custOf = (id: string | null | undefined) => (id ? custById.get(id) : undefined);
+
+      // Seller's own state (place of supply for intra-state B2C). RLS scopes to own tenant.
+      const { data: tenantRow } = await supabase
+        .from("tenants").select("state_code, state").limit(1).maybeSingle();
+      const sellerStateCode = tenantRow?.state_code ?? null;
+      const sellerState = tenantRow?.state ?? null;
 
       const outputRows: OutputRow[] = (invoices ?? []).map((i) => {
         const amount       = i.amount ?? 0;
@@ -147,11 +159,14 @@ function useGstReport(range: DateRange) {
         // back to reverse-deriving at the row's rate for any legacy invoice.
         const taxableValue = i.taxable_value ?? Math.round(amount * 100 / (100 + taxRate));
         const gst          = i.tax_amount ?? (amount - taxableValue);
+        const c = custOf(i.customer_id);
         return {
           invoiceId:     i.id,
           invoiceDate:   i.invoice_date,
           customerName:  i.customer_name ?? "—",
-          customerGstin: i.customer_id ? gstinByCustomerId.get(i.customer_id) ?? null : null,
+          customerGstin: c?.gstin ?? null,
+          customerStateCode: c?.stateCode ?? null,
+          customerState:     c?.state ?? null,
           amount,
           taxableValue,
           gst,
@@ -163,17 +178,19 @@ function useGstReport(range: DateRange) {
 
       // Notes as SIGNED output rows — credit note negative, debit note positive.
       for (const n of creditNotes ?? []) {
+        const c = custOf(n.customer_id);
         outputRows.push({
           invoiceId: n.id, invoiceDate: n.credit_date, customerName: n.customer_name ?? "—",
-          customerGstin: n.customer_id ? gstinByCustomerId.get(n.customer_id) ?? null : null,
+          customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null,
           amount: -(n.amount ?? 0), taxableValue: -(n.taxable_value ?? 0), gst: -(n.tax_amount ?? 0),
           taxRate: n.tax_rate ?? 18, interState: n.inter_state ?? false, docType: "credit_note",
         });
       }
       for (const n of debitNotes ?? []) {
+        const c = custOf(n.customer_id);
         outputRows.push({
           invoiceId: n.id, invoiceDate: n.debit_date, customerName: n.customer_name ?? "—",
-          customerGstin: n.customer_id ? gstinByCustomerId.get(n.customer_id) ?? null : null,
+          customerGstin: c?.gstin ?? null, customerStateCode: c?.stateCode ?? null, customerState: c?.state ?? null,
           amount: n.amount ?? 0, taxableValue: n.taxable_value ?? 0, gst: n.tax_amount ?? 0,
           taxRate: n.tax_rate ?? 18, interState: n.inter_state ?? false, docType: "debit_note",
         });
@@ -227,7 +244,7 @@ function useGstReport(range: DateRange) {
       const inputGST     = inputRows.reduce((s, r) => s + r.gst, 0);
       const netLiability = outputGST - inputGST;
 
-      return { outputRows, inputRows, outputTotal, outputGST, inputTotal, inputGST, netLiability };
+      return { outputRows, inputRows, outputTotal, outputGST, inputTotal, inputGST, netLiability, sellerStateCode, sellerState };
     },
   });
 }
@@ -238,6 +255,114 @@ function gstSplit(r: { gst: number; interState: boolean }): { cgst: number; sgst
   if (r.interState) return { cgst: 0, sgst: 0, igst: r.gst };
   const cgst = Math.round(r.gst / 2);
   return { cgst, sgst: r.gst - cgst, igst: 0 };
+}
+
+// ────────────────────────────────────────────────────────────────
+// GSTR-1 · GST Offline Tool export (B2B / B2CL / B2CS / HSN)
+// ────────────────────────────────────────────────────────────────
+// The GST Offline Tool imports one CSV per section. We build the standard
+// section templates from the period's invoices so the owner can import → generate
+// JSON → upload on the portal → file with OTP (no re-typing, no credentials).
+
+const B2CL_THRESHOLD = 250000;                         // inter-state B2C "large" invoice-value cutoff (₹)
+const DEFAULT_HSN = "998313";                          // Online/SaaS services (adjust if you sell other HSN)
+const DEFAULT_HSN_DESC = "Information technology software services";
+
+// GST state codes → names (place of supply must be "code-Name" e.g. 27-Maharashtra).
+const GST_STATE_NAMES: Record<string, string> = {
+  "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+  "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+  "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
+  "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
+  "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+  "25": "Daman and Diu", "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra",
+  "29": "Karnataka", "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu",
+  "34": "Puducherry", "35": "Andaman and Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh",
+  "38": "Ladakh", "97": "Other Territory",
+};
+
+// GST Offline Tool date format: DD-MMM-YYYY.
+function gstDate(isoStr: string): string {
+  const [y, m, d] = isoStr.slice(0, 10).split("-");
+  const mon = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(m)];
+  return `${d}-${mon}-${y}`;
+}
+
+// Resolve Place of Supply for a row → { code, name } or null if genuinely unknown.
+// B2B is authoritative from the GSTIN's first 2 digits; else the customer's state;
+// else (intra-state B2C) the seller's own state.
+function posFor(
+  r: OutputRow, sellerStateCode: string | null, sellerState: string | null,
+): { code: string; name: string } | null {
+  if (r.customerGstin && r.customerGstin.length >= 2) {
+    const code = r.customerGstin.slice(0, 2);
+    return { code, name: GST_STATE_NAMES[code] ?? r.customerState ?? "" };
+  }
+  if (r.customerStateCode) {
+    const code = r.customerStateCode.padStart(2, "0");
+    return { code, name: r.customerState ?? GST_STATE_NAMES[code] ?? "" };
+  }
+  if (!r.interState && sellerStateCode) {
+    const code = sellerStateCode.padStart(2, "0");
+    return { code, name: sellerState ?? GST_STATE_NAMES[code] ?? "" };
+  }
+  return null;
+}
+
+const GSTR1_HEADERS = {
+  b2b:  ["GSTIN/UIN of Recipient", "Receiver Name", "Invoice Number", "Invoice date", "Invoice Value", "Place Of Supply", "Reverse Charge", "Applicable % of Tax Rate", "Invoice Type", "E-Commerce GSTIN", "Rate", "Taxable Value", "Cess Amount"],
+  b2cl: ["Invoice Number", "Invoice date", "Invoice Value", "Place Of Supply", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN"],
+  b2cs: ["Type", "Place Of Supply", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN"],
+  hsn:  ["HSN", "Description", "UQC", "Total Quantity", "Total Value", "Rate", "Taxable Value", "Integrated Tax Amount", "Central Tax Amount", "State/UT Tax Amount", "Cess Amount"],
+};
+
+interface Gstr1Sections {
+  b2b: (string | number)[][];
+  b2cl: (string | number)[][];
+  b2cs: (string | number)[][];
+  hsn: (string | number)[][];
+  skipped: number;      // B2C invoices with no resolvable place of supply
+  notesCount: number;   // credit/debit notes (belong under CDNR, not built here)
+}
+
+function buildGstr1Sections(rows: OutputRow[], sellerStateCode: string | null, sellerState: string | null): Gstr1Sections {
+  // Only plain invoices go into B2B/B2C; credit/debit notes belong in CDNR/CDNUR.
+  const invoices = rows.filter((r) => r.docType === "invoice");
+  const b2b: (string | number)[][] = [];
+  const b2cl: (string | number)[][] = [];
+  const b2csMap = new Map<string, { pos: string; rate: number; taxable: number }>();
+  const hsnMap = new Map<string, { rate: number; taxable: number; igst: number; cgst: number; sgst: number; total: number }>();
+  let skipped = 0;
+
+  for (const r of invoices) {
+    const pos = posFor(r, sellerStateCode, sellerState);
+    const posStr = pos ? `${pos.code}-${pos.name}` : "";
+    const s = gstSplit(r);
+
+    // HSN summary — every invoice contributes (default HSN for SaaS).
+    const hk = `${DEFAULT_HSN}|${r.taxRate}`;
+    const h = hsnMap.get(hk) ?? { rate: r.taxRate, taxable: 0, igst: 0, cgst: 0, sgst: 0, total: 0 };
+    h.taxable += r.taxableValue; h.igst += s.igst; h.cgst += s.cgst; h.sgst += s.sgst; h.total += r.amount;
+    hsnMap.set(hk, h);
+
+    if (r.customerGstin) {
+      b2b.push([r.customerGstin, r.customerName, r.invoiceId, gstDate(r.invoiceDate), r.amount, posStr, "N", "", "Regular", "", r.taxRate, r.taxableValue, 0]);
+    } else if (!pos) {
+      skipped++;
+    } else if (r.interState && r.amount > B2CL_THRESHOLD) {
+      b2cl.push([r.invoiceId, gstDate(r.invoiceDate), r.amount, posStr, "", r.taxRate, r.taxableValue, 0, ""]);
+    } else {
+      const key = `${posStr}|${r.taxRate}`;
+      const cur = b2csMap.get(key) ?? { pos: posStr, rate: r.taxRate, taxable: 0 };
+      cur.taxable += r.taxableValue;
+      b2csMap.set(key, cur);
+    }
+  }
+
+  const b2cs = [...b2csMap.values()].map((v) => ["OE", v.pos, "", v.rate, v.taxable, 0, ""]);
+  const hsn = [...hsnMap.values()].map((h) => [DEFAULT_HSN, DEFAULT_HSN_DESC, "OTH-OTHERS", 0, h.total, h.rate, h.taxable, h.igst, h.cgst, h.sgst, 0]);
+
+  return { b2b, b2cl, b2cs, hsn, skipped, notesCount: rows.length - invoices.length };
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -291,6 +416,22 @@ export default function GstReportPage() {
         ];
       }),
     );
+  }
+
+  function exportGstr1() {
+    if (!data) return;
+    const secs = buildGstr1Sections(data.outputRows, data.sellerStateCode, data.sellerState);
+    const stamp = `${range.from}-to-${range.to}`;
+    let files = 0;
+    if (secs.b2b.length)  { downloadCSV(`gstr1-b2b-${stamp}.csv`,  GSTR1_HEADERS.b2b,  secs.b2b);  files++; }
+    if (secs.b2cl.length) { downloadCSV(`gstr1-b2cl-${stamp}.csv`, GSTR1_HEADERS.b2cl, secs.b2cl); files++; }
+    if (secs.b2cs.length) { downloadCSV(`gstr1-b2cs-${stamp}.csv`, GSTR1_HEADERS.b2cs, secs.b2cs); files++; }
+    if (secs.hsn.length)  { downloadCSV(`gstr1-hsn-${stamp}.csv`,  GSTR1_HEADERS.hsn,  secs.hsn);  files++; }
+    if (files === 0) { toast.error("No invoices to export for GSTR-1 in this period."); return; }
+    const notes: string[] = [];
+    if (secs.skipped)    notes.push(`${secs.skipped} B2C invoice(s) skipped — add the customer's state, then re-export.`);
+    if (secs.notesCount) notes.push(`${secs.notesCount} credit/debit note(s) not included — enter under CDNR on the portal.`);
+    toast.success(`${files} GSTR-1 file(s) downloaded — import each into the GST Offline Tool.${notes.length ? " " + notes.join(" ") : ""}`);
   }
 
   function exportInput() {
@@ -390,6 +531,27 @@ export default function GstReportPage() {
           )}
         </Card>
       </div>
+
+      {/* GSTR-1 filing helper — Offline Tool export */}
+      {data && data.outputRows.length > 0 && (
+        <Card className="mb-6 p-4 border border-amber/30 bg-amber-soft/10">
+          <div className="flex items-start gap-3 flex-wrap">
+            <Icon name="download" size={18} className="text-amber-ink shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <div className="font-medium text-ink">File GSTR-1 for {range.label}</div>
+              <p className="text-[12px] text-ink-2 mt-0.5 leading-relaxed">
+                Downloads your sales split into <b>GST Offline Tool</b> format — B2B, B2C, HSN. Open the Offline Tool →
+                Import each CSV → Generate JSON → upload on gst.gov.in → file with OTP. <b>Verify totals before filing.</b>
+                {" "}Direct one-click e-filing needs a GST Suvidha Provider (a future add-on).
+              </p>
+            </div>
+            <Button variant="primary" onClick={exportGstr1} className="shrink-0">
+              <Icon name="download" size={14} className="mr-1.5" />
+              Download GSTR-1 (Offline Tool)
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* Output GST table */}
       <SectionHeader
