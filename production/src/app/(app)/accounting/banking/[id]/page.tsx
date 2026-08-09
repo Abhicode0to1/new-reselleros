@@ -63,6 +63,7 @@ export default function BankAccountDetailPage() {
   const autoReconcile = useAutoReconcile();
 
   const [tab,           setTab]           = React.useState<FilterTab>("all");
+  const [search,        setSearch]        = React.useState("");
   const [importOpen,    setImportOpen]    = React.useState(false);
   const [aaConnectOpen, setAaConnectOpen] = React.useState(false);
   const [reconcileTxn,  setReconcileTxn]  = React.useState<BankTransactionRow | null>(null);
@@ -90,10 +91,15 @@ export default function BankAccountDetailPage() {
 
   const visibleTxns = React.useMemo(() => {
     if (!transactions) return [];
-    if (tab === "unmatched") return transactions.filter((t) => t.matched_to_type === null);
-    if (tab === "matched")   return transactions.filter((t) => t.matched_to_type !== null);
-    return transactions;
-  }, [transactions, tab]);
+    let list = transactions;
+    if (tab === "unmatched") list = list.filter((t) => t.matched_to_type === null);
+    else if (tab === "matched") list = list.filter((t) => t.matched_to_type !== null);
+    const q = search.trim().toLowerCase();
+    if (q) list = list.filter((t) =>
+      [t.description, t.reference, String(t.debit ?? ""), String(t.credit ?? "")]
+        .some((f) => (f ?? "").toString().toLowerCase().includes(q)));
+    return list;
+  }, [transactions, tab, search]);
 
   // Deep-link from elsewhere (e.g. Payroll "Reconcile in Banking →"):
   //   ?focus=<txnId>   → open that transaction's reconcile
@@ -261,6 +267,25 @@ export default function BankAccountDetailPage() {
           >
             {autoReconcile.isPending ? "Matching…" : `Auto-reconcile (${counts.unmatched})`}
           </Button>
+        )}
+      </div>
+
+      {/* Search transactions */}
+      <div className="mb-3 relative">
+        <Icon name="search" size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-3" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search transactions — description, reference or amount…"
+          aria-label="Search transactions"
+          className="w-full pl-8 pr-8 py-2 text-sm rounded-md border border-hairline bg-paper focus:outline-none focus:border-hairline-strong"
+        />
+        {search && (
+          <button type="button" onClick={() => setSearch("")}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink" aria-label="Clear search">
+            <Icon name="x" size={14} />
+          </button>
         )}
       </div>
 
