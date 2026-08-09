@@ -41,6 +41,8 @@ import {
 } from "@/lib/queries/expenses";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useVendors, ensureVendor } from "@/lib/queries/vendors";
+import { useAddReimbursement } from "@/lib/queries/reimbursements";
+import { toast } from "sonner";
 import { uploadBillAttachment } from "@/lib/queries/vendor-bills";
 import { useConfirm } from "@/components/providers/confirm-provider";
 
@@ -89,6 +91,12 @@ export function AddExpenseDialog({
   // NOT touch cash/bank until settled, so an unpaid expense skips the petty-cash
   // debit and stays out of the bank-reconcile candidates.
   const [paid, setPaid] = React.useState<boolean>(expense?.paid ?? true);
+  // Third case: a third person (employee/friend) paid the company's expense from
+  // their own pocket → the company OWES them (reimbursement payable). Routed
+  // through add_reimbursement, which books the expense + the payable atomically.
+  const [reimburse, setReimburse] = React.useState(false);
+  const [reimbursePerson, setReimbursePerson] = React.useState("");
+  const addReimb = useAddReimbursement();
   const [dueDate, setDueDate] = React.useState<string>(expense?.due_date ?? "");
 
   // Vendor master link — pick an existing supplier or type a new one (auto-added
@@ -392,6 +400,26 @@ export function AddExpenseDialog({
   }, [itemiseActive, lineSubtotalNum, setValue]);
 
   async function onSubmit(values: FormData) {
+    // ── Someone else paid our expense → record as a REIMBURSEMENT (payable to
+    //    that person). add_reimbursement books the expense + the payable together,
+    //    so we do NOT also create an expense here. ──
+    if (reimburse) {
+      const person = reimbursePerson.trim();
+      if (!person) { toast.error("Kisne diya? — us vyakti ka naam daalo."); return; }
+      const amt = Math.round((values.amount || 0) * rate);
+      if (amt <= 0) { toast.error("Amount daalo."); return; }
+      await addReimb.mutateAsync({
+        person,
+        purpose:    values.notes?.trim() || values.description?.trim() || values.category,
+        category:   values.category,
+        amount:     amt,
+        gst:        isGstBill ? Math.round((values.gst_paid || 0) * rate) : 0,
+        incurredOn: values.expense_date,
+      });
+      onClose();
+      return;
+    }
+
     const payee = values.vendor_name?.trim() || "";
     // Only GST-invoice suppliers belong in the Vendors master. So: an already-
     // picked vendor keeps its link; a NEW typed payee is added to Vendors only
@@ -880,23 +908,40 @@ export function AddExpenseDialog({
           {/* ── STEP 5: Paid already, or still to pay? ── */}
           <div>
             <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Paisa de diya?</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button type="button" onClick={() => setPaid(true)}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+              <button type="button" onClick={() => { setPaid(true); setReimburse(false); }}
                 className={cn("rounded-md border px-3 py-2 text-sm text-left transition-colors",
-                  paid ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
+                  paid && !reimburse ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
                 <span className="font-medium">Haan, de diya</span>
-                <span className="block text-[10px] text-ink-3">Cash/UPI/bank se pay ho gaya</span>
+                <span className="block text-[10px] text-ink-3">Company ne pay kiya (cash/UPI/bank)</span>
               </button>
-              <button type="button" onClick={() => setPaid(false)}
+              {!isEdit && (
+                <button type="button" onClick={() => { setReimburse(true); }}
+                  className={cn("rounded-md border px-3 py-2 text-sm text-left transition-colors",
+                    reimburse ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
+                  <span className="font-medium">Kisi aur ne diya</span>
+                  <span className="block text-[10px] text-ink-3">Reimbursement — company use wapas degi</span>
+                </button>
+              )}
+              <button type="button" onClick={() => { setPaid(false); setReimburse(false); }}
                 className={cn("rounded-md border px-3 py-2 text-sm text-left transition-colors",
-                  !paid ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
+                  !paid && !reimburse ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
                 <span className="font-medium">Nahi, baad me</span>
-                <span className="block text-[10px] text-ink-3">Udhaar — dena baaki hai</span>
+                <span className="block text-[10px] text-ink-3">Udhaar — vendor ko dena baaki</span>
               </button>
             </div>
           </div>
 
-          {paid ? (
+          {reimburse ? (
+            <FormField label="Kisne diya? (person)" htmlFor="reimburse_person">
+              <Input id="reimburse_person" placeholder="e.g. Prateek / Darshan / self"
+                value={reimbursePerson} onChange={(e) => setReimbursePerson(e.target.value)} />
+              <p className="text-[10px] text-ink-3 mt-1">
+                Kharcha company ka hai (P&amp;L me jayega), par paisa <b>{reimbursePerson.trim() || "is vyakti"}</b> ne apne pocket se diya —
+                company ab unhe wapas degi (Reimbursements me &quot;payable&quot; ban jayega, baad me Settle karo).
+              </p>
+            </FormField>
+          ) : paid ? (
             <FormField label="Paid by" htmlFor="payment_method">
               <Select value={watch("payment_method")} onValueChange={(v) => setValue("payment_method", v)}>
                 <SelectTrigger id="payment_method"><SelectValue /></SelectTrigger>
@@ -915,7 +960,7 @@ export function AddExpenseDialog({
           )}
 
           {/* Bank/UPI/card/cheque → which bank account did the money leave from? */}
-          {paid && watch("payment_method") !== "cash" && watch("payment_method") !== "statutory" && bankOnlyAccounts.length > 0 && (
+          {paid && !reimburse && watch("payment_method") !== "cash" && watch("payment_method") !== "statutory" && bankOnlyAccounts.length > 0 && (
             <FormField label="From which account?" htmlFor="bank_account">
               <Select value={bankAccountId || "none"} onValueChange={(v) => setBankAccountId(v === "none" ? "" : v)}>
                 <SelectTrigger id="bank_account"><SelectValue placeholder="Select bank account" /></SelectTrigger>
@@ -932,7 +977,7 @@ export function AddExpenseDialog({
             </FormField>
           )}
 
-          {paid && !isEdit && watch("payment_method") === "cash" && cashAccounts.length > 0 && (
+          {paid && !reimburse && !isEdit && watch("payment_method") === "cash" && cashAccounts.length > 0 && (
             <FormField label="Paid from petty cash" htmlFor="petty_cash">
               <Select value={pettyCashAccountId || "none"} onValueChange={(v) => setPettyCashAccountId(v === "none" ? "" : v)}>
                 <SelectTrigger id="petty_cash"><SelectValue placeholder="Don't deduct from petty cash" /></SelectTrigger>
