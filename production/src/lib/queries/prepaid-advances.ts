@@ -67,13 +67,15 @@ export function useCreatePrepaidAdvance() {
 export function useConsumePrepaidAdvance() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { advanceId: string; amount: number; date: string; note?: string | null }) => {
+    mutationFn: async (input: { advanceId: string; amount: number; date: string; note?: string | null; gst?: number; attachment?: string | null }) => {
       const supabase = createClient();
       const { error } = await supabase.rpc("consume_prepaid_advance", {
         p_advance_id: input.advanceId,
         p_amount: Math.round(input.amount),
         p_date: input.date,
         p_note: input.note ?? null,
+        p_gst: Math.round(input.gst ?? 0),
+        p_attachment: input.attachment ?? null,
       });
       if (error) throw new Error(error.message);
     },

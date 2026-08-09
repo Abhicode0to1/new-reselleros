@@ -2781,9 +2781,9 @@ export type Database = {
       v_tenant_with_parent: { Row: TenantWithParent; Relationships: [] };
     };
     Functions: {
-      /** Consume part of a prepaid advance → books an expense + reduces balance (migration 0205). */
+      /** Consume part of a prepaid advance → books an expense (with optional GST + bill) + reduces balance (migrations 0205/0206). */
       consume_prepaid_advance: {
-        Args: { p_advance_id: string; p_amount: number; p_date?: string; p_note?: string | null };
+        Args: { p_advance_id: string; p_amount: number; p_date?: string; p_note?: string | null; p_gst?: number; p_attachment?: string | null };
         Returns: number;
       };
       /**

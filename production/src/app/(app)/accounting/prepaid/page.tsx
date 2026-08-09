@@ -20,8 +20,10 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { rupee, formatDate } from "@/lib/utils";
 import { useBankAccounts } from "@/lib/queries/bank";
-import { useVendors, ensureVendor } from "@/lib/queries/vendors";
+import { useVendors, ensureVendor, } from "@/lib/queries/vendors";
+import { uploadBillAttachment } from "@/lib/queries/vendor-bills";
 import { Icon } from "@/components/ui/icon";
+import { toast } from "sonner";
 import {
   usePrepaidAdvances, useCreatePrepaidAdvance, useConsumePrepaidAdvance, useDeletePrepaidAdvance,
   type PrepaidAdvance,
@@ -262,14 +264,26 @@ function ConsumeDialog({ advance, onClose }: { advance: PrepaidAdvance; onClose:
   const consume = useConsumePrepaidAdvance();
   const today = new Date().toISOString().slice(0, 10);
   const [amount, setAmount] = React.useState(String(advance.balance));
+  const [gst, setGst] = React.useState("");
   const [date, setDate] = React.useState(today);
   const [note, setNote] = React.useState("");
+  const [file, setFile] = React.useState<File | null>(null);
+  const [uploading, setUploading] = React.useState(false);
   const amt = Math.round(Number(amount) || 0);
+  const gstAmt = Math.round(Number(gst) || 0);
   const tooMuch = amt > advance.balance;
+  const gstTooMuch = gstAmt > amt;
 
   async function submit() {
-    if (amt <= 0 || tooMuch) return;
-    await consume.mutateAsync({ advanceId: advance.id, amount: amt, date, note: note.trim() || null });
+    if (amt <= 0 || tooMuch || gstTooMuch) return;
+    let attachment: string | null = null;
+    if (file) {
+      setUploading(true);
+      try { attachment = await uploadBillAttachment(file); }
+      catch { toast.error("Bill upload failed — expense still booked without it."); }
+      finally { setUploading(false); }
+    }
+    await consume.mutateAsync({ advanceId: advance.id, amount: amt, gst: gstAmt, attachment, date, note: note.trim() || null });
     onClose();
   }
 
@@ -283,12 +297,24 @@ function ConsumeDialog({ advance, onClose }: { advance: PrepaidAdvance; onClose:
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <FormField label="Amount used (₹)" required htmlFor="cons_amt">
-            <Input id="cons_amt" type="number" min={1} prefix="₹" value={amount} onChange={(e) => setAmount(e.target.value)} error={tooMuch ? "More than the remaining balance" : undefined} />
-            <button type="button" className="text-[11px] text-amber-ink hover:underline mt-1" onClick={() => setAmount(String(advance.balance))}>Use full balance ({rupee(advance.balance)})</button>
-          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Amount used (₹)" required htmlFor="cons_amt">
+              <Input id="cons_amt" type="number" min={1} prefix="₹" value={amount} onChange={(e) => setAmount(e.target.value)} error={tooMuch ? "More than balance" : undefined} />
+              <button type="button" className="text-[11px] text-amber-ink hover:underline mt-1" onClick={() => setAmount(String(advance.balance))}>Full ({rupee(advance.balance)})</button>
+            </FormField>
+            <FormField label="of which GST (ITC)" htmlFor="cons_gst">
+              <Input id="cons_gst" type="number" min={0} prefix="₹" value={gst} onChange={(e) => setGst(e.target.value)} error={gstTooMuch ? "GST > amount" : undefined} />
+              <p className="text-[10px] text-ink-3 mt-1">Bill ka input GST — claimable.</p>
+            </FormField>
+          </div>
           <FormField label="Date" htmlFor="cons_date">
             <Input id="cons_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </FormField>
+          <FormField label="Attach bill (optional)" htmlFor="cons_bill">
+            <input id="cons_bill" type="file" accept="image/*,application/pdf"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-[12px] text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-paper-2 file:px-3 file:py-1.5 file:text-ink file:cursor-pointer" />
+            <p className="text-[10px] text-ink-3 mt-1">Facebook/Google ka tax invoice yahan lagao — expense se juda rahega.</p>
           </FormField>
           <FormField label="Note (optional)" htmlFor="cons_note">
             <Input id="cons_note" placeholder="e.g. ads run 1–15 Jan" value={note} onChange={(e) => setNote(e.target.value)} />
@@ -296,8 +322,8 @@ function ConsumeDialog({ advance, onClose }: { advance: PrepaidAdvance; onClose:
         </div>
         <DialogFooter>
           <Button type="button" variant="default" onClick={onClose}>Cancel</Button>
-          <Button type="button" variant="primary" loading={consume.isPending} disabled={amt <= 0 || tooMuch} onClick={submit}>
-            Book {rupee(amt > 0 ? amt : 0)} expense
+          <Button type="button" variant="primary" loading={consume.isPending || uploading} disabled={amt <= 0 || tooMuch || gstTooMuch} onClick={submit}>
+            {uploading ? "Uploading…" : `Book ${rupee(amt > 0 ? amt : 0)} expense`}
           </Button>
         </DialogFooter>
       </DialogContent>
