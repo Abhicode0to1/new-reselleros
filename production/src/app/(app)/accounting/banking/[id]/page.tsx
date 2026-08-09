@@ -31,6 +31,7 @@ import {
   useBankAccount,
   useBankTransactions,
   useReconcileTransaction,
+  useAutoReconcile,
   type BankTransactionRow,
 } from "@/lib/queries/bank";
 import { rupee, formatDate } from "@/lib/utils";
@@ -59,6 +60,7 @@ export default function BankAccountDetailPage() {
 
   const { data: account,      isLoading: accLoading } = useBankAccount(accountId);
   const { data: transactions, isLoading: txnLoading } = useBankTransactions(accountId);
+  const autoReconcile = useAutoReconcile();
 
   const [tab,           setTab]           = React.useState<FilterTab>("all");
   const [importOpen,    setImportOpen]    = React.useState(false);
@@ -246,9 +248,20 @@ export default function BankAccountDetailPage() {
         </div>
       </Card>
 
-      {/* Filter tabs */}
-      <div className="mb-4">
+      {/* Filter tabs + one-tap auto-reconcile */}
+      <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
         <TabBar items={tabs} value={tab} onChange={(v) => setTab(v as FilterTab)} />
+        {counts.unmatched > 0 && (
+          <Button
+            icon="sparkles"
+            variant="default"
+            loading={autoReconcile.isPending}
+            onClick={() => autoReconcile.mutate(account.id)}
+            title="Auto-match every unmatched line to its expense / salary / payment where the match is unambiguous"
+          >
+            {autoReconcile.isPending ? "Matching…" : `Auto-reconcile (${counts.unmatched})`}
+          </Button>
+        )}
       </div>
 
       {/* Transactions list */}

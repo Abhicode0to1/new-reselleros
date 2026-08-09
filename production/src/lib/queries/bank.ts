@@ -595,6 +595,116 @@ export function useReconcileSalaryAdvanceSplit() {
   });
 }
 
+/** Reconcile input shape — shared by the single-match hook and auto-reconcile. */
+type ReconcileInput = {
+  transactionId: string;
+  matchedToType: "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | null;
+  matchedToId:   string | null;
+  confidence?:   "exact" | "high" | "low" | "manual";
+};
+
+/** Core reconcile write — sets the match on the bank line AND keeps the reverse
+ *  links (project_payments.bank_txn_id, expenses.reconciled_txn_id) + statutory /
+ *  balance-sheet reversals in sync. The single source of truth used by both the
+ *  manual dialog (useReconcileTransaction) and the batch auto-reconcile below, so
+ *  they can never drift apart. Salary paid_amount is handled by a DB trigger on
+ *  the bank_transactions update, so no extra client work is needed for salaries. */
+async function applyReconcile(
+  supabase: ReturnType<typeof createClient>,
+  input: ReconcileInput,
+  matchedBy: string | null,
+): Promise<BankTransactionRow> {
+  const patch = input.matchedToType
+    ? {
+        matched_to_type:  input.matchedToType,
+        matched_to_id:    input.matchedToId,
+        matched_at:       new Date().toISOString(),
+        matched_by:       matchedBy,
+        match_confidence: input.confidence ?? "manual",
+      }
+    : {
+        matched_to_type:  null,
+        matched_to_id:    null,
+        matched_at:       null,
+        matched_by:       null,
+        match_confidence: null,
+      };
+  const { data, error } = await supabase
+    .from("bank_transactions").update(patch).eq("id", input.transactionId).select().single();
+  if (error) throw error;
+  await supabase.from("project_payments").update({ bank_txn_id: null }).eq("bank_txn_id", input.transactionId);
+  if (input.matchedToType === "project" && input.matchedToId) {
+    await supabase.from("project_payments").update({ bank_txn_id: input.transactionId }).eq("id", input.matchedToId);
+  }
+  await supabase.from("expenses").update({ reconciled_txn_id: null }).eq("reconciled_txn_id", input.transactionId);
+  if (input.matchedToType === "expense" && input.matchedToId) {
+    await supabase.from("expenses").update({ reconciled_txn_id: input.transactionId }).eq("id", input.matchedToId);
+  }
+  if (!input.matchedToType) {
+    await supabase.from("balance_sheet_items").delete().eq("bank_txn_id", input.transactionId);
+    await supabase.from("statutory_dues_payments").delete().eq("bank_txn_id", input.transactionId);
+  }
+  return data as BankTransactionRow;
+}
+
+/**
+ * Auto-reconcile — for every UNMATCHED line in the account, ask the server for
+ * match suggestions and auto-apply ONLY an UNAMBIGUOUS 'exact' one (a single
+ * exact candidate — if two records share the amount, it's left for manual review
+ * so we never guess wrong on money). Reuses applyReconcile, so the links + salary
+ * trigger fire exactly as in the manual flow. Returns how many were reconciled vs
+ * left for review.
+ */
+export function useAutoReconcile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (accountId: string): Promise<{ reconciled: number; review: number }> => {
+      const supabase = createClient();
+      const { data: authData } = await supabase.auth.getUser();
+      const matchedBy = authData?.user?.id ?? null;
+      const { data: txns, error } = await supabase
+        .from("bank_transactions")
+        .select("id")
+        .eq("bank_account_id", accountId)
+        .is("matched_to_id", null);
+      if (error) throw error;
+
+      let reconciled = 0, review = 0;
+      for (const t of txns ?? []) {
+        const { data: sugg } = await supabase.rpc("suggest_bank_transaction_matches", { p_bank_txn_id: t.id });
+        const list = (sugg ?? []) as MatchSuggestion[];
+        const top = list[0];
+        // Auto-apply only a CONFIDENT ('exact' or 'high') and UNAMBIGUOUS match —
+        // i.e. no second candidate sharing the top confidence. Two records with
+        // the same score (e.g. two months' salary of equal amount) are left for
+        // manual review so we never guess wrong on money. Everything applied is
+        // reversible via Un-reconcile.
+        const conf = top?.match_confidence;
+        const confident = conf === "exact" || conf === "high";
+        const unambiguous = list.length === 1 || list[1]?.match_confidence !== conf;
+        if (top && confident && unambiguous) {
+          try {
+            await applyReconcile(supabase, { transactionId: t.id, matchedToType: top.match_type, matchedToId: top.match_id, confidence: "high" }, matchedBy);
+            reconciled++;
+          } catch { review++; }
+        } else {
+          review++;
+        }
+      }
+      return { reconciled, review };
+    },
+    onSuccess: ({ reconciled, review }) => {
+      qc.invalidateQueries({ queryKey: ["bank_transactions"] });
+      qc.invalidateQueries({ queryKey: ["salary-payments"] });
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["balance-sheet"] });
+      if (reconciled === 0) toast.info(review > 0 ? `Koi pakka (exact) match nahi mila — ${review} manual review ke liye` : "Sab pehle se reconciled");
+      else toast.success(`${reconciled} auto-reconcile ho gaye${review > 0 ? ` · ${review} manual review ke liye` : ""}`);
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+}
+
 export function useReconcileTransaction() {
   const qc = useQueryClient();
   return useMutation({
