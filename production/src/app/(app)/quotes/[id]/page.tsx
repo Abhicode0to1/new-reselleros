@@ -40,7 +40,7 @@ import { usePaymentsByQuote, totalReceived as sumReceived } from "@/lib/queries/
 import { useCustomer } from "@/lib/queries/customers";
 import { useLead } from "@/lib/queries/leads";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
-import { rupee, formatDate, daysBetween } from "@/lib/utils";
+import { rupee, formatDate, daysBetween, toWhatsAppDigits } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { Quote, QuoteLineItem, Payment } from "@/lib/supabase/database.types";
 
@@ -89,6 +89,7 @@ export default function QuoteDetailPage() {
   const [paymentOpen, setPaymentOpen] = React.useState(false);
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const [downloadingPdf, setDownloadingPdf] = React.useState(false);
+  const [sharingWa, setSharingWa] = React.useState(false);
   const [receiptPayment, setReceiptPayment] = React.useState<Payment | null>(null);
   const [sendOpen,    setSendOpen]    = React.useState(false);
   const [whatsOpen,   setWhatsOpen]   = React.useState(false);
@@ -257,6 +258,83 @@ export default function QuoteDetailPage() {
   const tax = Math.round(taxable * (quote.tax_rate / 100));
   const total = quote.amount ?? taxable + tax;
   const margin = computeMargin(quote.total_cost, taxable);
+
+  const acceptUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/quote/${quote.id}/accept?t=${encodeURIComponent(quote.public_token)}`;
+
+  /** Render + download the quote PDF. Shared by the Download button and the
+   *  free WhatsApp share (so the file is ready for the owner to attach). */
+  const downloadQuotePdfFile = async (): Promise<void> => {
+    const { downloadQuotePDF } = await import("@/lib/pdf");
+    await downloadQuotePDF({
+      tenantName:    me?.tenantName    ?? "Workspace",
+      tenantGstin:   me?.tenantGstin,
+      tenantEmail:   me?.tenantEmail,
+      tenantPhone:   me?.tenantPhone,
+      tenantAddress: me?.tenantAddress,
+      quoteId:       quote.id,
+      customerName:  quote.customer_name,
+      contactName:   null,
+      contactEmail:  null,
+      contactPhone:  null,
+      createdDate:   quote.created_at,
+      expiresDate:   quote.expires_date,
+      validityDays:  quote.expires_date
+        ? Math.max(1, daysBetween(new Date(quote.created_at), quote.expires_date))
+        : 30,
+      lineItems:     items,
+      subtotal:      quote.subtotal,
+      discountPct:   quote.discount_pct,
+      discount,
+      taxable,
+      taxRate:       quote.tax_rate,
+      tax,
+      total,
+      interState,
+      notes:         quote.notes ?? "",
+    });
+  };
+
+  /** Free wa.me share — opens WhatsApp with a prefilled Hinglish message (quote
+   *  no · total · accept link) and downloads the PDF so the owner can attach it.
+   *  No Cloud API / keys needed, so it works day one. */
+  const shareQuoteOnWhatsApp = async (): Promise<void> => {
+    const message =
+      `Namaste ${quote.customer_name},\n\n` +
+      `Aapka quotation ${quote.id} taiyaar hai.\n` +
+      `Total: ${rupee(total)} (GST included)\n\n` +
+      `Online review + accept yahan kar sakte hain:\n${acceptUrl}\n\n` +
+      `PDF bhi attach kar raha hoon. Koi sawaal ho to bataiyega.\n\n` +
+      `Dhanyavaad,\n${me?.tenantName ?? ""}`;
+    const digits = toWhatsAppDigits(recipientPhone);
+    if (!digits) {
+      toast.error("Is customer/lead ka phone number nahi hai", {
+        description: "Customer ya lead me phone add karein, phir WhatsApp par bhej payenge.",
+      });
+      return;
+    }
+    // Device-aware target (matches the leads screen): mobile → wa.me deep link;
+    // desktop → web.whatsapp.com/send (wa.me shows a landing page on desktop).
+    const q = encodeURIComponent(message);
+    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+    const link = isMobile
+      ? `https://wa.me/${digits}?text=${q}`
+      : `https://web.whatsapp.com/send?phone=${digits}&text=${q}`;
+    // Open WhatsApp synchronously (inside the click gesture) so pop-up blockers
+    // don't eat it, THEN download the PDF for the owner to attach.
+    window.open(link, "_blank", "noopener,noreferrer");
+    setSharingWa(true);
+    try {
+      await downloadQuotePdfFile();
+      toast.success("Quote PDF download ho gaya", {
+        description: "WhatsApp chat me isi PDF ko attach kar dein.",
+      });
+    } catch (err) {
+      console.error("Quote PDF failed:", err);
+      toast.error("PDF download nahi hua — WhatsApp khul gaya, PDF alag se download karein.");
+    } finally {
+      setSharingWa(false);
+    }
+  };
   const daysLeft = quote.expires_date ? daysBetween(new Date(), quote.expires_date) : null;
 
   // Activity timeline
@@ -340,39 +418,21 @@ export default function QuoteDetailPage() {
             Preview
           </Button>
           <Button
+            variant="primary"
+            icon="whatsapp"
+            loading={sharingWa}
+            onClick={shareQuoteOnWhatsApp}
+            title="WhatsApp par bhejein — PDF download hoga, chat me attach kar dein"
+          >
+            Send on WhatsApp
+          </Button>
+          <Button
             icon="download"
             loading={downloadingPdf}
             onClick={async () => {
               setDownloadingPdf(true);
               try {
-                const { downloadQuotePDF } = await import("@/lib/pdf");
-                await downloadQuotePDF({
-                  tenantName:    me?.tenantName    ?? "Workspace",
-                  tenantGstin:   me?.tenantGstin,
-                  tenantEmail:   me?.tenantEmail,
-                  tenantPhone:   me?.tenantPhone,
-                  tenantAddress: me?.tenantAddress,
-                  quoteId:       quote.id,
-                  customerName:  quote.customer_name,
-                  contactName:   null,
-                  contactEmail:  null,
-                  contactPhone:  null,
-                  createdDate:   quote.created_at,
-                  expiresDate:   quote.expires_date,
-                  validityDays:  quote.expires_date
-                    ? Math.max(1, daysBetween(new Date(quote.created_at), quote.expires_date))
-                    : 30,
-                  lineItems:     items,
-                  subtotal:      quote.subtotal,
-                  discountPct:   quote.discount_pct,
-                  discount,
-                  taxable,
-                  taxRate:       quote.tax_rate,
-                  tax,
-                  total,
-                  interState,
-                  notes:         quote.notes ?? "",
-                });
+                await downloadQuotePdfFile();
                 toast.success(`${quote.id}.pdf downloaded`);
               } catch (err) {
                 toast.error(`PDF generation failed: ${(err as Error).message}`);
@@ -395,8 +455,7 @@ export default function QuoteDetailPage() {
               <DropdownMenuItem
                 className="gap-2.5 py-2 cursor-pointer"
                 onClick={() => {
-                  const url = `${window.location.origin}/quote/${quote.id}/accept?t=${encodeURIComponent(quote.public_token)}`;
-                  navigator.clipboard?.writeText(url);
+                  navigator.clipboard?.writeText(acceptUrl);
                   toast.success("Customer link copied · share via email or WhatsApp");
                 }}
               >
@@ -412,7 +471,7 @@ export default function QuoteDetailPage() {
                 className="gap-2.5 py-2 cursor-pointer"
                 onClick={() => setWhatsOpen(true)}
               >
-                <Icon name="whatsapp" size={15} /> {quote.status === "sent" || quote.status === "viewed" ? "Resend via WhatsApp" : "Send via WhatsApp"}
+                <Icon name="whatsapp" size={15} /> Send via WhatsApp automation (Cloud API)
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="gap-2.5 py-2 cursor-pointer"
