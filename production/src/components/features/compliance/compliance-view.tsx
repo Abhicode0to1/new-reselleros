@@ -160,12 +160,12 @@ export function ComplianceView({
                       ) : (
                         <>
                           {r.ob.filingSteps && (
-                            <Button variant="primary" icon="rocket" className="h-7 px-2.5 text-[11px]"
+                            <Button variant={r.status === "overdue" ? "primary" : "default"} icon="rocket" className="h-7 px-2.5 text-[11px]"
                               onClick={() => setGuide(r)}>
                               How to file
                             </Button>
                           )}
-                          <Button variant="default" icon="check" className="h-7 px-2.5 text-[11px]"
+                          <Button variant="ghost" icon="check" className="h-7 px-2.5 text-[11px]"
                             onClick={() => setFiling(r)}>
                             Mark filed
                           </Button>
@@ -230,12 +230,14 @@ function FilingGuideDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Honest scope: ResellerOS prepares the numbers; submission is on the portal. */}
+          {/* Honest scope: ResellerOS helps you prepare; submission is on the portal. */}
           <div className="flex items-start gap-2 rounded-md border border-hairline bg-paper-2/50 px-3 py-2 text-[12px] text-ink-2">
             <Icon name="info" size={14} className="text-amber-ink shrink-0 mt-0.5" />
             <p>
-              ResellerOS <b>prepares</b> the figures for this return. The actual submission happens on the
-              government portal — direct one-click e-filing needs a GST Suvidha Provider (a future add-on).
+              ResellerOS gives you the figures + steps. The actual submission happens on the government
+              portal ({row.ob.authority}) — {row.ob.category === "gst"
+                ? "direct one-click e-filing needs a GST Suvidha Provider (a future add-on)."
+                : "and needs your DSC / OTP, so it's done by you or your CA."}
             </p>
           </div>
 

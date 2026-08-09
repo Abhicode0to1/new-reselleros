@@ -132,6 +132,16 @@ export const OBLIGATIONS: Obligation[] = [
     category: "roc", freq: "annual", form: "AOC-4",
     penalty: "₹100/day of delay, no cap", link: "https://www.mca.gov.in",
     applies: "Every Pvt Ltd — within 30 days of the AGM (AGM by 30 Sep → due ~29 Oct).",
+    dataHref: { href: "/accounting/balance-sheet", label: "Open Balance Sheet (for the financials)" },
+    filingSteps: [
+      "Get the audited financials — Balance Sheet, P&L, notes — signed by your auditor + two directors.",
+      "Hold the AGM and adopt the accounts (AOC-4 is filed AFTER the AGM).",
+      "Log in to MCA V3 (mca.gov.in) → MCA Services → Company e-Filing → AOC-4 (AOC-4 XBRL only if applicable).",
+      "Fill company + financial details; attach audited financials, Board's report and auditor's report.",
+      "Pay the government fee (based on your authorised capital).",
+      "Affix DSC of a director + a practising professional (CA/CS/CMA) → submit → note the SRN.",
+      "Come back here → Mark filed (SRN in Reference).",
+    ],
     next: annualNext(10, 29),
   },
   {
@@ -139,6 +149,14 @@ export const OBLIGATIONS: Obligation[] = [
     category: "roc", freq: "annual", form: "MGT-7A",
     penalty: "₹100/day of delay, no cap", link: "https://www.mca.gov.in",
     applies: "Every Pvt Ltd — within 60 days of the AGM (due ~28 Nov).",
+    filingSteps: [
+      "After the AGM, prepare the annual return: shareholders, directors/KMP, shareholding pattern, meetings held during the year.",
+      "Log in to MCA V3 → Company e-Filing → MGT-7A (small company / OPC) or MGT-7.",
+      "Fill capital structure, shareholding, list of directors + changes, and meeting details.",
+      "Attach the list of shareholders and any required documents.",
+      "Pay the fee → affix DSC of a director (and a CS for MGT-7) → submit → note the SRN.",
+      "Mark filed here (SRN in Reference).",
+    ],
     next: annualNext(11, 28),
   },
   {
@@ -146,6 +164,14 @@ export const OBLIGATIONS: Obligation[] = [
     category: "roc", freq: "annual", form: "DIR-3 KYC",
     penalty: "₹5,000 per director if late", link: "https://www.mca.gov.in",
     applies: "Every director with a DIN — by 30 Sep each year.",
+    filingSteps: [
+      "Keep each director's PAN, Aadhaar, personal mobile and personal email ready (they're OTP-verified).",
+      "Go to MCA → DIR-3 KYC: use the WEB service if nothing changed since last year, or the e-form if it's the first time / details changed.",
+      "Verify the mobile + email via OTP.",
+      "e-form path: affix the director's DSC + certification by a practising professional.",
+      "Submit → note the SRN. Repeat for EVERY director holding a DIN.",
+      "Mark filed here.",
+    ],
     next: annualNext(9, 30),
   },
   {
@@ -153,6 +179,15 @@ export const OBLIGATIONS: Obligation[] = [
     category: "roc", freq: "annual", form: "DPT-3",
     penalty: "Company + officers penalty", link: "https://www.mca.gov.in",
     applies: "Companies with loans/advances outstanding — by 30 Jun for the prior FY.",
+    dataHref: { href: "/accounting/balance-sheet", label: "Open Balance Sheet (loans / advances)" },
+    filingSteps: [
+      "List every loan/advance/deposit outstanding as on 31 Mar — including director & related-party loans (check your Balance Sheet).",
+      "Get the auditor's certificate on the figures if required.",
+      "MCA V3 → Company e-Filing → DPT-3.",
+      "Fill 'money received not considered as deposits' + deposits (if any).",
+      "Pay the fee → DSC of a director + practising professional → submit → note the SRN.",
+      "Mark filed here.",
+    ],
     next: annualNext(6, 30),
   },
   {
@@ -160,6 +195,13 @@ export const OBLIGATIONS: Obligation[] = [
     category: "roc", freq: "annual", form: "ADT-1",
     penalty: "₹100/day of delay", link: "https://www.mca.gov.in",
     applies: "Only in a year an auditor is appointed/re-appointed at AGM (within 15 days).",
+    filingSteps: [
+      "The Board/AGM appoints or re-appoints the auditor; get the auditor's written consent + eligibility certificate (Sec 139/141).",
+      "MCA V3 → Company e-Filing → ADT-1, within 15 days of the AGM.",
+      "Attach the board/AGM resolution + the auditor's consent letter.",
+      "Pay the fee → affix a director's DSC → submit → note the SRN.",
+      "Mark filed here.",
+    ],
     next: annualNext(10, 14),
   },
   {
@@ -167,6 +209,13 @@ export const OBLIGATIONS: Obligation[] = [
     category: "roc", freq: "annual",
     penalty: "Up to ₹1,00,000 + ₹5,000/day", link: "https://www.mca.gov.in",
     applies: "Within 6 months of FY-end — by 30 Sep.",
+    filingSteps: [
+      "Board approves the audited accounts and fixes the AGM date, time and venue (physical or video).",
+      "Send the AGM notice with agenda to all members, directors and the auditor — at least 21 clear days in advance.",
+      "Hold the AGM by 30 Sep: adopt the accounts, appoint/ratify the auditor, declare dividend (if any).",
+      "Record the minutes + attendance register — these back your AOC-4 and MGT-7 filings.",
+      "Mark done here once the AGM is held (this is an event, not a portal filing).",
+    ],
     next: annualNext(9, 30),
   },
 
@@ -176,6 +225,16 @@ export const OBLIGATIONS: Obligation[] = [
     category: "income_tax", freq: "annual", form: "ITR-6",
     penalty: "₹5,000 late fee + interest u/s 234A", link: "https://www.incometax.gov.in",
     applies: "Audit case: by 31 Oct. Non-audit: by 31 Jul.",
+    dataHref: { href: "/accounting/pnl", label: "Open P&L (for the income figures)" },
+    filingSteps: [
+      "Finalise the audited accounts; get the tax-audit report accepted first (if applicable).",
+      "Compute total income — disallowances, depreciation as per IT Act, MAT if it applies.",
+      "incometax.gov.in → Login with the company PAN → e-File → Income Tax Return → pick the AY + ITR-6.",
+      "Import the JSON from your CA/tax software; reconcile with Form 26AS + AIS.",
+      "Pay any self-assessment tax via challan → attach → submit.",
+      "e-Verify with a director's DSC (mandatory for companies) → note the acknowledgement number.",
+      "Mark filed here.",
+    ],
     next: annualNext(10, 31),
   },
   {
@@ -183,6 +242,14 @@ export const OBLIGATIONS: Obligation[] = [
     category: "income_tax", freq: "annual", form: "3CD",
     penalty: "0.5% of turnover (max ₹1.5L)", link: "https://www.incometax.gov.in",
     applies: "If turnover > ₹1 cr (or ₹10 cr if ≤5% cash) — by 30 Sep.",
+    dataHref: { href: "/accounting/pnl", label: "Open P&L (share with your CA)" },
+    filingSteps: [
+      "A practising CA conducts the audit and prepares Form 3CA-3CD from your books.",
+      "The CA uploads the report on incometax.gov.in from their own login.",
+      "You (company) log in → Pending Actions → Worklist → ACCEPT the uploaded audit report with a director's DSC.",
+      "This must be done BEFORE filing the ITR.",
+      "Mark filed here once accepted.",
+    ],
     next: annualNext(9, 30),
   },
   {
@@ -190,6 +257,14 @@ export const OBLIGATIONS: Obligation[] = [
     category: "income_tax", freq: "quarterly",
     penalty: "Interest u/s 234B / 234C", link: "https://www.incometax.gov.in",
     applies: "If tax liability ≥ ₹10,000/yr. Due 15 Jun (15%), 15 Sep (45%), 15 Dec (75%), 15 Mar (100%).",
+    dataHref: { href: "/accounting/pnl", label: "Open P&L (to estimate profit)" },
+    filingSteps: [
+      "Estimate the year's total income + tax liability (include MAT).",
+      "Work out this instalment's cumulative % (15 / 45 / 75 / 100) minus what you've already paid.",
+      "incometax.gov.in → e-Pay Tax → Income Tax → pick the AY → type 'Advance Tax (100)'.",
+      "Enter the amount → pay via net-banking / UPI → save the challan (BSR code + serial + date).",
+      "Mark filed here (challan number in Reference).",
+    ],
     next: fixedNext((s) => [
       { dueDate: iso(s, 6, 15),  periodKey: `${s}-q1`, periodLabel: `15% · ${fyLabel(s)}` },
       { dueDate: iso(s, 9, 15),  periodKey: `${s}-q2`, periodLabel: `45% · ${fyLabel(s)}` },
@@ -204,6 +279,12 @@ export const OBLIGATIONS: Obligation[] = [
     category: "tds", freq: "monthly",
     penalty: "1.5%/month interest", link: "https://www.tin-nsdl.com",
     applies: "By the 7th of the next month (Mar TDS → 30 Apr).",
+    filingSteps: [
+      "Total the TDS you deducted in the month — salary (sec 192) + non-salary (194C/J/I/H etc.).",
+      "incometax.gov.in → e-Pay Tax → select TDS/TCS (challan 281) with the correct section codes.",
+      "Pay by the 7th → SAVE the challan (BSR code + serial + date) — you need it for the quarterly return.",
+      "Mark filed here (challan number in Reference).",
+    ],
     next: monthlyNext(7),
   },
   {
@@ -211,6 +292,15 @@ export const OBLIGATIONS: Obligation[] = [
     category: "tds", freq: "quarterly", form: "26Q",
     penalty: "₹200/day (max = TDS amount)", link: "https://www.tin-nsdl.com",
     applies: "Q1 31 Jul · Q2 31 Oct · Q3 31 Jan · Q4 31 May.",
+    dataHref: { href: "/accounting/salary-register", label: "Salary Register — 24Q working export" },
+    filingSteps: [
+      "Collect deductee details: PAN, amount paid, TDS, section — plus each challan's BSR code, serial and date.",
+      "In ResellerOS: Salary Register → '24Q working' (salary TDS); Expenses → '26Q (TDS)' (non-salary). Export both.",
+      "Open the NSDL RPU (or TDS software like ClearTDS) → import the workings + challan details.",
+      "Run the FVU validation utility → it produces the .fvu file.",
+      "Upload the .fvu on the TRACES / e-filing portal → verify with DSC or EVC → note the token number.",
+      "Mark filed here. (The app prepares the data; it can't generate the FVU itself.)",
+    ],
     next: fixedNext((s) => [
       { dueDate: iso(s, 7, 31),     periodKey: `${s}-q1`, periodLabel: `Q1 ${fyLabel(s)}` },
       { dueDate: iso(s, 10, 31),    periodKey: `${s}-q2`, periodLabel: `Q2 ${fyLabel(s)}` },
@@ -258,6 +348,14 @@ export const OBLIGATIONS: Obligation[] = [
     penalty: "₹200/day (max % of turnover)", link: "https://www.gst.gov.in/",
     applies: "Turnover > ₹2 cr — by 31 Dec for the prior FY.",
     dataHref: { href: "/accounting/gst", label: "Open GST Report for the year's figures" },
+    filingSteps: [
+      "File all 12 GSTR-1 and GSTR-3B for the year first, then reconcile them with your books.",
+      "gst.gov.in → Returns → Annual Return → GSTR-9 for the FY.",
+      "Most tables auto-populate from your 1/3B; fill the remaining (HSN summary, ITC break-up).",
+      "Reconcile GSTR-9 vs books vs GSTR-2B; prepare GSTR-9C too if turnover > ₹5 cr.",
+      "Pay any extra liability via DRC-03.",
+      "File with DSC/EVC → note the ARN → Mark filed here.",
+    ],
     next: annualNext(12, 31),
   },
 
@@ -267,6 +365,14 @@ export const OBLIGATIONS: Obligation[] = [
     category: "payroll", freq: "monthly",
     penalty: "Damages 5–25% + interest", link: "https://www.epfindia.gov.in",
     applies: "By the 15th of the next month.",
+    dataHref: { href: "/accounting/salary-register", label: "Salary Register — wages + PF for the month" },
+    filingSteps: [
+      "Prepare the ECR (Electronic Challan cum Return): each member's wages + EPF/EPS/EDLI split.",
+      "epfindia.gov.in → Unified Employer Portal → Payments → ECR Upload.",
+      "Upload the ECR text file → verify → generate the challan (TRRN).",
+      "Pay via net-banking by the 15th → save the challan.",
+      "Mark filed here.",
+    ],
     next: monthlyNext(15),
   },
   {
@@ -274,6 +380,13 @@ export const OBLIGATIONS: Obligation[] = [
     category: "payroll", freq: "monthly",
     penalty: "12% p.a. interest", link: "https://www.esic.gov.in",
     applies: "By the 15th of the next month (if ≥10 employees).",
+    dataHref: { href: "/accounting/salary-register", label: "Salary Register — wages for the month" },
+    filingSteps: [
+      "Work out the monthly contribution: employee 0.75% + employer 3.25% of wages (for employees ≤ ₹21,000/month).",
+      "esic.gov.in → Employer login → File Monthly Contribution → enter/upload the wages.",
+      "Generate the challan → pay by the 15th → save it.",
+      "Mark filed here.",
+    ],
     next: monthlyNext(15),
   },
   {
@@ -281,6 +394,13 @@ export const OBLIGATIONS: Obligation[] = [
     category: "payroll", freq: "monthly",
     penalty: "State-specific interest/penalty", link: "https://www.mahagst.gov.in",
     applies: "State rules (Maharashtra: monthly if PT > ₹1L/yr, else annual). Confirm your state.",
+    filingSteps: [
+      "Compute PT deducted from each salary per your state's slab (PT is a state tax — rules differ).",
+      "Log in to your state PT portal (Maharashtra: mahagst.gov.in → PTRC).",
+      "Enter the number of employees + total PT deducted → generate the challan → pay.",
+      "File the PTRC return at your state's frequency (monthly/annual) → note the acknowledgement.",
+      "Mark filed here.",
+    ],
     next: monthlyNext(21),
   },
 ];
