@@ -1,11 +1,11 @@
 /**
  * Setup Wizard — matches prototype screen "setup-wizard".
  *
- * 5-step first-run wizard:
+ * 5-step first-run wizard (order = first-value-first):
  *   1. Company details (legal name, GSTIN, state, address)  → SAVES to tenants
- *   2. Connect Razorpay
- *   3. Google CSP API
- *   4. Import customers (CSV / sample / fresh)
+ *   2. Import customers (CSV / fresh) — opens the real ImportCustomersDialog
+ *   3. Razorpay — preview only; real connect lives in Settings → Integrations
+ *   4. Google CSP API — preview of the 5–7 day application
  *   5. All set — celebration + next steps  → stamps setup_completed_at
  *
  * Step 1 pre-fills from `useCurrentUser` so re-running the wizard never wipes
@@ -27,6 +27,7 @@ import { useCustomers } from "@/lib/queries/customers";
 import { useUpdateTenant } from "@/lib/queries/tenant";
 import { GST_STATE_BY_CODE, gstStateFromGstin, isValidGstin, validateGstin } from "@/lib/utils";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
+import { ImportCustomersDialog } from "@/components/features/customers/import-customers-dialog";
 
 // ─── Step config ──────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ interface WizardData {
   razorpayConnected: boolean;
   cspId:         string;
   cspStage:      "intro" | "applied" | "approved";
-  importMode:    "csv" | "sample" | "skip";
+  importMode:    "csv" | "skip";
 }
 
 // ─── Field wrapper ────────────────────────────────────────────────────────────
@@ -226,13 +227,7 @@ function StepCompany({
 
 // ─── Step 2: Razorpay ────────────────────────────────────────────────────────
 
-function StepRazorpay({
-  data,
-  update,
-}: {
-  data: WizardData;
-  update: (k: keyof WizardData, v: string | boolean) => void;
-}) {
+function StepRazorpay() {
   return (
     <div className="space-y-4">
       <div>
@@ -243,67 +238,29 @@ function StepRazorpay({
         </p>
       </div>
 
-      {!data.razorpayConnected ? (
-        <>
-          <div
-            className="flex items-center justify-between gap-4 rounded-xl p-5"
-            style={{ background: "linear-gradient(135deg, #001A47 0%, #002B5C 100%)" }}
-          >
-            <div>
-              <p className="text-lg font-semibold text-white">Razorpay</p>
-              <p className="text-sm text-white/80">
-                India's #1 payment gateway · 2% per transaction · T+2 settlement
-              </p>
-            </div>
-            <Button
-              variant="primary"
-              onClick={() => update("razorpayConnected", true)}
-              className="shrink-0"
-            >
-              <Icon name="external" size={14} />
-              Connect with OAuth
-            </Button>
-          </div>
-
-          <p className="text-center text-xs text-ink-3">or enter API keys manually</p>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Razorpay Key ID">
-              <Input
-                className="font-mono"
-                placeholder="rzp_live_xxxxxxxxxxxx"
-                onChange={(e) => update("razorpayKey", e.target.value)}
-              />
-            </Field>
-            <Field label="Razorpay Secret">
-              <Input type="password" placeholder="••••••••••••" />
-            </Field>
-          </div>
-
-          <div className="flex items-start gap-2.5 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-            <Icon name="info" size={14} className="mt-0.5 shrink-0 text-amber" />
-            <p>
-              Get your keys from{" "}
-              <code className="font-mono text-xs">
-                dashboard.razorpay.com → Settings → API Keys
-              </code>
-              . We never see your secret — it's stored encrypted in your tenant only.
-            </p>
-          </div>
-        </>
-      ) : (
-        <div className="flex items-center gap-4 rounded-xl border border-emerald-300 bg-emerald-50 p-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-            <Icon name="check" size={20} />
-          </div>
-          <div>
-            <p className="font-semibold text-emerald-700">Razorpay marked as set up</p>
-            <p className="text-sm text-ink-3">
-              Finish + verify the live connection in Settings → Integrations before taking real payments.
-            </p>
-          </div>
+      <div
+        className="flex items-center justify-between gap-4 rounded-xl p-5"
+        style={{ background: "linear-gradient(135deg, #001A47 0%, #002B5C 100%)" }}
+      >
+        <div>
+          <p className="text-lg font-semibold text-white">Razorpay</p>
+          <p className="text-sm text-white/80">
+            India's #1 payment gateway · 2% per transaction · T+2 settlement
+          </p>
         </div>
-      )}
+      </div>
+
+      {/* Honest: this wizard step is a preview. The real connection (keys +
+          verify) lives in Settings → Integrations — we don't fake a "connected"
+          state here or capture keys that wouldn't be saved. */}
+      <div className="flex items-start gap-2.5 rounded-lg bg-amber-soft p-3 text-sm text-amber-ink">
+        <Icon name="info" size={14} className="mt-0.5 shrink-0" />
+        <p>
+          Razorpay abhi connect karna zaroori nahi. Setup ke baad <strong>Settings →
+          Integrations</strong> me apni Razorpay keys daal ke 2 minute me live payments
+          on kar sakte hain. Tab tak aap quotes/invoices bana ke WhatsApp par bhej sakte hain.
+        </p>
+      </div>
     </div>
   );
 }
@@ -422,16 +379,9 @@ const IMPORT_OPTIONS = [
   {
     id:   "csv"    as const,
     icon: "upload",
-    title: "CSV Import",
-    body:  "Upload Excel/CSV with customer + subscription data",
-    cta:   "Choose file",
-  },
-  {
-    id:   "sample" as const,
-    icon: "sparkles",
-    title: "Sample data",
-    body:  "Pre-loaded with 7 demo customers · explore first",
-    cta:   "Load sample",
+    title: "CSV / Excel import",
+    body:  "Upload your existing customer list — Zoho/Tally exports work too",
+    cta:   "Open importer",
   },
   {
     id:   "skip"   as const,
@@ -449,6 +399,8 @@ function StepImport({
   data: WizardData;
   update: (k: keyof WizardData, v: string | boolean) => void;
 }) {
+  const [importOpen, setImportOpen] = React.useState(false);
+
   return (
     <div className="space-y-4">
       <div>
@@ -461,14 +413,18 @@ function StepImport({
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {IMPORT_OPTIONS.map((opt) => {
           const active = data.importMode === opt.id;
           return (
             <button
               key={opt.id}
               type="button"
-              onClick={() => update("importMode", opt.id)}
+              onClick={() => {
+                update("importMode", opt.id);
+                // CSV is the real path — open the actual importer straight away.
+                if (opt.id === "csv") setImportOpen(true);
+              }}
               className={cn(
                 "rounded-xl border p-4 text-left transition-all",
                 active
@@ -500,18 +456,21 @@ function StepImport({
       </div>
 
       {data.importMode === "csv" && (
-        <div className="flex items-center justify-between rounded-lg bg-paper-2 p-3 text-sm text-ink-3">
-          <span>📎 Need the template? Download our CSV template with sample rows.</span>
+        <div className="flex items-center justify-between gap-3 rounded-lg bg-paper-2 p-3 text-sm text-ink-3">
+          <span>📎 The importer has a downloadable template + Zoho/Tally header matching.</span>
           <Button
-            variant="ghost"
+            variant="primary"
             size="sm"
-            onClick={() => toast.info("Template download coming soon")}
+            className="shrink-0"
+            onClick={() => setImportOpen(true)}
           >
-            <Icon name="download" size={13} />
-            Template
+            <Icon name="upload" size={13} />
+            Open importer
           </Button>
         </div>
       )}
+
+      <ImportCustomersDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 }
@@ -860,7 +819,7 @@ export default function SetupPage() {
         <Card className="p-6">
           {step === 0 && <StepCompany  data={data} update={update} />}
           {step === 1 && <StepImport   data={data} update={update} />}
-          {step === 2 && <StepRazorpay data={data} update={update} />}
+          {step === 2 && <StepRazorpay />}
           {step === 3 && <StepCsp      data={data} update={update} />}
           {step === 4 && <StepDone />}
         </Card>

@@ -34,6 +34,7 @@ import { Icon } from "@/components/ui/icon";
 import { FAB } from "@/components/ui/fab";
 import { rupee, formatDate, daysBetween } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { downloadCSV } from "@/lib/csv";
 import type { Subscription } from "@/lib/supabase/database.types";
 import { renewalStateLabel, renewalStateTone } from "@/lib/renewals/cadence";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -662,7 +663,44 @@ export default function RenewalsPage() {
 
   const activeSubs    = all.filter((s) => s.status === "active").length;
   const topHighRisk   = highRiskSubs[0]?.sub.customer_name ?? "a key customer";
+  // Real, computed reasons for the top high-risk sub — never fabricate signals
+  // (NPS/logins) we don't collect on a money screen.
+  const topReasons    = highRiskSubs[0] ? renewalRisk(highRiskSubs[0].sub).reasons : [];
   const firstUpcoming = upcoming[0];
+
+  // Real CSV export of the renewals pipeline (next 90 days) — raw integer ₹ so
+  // Excel/Tally treat amounts as numbers. Replaces the old "coming soon" stub.
+  const handleExport = () => {
+    if (upcoming90.length === 0) {
+      toast.info("Abhi export karne ke liye koi renewal nahi hai (agle 90 din)");
+      return;
+    }
+    const rows = upcoming90
+      .slice()
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .map(({ sub, daysUntil }) => {
+        const risk = renewalRisk(sub);
+        return [
+          sub.customer_name,
+          sub.plan,
+          sub.vendor,
+          sub.seats,
+          sub.used,
+          sub.mrr,
+          sub.mrr * 12,
+          sub.renewal_date ? formatDate(sub.renewal_date) : "",
+          daysUntil,
+          sub.outstanding_amount,
+          risk.label,
+        ];
+      });
+    downloadCSV(
+      "renewals-next-90-days.csv",
+      ["Customer", "Plan", "Vendor", "Seats", "Used", "MRR (₹)", "ARR (₹)", "Renewal date", "Days until", "Outstanding (₹)", "Risk"],
+      rows,
+    );
+    toast.success(`${rows.length} renewal${rows.length === 1 ? "" : "s"} export ho gaye`);
+  };
 
   // Real bulk reminder — actually calls the per-sub send-now endpoint for every
   // subscription renewing within 30 days, then reports the true count (and
@@ -721,7 +759,7 @@ export default function RenewalsPage() {
           <Button
             variant="default"
             size="sm"
-            onClick={() => toast.info("Export coming soon")}
+            onClick={handleExport}
           >
             <Icon name="download" size={14} />
             Export
@@ -777,13 +815,14 @@ export default function RenewalsPage() {
               {highRiskSubs.length !== 1 ? "s" : ""} worth{" "}
               {rupee(highRiskArr, { compact: true })} ARR detected.
             </strong>{" "}
-            Top priority: <strong>{topHighRisk}</strong> — low seat usage + poor NPS.
-            Call this week with a usage report and upgrade incentive.
+            Top priority: <strong>{topHighRisk}</strong>
+            {topReasons.length > 0 ? <> — {topReasons.join(" · ").toLowerCase()}</> : null}.
+            Call or WhatsApp this week to secure the renewal.
             {firstUpcoming && (
               <>
                 {" "}
                 <strong>{firstUpcoming.sub.customer_name}</strong> renews in{" "}
-                {firstUpcoming.daysUntil} days — try WhatsApp if no email response.
+                {firstUpcoming.daysUntil} days.
               </>
             )}
           </GeminiCard>
