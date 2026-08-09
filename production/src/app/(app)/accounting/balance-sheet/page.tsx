@@ -10,13 +10,13 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useConfirm } from "@/components/providers/confirm-provider";
@@ -177,22 +177,24 @@ export default function BalanceSheetPage() {
             <Card className="p-5 md:p-6">
               <SectionTitle>Assets</SectionTitle>
               <div className="space-y-1 mt-3">
-                <BSLine label="Cash & bank balances" amount={auto?.cashAndBank ?? 0} auto />
-                <BSLine label="Trade receivables" hint="customers' unpaid balances" amount={auto?.receivables ?? 0} auto />
+                <BSLine label="Cash & bank balances" amount={auto?.cashAndBank ?? 0} kind="auto" source="Banking" href="/accounting/banking" />
+                <BSLine label="Trade receivables" hint="customers' unpaid balances" amount={auto?.receivables ?? 0} kind="auto" source="unpaid invoices" href="/invoices" />
                 {(auto?.projectReceivable ?? 0) > 0 && (
-                  <BSLine label="Project receivables" hint="one-time / custom project sales, unpaid" amount={auto?.projectReceivable ?? 0} auto />
+                  <BSLine label="Project receivables" hint="one-time / custom project sales, unpaid" amount={auto?.projectReceivable ?? 0} kind="auto" source="project invoices" href="/invoices" />
                 )}
-                <BSLine label="TDS receivable" hint="credits from customers' TDS" amount={auto?.tdsReceivable ?? 0} auto />
+                <BSLine label="TDS receivable" hint="credits from customers' TDS" amount={auto?.tdsReceivable ?? 0} kind="auto" source="TDS Receivable" href="/accounting/tds-receivable" />
                 {(auto?.employeeLoans ?? 0) > 0 && (
-                  <BSLine label="Employee loans / advances" hint="outstanding, owed back" amount={auto?.employeeLoans ?? 0} auto />
+                  <BSLine label="Employee loans / advances" hint="outstanding, owed back" amount={auto?.employeeLoans ?? 0} kind="auto" source="Loans" href="/accounting/loans" />
                 )}
                 {(auto?.fixedAssets ?? 0) > 0 && (
-                  <BSLine label="Fixed assets (EMI purchases)" hint="vehicles, equipment at cost" amount={auto?.fixedAssets ?? 0} auto />
+                  <BSLine label="Fixed assets (EMI purchases)" hint="vehicles, equipment at cost" amount={auto?.fixedAssets ?? 0} kind="auto" source="Assets & EMIs" href="/accounting/assets" />
                 )}
-                {gstCredit > 0 && <BSLine label="GST input credit (ITC)" amount={gstCredit} auto />}
-                {manualAssetRows.map((r) => (
-                  <BSLine key={r.id} label={r.label} amount={r.amount} onEdit={() => setEditItem(r)} onDelete={async () => { if (await confirm({ title: "Remove line?", body: `Remove "${r.label}" from the balance sheet?`, confirmLabel: "Remove", danger: true })) del.mutate(r.id); }} />
-                ))}
+                {gstCredit > 0 && <BSLine label="GST input credit (ITC)" amount={gstCredit} kind="auto" source="GST Reports" href="/accounting/gst" />}
+                <ManualLines
+                  rows={manualAssetRows}
+                  onEdit={setEditItem}
+                  onDelete={async (r) => { if (await confirm({ title: "Remove line?", body: `Remove "${r.label}" from the balance sheet?`, confirmLabel: "Remove", danger: true })) del.mutate(r.id); }}
+                />
               </div>
               <TotalLine label="Total Assets" amount={totalAssets} />
             </Card>
@@ -201,44 +203,49 @@ export default function BalanceSheetPage() {
             <Card className="p-5 md:p-6">
               <SectionTitle>Liabilities</SectionTitle>
               <div className="space-y-1 mt-3">
-                <BSLine label="Trade payables" hint="unpaid vendor bills" amount={auto?.payables ?? 0} auto />
+                <BSLine label="Trade payables" hint="unpaid vendor bills" amount={auto?.payables ?? 0} kind="auto" source="COGS Bills" href="/accounting/bills" />
                 {(auto?.salaryPayable ?? 0) > 0 && (
-                  <BSLine label="Salary payable" hint="payroll run, not yet paid out" amount={auto?.salaryPayable ?? 0} auto />
+                  <BSLine label="Salary payable" hint="payroll run, not yet paid out" amount={auto?.salaryPayable ?? 0} kind="auto" source="Payroll" href="/payroll" />
                 )}
                 {(auto?.salaryDuesPayable ?? 0) > 0 && (
-                  <BSLine label="Salary dues payable" hint="withheld TDS/PF/ESI, not yet remitted" amount={auto?.salaryDuesPayable ?? 0} auto />
+                  <BSLine label="Salary dues payable" hint="withheld TDS/PF/ESI, not yet remitted" amount={auto?.salaryDuesPayable ?? 0} kind="auto" source="Payroll" href="/payroll" />
                 )}
                 {(auto?.reimbursementsPayable ?? 0) > 0 && (
-                  <BSLine label="Reimbursements payable" hint="expenses paid from someone's own card, not yet repaid" amount={auto?.reimbursementsPayable ?? 0} auto />
+                  <BSLine label="Reimbursements payable" hint="expenses paid from someone's own card, not yet repaid" amount={auto?.reimbursementsPayable ?? 0} kind="auto" source="Reimbursements" href="/accounting/reimbursements" />
                 )}
                 {(auto?.creditCardPayable ?? 0) > 0 && (
-                  <BSLine label="Credit card payable" hint="company credit cards ka owe / udhari" amount={auto?.creditCardPayable ?? 0} auto />
+                  <BSLine label="Credit card payable" hint="company credit cards ka owe / udhari" amount={auto?.creditCardPayable ?? 0} kind="auto" source="Banking" href="/accounting/banking" />
                 )}
                 {(auto?.emiLoansPayable ?? 0) > 0 && (
-                  <BSLine label="EMI / asset loans" hint="outstanding financing on purchases" amount={auto?.emiLoansPayable ?? 0} auto />
+                  <BSLine label="EMI / asset loans" hint="outstanding financing on purchases" amount={auto?.emiLoansPayable ?? 0} kind="auto" source="Assets & EMIs" href="/accounting/assets" />
                 )}
                 {(auto?.businessLoansPayable ?? 0) > 0 && (
-                  <BSLine label="Bank / business loans" hint="outstanding principal on borrowings" amount={auto?.businessLoansPayable ?? 0} auto />
+                  <BSLine label="Bank / business loans" hint="outstanding principal on borrowings" amount={auto?.businessLoansPayable ?? 0} kind="auto" source="Business Loans" href="/accounting/business-loans" />
                 )}
                 {gstPayable > 0 && (
-                  <BSLine label="GST payable" hint={`net, ${auto?.fyLabel ?? "this FY"} — before filing`} amount={gstPayable} auto />
+                  <BSLine label="GST payable" hint={`net, ${auto?.fyLabel ?? "this FY"} — before filing`} amount={gstPayable} kind="auto" source="GST Reports" href="/accounting/gst" />
                 )}
-                {manualLiabRows.map((r) => (
-                  <BSLine key={r.id} label={r.label} amount={r.amount} onEdit={() => setEditItem(r)} onDelete={async () => { if (await confirm({ title: "Remove line?", body: `Remove "${r.label}" from the balance sheet?`, confirmLabel: "Remove", danger: true })) del.mutate(r.id); }} />
-                ))}
+                <ManualLines
+                  rows={manualLiabRows}
+                  onEdit={setEditItem}
+                  onDelete={async (r) => { if (await confirm({ title: "Remove line?", body: `Remove "${r.label}" from the balance sheet?`, confirmLabel: "Remove", danger: true })) del.mutate(r.id); }}
+                />
               </div>
               <TotalLine label="Total Liabilities" amount={totalLiab} muted />
 
               <div className="mt-6">
                 <SectionTitle>Equity (net worth)</SectionTitle>
                 <div className="space-y-1 mt-3">
-                  {manualEqRows.map((r) => (
-                    <BSLine key={r.id} label={r.label} amount={r.amount} onEdit={() => setEditItem(r)} onDelete={async () => { if (await confirm({ title: "Remove line?", body: `Remove "${r.label}" from the balance sheet?`, confirmLabel: "Remove", danger: true })) del.mutate(r.id); }} />
-                  ))}
+                  <ManualLines
+                    rows={manualEqRows}
+                    onEdit={setEditItem}
+                    onDelete={async (r) => { if (await confirm({ title: "Remove line?", body: `Remove "${r.label}" from the balance sheet?`, confirmLabel: "Remove", danger: true })) del.mutate(r.id); }}
+                  />
                   <BSLine
                     label="Retained earnings"
                     hint="derived so the sheet balances"
                     amount={retained}
+                    kind="derived"
                   />
                 </div>
                 <TotalLine label="Total Equity" amount={netWorth} muted />
@@ -280,41 +287,135 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function BSLine({
-  label, hint, amount, auto, onEdit, onDelete,
-}: {
-  label: string; hint?: string; amount: number; auto?: boolean; onEdit?: () => void; onDelete?: () => void;
-}) {
+// Indian accounting notation — negatives in parentheses + red, e.g. (₹2,86,708).
+function fmtBS(amount: number): string {
+  return amount < 0 ? `(${rupee(Math.abs(amount))})` : rupee(amount);
+}
+
+/** Source-origin badge: 'auto' (pulled from records) vs 'manual' (owner-added)
+ *  vs 'derived' (a balancing figure). Distinct colour + icon + explaining tooltip. */
+function OriginBadge({ kind, source }: { kind: "auto" | "manual" | "derived"; source?: string }) {
+  const cfg = {
+    auto:    { icon: "sparkles" as const, cls: "bg-indigo/10 text-indigo",     text: "auto",    tip: source ? `Auto — from ${source}` : "Auto — pulled from your ResellerOS records" },
+    manual:  { icon: "edit" as const,     cls: "bg-amber-soft text-amber-ink", text: "manual",  tip: "Manual — you added this line by hand" },
+    derived: { icon: "zap" as const,      cls: "bg-slate-soft text-slate",     text: "derived", tip: "Derived — computed so the sheet balances" },
+  }[kind];
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1 group">
-      <div className="min-w-0 flex items-center gap-1.5">
-        <span className="text-sm text-ink truncate">{label}</span>
-        {auto && <Badge kind="muted" size="sm">auto</Badge>}
-        {hint && <span className="text-[11px] text-ink-3 hidden sm:inline">· {hint}</span>}
-        {onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="opacity-0 group-hover:opacity-100 text-ink-3 hover:text-ink transition-opacity"
-            aria-label={`Edit ${label}`}
-          >
-            <Icon name="edit" size={12} />
-          </button>
-        )}
-        {onDelete && (
-          <button
-            type="button"
-            onClick={onDelete}
-            className="opacity-0 group-hover:opacity-100 text-ink-3 hover:text-rose transition-opacity"
-            aria-label={`Remove ${label}`}
-          >
-            <Icon name="trash" size={12} />
-          </button>
-        )}
+    <span title={cfg.tip} className={`inline-flex items-center gap-0.5 rounded-full ${cfg.cls} px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide align-middle`}>
+      <Icon name={cfg.icon} size={9} /> {cfg.text}
+    </span>
+  );
+}
+
+function BSLine({
+  label, hint, amount, kind, source, href, onEdit, onDelete,
+}: {
+  label: string; hint?: string; amount: number;
+  kind?: "auto" | "manual" | "derived";
+  source?: string; href?: string;
+  onEdit?: () => void; onDelete?: () => void;
+}) {
+  const router = useRouter();
+  const clickable = !!href;
+  const go = () => { if (href) router.push(href as never); };
+  return (
+    <div
+      className={`flex items-start justify-between gap-3 py-1.5 group rounded-md ${clickable ? "cursor-pointer hover:bg-paper-2/50 -mx-2 px-2" : ""}`}
+      {...(clickable ? {
+        role: "button", tabIndex: 0, onClick: go,
+        onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } },
+        title: "Open the source ledger",
+      } : {})}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-sm text-ink">{label}</span>
+          {kind && <OriginBadge kind={kind} source={source} />}
+          {clickable && <Icon name="arrow_right" size={12} className="text-ink-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+          {onEdit && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="opacity-0 group-hover:opacity-100 text-ink-3 hover:text-ink transition-opacity" aria-label={`Edit ${label}`}>
+              <Icon name="edit" size={12} />
+            </button>
+          )}
+          {onDelete && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="opacity-0 group-hover:opacity-100 text-ink-3 hover:text-rose transition-opacity" aria-label={`Remove ${label}`}>
+              <Icon name="trash" size={12} />
+            </button>
+          )}
+        </div>
+        {hint && <div className="text-[11px] text-ink-3 mt-0.5 leading-snug">{hint}</div>}
       </div>
-      <span className={`font-mono text-sm tabular-nums whitespace-nowrap ${amount < 0 ? "text-rose" : "text-ink"}`}>
-        {amount < 0 ? "−" : ""}{rupee(Math.abs(amount))}
+      <span className={`font-mono text-sm tabular-nums whitespace-nowrap shrink-0 ${amount < 0 ? "text-rose" : "text-ink"}`}>
+        {fmtBS(amount)}
       </span>
+    </div>
+  );
+}
+
+/** Manual lines for a section — identical labels (e.g. two "Owner's capital")
+ *  fold under ONE parent showing the combined total, expandable to the entries. */
+function ManualLines({
+  rows, onEdit, onDelete,
+}: {
+  rows: BalanceSheetItem[];
+  onEdit: (r: BalanceSheetItem) => void;
+  onDelete: (r: BalanceSheetItem) => void;
+}) {
+  // Preserve first-seen order of labels.
+  const order: string[] = [];
+  const byLabel = new Map<string, BalanceSheetItem[]>();
+  for (const r of rows) {
+    if (!byLabel.has(r.label)) { byLabel.set(r.label, []); order.push(r.label); }
+    byLabel.get(r.label)!.push(r);
+  }
+  return (
+    <>
+      {order.map((label) => {
+        const rs = byLabel.get(label)!;
+        if (rs.length === 1) {
+          return <BSLine key={rs[0].id} label={label} amount={rs[0].amount} kind="manual"
+            onEdit={() => onEdit(rs[0])} onDelete={() => onDelete(rs[0])} />;
+        }
+        return <ManualGroup key={label} label={label} rows={rs} onEdit={onEdit} onDelete={onDelete} />;
+      })}
+    </>
+  );
+}
+
+function ManualGroup({
+  label, rows, onEdit, onDelete,
+}: {
+  label: string; rows: BalanceSheetItem[];
+  onEdit: (r: BalanceSheetItem) => void;
+  onDelete: (r: BalanceSheetItem) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  return (
+    <div>
+      <div
+        className="flex items-start justify-between gap-3 py-1.5 rounded-md cursor-pointer hover:bg-paper-2/50 -mx-2 px-2"
+        role="button" tabIndex={0} onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((o) => !o); } }}
+      >
+        <div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap">
+          <Icon name={open ? "chevron_down" : "arrow_right"} size={13} className="text-ink-3 shrink-0" />
+          <span className="text-sm text-ink">{label}</span>
+          <OriginBadge kind="manual" />
+          <span className="text-[11px] text-ink-3">· {rows.length} entries</span>
+        </div>
+        <span className={`font-mono text-sm tabular-nums whitespace-nowrap shrink-0 ${total < 0 ? "text-rose" : "text-ink"}`}>{fmtBS(total)}</span>
+      </div>
+      {open && (
+        <div className="pl-5 border-l border-hairline ml-1">
+          {rows.map((r) => (
+            <BSLine key={r.id} label={r.notes?.trim() || label} amount={r.amount}
+              onEdit={() => onEdit(r)} onDelete={() => onDelete(r)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -324,7 +425,7 @@ function TotalLine({ label, amount, muted }: { label: string; amount: number; mu
     <div className={`mt-3 pt-2 border-t ${muted ? "border-hairline" : "border-ink-2 border-t-2"} flex items-baseline justify-between gap-3`}>
       <span className={`${muted ? "text-sm text-ink-2" : "text-sm font-semibold text-ink"}`}>{label}</span>
       <span className={`font-mono tabular-nums whitespace-nowrap ${muted ? "text-base text-ink" : "font-serif text-xl text-ink"} ${amount < 0 ? "!text-rose" : ""}`}>
-        {amount < 0 ? "−" : ""}{rupee(Math.abs(amount))}
+        {fmtBS(amount)}
       </span>
     </div>
   );
