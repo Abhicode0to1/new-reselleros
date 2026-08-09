@@ -20,6 +20,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -53,6 +54,7 @@ const schema = z.object({
   gst_paid:       z.coerce.number().min(0).default(0),
   payment_method: z.string().optional(),
   description:    z.string().optional(),
+  notes:          z.string().optional(),        // longer free-text comment / extra detail
   tds_section:    z.string().optional(),        // 26Q — TDS deducted on this payment
   tds_amount:     z.coerce.number().min(0).default(0),
 });
@@ -334,6 +336,7 @@ export function AddExpenseDialog({
           gst_paid:       expense.currency !== "INR" && expense.fx_rate ? Math.round((expense.gst_paid / expense.fx_rate) * 100) / 100 : expense.gst_paid,
           payment_method: expense.payment_method ?? "bank_transfer",
           description:    expense.description ?? "",
+          notes:          expense.notes ?? "",
           tds_section:    expense.tds_section ?? "",
           tds_amount:     expense.tds_amount ?? 0,
         }
@@ -437,6 +440,8 @@ export function AddExpenseDialog({
       tds_amount:  Math.round(values.tds_amount || 0),
       // Source bank account for a bank/UPI/card/cheque payment (not cash).
       bank_account_id: paid && values.payment_method !== "cash" ? (bankAccountId || null) : null,
+      // Longer free-text comment / extra detail (optional).
+      notes: values.notes?.trim() || null,
     };
     // Cash only leaves petty cash once actually PAID — an unpaid bill must not.
     const pettyCash = paid && values.payment_method === "cash" ? (pettyCashAccountId || null) : null;
@@ -996,6 +1001,17 @@ export function AddExpenseDialog({
               </p>
             </FormField>
           )}
+
+          {/* Comment — longer free-text detail about this expense. */}
+          <FormField label="Comment (optional)" htmlFor="notes">
+            <Textarea
+              id="notes"
+              rows={2}
+              placeholder="e.g. Ranjeet ka birthday gift — company ne Prateek ke a/c me bheja, Prateek ne cash Ranjeet ko diya"
+              {...register("notes")}
+            />
+            <p className="text-[10px] text-ink-3 mt-1">Koi bhi extra detail — kis liye, kiske through, koi note. Report/detail me dikhega.</p>
+          </FormField>
 
           <DialogFooter>
             <Button type="button" variant="default" onClick={onClose}>Cancel</Button>

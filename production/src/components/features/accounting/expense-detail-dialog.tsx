@@ -139,6 +139,14 @@ export function ExpenseDetailDialog({ expense, onEdit, onClose }: {
             </div>
           </div>
 
+          {/* Comment / extra detail */}
+          {expense.notes && (
+            <div className="rounded-lg border border-hairline bg-paper-2/30 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Comment</div>
+              <p className="text-[13px] text-ink-2 whitespace-pre-wrap leading-relaxed">{expense.notes}</p>
+            </div>
+          )}
+
           {expense.attachment_url && (
             <button type="button" onClick={openAttachment} disabled={openingBill}
               className="flex items-center gap-1.5 text-[12px] text-amber-ink hover:underline disabled:opacity-60">
