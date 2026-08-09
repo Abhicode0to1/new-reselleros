@@ -726,6 +726,9 @@ type LeadRow = {
   /** Migration 0108 — 'fresh' = net-new subscription · 'switch' = already
    *  subscribed elsewhere, moving vendor/reseller to us (migration/transfer). */
   subscription_type: "fresh" | "switch" | null;
+  /** Migration 0197 — the master contact (person) this lead belongs to.
+   *  Auto-linked on insert via resolve_or_create_contact. */
+  contact_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -756,6 +759,7 @@ type LeadInsert = {
   country?:            string;
   subscription_type?:  "fresh" | "switch" | null;
   is_junk?:            boolean;
+  contact_id?:         string | null;
 }
 type LeadUpdate = Partial<LeadInsert>;
 
@@ -2310,7 +2314,7 @@ type CampaignTemplateUpdate = Partial<Omit<CampaignTemplateInsert, "tenant_id" |
 // ============================================================
 // Contacts — standalone directory (migration 0030)
 // ============================================================
-export type ContactSource     = "manual" | "google_csv" | "google_api" | "outlook" | "linkedin" | "event" | "other";
+export type ContactSource     = "manual" | "google_csv" | "google_api" | "outlook" | "linkedin" | "event" | "other" | "enquiry";
 export type ContactStatus     = "pending" | "engaged" | "promoted" | "archived";
 
 /** One email/phone entry on a contact. label ∈ mobile|work|home|other. */

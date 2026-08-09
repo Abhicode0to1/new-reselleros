@@ -321,7 +321,7 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
 
   // ── PUSH ── build the unified app-people list from all three sources.
   const [contactsRes, leadsRes, customersRes] = await Promise.all([
-    admin.from("contacts").select("id, full_name, emails, phones, email, phone, company, title, notes, website, updated_at").eq("tenant_id", tenantId),
+    admin.from("contacts").select("id, full_name, emails, phones, email, phone, company, title, notes, website, source, updated_at").eq("tenant_id", tenantId),
     admin.from("leads").select("id, company, contact_name, contact_email, contact_phone, is_junk, updated_at").eq("tenant_id", tenantId),
     admin.from("customers").select("id, name, contact_name, contact_email, contact_phone, updated_at").eq("tenant_id", tenantId),
   ]);
@@ -359,6 +359,10 @@ export async function syncUserContacts(admin: Admin, userId: string, tenantId: s
   const candidates: Candidate[] = [];
 
   for (const c of contacts ?? []) {
+    // 'enquiry' contacts are shadow identities auto-created for leads (see
+    // migration 0197). The lead/customer already carries this person to Google —
+    // pushing the shadow too would create a DUPLICATE Google contact. Skip them.
+    if ((c as { source?: string }).source === "enquiry") continue;
     if (!(c.full_name?.trim() || c.email || c.phone || (c.emails?.length ?? 0) || (c.phones?.length ?? 0))) continue;
     candidates.push({ st: "contact", id: c.id, updatedAt: c.updated_at ? Date.parse(c.updated_at) : 0, person: contactRowToPerson(c), mask: CONTACT_MASK });
   }

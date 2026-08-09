@@ -44,6 +44,10 @@ export interface UnifiedContact {
   phones?: string[];
   /** How many source rows were merged into this identity (1 = not merged). */
   mergedCount?: number;
+  /** The master contact id this row is tied to — a lead's `contact_id`, or an
+   *  imported contact's own id. Used to union a lead with its shadow contact
+   *  even if their channels were later edited apart. */
+  linkId?: string | null;
 }
 
 /** A contact's unified "kind" for filtering + badges. Leads/customers derive it
@@ -71,7 +75,7 @@ export function useAllContacts() {
       const [leadsRes, customersRes, vendorsRes, partnersRes, importedRes] = await Promise.all([
         supabase
           .from("leads")
-          .select("id, company, contact_name, contact_email, contact_phone, stage, created_at, is_junk"),
+          .select("id, company, contact_name, contact_email, contact_phone, stage, created_at, is_junk, contact_id"),
         supabase
           .from("customers")
           .select("id, name, contact_name, contact_title, contact_email, contact_phone, health, created_at"),
@@ -87,6 +91,12 @@ export function useAllContacts() {
         supabase
           .from("contacts")
           .select("id, full_name, email, phone, company, title, source, status, relationship, promoted_to_lead_id, created_at")
+          // 'enquiry' contacts are durable identity anchors auto-created for leads
+          // (migration 0197). They're never shown directly — the lead they belong
+          // to already represents the person in the book (and if that lead is junk,
+          // it's hidden, so its anchor must stay hidden too). They exist only to
+          // give leads a stable contact_id + accumulate a person's channels.
+          .neq("source", "enquiry")
           // Hide promoted contacts ONLY while their lead still exists (they show
           // via that lead row). If the lead was later deleted, promoted_to_lead_id
           // is SET NULL by the FK — then re-show the contact so a real person
@@ -115,6 +125,7 @@ export function useAllContacts() {
           title:     null,
           status:    l.stage,
           createdAt: l.created_at,
+          linkId:    (l as { contact_id?: string | null }).contact_id ?? null,
         }));
 
       const fromCustomers: UnifiedContact[] = (customersRes.data ?? [])
@@ -175,6 +186,7 @@ export function useAllContacts() {
         importedFrom: c.source,
         relationship: c.relationship,
         createdAt:    c.created_at,
+        linkId:       c.id,
       }));
 
       // ── Identity grouping ────────────────────────────────────────────────
@@ -219,6 +231,7 @@ export function useAllContacts() {
         for (const key of [
           normEmail(c.email) && `e:${normEmail(c.email)}`,
           normPhone(c.phone) && `p:${normPhone(c.phone)}`,
+          c.linkId && `k:${c.linkId}`,
         ]) {
           if (!key) continue;
           const prev = keyToRow.get(key);
