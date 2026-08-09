@@ -297,6 +297,68 @@ export function useAllContacts() {
 }
 
 // ============================================================
+// Celebrations — upcoming birthdays / anniversaries (migration 0198).
+// Powers the notification-bell reminder + 1-tap WhatsApp wish. Pure client
+// derivation; month-day match ignoring year, next occurrence within N days.
+// ============================================================
+
+export interface Celebration {
+  id:        string;                    // `${kind}:${contactId}` — stable key
+  contactId: string;
+  name:      string;
+  kind:      "birthday" | "anniversary";
+  dateISO:   string;                    // stored YYYY-MM-DD
+  inDays:    number;                    // 0 = today
+  age:       number | null;             // years turning (birthday, if year known)
+  phone:     string | null;
+}
+
+export function useCelebrations(daysAhead = 7) {
+  return useQuery({
+    queryKey: ["contacts", "celebrations", daysAhead],
+    queryFn: async (): Promise<Celebration[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("contacts")
+        .select("id, full_name, phone, birthday, anniversary")
+        .or("birthday.not.is.null,anniversary.not.is.null");
+      if (error) throw error;
+
+      // "Today" in IST (matches the rest of the app's day boundary).
+      const istNow = new Date(Date.now() + 5.5 * 3600 * 1000);
+      const ty = istNow.getUTCFullYear(), tm = istNow.getUTCMonth(), tdte = istNow.getUTCDate();
+      const todayUTC = Date.UTC(ty, tm, tdte);
+
+      const out: Celebration[] = [];
+      const consider = (
+        contactId: string, name: string | null, phone: string | null,
+        kind: Celebration["kind"], dateStr: string | null,
+      ) => {
+        if (!dateStr) return;
+        const d = new Date(`${dateStr}T00:00:00Z`);
+        if (Number.isNaN(d.getTime())) return;
+        const bm = d.getUTCMonth(), bd = d.getUTCDate();
+        let occ = Date.UTC(ty, bm, bd);
+        if (occ < todayUTC) occ = Date.UTC(ty + 1, bm, bd);      // already passed → next year
+        const inDays = Math.round((occ - todayUTC) / 86_400_000);
+        if (inDays > daysAhead) return;
+        const birthYear = d.getUTCFullYear();
+        const age = kind === "birthday" && birthYear > 1900
+          ? new Date(occ).getUTCFullYear() - birthYear
+          : null;
+        out.push({ id: `${kind}:${contactId}`, contactId, name: name ?? "Contact", kind, dateISO: dateStr, inDays, age, phone });
+      };
+
+      for (const c of data ?? []) {
+        consider(c.id, c.full_name, c.phone, "birthday", (c as { birthday?: string | null }).birthday ?? null);
+        consider(c.id, c.full_name, c.phone, "anniversary", (c as { anniversary?: string | null }).anniversary ?? null);
+      }
+      return out.sort((a, b) => a.inDays - b.inDays);
+    },
+  });
+}
+
+// ============================================================
 // Standalone contacts (the real `contacts` table) — full CRUD.
 // These are the owner's own people: networking / marketing / personal
 // outreach contacts with rich profile detail (social + address).
