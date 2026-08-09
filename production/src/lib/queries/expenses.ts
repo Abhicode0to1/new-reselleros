@@ -193,11 +193,11 @@ export function useUnreconciledExpenses() {
         // Only PAID expenses moved money, so only they can match a bank line.
         // An unpaid payable has no cash movement yet — keep it out.
         .eq("paid", true)
-        // 'statutory' expenses (e.g. employer-ESI accrual) are settled via the
-        // statutory payable, never matched to a single bank line — keep them out
-        // of the reconcile candidate list. (.or keeps NULL payment_method rows,
-        // which a bare .neq would silently drop.)
-        .or("payment_method.is.null,payment_method.neq.statutory")
+        // 'statutory' (employer-ESI accrual) and 'advance' (funded from a prepaid
+        // advance — the bank line was the advance payment) expenses have no bank
+        // line of their own, so keep them out of the reconcile candidate list.
+        // (.or keeps NULL payment_method rows, which a bare .neq would drop.)
+        .or("payment_method.is.null,and(payment_method.neq.statutory,payment_method.neq.advance)")
         .order("expense_date", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Expense[];

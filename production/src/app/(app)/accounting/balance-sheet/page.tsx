@@ -62,7 +62,7 @@ export default function BalanceSheetPage() {
 
   const autoAssets =
     (auto?.cashAndBank ?? 0) + (auto?.receivables ?? 0) + (auto?.projectReceivable ?? 0) + (auto?.tdsReceivable ?? 0)
-    + (auto?.employeeLoans ?? 0) + (auto?.fixedAssets ?? 0) + gstCredit;
+    + (auto?.employeeLoans ?? 0) + (auto?.prepaidAdvances ?? 0) + (auto?.fixedAssets ?? 0) + gstCredit;
   const autoLiab = (auto?.payables ?? 0) + (auto?.salaryPayable ?? 0) + (auto?.salaryDuesPayable ?? 0) + (auto?.reimbursementsPayable ?? 0) + (auto?.creditCardPayable ?? 0) + (auto?.emiLoansPayable ?? 0) + (auto?.businessLoansPayable ?? 0) + gstPayable;
 
   const manualAssetRows = manual("asset");
@@ -101,6 +101,7 @@ export default function BalanceSheetPage() {
         ["Project receivable", auto.projectReceivable ?? 0],
         ["TDS receivable", auto.tdsReceivable ?? 0],
         ["Employee loans (advances)", auto.employeeLoans ?? 0],
+        ["Prepaid / vendor advances", auto.prepaidAdvances ?? 0],
         ["Fixed assets", auto.fixedAssets ?? 0],
         ["GST input credit (ITC)", gstCredit],
         ...manualAssetRows.map((r): [string, number] => [r.label, r.amount]),
@@ -231,6 +232,9 @@ export default function BalanceSheetPage() {
                 <BSLine label="TDS receivable" hint="credits from customers' TDS" amount={auto?.tdsReceivable ?? 0} kind="auto" source="TDS Receivable" href="/accounting/tds-receivable" />
                 {(auto?.employeeLoans ?? 0) > 0 && (
                   <BSLine label="Employee loans / advances" hint="outstanding, owed back" amount={auto?.employeeLoans ?? 0} kind="auto" source="Loans" href="/accounting/loans" />
+                )}
+                {(auto?.prepaidAdvances ?? 0) > 0 && (
+                  <BSLine label="Prepaid / vendor advances" hint="paid, not yet consumed" amount={auto?.prepaidAdvances ?? 0} kind="auto" source="Prepaid" href="/accounting/prepaid" />
                 )}
                 {(auto?.fixedAssets ?? 0) > 0 && (
                   <BSLine label="Fixed assets (EMI purchases)" hint="vehicles, equipment at cost" amount={auto?.fixedAssets ?? 0} kind="auto" source="Assets & EMIs" href="/accounting/assets" />

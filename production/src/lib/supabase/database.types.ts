@@ -2442,6 +2442,39 @@ type ContactGreetingLogInsert = {
 };
 type ContactGreetingLogUpdate = Partial<ContactGreetingLogInsert>;
 
+// Prepaid / vendor advances (migration 0205).
+export type PrepaidAdvanceRow = {
+  id:              string;
+  tenant_id:       string;
+  vendor_name:     string;
+  vendor_id:       string | null;
+  category:        string;
+  total_amount:    number;
+  consumed_amount: number;
+  paid_date:       string;
+  payment_method:  string | null;
+  bank_account_id: string | null;
+  notes:           string | null;
+  created_by:      string | null;
+  created_at:      string;
+  updated_at:      string;
+};
+type PrepaidAdvanceInsert = {
+  id?:              string;
+  tenant_id:        string;
+  vendor_name:      string;
+  vendor_id?:       string | null;
+  category?:        string;
+  total_amount:     number;
+  consumed_amount?: number;
+  paid_date?:       string;
+  payment_method?:  string | null;
+  bank_account_id?: string | null;
+  notes?:           string | null;
+  created_by?:      string | null;
+};
+type PrepaidAdvanceUpdate = Partial<PrepaidAdvanceInsert>;
+
 // Statutory-compliance filing log (migration 0201).
 export type ComplianceLogRow = {
   id:             string;
@@ -2715,6 +2748,7 @@ export type Database = {
       lead_activities:{ Row: LeadActivityRow; Insert: LeadActivityInsert; Update: LeadActivityUpdate; Relationships: [] };
       contact_greeting_log:{ Row: ContactGreetingLogRow; Insert: ContactGreetingLogInsert; Update: ContactGreetingLogUpdate; Relationships: [] };
       compliance_log:{ Row: ComplianceLogRow; Insert: ComplianceLogInsert; Update: ComplianceLogUpdate; Relationships: [] };
+      prepaid_advances:{ Row: PrepaidAdvanceRow; Insert: PrepaidAdvanceInsert; Update: PrepaidAdvanceUpdate; Relationships: [] };
       inbound_purchases:{ Row: InboundPurchaseRow; Insert: InboundPurchaseInsert; Update: InboundPurchaseUpdate; Relationships: [] };
       tds_receivable:     { Row: TdsReceivableRow;     Insert: TdsReceivableInsert;     Update: TdsReceivableUpdate;     Relationships: [] };
       customer_users:     { Row: CustomerUserRow;      Insert: CustomerUserInsert;      Update: CustomerUserUpdate;      Relationships: [] };
@@ -2747,6 +2781,11 @@ export type Database = {
       v_tenant_with_parent: { Row: TenantWithParent; Relationships: [] };
     };
     Functions: {
+      /** Consume part of a prepaid advance → books an expense + reduces balance (migration 0205). */
+      consume_prepaid_advance: {
+        Args: { p_advance_id: string; p_amount: number; p_date?: string; p_note?: string | null };
+        Returns: number;
+      };
       /**
        * Returns the caller's tenant joined with its parent's display fields.
        * SECURITY DEFINER — bypasses RLS for the parent JOIN, but the WHERE

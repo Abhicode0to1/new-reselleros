@@ -35,6 +35,7 @@ export interface BalanceSheetAuto {
   projectReceivable: number; // one-time / project sales: total − payments received
   tdsReceivable:   number;   // pending TDS credits from customers
   employeeLoans:   number;   // outstanding loans/advances to employees (an asset)
+  prepaidAdvances: number;   // vendor advances paid but not yet consumed (a current asset)
   fixedAssets:     number;   // cost of assets bought on EMI (an asset)
   payables:        number;   // unpaid vendor bills (total − paid)
   salaryPayable:   number;   // net salary accrued (payroll run) but not yet paid out — a liability
@@ -127,6 +128,12 @@ export function useBalanceSheetAuto() {
       const loanPrincipal = (loans ?? []).reduce((s, l) => s + (l.principal ?? 0), 0);
       const loanRepaid    = (loanReps ?? []).reduce((s, r) => s + (r.amount ?? 0), 0);
       const employeeLoans = Math.max(0, loanPrincipal - loanRepaid);
+
+      // Prepaid / vendor advances — paid but not yet consumed. A current asset.
+      const { data: advs, error: advErr } = await supabase
+        .from("prepaid_advances").select("total_amount, consumed_amount");
+      if (advErr) throw advErr;
+      const prepaidAdvances = (advs ?? []).reduce((s, a) => s + Math.max(0, (a.total_amount ?? 0) - (a.consumed_amount ?? 0)), 0);
 
       // Assets bought on EMI: total cost is a fixed asset; financed-minus-
       // principal-paid is a loan liability.
@@ -228,7 +235,7 @@ export function useBalanceSheetAuto() {
 
       const gstPayable = outputGST - billsGst - expGst;
 
-      return { cashAndBank, receivables, projectReceivable, tdsReceivable, employeeLoans, fixedAssets, payables, salaryPayable, salaryDuesPayable, reimbursementsPayable, creditCardPayable, emiLoansPayable, businessLoansPayable, gstPayable, fyLabel };
+      return { cashAndBank, receivables, projectReceivable, tdsReceivable, employeeLoans, prepaidAdvances, fixedAssets, payables, salaryPayable, salaryDuesPayable, reimbursementsPayable, creditCardPayable, emiLoansPayable, businessLoansPayable, gstPayable, fyLabel };
     },
     staleTime: 30_000,
   });

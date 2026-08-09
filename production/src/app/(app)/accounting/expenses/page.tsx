@@ -227,7 +227,8 @@ export default function ExpensesPage() {
       if (e.category === "Salaries") { const s = salByExpense.get(e.id); return s ? s.paid_status !== "paid" : false; }
       return !e.reconciled_txn_id; // statutory / ESI
     }
-    return e.paid && !e.reconciled_txn_id; // operating: paid, awaiting bank match
+    // advance-funded expenses have no bank line of their own (the advance payment was the debit)
+    return e.paid && !e.reconciled_txn_id && e.payment_method !== "advance"; // operating: paid, awaiting bank match
   }, [salByExpense]);
 
   // Start reconcile. Operating expenses use the expense-first picker; payroll
