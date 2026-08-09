@@ -12,9 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
+import { Badge } from "@/components/ui/badge";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { toast } from "sonner";
-import { useBackups, useCreateBackup, useDeleteBackup, downloadBackup } from "@/lib/queries/backups";
+import { useBackups, useCreateBackup, useDeleteBackup, useRestoreBackup, downloadBackup, autoBackupIfStale } from "@/lib/queries/backups";
+import { useQueryClient } from "@tanstack/react-query";
 
 function humanSize(b: number): string {
   if (b < 1024) return `${b} B`;
@@ -30,8 +32,19 @@ export default function BackupPage() {
   const q = useBackups();
   const create = useCreateBackup();
   const del = useDeleteBackup();
+  const restore = useRestoreBackup();
   const confirm = useConfirm();
+  const qc = useQueryClient();
   const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
+  const autoRan = React.useRef(false);
+
+  // Auto restore point: once per app session, make a daily 'auto' snapshot if
+  // the newest one is stale (>20h). Keeps ~15 points rolling with zero effort.
+  React.useEffect(() => {
+    if (autoRan.current) return;
+    autoRan.current = true;
+    autoBackupIfStale().then((created) => { if (created) qc.invalidateQueries({ queryKey: ["tenant_backups"] }); });
+  }, [qc]);
 
   const rows = q.data ?? [];
 
@@ -60,11 +73,11 @@ export default function BackupPage() {
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Settings</p>
-          <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Backup</h1>
+          <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Backup &amp; Restore</h1>
           <p className="text-sm text-ink-2 mt-1 max-w-2xl">
-            Apne poore business data ka ek copy le lo — customers, leads, quotes, invoices, payments,
-            expenses, subscriptions, sab kuch. Kisi bhi bade change ya experiment se pehle ek backup
-            le lena safe rehta hai.
+            Har restore point tumhare poore data ka ek copy hai — customers, leads, quotes, invoices,
+            payments, expenses, sab kuch. Galat direction me chale gaye to kisi bhi purane point par
+            <b> wapas jaa sakte ho</b>. Restore points <b>apne aap roz</b> bhi bante hain (last 15 rakhe jaate hain).
           </p>
         </div>
         <Button variant="primary" icon="download" loading={create.isPending || downloadingId != null} onClick={takeBackup} className="shrink-0">
@@ -101,11 +114,25 @@ export default function BackupPage() {
                     <Icon name="check_circle" size={18} />
                   </span>
                   <div className="min-w-0">
-                    <div className="text-[13px] font-medium text-ink truncate">{b.label || "Backup"}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-medium text-ink truncate">{b.label || "Backup"}</span>
+                      <Badge kind={b.kind === "auto" ? "muted" : "info"} size="sm">{b.kind === "auto" ? "Auto" : "Manual"}</Badge>
+                    </div>
                     <div className="text-[11px] text-ink-3">{whenLabel(b.created_at)} · {b.table_count} tables · {humanSize(b.bytes)}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="primary" className="h-8 px-3 text-[12px]" icon="refresh"
+                    loading={restore.isPending} disabled={restore.isPending}
+                    onClick={async () => {
+                      if (await confirm({
+                        title: "Restore to this point?",
+                        body: `Tumhara data is point (${whenLabel(b.created_at)}) par wapas aa jayega — iske baad ke saare changes hat jayenge. Ghabrao mat: abhi ka data pehle ek "Before restore" point me apne aap save ho jayega, to ye undo ho sakta hai.`,
+                        danger: true, confirmLabel: "Restore now",
+                      })) restore.mutate(b.id);
+                    }}>
+                    Restore
+                  </Button>
                   <Button variant="default" className="h-8 px-3 text-[12px]" icon="download"
                     loading={downloadingId === b.id} onClick={() => onDownload(b.id, b.created_at)}>
                     Download

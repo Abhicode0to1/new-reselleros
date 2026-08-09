@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 
 const KEY = ["tenant_backups"] as const;
 
-export type BackupRow = { id: string; created_at: string; label: string | null; table_count: number; bytes: number };
+export type BackupRow = { id: string; created_at: string; label: string | null; kind: string; table_count: number; bytes: number };
 
 export function useBackups() {
   return useQuery({
@@ -38,6 +38,35 @@ export function useCreateBackup() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: KEY }); },
     onError: (err) => toast.error((err as Error).message),
   });
+}
+
+/** Restore the tenant's data to a chosen point. A "Before restore" safety point
+ *  is auto-saved first. All app data changes → invalidate everything. */
+export function useRestoreBackup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("restore_tenant_backup", { p_id: id });
+      if (error) throw new Error(error.message);
+      return data as { restored_tables: number; restored_at: string };
+    },
+    onSuccess: (res) => {
+      qc.invalidateQueries(); // every screen's data just changed
+      toast.success(`Restore ho gaya — ${res.restored_tables} tables wapas is point par. (Pehle wala data "Before restore" point me safe hai.)`);
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+}
+
+/** Fire-and-forget: create a daily 'auto' restore point if none exists < 20h. */
+export async function autoBackupIfStale(): Promise<boolean> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("auto_backup_if_stale");
+    if (error) return false;
+    return !!(data as { created: boolean } | null)?.created;
+  } catch { return false; }
 }
 
 export function useDeleteBackup() {

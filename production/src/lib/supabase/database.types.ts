@@ -2823,7 +2823,7 @@ export type Database = {
       };
       list_tenant_backups: {
         Args: Record<string, never>;
-        Returns: { id: string; created_at: string; label: string | null; table_count: number; bytes: number }[];
+        Returns: { id: string; created_at: string; label: string | null; kind: string; table_count: number; bytes: number }[];
       };
       get_tenant_backup: {
         Args: { p_id: string };
@@ -2832,6 +2832,15 @@ export type Database = {
       delete_tenant_backup: {
         Args: { p_id: string };
         Returns: undefined;
+      };
+      /** Restore points (migration 0212). */
+      auto_backup_if_stale: {
+        Args: Record<string, never>;
+        Returns: { created: boolean };
+      };
+      restore_tenant_backup: {
+        Args: { p_id: string };
+        Returns: { restored_tables: number; restored_at: string };
       };
       /**
        * Returns the caller's tenant joined with its parent's display fields.
