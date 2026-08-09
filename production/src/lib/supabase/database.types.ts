@@ -2347,6 +2347,9 @@ export type ContactRow = {
   // Optional link to a customer company (migration 0188). null = no company /
   // free-text `company` only. FK is ON DELETE SET NULL.
   customer_id:         string | null;
+  // Relationship classification for standalone contacts (migration 0196):
+  // 'partner' | 'vendor' | 'personal' | 'other'. null = unclassified.
+  relationship:        string | null;
   // Google Contacts sync (migration 0189). external_id holds the resourceName.
   google_etag:         string | null;
   google_synced_at:    string | null;
@@ -2380,6 +2383,7 @@ type ContactInsert = {
   address?:            string | null;
   city?:               string | null;
   customer_id?:        string | null;
+  relationship?:       string | null;
   google_etag?:        string | null;
   google_synced_at?:   string | null;
 };

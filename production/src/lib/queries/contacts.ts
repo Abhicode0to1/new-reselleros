@@ -31,7 +31,23 @@ export interface UnifiedContact {
   status:    string | null;
   /** Sub-source for imported contacts: 'google_csv' | 'manual' | etc. */
   importedFrom?: string;
+  /** Relationship classification for standalone contacts: 'partner' | 'vendor'
+   *  | 'personal' | 'other'. null/undefined for lead/customer contacts (their
+   *  kind comes from the source). */
+  relationship?: string | null;
   createdAt: string;
+}
+
+/** A contact's unified "kind" for filtering + badges. Leads/customers derive it
+ *  from their source; standalone contacts from their `relationship` column. */
+export type ContactKind = "lead" | "customer" | "partner" | "vendor" | "personal" | "other";
+
+export function contactKind(c: UnifiedContact): ContactKind {
+  if (c.source === "lead") return "lead";
+  if (c.source === "customer") return "customer";
+  const rel = (c.relationship ?? "").toLowerCase();
+  if (rel === "partner" || rel === "vendor" || rel === "personal") return rel;
+  return "other";
 }
 
 export function useAllContacts() {
@@ -49,7 +65,7 @@ export function useAllContacts() {
           .select("id, name, contact_name, contact_title, contact_email, contact_phone, health, created_at"),
         supabase
           .from("contacts")
-          .select("id, full_name, email, phone, company, title, source, status, created_at")
+          .select("id, full_name, email, phone, company, title, source, status, relationship, created_at")
           // Hide promoted contacts here — they show up via the leads row already
           .neq("status", "promoted"),
       ]);
@@ -101,6 +117,7 @@ export function useAllContacts() {
         title:        c.title,
         status:       c.status,
         importedFrom: c.source,
+        relationship: c.relationship,
         createdAt:    c.created_at,
       }));
 
@@ -160,6 +177,8 @@ export type ContactFormValues = {
   /** Optional link to a customer company — surfaces that company's records on
    *  the contact detail page. null = free-text `company` only. */
   customer_id?: string | null;
+  /** Relationship classification: 'partner' | 'vendor' | 'personal' | 'other'. */
+  relationship?: string | null;
   title?:    string | null;
   /** All emails/phones (each labelled). The mutations mirror index 0 into the
    *  legacy `email`/`phone` primary columns so existing consumers keep working. */

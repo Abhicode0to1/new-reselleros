@@ -29,11 +29,22 @@ import { CustomerCombobox } from "@/components/features/customers/customer-combo
 
 const EMAIL_LABELS = ["work", "home", "other"] as const;
 const PHONE_LABELS = ["mobile", "work", "home", "other"] as const;
+// Relationship classification for standalone contacts. Lead/Customer are NOT
+// options here — those records are created in their own flows; this form only
+// makes standalone contacts.
+const RELATIONSHIP_OPTIONS = [
+  { value: "",         label: "— Not set —" },
+  { value: "partner",  label: "Partner" },
+  { value: "vendor",   label: "Vendor / Supplier" },
+  { value: "personal", label: "Personal / Relation" },
+  { value: "other",    label: "Other" },
+] as const;
 
 const schema = z.object({
   full_name: z.string().min(1, "Name is required"),
   company:   z.string().optional(),
   customer_id: z.string().optional(),
+  relationship: z.string().optional(),
   title:     z.string().optional(),
   emails:    z.array(z.object({
     value: z.string().email("Enter a valid email").or(z.literal("")),
@@ -95,6 +106,7 @@ export function ContactForm({
       full_name: data.full_name.trim(),
       company:   clean(data.company),
       customer_id: clean(data.customer_id),
+      relationship: clean(data.relationship),
       title:     clean(data.title),
       // Arrays go through as-is; the mutation cleans blanks + mirrors index 0
       // into the primary email/phone columns.
@@ -169,6 +181,20 @@ export function ContactForm({
                   }}
                 />
                 <p className="text-[11px] text-ink-3">Connect this person to a customer to manage their company&apos;s records here.</p>
+              </FormField>
+
+              {/* Relationship type — lets a person who is neither a lead nor a
+                  customer (partner, vendor, personal/relation) be kept + filtered
+                  in the contact book. */}
+              <FormField label="Relationship" htmlFor="relationship">
+                <select
+                  id="relationship"
+                  {...register("relationship")}
+                  className="h-9 w-full rounded-md border border-hairline bg-paper px-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                >
+                  {RELATIONSHIP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <p className="text-[11px] text-ink-3">How you know this person — used to group them in Contacts.</p>
               </FormField>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -305,6 +331,7 @@ function toDefaults(c?: Contact | null): FormData {
     full_name: c?.full_name ?? "",
     company:   c?.company ?? "",
     customer_id: c?.customer_id ?? "",
+    relationship: c?.relationship ?? "",
     title:     c?.title ?? "",
     emails,
     phones,

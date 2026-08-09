@@ -8,7 +8,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { useAllContacts } from "@/lib/queries/contacts";
+import { useAllContacts, contactKind, type ContactKind } from "@/lib/queries/contacts";
 import ImportContactsDialog from "@/components/features/contacts/import-contacts-dialog";
 import { ContactForm } from "@/components/features/contacts/contact-form";
 import CampaignComposerDialog from "@/components/features/campaigns/campaign-composer-dialog";
@@ -25,12 +25,22 @@ import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
 import { initials } from "@/lib/utils";
 
-const SOURCE_TABS: TabBarItem[] = [
-  { id: "all",      label: "All" },
-  { id: "lead",     label: "From Leads",     dot: "amber"   },
-  { id: "customer", label: "From Customers", dot: "emerald" },
-  { id: "imported", label: "Imported",       dot: "indigo"  },
-];
+// Contacts are grouped by their unified "kind" (see contactKind): leads +
+// customers come from their own tables; partners / vendors / personal / other
+// are standalone contacts classified by their `relationship` field.
+const KIND_META: Record<ContactKind, { label: string; dot: TabBarItem["dot"]; badge: "success" | "warning" | "info" | "muted" }> = {
+  lead:     { label: "Leads",     dot: "amber",   badge: "warning" },
+  customer: { label: "Customers", dot: "emerald", badge: "success" },
+  partner:  { label: "Partners",  dot: "indigo",  badge: "info"    },
+  vendor:   { label: "Vendors",   dot: "slate",   badge: "muted"   },
+  personal: { label: "Personal",  dot: "rose",    badge: "info"    },
+  other:    { label: "Other",     dot: "slate",   badge: "muted"   },
+};
+const KIND_ORDER: ContactKind[] = ["lead", "customer", "partner", "vendor", "personal", "other"];
+// Singular label for the per-row badge.
+const KIND_BADGE_LABEL: Record<ContactKind, string> = {
+  lead: "Lead", customer: "Customer", partner: "Partner", vendor: "Vendor", personal: "Personal", other: "Contact",
+};
 
 const CONTACT_COL_ORDER = ["select", "name", "company", "email", "phone", "source", "action"];
 // Fluid percentage widths (sum = 100%) so the table always fits its container
@@ -122,7 +132,7 @@ export default function ContactsPage() {
 
   // Filter
   const filtered = (contacts ?? []).filter((c) => {
-    if (tab !== "all" && c.source !== tab) return false;
+    if (tab !== "all" && contactKind(c) !== tab) return false;
     if (search.trim()) {
       const s = search.toLowerCase();
       if (
@@ -135,12 +145,23 @@ export default function ContactsPage() {
     return true;
   });
 
-  // Counts
+  // Counts by unified kind
   const counts: Record<string, number> = { all: contacts?.length ?? 0 };
   for (const c of contacts ?? []) {
-    counts[c.source] = (counts[c.source] ?? 0) + 1;
+    const k = contactKind(c);
+    counts[k] = (counts[k] ?? 0) + 1;
   }
-  const tabsWithCounts = SOURCE_TABS.map((t) => ({ ...t, count: counts[t.id] ?? 0 }));
+  // "All" always; each kind chip only when it has members (keeps the bar clean —
+  // no empty "Vendors 0" until the owner actually adds one).
+  const tabsWithCounts: TabBarItem[] = [
+    { id: "all", label: "All", count: counts.all ?? 0 },
+    ...KIND_ORDER.filter((k) => (counts[k] ?? 0) > 0).map((k) => ({
+      id: k,
+      label: KIND_META[k].label,
+      dot: KIND_META[k].dot,
+      count: counts[k] ?? 0,
+    })),
+  ];
 
   // Selection helpers
   const allFilteredSelected =
@@ -367,11 +388,11 @@ export default function ContactsPage() {
                 </div>
                 <div className="shrink-0">
                   <Badge
-                    kind={c.source === "customer" ? "success" : c.source === "imported" ? "info" : "warning"}
+                    kind={KIND_META[contactKind(c)].badge}
                     size="sm"
                     dot
                   >
-                    {c.source === "customer" ? "Customer" : c.source === "imported" ? "Imported" : "Lead"}
+                    {KIND_BADGE_LABEL[contactKind(c)]}
                   </Badge>
                 </div>
               </div>
@@ -459,10 +480,10 @@ export default function ContactsPage() {
                     <td className="p-3 text-xs font-mono text-ink-2 truncate">{c.phone ?? "—"}</td>
                     <td className="p-3">
                       <Badge
-                        kind={c.source === "customer" ? "success" : c.source === "imported" ? "info" : "warning"}
+                        kind={KIND_META[contactKind(c)].badge}
                         dot
                       >
-                        {c.source === "customer" ? "Customer" : c.source === "imported" ? "Imported" : "Lead"}
+                        {KIND_BADGE_LABEL[contactKind(c)]}
                       </Badge>
                     </td>
                     <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
