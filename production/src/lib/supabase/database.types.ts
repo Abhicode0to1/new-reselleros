@@ -2816,6 +2816,23 @@ export type Database = {
         Args: { p_advance_id: string; p_amount: number; p_date?: string; p_note?: string | null; p_gst?: number; p_attachment?: string | null };
         Returns: number;
       };
+      /** In-app backup (migration 0211) — owner-only, tenant-scoped snapshot of the caller's own data. */
+      create_tenant_backup: {
+        Args: { p_label?: string | null };
+        Returns: { id: string; table_count: number; bytes: number; created_at: string };
+      };
+      list_tenant_backups: {
+        Args: Record<string, never>;
+        Returns: { id: string; created_at: string; label: string | null; table_count: number; bytes: number }[];
+      };
+      get_tenant_backup: {
+        Args: { p_id: string };
+        Returns: unknown;
+      };
+      delete_tenant_backup: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
       /**
        * Returns the caller's tenant joined with its parent's display fields.
        * SECURITY DEFINER — bypasses RLS for the parent JOIN, but the WHERE

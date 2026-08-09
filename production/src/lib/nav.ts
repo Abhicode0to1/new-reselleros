@@ -274,6 +274,7 @@ export const APP_NAV: NavSection[] = [
     roles: ["owner", "manager"],
     items: [
       { id: "settings", href: "/settings", label: "Settings",     icon: "settings" },
+      { id: "backup",   href: "/settings/backup", label: "Backup", icon: "download", roles: ["owner"], hint: "Apne saare data ka ek copy le lo (download) — experiment ya galti se pehle safety." },
       { id: "team",     href: "/team",     label: "Team",         icon: "users" },
       { id: "partners", href: "/partners", label: "Partners",     icon: "link" },
       { id: "lead-gen", href: "/lead-gen", label: "Lead Sources", icon: "inbox" },
@@ -387,6 +388,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/items":           ["Catalog"],
   "/documents":       ["Company Documents", "Documents"],
   "/settings":        ["Settings", "Settings"],
+  "/settings/backup": ["Settings", "Backup"],
   "/team":            ["Settings", "Team"],
   "/partners":        ["Settings", "Partners"],
   "/lead-gen":        ["Settings", "Lead Sources"],
