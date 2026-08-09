@@ -65,9 +65,12 @@ export function useAllContacts() {
           .select("id, name, contact_name, contact_title, contact_email, contact_phone, health, created_at"),
         supabase
           .from("contacts")
-          .select("id, full_name, email, phone, company, title, source, status, relationship, created_at")
-          // Hide promoted contacts here — they show up via the leads row already
-          .neq("status", "promoted"),
+          .select("id, full_name, email, phone, company, title, source, status, relationship, promoted_to_lead_id, created_at")
+          // Hide promoted contacts ONLY while their lead still exists (they show
+          // via that lead row). If the lead was later deleted, promoted_to_lead_id
+          // is SET NULL by the FK — then re-show the contact so a real person
+          // never silently vanishes from the book after a lead delete.
+          .or("status.neq.promoted,promoted_to_lead_id.is.null"),
       ]);
 
       if (leadsRes.error)     throw leadsRes.error;
