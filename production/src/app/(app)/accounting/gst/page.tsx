@@ -90,6 +90,9 @@ interface InputRow {
   vendorGstin:  string | null;
   taxableValue: number;        // pre-GST
   gst:          number;        // CGST + SGST + IGST or gst_paid
+  igst:         number;        // ITC head split — bills exact; expenses assumed intra
+  cgst:         number;
+  sgst:         number;
   category:     string;
 }
 interface GstReport {
@@ -212,6 +215,9 @@ function useGstReport(range: DateRange) {
         vendorGstin:  b.vendor_gstin ?? null,
         taxableValue: b.subtotal ?? 0,
         gst:          (b.cgst ?? 0) + (b.sgst ?? 0) + (b.igst ?? 0),
+        igst:         b.igst ?? 0,
+        cgst:         b.cgst ?? 0,
+        sgst:         b.sgst ?? 0,
         category:     b.category ?? "",
       }));
 
@@ -222,16 +228,26 @@ function useGstReport(range: DateRange) {
         .lte("expense_date", range.to)
         .gt("gst_paid", 0);
 
-      const inputRowsExpenses: InputRow[] = (expenses ?? []).map((e) => ({
-        source:       "expense",
-        id:           e.id,
-        date:         e.expense_date,
-        vendor:       e.vendor_name ?? "—",
-        vendorGstin:  null,
-        taxableValue: (e.amount ?? 0) - (e.gst_paid ?? 0),
-        gst:          e.gst_paid ?? 0,
-        category:     e.category ?? "Expense",
-      }));
+      const inputRowsExpenses: InputRow[] = (expenses ?? []).map((e) => {
+        // Expenses store only a GST total (no head split). Assume intra-state
+        // (CGST + SGST) — the common case for local overheads — and flag it in
+        // the worksheet so an inter-state / import (IGST) expense can be adjusted.
+        const g = e.gst_paid ?? 0;
+        const cgst = Math.round(g / 2);
+        return {
+          source:       "expense" as const,
+          id:           e.id,
+          date:         e.expense_date,
+          vendor:       e.vendor_name ?? "—",
+          vendorGstin:  null,
+          taxableValue: (e.amount ?? 0) - g,
+          gst:          g,
+          igst:         0,
+          cgst,
+          sgst:         g - cgst,
+          category:     e.category ?? "Expense",
+        };
+      });
 
       const inputRows = [...inputRowsBills, ...inputRowsExpenses].sort(
         (a, b) => b.date.localeCompare(a.date),
@@ -366,6 +382,31 @@ function buildGstr1Sections(rows: OutputRow[], sellerStateCode: string | null, s
 }
 
 // ────────────────────────────────────────────────────────────────
+// GSTR-3B · summary worksheet (typed on the portal, not uploaded)
+// ────────────────────────────────────────────────────────────────
+// 3B is a summary return: you enter a few figures per table. We compute the
+// exact box values from the period's books so the owner types them straight in.
+interface Gstr3b {
+  outTaxable: number; outIgst: number; outCgst: number; outSgst: number;   // Table 3.1(a) outward
+  itcIgst: number; itcCgst: number; itcSgst: number;                       // Table 4(A)(5) ITC
+  payIgst: number; payCgst: number; paySgst: number;                       // net (per head, floored)
+}
+function computeGstr3b(outputRows: OutputRow[], inputRows: InputRow[]): Gstr3b {
+  let outTaxable = 0, outIgst = 0, outCgst = 0, outSgst = 0;
+  for (const r of outputRows) {
+    const s = gstSplit(r);
+    outTaxable += r.taxableValue; outIgst += s.igst; outCgst += s.cgst; outSgst += s.sgst;
+  }
+  let itcIgst = 0, itcCgst = 0, itcSgst = 0;
+  for (const r of inputRows) { itcIgst += r.igst; itcCgst += r.cgst; itcSgst += r.sgst; }
+  const net = (o: number, i: number) => Math.max(0, o - i);
+  return {
+    outTaxable, outIgst, outCgst, outSgst, itcIgst, itcCgst, itcSgst,
+    payIgst: net(outIgst, itcIgst), payCgst: net(outCgst, itcCgst), paySgst: net(outSgst, itcSgst),
+  };
+}
+
+// ────────────────────────────────────────────────────────────────
 // CSV export helpers
 // ────────────────────────────────────────────────────────────────
 
@@ -432,6 +473,21 @@ export default function GstReportPage() {
     if (secs.skipped)    notes.push(`${secs.skipped} B2C invoice(s) skipped — add the customer's state, then re-export.`);
     if (secs.notesCount) notes.push(`${secs.notesCount} credit/debit note(s) not included — enter under CDNR on the portal.`);
     toast.success(`${files} GSTR-1 file(s) downloaded — import each into the GST Offline Tool.${notes.length ? " " + notes.join(" ") : ""}`);
+  }
+
+  const g3b = data ? computeGstr3b(data.outputRows, data.inputRows) : null;
+
+  function exportGstr3b() {
+    if (!g3b) return;
+    downloadCSV(
+      `gstr3b-worksheet-${range.from}-to-${range.to}.csv`,
+      ["Table", "Description", "Taxable value", "IGST", "CGST", "SGST"],
+      [
+        ["3.1(a)", "Outward taxable supplies (other than zero/nil/exempt)", g3b.outTaxable, g3b.outIgst, g3b.outCgst, g3b.outSgst],
+        ["4(A)(5)", "ITC available — all other ITC", "", g3b.itcIgst, g3b.itcCgst, g3b.itcSgst],
+        ["Net", "Tax payable in cash (per head, before IGST cross-set-off)", "", g3b.payIgst, g3b.payCgst, g3b.paySgst],
+      ],
+    );
   }
 
   function exportInput() {
@@ -550,6 +606,69 @@ export default function GstReportPage() {
               Download GSTR-1 (Offline Tool)
             </Button>
           </div>
+        </Card>
+      )}
+
+      {/* GSTR-3B worksheet — the summary figures to type on the portal */}
+      {g3b && data && (data.outputRows.length > 0 || data.inputRows.length > 0) && (
+        <Card className="mb-6 p-4 border border-indigo/30 bg-indigo/5">
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+            <div className="min-w-0">
+              <div className="font-medium text-ink">GSTR-3B worksheet — {range.label}</div>
+              <p className="text-[12px] text-ink-2 mt-0.5 leading-relaxed">
+                3B is <b>typed</b> on the portal (no file upload). Enter these figures box-by-box on
+                gst.gov.in → Returns → GSTR-3B. <b>Verify before filing.</b>
+              </p>
+            </div>
+            <Button variant="default" size="sm" onClick={exportGstr3b} className="shrink-0">
+              <Icon name="download" size={14} className="mr-1.5" /> Download worksheet
+            </Button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+                <tr>
+                  <th className="text-left  px-3 py-2">Box</th>
+                  <th className="text-left  px-3 py-2">What to enter</th>
+                  <th className="text-right px-3 py-2">Taxable</th>
+                  <th className="text-right px-3 py-2">IGST</th>
+                  <th className="text-right px-3 py-2">CGST</th>
+                  <th className="text-right px-3 py-2">SGST</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-hairline font-mono">
+                <tr>
+                  <td className="px-3 py-2 text-ink-2">3.1(a)</td>
+                  <td className="px-3 py-2 font-sans text-ink">Outward taxable supplies</td>
+                  <td className="px-3 py-2 text-right text-ink">{rupee(g3b.outTaxable)}</td>
+                  <td className="px-3 py-2 text-right">{rupee(g3b.outIgst)}</td>
+                  <td className="px-3 py-2 text-right">{rupee(g3b.outCgst)}</td>
+                  <td className="px-3 py-2 text-right">{rupee(g3b.outSgst)}</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 text-ink-2">4(A)(5)</td>
+                  <td className="px-3 py-2 font-sans text-ink">ITC available (all other ITC)</td>
+                  <td className="px-3 py-2 text-right text-ink-3">—</td>
+                  <td className="px-3 py-2 text-right text-emerald">{rupee(g3b.itcIgst)}</td>
+                  <td className="px-3 py-2 text-right text-emerald">{rupee(g3b.itcCgst)}</td>
+                  <td className="px-3 py-2 text-right text-emerald">{rupee(g3b.itcSgst)}</td>
+                </tr>
+                <tr className="bg-paper-2/30">
+                  <td className="px-3 py-2 text-ink-2">Net</td>
+                  <td className="px-3 py-2 font-sans font-semibold text-ink">Tax payable in cash</td>
+                  <td className="px-3 py-2 text-right text-ink-3">—</td>
+                  <td className="px-3 py-2 text-right font-semibold text-rose">{rupee(g3b.payIgst)}</td>
+                  <td className="px-3 py-2 text-right font-semibold text-rose">{rupee(g3b.payCgst)}</td>
+                  <td className="px-3 py-2 text-right font-semibold text-rose">{rupee(g3b.paySgst)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-ink-3 mt-2 leading-relaxed">
+            Net = output − ITC per head (floored at 0). The portal also lets IGST credit set off CGST/SGST,
+            so your actual cash payable can be lower. Expense ITC is assumed intra-state (CGST+SGST) — adjust
+            if any expense was inter-state / import (IGST). Add reverse-charge, interest or late fee separately.
+          </p>
         </Card>
       )}
 
