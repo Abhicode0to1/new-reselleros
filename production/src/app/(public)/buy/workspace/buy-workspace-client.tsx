@@ -1211,12 +1211,18 @@ export function BuyWorkspaceClient({
    *  Catalog. When empty, we fall back to the hardcoded FALLBACK_TIERS. */
   catalogItems?: CatalogItem[];
   /** "live"        : Razorpay configured, real money taken.
-   *  "simulation"  : Razorpay missing — Buy-now still works, posts a fake
-   *                  payment so Pardeep can walk the full pipeline. A clear
-   *                  banner is shown so test buys don't look like real ones. */
-  paymentMode?: "live" | "simulation";
+   *  "simulation"  : Razorpay missing but simulated checkout is allowed
+   *                  (non-prod, or ALLOW_SIMULATED_CHECKOUT=1) — Buy-now posts
+   *                  a fake payment so Pardeep can walk the full pipeline. A
+   *                  clear TEST MODE banner keeps test buys unambiguous.
+   *  "disabled"    : Razorpay missing in production — the online-buy CTA is
+   *                  hidden entirely so a REAL customer never sees a "Simulate
+   *                  payment" button. They're routed to "Get a GST quote". */
+  paymentMode?: "live" | "simulation" | "disabled";
 } = {}) {
   const isSimulation = paymentMode === "simulation";
+  // Online instant-buy (Razorpay live OR simulated preview) — never in disabled.
+  const onlineBuyEnabled = paymentMode !== "disabled";
   // Runtime tiers — sourced from the catalog when it has rows, otherwise from
   // the in-file FALLBACK_TIERS so the page never renders empty.
   const TIERS = React.useMemo<Tier[]>(
@@ -1506,7 +1512,7 @@ export function BuyWorkspaceClient({
                   </div>
 
                   {/* Buy now button — fills the empty right side of the calculator */}
-                  {selectedTierObj.annualPrice != null && (
+                  {selectedTierObj.annualPrice != null && onlineBuyEnabled && (
                     <button
                       type="button"
                       onClick={() => setBuyNowTier(selectedTierObj)}
@@ -1747,7 +1753,7 @@ export function BuyWorkspaceClient({
               // Buy now shows in both live and simulation modes; Enterprise
               // (no fixed annualPrice) always uses the quote path.
               onBuyNow={
-                tier.annualPrice != null ? () => setBuyNowTier(tier) : undefined
+                tier.annualPrice != null && onlineBuyEnabled ? () => setBuyNowTier(tier) : undefined
               }
             />
           ))}

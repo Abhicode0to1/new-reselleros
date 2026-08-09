@@ -26,7 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/label";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel,
 } from "@/components/ui/select";
 import { rupee, formatDate } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
@@ -521,6 +521,24 @@ const SECTIONS: { value: BalanceSheetSection; label: string; examples: string }[
   { value: "equity",    label: "Equity",    examples: "Owner's capital, drawings (as negative)" },
 ];
 
+// Guided categories for the Add-line dialog — a non-CA owner picks what a line
+// *is*, and we file it under the correct section automatically. `contra` items
+// (drawings, depreciation) reduce their side, so we store them as negative even
+// if the owner types a positive number — removing the classic sign mistake.
+type BSCategory = {
+  value: string; label: string; section: BalanceSheetSection;
+  examples: string; contra?: boolean;
+};
+const CATEGORIES: BSCategory[] = [
+  { value: "fixed_asset",     label: "Fixed asset",        section: "asset",     examples: "Laptop, furniture, vehicle, machinery" },
+  { value: "current_asset",   label: "Deposit / advance",  section: "asset",     examples: "Security deposit, advance paid, investment" },
+  { value: "depreciation",    label: "Depreciation (–)",   section: "asset",     examples: "Wear-down of a fixed asset — reduces its value", contra: true },
+  { value: "long_term_loan",  label: "Long-term loan",     section: "liability", examples: "Bank term loan, vehicle / equipment loan" },
+  { value: "short_term_due",  label: "Short-term due",     section: "liability", examples: "Unsecured loan, friend/family loan, other payable" },
+  { value: "owners_capital",  label: "Owner's capital",    section: "equity",    examples: "Money you put into the business" },
+  { value: "drawings",        label: "Owner's drawings (–)", section: "equity",  examples: "Money you took out for personal use", contra: true },
+];
+
 const schema = z.object({
   label:  z.string().min(2, "Name required"),
   amount: z.coerce.number().int(),
@@ -569,21 +587,29 @@ function EditLineDialog({ item, onClose }: { item: BalanceSheetItem; onClose: ()
 
 function AddLineDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const create = useCreateBalanceSheetItem();
-  const [section, setSection] = React.useState<BalanceSheetSection>("asset");
+  const [categoryValue, setCategoryValue] = React.useState<string>("fixed_asset");
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { amount: 0 },
   });
 
-  React.useEffect(() => { if (!open) { reset(); setSection("asset"); } }, [open, reset]);
+  React.useEffect(() => { if (!open) { reset(); setCategoryValue("fixed_asset"); } }, [open, reset]);
+
+  const category = CATEGORIES.find((c) => c.value === categoryValue) ?? CATEGORIES[0];
 
   const onSubmit = async (data: FormData) => {
-    await create.mutateAsync({ section, label: data.label.trim(), amount: data.amount, notes: data.notes?.trim() || null });
+    // File under the category's section; contra items (drawings/depreciation)
+    // are stored negative so they reduce their side even if typed positive.
+    const amt = category.contra ? -Math.abs(data.amount) : data.amount;
+    await create.mutateAsync({
+      section: category.section,
+      label: data.label.trim(),
+      amount: amt,
+      notes: category.label,          // remember what kind of line this is
+    });
     onClose();
   };
-
-  const sectionMeta = SECTIONS.find((s) => s.value === section);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -592,19 +618,30 @@ function AddLineDialog({ open, onClose }: { open: boolean; onClose: () => void }
           <DialogTitle>Add balance-sheet line</DialogTitle>
           <DialogDescription>
             Add something the app doesn&apos;t track automatically — a fixed asset, a loan,
-            owner&apos;s capital, etc.
+            owner&apos;s capital, etc. Pick what it is and we&apos;ll file it correctly.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <FormField label="Section" required htmlFor="bs-section">
-            <Select value={section} onValueChange={(v) => setSection(v as BalanceSheetSection)}>
-              <SelectTrigger id="bs-section"><SelectValue /></SelectTrigger>
+          <FormField label="What kind of line?" required htmlFor="bs-category">
+            <Select value={categoryValue} onValueChange={setCategoryValue}>
+              <SelectTrigger id="bs-category"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {SECTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                {(["asset", "liability", "equity"] as BalanceSheetSection[]).map((sec) => {
+                  const group = CATEGORIES.filter((c) => c.section === sec);
+                  const secLabel = SECTIONS.find((s) => s.value === sec)?.label ?? sec;
+                  return (
+                    <SelectGroup key={sec}>
+                      <SelectLabel>{secLabel}</SelectLabel>
+                      {group.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    </SelectGroup>
+                  );
+                })}
               </SelectContent>
             </Select>
-            {sectionMeta && <p className="text-[10px] text-ink-3 mt-1">e.g. {sectionMeta.examples}</p>}
+            <p className="text-[10px] text-ink-3 mt-1">
+              Goes under <b>{SECTIONS.find((s) => s.value === category.section)?.label}</b> · e.g. {category.examples}
+            </p>
           </FormField>
 
           <FormField label="Name" required htmlFor="bs-label">
@@ -614,7 +651,9 @@ function AddLineDialog({ open, onClose }: { open: boolean; onClose: () => void }
           <FormField label="Amount (₹)" required htmlFor="bs-amount">
             <Input id="bs-amount" type="number" prefix="₹" error={errors.amount?.message} {...register("amount")} />
             <p className="text-[10px] text-ink-3 mt-1">
-              Use a negative value for contra items — accumulated depreciation, or owner&apos;s drawings.
+              {category.contra
+                ? "Just type the amount — we'll record it as a reduction automatically."
+                : "Enter the current value / outstanding balance."}
             </p>
           </FormField>
 
