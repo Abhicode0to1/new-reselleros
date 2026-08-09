@@ -59,7 +59,8 @@ function reconcileTag(e: Expense, sal?: SalMini):
 function ReconcileTag({ tone, label, title }: { tone: "emerald" | "amber"; label: string; title?: string }) {
   const cls = tone === "emerald" ? "bg-emerald/10 text-emerald" : "bg-amber-soft text-amber-ink";
   return (
-    <span title={title} className={`ml-2 inline-flex items-center gap-0.5 rounded-full ${cls} px-1.5 py-0.5 text-[10px] font-medium align-middle`}>
+    <span title={title} className={`inline-flex items-center gap-1 rounded-full ${cls} px-2 py-0.5 text-[10px] font-medium align-middle`}>
+      <Icon name={tone === "emerald" ? "check_circle" : "clock"} size={11} />
       {label}
     </span>
   );
@@ -73,30 +74,39 @@ function ReconcileTag({ tone, label, title }: { tone: "emerald" | "amber"; label
  * "✓ Paid" tick (bank-verified). An open bill reads "To pay" / "Overdue".
  */
 function PayBadge({ e, today }: { e: Expense; today: string }) {
+  const base = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium align-middle";
   if (!e.paid) {
     const overdue = expensePayStatus(e, today) === "overdue";
-    const due = e.due_date ? ` · due ${formatDate(e.due_date)}` : "";
     return (
       <span
         title={overdue ? "Payable overdue — settle it and Mark paid." : "Payable — not paid yet."}
-        className={`ml-2 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium align-middle ${overdue ? "bg-rose/10 text-rose" : "bg-amber-soft text-amber-ink"}`}
+        className={`${base} ${overdue ? "bg-rose/10 text-rose" : "bg-amber-soft text-amber-ink"}`}
       >
-        {overdue ? "Overdue" : "To pay"}{due}
+        <Icon name={overdue ? "alert" : "clock"} size={11} />
+        {overdue ? "Overdue" : "To pay"}
       </span>
     );
   }
   if (e.reconciled_txn_id) {
     return (
-      <span title="Paid & bank-verified — matched to a bank/cash line."
-        className="ml-2 inline-flex items-center rounded-full bg-emerald/10 text-emerald px-1.5 py-0.5 text-[10px] font-medium align-middle">
-        ✓ Paid
+      <span title="Paid & bank-verified — matched to a bank/cash line." className={`${base} bg-emerald/10 text-emerald`}>
+        <Icon name="check_circle" size={11} /> Paid
       </span>
     );
   }
   return (
-    <span title="Payment recorded. Reconcile it against the bank line to bank-verify."
-      className="ml-2 inline-flex items-center rounded-full border border-emerald/30 text-emerald px-1.5 py-0.5 text-[10px] font-medium align-middle">
-      Paid
+    <span title="Payment recorded. Reconcile it against the bank line to bank-verify." className={`${base} border border-emerald/30 text-emerald`}>
+      <Icon name="check" size={11} /> Paid
+    </span>
+  );
+}
+
+/** Bill-presence chip — makes "Missing bill" / kaccha clearly visible. */
+function BillChip({ tone, label, title }: { tone: "rose" | "amber"; label: string; title?: string }) {
+  const cls = tone === "rose" ? "bg-rose/10 text-rose" : "bg-amber-soft/70 text-amber-ink";
+  return (
+    <span title={title} className={`inline-flex items-center gap-1 rounded-full ${cls} px-1.5 py-0.5 text-[9px] uppercase tracking-wide font-semibold align-middle`}>
+      <Icon name="alert" size={10} /> {label}
     </span>
   );
 }
@@ -392,86 +402,78 @@ export default function ExpensesPage() {
         </Card>
       ) : (
         <>
-          {/* Desktop table — scrolls horizontally rather than clipping so the
-              Amount / Actions columns are never cut off on narrower laptops. */}
+          {/* Desktop table — FLUID (table-fixed + % widths) so it always fits the
+              container with NO horizontal scroll. Date / method / GST are folded
+              into rich cells; status badge + bill chip sit with the category. */}
           <Card flush className="hidden md:block">
-            {/* Viewport-capped internal scroller so BOTH scrollbars sit inside
-                the visible frame — the horizontal bar is reachable without
-                scrolling the whole page to the bottom. Sticky header stays put. */}
-            <div className="overflow-auto max-h-[calc(100vh-15rem)]">
-            <table className="w-full min-w-[760px] text-sm">
+            <div className="overflow-y-auto max-h-[calc(100vh-15rem)]">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col style={{ width: "44%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "20%" }} />
+              </colgroup>
               <thead className="sticky top-0 z-10 bg-paper-2 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
-                  <th className="text-left  px-3 py-3 whitespace-nowrap">Date</th>
-                  <th className="text-left  px-3 py-3">Category &amp; what for</th>
-                  <th className="text-left  px-3 py-3">Vendor / payee</th>
-                  <th className="text-left  px-3 py-3">Method</th>
-                  <th className="text-right px-3 py-3">GST</th>
-                  <th className="text-right px-3 py-3">Amount</th>
-                  <th className="text-right px-3 py-3">Actions</th>
+                  <th className="text-left  px-3 py-2.5">Expense</th>
+                  <th className="text-left  px-3 py-2.5">Vendor / payee</th>
+                  <th className="text-right px-3 py-2.5">Amount</th>
+                  <th className="text-right px-3 py-2.5">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
-                {rows.map((e) => (
-                  <tr key={e.id} className="hover:bg-paper-2/40 cursor-pointer" onClick={() => openRow(e)}>
-                    <td className="px-3 py-3 text-ink-2 whitespace-nowrap">{formatDate(e.expense_date)}</td>
-                    <td className="px-3 py-3 text-ink align-top">
-                      <span className="whitespace-nowrap">
-                        {e.category}
-                        {e.bill_type === "kaccha" && <span className="ml-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-soft/60 text-amber-ink align-middle">Kaccha bill</span>}
-                        {e.bill_type === "none" && <span className="ml-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper-2 text-ink-3 align-middle">No bill</span>}
+                {rows.map((e) => {
+                  const noBill = e.bill_type === "none" && !isPayrollExpense(e);
+                  return (
+                  <tr key={e.id} className="hover:bg-paper-2/40 cursor-pointer align-top" onClick={() => openRow(e)}>
+                    {/* Expense: category + status + bill chip, then a muted meta line */}
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-medium text-ink truncate">{e.category}</span>
                         {isPayrollExpense(e)
                           ? (() => { const t = reconcileTag(e, salByExpense.get(e.id)); return t ? <ReconcileTag {...t} /> : null; })()
                           : <PayBadge e={e} today={today} />}
-                      </span>
-                      {e.description && <div className="text-xs text-ink-3 mt-0.5 max-w-[280px] truncate" title={e.description}>{e.description}</div>}
+                        {e.bill_type === "kaccha" && <BillChip tone="amber" label="Kaccha" title="Non-GST (kaccha) bill" />}
+                        {e.bill_type === "none" && !isPayrollExpense(e) && <BillChip tone="rose" label="No bill" title="No bill/receipt attached yet" />}
+                      </div>
+                      <div className="text-[11px] text-ink-3 truncate mt-0.5" title={e.description ?? undefined}>
+                        {formatDate(e.expense_date)}
+                        {e.payment_method ? ` · ${e.payment_method}` : ""}
+                        {e.description ? ` · ${e.description}` : ""}
+                      </div>
                     </td>
-                    <td className="px-3 py-3 text-ink-2 whitespace-nowrap align-top">{e.vendor_name ?? "—"}</td>
-                    <td className="px-3 py-3 text-ink-3 text-xs whitespace-nowrap align-top">{e.payment_method ?? "—"}</td>
-                    <td className="px-3 py-3 text-right text-emerald font-mono whitespace-nowrap">
-                      {e.gst_paid > 0 ? rupee(e.gst_paid) : "—"}
-                      {(() => { const fx = e.gst_paid > 0 ? foreignAmount(e.currency, e.gst_paid, e.fx_rate) : null; return fx ? <div className="text-[10px] font-normal text-emerald/70">{fx}</div> : null; })()}
+                    {/* Vendor */}
+                    <td className="px-3 py-2.5 text-ink-2 truncate" title={e.vendor_name ?? undefined}>{e.vendor_name ?? "—"}</td>
+                    {/* Amount (+ GST + FX as sub-lines) */}
+                    <td className="px-3 py-2.5 text-right">
+                      <div className="font-semibold text-ink font-mono">{rupee(e.amount)}</div>
+                      {e.gst_paid > 0 && <div className="text-[10px] text-emerald">+{rupee(e.gst_paid)} GST</div>}
+                      {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-[10px] text-ink-3">{fx}</div> : null; })()}
                     </td>
-                    <td className="px-3 py-3 text-right font-semibold text-ink font-mono whitespace-nowrap">
-                      {rupee(e.amount)}
-                      {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-[10px] font-normal text-ink-3">{fx}</div> : null; })()}
-                    </td>
-                    <td className="px-3 py-3 text-right whitespace-nowrap">
-                      {!e.paid && !isPayrollExpense(e) && (
-                        <Button
-                          variant="default"
-                          className="mr-1 h-7 px-2 py-0 text-[11px] align-middle"
-                          onClick={(ev) => { ev.stopPropagation(); setPayingExpense(e); }}
-                        >
-                          Mark paid
-                        </Button>
-                      )}
-                      {canReconcile(e) && (
-                        <Button
-                          variant="default"
-                          className="mr-1 h-7 px-2 py-0 text-[11px] align-middle"
-                          onClick={(ev) => { ev.stopPropagation(); startReconcile(e); }}
-                        >
-                          Reconcile
-                        </Button>
-                      )}
-                      <IconButton
-                        icon="edit"
-                        aria-label="Edit expense"
-                        onClick={(ev) => { ev.stopPropagation(); setEditing(e); }}
-                      />
-                      <IconButton
-                        icon="trash"
-                        aria-label="Delete expense"
-                        className="ml-1"
-                        onClick={async (ev) => {
-                          ev.stopPropagation();
-                          if (await confirm({ title: `Delete this expense?`, danger: true, confirmLabel: "Delete" })) del.mutate(e.id);
-                        }}
-                      />
+                    {/* Actions — icon-first, wrap instead of overflowing */}
+                    <td className="px-3 py-2.5" onClick={(ev) => ev.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-0.5 flex-wrap">
+                        {noBill && (
+                          <IconButton icon="upload" size="sm" variant="ghost" aria-label="Upload receipt"
+                            title="Upload receipt / bill" onClick={() => setEditing(e)} />
+                        )}
+                        {!e.paid && !isPayrollExpense(e) && (
+                          <Button variant="default" className="h-7 px-2 py-0 text-[11px]"
+                            onClick={() => setPayingExpense(e)}>Mark paid</Button>
+                        )}
+                        {canReconcile(e) && (
+                          <Button variant="default" className="h-7 px-2 py-0 text-[11px]"
+                            onClick={() => startReconcile(e)}>Reconcile</Button>
+                        )}
+                        <IconButton icon="edit" size="sm" variant="ghost" aria-label="Edit expense" onClick={() => setEditing(e)} />
+                        <IconButton icon="trash" size="sm" variant="ghost" aria-label="Delete expense"
+                          onClick={async () => { if (await confirm({ title: `Delete this expense?`, danger: true, confirmLabel: "Delete" })) del.mutate(e.id); }} />
+                      </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
             </div>
