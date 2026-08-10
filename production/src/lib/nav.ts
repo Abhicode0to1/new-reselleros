@@ -218,6 +218,7 @@ export const APP_NAV: NavSection[] = [
     items: [
       { id: "employees",        href: "/accounting/employees",  label: "Employees",        icon: "users" },
       { id: "performance",      href: "/performance",           label: "Team Performance", icon: "award" },
+      { id: "scorecard",        href: "/scorecard",             label: "Scorecards",       icon: "chart", hint: "Per-employee, role-aware: outcomes (real score) + reliability + activity signal." },
       { id: "assessments",      href: "/assessments",           label: "Reasoning Tests",  icon: "sparkles", hint: "AI-generated reasoning MCQ tests — share a link, employees take it, auto-graded A/B/C/D." },
       { id: "payroll",          href: "/accounting/payroll",    label: "Payroll",          icon: "rupee" },
       { id: "salary-register",  href: "/accounting/salary-register", label: "Salary Register", icon: "book" },
@@ -381,6 +382,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/attendance/kiosk":         ["Payroll", "Attendance Kiosk"],
   "/attendance/me":            ["My Attendance"],
   "/activity":                 ["Reports", "Activity Log"],
+  "/scorecard":                ["Payroll", "Scorecards"],
   "/whatsapp":        ["Engage", "WhatsApp Inbox"],
   "/campaigns":       ["Engage", "Campaigns"],
   "/online-promos":   ["Engage", "Online Promos"],
