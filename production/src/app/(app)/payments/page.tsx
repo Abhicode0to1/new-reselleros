@@ -760,7 +760,16 @@ function PaymentRowView({
   const router = useRouter();
   const methodInfo = METHOD_META[p.method];
   const [receiptOpen, setReceiptOpen] = React.useState(false);
-  const del = useDeletePayment();
+  // When a delete is blocked (invoice issued / bank-reconciled / add-seats / etc.),
+  // don't dead-end: show the reason AND a button to where the next step happens
+  // (the quote, which lists the exact blocking records + how to clear them).
+  const del = useDeletePayment({
+    onBlocked: (msg) =>
+      toast.error(msg, {
+        description: "Yahin se nahi hata sakte — quote khol ke aage ka step wahan se karo.",
+        action: { label: "Open quote", onClick: () => router.push(`/quotes/${p.quote_id}` as any) },
+      }),
+  });
   const confirm = useConfirm();
 
   // Delete = correct a wrong entry. Explains the reversal, then reverses via RPC
