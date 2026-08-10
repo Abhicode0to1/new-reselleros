@@ -16,6 +16,7 @@ import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { getDeviceToken } from "@/lib/attendance/device";
 import { useEmployees, useAttendanceNetwork } from "@/lib/queries/payroll";
 import {
   useMyAttendanceToday,
@@ -274,6 +275,7 @@ function CheckInCard({
       lat: coords.current?.lat ?? null,
       lng: coords.current?.lng ?? null,
       accuracy: coords.current?.accuracy ?? null,
+      device: getDeviceToken(),
     });
   }
 

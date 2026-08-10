@@ -1918,6 +1918,11 @@ type AttendanceRow = {
   selfie_out:  string | null;
   geo_in:      string | null;
   geo_out:     string | null;
+  flags:            string[];
+  check_in_device:  string | null;
+  check_out_device: string | null;
+  reviewed_at:      string | null;
+  reviewed_by:      string | null;
   created_at:  string;
 };
 type AttendanceInsert = {
@@ -1933,6 +1938,11 @@ type AttendanceInsert = {
   selfie_out?: string | null;
   geo_in?:     string | null;
   geo_out?:    string | null;
+  flags?:            string[];
+  check_in_device?:  string | null;
+  check_out_device?: string | null;
+  reviewed_at?:      string | null;
+  reviewed_by?:      string | null;
 };
 type AttendanceUpdate = Partial<Omit<AttendanceInsert, "tenant_id">>;
 

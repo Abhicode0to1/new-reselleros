@@ -75,6 +75,23 @@ export function useRecordConsent() {
   });
 }
 
+/** Owner clears an anomaly-flagged punch after reviewing it. */
+export function useMarkAttendanceReviewed() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const supabase = createClient();
+      const { data: auth } = await supabase.auth.getUser();
+      const { error } = await supabase.from("attendance")
+        .update({ reviewed_at: new Date().toISOString(), reviewed_by: auth?.user?.id ?? null })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Reviewed ✓"); void qc.invalidateQueries({ queryKey: ["attendance"] }); },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Review fail"),
+  });
+}
+
 /** Owner records/clears attendance consent for an employee (enrollment). */
 export function useOwnerSetConsent() {
   const qc = useQueryClient();
@@ -122,7 +139,7 @@ export function useMarkSelfAttendance() {
     // Goes through the API route so the selfie + presence code + geo are handled
     // and enforced server-side (client-only checks would be bypassable).
     mutationFn: async (input?: {
-      photo?: string | null; code?: string; lat?: number | null; lng?: number | null; accuracy?: number | null;
+      photo?: string | null; code?: string; lat?: number | null; lng?: number | null; accuracy?: number | null; device?: string;
     }): Promise<string> => {
       const res = await fetch("/api/attendance/self", {
         method: "POST",
@@ -133,6 +150,7 @@ export function useMarkSelfAttendance() {
           lat: input?.lat ?? null,
           lng: input?.lng ?? null,
           accuracy: input?.accuracy ?? null,
+          device: input?.device ?? "",
         }),
       });
       const json = await res.json().catch(() => ({}));

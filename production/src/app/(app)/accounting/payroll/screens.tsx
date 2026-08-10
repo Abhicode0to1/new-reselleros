@@ -46,7 +46,7 @@ import {
   LEAVE_TYPE_LABEL,
   type Employee, type LeaveKind, type Attendance, type SalaryPayment,
 } from "@/lib/queries/payroll";
-import { useOwnerSetConsent } from "@/lib/queries/my-attendance";
+import { useOwnerSetConsent, useMarkAttendanceReviewed } from "@/lib/queries/my-attendance";
 import type { CurrentUserInfo } from "@/lib/hooks/useCurrentUser";
 import { EmployeeDetailDrawer } from "@/components/features/payroll/employee-detail-drawer";
 import { OfferLetterDialog } from "@/components/features/payroll/offer-letter-dialog";
@@ -1793,6 +1793,7 @@ export function AttendanceTab() {
   const empQ = useEmployees();
   const attQ = useAttendance(period);
   const setConsent = useOwnerSetConsent();
+  const reviewMut = useMarkAttendanceReviewed();
   const employees = (empQ.data ?? []).filter((e) => e.is_active);
   const focusEmp = focusId ? (empQ.data ?? []).find((e) => e.id === focusId) ?? null : null;
 
@@ -1838,6 +1839,8 @@ export function AttendanceTab() {
   return (
     <>
       <NetworkCard />
+
+      <ReviewQueue attendance={attQ.data ?? []} employees={employees} onReview={(id) => reviewMut.mutate(id)} reviewing={reviewMut.isPending} />
 
       <Card className="mb-4 p-3 md:p-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -2052,6 +2055,55 @@ function AttendanceRegisterDialog({ employee, initialPeriod, onClose }: {
           : <AttendanceRegister period={period} employees={[employee]} attendance={attQ.data ?? []} />}
       </DialogContent>
     </Dialog>
+  );
+}
+
+const FLAG_LABEL: Record<string, string> = {
+  odd_hours:   "Odd hours",
+  no_location: "No location",
+  new_device:  "New device",
+};
+
+/** Owner review queue — anomaly-flagged, not-yet-reviewed punches for the month. */
+function ReviewQueue({
+  attendance, employees, onReview, reviewing,
+}: {
+  attendance: Attendance[]; employees: Employee[];
+  onReview: (id: string) => void; reviewing: boolean;
+}) {
+  const empName = new Map(employees.map((e) => [e.id, e.name]));
+  const rows = attendance
+    .filter((a) => (a.flags?.length ?? 0) > 0 && !a.reviewed_at)
+    .sort((a, b) => b.work_date.localeCompare(a.work_date));
+  if (rows.length === 0) return null;
+  return (
+    <Card className="mb-4 overflow-hidden border-amber/40">
+      <div className="px-4 py-3 border-b border-hairline bg-amber-soft/30 flex items-center gap-2">
+        <Icon name="alert" size={14} className="text-amber-ink" />
+        <span className="text-sm font-semibold text-ink">Needs review · {rows.length}</span>
+        <span className="text-[11px] text-ink-3">Self check-ins jinme kuch anokha laga — dekh ke clear karo.</span>
+      </div>
+      <ul className="divide-y divide-hairline">
+        {rows.map((a) => (
+          <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 text-sm">
+            <span className="font-medium text-ink">{empName.get(a.employee_id) ?? "—"}</span>
+            <span className="text-xs text-ink-3">{formatDate(a.work_date)} · In {fmtTimeIST(a.check_in)}{a.check_out ? ` · Out ${fmtTimeIST(a.check_out)}` : ""}</span>
+            <span className="flex flex-wrap gap-1">
+              {(a.flags ?? []).map((f) => (
+                <Badge key={f} kind="warning">{FLAG_LABEL[f] ?? f}</Badge>
+              ))}
+            </span>
+            <span className="ml-auto flex items-center gap-2">
+              {a.selfie_in && <SelfieButton path={a.selfie_in} label="in" />}
+              {a.selfie_out && <SelfieButton path={a.selfie_out} label="out" />}
+              <Button size="sm" variant="ghost" disabled={reviewing} onClick={() => onReview(a.id)}>
+                Mark reviewed
+              </Button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 
