@@ -20,6 +20,7 @@ import { QuickActionsPanel } from "./quick-actions-panel";
 import { getCrumb, getSectionPrimaryHref } from "@/lib/nav";
 import type { Route } from "next";
 import { useTaskCountDueOrOverdue } from "@/lib/queries/tasks";
+import { logLoginOnce } from "@/lib/queries/activity";
 
 interface TopBarProps {
   /** Open the mobile sidebar */
@@ -31,6 +32,8 @@ interface TopBarProps {
 export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  // Record a login once per browser session (fire-and-forget) for the activity log.
+  React.useEffect(() => { void logLoginOnce(); }, []);
   const crumb = crumbOverride ?? getCrumb(pathname);
   // On phones the breadcrumb is hidden (no room), so detail/sub pages (≥2 path
   // segments, e.g. /quotes/Q-123 or /customers/abc/edit) get a Back chevron so

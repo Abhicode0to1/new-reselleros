@@ -248,6 +248,7 @@ export const APP_NAV: NavSection[] = [
     roles: ["owner", "manager"],
     items: [
       { id: "reports",          href: "/reports",                  label: "All Reports",               icon: "chart", hint: "Every business report in one place." },
+      { id: "activity",         href: "/activity",                 label: "Activity Log",              icon: "clock", hint: "App me kisne kya kiya — bana / badla / delete / login. Accountability trail." },
       { id: "reports-profit",   href: "/reports/profit",           label: "Profit by product/service", icon: "package" },
       { id: "reports-customer", href: "/accounting/profitability", label: "Profit by customer",        icon: "users" },
       { id: "reports-purchases",href: "/reports/purchases",        label: "Purchase report",           icon: "cart" },
@@ -379,6 +380,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/attendance":    ["Payroll", "Attendance Register"],
   "/attendance/kiosk":         ["Payroll", "Attendance Kiosk"],
   "/attendance/me":            ["My Attendance"],
+  "/activity":                 ["Reports", "Activity Log"],
   "/whatsapp":        ["Engage", "WhatsApp Inbox"],
   "/campaigns":       ["Engage", "Campaigns"],
   "/online-promos":   ["Engage", "Online Promos"],

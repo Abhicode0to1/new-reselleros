@@ -1972,6 +1972,26 @@ type AttendanceSettingsInsert = {
 };
 type AttendanceSettingsUpdate = Partial<Omit<AttendanceSettingsInsert, "tenant_id">>;
 
+// Activity log (migration 0222).
+type ActivityLogRow = {
+  id:         number;
+  tenant_id:  string;
+  user_id:    string | null;
+  action:     string;
+  entity:     string;
+  entity_id:  string | null;
+  label:      string | null;
+  created_at: string;
+};
+type ActivityLogInsert = {
+  tenant_id:  string;
+  user_id?:   string | null;
+  action:     string;
+  entity:     string;
+  entity_id?: string | null;
+  label?:     string | null;
+};
+
 // Assets bought on EMI (migration 0092).
 type EmiPurchaseRow = {
   id:              string;
@@ -2834,6 +2854,7 @@ export type Database = {
       debit_notes:     { Row: DebitNoteRow;       Insert: DebitNoteInsert;       Update: DebitNoteUpdate;       Relationships: [] };
       holidays:{ Row: HolidayRow; Insert: HolidayInsert; Update: HolidayUpdate; Relationships: [] };
       attendance:{ Row: AttendanceRow; Insert: AttendanceInsert; Update: AttendanceUpdate; Relationships: [] };
+      activity_log:{ Row: ActivityLogRow; Insert: ActivityLogInsert; Update: Partial<ActivityLogInsert>; Relationships: [] };
       attendance_settings:{ Row: AttendanceSettingsRow; Insert: AttendanceSettingsInsert; Update: AttendanceSettingsUpdate; Relationships: [] };
       emi_purchases:{ Row: EmiPurchaseRow; Insert: EmiPurchaseInsert; Update: EmiPurchaseUpdate; Relationships: [] };
       emi_payments:{ Row: EmiPaymentRow; Insert: EmiPaymentInsert; Update: EmiPaymentUpdate; Relationships: [] };
@@ -2914,6 +2935,7 @@ export type Database = {
       my_attendance_today: { Args: Record<string, never>; Returns: unknown };
       mark_self_attendance: { Args: Record<string, never>; Returns: string };
       undo_my_last_punch: { Args: Record<string, never>; Returns: string };
+      log_activity: { Args: { p_action: string; p_entity?: string; p_entity_id?: string | null; p_label?: string | null }; Returns: undefined };
       record_attendance_consent: { Args: Record<string, never>; Returns: undefined };
       my_attendance_history: {
         Args: { p_days?: number };
