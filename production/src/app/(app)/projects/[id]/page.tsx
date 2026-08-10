@@ -403,7 +403,17 @@ export default function ProjectDetailPage() {
 
       {/* Roadmap & tasks — assign delivery work to the project's team */}
       <div className="mt-6">
-        <ProjectTasks projectId={project.id} team={labour} />
+        <ProjectTasks
+          projectId={project.id}
+          team={labour}
+          project={{
+            title:        project.title,
+            customerName: project.customer_name,
+            value:        project.taxable_amount ?? 0,
+            startDate:    project.start_date,
+            targetDate:   project.target_date,
+          }}
+        />
       </div>
 
       {/* Costs — expenses tagged to this project (drive the P&L above) */}

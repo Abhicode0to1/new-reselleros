@@ -755,3 +755,50 @@ export function useDeleteProjectTask() {
     onError: (e) => toast.error((e as Error).message),
   });
 }
+
+/** AI project planner — returns a detailed explanation + a suggested task list. */
+export type PlannedTask = { title: string; phase?: string; assignee?: string };
+export type ProjectPlan = { explanation: string; tasks: PlannedTask[]; mode: string };
+export async function generateProjectPlan(input: {
+  title: string; customer?: string; value?: number; startDate?: string | null; targetDate?: string | null; details?: string; team?: string[];
+}): Promise<ProjectPlan> {
+  const res = await fetch("/api/ai/plan-project", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      title: input.title, customer: input.customer, value: input.value,
+      startDate: input.startDate ?? undefined, targetDate: input.targetDate ?? undefined,
+      details: input.details, team: input.team,
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ?? "Could not generate the plan.");
+  return json as ProjectPlan;
+}
+
+/** Bulk-create tasks (from the AI plan), appended after existing ones. */
+export function useCreateProjectTasksBulk() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { projectId: string; tasks: { title: string; assigneeId?: string | null }[]; startSeq?: number }) => {
+      const supabase = createClient();
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData?.user) throw new Error("Not authenticated");
+      const { data: me, error: meErr } = await supabase.from("users").select("tenant_id").eq("id", authData.user.id).single();
+      if (meErr || !me) throw new Error("User not linked to a tenant");
+      const base = input.startSeq ?? 0;
+      const rows = input.tasks
+        .filter((t) => t.title.trim())
+        .map((t, i) => ({
+          tenant_id: me.tenant_id, project_id: input.projectId,
+          title: t.title.trim(), assignee_employee_id: t.assigneeId ?? null,
+          seq: base + i, created_by: authData.user.id,
+        }));
+      if (rows.length === 0) return 0;
+      const { error } = await supabase.from("project_tasks").insert(rows);
+      if (error) throw error;
+      return rows.length;
+    },
+    onSuccess: (n, v) => { qc.invalidateQueries({ queryKey: ["project_tasks", v.projectId] }); toast.success(`${n} tasks added to the roadmap`); },
+    onError: (e) => toast.error((e as Error).message),
+  });
+}
