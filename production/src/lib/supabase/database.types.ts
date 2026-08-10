@@ -429,6 +429,7 @@ type UserRow = {
   is_active: boolean;
   /** Migration 0045 — sales-role extension: when true, user also sees /deals. */
   can_view_deals: boolean;
+  employee_id: string | null;   // migration 0216 — self check-in link
   created_at: string;
 }
 type UserInsert = {
@@ -442,6 +443,7 @@ type UserInsert = {
   avatar_url?: string | null;
   is_active?: boolean;
   can_view_deals?: boolean;
+  employee_id?: string | null;
   created_at?: string;
 }
 type UserUpdate = Partial<UserInsert>;
@@ -2877,6 +2879,10 @@ export type Database = {
         Args: { p_id: string };
         Returns: { restored_tables: number; restored_at: string };
       };
+      /** Self attendance for logged-in users (migration 0216). */
+      set_my_employee: { Args: { p_employee_id: string }; Returns: undefined };
+      my_attendance_today: { Args: Record<string, never>; Returns: unknown };
+      mark_self_attendance: { Args: Record<string, never>; Returns: string };
       /**
        * Returns the caller's tenant joined with its parent's display fields.
        * SECURITY DEFINER — bypasses RLS for the parent JOIN, but the WHERE

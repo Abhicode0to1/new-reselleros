@@ -128,6 +128,8 @@ export const APP_NAV: NavSection[] = [
     icon: "home",
     items: [
       { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home", roles: ["owner", "manager"] },
+      // My Attendance — every logged-in user can self check-in/out (no role gate).
+      { id: "my-attendance", href: "/attendance/me", label: "My Attendance", icon: "calendar", hint: "Apni attendance khud mark karo — login hi identity proof hai, PIN/selfie ki zaroorat nahi." },
     ],
   },
   {
@@ -376,6 +378,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/leave":         ["Payroll", "Leave Register"],
   "/accounting/attendance":    ["Payroll", "Attendance Register"],
   "/attendance/kiosk":         ["Payroll", "Attendance Kiosk"],
+  "/attendance/me":            ["My Attendance"],
   "/whatsapp":        ["Engage", "WhatsApp Inbox"],
   "/campaigns":       ["Engage", "Campaigns"],
   "/online-promos":   ["Engage", "Online Promos"],
