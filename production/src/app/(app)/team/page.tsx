@@ -30,11 +30,15 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
-type Role = "owner" | "sales" | "sales_senior" | "accountant" | "support";
-const ROLES: Role[] = ["owner", "sales_senior", "sales", "accountant", "support"];
-const ROLE_LABEL: Record<Role, string> = { owner: "Owner", sales: "Sales", sales_senior: "Sales Senior", accountant: "Accountant", support: "Support" };
+type Role = "owner" | "manager" | "sales" | "sales_senior" | "billing" | "accountant" | "delivery" | "support";
+const ROLES: Role[] = ["owner", "manager", "sales_senior", "sales", "billing", "accountant", "delivery", "support"];
+const ROLE_LABEL: Record<Role, string> = {
+  owner: "Owner", manager: "Manager", sales: "Sales", sales_senior: "Sales Senior",
+  billing: "Billing / Accounts", accountant: "Accountant / CA", delivery: "Delivery (Projects)", support: "Support",
+};
 const ROLE_TONE: Record<Role, "success" | "info" | "muted" | "warning"> = {
-  owner: "info", sales: "success", sales_senior: "info", accountant: "warning", support: "muted",
+  owner: "info", manager: "info", sales: "success", sales_senior: "info",
+  billing: "success", accountant: "warning", delivery: "info", support: "muted",
 };
 
 interface Member { id: string; full_name: string | null; email: string | null; role: Role; initials: string | null; color: string | null; is_active: boolean | null; can_view_deals: boolean | null; }

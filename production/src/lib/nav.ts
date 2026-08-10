@@ -7,7 +7,9 @@
  * 3. Create the page at src/app/(app)/[id]/page.tsx
  */
 
-export type UserRole = "owner" | "manager" | "sales" | "sales_senior" | "accountant";
+export type UserRole =
+  | "owner" | "manager" | "sales" | "sales_senior" | "accountant"
+  | "support" | "billing" | "delivery";
 
 export interface NavItem {
   id: string;
@@ -88,6 +90,9 @@ export const ROLE_HOME: Record<UserRole, string> = {
   sales_senior: "/deals",
   // The CA / accountant lands on the P&L — the headline figure for ITR.
   accountant:   "/accounting/pnl",
+  support:      "/support",
+  billing:      "/invoices",
+  delivery:     "/projects",
 };
 
 // ============================================================
@@ -127,7 +132,7 @@ export const APP_NAV: NavSection[] = [
     section: "Home",
     icon: "home",
     items: [
-      { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home", roles: ["owner", "manager"] },
+      { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home", roles: ["owner", "manager", "billing"] },
       // My Attendance — every logged-in user can self check-in/out (no role gate).
       { id: "my-attendance", href: "/attendance/me", label: "My Attendance", icon: "calendar", hint: "Apni attendance khud mark karo — login hi identity proof hai, PIN/selfie ki zaroorat nahi." },
     ],
@@ -136,37 +141,37 @@ export const APP_NAV: NavSection[] = [
     // The CRM daily core. Visible to sales too (customers/contacts stay owner/manager).
     section: "Sales",
     icon: "target",
-    roles: ["owner", "manager", "sales"],
+    roles: ["owner", "manager", "sales", "billing"],
     items: [
       { id: "leads",     href: "/leads",     label: "Leads",         icon: "inbox",  roles: ["owner", "manager", "sales"] },
       { id: "enquiries", href: "/enquiries", label: "Enquiries",     icon: "mail",   roles: ["owner", "manager", "sales"] },
       { id: "deals",     href: "/deals",     label: "Deal Pipeline", icon: "target", roles: ["owner", "manager", "sales"] },
       { id: "tasks",     href: "/tasks",     label: "Tasks",         icon: "clock",  roles: ["owner", "manager", "sales"] },
-      { id: "customers", href: "/customers", label: "Customers",     icon: "users",  roles: ["owner", "manager"] },
+      { id: "customers", href: "/customers", label: "Customers",     icon: "users",  roles: ["owner", "manager", "billing"] },
       { id: "customer-groups", href: "/customers/groups", label: "Parent Accounts", icon: "layout", roles: ["owner", "manager"] },
-      { id: "contacts",  href: "/contacts",  label: "Contacts",      icon: "user",   roles: ["owner", "manager"] },
+      { id: "contacts",  href: "/contacts",  label: "Contacts",      icon: "user",   roles: ["owner", "manager", "billing"] },
       { id: "referrals", href: "/referrals", label: "Referrals",     icon: "award",  roles: ["owner", "manager"] },
     ],
   },
   {
     section: "Revenue",
     icon: "rupee",
-    roles: ["owner", "manager", "sales"],
+    roles: ["owner", "manager", "sales", "billing", "delivery", "support"],
     items: [
       // Online Orders stays hidden until a real order/provisioning system exists.
       { id: "quotes",        href: "/quotes",        label: "Quotes",        icon: "file",    roles: ["owner", "manager", "sales"] },
-      { id: "projects",      href: "/projects",      label: "Project Sales", icon: "package", roles: ["owner", "manager", "sales"] },
-      { id: "invoices",      href: "/invoices",      label: "Invoices",      icon: "receipt", roles: ["owner", "manager"] },
-      { id: "payments",      href: "/payments",      label: "Payments Received", icon: "rupee", roles: ["owner", "manager"] },
-      { id: "subscriptions", href: "/subscriptions", label: "Subscriptions", icon: "refresh", roles: ["owner", "manager"] },
-      { id: "renewals",      href: "/renewals",      label: "Renewals",      icon: "clock",   roles: ["owner", "manager"] },
+      { id: "projects",      href: "/projects",      label: "Project Sales", icon: "package", roles: ["owner", "manager", "sales", "delivery", "billing"] },
+      { id: "invoices",      href: "/invoices",      label: "Invoices",      icon: "receipt", roles: ["owner", "manager", "billing"] },
+      { id: "payments",      href: "/payments",      label: "Payments Received", icon: "rupee", roles: ["owner", "manager", "billing"] },
+      { id: "subscriptions", href: "/subscriptions", label: "Subscriptions", icon: "refresh", roles: ["owner", "manager", "billing"] },
+      { id: "renewals",      href: "/renewals",      label: "Renewals",      icon: "clock",   roles: ["owner", "manager", "billing", "support"] },
     ],
   },
   {
     // Zoho groups vendor-side money under "Purchases" — familiar to any Books user.
     section: "Purchases",
     icon: "cart",
-    roles: ["owner", "manager"],
+    roles: ["owner", "manager", "billing"],
     items: [
       { id: "vendors",         href: "/accounting/vendors",        label: "Vendors",         icon: "users" },
       { id: "bills",           href: "/accounting/bills",          label: "COGS Bills",      icon: "receipt", hint: "Ask: do you RESELL this to a customer? YES → here. Supplier invoices for products you resell — Google Workspace / M365 / Zoho licenses. This is COGS. (Office / overhead invoices → Expenses.)" },
@@ -181,7 +186,7 @@ export const APP_NAV: NavSection[] = [
   {
     section: "Accounting",
     icon: "layout",
-    roles: ["owner", "manager"],
+    roles: ["owner", "manager", "billing"],
     items: [
       { id: "acc-overview",   href: "/accounting",                label: "Overview",        icon: "layout", hint: "Money cockpit — cash, owed-to-you, you-owe, GST due, and what needs your attention." },
       { id: "banking",        href: "/accounting/banking",        label: "Banking",         icon: "rupee" },
@@ -203,7 +208,7 @@ export const APP_NAV: NavSection[] = [
     // TDS, GST and PF/ESI due-date tracking. Owner/manager + the CA (accountant).
     section: "Compliance",
     icon: "book",
-    roles: ["owner", "manager", "accountant"],
+    roles: ["owner", "manager", "accountant", "billing"],
     items: [
       { id: "compliance-calendar", href: "/compliance",             label: "Compliance Calendar", icon: "calendar", hint: "Every statutory due date for your Pvt Ltd in one worklist — ROC, Income Tax, TDS, GST, PF/ESI. Confirm exact dates with your CA." },
       { id: "compliance-roc",      href: "/compliance/roc",         label: "ROC / MCA",           icon: "book",     hint: "Annual Registrar of Companies filings — AOC-4, MGT-7, DIR-3 KYC, DPT-3, ADT-1, AGM." },
@@ -214,7 +219,7 @@ export const APP_NAV: NavSection[] = [
   {
     section: "Payroll",
     icon: "users",
-    roles: ["owner", "manager"],
+    roles: ["owner", "manager", "billing"],
     items: [
       { id: "employees",        href: "/accounting/employees",  label: "Employees",        icon: "users" },
       { id: "performance",      href: "/performance",           label: "Team Performance", icon: "award" },
@@ -232,13 +237,13 @@ export const APP_NAV: NavSection[] = [
   {
     section: "Engage",
     icon: "send",
-    roles: ["owner", "manager"],
+    roles: ["owner", "manager", "support"],
     items: [
-      { id: "whatsapp",      href: "/whatsapp",      label: "WhatsApp Inbox", icon: "whatsapp" },
-      { id: "campaigns",     href: "/campaigns",     label: "Campaigns",      icon: "send" },
-      { id: "online-promos", href: "/online-promos", label: "Online Promos",  icon: "zap" },
-      { id: "coupons",       href: "/coupons",       label: "Coupons",        icon: "rupee" },
-      { id: "support",       href: "/support",       label: "Support",        icon: "ticket" },
+      { id: "whatsapp",      href: "/whatsapp",      label: "WhatsApp Inbox", icon: "whatsapp", roles: ["owner", "manager", "support"] },
+      { id: "campaigns",     href: "/campaigns",     label: "Campaigns",      icon: "send",   roles: ["owner", "manager"] },
+      { id: "online-promos", href: "/online-promos", label: "Online Promos",  icon: "zap",    roles: ["owner", "manager"] },
+      { id: "coupons",       href: "/coupons",       label: "Coupons",        icon: "rupee",  roles: ["owner", "manager"] },
+      { id: "support",       href: "/support",       label: "Support",        icon: "ticket", roles: ["owner", "manager", "support"] },
     ],
   },
   {
@@ -246,7 +251,7 @@ export const APP_NAV: NavSection[] = [
     // visible in the main menu (was buried under Engage).
     section: "Reports",
     icon: "chart",
-    roles: ["owner", "manager"],
+    roles: ["owner", "manager", "billing"],
     items: [
       { id: "reports",          href: "/reports",                  label: "All Reports",               icon: "chart", hint: "Every business report in one place." },
       { id: "activity",         href: "/activity",                 label: "Activity Log",              icon: "clock", hint: "App me kisne kya kiya — bana / badla / delete / login. Accountability trail." },
