@@ -11,6 +11,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { guardErrorToast } from "@/lib/ui/guard-toast";
 import type { Database } from "@/lib/supabase/database.types";
 
 export type Employee = Database["public"]["Tables"]["employees"]["Row"];
@@ -427,7 +428,8 @@ export function useDeleteSalaryPayment() {
       qc.invalidateQueries({ queryKey: ["statutory-dues"] });
       toast.success("Salary undone — you can pay it again");
     },
-    onError: (err) => toast.error((err as Error).message),
+    // Blocked (bank-reconciled)? Point to Banking to un-reconcile first.
+    onError: (err) => guardErrorToast(err, { label: "Open Banking", href: "/accounting/banking" }),
   });
 }
 
