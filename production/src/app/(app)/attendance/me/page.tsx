@@ -21,6 +21,9 @@ import {
   useMyAttendanceToday,
   useMarkSelfAttendance,
   useSetMyEmployee,
+  useMyAttendanceHistory,
+  useRecordConsent,
+  useWithdrawConsent,
 } from "@/lib/queries/my-attendance";
 
 function fmtTime(iso: string | null): string {
@@ -63,16 +66,111 @@ export default function MyAttendancePage() {
         </Card>
       ) : meQ.data && !meQ.data.linked ? (
         <LinkEmployeeCard />
+      ) : meQ.data && meQ.data.linked && requireSelfie && !meQ.data.consent_at ? (
+        <ConsentCard retentionDays={meQ.data.retention_days} />
       ) : meQ.data && meQ.data.linked ? (
-        <CheckInCard
-          name={meQ.data.employee_name}
-          checkIn={meQ.data.check_in}
-          checkOut={meQ.data.check_out}
-          requireSelfie={requireSelfie}
-          requirePresence={requirePresence}
-        />
+        <>
+          <CheckInCard
+            name={meQ.data.employee_name}
+            checkIn={meQ.data.check_in}
+            checkOut={meQ.data.check_out}
+            requireSelfie={requireSelfie}
+            requirePresence={requirePresence}
+          />
+          <HistoryCard />
+          {meQ.data.consent_at && (
+            <ConsentStatus consentAt={meQ.data.consent_at} retentionDays={meQ.data.retention_days} />
+          )}
+        </>
       ) : null}
     </div>
+  );
+}
+
+/** DPDP consent — shown once before the first selfie check-in. */
+function ConsentCard({ retentionDays }: { retentionDays: number }) {
+  const record = useRecordConsent();
+  const months = Math.round(retentionDays / 30);
+  return (
+    <Card className="p-6 md:p-8">
+      <div className="text-center">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-soft">
+          <Icon name="lock" className="h-6 w-6 text-indigo" />
+        </div>
+        <h2 className="font-serif text-xl">Attendance ke liye consent</h2>
+      </div>
+      <div className="mt-5 space-y-3 text-sm text-ink-2">
+        <p>Attendance mark karte waqt aapki ek <b>selfie</b> aur <b>location</b> capture hogi. Ye sirf <b>attendance ke liye</b> use hoti hai — aur kuch nahi.</p>
+        <ul className="space-y-2 text-[13px]">
+          <li className="flex gap-2"><span className="text-indigo">•</span> Sirf attendance ke liye — koi tracking nahi.</li>
+          <li className="flex gap-2"><span className="text-indigo">•</span> Selfie sirf <b>{months} mahine</b> tak rakhi jaati hai, phir apne-aap delete.</li>
+          <li className="flex gap-2"><span className="text-indigo">•</span> Aap kabhi bhi consent wapas le sakte ho — tab aapki saari selfies delete ho jaayengi.</li>
+        </ul>
+      </div>
+      <Button className="w-full mt-6" disabled={record.isPending} onClick={() => record.mutate()}>
+        {record.isPending ? "…" : "Main samajh gaya — consent deta hoon"}
+      </Button>
+      <p className="text-[11px] text-ink-3 mt-3 text-center">DPDP Act 2023 ke hisaab se — aapki marzi se hi data liya jaata hai.</p>
+    </Card>
+  );
+}
+
+/** Consent status + withdraw (right to erasure) — transparency. */
+function ConsentStatus({ consentAt, retentionDays }: { consentAt: string; retentionDays: number }) {
+  const withdraw = useWithdrawConsent();
+  const [confirming, setConfirming] = React.useState(false);
+  const months = Math.round(retentionDays / 30);
+  return (
+    <Card className="mt-4 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-[12px] text-ink-3">
+          <div className="flex items-center gap-1.5 text-emerald font-medium">
+            <Icon name="check_circle" size={13} /> Consent diya
+          </div>
+          <p className="mt-1">
+            {new Date(consentAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} · selfie {months} mahine tak rakhi jaati hai.
+          </p>
+        </div>
+        {confirming ? (
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>Cancel</Button>
+            <Button size="sm" variant="danger" loading={withdraw.isPending}
+              onClick={() => withdraw.mutate(undefined, { onSuccess: () => setConfirming(false) })}>
+              Delete my selfies
+            </Button>
+          </div>
+        ) : (
+          <button className="text-[12px] text-rose hover:underline shrink-0" onClick={() => setConfirming(true)}>
+            Withdraw
+          </button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** Last 14 days of the caller's own attendance — transparency builds trust. */
+function HistoryCard() {
+  const histQ = useMyAttendanceHistory(14);
+  const rows = histQ.data ?? [];
+  if (histQ.isLoading) return <Skeleton className="mt-4 h-32 w-full rounded-xl" />;
+  if (!rows.length) return null;
+  return (
+    <Card className="mt-4 p-4">
+      <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-3">Aapka recent record</div>
+      <ul className="divide-y divide-hairline">
+        {rows.map((r) => (
+          <li key={r.work_date} className="flex items-center justify-between py-2 text-sm">
+            <span className="text-ink-2">
+              {new Date(r.work_date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+            </span>
+            <span className="tabular-nums text-ink-3 text-[13px]">
+              {fmtTime(r.check_in)} <span className="text-ink-3/60">→</span> {fmtTime(r.check_out)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 

@@ -20,6 +20,8 @@ export type MyAttendanceToday =
       work_date: string;
       check_in: string | null;
       check_out: string | null;
+      consent_at: string | null;
+      retention_days: number;
     };
 
 export function useMyAttendanceToday() {
@@ -31,6 +33,86 @@ export function useMyAttendanceToday() {
       if (error) throw error;
       return data as unknown as MyAttendanceToday;
     },
+  });
+}
+
+export type MyAttendanceDay = {
+  work_date: string;
+  check_in: string | null;
+  check_out: string | null;
+  source: string;
+};
+
+export function useMyAttendanceHistory(days = 14) {
+  return useQuery({
+    queryKey: ["my-attendance-history", days],
+    queryFn: async (): Promise<MyAttendanceDay[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("my_attendance_history", { p_days: days });
+      if (error) throw error;
+      return (data ?? []) as unknown as MyAttendanceDay[];
+    },
+  });
+}
+
+export function useRecordConsent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/attendance/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "record" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Consent record nahi hua");
+    },
+    onSuccess: () => {
+      toast.success("Consent record ho gaya.");
+      void qc.invalidateQueries({ queryKey: ["my-attendance-today"] });
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Consent fail"),
+  });
+}
+
+/** Owner records/clears attendance consent for an employee (enrollment). */
+export function useOwnerSetConsent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { employeeId: string; value: boolean }) => {
+      const res = await fetch("/api/attendance/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "owner_set", employeeId: input.employeeId, value: input.value }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Consent update fail");
+    },
+    onSuccess: (_d, v) => {
+      toast.success(v.value ? "Consent record ho gaya." : "Consent hata diya + selfies delete.");
+      void qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Consent update fail"),
+  });
+}
+
+export function useWithdrawConsent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/attendance/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "withdraw" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Withdraw fail");
+    },
+    onSuccess: () => {
+      toast.success("Consent withdraw + aapki selfies delete ho gayi.");
+      void qc.invalidateQueries({ queryKey: ["my-attendance-today"] });
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Withdraw fail"),
   });
 }
 
@@ -54,6 +136,9 @@ export function useMarkSelfAttendance() {
         }),
       });
       const json = await res.json().catch(() => ({}));
+      if (res.status === 428 || json?.needsConsent) {
+        throw new Error("Pehle attendance ke liye consent do (upar wali screen).");
+      }
       if (!res.ok) throw new Error(json.error ?? "Attendance mark nahi hui");
       return json.action as string;
     },

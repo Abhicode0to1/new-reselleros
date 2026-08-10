@@ -46,6 +46,7 @@ import {
   LEAVE_TYPE_LABEL,
   type Employee, type LeaveKind, type Attendance, type SalaryPayment,
 } from "@/lib/queries/payroll";
+import { useOwnerSetConsent } from "@/lib/queries/my-attendance";
 import type { CurrentUserInfo } from "@/lib/hooks/useCurrentUser";
 import { EmployeeDetailDrawer } from "@/components/features/payroll/employee-detail-drawer";
 import { OfferLetterDialog } from "@/components/features/payroll/offer-letter-dialog";
@@ -1754,6 +1755,29 @@ function NetworkCard() {
           {d?.requirePresence ? "Turn off" : "Require office code"}
         </Button>
       </div>
+
+      {/* Selfie retention — DPDP storage limitation */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-3">
+        <div>
+          <div className="text-sm font-medium text-ink flex items-center gap-2">
+            <Icon name="clock" size={14} className="text-ink-3" />
+            Selfies kept for
+          </div>
+          <p className="text-[11px] text-ink-3 mt-0.5 max-w-xl">
+            Puraani selfies is period ke baad apne-aap delete ho jaati hain (privacy / DPDP). Employee exit pe bhi delete.
+          </p>
+        </div>
+        <select
+          value={d?.retentionDays ?? 180}
+          onChange={(e) => setNet.mutate({ action: "set_retention", value: Number(e.target.value) })}
+          className="px-3 py-1.5 text-sm rounded-md border border-hairline bg-paper"
+        >
+          <option value={90}>3 months</option>
+          <option value={180}>6 months</option>
+          <option value={365}>1 year</option>
+          <option value={730}>2 years</option>
+        </select>
+      </div>
     </Card>
   );
 }
@@ -1768,6 +1792,7 @@ export function AttendanceTab() {
   );
   const empQ = useEmployees();
   const attQ = useAttendance(period);
+  const setConsent = useOwnerSetConsent();
   const employees = (empQ.data ?? []).filter((e) => e.is_active);
   const focusEmp = focusId ? (empQ.data ?? []).find((e) => e.id === focusId) ?? null : null;
 
@@ -1841,6 +1866,7 @@ export function AttendanceTab() {
               <tr>
                 <th className="text-left px-4 py-3">Employee</th>
                 <th className="text-left px-4 py-3">PIN</th>
+                <th className="text-left px-4 py-3">Selfie consent</th>
                 <th className="text-right px-4 py-3">Days present</th>
                 <th className="text-left px-4 py-3">Last seen</th>
               </tr>
@@ -1848,11 +1874,33 @@ export function AttendanceTab() {
             <tbody className="divide-y divide-hairline">
               {employees.map((e) => {
                 const s = byEmp.get(e.id);
+                const consented = Boolean(e.attendance_consent_at);
                 return (
                   <tr key={e.id} className="hover:bg-paper-2/40">
                     <td className="px-4 py-3 font-medium text-ink">{e.name}</td>
                     <td className="px-4 py-3">
                       {e.pin_hash ? <Badge kind="success">Set</Badge> : <Badge kind="warning">Not set</Badge>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {consented ? (
+                        <button
+                          className="inline-flex items-center gap-1.5 group"
+                          title={`Consented (${e.attendance_consent_source ?? "?"}) — click to withdraw + delete selfies`}
+                          onClick={() => setConsent.mutate({ employeeId: e.id, value: false })}
+                        >
+                          <Badge kind="success">Given</Badge>
+                          <span className="text-[10px] text-ink-3 group-hover:text-rose">withdraw</span>
+                        </button>
+                      ) : (
+                        <button
+                          className="inline-flex items-center gap-1.5"
+                          title="Record consent on this employee's behalf (enrollment)"
+                          onClick={() => setConsent.mutate({ employeeId: e.id, value: true })}
+                        >
+                          <Badge kind="warning">Pending</Badge>
+                          <span className="text-[10px] text-ink-3 hover:text-amber-ink">mark given</span>
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right font-mono">{s?.present ?? 0}</td>
                     <td className="px-4 py-3 text-ink-2">{s?.last ? formatDate(s.last) : "—"}</td>

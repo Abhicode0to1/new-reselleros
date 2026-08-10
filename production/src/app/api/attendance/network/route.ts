@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   const u = await me(supabase);
   if (!u) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { data } = await supabase.from("attendance_settings").select("allowed_ips, require_selfie, require_presence").maybeSingle();
+  const { data } = await supabase.from("attendance_settings").select("allowed_ips, require_selfie, require_presence, selfie_retention_days").maybeSingle();
   const allowedIps: string[] = data?.allowed_ips ?? [];
   const currentIp = clientIp(request);
   return NextResponse.json({
@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     onAllowedNetwork: allowedIps.length === 0 || allowedIps.includes(currentIp),
     requireSelfie: data?.require_selfie ?? true,
     requirePresence: data?.require_presence ?? false,
+    retentionDays: data?.selfie_retention_days ?? 180,
   });
 }
 
@@ -52,11 +53,12 @@ export async function POST(request: NextRequest) {
   const action = body?.action as string | undefined;
   const currentIp = clientIp(request);
 
-  const { data: existing } = await supabase.from("attendance_settings").select("allowed_ips, require_selfie, require_presence, presence_secret").maybeSingle();
+  const { data: existing } = await supabase.from("attendance_settings").select("allowed_ips, require_selfie, require_presence, presence_secret, selfie_retention_days").maybeSingle();
   let allowed: string[] = existing?.allowed_ips ?? [];
   let requireSelfie: boolean = existing?.require_selfie ?? true;
   let requirePresence: boolean = existing?.require_presence ?? false;
   let presenceSecret: string | null = existing?.presence_secret ?? null;
+  let retentionDays: number = existing?.selfie_retention_days ?? 180;
 
   if (action === "lock") {
     if (!currentIp) return NextResponse.json({ error: "Couldn't read this network's IP" }, { status: 400 });
@@ -72,14 +74,20 @@ export async function POST(request: NextRequest) {
     requirePresence = Boolean(body?.value);
     // Enabling for the first time → mint the rotating-code seed.
     if (requirePresence && !presenceSecret) presenceSecret = newPresenceSecret();
+  } else if (action === "set_retention") {
+    const v = Number(body?.value);
+    if (!Number.isFinite(v) || v < 30 || v > 3650) {
+      return NextResponse.json({ error: "Retention 30–3650 din ke beech hona chahiye" }, { status: 400 });
+    }
+    retentionDays = Math.round(v);
   } else {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
 
   const { error } = await supabase
     .from("attendance_settings")
-    .upsert({ tenant_id: u.tenant_id, allowed_ips: allowed, require_selfie: requireSelfie, require_presence: requirePresence, presence_secret: presenceSecret, updated_at: new Date().toISOString() }, { onConflict: "tenant_id" });
+    .upsert({ tenant_id: u.tenant_id, allowed_ips: allowed, require_selfie: requireSelfie, require_presence: requirePresence, presence_secret: presenceSecret, selfie_retention_days: retentionDays, updated_at: new Date().toISOString() }, { onConflict: "tenant_id" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ allowedIps: allowed, currentIp, requireSelfie, requirePresence });
+  return NextResponse.json({ allowedIps: allowed, currentIp, requireSelfie, requirePresence, retentionDays });
 }

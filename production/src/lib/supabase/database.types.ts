@@ -1474,6 +1474,8 @@ type EmployeeRow = {
   emergency_contact_name:   string | null;
   emergency_contact_phone:  string | null;
   biometric_id:             string | null;   // migration 0215 — device user number
+  attendance_consent_at:     string | null;  // migration 0218 — DPDP consent for selfie/attendance
+  attendance_consent_source: string | null;  // 'self' | 'owner'
   created_at:      string;
   updated_at:      string;
 };
@@ -1499,6 +1501,8 @@ type EmployeeInsert = {
   emergency_contact_name?:   string | null;
   emergency_contact_phone?:  string | null;
   biometric_id?:             string | null;
+  attendance_consent_at?:     string | null;
+  attendance_consent_source?: string | null;
 };
 type EmployeeUpdate = Partial<Omit<EmployeeInsert, "tenant_id">>;
 
@@ -1933,20 +1937,22 @@ type AttendanceInsert = {
 type AttendanceUpdate = Partial<Omit<AttendanceInsert, "tenant_id">>;
 
 type AttendanceSettingsRow = {
-  tenant_id:        string;
-  allowed_ips:      string[];
-  require_selfie:   boolean;
-  require_presence: boolean;
-  presence_secret:  string | null;
-  updated_at:       string;
+  tenant_id:             string;
+  allowed_ips:           string[];
+  require_selfie:        boolean;
+  require_presence:      boolean;
+  presence_secret:       string | null;
+  selfie_retention_days: number;
+  updated_at:            string;
 };
 type AttendanceSettingsInsert = {
-  tenant_id:         string;
-  allowed_ips?:      string[];
-  require_selfie?:   boolean;
-  require_presence?: boolean;
-  presence_secret?:  string | null;
-  updated_at?:       string;
+  tenant_id:              string;
+  allowed_ips?:           string[];
+  require_selfie?:        boolean;
+  require_presence?:      boolean;
+  presence_secret?:       string | null;
+  selfie_retention_days?: number;
+  updated_at?:            string;
 };
 type AttendanceSettingsUpdate = Partial<Omit<AttendanceSettingsInsert, "tenant_id">>;
 
@@ -2891,6 +2897,11 @@ export type Database = {
       set_my_employee: { Args: { p_employee_id: string }; Returns: undefined };
       my_attendance_today: { Args: Record<string, never>; Returns: unknown };
       mark_self_attendance: { Args: Record<string, never>; Returns: string };
+      record_attendance_consent: { Args: Record<string, never>; Returns: undefined };
+      my_attendance_history: {
+        Args: { p_days?: number };
+        Returns: { work_date: string; check_in: string | null; check_out: string | null; source: string }[];
+      };
       /**
        * Returns the caller's tenant joined with its parent's display fields.
        * SECURITY DEFINER — bypasses RLS for the parent JOIN, but the WHERE

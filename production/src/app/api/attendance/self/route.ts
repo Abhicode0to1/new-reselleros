@@ -62,6 +62,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // DPDP shield — never store a face selfie without recorded consent.
+  if (requireSelfie) {
+    const { data: emp } = await supabase
+      .from("employees").select("attendance_consent_at").eq("id", me.employee_id).maybeSingle();
+    if (!emp?.attendance_consent_at) {
+      return NextResponse.json(
+        { error: "NEEDS_CONSENT", needsConsent: true },
+        { status: 428 },
+      );
+    }
+  }
+
   const { data, error } = await supabase.rpc("mark_self_attendance");
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   const action = data as unknown as string;
