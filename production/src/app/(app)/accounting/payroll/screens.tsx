@@ -1731,6 +1731,29 @@ function NetworkCard() {
           {d?.requireSelfie ? "Turn off" : "Require selfie"}
         </Button>
       </div>
+
+      {/* Office presence code — gates SELF check-in (personal phones) to the office */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-3">
+        <div>
+          <div className="text-sm font-medium text-ink flex items-center gap-2">
+            <Icon name="mobile" size={14} className={d?.requirePresence ? "text-emerald" : "text-ink-3"} />
+            Office code for self check-in {d?.requirePresence ? "· ON" : "· OFF"}
+          </div>
+          <p className="text-[11px] text-ink-3 mt-0.5 max-w-xl">
+            {d?.requirePresence
+              ? "Employees marking from their OWN phone must type the rotating code shown on the kiosk — so \"My Attendance\" can only be done inside the office."
+              : "Self check-in (\"My Attendance\") works from anywhere. Turn on to require the office code — the fix for marking present from home."}
+          </p>
+        </div>
+        <Button
+          variant={d?.requirePresence ? "ghost" : "primary"}
+          size="sm"
+          loading={setNet.isPending}
+          onClick={() => setNet.mutate({ action: "require_presence", value: !(d?.requirePresence ?? false) })}
+        >
+          {d?.requirePresence ? "Turn off" : "Require office code"}
+        </Button>
+      </div>
     </Card>
   );
 }

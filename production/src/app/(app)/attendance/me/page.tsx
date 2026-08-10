@@ -45,6 +45,7 @@ export default function MyAttendancePage() {
   const meQ = useMyAttendanceToday();
   const netQ = useAttendanceNetwork();
   const requireSelfie = netQ.data?.requireSelfie ?? true;
+  const requirePresence = netQ.data?.requirePresence ?? false;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[560px] mx-auto">
@@ -68,6 +69,7 @@ export default function MyAttendancePage() {
           checkIn={meQ.data.check_in}
           checkOut={meQ.data.check_out}
           requireSelfie={requireSelfie}
+          requirePresence={requirePresence}
         />
       ) : null}
     </div>
@@ -79,15 +81,32 @@ function CheckInCard({
   checkIn,
   checkOut,
   requireSelfie,
+  requirePresence,
 }: {
   name: string;
   checkIn: string | null;
   checkOut: string | null;
   requireSelfie: boolean;
+  requirePresence: boolean;
 }) {
   const mark = useMarkSelfAttendance();
   const state: "out" | "in" | "done" = !checkIn ? "out" : !checkOut ? "in" : "done";
   const pending = state !== "done";
+
+  // ── Presence code (only when the office requires it) ─────────────────────────
+  const [code, setCode] = React.useState("");
+
+  // ── GPS (soft audit signal — captured whenever the phone shares it) ──────────
+  const coords = React.useRef<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [geoState, setGeoState] = React.useState<"idle" | "ok" | "denied">("idle");
+  React.useEffect(() => {
+    if (!pending || typeof navigator === "undefined" || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (p) => { coords.current = { lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }; setGeoState("ok"); },
+      () => setGeoState("denied"),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+    );
+  }, [pending]);
 
   // ── Camera (only when a selfie is required and there's still a punch to make) ─
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -151,7 +170,13 @@ function CheckInCard({
 
   function onMark() {
     const photo = requireSelfie ? capture() : null;
-    mark.mutate({ photo });
+    mark.mutate({
+      photo,
+      code,
+      lat: coords.current?.lat ?? null,
+      lng: coords.current?.lng ?? null,
+      accuracy: coords.current?.accuracy ?? null,
+    });
   }
 
   return (
@@ -185,6 +210,27 @@ function CheckInCard({
         </div>
       )}
 
+      {requirePresence && pending && (
+        <div className="mt-5 text-left">
+          <label htmlFor="office-code" className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+            Office code
+          </label>
+          <input
+            id="office-code"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={6}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="6-digit"
+            className="mt-1 w-full rounded-lg border border-hairline bg-paper px-4 py-3 text-center font-mono text-2xl tracking-[0.4em] tabular-nums focus:border-amber focus:outline-none"
+          />
+          <p className="mt-1.5 text-[11px] text-ink-3">
+            Office tablet pe abhi jo code chal raha hai wahi daalo — isse pata chalta hai aap office me hi ho.
+          </p>
+        </div>
+      )}
+
       <div className="mt-6 grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-hairline p-4">
           <p className="text-[11px] uppercase tracking-wider text-ink-3">Check-in</p>
@@ -211,7 +257,7 @@ function CheckInCard({
             size="lg"
             className="w-full h-14 text-base"
             onClick={onMark}
-            disabled={mark.isPending || (requireSelfie && !camOn)}
+            disabled={mark.isPending || (requireSelfie && !camOn) || (requirePresence && code.length !== 6)}
           >
             <Icon name={state === "out" ? "check" : "logout"} className="h-5 w-5 mr-2" />
             {mark.isPending ? "…" : state === "out" ? "Check In" : "Check Out"}
@@ -220,9 +266,14 @@ function CheckInCard({
       </div>
 
       <p className="text-[11px] text-ink-3 mt-4">
-        {requireSelfie
-          ? "Aap logged in ho + selfie — do proof, koi aur aapki attendance nahi laga sakta."
-          : "Aap logged in ho — isliye PIN ki zaroorat nahi."}
+        {[
+          "Login",
+          requireSelfie ? "selfie" : null,
+          requirePresence ? "office code" : null,
+          pending && geoState === "ok" ? "location" : null,
+        ].filter(Boolean).join(" + ")}
+        {" — "}
+        itne proof ke saath aapki attendance record hoti hai, taaki koi aur na laga sake.
       </p>
     </Card>
   );

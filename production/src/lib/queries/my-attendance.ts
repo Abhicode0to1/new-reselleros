@@ -37,13 +37,21 @@ export function useMyAttendanceToday() {
 export function useMarkSelfAttendance() {
   const qc = useQueryClient();
   return useMutation({
-    // Goes through the API route so the selfie is stored + require_selfie is
-    // enforced server-side (a client-only check would be bypassable).
-    mutationFn: async (input?: { photo?: string | null }): Promise<string> => {
+    // Goes through the API route so the selfie + presence code + geo are handled
+    // and enforced server-side (client-only checks would be bypassable).
+    mutationFn: async (input?: {
+      photo?: string | null; code?: string; lat?: number | null; lng?: number | null; accuracy?: number | null;
+    }): Promise<string> => {
       const res = await fetch("/api/attendance/self", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photo: input?.photo ?? null }),
+        body: JSON.stringify({
+          photo: input?.photo ?? null,
+          code: input?.code ?? "",
+          lat: input?.lat ?? null,
+          lng: input?.lng ?? null,
+          accuracy: input?.accuracy ?? null,
+        }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Attendance mark nahi hui");

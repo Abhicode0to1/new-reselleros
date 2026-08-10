@@ -1912,6 +1912,8 @@ type AttendanceRow = {
   marked_ip:   string | null;
   selfie_in:   string | null;
   selfie_out:  string | null;
+  geo_in:      string | null;
+  geo_out:     string | null;
   created_at:  string;
 };
 type AttendanceInsert = {
@@ -1925,20 +1927,26 @@ type AttendanceInsert = {
   marked_ip?:  string | null;
   selfie_in?:  string | null;
   selfie_out?: string | null;
+  geo_in?:     string | null;
+  geo_out?:    string | null;
 };
 type AttendanceUpdate = Partial<Omit<AttendanceInsert, "tenant_id">>;
 
 type AttendanceSettingsRow = {
-  tenant_id:      string;
-  allowed_ips:    string[];
-  require_selfie: boolean;
-  updated_at:     string;
+  tenant_id:        string;
+  allowed_ips:      string[];
+  require_selfie:   boolean;
+  require_presence: boolean;
+  presence_secret:  string | null;
+  updated_at:       string;
 };
 type AttendanceSettingsInsert = {
-  tenant_id:      string;
-  allowed_ips?:   string[];
-  require_selfie?: boolean;
-  updated_at?:    string;
+  tenant_id:         string;
+  allowed_ips?:      string[];
+  require_selfie?:   boolean;
+  require_presence?: boolean;
+  presence_secret?:  string | null;
+  updated_at?:       string;
 };
 type AttendanceSettingsUpdate = Partial<Omit<AttendanceSettingsInsert, "tenant_id">>;
 
