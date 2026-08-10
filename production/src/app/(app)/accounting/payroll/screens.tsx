@@ -36,6 +36,7 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { downloadPayslipPDF } from "@/lib/pdf";
 import { periodLabel } from "@/lib/pdf/PayslipPDF";
 import { toast } from "sonner";
+import { BiometricSetupCard } from "@/components/features/attendance/biometric-setup-card";
 import {
   useEmployees, useUpsertEmployee, useDeleteEmployee, useSetEmployeePin,
   useLeaveEntries, useCreateLeaveEntry, useDeleteLeaveEntry,
@@ -1790,6 +1791,7 @@ export function AttendanceTab() {
   return (
     <>
       <NetworkCard />
+      <BiometricSetupCard employees={employees} />
 
       <Card className="mb-4 p-3 md:p-4">
         <div className="flex flex-wrap items-center gap-3">

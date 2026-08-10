@@ -68,6 +68,7 @@ type TenantRow = {
   gstin_verification: GstinVerification | null;
   parent_tenant_id: string | null;
   tier: TenantTier;
+  attendance_ingest_key: string | null;   // migration 0215 — biometric bridge key
   created_at: string;
   updated_at: string;
 }
@@ -91,6 +92,7 @@ type TenantInsert = {
   gstin_verification?: GstinVerification | null;
   parent_tenant_id?: string | null;
   tier?: TenantTier;
+  attendance_ingest_key?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -1469,6 +1471,7 @@ type EmployeeRow = {
   address:                  string | null;
   emergency_contact_name:   string | null;
   emergency_contact_phone:  string | null;
+  biometric_id:             string | null;   // migration 0215 — device user number
   created_at:      string;
   updated_at:      string;
 };
@@ -1493,6 +1496,7 @@ type EmployeeInsert = {
   address?:                  string | null;
   emergency_contact_name?:   string | null;
   emergency_contact_phone?:  string | null;
+  biometric_id?:             string | null;
 };
 type EmployeeUpdate = Partial<Omit<EmployeeInsert, "tenant_id">>;
 
