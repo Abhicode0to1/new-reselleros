@@ -22,6 +22,7 @@ export type MyAttendanceToday =
       check_out: string | null;
       consent_at: string | null;
       retention_days: number;
+      face_enrolled: boolean;
     };
 
 export function useMyAttendanceToday() {
@@ -110,6 +111,27 @@ export function useOwnerSetConsent() {
       void qc.invalidateQueries({ queryKey: ["employees"] });
     },
     onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Consent update fail"),
+  });
+}
+
+/** Enrol the caller's own reference face (Phase 4). */
+export function useEnrollMyFace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (photo: string) => {
+      const res = await fetch("/api/attendance/face/enroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photo }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Face enroll fail");
+    },
+    onSuccess: () => {
+      toast.success("Face enroll ho gaya ✅");
+      void qc.invalidateQueries({ queryKey: ["my-attendance-today"] });
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Face enroll fail"),
   });
 }
 

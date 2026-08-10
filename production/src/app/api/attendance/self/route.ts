@@ -16,6 +16,7 @@ import crypto from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { validateCode } from "@/lib/attendance/presence";
+import { compareFaces } from "@/lib/attendance/face";
 
 export async function POST(request: NextRequest) {
   const supabase = createClient();
@@ -43,10 +44,11 @@ export async function POST(request: NextRequest) {
 
   const { data: settings } = await supabase
     .from("attendance_settings")
-    .select("require_selfie, require_presence, presence_secret")
+    .select("require_selfie, require_presence, presence_secret, require_face_match")
     .maybeSingle();
   const requireSelfie = settings?.require_selfie ?? true;
   const requirePresence = settings?.require_presence ?? false;
+  const requireFaceMatch = settings?.require_face_match ?? false;
 
   // Presence gate — must know the current rotating office code.
   if (requirePresence) {
@@ -122,6 +124,27 @@ export async function POST(request: NextRequest) {
           .limit(1);
         if (!seen || seen.length === 0) flags.add("new_device");
       }
+      // ── Face verification (Phase 4 seam — opt-in; stub → owner review) ──────
+      if (requireFaceMatch && photo) {
+        const { data: emp } = await supabase
+          .from("employees").select("face_ref_path").eq("id", me.employee_id).maybeSingle();
+        if (!emp?.face_ref_path) {
+          flags.add("face_not_enrolled");
+        } else {
+          const dl = await supabase.storage.from("attendance-selfies").download(emp.face_ref_path);
+          if (dl.data) {
+            const refB64 = Buffer.from(await dl.data.arrayBuffer()).toString("base64");
+            const probeB64 = photo.includes(",") ? photo.split(",")[1] : photo;
+            const cmp = await compareFaces(refB64, probeB64);
+            if (cmp.match === false) flags.add("face_mismatch");
+            else if (cmp.match === null) flags.add("face_review"); // stub / undecided → owner eyeballs it
+            // cmp.match === true → verified, no flag
+          } else {
+            flags.add("face_review");
+          }
+        }
+      }
+
       if (flags.size) {
         // Merge with any flags already on today's row (from the earlier punch).
         const { data: cur } = await supabase.from("attendance")

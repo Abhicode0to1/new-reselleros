@@ -25,6 +25,7 @@ import {
   useMyAttendanceHistory,
   useRecordConsent,
   useWithdrawConsent,
+  useEnrollMyFace,
 } from "@/lib/queries/my-attendance";
 
 function fmtTime(iso: string | null): string {
@@ -50,6 +51,7 @@ export default function MyAttendancePage() {
   const netQ = useAttendanceNetwork();
   const requireSelfie = netQ.data?.requireSelfie ?? true;
   const requirePresence = netQ.data?.requirePresence ?? false;
+  const requireFaceMatch = netQ.data?.requireFaceMatch ?? false;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[560px] mx-auto">
@@ -71,6 +73,7 @@ export default function MyAttendancePage() {
         <ConsentCard retentionDays={meQ.data.retention_days} />
       ) : meQ.data && meQ.data.linked ? (
         <>
+          {requireFaceMatch && !meQ.data.face_enrolled && <EnrollFaceCard />}
           <CheckInCard
             name={meQ.data.employee_name}
             checkIn={meQ.data.check_in}
@@ -112,6 +115,71 @@ function ConsentCard({ retentionDays }: { retentionDays: number }) {
         {record.isPending ? "…" : "Main samajh gaya — consent deta hoon"}
       </Button>
       <p className="text-[11px] text-ink-3 mt-3 text-center">DPDP Act 2023 ke hisaab se — aapki marzi se hi data liya jaata hai.</p>
+    </Card>
+  );
+}
+
+/** One-time reference-face enrollment (Phase 4). */
+function EnrollFaceCard() {
+  const enroll = useEnrollMyFace();
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const [camOn, setCamOn] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  const start = React.useCallback(async () => {
+    if (streamRef.current) return;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setErr("Is browser me camera nahi khulta."); return;
+    }
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+        .catch(() => navigator.mediaDevices.getUserMedia({ video: true, audio: false }));
+      streamRef.current = s;
+      if (videoRef.current) { videoRef.current.srcObject = s; await videoRef.current.play().catch(() => {}); }
+      setCamOn(true); setErr(null);
+    } catch { setErr("Camera allow karke dobara try karo."); }
+  }, []);
+
+  React.useEffect(() => {
+    void start();
+    return () => { streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; };
+  }, [start]);
+
+  function capture(): string | null {
+    const v = videoRef.current;
+    if (!v || !camOn || !v.videoWidth) return null;
+    const w = 320, h = Math.round((v.videoHeight / v.videoWidth) * 320) || 240;
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const ctx = c.getContext("2d"); if (!ctx) return null;
+    ctx.drawImage(v, 0, 0, w, h);
+    return c.toDataURL("image/jpeg", 0.7);
+  }
+
+  return (
+    <Card className="mb-4 p-5 border-indigo/30">
+      <div className="flex items-start gap-4">
+        <div className="shrink-0">
+          <video ref={videoRef} autoPlay muted playsInline
+            className={cn("h-20 w-20 rounded-full border border-hairline bg-paper-2 object-cover [transform:scaleX(-1)]", camOn ? "" : "hidden")} />
+          {!camOn && (
+            <button type="button" onClick={start}
+              className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3">
+              <Icon name="eye" size={20} /><span className="text-[9px]">Tap</span>
+            </button>
+          )}
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-ink">Ek baar apna face enroll karo</div>
+          <p className="text-[12px] text-ink-3 mt-0.5">
+            {err ?? "Face verification ON hai. Seedha camera dekho aur enroll karo — aage har check-in isi se match hoga."}
+          </p>
+          <Button size="sm" className="mt-2" disabled={!camOn || enroll.isPending}
+            onClick={() => { const p = capture(); if (p) enroll.mutate(p); }}>
+            {enroll.isPending ? "…" : "Capture & enroll"}
+          </Button>
+        </div>
+      </div>
     </Card>
   );
 }

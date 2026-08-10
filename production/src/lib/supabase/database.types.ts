@@ -1476,6 +1476,8 @@ type EmployeeRow = {
   biometric_id:             string | null;   // migration 0215 — device user number
   attendance_consent_at:     string | null;  // migration 0218 — DPDP consent for selfie/attendance
   attendance_consent_source: string | null;  // 'self' | 'owner'
+  face_enrolled_at:          string | null;  // migration 0220 — Phase 4 face-verification seam
+  face_ref_path:             string | null;
   created_at:      string;
   updated_at:      string;
 };
@@ -1503,6 +1505,8 @@ type EmployeeInsert = {
   biometric_id?:             string | null;
   attendance_consent_at?:     string | null;
   attendance_consent_source?: string | null;
+  face_enrolled_at?:          string | null;
+  face_ref_path?:             string | null;
 };
 type EmployeeUpdate = Partial<Omit<EmployeeInsert, "tenant_id">>;
 
@@ -1953,6 +1957,7 @@ type AttendanceSettingsRow = {
   require_presence:      boolean;
   presence_secret:       string | null;
   selfie_retention_days: number;
+  require_face_match:    boolean;
   updated_at:            string;
 };
 type AttendanceSettingsInsert = {
@@ -1962,6 +1967,7 @@ type AttendanceSettingsInsert = {
   require_presence?:      boolean;
   presence_secret?:       string | null;
   selfie_retention_days?: number;
+  require_face_match?:    boolean;
   updated_at?:            string;
 };
 type AttendanceSettingsUpdate = Partial<Omit<AttendanceSettingsInsert, "tenant_id">>;

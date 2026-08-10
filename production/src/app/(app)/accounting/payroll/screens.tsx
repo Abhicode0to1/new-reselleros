@@ -1778,6 +1778,29 @@ function NetworkCard() {
           <option value={730}>2 years</option>
         </select>
       </div>
+
+      {/* Face verification (Phase 4 seam) — premium, opt-in */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-3">
+        <div>
+          <div className="text-sm font-medium text-ink flex items-center gap-2">
+            <Icon name="user" size={14} className={d?.requireFaceMatch ? "text-emerald" : "text-ink-3"} />
+            Face verification {d?.requireFaceMatch ? "· ON" : "· OFF"}
+          </div>
+          <p className="text-[11px] text-ink-3 mt-0.5 max-w-xl">
+            {d?.requireFaceMatch
+              ? "Self check-in selfie ko employee ke enrolled face se match kiya jaata hai. Bina certified face-provider ke, mismatch/undecided owner review me aata hai (koi auto-reject nahi)."
+              : "OFF. Turn on to match each self check-in selfie against an enrolled face. Employees ko pehle 'My Attendance' pe apna face enroll karna hoga. (Certified provider env se connect hota hai — warna review-only.)"}
+          </p>
+        </div>
+        <Button
+          variant={d?.requireFaceMatch ? "ghost" : "primary"}
+          size="sm"
+          loading={setNet.isPending}
+          onClick={() => setNet.mutate({ action: "require_face_match", value: !(d?.requireFaceMatch ?? false) })}
+        >
+          {d?.requireFaceMatch ? "Turn off" : "Require face match"}
+        </Button>
+      </div>
     </Card>
   );
 }
@@ -2059,9 +2082,12 @@ function AttendanceRegisterDialog({ employee, initialPeriod, onClose }: {
 }
 
 const FLAG_LABEL: Record<string, string> = {
-  odd_hours:   "Odd hours",
-  no_location: "No location",
-  new_device:  "New device",
+  odd_hours:         "Odd hours",
+  no_location:       "No location",
+  new_device:        "New device",
+  face_review:       "Face — review",
+  face_mismatch:     "Face mismatch",
+  face_not_enrolled: "Face not enrolled",
 };
 
 /** Owner review queue — anomaly-flagged, not-yet-reviewed punches for the month. */
