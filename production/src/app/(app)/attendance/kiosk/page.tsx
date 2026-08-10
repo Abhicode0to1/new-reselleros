@@ -248,7 +248,10 @@ function PinPad({ employee, requireSelfie, onClose }: { employee: Employee; requ
     }
     try {
       const action = await mark.mutateAsync({ employeeId: employee.id, pin, photo });
-      const msg = action === "checked_in" ? "Checked in ✓" : action === "checked_out" ? "Checked out ✓" : "Already done for today";
+      const msg = action === "checked_in" ? "Checked in ✓"
+        : action === "checked_out" ? "Checked out ✓"
+        : action === "too_soon" ? "Abhi to check-in hua — ignore kiya"
+        : "Already done for today";
       setResult({ ok: true, msg });
       setTimeout(onClose, 1400);
     } catch (e) {

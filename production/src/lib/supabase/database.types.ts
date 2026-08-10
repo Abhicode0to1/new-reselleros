@@ -2913,6 +2913,7 @@ export type Database = {
       set_my_employee: { Args: { p_employee_id: string }; Returns: undefined };
       my_attendance_today: { Args: Record<string, never>; Returns: unknown };
       mark_self_attendance: { Args: Record<string, never>; Returns: string };
+      undo_my_last_punch: { Args: Record<string, never>; Returns: string };
       record_attendance_consent: { Args: Record<string, never>; Returns: undefined };
       my_attendance_history: {
         Args: { p_days?: number };

@@ -26,6 +26,7 @@ import {
   useRecordConsent,
   useWithdrawConsent,
   useEnrollMyFace,
+  useUndoLastPunch,
 } from "@/lib/queries/my-attendance";
 
 function fmtTime(iso: string | null): string {
@@ -257,8 +258,17 @@ function CheckInCard({
   requirePresence: boolean;
 }) {
   const mark = useMarkSelfAttendance();
+  const undo = useUndoLastPunch();
   const state: "out" | "in" | "done" = !checkIn ? "out" : !checkOut ? "in" : "done";
   const pending = state !== "done";
+
+  const [confirmQuick, setConfirmQuick] = React.useState(false);
+  const minsSince = (iso: string | null) => (iso ? (Date.now() - new Date(iso).getTime()) / 60000 : Infinity);
+  // A check-out < 10 min after check-in is probably a mis-tap → ask first.
+  const quickCheckout = state === "in" && minsSince(checkIn) < 10;
+  // Undo affordance: last punch was in the last 15 min.
+  const lastPunch = checkOut ?? checkIn;
+  const canUndo = state !== "out" && minsSince(lastPunch) < 15;
 
   // ── Presence code (only when the office requires it) ─────────────────────────
   const [code, setCode] = React.useState("");
@@ -336,6 +346,7 @@ function CheckInCard({
   }
 
   function onMark() {
+    setConfirmQuick(false);
     const photo = requireSelfie ? capture() : null;
     mark.mutate({
       photo,
@@ -345,6 +356,12 @@ function CheckInCard({
       accuracy: coords.current?.accuracy ?? null,
       device: getDeviceToken(),
     });
+  }
+
+  function onPrimary() {
+    // Quick check-out (just checked in) → confirm first, so a stray tap doesn't end the day.
+    if (quickCheckout && !confirmQuick) { setConfirmQuick(true); return; }
+    onMark();
   }
 
   return (
@@ -415,7 +432,17 @@ function CheckInCard({
       </div>
 
       <div className="mt-6">
-        {state === "done" ? (
+        {confirmQuick ? (
+          <div className="rounded-lg border border-amber/40 bg-amber-soft/40 p-4">
+            <p className="text-sm text-ink">
+              Aapne sirf <b>{Math.max(1, Math.round(minsSince(checkIn)))} min</b> pehle check-in kiya tha — pakka check-out karna hai?
+            </p>
+            <div className="mt-3 flex gap-2">
+              <Button variant="ghost" className="flex-1" onClick={() => setConfirmQuick(false)}>Nahi, rehne do</Button>
+              <Button className="flex-1" loading={mark.isPending} onClick={onMark}>Haan, check-out</Button>
+            </div>
+          </div>
+        ) : state === "done" ? (
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-soft px-4 py-2 text-sm text-emerald">
             <Icon name="check_circle" className="h-4 w-4" />
             Aaj ki attendance complete hai
@@ -424,12 +451,22 @@ function CheckInCard({
           <Button
             size="lg"
             className="w-full h-14 text-base"
-            onClick={onMark}
+            onClick={onPrimary}
             disabled={mark.isPending || (requireSelfie && !camOn) || (requirePresence && code.length !== 6)}
           >
             <Icon name={state === "out" ? "check" : "logout"} className="h-5 w-5 mr-2" />
             {mark.isPending ? "…" : state === "out" ? "Check In" : "Check Out"}
           </Button>
+        )}
+
+        {canUndo && !confirmQuick && (
+          <button
+            className="mt-3 text-[12px] text-ink-3 hover:text-rose disabled:opacity-50"
+            disabled={undo.isPending}
+            onClick={() => undo.mutate()}
+          >
+            {undo.isPending ? "Undo ho raha hai…" : `Galti se ${state === "done" ? "check-out" : "check-in"} ho gaya? Undo karo`}
+          </button>
         )}
       </div>
 

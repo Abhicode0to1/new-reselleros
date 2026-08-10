@@ -185,6 +185,7 @@ export function useMarkSelfAttendance() {
     onSuccess: (result) => {
       if (result === "checked_in") toast.success("Check-in ho gaya ✅");
       else if (result === "checked_out") toast.success("Check-out ho gaya 👋");
+      else if (result === "too_soon") toast.info("Abhi to check-in hua — ye tap ignore kiya (galti se double-tap).");
       else toast.info("Aaj ki attendance already complete hai.");
       void qc.invalidateQueries({ queryKey: ["my-attendance-today"] });
       void qc.invalidateQueries({ queryKey: ["attendance"] });
@@ -192,6 +193,26 @@ export function useMarkSelfAttendance() {
     onError: (err: unknown) => {
       toast.error(err instanceof Error ? err.message : "Attendance mark nahi hui");
     },
+  });
+}
+
+/** Undo the caller's last punch within 15 min (clear a wrong check-out / check-in). */
+export function useUndoLastPunch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<string> => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("undo_my_last_punch");
+      if (error) throw error;
+      return data as unknown as string;
+    },
+    onSuccess: (result) => {
+      toast.success(result === "undo_checkout" ? "Check-out undo — aap fir se checked-in ho." : "Check-in undo ho gaya.");
+      void qc.invalidateQueries({ queryKey: ["my-attendance-today"] });
+      void qc.invalidateQueries({ queryKey: ["my-attendance-history"] });
+      void qc.invalidateQueries({ queryKey: ["attendance"] });
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : "Undo fail"),
   });
 }
 
