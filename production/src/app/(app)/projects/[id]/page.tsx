@@ -31,6 +31,7 @@ import { useCustomer } from "@/lib/queries/customers";
 import { RecordProjectPaymentDialog } from "@/components/features/projects/record-project-payment-dialog";
 import { AddExpenseDialog } from "@/components/features/accounting/add-expense-dialog";
 import { AddLabourDialog } from "@/components/features/projects/add-labour-dialog";
+import { ProjectTasks } from "@/components/features/projects/project-tasks";
 import { useRemoveProjectLabour, useSaveProjectLabour, useUpdateProjectDates, type ProjectLabourLine } from "@/lib/queries/projects";
 import { Input } from "@/components/ui/input";
 
@@ -399,6 +400,11 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </CollapsibleCard>
+
+      {/* Roadmap & tasks — assign delivery work to the project's team */}
+      <div className="mt-6">
+        <ProjectTasks projectId={project.id} team={labour} />
+      </div>
 
       {/* Costs — expenses tagged to this project (drive the P&L above) */}
       <CollapsibleCard

@@ -1648,6 +1648,36 @@ type ProjectLabourInsert = {
 };
 type ProjectLabourUpdate = Partial<Omit<ProjectLabourInsert, "id" | "tenant_id" | "project_id" | "employee_id">>;
 
+// ── Project task roadmap — migration 0214 ────────────────────────────────────
+export type ProjectTaskStatus = "todo" | "in_progress" | "done";
+export type ProjectTaskRow = {
+  id:                   string;
+  tenant_id:            string;
+  project_id:           string;
+  title:                string;
+  description:          string | null;
+  status:               ProjectTaskStatus;
+  assignee_employee_id: string | null;
+  due_date:             string | null;
+  seq:                  number;
+  created_by:           string | null;
+  created_at:           string;
+  updated_at:           string;
+};
+type ProjectTaskInsert = {
+  id?:                   string;
+  tenant_id:             string;
+  project_id:            string;
+  title:                 string;
+  description?:          string | null;
+  status?:               ProjectTaskStatus;
+  assignee_employee_id?: string | null;
+  due_date?:             string | null;
+  seq?:                  number;
+  created_by?:           string | null;
+};
+type ProjectTaskUpdate = Partial<Omit<ProjectTaskInsert, "tenant_id" | "project_id">>;
+
 // ── Company Document Vault — migration 0107 ──────────────────────────────────
 export type DocumentCategory = "legal" | "finance" | "hr" | "operations" | "sales_marketing" | "admin" | "branding" | "other";
 export type DocumentRow = {
@@ -2759,6 +2789,7 @@ export type Database = {
       project_sales:     { Row: ProjectSaleRow;      Insert: ProjectSaleInsert;      Update: ProjectSaleUpdate;      Relationships: [] };
       project_labour:    { Row: ProjectLabourRow;    Insert: ProjectLabourInsert;    Update: ProjectLabourUpdate;    Relationships: [] };
       project_milestones:{ Row: ProjectMilestoneRow; Insert: ProjectMilestoneInsert; Update: ProjectMilestoneUpdate; Relationships: [] };
+      project_tasks:     { Row: ProjectTaskRow;      Insert: ProjectTaskInsert;      Update: ProjectTaskUpdate;      Relationships: [] };
       project_payments:  { Row: ProjectPaymentRow;   Insert: ProjectPaymentInsert;   Update: ProjectPaymentUpdate;   Relationships: [] };
       documents:         { Row: DocumentRow;         Insert: DocumentInsert;         Update: DocumentUpdate;         Relationships: [] };
       statutory_dues_payments:{ Row: StatutoryDuesPaymentRow; Insert: StatutoryDuesPaymentInsert; Update: StatutoryDuesPaymentUpdate; Relationships: [] };

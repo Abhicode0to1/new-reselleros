@@ -20,6 +20,8 @@ import type {
   ProjectQuoteLine,
   ExpenseRow,
   ProjectLabourRow,
+  ProjectTaskRow,
+  ProjectTaskStatus,
 } from "@/lib/supabase/database.types";
 
 export type { ProjectSaleRow, ProjectMilestoneRow, ProjectPaymentRow, ProjectQuoteLine };
@@ -682,5 +684,74 @@ export function useRecordProjectPayment() {
       toast.success("Payment recorded");
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not record payment"),
+  });
+}
+
+// ── Project task roadmap (migration 0214) ────────────────────────────────────
+// Tasks per project, assignable to the project's allocated employees (labour).
+export function useProjectTasks(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["project_tasks", projectId],
+    enabled:  Boolean(projectId),
+    queryFn: async (): Promise<ProjectTaskRow[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("project_tasks").select("*").eq("project_id", projectId!)
+        .order("seq", { ascending: true }).order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ProjectTaskRow[];
+    },
+  });
+}
+
+export function useCreateProjectTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { projectId: string; title: string; assigneeId?: string | null; dueDate?: string | null; seq?: number }) => {
+      const supabase = createClient();
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData?.user) throw new Error("Not authenticated");
+      const { data: me, error: meErr } = await supabase.from("users").select("tenant_id").eq("id", authData.user.id).single();
+      if (meErr || !me) throw new Error("User not linked to a tenant");
+      const { error } = await supabase.from("project_tasks").insert({
+        tenant_id:            me.tenant_id,
+        project_id:           input.projectId,
+        title:                input.title.trim(),
+        assignee_employee_id: input.assigneeId ?? null,
+        due_date:             input.dueDate ?? null,
+        seq:                  input.seq ?? 0,
+        created_by:           authData.user.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["project_tasks", v.projectId] }); },
+    onError: (e) => toast.error((e as Error).message),
+  });
+}
+
+export function useUpdateProjectTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; projectId: string; patch: { title?: string; status?: ProjectTaskStatus; assignee_employee_id?: string | null; due_date?: string | null; seq?: number } }) => {
+      const supabase = createClient();
+      const { error } = await supabase.from("project_tasks")
+        .update(input.patch).eq("id", input.id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["project_tasks", v.projectId] }); },
+    onError: (e) => toast.error((e as Error).message),
+  });
+}
+
+export function useDeleteProjectTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; projectId: string }) => {
+      const supabase = createClient();
+      const { error } = await supabase.from("project_tasks").delete().eq("id", input.id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["project_tasks", v.projectId] }); toast.success("Task removed"); },
+    onError: (e) => toast.error((e as Error).message),
   });
 }
