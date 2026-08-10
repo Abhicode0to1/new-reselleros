@@ -1,8 +1,9 @@
 /**
  * My Attendance — self check-in for logged-in app users (migration 0216).
  *
- * Unlike the shared kiosk (PIN + selfie), the login itself is the identity
- * proof, so this is a single big Check In / Check Out button. If the user isn't
+ * The login proves WHO you are, and — when the tenant keeps require_selfie on —
+ * a live selfie proves you're actually present (anti buddy-punching, same as the
+ * shared kiosk). No PIN: the login already is the identity. If the user isn't
  * yet linked to an employee record, they pick themselves once.
  */
 "use client";
@@ -15,7 +16,7 @@ import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { useEmployees } from "@/lib/queries/payroll";
+import { useEmployees, useAttendanceNetwork } from "@/lib/queries/payroll";
 import {
   useMyAttendanceToday,
   useMarkSelfAttendance,
@@ -42,7 +43,8 @@ function todayLabel(): string {
 
 export default function MyAttendancePage() {
   const meQ = useMyAttendanceToday();
-  const mark = useMarkSelfAttendance();
+  const netQ = useAttendanceNetwork();
+  const requireSelfie = netQ.data?.requireSelfie ?? true;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[560px] mx-auto">
@@ -65,8 +67,7 @@ export default function MyAttendancePage() {
           name={meQ.data.employee_name}
           checkIn={meQ.data.check_in}
           checkOut={meQ.data.check_out}
-          onMark={() => mark.mutate()}
-          marking={mark.isPending}
+          requireSelfie={requireSelfie}
         />
       ) : null}
     </div>
@@ -77,21 +78,112 @@ function CheckInCard({
   name,
   checkIn,
   checkOut,
-  onMark,
-  marking,
+  requireSelfie,
 }: {
   name: string;
   checkIn: string | null;
   checkOut: string | null;
-  onMark: () => void;
-  marking: boolean;
+  requireSelfie: boolean;
 }) {
+  const mark = useMarkSelfAttendance();
   const state: "out" | "in" | "done" = !checkIn ? "out" : !checkOut ? "in" : "done";
+  const pending = state !== "done";
+
+  // ── Camera (only when a selfie is required and there's still a punch to make) ─
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const [camOn, setCamOn] = React.useState(false);
+  const [camErrMsg, setCamErrMsg] = React.useState<string | null>(null);
+  const needsCam = requireSelfie && pending;
+
+  const startCam = React.useCallback(async () => {
+    if (streamRef.current) return;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setCamErrMsg("Is browser me camera nahi khulta. Site Chrome (https) me kholo, in-app browser me nahi.");
+      return;
+    }
+    async function grab(): Promise<MediaStream> {
+      try {
+        return await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      } catch (e1) {
+        const n = (e1 as Error).name;
+        if (n === "OverconstrainedError" || n === "NotFoundError" || n === "DevicesNotFoundError" || n === "TypeError") {
+          return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+        throw e1;
+      }
+    }
+    try {
+      const s = await grab();
+      streamRef.current = s;
+      if (videoRef.current) { videoRef.current.srcObject = s; await videoRef.current.play().catch(() => {}); }
+      setCamOn(true); setCamErrMsg(null);
+    } catch (e) {
+      const nm = (e as Error).name || "";
+      setCamErrMsg(
+        nm === "NotAllowedError" || nm === "SecurityError"
+          ? "Camera blocked — circle pe tap karke Allow choose karo (ya browser settings me is site ke liye camera on karo)."
+          : nm === "NotReadableError" || nm === "TrackStartError" || nm === "AbortError"
+            ? "Camera busy hai — Meet/Zoom/WhatsApp jaise apps band karke circle pe dobara tap karo."
+            : nm === "NotFoundError" || nm === "OverconstrainedError" || nm === "DevicesNotFoundError"
+              ? "Is device pe camera nahi mila."
+              : `Camera error: ${nm || "unknown"} — circle pe tap karke retry karo.`,
+      );
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (needsCam) void startCam();
+    return () => { streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; setCamOn(false); };
+  }, [needsCam, startCam]);
+
+  function capture(): string | null {
+    const v = videoRef.current;
+    if (!v || !camOn || !v.videoWidth) return null;
+    const w = 320, h = Math.round((v.videoHeight / v.videoWidth) * 320) || 240;
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(v, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", 0.6);
+  }
+
+  function onMark() {
+    const photo = requireSelfie ? capture() : null;
+    mark.mutate({ photo });
+  }
 
   return (
     <Card className="p-6 md:p-8 text-center">
       <p className="text-sm text-ink-3">Namaste</p>
       <p className="font-serif text-2xl mt-0.5">{name}</p>
+
+      {needsCam && (
+        <div className="mt-5">
+          <video
+            ref={videoRef}
+            autoPlay muted playsInline
+            className={cn(
+              "mx-auto h-28 w-28 rounded-full border border-hairline bg-paper-2 object-cover [transform:scaleX(-1)]",
+              camOn ? "" : "hidden",
+            )}
+          />
+          {!camOn && (
+            <button
+              type="button"
+              onClick={startCam}
+              className="mx-auto flex h-28 w-28 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3 hover:border-amber/50 hover:text-amber-ink"
+            >
+              <Icon name="eye" size={24} />
+              <span className="text-[10px] leading-tight">Camera on karne ke liye tap</span>
+            </button>
+          )}
+          <p className={cn("mt-2 text-xs", camErrMsg ? "text-rose" : "text-ink-3")}>
+            {camErrMsg ?? (camOn ? "Camera dekho — selfie ke saath attendance mark hogi." : "Selfie zaroori hai.")}
+          </p>
+        </div>
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-hairline p-4">
@@ -119,16 +211,18 @@ function CheckInCard({
             size="lg"
             className="w-full h-14 text-base"
             onClick={onMark}
-            disabled={marking}
+            disabled={mark.isPending || (requireSelfie && !camOn)}
           >
             <Icon name={state === "out" ? "check" : "logout"} className="h-5 w-5 mr-2" />
-            {marking ? "…" : state === "out" ? "Check In" : "Check Out"}
+            {mark.isPending ? "…" : state === "out" ? "Check In" : "Check Out"}
           </Button>
         )}
       </div>
 
       <p className="text-[11px] text-ink-3 mt-4">
-        Aap logged in ho — isliye PIN ya selfie ki zaroorat nahi.
+        {requireSelfie
+          ? "Aap logged in ho + selfie — do proof, koi aur aapki attendance nahi laga sakta."
+          : "Aap logged in ho — isliye PIN ki zaroorat nahi."}
       </p>
     </Card>
   );

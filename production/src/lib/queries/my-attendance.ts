@@ -37,11 +37,17 @@ export function useMyAttendanceToday() {
 export function useMarkSelfAttendance() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (): Promise<string> => {
-      const supabase = createClient();
-      const { data, error } = await supabase.rpc("mark_self_attendance");
-      if (error) throw error;
-      return data as unknown as string;
+    // Goes through the API route so the selfie is stored + require_selfie is
+    // enforced server-side (a client-only check would be bypassable).
+    mutationFn: async (input?: { photo?: string | null }): Promise<string> => {
+      const res = await fetch("/api/attendance/self", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photo: input?.photo ?? null }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Attendance mark nahi hui");
+      return json.action as string;
     },
     onSuccess: (result) => {
       if (result === "checked_in") toast.success("Check-in ho gaya ✅");
