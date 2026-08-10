@@ -20,12 +20,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { StatStrip } from "@/components/shared/stat-strip";
-import { rupee } from "@/lib/utils";
+import { Icon } from "@/components/ui/icon";
+import { rupee, formatDate } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
 type RangeKey = "month" | "fy" | "12m" | "all";
 
 interface PurchaseLine {
+  id:       string;
   source:   "expense" | "cogs";
   date:     string;       // YYYY-MM-DD
   vendor:   string;
@@ -65,8 +67,8 @@ function usePurchases(range: RangeKey) {
     queryKey: ["reports", "purchases", { from, to }],
     queryFn: async (): Promise<PurchaseLine[]> => {
       const supabase = createClient();
-      let ex = supabase.from("expenses").select("expense_date, amount, gst_paid, category, vendor_name");
-      let bi = supabase.from("vendor_bills").select("bill_date, subtotal, cgst, sgst, igst, category, vendor_name");
+      let ex = supabase.from("expenses").select("id, expense_date, amount, gst_paid, category, vendor_name");
+      let bi = supabase.from("vendor_bills").select("id, bill_date, subtotal, cgst, sgst, igst, category, vendor_name");
       if (from) { ex = ex.gte("expense_date", from); bi = bi.gte("bill_date", from); }
       if (to)   { ex = ex.lte("expense_date", to);   bi = bi.lte("bill_date", to); }
       const [exRes, biRes] = await Promise.all([ex, bi]);
@@ -80,6 +82,7 @@ function usePurchases(range: RangeKey) {
         // by salary payouts.
         if ((e.category || "").toLowerCase() === "salaries") continue;
         lines.push({
+          id: e.id,
           source: "expense",
           date: e.expense_date,
           vendor: (e.vendor_name ?? "").trim() || "—",
@@ -90,6 +93,7 @@ function usePurchases(range: RangeKey) {
       }
       for (const b of biRes.data ?? []) {
         lines.push({
+          id: b.id,
           source: "cogs",
           date: b.bill_date,
           vendor: (b.vendor_name ?? "").trim() || "—",
@@ -114,6 +118,26 @@ function groupBy(lines: PurchaseLine[], keyOf: (l: PurchaseLine) => string): Agg
   return Array.from(m.values()).sort((x, y) => y.gross - x.gross);
 }
 
+/** Same grouping, but keep each group's individual lines (newest first) for drill-down. */
+function groupLines(lines: PurchaseLine[], keyOf: (l: PurchaseLine) => string): Map<string, PurchaseLine[]> {
+  const m = new Map<string, PurchaseLine[]>();
+  for (const l of lines) {
+    const key = keyOf(l);
+    const arr = m.get(key) ?? [];
+    arr.push(l);
+    m.set(key, arr);
+  }
+  for (const arr of m.values()) arr.sort((a, b) => b.date.localeCompare(a.date));
+  return m;
+}
+
+/** Where a purchase line's source record lives — pre-filtered by vendor where possible. */
+function lineHref(l: PurchaseLine): string {
+  return l.source === "expense"
+    ? `/accounting/expenses?q=${encodeURIComponent(l.vendor === "—" ? "" : l.vendor)}`
+    : `/accounting/bills`;
+}
+
 const MONTH_LABEL = (ym: string) => {
   const [y, m] = ym.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
@@ -126,6 +150,8 @@ export default function PurchasesReportPage() {
 
   const byVendor  = React.useMemo(() => groupBy(lines ?? [], (l) => l.vendor), [lines]);
   const byCategory = React.useMemo(() => groupBy(lines ?? [], (l) => l.category), [lines]);
+  const linesByVendor = React.useMemo(() => groupLines(lines ?? [], (l) => l.vendor), [lines]);
+  const linesByCategory = React.useMemo(() => groupLines(lines ?? [], (l) => l.category), [lines]);
   const byMonth = React.useMemo(
     () => groupBy(lines ?? [], (l) => l.date.slice(0, 7)).sort((a, b) => a.key.localeCompare(b.key)),
     [lines],
@@ -220,9 +246,9 @@ export default function PurchasesReportPage() {
       {!isLoading && !error && lines && lines.length > 0 && (
         <div className="space-y-6">
           {/* By vendor */}
-          <BreakdownTable title="By vendor" subtitle="Who you buy from most" rows={byVendor} totals={totals} firstColHeader="Vendor" />
+          <BreakdownTable title="By vendor" subtitle="Kisi vendor pe click karo — uski saari bills/expenses khulengi" rows={byVendor} totals={totals} firstColHeader="Vendor" groupLines={linesByVendor} />
           {/* By category */}
-          <BreakdownTable title="By category" subtitle="What the money goes on" rows={byCategory} totals={totals} firstColHeader="Category" />
+          <BreakdownTable title="By category" subtitle="Kisi category pe click karo — uske saare records khulenge" rows={byCategory} totals={totals} firstColHeader="Category" groupLines={linesByCategory} />
 
           {/* By month */}
           <Card flush>
@@ -261,12 +287,52 @@ export default function PurchasesReportPage() {
   );
 }
 
-/** A vendor/category rollup table (desktop) + card list (mobile). */
+const SOURCE_LABEL = { expense: "Expense", cogs: "COGS bill" } as const;
+
+/** The individual purchase lines behind one vendor/category — the drill-down. */
+function DrillLines({ lines, colSpan }: { lines: PurchaseLine[]; colSpan?: number }) {
+  if (!lines.length) return null;
+  const body = (
+    <ul className="divide-y divide-hairline/70">
+      {lines.map((l) => (
+        <li key={`${l.source}-${l.id}`} className="flex items-center gap-3 py-2 pl-2 pr-1">
+          <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${l.source === "cogs" ? "bg-indigo-soft text-indigo" : "bg-paper-2 text-ink-3"}`}>
+            {SOURCE_LABEL[l.source]}
+          </span>
+          <span className="text-[12px] text-ink-3 tabular-nums shrink-0 w-20">{formatDate(l.date)}</span>
+          <span className="text-sm text-ink-2 truncate flex-1 min-w-0">{l.category}</span>
+          <span className="tabular-nums text-sm text-ink-2 shrink-0">{rupee(l.net + l.gst)}</span>
+          <Link href={lineHref(l) as never} className="shrink-0 inline-flex items-center gap-0.5 text-[11px] text-amber-ink hover:underline">
+            Open <Icon name="arrow_right" size={11} />
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+  if (colSpan) {
+    return (
+      <tr className="bg-paper-2/30">
+        <td colSpan={colSpan} className="px-6 py-1">{body}</td>
+      </tr>
+    );
+  }
+  return <div className="mt-2 rounded-lg bg-paper-2/40 px-2">{body}</div>;
+}
+
+/** A vendor/category rollup table (desktop) + card list (mobile), each row drills into its lines. */
 function BreakdownTable({
-  title, subtitle, rows, totals, firstColHeader,
+  title, subtitle, rows, totals, firstColHeader, groupLines,
 }: {
   title: string; subtitle: string; rows: Agg[]; totals: { net: number; gst: number; gross: number; count: number }; firstColHeader: string;
+  groupLines: Map<string, PurchaseLine[]>;
 }) {
+  const [open, setOpen] = React.useState<Set<string>>(new Set());
+  const toggle = (k: string) => setOpen((prev) => {
+    const next = new Set(prev);
+    if (next.has(k)) next.delete(k); else next.add(k);
+    return next;
+  });
+
   return (
     <Card flush>
       <div className="p-3 border-b border-hairline">
@@ -276,15 +342,24 @@ function BreakdownTable({
 
       {/* Mobile cards */}
       <ul className="md:hidden divide-y divide-hairline">
-        {rows.map((r) => (
-          <li key={r.key} className="p-3">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <span className="font-medium text-ink text-sm truncate">{r.key}</span>
-              <span className="tabular-nums text-sm font-medium">{rupee(r.gross)}</span>
-            </div>
-            <div className="text-[11px] text-ink-3 tabular-nums">{r.count} bills · net {rupee(r.net)} · GST {rupee(r.gst)}</div>
-          </li>
-        ))}
+        {rows.map((r) => {
+          const isOpen = open.has(r.key);
+          return (
+            <li key={r.key} className="p-3">
+              <button type="button" className="w-full text-left" onClick={() => toggle(r.key)}>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="font-medium text-ink text-sm truncate flex items-center gap-1">
+                    <Icon name={isOpen ? "chevron_down" : "chevron_up"} size={13} className="text-ink-3 rotate-90 data-[o=1]:rotate-0" data-o={isOpen ? 1 : 0} />
+                    {r.key}
+                  </span>
+                  <span className="tabular-nums text-sm font-medium">{rupee(r.gross)}</span>
+                </div>
+                <div className="text-[11px] text-ink-3 tabular-nums pl-4">{r.count} bills · net {rupee(r.net)} · GST {rupee(r.gst)}</div>
+              </button>
+              {isOpen && <DrillLines lines={groupLines.get(r.key) ?? []} />}
+            </li>
+          );
+        })}
       </ul>
 
       {/* Desktop table */}
@@ -300,15 +375,26 @@ function BreakdownTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.key} className="border-b border-hairline last:border-0 hover:bg-paper-2/40">
-                <td className="p-3 text-sm font-medium text-ink">{r.key}</td>
-                <td className="p-3 text-right tabular-nums text-sm text-ink-2">{r.count}</td>
-                <td className="p-3 text-right tabular-nums text-sm text-ink-2">{rupee(r.net)}</td>
-                <td className="p-3 text-right tabular-nums text-sm text-ink-2">{rupee(r.gst)}</td>
-                <td className="p-3 text-right tabular-nums text-sm font-medium">{rupee(r.gross)}</td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const isOpen = open.has(r.key);
+              return (
+                <React.Fragment key={r.key}>
+                  <tr className="border-b border-hairline hover:bg-paper-2/40 cursor-pointer" onClick={() => toggle(r.key)}>
+                    <td className="p-3 text-sm font-medium text-ink">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Icon name={isOpen ? "chevron_down" : "chevron_up"} size={13} className={isOpen ? "text-ink-2" : "text-ink-3 rotate-180"} />
+                        {r.key}
+                      </span>
+                    </td>
+                    <td className="p-3 text-right tabular-nums text-sm text-ink-2">{r.count}</td>
+                    <td className="p-3 text-right tabular-nums text-sm text-ink-2">{rupee(r.net)}</td>
+                    <td className="p-3 text-right tabular-nums text-sm text-ink-2">{rupee(r.gst)}</td>
+                    <td className="p-3 text-right tabular-nums text-sm font-medium">{rupee(r.gross)}</td>
+                  </tr>
+                  {isOpen && <DrillLines lines={groupLines.get(r.key) ?? []} colSpan={5} />}
+                </React.Fragment>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-ink bg-paper-2/40 font-semibold">

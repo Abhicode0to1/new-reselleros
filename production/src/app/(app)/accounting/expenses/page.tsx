@@ -161,6 +161,12 @@ export default function ExpensesPage() {
   const [payeeFilter, setPayeeFilter] = React.useState("");
   const [unpaidOnly, setUnpaidOnly] = React.useState(false);
   const [search, setSearch] = React.useState("");
+  // Deep-link from Purchase Report ("Open" on a vendor line) → pre-fill search.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setSearch(q);
+  }, []);
   const [addOpen, setAddOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Expense | null>(null);
   const [detail, setDetail]   = React.useState<Expense | null>(null);
