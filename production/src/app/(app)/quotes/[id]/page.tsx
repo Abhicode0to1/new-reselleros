@@ -93,6 +93,8 @@ export default function QuoteDetailPage() {
   const [receiptPayment, setReceiptPayment] = React.useState<Payment | null>(null);
   const [sendOpen,    setSendOpen]    = React.useState(false);
   const [whatsOpen,   setWhatsOpen]   = React.useState(false);
+  // "Can't delete" → show WHICH related records block it (invoice + payments).
+  const [blockedOpen, setBlockedOpen] = React.useState(false);
   // In-app confirm dialog — native window.confirm() is suppressed in some
   // embeds/webviews and silently returns false, which made destructive actions
   // (Reopen, Delete) look dead. See tasks/page.tsx for the same fix.
@@ -122,6 +124,8 @@ export default function QuoteDetailPage() {
   }, [sendIntent, quote, router]);
 
   const totalReceivedSoFar = sumReceived(paymentHistory ?? []);
+  // Records that keep this quote un-deletable (must be voided/refunded first).
+  const receivedPayments = (paymentHistory ?? []).filter((p) => p.status === "received");
 
   // Inter-state? Compare customer state code vs tenant (seller) state code.
   const interState = isInterStateSupply(customer?.state_code, me?.tenantStateCode);
@@ -389,7 +393,19 @@ export default function QuoteDetailPage() {
               {quote.id}
             </h1>
             <p className="text-sm text-ink-3 mt-1 flex items-center gap-2 flex-wrap">
-              <span>For <b className="text-ink">{quote.customer_name}</b></span>
+              <span>
+                For{" "}
+                {quote.customer_id ? (
+                  <Link
+                    href={`/customers/${quote.customer_id}` as any}
+                    className="font-semibold text-ink hover:text-amber-ink hover:underline"
+                  >
+                    {quote.customer_name}
+                  </Link>
+                ) : (
+                  <b className="text-ink">{quote.customer_name}</b>
+                )}
+              </span>
               <span>·</span>
               <Badge kind={status.kind} dot>{status.label}</Badge>
               {quote.is_extension ? (
@@ -487,14 +503,22 @@ export default function QuoteDetailPage() {
                 <Icon name="copy" size={15} /> Duplicate & edit
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                destructive
-                className="gap-2.5 py-2 cursor-pointer"
-                disabled={Boolean(deleteBlock)}
-                onClick={handleDelete}
-              >
-                <Icon name="trash" size={15} /> {deleteBlock ? "Can't delete" : "Delete quote"}
-              </DropdownMenuItem>
+              {deleteBlock ? (
+                <DropdownMenuItem
+                  className="gap-2.5 py-2 cursor-pointer text-ink-2"
+                  onClick={() => setBlockedOpen(true)}
+                >
+                  <Icon name="lock" size={15} /> Can&apos;t delete — why?
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  destructive
+                  className="gap-2.5 py-2 cursor-pointer"
+                  onClick={handleDelete}
+                >
+                  <Icon name="trash" size={15} /> Delete quote
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -968,6 +992,67 @@ export default function QuoteDetailPage() {
           }}
         />
       )}
+
+      {/* "Can't delete — why?" — shows the related records that block deletion
+          (the invoice + recorded payments) so the owner knows what to void first. */}
+      <Dialog open={blockedOpen} onOpenChange={setBlockedOpen}>
+        <DialogContent className="max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="lock" size={18} className="text-amber" />
+              Ye quote abhi delete nahi ho sakta
+            </DialogTitle>
+            <DialogDescription>
+              Is quote pe paisa laga hua hai. Delete karne se payment ledger + audit trail mit jaayega.
+              Pehle in related records ko hatana / void karna padega:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            {quote.invoice_id && (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline p-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Icon name="receipt" size={16} className="text-emerald shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-ink truncate">Invoice {quote.invoice_id}</div>
+                    <div className="text-[11px] text-ink-3">Pehle ise credit-note / void karo</div>
+                  </div>
+                </div>
+                <Button asChild variant="ghost" size="sm" icon="external" className="shrink-0">
+                  <Link href={"/invoices" as any}>Open</Link>
+                </Button>
+              </div>
+            )}
+
+            {receivedPayments.length > 0 && (
+              <div className="rounded-lg border border-hairline p-3">
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <Icon name="rupee" size={16} className="text-emerald shrink-0" />
+                  <div className="text-sm font-medium text-ink">
+                    {receivedPayments.length} payment{receivedPayments.length === 1 ? "" : "s"} · {rupee(totalReceivedSoFar)} received
+                  </div>
+                </div>
+                <ul className="space-y-0.5 pl-6">
+                  {receivedPayments.map((p, i) => (
+                    <li key={p.id} className="text-[11px] text-ink-3 tabular-nums">
+                      #{i + 1} · {rupee(p.amount)} · {p.method.replace("_", " ")} · {formatDate(p.received_at)}
+                    </li>
+                  ))}
+                </ul>
+                <div className="text-[11px] text-ink-3 mt-1.5 pl-6">Pehle inhe refund / void karo (Payment history se).</div>
+              </div>
+            )}
+
+            {!quote.invoice_id && receivedPayments.length === 0 && (
+              <p className="text-sm text-ink-3">{deleteBlock}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="primary" onClick={() => setBlockedOpen(false)}>Samajh gaya</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reusable confirm dialog (replaces native window.confirm, which is
           suppressed in some embeds and silently returns false). */}
