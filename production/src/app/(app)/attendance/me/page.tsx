@@ -38,6 +38,14 @@ function fmtTime(iso: string | null): string {
   });
 }
 
+/** "8h 12m" between two timestamps — the real "office me kitne time" answer. */
+function fmtDuration(inIso: string | null, outIso: string | null): string | null {
+  if (!inIso || !outIso) return null;
+  const mins = Math.max(0, Math.round((new Date(outIso).getTime() - new Date(inIso).getTime()) / 60000));
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 function todayLabel(): string {
   return new Date().toLocaleDateString("en-IN", {
     timeZone: "Asia/Kolkata",
@@ -236,6 +244,9 @@ function HistoryCard() {
             </span>
             <span className="tabular-nums text-ink-3 text-[13px]">
               {fmtTime(r.check_in)} <span className="text-ink-3/60">→</span> {fmtTime(r.check_out)}
+              {fmtDuration(r.check_in, r.check_out)
+                ? <span className="ml-2 text-ink-2">· {fmtDuration(r.check_in, r.check_out)}</span>
+                : r.check_in && !r.check_out ? <span className="ml-2 text-amber-ink">· check-out reh gaya</span> : null}
             </span>
           </li>
         ))}
@@ -432,6 +443,9 @@ function CheckInCard({
       </div>
 
       <div className="mt-6">
+        {state === "done" && fmtDuration(checkIn, checkOut) && (
+          <p className="mb-3 text-sm text-ink-2">Aaj office me: <b className="text-ink">{fmtDuration(checkIn, checkOut)}</b></p>
+        )}
         {confirmQuick ? (
           <div className="rounded-lg border border-amber/40 bg-amber-soft/40 p-4">
             <p className="text-sm text-ink">
