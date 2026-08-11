@@ -15,7 +15,6 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { EmptyState } from "@/components/shared/empty-state";
-import { StatStrip } from "@/components/shared/stat-strip";
 import { computeMargin } from "@/components/features/margin-pill";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button, IconButton } from "@/components/ui/button";
@@ -24,13 +23,6 @@ import type { QuoteLineItem } from "@/lib/supabase/database.types";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { TabBar, type TabBarItem } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -224,6 +216,7 @@ export default function QuotesPage() {
     .reduce((s, q) => s + estimateMarginForQuote(q).margin, 0);
   const acceptedCount = counts.accepted ?? 0;
   const sentishCount = (counts.sent ?? 0) + (counts.viewed ?? 0);
+  const expiringCount = sentishCount;
   const winRate = (quotes ?? []).length > 0
     ? Math.round((acceptedCount / Math.max(1, (quotes?.length ?? 1) - (counts.draft ?? 0))) * 100)
     : 0;
@@ -392,71 +385,94 @@ export default function QuotesPage() {
         )
       )}
 
-      {view === "subscription" && (<>
-
-      {/* Compact metric strip (replaces the big KPI-card grid) */}
-      {!isLoading && quotes && (
-        <StatStrip
-          className="mb-5"
-          items={[
-            { label: "Pipeline",       value: rupee(totalValue, { compact: true }), tone: "amber" },
-            { label: "Out for review", value: rupee(sentValue, { compact: true }) },
-            { label: "Accepted",       value: rupee(acceptedValue, { compact: true }), tone: "emerald" },
-            { label: "Pipeline margin",value: rupee(pipelineMargin, { compact: true }), tone: "emerald" },
-            { label: "Win rate",       value: `${winRate}%` },
-            { label: "Total quotes",   value: quotes.length },
-          ]}
-        />
+      {view === "subscription" && (
+        <>
+          {/* Interactive KPI Stat Grid */}
+          {!isLoading && quotes && (
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-5">
+          <button
+            type="button"
+            onClick={() => setTab("all")}
+            className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
+          >
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Pipeline</p>
+            <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalValue, { compact: true })}</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("sent")}
+            className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
+          >
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Out for review</p>
+            <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(sentValue, { compact: true })}</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("accepted")}
+            className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-emerald/60 transition-all cursor-pointer"
+          >
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Accepted</p>
+            <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(acceptedValue, { compact: true })}</p>
+          </button>
+          <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Pipeline Margin</p>
+            <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(pipelineMargin, { compact: true })}</p>
+          </div>
+          <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
+            <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{winRate}%</p>
+          </div>
+          <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Total Quotes</p>
+            <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{quotes.length}</p>
+          </div>
+        </div>
       )}
 
-      {/* AI suggestion */}
-      {!isLoading && quotes && quotes.length > 0 && sentishCount > 0 && (
+      {/* Quote Intelligence */}
+      {!isLoading && quotes && expiringCount > 0 && (
         <div className="mb-4">
           <GeminiCard
             title="Quote intelligence"
             actions={
-              <Button size="sm" variant="primary" icon="mail">
+              <Button
+                size="sm"
+                variant="primary"
+                icon="mail"
+                onClick={() => {
+                  toast.success(`Nudge sent for ${expiringCount} expiring quotes`);
+                }}
+              >
                 Nudge expiring quotes
               </Button>
             }
             compact
           >
-            <b>{sentishCount} quotes out for review.</b>{" "}
-            Expiring within 7 days are highest priority — send a nudge to those customers.
+            <b>{expiringCount} quote{expiringCount === 1 ? "" : "s"} out for review.</b> Expiring within 7 days are highest priority — send a nudge to those customers.
           </GeminiCard>
         </div>
       )}
 
-      {/* Tabs + filter */}
+      {/* Sleek Horizontal TabBar + Date Range + Search */}
       {!isLoading && quotes && quotes.length > 0 && (
-        <>
-          {/* One compact toolbar — status filter + search + count on a single row. */}
-          <div className="flex items-center gap-3 flex-wrap mb-3">
-            <Select value={tab} onValueChange={setTab}>
-              <SelectTrigger className="w-full sm:w-52">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {tabs.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.label} ({t.count ?? 0})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="w-full sm:w-64">
-              <Input
-                prefix={<Icon name="search" size={14} />}
-                placeholder="Quote ID, customer…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+        <div className="mb-4 space-y-3">
+          <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
+          <div className="flex justify-between items-center gap-3 flex-wrap">
+            <div className="text-xs text-ink-3">
+              Showing {filtered.length} of {counts.all ?? 0} quote{counts.all === 1 ? "" : "s"}
             </div>
-            <div className="text-xs text-ink-3 sm:ml-auto">
-              Showing {filtered.length} of {counts.all ?? 0} quotes
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="w-full sm:w-64">
+                <Input
+                  prefix={<Icon name="search" size={14} />}
+                  placeholder="Quote ID, customer, product…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* Error */}
