@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
 import { rupee, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { useVendors } from "@/lib/queries/vendors";
@@ -294,6 +297,201 @@ const VENDOR_SCORECARDS: VendorScorecard[] = [
   },
 ];
 
+// ── Edit Vendor Card & Products Modal ───────────────────────────────────────
+
+function EditVendorCardModal({
+  bid,
+  onClose,
+  onSave,
+}: {
+  bid: VendorBid;
+  onClose: () => void;
+  onSave: (updated: VendorBid) => void;
+}) {
+  const [vendorName, setVendorName] = React.useState(bid.vendorName);
+  const [productSku, setProductSku] = React.useState(bid.productSku);
+  const [monthlyCost, setMonthlyCost] = React.useState(bid.unitCostMonthly.toString());
+  const [creditDays, setCreditDays] = React.useState(bid.creditDays.toString());
+  const [provisioningTime, setProvisioningTime] = React.useState(bid.provisioningTime);
+  const [notes, setNotes] = React.useState(bid.notes || "");
+  const [selectedProducts, setSelectedProducts] = React.useState<string[]>([
+    "Google Workspace & GCP",
+  ]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const mCost = Number(monthlyCost) || 0;
+    const updatedBid: VendorBid = {
+      ...bid,
+      vendorName,
+      productSku,
+      unitCostMonthly: mCost,
+      unitCostYearly: mCost * 12,
+      creditDays: Number(creditDays) || 0,
+      provisioningTime,
+      notes: notes.trim() || undefined,
+      updatedAt: new Date().toISOString().split("T")[0],
+    };
+    onSave(updatedBid);
+    onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="md:!max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Icon name="sparkles" size={18} className="text-primary" />
+            <span>Edit Vendor Card & Products — {bid.vendorName}</span>
+          </DialogTitle>
+          <DialogDescription>
+            Update wholesale unit rate, credit terms, and add or remove products supplied by this vendor.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+              Vendor Name
+            </label>
+            <Input
+              value={vendorName}
+              onChange={(e) => setVendorName(e.target.value)}
+              className="bg-paper font-semibold"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+                Product SKU
+              </label>
+              <select
+                value={productSku}
+                onChange={(e) => setProductSku(e.target.value)}
+                className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm font-semibold focus:border-amber"
+              >
+                <option value="Google Workspace Business Starter">Google Workspace Business Starter</option>
+                <option value="Google Workspace Business Standard">Google Workspace Business Standard</option>
+                <option value="Google Workspace Business Plus">Google Workspace Business Plus</option>
+                <option value="Microsoft 365 Business Basic">Microsoft 365 Business Basic</option>
+                <option value="Microsoft 365 Business Standard">Microsoft 365 Business Standard</option>
+                <option value="Zoho One License">Zoho One License</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+                Wholesale Unit Rate (₹/usr/mo) *
+              </label>
+              <Input
+                type="number"
+                value={monthlyCost}
+                onChange={(e) => setMonthlyCost(e.target.value)}
+                className="bg-paper font-mono font-bold text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+                Payment Credit Terms *
+              </label>
+              <select
+                value={creditDays}
+                onChange={(e) => setCreditDays(e.target.value)}
+                className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm focus:border-amber"
+              >
+                <option value="0">Prepaid (0 Days)</option>
+                <option value="15">15 Days Net Credit</option>
+                <option value="30">30 Days Net Credit</option>
+                <option value="45">45 Days Net Credit</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+                Provisioning Turnaround *
+              </label>
+              <select
+                value={provisioningTime}
+                onChange={(e) => setProvisioningTime(e.target.value)}
+                className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm focus:border-amber"
+              >
+                <option value="Instant API (< 5 Mins)">Instant API (&lt; 5 Mins)</option>
+                <option value="30 Minutes">30 Minutes Turnaround</option>
+                <option value="Same Day">Same Day Delivery</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Multi-select Products Supplied Chips */}
+          <div className="space-y-1.5 p-3 bg-paper-2/60 border border-hairline rounded-xl">
+            <label className="block text-xs uppercase tracking-wider text-primary font-bold">
+              🛒 Products & Services Supplied (Add / Remove)
+            </label>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {[
+                "Google Workspace & GCP",
+                "Microsoft 365 & Azure",
+                "Zoho One & Business Apps",
+                "AWS & Cloud Hosting",
+                "SSL & Domain Names",
+                "IT Hardware & Laptops",
+                "Software Services & Dev",
+              ].map((prod) => {
+                const isSel = selectedProducts.includes(prod);
+                return (
+                  <button
+                    key={prod}
+                    type="button"
+                    onClick={() => {
+                      if (isSel) {
+                        setSelectedProducts(selectedProducts.filter((p) => p !== prod));
+                      } else {
+                        setSelectedProducts([...selectedProducts, prod]);
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                      isSel
+                        ? "bg-primary text-white border-primary font-bold shadow-2xs"
+                        : "bg-paper border-hairline text-ink hover:border-primary/40"
+                    }`}
+                  >
+                    {isSel ? `✓ ${prod}` : `+ ${prod}`}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
+              Special Margin Deal / Support Notes
+            </label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm focus:border-amber"
+            />
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="default" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" icon="sparkles" className="font-bold">
+              Save Card & Update Rate
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main Page Component ──────────────────────────────────────────────────────
 
 export default function VendorPortalPage() {
@@ -304,6 +502,7 @@ export default function VendorPortalPage() {
   const [bills] = React.useState<VendorBillItem[]>(INITIAL_BILLS);
   const [selectedSku, setSelectedSku] = React.useState<string>("All");
   const [autoProcureEnabled, setAutoProcureEnabled] = React.useState(true);
+  const [editingBid, setEditingBid] = React.useState<VendorBid | null>(null);
 
   // Margin Calculator State
   const [calcSellingPrice, setCalcSellingPrice] = React.useState<number>(150);
@@ -458,6 +657,19 @@ export default function VendorPortalPage() {
       prev.map((r) => (r.id === rfq.id ? { ...r, status: "PO Issued" } : r))
     );
     toast.success(`Winning bid accepted for ${rfq.rfqCode}! Purchase Order generated.`);
+  };
+
+  // Save Edited Vendor Bid & Rate
+  const handleSaveEditedBid = (updated: VendorBid) => {
+    setBids((prev) => {
+      const exists = prev.some((b) => b.id === updated.id);
+      if (exists) {
+        return prev.map((b) => (b.id === updated.id ? updated : b));
+      } else {
+        return [updated, ...prev];
+      }
+    });
+    toast.success(`Updated wholesale rate & products for ${updated.vendorName}!`);
   };
 
   // Bids for Margin Calculator
@@ -778,15 +990,25 @@ export default function VendorPortalPage() {
                     <span>Speed: <b>{bid.provisioningTime}</b></span>
                   </div>
 
-                  <Button
-                    variant={bid.isBestValue ? "primary" : "outline"}
-                    size="sm"
-                    icon="cart"
-                    onClick={() => handlePlacePo(bid)}
-                    className="text-xs font-bold"
-                  >
-                    🛒 Place PO
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingBid(bid)}
+                      className="text-xs font-semibold text-ink"
+                    >
+                      ✏️ Edit Card
+                    </Button>
+                    <Button
+                      variant={bid.isBestValue ? "primary" : "outline"}
+                      size="sm"
+                      icon="cart"
+                      onClick={() => handlePlacePo(bid)}
+                      className="text-xs font-bold"
+                    >
+                      🛒 Place PO
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -1283,6 +1505,14 @@ export default function VendorPortalPage() {
             ))}
           </div>
         </Card>
+      )}
+
+      {editingBid && (
+        <EditVendorCardModal
+          bid={editingBid}
+          onClose={() => setEditingBid(null)}
+          onSave={handleSaveEditedBid}
+        />
       )}
     </div>
   );
