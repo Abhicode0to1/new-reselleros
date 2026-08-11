@@ -31,9 +31,7 @@ import { ReceiptVoucherDialog } from "@/components/features/quotes/receipt-vouch
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { Icon } from "@/components/ui/icon";
 import { toast } from "sonner";
-import { GeminiCard } from "@/components/shared/gemini-card";
 import { EmptyState } from "@/components/shared/empty-state";
-import { StatStrip } from "@/components/shared/stat-strip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { FAB } from "@/components/ui/fab";
@@ -73,15 +71,37 @@ function InvoicesPageInner() {
   const [view, setView] = React.useState<"all" | "subscription" | "project">("all");
   const [tab, setTab]           = React.useState<string>("all");
   const [search, setSearch]     = React.useState<string>("");
+  const [dateRange, setDateRange] = React.useState<"all" | "this_month" | "last_30" | "this_quarter">("all");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [pendingOpen, setPendingOpen] = React.useState<boolean>(false);
 
   const isProjectInv = React.useCallback((id: string) => projectInvoiceIds?.has(id) ?? false, [projectInvoiceIds]);
   const viewInvoices = React.useMemo(
-    () => (invoices ?? []).filter((i) =>
-      view === "all" ? true : view === "project" ? isProjectInv(i.id) : !isProjectInv(i.id)),
-    [invoices, view, isProjectInv],
+    () => (invoices ?? []).filter((inv) => view === "all" || (view === "project" ? isProjectInv(inv.id) : !isProjectInv(inv.id))),
+    [invoices, view, isProjectInv]
   );
+
+  const dateFilteredInvoices = React.useMemo(() => {
+    if (dateRange === "all") return viewInvoices;
+    const now = new Date();
+    return viewInvoices.filter((inv) => {
+      if (!inv.created_at) return true;
+      const invDate = new Date(inv.created_at);
+      if (dateRange === "this_month") {
+        return invDate.getMonth() === now.getMonth() && invDate.getFullYear() === now.getFullYear();
+      }
+      if (dateRange === "last_30") {
+        return (now.getTime() - invDate.getTime()) <= 30 * 86400000;
+      }
+      if (dateRange === "this_quarter") {
+        const currentQuarter = Math.floor(now.getMonth() / 3);
+        const invQuarter = Math.floor(invDate.getMonth() / 3);
+        return currentQuarter === invQuarter && invDate.getFullYear() === now.getFullYear();
+      }
+      return true;
+    });
+  }, [viewInvoices, dateRange]);
+
   const subCount  = React.useMemo(() => (invoices ?? []).filter((i) => !isProjectInv(i.id)).length, [invoices, isProjectInv]);
   const projCount = React.useMemo(() => (invoices ?? []).filter((i) =>  isProjectInv(i.id)).length, [invoices, isProjectInv]);
   const [pendingSelected, setPendingSelected] = React.useState<Set<string>>(new Set());
@@ -127,7 +147,7 @@ function InvoicesPageInner() {
   // Filter — status tab (Partial/Pending both derive from status='pending',
   // split by whether advances were applied) + free-text search on invoice #,
   // customer, or status.
-  const rows = viewInvoices.filter((i) => {
+  const rows = dateFilteredInvoices.filter((i) => {
     // Status tab
     if (tab !== "all") {
       const hasAdv = Array.isArray(i.adjusted_advances) && i.adjusted_advances.length > 0;
@@ -226,21 +246,12 @@ function InvoicesPageInner() {
       */}
       {view !== "project" && pending && pending.length > 0 && (() => {
         const now = Date.now();
-        const buckets = { fresh: [] as any[], warn: [] as any[], urgent: [] as any[], overdue: [] as any[] };
-        for (const q of pending) {
-          // Legal aging anchor = first advance received (not last payment)
-          const anchor = q.first_advance_at ?? q.payment_received_at;
-          const days = anchor
-            ? Math.floor((now - new Date(anchor).getTime()) / 86400000)
-            : 0;
-          if (days <= 15)       buckets.fresh.push({ ...q, days });
-          else if (days <= 30)  buckets.warn.push({ ...q, days });
-          else if (days <= 60)  buckets.urgent.push({ ...q, days });
-          else                  buckets.overdue.push({ ...q, days });
-        }
-        // Outstanding, not face value — subtract anything already received
-        // (paid_amount: project-milestone receipts, migration 0184) so a
-        // part-paid invoice doesn't overstate the receivable bucket.
+        const buckets = {
+          fresh:   pending.filter((q: any) => { const a = q.first_advance_at ?? q.payment_received_at; return a && (now - new Date(a).getTime()) <= 15 * 86400000; }),
+          warn:    pending.filter((q: any) => { const a = q.first_advance_at ?? q.payment_received_at; const d = a ? (now - new Date(a).getTime()) / 86400000 : 0; return d > 15 && d <= 30; }),
+          urgent:  pending.filter((q: any) => { const a = q.first_advance_at ?? q.payment_received_at; const d = a ? (now - new Date(a).getTime()) / 86400000 : 0; return d > 30 && d <= 60; }),
+          overdue: pending.filter((q: any) => { const a = q.first_advance_at ?? q.payment_received_at; return a && (now - new Date(a).getTime()) > 60 * 86400000; }),
+        };
         const sumAmt = (arr: any[]) => arr.reduce((s, q) => s + Math.max(0, (q.amount ?? 0) - (q.paid_amount ?? 0)), 0);
         const totalAmt = sumAmt(pending);
 
@@ -334,8 +345,7 @@ function InvoicesPageInner() {
                   <BucketTile label="60+ days · audit risk"  count={buckets.overdue.length} amount={sumAmt(buckets.overdue)} tone="rose" />
                 </div>
 
-                {/* Mobile card list — phones only. Keeps the primary "Generate"
-                    action; bulk-select stays a desktop power feature. */}
+                {/* Mobile card list */}
                 <ul className="md:hidden space-y-2">
                   {pending.map((q: any) => {
                     const anchor = q.first_advance_at ?? q.payment_received_at;
@@ -475,55 +485,121 @@ function InvoicesPageInner() {
         );
       })()}
 
-      {/* Compact metric strip (replaces the big KPI-card grid) */}
+      {/* Interactive KPI Stat Strip */}
       {!isLoading && invoices && (
-        <StatStrip
-          className="mb-5"
-          items={[
-            { label: "Outstanding",    value: rupee(outstanding, { compact: true }), tone: outstanding > 0 ? "rose" : "emerald" },
-            { label: "Overdue",        value: rupee(overdueTotal, { compact: true }), tone: overdueCount > 0 ? "rose" : "default" },
-            { label: "Collected · MTD",value: rupee(collectedMTD, { compact: true }), tone: "emerald" },
-            { label: "Margin · MTD",   value: rupee(marginMTD, { compact: true }) },
-            { label: "Avg collection", value: avgCollection > 0 ? `${avgCollection}d` : "—" },
-          ]}
-        />
-      )}
-
-      {/* AI suggestion */}
-      {!isLoading && invoices && overdueCount > 0 && (
-        <div className="mb-4">
-          <GeminiCard
-            title="Collection intelligence"
-            actions={
-              <Button size="sm" variant="primary" icon="users" onClick={() => router.push("/customers" as any)}>
-                Open customers
-              </Button>
-            }
-            compact
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5">
+          <button
+            type="button"
+            onClick={() => setTab("pending")}
+            className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
           >
-            <b>{overdueCount} overdue invoice{overdueCount === 1 ? "" : "s"} worth {rupee(overdueTotal, { compact: true })}.</b>{" "}
-            Customers with overdue invoices have 2× higher churn risk. Reach out today.
-          </GeminiCard>
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Outstanding</p>
+            <p className="font-serif text-lg font-bold text-rose-ink tabular-nums mt-0.5">{rupee(outstanding, { compact: true })}</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("overdue")}
+            className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-rose/60 transition-all cursor-pointer"
+          >
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Overdue ({overdueCount})</p>
+            <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(overdueTotal, { compact: true })}</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("paid")}
+            className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-emerald/60 transition-all cursor-pointer"
+          >
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Collected MTD</p>
+            <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(collectedMTD, { compact: true })}</p>
+          </button>
+          <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Margin MTD</p>
+            <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(marginMTD, { compact: true })}</p>
+          </div>
+          <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
+            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Avg collection</p>
+            <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{avgCollection}d</p>
+          </div>
         </div>
       )}
 
-      {/* Tabs + search */}
+      {/* Tabs, Date Range Filter & Search */}
       {!isLoading && invoices && invoices.length > 0 && (
-        <div className="mb-3 space-y-3">
+        <div className="mb-4 space-y-3">
           <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
           <div className="flex justify-between items-center gap-3 flex-wrap">
             <div className="text-xs text-ink-3">
               Showing {rows.length} of {viewInvoices.length} invoice{viewInvoices.length === 1 ? "" : "s"}
             </div>
-            <div className="w-72">
-              <Input
-                prefix={<Icon name="search" size={14} />}
-                placeholder="Invoice #, customer, status…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={dateRange}
+                onChange={(e: any) => setDateRange(e.target.value)}
+                className="bg-paper border border-hairline rounded-md text-xs px-2.5 py-1.5 font-medium text-ink focus:outline-none focus:border-amber cursor-pointer"
+              >
+                <option value="all">All Time</option>
+                <option value="this_month">This Month</option>
+                <option value="last_30">Last 30 Days</option>
+                <option value="this_quarter">This Quarter</option>
+              </select>
+              <div className="w-full sm:w-64">
+                <Input
+                  prefix={<Icon name="search" size={14} />}
+                  placeholder="Invoice #, customer, status…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* World-Class Floating Batch Operations Bar */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-ink text-paper rounded-full px-5 py-2.5 shadow-2xl flex items-center gap-3 border border-hairline animate-in fade-in slide-in-from-bottom-3">
+          <span className="text-xs font-semibold">{selected.size} selected</span>
+          <div className="h-4 w-px bg-paper/20" />
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-paper/10 text-paper border-paper/20 hover:bg-paper/20 text-xs h-7 gap-1"
+            icon="whatsapp"
+            onClick={() => {
+              const selectedInvoices = rows.filter((r) => selected.has(r.id));
+              const first = selectedInvoices[0];
+              if (first) window.open(getInvoiceWhatsAppUrl(first), "_blank");
+            }}
+          >
+            Bulk WhatsApp
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-paper/10 text-paper border-paper/20 hover:bg-paper/20 text-xs h-7 gap-1"
+            icon="download"
+            onClick={() => {
+              toast.success(`Exporting CSV for ${selected.size} selected invoices`);
+              const selectedInvoices = rows.filter((r) => selected.has(r.id));
+              const csv = "Invoice ID,Customer,Amount,Status,Date\n" + selectedInvoices.map(i => `${i.id},"${i.customer_name}",${i.amount},${i.status},${i.created_at || ""}`).join("\n");
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `selected-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+            }}
+          >
+            Export CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-paper/70 hover:text-paper text-xs h-7 px-2"
+            onClick={() => setSelected(new Set())}
+          >
+            Deselect
+          </Button>
         </div>
       )}
 
