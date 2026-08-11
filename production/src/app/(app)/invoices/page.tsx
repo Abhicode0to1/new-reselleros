@@ -44,6 +44,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
 import { getInvoiceWhatsAppUrl } from "@/lib/whatsapp";
@@ -955,7 +956,13 @@ function InvoicePreviewContainer({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { data: quote, isLoading: qLoading } = useQuoteByInvoiceId(invoice.id);
+  const router = useRouter();
+  const [pdfDialogOpen, setPdfDialogOpen] = React.useState(false);
+  const [showItems, setShowItems] = React.useState(true);
+  const [showSummary, setShowSummary] = React.useState(true);
+  const [showPayments, setShowPayments] = React.useState(true);
+
+  const { data: quote } = useQuoteByInvoiceId(invoice.id);
   const { data: payments } = usePaymentsByQuote(quote?.id);
   const { data: customer } = useCustomer(invoice.customer_id ?? undefined);
   const { data: me } = useCurrentUser();
@@ -970,7 +977,6 @@ function InvoicePreviewContainer({
     tenantStateCode: "27",
   };
 
-  // Derive totals from quote (same math as quote detail page) — falls back to invoice.amount
   const lineItems = quote?.line_items ?? [];
   const subtotal  = quote?.subtotal ?? invoice.amount;
   const discount  = Math.round(subtotal * ((quote?.discount_pct ?? 0) / 100));
@@ -980,54 +986,199 @@ function InvoicePreviewContainer({
   const total     = quote?.amount ?? invoice.amount;
 
   const interState = isInterStateSupply(customer?.state_code, meTenant.tenantStateCode);
-
   const receivedPayments = (payments ?? []).filter((p) => p.status === "received");
 
-  if (qLoading) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-xl p-6">
-          <DialogHeader>
-            <DialogTitle>Loading Tax Invoice...</DialogTitle>
-          </DialogHeader>
-          <div className="py-8 flex flex-col items-center justify-center space-y-3">
-            <Skeleton className="h-6 w-3/4" />
-            <Skeleton className="h-28 w-full" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
   return (
-    <TaxInvoiceDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      invoice={invoice}
-      lineItems={lineItems}
-      subtotal={subtotal}
-      discountPct={quote?.discount_pct ?? 0}
-      discount={discount}
-      taxable={taxable}
-      taxRate={taxRate}
-      tax={tax}
-      total={total}
-      receivedPayments={receivedPayments}
-      interState={interState}
-      customerGstin={customer?.gstin}
-      customerEmail={customer?.contact_email}
-      customerPhone={customer?.contact_phone}
-      customerState={customer?.state}
-      customerCountry={customer?.country}
-      currency={quote?.currency}
-      exchangeRate={quote?.exchange_rate}
-      tenantName={meTenant.tenantName}
-      tenantGstin={meTenant.tenantGstin}
-      tenantEmail={meTenant.tenantEmail}
-      tenantPhone={meTenant.tenantPhone}
-      tenantAddress={meTenant.tenantAddress}
-      tenantState={meTenant.tenantState}
-    />
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="right" className="sm:max-w-xl w-full p-0 flex flex-col h-full bg-paper overflow-y-auto">
+          <SheetHeader className="p-4 border-b border-hairline bg-paper-2 sticky top-0 z-20 flex flex-row items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-base font-bold text-ink">{invoice.id}</span>
+                <Badge kind={invoice.status === "paid" ? "success" : "warning"} size="sm" dot>
+                  {invoice.status}
+                </Badge>
+              </div>
+              <SheetTitle className="text-xs font-medium text-ink-2 mt-0.5">
+                {cleanDisplayName(invoice.customer_name)}
+              </SheetTitle>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {quote?.id && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon="edit"
+                  onClick={() => {
+                    onOpenChange(false);
+                    router.push(`/quotes/${quote.id}` as any);
+                  }}
+                >
+                  Edit Quote
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="primary"
+                icon="whatsapp"
+                onClick={() => window.open(getInvoiceWhatsAppUrl(invoice, customer?.contact_phone), "_blank")}
+              >
+                WhatsApp
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="file"
+                onClick={() => setPdfDialogOpen(true)}
+              >
+                PDF
+              </Button>
+            </div>
+          </SheetHeader>
+
+          <div className="p-4 space-y-4 flex-1">
+            {/* 🔽 Collapsible Panel 1: Invoice Overview & Tax Summary */}
+            <Card className="overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowSummary((s) => !s)}
+                className="w-full px-4 py-3 bg-paper-2/60 border-b border-hairline flex items-center justify-between font-semibold text-xs text-ink hover:bg-paper-2 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Icon name="receipt" size={14} className="text-ink-3" />
+                  <span>Invoice Overview & GST Summary</span>
+                </div>
+                <Icon name={showSummary ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
+              </button>
+
+              {showSummary && (
+                <div className="p-4 space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-3 pb-3 border-b border-hairline/60">
+                    <div>
+                      <p className="text-[10px] text-ink-3 uppercase tracking-wider font-semibold">Total Amount</p>
+                      <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(total)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-ink-3 uppercase tracking-wider font-semibold">Net Payable</p>
+                      <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(invoice.net_payable ?? total)}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-ink-2">
+                    <div><span className="text-ink-3">Invoice Date:</span> {formatDate(invoice.invoice_date)}</div>
+                    <div><span className="text-ink-3">Due Date:</span> {invoice.due_date ? formatDate(invoice.due_date) : "—"}</div>
+                    <div><span className="text-ink-3">Place of Supply:</span> {interState ? "Inter-state (IGST)" : "Intra-state (CGST+SGST)"}</div>
+                    <div><span className="text-ink-3">Tax Total:</span> {rupee(tax)} ({taxRate}%)</div>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* 🔽 Collapsible Panel 2: Line Items & HSN/SAC Breakdown */}
+            <Card className="overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowItems((s) => !s)}
+                className="w-full px-4 py-3 bg-paper-2/60 border-b border-hairline flex items-center justify-between font-semibold text-xs text-ink hover:bg-paper-2 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Icon name="file" size={14} className="text-ink-3" />
+                  <span>Line Items ({lineItems.length > 0 ? lineItems.length : "1"})</span>
+                </div>
+                <Icon name={showItems ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
+              </button>
+
+              {showItems && (
+                <div className="p-3">
+                  {lineItems.length > 0 ? (
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-hairline text-ink-3 text-[10px] uppercase">
+                          <th className="text-left py-1">Description</th>
+                          <th className="text-center py-1">HSN/SAC</th>
+                          <th className="text-right py-1">Qty</th>
+                          <th className="text-right py-1">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-hairline/60">
+                        {lineItems.map((item, idx) => (
+                          <tr key={idx}>
+                            <td className="py-2 font-medium text-ink">{item.name}</td>
+                            <td className="py-2 text-center text-ink-3 font-mono text-[11px]">998313</td>
+                            <td className="py-2 text-right tabular-nums">{item.qty}</td>
+                            <td className="py-2 text-right font-medium tabular-nums">{rupee((item.rate ?? 0) * (item.qty ?? 1))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-xs text-ink-3 italic p-2">Standard Subscription License Supply (HSN 998313)</p>
+                  )}
+                </div>
+              )}
+            </Card>
+
+            {/* 🔽 Collapsible Panel 3: Payments & Receipts Accordion */}
+            <Card className="overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowPayments((s) => !s)}
+                className="w-full px-4 py-3 bg-paper-2/60 border-b border-hairline flex items-center justify-between font-semibold text-xs text-ink hover:bg-paper-2 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Icon name="rupee" size={14} className="text-ink-3" />
+                  <span>Payment Receipts & Advance Adjustments</span>
+                </div>
+                <Icon name={showPayments ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
+              </button>
+
+              {showPayments && (
+                <div className="p-4">
+                  <InvoicePaymentsAccordion inv={invoice} />
+                </div>
+              )}
+            </Card>
+
+            {/* 🔽 Collapsible Panel 4: Internal Notes */}
+            <Card className="p-4">
+              <p className="text-xs font-semibold text-ink mb-2">Internal Notes & History</p>
+              <InvoiceNotesList invoiceId={invoice.id} />
+            </Card>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {pdfDialogOpen && (
+        <TaxInvoiceDialog
+          open={pdfDialogOpen}
+          onOpenChange={setPdfDialogOpen}
+          invoice={invoice}
+          lineItems={lineItems}
+          subtotal={subtotal}
+          discountPct={quote?.discount_pct ?? 0}
+          discount={discount}
+          taxable={taxable}
+          taxRate={taxRate}
+          tax={tax}
+          total={total}
+          receivedPayments={receivedPayments}
+          interState={interState}
+          customerGstin={customer?.gstin}
+          customerEmail={customer?.contact_email}
+          customerPhone={customer?.contact_phone}
+          customerState={customer?.state}
+          customerCountry={customer?.country}
+          currency={quote?.currency}
+          exchangeRate={quote?.exchange_rate}
+          tenantName={meTenant.tenantName}
+          tenantGstin={meTenant.tenantGstin}
+          tenantEmail={meTenant.tenantEmail}
+          tenantPhone={meTenant.tenantPhone}
+          tenantAddress={meTenant.tenantAddress}
+          tenantState={meTenant.tenantState}
+        />
+      )}
+    </>
   );
 }
 
