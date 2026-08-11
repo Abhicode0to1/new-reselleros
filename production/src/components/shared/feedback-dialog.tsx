@@ -188,7 +188,7 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         onPaste={handlePaste}
-        className="sm:max-w-[580px] p-6 max-h-[92vh] overflow-y-auto shadow-2xl"
+        className="sm:max-w-[580px] p-6 max-h-[92vh] overflow-y-auto shadow-2xl z-[99999]"
       >
         <DialogHeader>
           <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider mb-1">
