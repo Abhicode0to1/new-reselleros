@@ -718,9 +718,23 @@ export default function QuotesPage() {
                             </Button>
                           )}
                           {(q.status === "sent" || q.status === "viewed") && (
-                            <Button asChild size="sm" icon="external">
-                              <Link href={`/quotes/${q.id}` as any}>Open</Link>
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                icon="whatsapp"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const msg = encodeURIComponent(`Namaste ${q.customer_name},\n\nQuick follow up regarding Quote #${q.id} (${q.plan || "Google Workspace"}) for ₹${(q.amount ?? 0).toLocaleString("en-IN")}.\n\nPlease let us know if you need any clarification.\n\nDhanyavaad`);
+                                  window.open(`https://web.whatsapp.com/send?text=${msg}`, "_blank");
+                                }}
+                              >
+                                WhatsApp
+                              </Button>
+                              <Button asChild size="sm" icon="external">
+                                <Link href={`/quotes/${q.id}` as any}>Open</Link>
+                              </Button>
+                            </div>
                           )}
                           {q.status === "accepted" && (() => {
                             // What happens NEXT on an accepted quote depends on
@@ -780,9 +794,28 @@ export default function QuotesPage() {
                                 aria-label={`Actions for quote ${q.id}`}
                               />
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="min-w-[12rem]">
+                            <DropdownMenuContent align="end" className="min-w-[13rem]">
                               <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setPreviewing(q)}>
                                 <Icon name="file" size={15} /> View PDF preview
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2.5 py-2 cursor-pointer"
+                                onClick={() => {
+                                  const url = `${window.location.origin}/quotes/${q.id}`;
+                                  navigator.clipboard.writeText(url);
+                                  toast.success("Quote link copied to clipboard!");
+                                }}
+                              >
+                                <Icon name="link" size={15} /> Copy quote link
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="gap-2.5 py-2 cursor-pointer text-emerald font-medium"
+                                onClick={() => {
+                                  const msg = encodeURIComponent(`Namaste ${q.customer_name},\n\nQuick follow up regarding Quote #${q.id} (${q.plan || "Google Workspace"}) for ₹${(q.amount ?? 0).toLocaleString("en-IN")}.\n\nPlease let us know if you need any clarification.\n\nDhanyavaad`);
+                                  window.open(`https://web.whatsapp.com/send?text=${msg}`, "_blank");
+                                }}
+                              >
+                                <Icon name="whatsapp" size={15} /> Send / nudge on WhatsApp
                               </DropdownMenuItem>
                               <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => router.push(`/quotes/${q.id}` as any)}>
                                 <Icon name="edit" size={15} /> Open / edit
