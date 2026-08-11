@@ -2511,15 +2511,8 @@ function LeadListView({
 
   return (
     <>
-    {/* Mobile card list — phones only.
-        Each card is a SwipeLeadCard:
-          - Tap → open drawer
-          - Drag right ≥ 80px → Call
-          - Drag left  ≥ 80px → WhatsApp
-        Dense 3-row layout: header (co/value), contact, meta+actions.
-        Stage quick-change chip + inline action icons are tap-isolated
-        from the card via stopPropagation. */}
-    <ul className="md:hidden space-y-3 pb-2">
+    {/* Adaptive card list — viewports < 1280px */}
+    <ul className="xl:hidden space-y-3 pb-2">
       {sorted.map((lead) => {
         const stale = daysSince(lead.updated_at) > 14 && lead.stage !== "won" && lead.stage !== "lost";
         return (
@@ -2540,25 +2533,8 @@ function LeadListView({
     </ul>
     {/* ─── End of mobile list — old inline card markup retired ─── */}
 
-    {/* Desktop / tablet power table.
-        New columns vs v1:
-          - leading checkbox  → bulk select
-          - trailing actions  → row-hover Call / WhatsApp / Email icons
-        Selecting any row reveals the floating LeadsBulkBar at the
-        viewport bottom (stage change, delete). */}
-    {/* min-h-[400px] guarantees the table never collapses below a usable
-        height even when the rail-below section is tall (sparse-data flex
-        competition bug — table had been crushing to 1.6px on /deals when
-        only 1-3 deals existed and rail-below's quick-actions grid was
-        taking all the flex space). */}
-    {/* flex-1 + min-h-0 caps this to the space the flex chain leaves, so the table
-        scrolls INTERNALLY (both axes) instead of growing as tall as all its rows.
-        Before, the container grew unbounded and the horizontal scrollbar sat at the
-        very bottom of that tall element — you had to scroll the whole page down just
-        to reach it (Pardeep's dogfood complaint). Capped + sticky header = header
-        stays put and the h-scrollbar is always on screen. The md+ fixed-height page
-        wrapper is what makes flex-1 resolve to a real cap. */}
-    <div className="hidden md:block w-full max-w-full border border-hairline rounded-md overflow-auto bg-paper flex-1 min-h-0">
+    {/* Desktop / tablet power table — viewports >= 1280px */}
+    <div className="hidden xl:block w-full max-w-full border border-hairline rounded-md overflow-auto bg-paper flex-1 min-h-0">
       {/* Fluid percentage columns — the table fills the container width with no
           horizontal scrollbar at desktop widths. */}
       <table className="w-full table-fixed">
