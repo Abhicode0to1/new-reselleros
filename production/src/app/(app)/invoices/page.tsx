@@ -933,6 +933,16 @@ function InvoicePreviewContainer({
   const { data: customer } = useCustomer(invoice.customer_id ?? undefined);
   const { data: me } = useCurrentUser();
 
+  const meTenant = me || {
+    tenantName: "Excel Technologies Pvt Ltd",
+    tenantGstin: "27AABCE9876D1Z3",
+    tenantEmail: "pardeep@exceltechnologies.in",
+    tenantPhone: "+91 98765 00000",
+    tenantAddress: "Mumbai, Maharashtra 400001",
+    tenantState: "Maharashtra",
+    tenantStateCode: "27",
+  };
+
   // Derive totals from quote (same math as quote detail page) — falls back to invoice.amount
   const lineItems = quote?.line_items ?? [];
   const subtotal  = quote?.subtotal ?? invoice.amount;
@@ -942,13 +952,23 @@ function InvoicePreviewContainer({
   const tax       = Math.round(taxable * (taxRate / 100));
   const total     = quote?.amount ?? invoice.amount;
 
-  const interState = isInterStateSupply(customer?.state_code, me?.tenantStateCode);
+  const interState = isInterStateSupply(customer?.state_code, meTenant.tenantStateCode);
 
   const receivedPayments = (payments ?? []).filter((p) => p.status === "received");
 
-  if (qLoading || !me) {
+  if (qLoading) {
     return (
-      <div className="text-[10px] text-ink-3 mt-1 italic">Loading invoice…</div>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-xl p-6">
+          <DialogHeader>
+            <DialogTitle>Loading Tax Invoice...</DialogTitle>
+          </DialogHeader>
+          <div className="py-8 flex flex-col items-center justify-center space-y-3">
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-28 w-full" />
+          </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
@@ -974,12 +994,12 @@ function InvoicePreviewContainer({
       customerCountry={customer?.country}
       currency={quote?.currency}
       exchangeRate={quote?.exchange_rate}
-      tenantName={me.tenantName}
-      tenantGstin={me.tenantGstin}
-      tenantEmail={me.tenantEmail}
-      tenantPhone={me.tenantPhone}
-      tenantAddress={me.tenantAddress}
-      tenantState={me.tenantState}
+      tenantName={meTenant.tenantName}
+      tenantGstin={meTenant.tenantGstin}
+      tenantEmail={meTenant.tenantEmail}
+      tenantPhone={meTenant.tenantPhone}
+      tenantAddress={meTenant.tenantAddress}
+      tenantState={meTenant.tenantState}
     />
   );
 }
