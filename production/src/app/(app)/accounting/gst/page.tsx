@@ -638,21 +638,21 @@ export default function GstReportPage() {
         </Card>
       </div>
 
-      {/* GSTR-1 filing helper — Offline Tool export */}
+      {/* GSTR-1 filing helper — Offline Tool & Portal JSON export */}
       {data && data.outputRows.length > 0 && (
-        <Card className="mb-6 p-4 border border-amber/30 bg-amber-soft/10">
-          <div className="flex items-start gap-3 flex-wrap">
-            <Icon name="download" size={18} className="text-amber-ink shrink-0 mt-0.5" />
-            <div className="min-w-0 flex-1">
-              <div className="font-medium text-ink">File GSTR-1 for {range.label}</div>
-              <p className="text-[12px] text-ink-2 mt-0.5 leading-relaxed">
-                Downloads your sales split into <b>GST Offline Tool</b> format — B2B, B2C, HSN. Open the Offline Tool →
-                Import each CSV → Generate JSON → upload on gst.gov.in → file with OTP. <b>Verify totals before filing.</b>
-                {" "}Direct one-click e-filing needs a GST Suvidha Provider (a future add-on).
-              </p>
+        <Card className="mb-6 p-4 md:p-5 border border-amber/30 bg-amber-soft/10">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+            <div className="flex items-start gap-3 min-w-0 w-full">
+              <Icon name="download" size={20} className="text-amber-ink shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-ink text-base">File GSTR-1 for {range.label}</div>
+                <p className="text-xs text-ink-2 mt-1 leading-relaxed max-w-3xl">
+                  Export sales data in official <b>GST Portal JSON</b> or <b>GST Offline Tool CSVs</b> (B2B, B2C, HSN). Direct upload on <a href="https://gst.gov.in" target="_blank" rel="noreferrer" className="text-amber-ink underline font-medium">gst.gov.in</a> → file returns with OTP.
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
-              <Button variant="primary" onClick={exportGstr1Json} className="bg-emerald hover:bg-emerald/90 text-white">
+            <div className="flex items-center gap-2.5 shrink-0 flex-wrap pt-1 xl:pt-0">
+              <Button variant="primary" onClick={exportGstr1Json} className="bg-emerald hover:bg-emerald/90 text-white shadow-xs">
                 <Icon name="file" size={14} className="mr-1.5" />
                 Download GSTR-1 JSON (Portal Direct)
               </Button>
