@@ -411,8 +411,13 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
   );
   const [isMetro, setIsMetro] = React.useState(false);
   const [basicPct, setBasicPct] = React.useState<number>(0.5);
+  const [customBasic, setCustomBasic] = React.useState<string>("");
+  const [customHra, setCustomHra] = React.useState<string>("");
   const [customConveyance, setCustomConveyance] = React.useState<string>("1600");
   const [customMedical, setCustomMedical] = React.useState<string>("1250");
+  const [customSpecial, setCustomSpecial] = React.useState<string>("");
+  const [customPt, setCustomPt] = React.useState<string>("200");
+  const [capPfCeiling, setCapPfCeiling] = React.useState<boolean>(true);
   const [includeGratuity, setIncludeGratuity] = React.useState<boolean>(true);
   const [showCustomControls, setShowCustomControls] = React.useState<boolean>(false);
 
@@ -421,11 +426,16 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
     return calculateCtcBreakdown(val, {
       isMetro,
       basicPct,
+      customBasicMonthly: Number(customBasic) || undefined,
+      customHraMonthly: Number(customHra) || undefined,
       customConveyanceMonthly: Number(customConveyance) || 0,
       customMedicalMonthly: Number(customMedical) || 0,
+      customSpecialMonthly: Number(customSpecial) || undefined,
+      customPtMonthly: customPt !== "" ? Number(customPt) : undefined,
+      capPfWageCeiling: capPfCeiling,
       includeGratuity,
     });
-  }, [annualCtc, gross, isMetro, basicPct, customConveyance, customMedical, includeGratuity]);
+  }, [annualCtc, gross, isMetro, basicPct, customBasic, customHra, customConveyance, customMedical, customSpecial, customPt, capPfCeiling, includeGratuity]);
   // For a NEW employee, suggest ESI coverage from the wage ceiling until the
   // user decides for themselves. Existing employees keep their saved value.
   React.useEffect(() => {
@@ -564,50 +574,102 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                 </button>
 
                 {showCustomControls && (
-                  <div className="mt-3 p-3 bg-paper-2/70 border border-hairline rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <Field label="Basic Salary % of CTC">
-                      <select
-                        value={basicPct}
-                        onChange={(e) => setBasicPct(Number(e.target.value))}
-                        className={selectCls}
-                      >
-                        <option value={0.30}>30% Basic</option>
-                        <option value={0.40}>40% Basic</option>
-                        <option value={0.50}>50% Basic (Recommended)</option>
-                        <option value={0.60}>60% Basic</option>
-                      </select>
-                    </Field>
+                  <div className="mt-3 p-3.5 bg-paper-2/90 border border-hairline rounded-2xl space-y-3 text-xs shadow-2xs">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-3 font-bold">⚙️ Component Overrides &amp; Custom Allowances</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      <Field label="Basic Salary %">
+                        <select
+                          value={basicPct}
+                          onChange={(e) => { setBasicPct(Number(e.target.value)); setCustomBasic(""); }}
+                          className={selectCls}
+                        >
+                          <option value={0.30}>30% Basic</option>
+                          <option value={0.40}>40% Basic</option>
+                          <option value={0.50}>50% Basic (Default)</option>
+                          <option value={0.60}>60% Basic</option>
+                        </select>
+                      </Field>
 
-                    <Field label="Conveyance Allowance (₹/mo)">
-                      <Input
-                        type="number"
-                        min={0}
-                        value={customConveyance}
-                        onChange={(e) => setCustomConveyance(e.target.value)}
-                        placeholder="1600"
-                      />
-                    </Field>
-
-                    <Field label="Medical Allowance (₹/mo)">
-                      <Input
-                        type="number"
-                        min={0}
-                        value={customMedical}
-                        onChange={(e) => setCustomMedical(e.target.value)}
-                        placeholder="1250"
-                      />
-                    </Field>
-
-                    <div className="flex items-center pt-5">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={includeGratuity}
-                          onChange={(e) => setIncludeGratuity(e.target.checked)}
-                          className="rounded border-hairline accent-amber"
+                      <Field label="Custom Basic (₹/mo, optional)">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={customBasic}
+                          onChange={(e) => setCustomBasic(e.target.value)}
+                          placeholder={`Auto (${rupee(ctcBreakdown?.basicMonthly ?? 0)})`}
                         />
-                        <span className="text-xs text-ink-2 font-semibold">Include Gratuity Provision (4.81%)</span>
-                      </label>
+                      </Field>
+
+                      <Field label="Custom HRA (₹/mo, optional)">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={customHra}
+                          onChange={(e) => setCustomHra(e.target.value)}
+                          placeholder={`Auto (${rupee(ctcBreakdown?.hraMonthly ?? 0)})`}
+                        />
+                      </Field>
+
+                      <Field label="Conveyance Allowance (₹/mo)">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={customConveyance}
+                          onChange={(e) => setCustomConveyance(e.target.value)}
+                          placeholder="1600"
+                        />
+                      </Field>
+
+                      <Field label="Medical Allowance (₹/mo)">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={customMedical}
+                          onChange={(e) => setCustomMedical(e.target.value)}
+                          placeholder="1250"
+                        />
+                      </Field>
+
+                      <Field label="Special Allowance (₹/mo, optional)">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={customSpecial}
+                          onChange={(e) => setCustomSpecial(e.target.value)}
+                          placeholder={`Auto (${rupee(ctcBreakdown?.specialAllowanceMonthly ?? 0)})`}
+                        />
+                      </Field>
+
+                      <Field label="Professional Tax / PT (₹/mo)">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={customPt}
+                          onChange={(e) => setCustomPt(e.target.value)}
+                          placeholder="200"
+                        />
+                      </Field>
+
+                      <div className="flex flex-col justify-center space-y-1.5 pt-2">
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-ink-2 font-medium">
+                          <input
+                            type="checkbox"
+                            checked={includeGratuity}
+                            onChange={(e) => setIncludeGratuity(e.target.checked)}
+                            className="rounded border-hairline accent-amber"
+                          />
+                          <span>Include Gratuity (4.81%)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer text-xs text-ink-2 font-medium">
+                          <input
+                            type="checkbox"
+                            checked={capPfCeiling}
+                            onChange={(e) => setCapPfCeiling(e.target.checked)}
+                            className="rounded border-hairline accent-amber"
+                          />
+                          <span>Cap PF Ceiling at ₹1,800/mo</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 )}

@@ -1,6 +1,13 @@
 /**
  * Indian Cost to Company (CTC) Salary Breakdown Calculator Engine.
- * Supports standard Indian Wage Code calculations as well as custom component overrides (Basic %, HRA %, Conveyance, Medical, etc.).
+ * Supports standard Indian Wage Code calculations as well as 100% custom component overrides:
+ * - Basic Salary (₹ or %)
+ * - HRA Allowance (₹ or %)
+ * - Conveyance Allowance (₹)
+ * - Medical Allowance (₹)
+ * - Special / Flexi Allowance (₹)
+ * - Professional Tax (₹)
+ * - Employer & Employee PF / ESI / Gratuity toggles
  */
 
 export interface CtcBreakdown {
@@ -58,8 +65,12 @@ export function calculateCtcBreakdown(
     isMetro?: boolean;
     basicPct?: number; // Custom basic percentage (e.g., 0.40, 0.50)
     hraPct?: number; // Custom HRA percentage (e.g., 0.40, 0.50)
+    customBasicMonthly?: number; // Explicit Basic Salary in ₹
+    customHraMonthly?: number; // Explicit HRA in ₹
     customConveyanceMonthly?: number; // Custom conveyance allowance
     customMedicalMonthly?: number; // Custom medical allowance
+    customSpecialMonthly?: number; // Explicit Special Allowance in ₹
+    customPtMonthly?: number; // Explicit Professional Tax in ₹
     capPfWageCeiling?: boolean; // Cap PF to ₹1,800/mo (₹15,000 basic limit)
     includeGratuity?: boolean;
     includeEsi?: boolean;
@@ -75,19 +86,23 @@ export function calculateCtcBreakdown(
   const annualCtc = Math.max(0, Math.round(annualCtcInput));
   const monthlyCtc = Math.round(annualCtc / 12);
 
-  // 1. Basic Salary
-  const basicMonthly = Math.round(monthlyCtc * basicPct);
+  // 1. Basic Salary (Custom ₹ override or % calculation)
+  const basicMonthly = opts?.customBasicMonthly !== undefined && opts.customBasicMonthly > 0
+    ? Math.round(opts.customBasicMonthly)
+    : Math.round(monthlyCtc * basicPct);
 
-  // 2. HRA
-  const hraMonthly = Math.round(basicMonthly * hraPct);
+  // 2. HRA (Custom ₹ override or % calculation)
+  const hraMonthly = opts?.customHraMonthly !== undefined && opts.customHraMonthly > 0
+    ? Math.round(opts.customHraMonthly)
+    : Math.round(basicMonthly * hraPct);
 
   // 3. Conveyance & Medical Allowances
   const conveyanceMonthly = opts?.customConveyanceMonthly !== undefined
-    ? Math.max(0, opts.customConveyanceMonthly)
+    ? Math.max(0, Math.round(opts.customConveyanceMonthly))
     : (monthlyCtc >= 25000 ? 1600 : 0);
 
   const medicalMonthly = opts?.customMedicalMonthly !== undefined
-    ? Math.max(0, opts.customMedicalMonthly)
+    ? Math.max(0, Math.round(opts.customMedicalMonthly))
     : (monthlyCtc >= 25000 ? 1250 : 0);
 
   // 4. Employer PF (12% of Basic, capped at ₹1,800 if ceiling applies)
@@ -108,9 +123,11 @@ export function calculateCtcBreakdown(
 
   const totalEmployerContributionMonthly = employerPfMonthly + employerEsiMonthly + gratuityMonthly;
 
-  // 6. Special Allowance = Monthly CTC - (Basic + HRA + Conveyance + Medical + Employer PF + Employer ESI + Gratuity)
+  // 6. Special Allowance = Custom ₹ override or Monthly CTC - (Basic + HRA + Conveyance + Medical + Employer PF + Employer ESI + Gratuity)
   const sumFixedEmployerCost = basicMonthly + hraMonthly + conveyanceMonthly + medicalMonthly + totalEmployerContributionMonthly;
-  const specialAllowanceMonthly = Math.max(0, monthlyCtc - sumFixedEmployerCost);
+  const specialAllowanceMonthly = opts?.customSpecialMonthly !== undefined && opts.customSpecialMonthly >= 0
+    ? Math.round(opts.customSpecialMonthly)
+    : Math.max(0, monthlyCtc - sumFixedEmployerCost);
 
   // 7. Gross Monthly Salary = Basic + HRA + Conveyance + Medical + Special Allowance
   const grossMonthly = basicMonthly + hraMonthly + conveyanceMonthly + medicalMonthly + specialAllowanceMonthly;
@@ -122,7 +139,9 @@ export function calculateCtcBreakdown(
   }
 
   const employeeEsiMonthly = isEsiEligible ? Math.round(grossMonthly * 0.0075) : 0;
-  const professionalTaxMonthly = grossMonthly > 15000 ? 200 : grossMonthly > 10000 ? 150 : 0;
+  const professionalTaxMonthly = opts?.customPtMonthly !== undefined
+    ? Math.max(0, Math.round(opts.customPtMonthly))
+    : (grossMonthly > 15000 ? 200 : grossMonthly > 10000 ? 150 : 0);
 
   const totalDeductionsMonthly = employeePfMonthly + employeeEsiMonthly + professionalTaxMonthly;
   const netTakeHomeMonthly = Math.max(0, grossMonthly - totalDeductionsMonthly);
