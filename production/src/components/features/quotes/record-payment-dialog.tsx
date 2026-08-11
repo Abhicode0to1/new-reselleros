@@ -557,54 +557,12 @@ export function RecordPaymentDialog({
     onError: (err) => toast.error((err as Error).message),
   });
 
-  const [drawerWidth, setDrawerWidth] = React.useState<number>(640);
-  const [resizing, setResizing] = React.useState(false);
-  const resizeRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
-
-  const handleResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setResizing(true);
-    resizeRef.current = { startX: e.clientX, startWidth: drawerWidth };
-  };
-
-  React.useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!resizeRef.current) return;
-      const dx = resizeRef.current.startX - e.clientX;
-      const newWidth = Math.max(480, Math.min(1200, resizeRef.current.startWidth + dx));
-      setDrawerWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      setResizing(false);
-      resizeRef.current = null;
-    };
-
-    if (resizing) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [resizing]);
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        style={{ width: `${drawerWidth}px`, maxWidth: "95vw" }}
-        className="w-full sm:max-w-none p-0 flex flex-col overflow-x-hidden relative transition-all duration-75"
+        className="w-full sm:max-w-[640px] md:max-w-[780px] lg:max-w-[880px] p-0 flex flex-col overflow-x-hidden shadow-2xl"
       >
-        {/* Left Edge Resize Drag Handle */}
-        <div
-          onMouseDown={handleResizeStart}
-          title="Click and drag left to stretch panel width"
-          className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-primary/20 bg-transparent z-50 flex items-center justify-center transition-colors group"
-        >
-          <div className="w-1 h-12 bg-hairline-strong rounded-full group-hover:bg-primary" />
-        </div>
         <SheetHeader>
           <SheetTitle>
             {hasPriorPayments ? "Record additional payment" : "Record payment received"}
