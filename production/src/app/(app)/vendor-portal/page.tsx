@@ -338,6 +338,141 @@ function parseRatesFromBid(notesStr?: string | null): Record<string, number> {
   return rates;
 }
 
+const STANDARD_MRP_MAP: Record<string, number> = {
+  "Google Workspace Business Starter": 150,
+  "Google Workspace Business Standard": 750,
+  "Google Workspace Business Plus": 1500,
+  "Microsoft 365 Business Basic": 140,
+  "Microsoft 365 Business Standard": 770,
+  "Zoho One License": 350,
+  "AWS EC2 Cloud Compute": 1000,
+  "DigiCert Wildcard SSL": 600,
+};
+
+function CompareVendorsModal({
+  bids,
+  onClose,
+  onPlacePo,
+}: {
+  bids: VendorBid[];
+  onClose: () => void;
+  onPlacePo: (bid: VendorBid) => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="md:!max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="space-y-1">
+          <DialogTitle className="text-xl font-bold font-sans flex items-center gap-2">
+            <Icon name="sparkles" size={18} className="text-primary" />
+            <span>Side-by-Side Vendor Comparison Matrix</span>
+          </DialogTitle>
+          <DialogDescription className="text-xs text-ink-3">
+            Comparing <b>{bids.length} selected vendors</b> across wholesale rates, reseller margins, credit terms, and SLAs.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="overflow-x-auto pt-2">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-hairline bg-paper-2/60">
+                <th className="p-3 font-bold text-ink uppercase tracking-wider">Metric / Attribute</th>
+                {bids.map((b) => (
+                  <th key={b.id} className="p-3 font-bold text-ink text-center">
+                    <div className="text-sm text-primary font-sans">{b.vendorName}</div>
+                    <Badge kind="info" size="sm" className="text-[10px] mt-0.5">
+                      {b.isFromDb ? "🏛️ Vendors Master" : "🌐 CSP Benchmark"}
+                    </Badge>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-hairline">
+              <tr>
+                <td className="p-3 font-bold text-ink-2">Product Edition SKU</td>
+                {bids.map((b) => (
+                  <td key={b.id} className="p-3 text-center font-semibold text-ink">
+                    {b.productSku}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="p-3 font-bold text-ink-2">Wholesale Unit Rate</td>
+                {bids.map((b) => (
+                  <td key={b.id} className="p-3 text-center font-bold font-mono text-base text-ink">
+                    {rupee(b.unitCostMonthly)} <span className="text-[11px] text-ink-3 font-sans">/usr/mo</span>
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="p-3 font-bold text-ink-2">Reseller Profit Margin</td>
+                {bids.map((b) => {
+                  const mrp = STANDARD_MRP_MAP[b.productSku] || 150;
+                  const profit = Math.max(0, mrp - b.unitCostMonthly);
+                  const pct = Math.round((profit / mrp) * 100);
+                  return (
+                    <td key={b.id} className="p-3 text-center">
+                      <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        +{pct}% ({rupee(profit)}/usr/mo profit)
+                      </span>
+                    </td>
+                  );
+                })}
+              </tr>
+              <tr>
+                <td className="p-3 font-bold text-ink-2">Payment Credit Terms</td>
+                {bids.map((b) => (
+                  <td key={b.id} className="p-3 text-center font-semibold text-ink">
+                    {b.creditDays > 0 ? `Net ${b.creditDays} Days Credit` : "Prepaid Immediate"}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="p-3 font-bold text-ink-2">Delivery & Turnaround</td>
+                {bids.map((b) => (
+                  <td key={b.id} className="p-3 text-center font-medium text-ink-2">
+                    {b.provisioningTime}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="p-3 font-bold text-ink-2">SLA Adherence & Rating</td>
+                {bids.map((b) => (
+                  <td key={b.id} className="p-3 text-center font-medium text-ink">
+                    ⭐ {b.rating} ({b.slaScore}% SLA)
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="p-3 font-bold text-ink-2">Action / Procurement</td>
+                {bids.map((b) => (
+                  <td key={b.id} className="p-3 text-center">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        onPlacePo(b);
+                        onClose();
+                      }}
+                      className="bg-primary text-white font-bold text-xs"
+                    >
+                      🛒 Issue PO
+                    </Button>
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close Matrix
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function EditVendorCardModal({
   bid,
   onClose,
@@ -936,7 +1071,11 @@ export default function VendorPortalPage() {
     return ["All", ...list];
   }, [mergedBids]);
 
-  // Filtered Bids by SKU and Source Filter
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [comparedBidIds, setComparedBidIds] = React.useState<string[]>([]);
+  const [isCompareModalOpen, setIsCompareModalOpen] = React.useState(false);
+
+  // Filtered Bids by SKU, Source Filter, and Search Term
   const filteredBids = React.useMemo(() => {
     let list = mergedBids;
     if (vendorSourceFilter === "dbOnly") {
@@ -947,8 +1086,28 @@ export default function VendorPortalPage() {
     if (selectedSku !== "All") {
       list = list.filter((b) => b.productSku === selectedSku);
     }
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase().trim();
+      list = list.filter(
+        (b) =>
+          b.vendorName.toLowerCase().includes(q) ||
+          b.productSku.toLowerCase().includes(q) ||
+          (b.supportContact && b.supportContact.toLowerCase().includes(q))
+      );
+    }
     return list;
-  }, [mergedBids, selectedSku, vendorSourceFilter]);
+  }, [mergedBids, selectedSku, vendorSourceFilter, searchTerm]);
+
+  // Dynamic #1 Best Deal Vendor calculation for active selection
+  const bestDealBid = React.useMemo(() => {
+    if (filteredBids.length === 0) return null;
+    return filteredBids.reduce((min, b) => (b.unitCostMonthly < min.unitCostMonthly ? b : min), filteredBids[0]);
+  }, [filteredBids]);
+
+  // Compared Bids Array
+  const comparedBids = React.useMemo(() => {
+    return mergedBids.filter((b) => comparedBidIds.includes(b.id));
+  }, [mergedBids, comparedBidIds]);
 
   // Handle Add New Vendor Rate Quote
   const handleAddBid = (e: React.FormEvent) => {
@@ -1342,10 +1501,64 @@ export default function VendorPortalPage() {
               </div>
             </div>
 
-            <div className="text-xs text-ink-3 font-semibold">
-              Showing <b>{filteredBids.length}</b> rate bids
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Live Search Bar */}
+              <div className="relative min-w-[220px]">
+                <Input
+                  placeholder="Search vendor, SKU, contact..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-paper text-xs pl-8 font-medium h-9"
+                />
+                <Icon name="search" size={14} className="absolute left-2.5 top-2.5 text-ink-3" />
+              </div>
+
+              <div className="text-xs text-ink-3 font-semibold">
+                Showing <b>{filteredBids.length}</b> rate bids
+              </div>
             </div>
           </div>
+
+          {/* 🔥 Lowest Wholesale Rate Deal Alert Banner */}
+          {bestDealBid && (
+            <div className="p-4 bg-gradient-to-r from-emerald-950/40 via-emerald-900/20 to-paper border border-emerald-500/30 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 bg-emerald-500/20 rounded-xl text-emerald-400 font-bold text-lg shrink-0">
+                  🔥
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
+                      #1 Best Value Wholesale Deal Alert
+                    </span>
+                    <Badge kind="info" size="sm" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/30">
+                      Lowest Price Found
+                    </Badge>
+                  </div>
+                  <h3 className="text-base font-bold text-ink mt-0.5">
+                    {bestDealBid.vendorName} offers {bestDealBid.productSku} @{" "}
+                    <span className="font-mono text-emerald-600">{rupee(bestDealBid.unitCostMonthly)}</span>/usr/mo
+                  </h3>
+                  <p className="text-xs text-ink-3">
+                    Net credit: <b>{bestDealBid.creditDays > 0 ? `Net ${bestDealBid.creditDays} Days` : "Prepaid"}</b> • SLA: <b>{bestDealBid.slaScore}%</b> • Reseller Margin:{" "}
+                    <b className="text-emerald-600">
+                      +{Math.round((((STANDARD_MRP_MAP[bestDealBid.productSku] || 150) - bestDealBid.unitCostMonthly) / (STANDARD_MRP_MAP[bestDealBid.productSku] || 150)) * 100)}% Profit
+                    </b>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  onClick={() => handlePlacePo(bestDealBid)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
+                >
+                  🛒 Issue PO to {bestDealBid.vendorName}
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Wholesale Bids Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1366,7 +1579,7 @@ export default function VendorPortalPage() {
                   </div>
                 )}
 
-                {/* Source Badge */}
+                {/* Source & Compare Checkbox Bar */}
                 <div className="flex items-center justify-between pt-1">
                   {bid.isFromDb ? (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-soft text-primary border border-primary/20">
@@ -1377,6 +1590,26 @@ export default function VendorPortalPage() {
                       🌐 CSP Benchmark Rate
                     </span>
                   )}
+
+                  <label className="flex items-center gap-1.5 text-xs text-ink-3 cursor-pointer select-none font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={comparedBidIds.includes(bid.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          if (comparedBidIds.length >= 3) {
+                            toast.error("You can compare up to 3 vendors side-by-side!");
+                            return;
+                          }
+                          setComparedBidIds([...comparedBidIds, bid.id]);
+                        } else {
+                          setComparedBidIds(comparedBidIds.filter((id) => id !== bid.id));
+                        }
+                      }}
+                      className="rounded border-hairline accent-primary"
+                    />
+                    <span>Compare</span>
+                  </label>
                 </div>
 
                 <div className="space-y-3">
@@ -1414,6 +1647,21 @@ export default function VendorPortalPage() {
                       <span>Credit: <b>{bid.creditDays ? `${bid.creditDays} Days Net` : "Prepaid"}</b></span>
                     </div>
                   </div>
+
+                  {/* Reseller Profit Margin Pill */}
+                  {(() => {
+                    const mrp = STANDARD_MRP_MAP[bid.productSku] || 150;
+                    const profit = Math.max(0, mrp - bid.unitCostMonthly);
+                    const marginPct = Math.round((profit / mrp) * 100);
+                    return (
+                      <div className="flex items-center justify-between text-xs px-3 py-1.5 bg-emerald-50/50 border border-emerald-200/60 rounded-xl">
+                        <span className="text-ink-3 text-[11px] font-medium">Standard MRP: ₹{mrp}/mo</span>
+                        <span className="font-bold text-emerald-700 text-xs">
+                          Profit: +{marginPct}% ({rupee(profit)}/mo)
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {bid.notes && (
                     <p className="text-xs text-ink-2 bg-paper p-2 rounded-lg border border-hairline/50 italic">
@@ -1953,6 +2201,40 @@ export default function VendorPortalPage() {
           bid={editingBid}
           onClose={() => setEditingBid(null)}
           onSave={handleSaveEditedBid}
+        />
+      )}
+
+      {comparedBidIds.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-50 p-3 bg-ink text-white rounded-2xl shadow-xl flex items-center gap-4 border border-white/20 animate-in fade-in slide-in-from-bottom-4">
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <span className="px-2 py-0.5 bg-primary rounded-lg text-white font-bold text-xs font-mono">{comparedBidIds.length}</span>
+            <span>Vendors Selected for Comparison</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => setIsCompareModalOpen(true)}
+              className="bg-primary text-white font-bold text-xs hover:bg-primary/90"
+            >
+              ⚔️ Compare Matrix ({comparedBidIds.length})
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setComparedBidIds([])}
+              className="border-white/30 text-white hover:bg-white/10 text-xs"
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {isCompareModalOpen && (
+        <CompareVendorsModal
+          bids={comparedBids}
+          onClose={() => setIsCompareModalOpen(false)}
+          onPlacePo={handlePlacePo}
         />
       )}
     </div>
