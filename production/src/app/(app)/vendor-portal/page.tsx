@@ -1083,9 +1083,23 @@ export default function VendorPortalPage() {
     } else if (vendorSourceFilter === "benchmarks") {
       list = list.filter((b) => !b.isFromDb);
     }
+
     if (selectedSku !== "All") {
       list = list.filter((b) => b.productSku === selectedSku);
+    } else {
+      // Deduplicate by vendorName when SKU filter is "All" so each vendor appears ONCE
+      const seenVendors = new Set<string>();
+      const deduplicated: typeof mergedBids = [];
+      list.forEach((b) => {
+        const key = b.vendorName.toLowerCase();
+        if (!seenVendors.has(key)) {
+          seenVendors.add(key);
+          deduplicated.push(b);
+        }
+      });
+      list = deduplicated;
     }
+
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase().trim();
       list = list.filter(
