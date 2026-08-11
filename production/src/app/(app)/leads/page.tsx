@@ -77,6 +77,7 @@ import { useConfirm } from "@/components/providers/confirm-provider";
 import type { Lead } from "@/lib/supabase/database.types";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
 import { FAB } from "@/components/ui/fab";
+import { WhatsAppActionDialog } from "@/components/shared/whatsapp-action-dialog";
 
 // ============================================================
 // Stage config (matches prototype LEAD_STAGES)
@@ -201,6 +202,7 @@ function LeadsPageInner() {
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null);
   // Row "Follow-up" quick action → opens AddTaskDialog scoped to this lead.
   const [followUpLead, setFollowUpLead] = React.useState<Lead | null>(null);
+  const [waLead, setWaLead] = React.useState<Lead | null>(null);
   // Merge-duplicates dialog — holds the cluster (a lead + its matches) to fold.
   const [mergeCluster, setMergeCluster] = React.useState<Lead[] | null>(null);
   // "Follow-ups due today" banner — click to expand the list of due leads.
@@ -1076,6 +1078,7 @@ function LeadsPageInner() {
           onRowClick={(l) => setSelected(l)}
           onSendQuote={goSendQuote}
           onFollowUp={setFollowUpLead}
+          onWhatsApp={(l) => setWaLead(l)}
           onMerge={openMergeFor}
           dupIds={dup.flagged}
           isDealsPage={isDealsPage}
@@ -1175,6 +1178,23 @@ function LeadsPageInner() {
           onOpenChange={(o) => { if (!o) setFollowUpLead(null); }}
           linkLabel={followUpLead.company}
           linkTo={{ lead_id: followUpLead.id }}
+        />
+      )}
+
+      {/* WhatsApp Action & Templates Dialog */}
+      {waLead && (
+        <WhatsAppActionDialog
+          open
+          onOpenChange={(o) => { if (!o) setWaLead(null); }}
+          phone={waLead.contact_phone}
+          recipientName={waLead.contact_name}
+          companyName={waLead.company}
+          category="quote"
+          vars={{
+            productName: waLead.plan || "Cloud Service",
+            seats: waLead.seats || 10,
+            amount: waLead.value ? rupee(waLead.value) : undefined,
+          }}
         />
       )}
 
@@ -2218,12 +2238,13 @@ function LeadDetailSheet({
 // the cell (which is why the old hover-slide panel needed a JS hover-intent).
 // ============================================================
 function RowActions({
-  lead, isSelected, onSendQuote, onFollowUp,
+  lead, isSelected, onSendQuote, onFollowUp, onWhatsApp,
 }: {
   lead: Lead;
   isSelected: boolean;
   onSendQuote: (l: Lead) => void;
   onFollowUp: (l: Lead) => void;
+  onWhatsApp?: (l: Lead) => void;
 }) {
   const phoneDigits = (lead.contact_phone ?? "").replace(/\D/g, "");
   const waNumber = phoneDigits.startsWith("91")
@@ -2265,7 +2286,11 @@ function RowActions({
             aria-label={`WhatsApp ${lead.company}`}
             className={cn(iconBtn, "hover:text-emerald")}
             onClick={() => {
-              openWhatsApp(waNumber);
+              if (onWhatsApp) {
+                onWhatsApp(lead);
+              } else {
+                openWhatsApp(waNumber);
+              }
               logActivity.mutate({ leadId: lead.id, kind: "whatsapp", detail: `WhatsApp to ${lead.contact_phone}` });
             }}
           >
@@ -2391,6 +2416,7 @@ function LeadListView({
   onRowClick,
   onSendQuote,
   onFollowUp,
+  onWhatsApp,
   onMerge,
   dupIds,
   isDealsPage,
@@ -2402,6 +2428,7 @@ function LeadListView({
   onRowClick: (l: Lead) => void;
   onSendQuote: (l: Lead) => void;
   onFollowUp: (l: Lead) => void;
+  onWhatsApp?: (l: Lead) => void;
   onMerge: (l: Lead) => void;
   dupIds: Set<string>;
   isDealsPage: boolean;
@@ -2767,7 +2794,7 @@ function LeadListView({
                 </td>
                 {/* Quick actions — dark panel that opens from the ⋯ (hover/click/
                     focus) and stays open while the panel itself is hovered. */}
-                <RowActions lead={lead} isSelected={isSelected} onSendQuote={onSendQuote} onFollowUp={onFollowUp} />
+                <RowActions lead={lead} isSelected={isSelected} onSendQuote={onSendQuote} onFollowUp={onFollowUp} onWhatsApp={onWhatsApp} />
               </tr>
             );
           })}
