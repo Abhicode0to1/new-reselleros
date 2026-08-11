@@ -514,11 +514,14 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
             </div>
 
             {ctcBreakdown && showCtcCalc && (
-              <div className="p-3.5 bg-paper-2/60 border border-hairline rounded-xl space-y-3 text-xs">
-                <div className="flex items-center justify-between pb-2 border-b border-hairline">
+              <div className="p-4 bg-paper-2/80 border border-hairline rounded-2xl space-y-4 text-xs shadow-2xs">
+                <div className="flex items-center justify-between pb-3 border-b border-hairline">
                   <div>
-                    <span className="font-bold text-ink">Monthly CTC: {rupee(ctcBreakdown.monthlyCtc)}/mo</span>
-                    <span className="text-[11px] text-ink-3 block">Annual Package: {rupee(ctcBreakdown.annualCtc)}/yr</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-ink text-sm">Monthly CTC: {rupee(ctcBreakdown.monthlyCtc)}/mo</span>
+                      <Badge kind="info" size="sm">Annual {rupee(ctcBreakdown.annualCtc)}</Badge>
+                    </div>
+                    <span className="text-[11px] text-ink-3 block mt-0.5">Itemized Indian Wage Code &amp; Statutory Breakdown</span>
                   </div>
                   <Button
                     type="button"
@@ -530,42 +533,98 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                       if (ctcBreakdown.employerEsiMonthly > 0) setEsiApplicable(true);
                       toast.success(`Applied Monthly Gross ${rupee(ctcBreakdown.grossMonthly)} & PF/ESI settings!`);
                     }}
-                    className="text-xs font-bold"
+                    className="text-xs font-extrabold"
                   >
-                    ⚡ Apply to Monthly Salary
+                    ⚡ Apply Salary Structure
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
-                  <div className="bg-paper p-2 rounded-lg border border-hairline/60">
-                    <span className="text-ink-3 font-semibold block uppercase tracking-wider text-[9px]">1. Gross Salary (Base)</span>
-                    <div className="font-bold text-ink text-sm mt-0.5">{rupee(ctcBreakdown.grossMonthly)}/mo</div>
-                    <div className="text-[10px] text-ink-3 mt-1 space-y-0.5">
-                      <div>Basic (50%): {rupee(ctcBreakdown.basicMonthly)}</div>
-                      <div>HRA: {rupee(ctcBreakdown.hraMonthly)}</div>
-                      <div>Special Allowance: {rupee(ctcBreakdown.specialAllowanceMonthly)}</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
+                  {/* Column 1: Gross Monthly Salary Breakdown */}
+                  <div className="bg-paper p-3 rounded-xl border border-hairline space-y-2">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-hairline">
+                      <span className="font-bold text-ink uppercase tracking-wider text-[9.5px]">1. Earnings (Gross Base)</span>
+                      <span className="font-bold text-ink text-xs">{rupee(ctcBreakdown.grossMonthly)}</span>
+                    </div>
+                    <div className="space-y-1 text-ink-2">
+                      <div className="flex justify-between">
+                        <span>• Basic Salary (50%):</span>
+                        <span className="font-mono font-semibold">{rupee(ctcBreakdown.basicMonthly)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>• HRA ({isMetro ? "50%" : "40%"}):</span>
+                        <span className="font-mono font-semibold">{rupee(ctcBreakdown.hraMonthly)}</span>
+                      </div>
+                      {ctcBreakdown.conveyanceMonthly > 0 && (
+                        <div className="flex justify-between">
+                          <span>• Conveyance Allowance:</span>
+                          <span className="font-mono font-semibold">{rupee(ctcBreakdown.conveyanceMonthly)}</span>
+                        </div>
+                      )}
+                      {ctcBreakdown.medicalMonthly > 0 && (
+                        <div className="flex justify-between">
+                          <span>• Medical Allowance:</span>
+                          <span className="font-mono font-semibold">{rupee(ctcBreakdown.medicalMonthly)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-ink-3">
+                        <span>• Special / Flexi Allowance:</span>
+                        <span className="font-mono font-semibold">{rupee(ctcBreakdown.specialAllowanceMonthly)}</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="bg-paper p-2 rounded-lg border border-hairline/60">
-                    <span className="text-ink-3 font-semibold block uppercase tracking-wider text-[9px]">2. Employer Retirals</span>
-                    <div className="font-bold text-amber-700 text-sm mt-0.5">
-                      {rupee(ctcBreakdown.employerPfMonthly + ctcBreakdown.employerEsiMonthly + ctcBreakdown.gratuityMonthly)}/mo
+                  {/* Column 2: Employer Retirals & Benefits */}
+                  <div className="bg-paper p-3 rounded-xl border border-hairline space-y-2">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-hairline">
+                      <span className="font-bold text-amber-800 uppercase tracking-wider text-[9.5px]">2. Employer Contributions</span>
+                      <span className="font-bold text-amber-700 text-xs">{rupee(ctcBreakdown.totalEmployerContributionMonthly)}</span>
                     </div>
-                    <div className="text-[10px] text-ink-3 mt-1 space-y-0.5">
-                      <div>Employer PF (12%): {rupee(ctcBreakdown.employerPfMonthly)}</div>
-                      <div>Employer ESI: {rupee(ctcBreakdown.employerEsiMonthly)}</div>
-                      <div>Gratuity Provision: {rupee(ctcBreakdown.gratuityMonthly)}</div>
+                    <div className="space-y-1 text-ink-2">
+                      <div className="flex justify-between">
+                        <span>• EPF Share (3.67%):</span>
+                        <span className="font-mono font-semibold">{rupee(ctcBreakdown.employerEpfShareMonthly)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>• EPS Pension (8.33%):</span>
+                        <span className="font-mono font-semibold">{rupee(ctcBreakdown.employerEpsMonthly)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>• ESI Share (3.25%):</span>
+                        <span className="font-mono font-semibold">{rupee(ctcBreakdown.employerEsiMonthly)}</span>
+                      </div>
+                      <div className="flex justify-between text-ink-3">
+                        <span>• Gratuity Fund (4.81%):</span>
+                        <span className="font-mono font-semibold">{rupee(ctcBreakdown.gratuityMonthly)}</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="bg-paper p-2 rounded-lg border border-hairline/60">
-                    <span className="text-ink-3 font-semibold block uppercase tracking-wider text-[9px]">3. Employee Net Take-Home</span>
-                    <div className="font-bold text-emerald-700 text-sm mt-0.5">{rupee(ctcBreakdown.netTakeHomeMonthly)}/mo</div>
-                    <div className="text-[10px] text-ink-3 mt-1 space-y-0.5">
-                      <div>Employee PF: -{rupee(ctcBreakdown.employeePfMonthly)}</div>
-                      <div>Prof. Tax (PT): -{rupee(ctcBreakdown.professionalTaxMonthly)}</div>
-                      <div>In-Hand Annual: {rupee(ctcBreakdown.netTakeHomeAnnual)}</div>
+                  {/* Column 3: Employee Deductions & Net Take Home */}
+                  <div className="bg-paper p-3 rounded-xl border border-hairline space-y-2">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-hairline">
+                      <span className="font-bold text-emerald-800 uppercase tracking-wider text-[9.5px]">3. Employee Net In-Hand</span>
+                      <span className="font-extrabold text-emerald-700 text-xs">{rupee(ctcBreakdown.netTakeHomeMonthly)}</span>
+                    </div>
+                    <div className="space-y-1 text-ink-2">
+                      <div className="flex justify-between text-rose-700">
+                        <span>• Employee PF (12%):</span>
+                        <span className="font-mono font-semibold">-{rupee(ctcBreakdown.employeePfMonthly)}</span>
+                      </div>
+                      <div className="flex justify-between text-rose-700">
+                        <span>• Professional Tax (PT):</span>
+                        <span className="font-mono font-semibold">-{rupee(ctcBreakdown.professionalTaxMonthly)}</span>
+                      </div>
+                      {ctcBreakdown.employeeEsiMonthly > 0 && (
+                        <div className="flex justify-between text-rose-700">
+                          <span>• Employee ESI (0.75%):</span>
+                          <span className="font-mono font-semibold">-{rupee(ctcBreakdown.employeeEsiMonthly)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between pt-1 border-t border-hairline font-bold text-ink">
+                        <span>Net Take Home / Year:</span>
+                        <span className="font-mono text-emerald-700">{rupee(ctcBreakdown.netTakeHomeAnnual)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>

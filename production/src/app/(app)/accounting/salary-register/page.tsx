@@ -254,11 +254,13 @@ function MonthRegister() {
                   <th className="text-left px-3 py-3">Employee</th>
                   <th className="text-right px-3 py-3">Annual CTC</th>
                   <th className="text-right px-3 py-3">Monthly CTC</th>
-                  <th className="text-right px-3 py-3">Gross Salary</th>
+                  <th className="text-right px-3 py-3">Gross Base</th>
                   <th className="text-right px-3 py-3">Basic (50%)</th>
                   <th className="text-right px-3 py-3">HRA (40%)</th>
+                  <th className="text-right px-3 py-3">Conveyance</th>
+                  <th className="text-right px-3 py-3">Medical</th>
                   <th className="text-right px-3 py-3">Special Allow.</th>
-                  <th className="text-right px-3 py-3">Employer PF/ESI</th>
+                  <th className="text-right px-3 py-3">Employer Retirals</th>
                   <th className="text-right px-3 py-3 font-bold text-emerald-700">Net Take Home</th>
                 </tr>
               </thead>
@@ -276,8 +278,10 @@ function MonthRegister() {
                       <td className="px-3 py-2.5 text-right font-mono font-semibold text-ink">{rupee(ctc.grossMonthly)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-ink-3">{rupee(ctc.basicMonthly)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-ink-3">{rupee(ctc.hraMonthly)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-ink-3">{rupee(ctc.conveyanceMonthly)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-ink-3">{rupee(ctc.medicalMonthly)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-ink-3">{rupee(ctc.specialAllowanceMonthly)}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-amber-700 font-semibold">{rupee(ctc.employerPfMonthly + ctc.employerEsiMonthly)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-amber-700 font-semibold">{rupee(ctc.totalEmployerContributionMonthly)}</td>
                       <td className="px-3 py-2.5 text-right font-mono font-bold text-emerald-700 text-sm">{rupee(ctc.netTakeHomeMonthly)}</td>
                     </tr>
                   );
