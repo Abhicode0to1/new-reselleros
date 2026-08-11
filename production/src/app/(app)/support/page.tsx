@@ -1,15 +1,12 @@
 /**
- * /support — reseller-side support ticket inbox.
+ * /support — reseller-side support ticket & team feedback inbox.
  *
- * Pardeep sees every ticket raised by customers via the portal +
- * manually-created tickets. Action buttons let him move ticket through
- * the lifecycle (in_progress → resolved) and add a resolution note
- * that's visible to the customer on /portal/support.
+ * Pardeep & Deepak see every ticket raised by customers via the portal +
+ * testing feedback/bug reports submitted by employees with attached screenshots.
  */
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -37,15 +34,21 @@ const STATUS_COLOR: Record<SupportTicketStatus, "rose" | "amber" | "indigo" | "e
   resolved:          "emerald",
   closed:            "slate",
 };
-const STATUSES: ("all" | SupportTicketStatus)[] = ["open", "in_progress", "awaiting_customer", "resolved", "closed", "all"];
+const STATUSES: ("all" | SupportTicketStatus | "team_feedback")[] = ["open", "in_progress", "team_feedback", "resolved", "closed", "all"];
 
-function useTickets(status: "all" | SupportTicketStatus) {
+function useTickets(filter: "all" | SupportTicketStatus | "team_feedback") {
   return useQuery({
-    queryKey: ["support_tickets", status],
+    queryKey: ["support_tickets", filter],
     queryFn: async (): Promise<SupportTicketRow[]> => {
       const supabase = createClient();
       let q = supabase.from("support_tickets").select("*").order("created_at", { ascending: false });
-      if (status !== "all") q = q.eq("status", status);
+      
+      if (filter === "team_feedback") {
+        q = q.or("subject.ilike.[BUG]%,subject.ilike.[FEATURE]%,subject.ilike.[UI_IMPROVEMENT]%");
+      } else if (filter !== "all") {
+        q = q.eq("status", filter);
+      }
+      
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as SupportTicketRow[];
@@ -58,11 +61,14 @@ function useTicketCounts() {
     queryKey: ["support_tickets", "counts"],
     queryFn: async () => {
       const supabase = createClient();
-      const { data } = await supabase.from("support_tickets").select("status");
-      const out: Record<string, number> = { all: 0, open: 0, in_progress: 0, awaiting_customer: 0, resolved: 0, closed: 0 };
+      const { data } = await supabase.from("support_tickets").select("status, subject");
+      const out: Record<string, number> = { all: 0, open: 0, in_progress: 0, awaiting_customer: 0, resolved: 0, closed: 0, team_feedback: 0 };
       for (const r of data ?? []) {
         out.all += 1;
         out[r.status as string] = (out[r.status as string] ?? 0) + 1;
+        if (r.subject && (r.subject.includes("[BUG]") || r.subject.includes("[FEATURE]") || r.subject.includes("[UI_IMPROVEMENT]"))) {
+          out.team_feedback += 1;
+        }
       }
       return out;
     },
@@ -70,9 +76,9 @@ function useTicketCounts() {
 }
 
 export default function SupportPage() {
-  const [tab, setTab] = React.useState<"all" | SupportTicketStatus>("open");
+  const [filter, setFilter] = React.useState<"all" | SupportTicketStatus | "team_feedback">("open");
   const [selected, setSelected] = React.useState<SupportTicketRow | null>(null);
-  const { data: tickets = [], isLoading } = useTickets(tab);
+  const { data: tickets = [], isLoading } = useTickets(filter);
   const { data: counts }                  = useTicketCounts();
   const qc = useQueryClient();
 
@@ -91,33 +97,40 @@ export default function SupportPage() {
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Engage</p>
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Support Inbox</h1>
-        <p className="text-sm text-ink-3 mt-1">
-          Customer-raised tickets from the portal. Respond via WhatsApp / email,
-          then mark resolved with a note here so the customer can see it.
-        </p>
+      <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Engage & Quality Assurance</p>
+          <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Support & Team Testing Reports</h1>
+          <p className="text-sm text-ink-3 mt-1">
+            View customer portal tickets and employee software testing bug reports & feature suggestions.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge color="rose" className="text-xs py-1 px-3">
+            🐛 {counts?.team_feedback ?? 0} Team Feedback Reports
+          </Badge>
+        </div>
       </div>
 
       {/* Tab filter */}
       <div className="flex flex-wrap gap-1.5 mb-5">
         {STATUSES.map((s) => {
-          const active = tab === s;
+          const active = filter === s;
           const count  = counts?.[s] ?? 0;
+          const label = s === "all" ? "All Tickets" : s === "team_feedback" ? "🐛 Team Testing Reports" : STATUS_LABEL[s];
           return (
             <button
               key={s}
               type="button"
-              onClick={() => setTab(s)}
-              className={`text-xs px-3 py-1.5 rounded-full border transition-colors inline-flex items-center gap-2 ${
+              onClick={() => setFilter(s)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-all inline-flex items-center gap-2 ${
                 active
-                  ? "border-amber bg-amber-soft text-amber-ink font-semibold"
+                  ? "border-primary bg-primary-soft text-primary font-bold shadow-sm"
                   : "border-hairline text-ink-3 hover:text-ink hover:bg-paper-2"
               }`}
             >
-              {s === "all" ? "All" : STATUS_LABEL[s]}
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${active ? "bg-paper text-amber-ink" : "bg-paper-2 text-ink-3"}`}>{count}</span>
+              <span>{label}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${active ? "bg-paper text-primary font-bold" : "bg-paper-2 text-ink-3"}`}>{count}</span>
             </button>
           );
         })}
@@ -129,43 +142,53 @@ export default function SupportPage() {
           {[1,2,3].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
         </div>
       ) : tickets.length === 0 ? (
-        <Card className="py-2">
+        <Card className="py-8 text-center">
           <EmptyState
             icon="ticket"
-            title="No tickets here"
-            body="Open tickets will appear here as customers raise them on the portal."
+            title="No tickets or feedback found"
+            body="Submitted testing reports from employees or customer portal tickets will appear here."
           />
         </Card>
       ) : (
         <div className="space-y-3">
-          {tickets.map((t) => (
-            <Card key={t.id} className="p-5 hover:bg-paper-2/30 cursor-pointer" onClick={() => setSelected(t)}>
-              <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
-                <div className="min-w-0">
-                  <div className="font-medium text-ink leading-tight">{t.subject}</div>
-                  <div className="text-[11px] text-ink-3 mt-0.5">
-                    <span className="font-mono">{t.id}</span>
-                    <span className="mx-1.5">·</span>
-                    {t.customer_name}
-                    <span className="mx-1.5">·</span>
-                    {formatDate(t.created_at.slice(0, 10))}
-                    <span className="mx-1.5">·</span>
-                    {t.category.replace("_", " ")}
-                    {t.priority !== "normal" && (
-                      <>
-                        <span className="mx-1.5">·</span>
-                        <span className={t.priority === "urgent" ? "text-rose font-semibold" : "text-amber-ink"}>
-                          {t.priority}
+          {tickets.map((t) => {
+            const isTeamReport = t.subject.includes("[BUG]") || t.subject.includes("[FEATURE]") || t.subject.includes("[UI_IMPROVEMENT]");
+            return (
+              <Card key={t.id} className="p-5 hover:bg-paper-2/30 cursor-pointer transition-all border-l-4 border-l-transparent hover:border-l-primary" onClick={() => setSelected(t)}>
+                <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      {isTeamReport && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-soft text-rose-ink border border-rose/30">
+                          🐛 Team Report
                         </span>
-                      </>
-                    )}
+                      )}
+                      <div className="font-semibold text-ink text-base leading-tight">{t.subject}</div>
+                    </div>
+                    <div className="text-[11px] text-ink-3 mt-1 flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-ink-2">{t.id.slice(0, 8)}</span>
+                      <span>·</span>
+                      <span className="font-medium text-ink">{t.customer_name} ({t.raised_by_email})</span>
+                      <span>·</span>
+                      <span>{formatDate(t.created_at.slice(0, 10))}</span>
+                      {t.priority !== "normal" && (
+                        <>
+                          <span>·</span>
+                          <span className={t.priority === "urgent" ? "text-rose font-bold uppercase" : "text-amber-ink font-semibold"}>
+                            {t.priority}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
+                  <Badge color={STATUS_COLOR[t.status]}>{STATUS_LABEL[t.status]}</Badge>
                 </div>
-                <Badge color={STATUS_COLOR[t.status]}>{STATUS_LABEL[t.status]}</Badge>
-              </div>
-              <p className="text-sm text-ink-2 leading-relaxed line-clamp-2 mt-1">{t.body}</p>
-            </Card>
-          ))}
+                <p className="text-xs text-ink-2 leading-relaxed line-clamp-2 mt-2 font-mono bg-paper-2/50 p-2 rounded border border-hairline/60">
+                  {t.body}
+                </p>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -182,7 +205,7 @@ export default function SupportPage() {
 }
 
 // ────────────────────────────────────────────────────────────────
-// Detail modal — show + action
+// Detail modal — show + action + screenshot preview
 // ────────────────────────────────────────────────────────────────
 
 function TicketDetail({
@@ -192,8 +215,11 @@ function TicketDetail({
   onClose: () => void;
   onUpdate: (patch: Partial<Omit<SupportTicketRow, "id" | "tenant_id" | "created_at" | "updated_at">>) => Promise<unknown>;
 }) {
-  const [note, setNote]     = React.useState(ticket.resolution_note ?? "");
-  const [busy, setBusy]     = React.useState(false);
+  const [note, setNote] = React.useState(ticket.resolution_note ?? "");
+  const [busy, setBusy] = React.useState(false);
+  const [zoomImage, setZoomImage] = React.useState<string | null>(null);
+
+  const isTeamReport = ticket.subject.includes("[BUG]") || ticket.subject.includes("[FEATURE]") || ticket.subject.includes("[UI_IMPROVEMENT]");
 
   async function setStatus(newStatus: SupportTicketStatus) {
     setBusy(true);
@@ -211,93 +237,108 @@ function TicketDetail({
   }
 
   return (
-    <div className="fixed inset-0 bg-ink/40 z-40 grid place-items-center p-4" onClick={onClose}>
-      <Card className="max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-ink/50 backdrop-blur-xs z-50 grid place-items-center p-4" onClick={onClose}>
+      <Card className="max-w-3xl w-full p-6 max-h-[92vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
-            <Badge color={STATUS_COLOR[ticket.status]}>{STATUS_LABEL[ticket.status]}</Badge>
-            <h2 className="font-serif text-xl text-ink leading-tight mt-2">{ticket.subject}</h2>
+            <div className="flex items-center gap-2 mb-2">
+              <Badge color={STATUS_COLOR[ticket.status]}>{STATUS_LABEL[ticket.status]}</Badge>
+              {isTeamReport && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-soft text-rose-ink border border-rose/30">
+                  🐛 Employee Testing Report
+                </span>
+              )}
+            </div>
+            <h2 className="font-serif text-xl md:text-2xl text-ink leading-tight">{ticket.subject}</h2>
             <div className="text-[11px] text-ink-3 mt-1 font-mono">{ticket.id}</div>
           </div>
-          <button onClick={onClose} className="text-ink-3 hover:text-ink"><Icon name="x" size={18} /></button>
+          <button onClick={onClose} className="p-1 rounded-md text-ink-3 hover:text-ink hover:bg-paper-2"><Icon name="x" size={20} /></button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-xs border-y border-hairline py-3 mb-4">
+        <div className="grid grid-cols-2 gap-3 text-xs border-y border-hairline py-3 mb-4 bg-paper-2/40 p-3 rounded-lg">
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Customer</div>
-            <div className="text-ink">{ticket.customer_name}</div>
+            <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Submitted By</div>
+            <div className="text-ink font-medium">{ticket.customer_name}</div>
             <div className="text-ink-3 font-mono text-[11px]">{ticket.raised_by_email}</div>
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Category · Priority</div>
-            <div className="text-ink">{ticket.category.replace("_", " ")}</div>
-            <div className={`text-[11px] ${ticket.priority === "urgent" ? "text-rose font-semibold" : ticket.priority === "high" ? "text-amber-ink" : "text-ink-3"}`}>
-              {ticket.priority} priority
+            <div className="text-ink font-medium">{ticket.category.replace("_", " ")}</div>
+            <div className={`text-[11px] font-semibold ${ticket.priority === "urgent" ? "text-rose" : ticket.priority === "high" ? "text-amber-ink" : "text-ink-3"}`}>
+              {ticket.priority.toUpperCase()} priority
             </div>
           </div>
         </div>
 
         <div className="mb-4">
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Customer wrote</div>
-          <p className="text-sm text-ink-2 leading-relaxed whitespace-pre-wrap">{ticket.body}</p>
+          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Report Details & Steps</div>
+          <div className="text-xs text-ink-2 leading-relaxed whitespace-pre-wrap font-mono p-3 bg-paper border border-hairline rounded-lg">
+            {ticket.body}
+          </div>
         </div>
 
+        {/* Resolution note */}
         <div className="mb-4">
           <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1 block">
-            Your resolution note (shown to customer when you mark resolved)
+            Resolution Note / Developer Fix Status
           </label>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            rows={4}
-            className="w-full px-3 py-2 text-sm border border-hairline rounded-md bg-paper"
-            placeholder="What did you do to resolve this? What should they do next?"
+            rows={3}
+            className="w-full px-3 py-2 text-xs border border-hairline rounded-md bg-paper text-ink placeholder:text-ink-4 focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+            placeholder="Describe the fix or feature update made for this report..."
           />
         </div>
 
-        <div className="flex flex-wrap gap-2 justify-end">
+        <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-hairline">
           <Button variant="ghost" onClick={onClose}>Close</Button>
           {ticket.status === "open" && (
             <Button variant="default" loading={busy} onClick={() => setStatus("in_progress")}>
               Mark In Progress
             </Button>
           )}
-          {ticket.status !== "awaiting_customer" && ticket.status !== "resolved" && ticket.status !== "closed" && (
-            <Button variant="default" loading={busy} onClick={() => setStatus("awaiting_customer")}>
-              Awaiting customer
-            </Button>
-          )}
           {ticket.status !== "resolved" && (
             <Button variant="primary" loading={busy} onClick={() => setStatus("resolved")}>
-              <Icon name="check" size={12} className="mr-1" /> Mark resolved
+              <Icon name="check" size={14} className="mr-1" /> Mark Resolved
             </Button>
           )}
           {ticket.status === "resolved" && (
             <Button variant="default" loading={busy} onClick={() => setStatus("closed")}>
-              Close ticket
+              Close Ticket
             </Button>
           )}
         </div>
 
-        {/* WhatsApp shortcut */}
-        <div className="mt-4 pt-4 border-t border-hairline text-center">
+        {/* Contact Reporter */}
+        <div className="mt-4 pt-3 border-t border-hairline flex items-center justify-between text-xs text-ink-3">
+          <span>Reporter Email: <span className="font-mono text-ink">{ticket.raised_by_email}</span></span>
           <a
-            href={`https://wa.me/?text=${encodeURIComponent(`Hi, regarding your ticket ${ticket.id}: ${ticket.subject}\n\n`)}`}
+            href={`https://wa.me/?text=${encodeURIComponent(`Hi ${ticket.customer_name}, regarding your testing report ${ticket.id}: ${ticket.subject}\n\n`)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-xs px-4 py-2 rounded-md text-paper"
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md text-white font-medium"
             style={{ background: "#25D366" }}
           >
-            <Icon name="whatsapp" size={12} /> Open WhatsApp template
+            <Icon name="whatsapp" size={13} /> WhatsApp Reporter
           </a>
         </div>
-
-        <div className="mt-3 text-center">
-          <Link href={`/customers/${ticket.customer_id ?? ""}`} className="text-xs text-amber-ink hover:underline">
-            View customer profile →
-          </Link>
-        </div>
       </Card>
+
+      {/* Image Zoom Modal */}
+      {zoomImage && (
+        <div className="fixed inset-0 bg-ink/90 z-50 grid place-items-center p-4" onClick={() => setZoomImage(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setZoomImage(null)}
+              className="absolute top-2 right-2 p-2 rounded-full bg-ink/70 text-white hover:bg-ink"
+            >
+              <Icon name="x" size={20} />
+            </button>
+            <img src={zoomImage} alt="Zoomed screenshot" className="w-full h-auto max-h-[85vh] object-contain rounded-lg border border-paper/20" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
