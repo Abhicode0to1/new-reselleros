@@ -1,28 +1,15 @@
 /**
  * Indian Cost to Company (CTC) Salary Breakdown Calculator Engine.
- *
- * Detailed Indian Corporate & Reseller HR CTC Breakdown Model:
- * 1. Monthly CTC = Annual CTC / 12
- * 2. Basic Salary = 50% of Monthly CTC
- * 3. House Rent Allowance (HRA) = 40% of Basic (Non-Metro) or 50% (Metro)
- * 4. Conveyance / Transport Allowance = ₹1,600/mo (Tax-exempt standard)
- * 5. Medical Allowance = ₹1,250/mo (Standard tax allowance)
- * 6. Employer EPF = 12% of Basic (capped at ₹1,800/mo)
- *    - Employer EPS (Pension Fund): 8.33% of Basic (capped at ₹1,250/mo)
- *    - Employer EPF Share: 3.67% of Basic (balance ₹550/mo)
- * 7. Employer ESI = 3.25% of Gross (only if Gross ≤ ₹21,000/mo)
- * 8. Gratuity Provision = 4.81% of Basic (15 days / 26 days per year)
- * 9. Special / Flexible Allowance = Monthly CTC - (Basic + HRA + Conveyance + Medical + Employer EPF + Employer ESI + Gratuity)
- * 10. Gross Salary = Basic + HRA + Conveyance + Medical + Special Allowance
- * 11. Employee EPF = 12% of Basic (capped at ₹1,800/mo)
- * 12. Employee ESI = 0.75% of Gross (only if Gross ≤ ₹21,000/mo)
- * 13. Professional Tax (PT) = ₹200/mo (Standard slab)
- * 14. Net Take Home = Gross Salary - (Employee EPF + Employee ESI + Professional Tax)
+ * Supports standard Indian Wage Code calculations as well as custom component overrides (Basic %, HRA %, Conveyance, Medical, etc.).
  */
 
 export interface CtcBreakdown {
   annualCtc: number;
   monthlyCtc: number;
+
+  // Configuration percentages used
+  basicPct: number;
+  hraPct: number;
 
   // Earnings (Gross Components)
   basicMonthly: number;
@@ -39,9 +26,9 @@ export interface CtcBreakdown {
   grossAnnual: number;
 
   // Employer Contributions (Included in CTC)
-  employerPfMonthly: number; // Total 12% (₹1,800)
-  employerEpsMonthly: number; // 8.33% (₹1,250)
-  employerEpfShareMonthly: number; // 3.67% (₹550)
+  employerPfMonthly: number; // Total 12% (capped or uncapped)
+  employerEpsMonthly: number; // 8.33% (capped at ₹1,250)
+  employerEpfShareMonthly: number; // 3.67%
   employerPfAnnual: number;
   employerEsiMonthly: number;
   employerEsiAnnual: number;
@@ -69,30 +56,39 @@ export function calculateCtcBreakdown(
   annualCtcInput: number,
   opts?: {
     isMetro?: boolean;
+    basicPct?: number; // Custom basic percentage (e.g., 0.40, 0.50)
+    hraPct?: number; // Custom HRA percentage (e.g., 0.40, 0.50)
+    customConveyanceMonthly?: number; // Custom conveyance allowance
+    customMedicalMonthly?: number; // Custom medical allowance
     capPfWageCeiling?: boolean; // Cap PF to ₹1,800/mo (₹15,000 basic limit)
     includeGratuity?: boolean;
     includeEsi?: boolean;
-    includeConveyanceMedical?: boolean;
   }
 ): CtcBreakdown {
   const isMetro = opts?.isMetro ?? false;
+  const basicPct = opts?.basicPct ?? 0.5; // Default 50%
+  const hraPct = opts?.hraPct ?? (isMetro ? 0.5 : 0.4); // Default 40% (non-metro) or 50% (metro)
   const capPfWageCeiling = opts?.capPfWageCeiling ?? true;
   const includeGratuity = opts?.includeGratuity ?? true;
   const includeEsi = opts?.includeEsi ?? true;
-  const includeConveyanceMedical = opts?.includeConveyanceMedical ?? true;
 
   const annualCtc = Math.max(0, Math.round(annualCtcInput));
   const monthlyCtc = Math.round(annualCtc / 12);
 
-  // 1. Basic = 50% of Monthly CTC
-  const basicMonthly = Math.round(monthlyCtc * 0.5);
+  // 1. Basic Salary
+  const basicMonthly = Math.round(monthlyCtc * basicPct);
 
-  // 2. HRA = 40% of Basic (or 50% for Metro)
-  const hraMonthly = Math.round(basicMonthly * (isMetro ? 0.5 : 0.4));
+  // 2. HRA
+  const hraMonthly = Math.round(basicMonthly * hraPct);
 
   // 3. Conveyance & Medical Allowances
-  const conveyanceMonthly = includeConveyanceMedical && monthlyCtc >= 25000 ? 1600 : 0;
-  const medicalMonthly = includeConveyanceMedical && monthlyCtc >= 25000 ? 1250 : 0;
+  const conveyanceMonthly = opts?.customConveyanceMonthly !== undefined
+    ? Math.max(0, opts.customConveyanceMonthly)
+    : (monthlyCtc >= 25000 ? 1600 : 0);
+
+  const medicalMonthly = opts?.customMedicalMonthly !== undefined
+    ? Math.max(0, opts.customMedicalMonthly)
+    : (monthlyCtc >= 25000 ? 1250 : 0);
 
   // 4. Employer PF (12% of Basic, capped at ₹1,800 if ceiling applies)
   let employerPfMonthly = Math.round(basicMonthly * 0.12);
@@ -134,6 +130,9 @@ export function calculateCtcBreakdown(
   return {
     annualCtc,
     monthlyCtc,
+
+    basicPct,
+    hraPct,
 
     basicMonthly,
     basicAnnual: basicMonthly * 12,

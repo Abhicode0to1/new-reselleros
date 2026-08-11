@@ -405,16 +405,27 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
   // Tab state
   const [empTab, setEmpTab] = React.useState<"basic" | "ctc" | "statutory">("basic");
 
-  // CTC Calculator State
+  // CTC Calculator State & Overrides
   const [annualCtc, setAnnualCtc] = React.useState<string>(
     employee?.monthly_gross ? String(employee.monthly_gross * 12) : "600000"
   );
   const [isMetro, setIsMetro] = React.useState(false);
+  const [basicPct, setBasicPct] = React.useState<number>(0.5);
+  const [customConveyance, setCustomConveyance] = React.useState<string>("1600");
+  const [customMedical, setCustomMedical] = React.useState<string>("1250");
+  const [includeGratuity, setIncludeGratuity] = React.useState<boolean>(true);
+  const [showCustomControls, setShowCustomControls] = React.useState<boolean>(false);
 
   const ctcBreakdown = React.useMemo(() => {
     const val = Number(annualCtc) || (Number(gross) > 0 ? Number(gross) * 12 : 600000);
-    return calculateCtcBreakdown(val, { isMetro });
-  }, [annualCtc, gross, isMetro]);
+    return calculateCtcBreakdown(val, {
+      isMetro,
+      basicPct,
+      customConveyanceMonthly: Number(customConveyance) || 0,
+      customMedicalMonthly: Number(customMedical) || 0,
+      includeGratuity,
+    });
+  }, [annualCtc, gross, isMetro, basicPct, customConveyance, customMedical, includeGratuity]);
   // For a NEW employee, suggest ESI coverage from the wage ceiling until the
   // user decides for themselves. Existing employees keep their saved value.
   React.useEffect(() => {
@@ -540,6 +551,67 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
               <Field label="Monthly Gross Salary (₹, Base for Pay Slip)">
                 <Input type="number" min={0} value={gross} onChange={(e) => setGross(e.target.value)} placeholder="e.g. 46997" />
               </Field>
+
+              {/* Custom Component Override Accordion Toggle */}
+              <div className="border-t border-hairline pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomControls(!showCustomControls)}
+                  className="text-xs text-primary font-extrabold flex items-center gap-1 hover:underline cursor-pointer"
+                >
+                  <Icon name={showCustomControls ? "chevron_up" : "chevron_down"} size={14} />
+                  <span>{showCustomControls ? "Hide Component Customizer" : "⚙️ Custom Edit Basic %, Allowances & Retirals"}</span>
+                </button>
+
+                {showCustomControls && (
+                  <div className="mt-3 p-3 bg-paper-2/70 border border-hairline rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <Field label="Basic Salary % of CTC">
+                      <select
+                        value={basicPct}
+                        onChange={(e) => setBasicPct(Number(e.target.value))}
+                        className={selectCls}
+                      >
+                        <option value={0.30}>30% Basic</option>
+                        <option value={0.40}>40% Basic</option>
+                        <option value={0.50}>50% Basic (Recommended)</option>
+                        <option value={0.60}>60% Basic</option>
+                      </select>
+                    </Field>
+
+                    <Field label="Conveyance Allowance (₹/mo)">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={customConveyance}
+                        onChange={(e) => setCustomConveyance(e.target.value)}
+                        placeholder="1600"
+                      />
+                    </Field>
+
+                    <Field label="Medical Allowance (₹/mo)">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={customMedical}
+                        onChange={(e) => setCustomMedical(e.target.value)}
+                        placeholder="1250"
+                      />
+                    </Field>
+
+                    <div className="flex items-center pt-5">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={includeGratuity}
+                          onChange={(e) => setIncludeGratuity(e.target.checked)}
+                          className="rounded border-hairline accent-amber"
+                        />
+                        <span className="text-xs text-ink-2 font-semibold">Include Gratuity Provision (4.81%)</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {ctcBreakdown ? (
                 <div className="p-4 bg-paper-2/80 border border-hairline rounded-2xl space-y-4 text-xs shadow-2xs">
