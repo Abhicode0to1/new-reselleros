@@ -338,6 +338,81 @@ function parseRatesFromBid(notesStr?: string | null): Record<string, number> {
   return rates;
 }
 
+interface VendorAgreement {
+  id: string;
+  contractCode: string;
+  vendorName: string;
+  title: string;
+  type: "Master SLA & Credit Contract" | "Mutual Customer Data NDA" | "Volume Rebate Commitment" | "Transfer Token Guarantee";
+  effectiveDate: string;
+  expiryDate: string;
+  status: "Active (Signed)" | "Pending Signature" | "Expiring Soon" | "Draft";
+  creditDaysLock: number;
+  priceFreezeMonths: number;
+  slaPenaltyPercent: number;
+  pdfUrl?: string;
+  notes: string;
+}
+
+const INITIAL_AGREEMENTS: VendorAgreement[] = [
+  {
+    id: "agr-101",
+    contractCode: "AGR-2026-RED-01",
+    vendorName: "Redington India Ltd",
+    title: "Tier-1 CSP Distributor SLA & Net 30 Credit Master Contract",
+    type: "Master SLA & Credit Contract",
+    effectiveDate: "2026-01-01",
+    expiryDate: "2026-12-31",
+    status: "Active (Signed)",
+    creditDaysLock: 30,
+    priceFreezeMonths: 12,
+    slaPenaltyPercent: 2.0,
+    notes: "Guarantees ₹120/mo Google Workspace Starter rate with Net 30 credit terms. 99.9% uptime SLA.",
+  },
+  {
+    id: "agr-102",
+    contractCode: "AGR-2026-NET-02",
+    vendorName: "Net2Secure Services",
+    title: "Mutual Customer Data NDA & Direct Sub-Reseller Protection",
+    type: "Mutual Customer Data NDA",
+    effectiveDate: "2026-02-15",
+    expiryDate: "2027-02-14",
+    status: "Active (Signed)",
+    creditDaysLock: 30,
+    priceFreezeMonths: 12,
+    slaPenaltyPercent: 1.5,
+    notes: "Non-circumvention clause: Vendor cannot directly contact or pitch customers transferred by Reseller.",
+  },
+  {
+    id: "agr-103",
+    contractCode: "AGR-2026-ING-03",
+    vendorName: "Ingram Micro India",
+    title: "Annual Volume Milestone Rebate & Tiered Margin Agreement",
+    type: "Volume Rebate Commitment",
+    effectiveDate: "2026-04-01",
+    expiryDate: "2027-03-31",
+    status: "Pending Signature",
+    creditDaysLock: 45,
+    priceFreezeMonths: 12,
+    slaPenaltyPercent: 1.0,
+    notes: "Milestone: Extra 5% cashback rebate upon reaching 500 active Google/M365 seats.",
+  },
+  {
+    id: "agr-104",
+    contractCode: "AGR-2026-RAJ-04",
+    vendorName: "Rajesh (Direct Sub-Reseller)",
+    title: "Instant Transfer Token & CSP Provisioning Guarantee",
+    type: "Transfer Token Guarantee",
+    effectiveDate: "2026-03-01",
+    expiryDate: "2027-02-28",
+    status: "Active (Signed)",
+    creditDaysLock: 30,
+    priceFreezeMonths: 12,
+    slaPenaltyPercent: 3.0,
+    notes: "Binds supplier to provide Google CSP domain transfer token within 15 minutes of PO generation.",
+  },
+];
+
 const STANDARD_MRP_MAP: Record<string, number> = {
   "Google Workspace Business Starter": 150,
   "Google Workspace Business Standard": 750,
@@ -348,6 +423,313 @@ const STANDARD_MRP_MAP: Record<string, number> = {
   "AWS EC2 Cloud Compute": 1000,
   "DigiCert Wildcard SSL": 600,
 };
+
+function ViewAgreementModal({
+  agreement,
+  onClose,
+}: {
+  agreement: VendorAgreement;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="md:!max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="space-y-1 border-b border-hairline pb-3">
+          <div className="flex items-center justify-between">
+            <Badge kind="info" size="sm" className="font-mono text-xs">
+              {agreement.contractCode}
+            </Badge>
+            <Badge
+              kind={
+                agreement.status === "Active (Signed)"
+                  ? "success"
+                  : agreement.status === "Pending Signature"
+                  ? "warning"
+                  : "muted"
+              }
+              size="sm"
+              className="font-bold"
+            >
+              {agreement.status}
+            </Badge>
+          </div>
+          <DialogTitle className="text-xl font-bold font-serif text-ink">
+            {agreement.title}
+          </DialogTitle>
+          <DialogDescription className="text-xs text-ink-3">
+            Legally Binding B2B Service Level Agreement between <b>Anutech Digital (Reseller)</b> and <b>{agreement.vendorName}</b>.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-3 text-xs text-ink">
+          {/* Key Term Pills */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-paper-2/60 p-3 rounded-xl border border-hairline">
+            <div>
+              <div className="text-[10px] text-ink-3 uppercase font-bold">Credit Line</div>
+              <div className="font-bold text-sm text-primary">{agreement.creditDaysLock} Days Net</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-ink-3 uppercase font-bold">Price Freeze</div>
+              <div className="font-bold text-sm text-emerald-600">{agreement.priceFreezeMonths} Months</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-ink-3 uppercase font-bold">SLA Breach Credit</div>
+              <div className="font-bold text-sm text-amber-ink">{agreement.slaPenaltyPercent}% Credit</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-ink-3 uppercase font-bold">Expiry Date</div>
+              <div className="font-bold text-sm text-ink">{agreement.expiryDate}</div>
+            </div>
+          </div>
+
+          {/* Legal Document Text Container */}
+          <div className="p-4 bg-paper border border-hairline rounded-xl space-y-3 leading-relaxed font-sans text-ink-2">
+            <h4 className="font-bold text-xs uppercase text-ink tracking-wider border-b border-hairline pb-1">
+              📜 B2B Reseller Terms & Legal Undertakings
+            </h4>
+
+            <p>
+              <b>1. Wholesale Rate & Price Freeze Guarantee:</b> Vendor agrees that all unit rates for standard cloud licenses provided to Reseller shall remain fixed for a minimum period of <b>{agreement.priceFreezeMonths} Months</b> without unannounced price increases.
+            </p>
+
+            <p>
+              <b>2. Payment Credit Line:</b> Vendor grants Reseller a binding credit term of <b>{agreement.creditDaysLock} Days Net</b> from the date of invoice issuance. Credit line revoking requires 30 days written notice.
+            </p>
+
+            <p>
+              <b>3. Provisioning Speed & SLA Penalty:</b> Vendor guarantees order delivery and Google/Microsoft Transfer Token handover within standard SLAs. In case of delay exceeding SLA limits, a penalty credit of <b>{agreement.slaPenaltyPercent}%</b> per incident shall be deducted from vendor COGS bill.
+            </p>
+
+            <p>
+              <b>4. Non-Circumvention & Customer Data NDA:</b> Vendor shall not directly approach, solicit, or market cloud subscriptions to any customer domains onboarded or managed by Reseller under this contract.
+            </p>
+
+            {agreement.notes && (
+              <div className="p-2.5 bg-paper-2/70 rounded-lg text-ink text-xs italic border-l-2 border-primary">
+                “{agreement.notes}”
+              </div>
+            )}
+          </div>
+
+          {/* Signature Blocks */}
+          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-hairline">
+            <div className="p-3 bg-paper-2/40 border border-hairline rounded-xl space-y-1">
+              <div className="text-[10px] uppercase font-bold text-ink-3">Signed on behalf of Reseller</div>
+              <div className="font-bold text-ink">Anutech Digital</div>
+              <div className="text-[11px] text-emerald-600 font-semibold">✓ Signed Digitally by Pardeep Sharma (Owner)</div>
+              <div className="text-[10px] text-ink-3 font-mono">Date: {agreement.effectiveDate}</div>
+            </div>
+
+            <div className="p-3 bg-paper-2/40 border border-hairline rounded-xl space-y-1">
+              <div className="text-[10px] uppercase font-bold text-ink-3">Signed on behalf of Vendor</div>
+              <div className="font-bold text-ink">{agreement.vendorName}</div>
+              <div className="text-[11px] text-emerald-600 font-semibold">
+                {agreement.status === "Active (Signed)" ? "✓ Signed Digitally by Authorized Officer" : "⏳ Pending Digital Signature"}
+              </div>
+              <div className="text-[10px] text-ink-3 font-mono">Date: {agreement.effectiveDate}</div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="flex items-center justify-between sm:justify-between w-full pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              window.print();
+            }}
+            className="text-xs font-semibold"
+          >
+            🖨️ Print / Save as PDF
+          </Button>
+          <Button variant="primary" size="sm" onClick={onClose} className="text-xs font-bold">
+            Close Document
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateAgreementModal({
+  vendors,
+  onClose,
+  onCreate,
+}: {
+  vendors: string[];
+  onClose: () => void;
+  onCreate: (ag: VendorAgreement) => void;
+}) {
+  const [vendorName, setVendorName] = React.useState(vendors[0] || "Redington India Ltd");
+  const [title, setTitle] = React.useState("Tier-1 CSP Distributor Master SLA & Credit Contract");
+  const [type, setType] = React.useState<VendorAgreement["type"]>("Master SLA & Credit Contract");
+  const [creditDays, setCreditDays] = React.useState("30");
+  const [priceFreezeMonths, setPriceFreezeMonths] = React.useState("12");
+  const [slaPenalty, setSlaPenalty] = React.useState("2.0");
+  const [expiryDate, setExpiryDate] = React.useState("2027-03-31");
+  const [notes, setNotes] = React.useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vendorName.trim() || !title.trim()) {
+      toast.error("Please fill required agreement fields!");
+      return;
+    }
+
+    const newAgreement: VendorAgreement = {
+      id: `agr-${Date.now()}`,
+      contractCode: `AGR-2026-${vendorName.substring(0, 3).toUpperCase()}-${Math.floor(10 + Math.random() * 90)}`,
+      vendorName: vendorName.trim(),
+      title: title.trim(),
+      type,
+      effectiveDate: new Date().toISOString().split("T")[0],
+      expiryDate: expiryDate || "2027-12-31",
+      status: "Active (Signed)",
+      creditDaysLock: Number(creditDays) || 30,
+      priceFreezeMonths: Number(priceFreezeMonths) || 12,
+      slaPenaltyPercent: Number(slaPenalty) || 2.0,
+      notes: notes.trim() || "Legally binding B2B contract registered in ResellerOS.",
+    };
+
+    onCreate(newAgreement);
+    toast.success(`Created & Signed B2B Agreement ${newAgreement.contractCode} for ${vendorName}!`);
+    onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="md:!max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold font-sans flex items-center gap-2">
+            <Icon name="sparkles" size={18} className="text-primary" />
+            <span>Draft & Execute B2B Vendor Legal Agreement</span>
+          </DialogTitle>
+          <DialogDescription className="text-xs text-ink-3">
+            Create a legally binding SLA, Credit Line Lock, NDA, or Price Freeze Contract with a Tier-1 Distributor or Sub-Reseller.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2 text-xs">
+          <div>
+            <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Select Vendor / Supplier *</label>
+            <select
+              value={vendorName}
+              onChange={(e) => setVendorName(e.target.value)}
+              className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm font-semibold"
+            >
+              {vendors.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Agreement Type / Template *</label>
+            <select
+              value={type}
+              onChange={(e) => {
+                const t = e.target.value as VendorAgreement["type"];
+                setType(t);
+                if (t === "Master SLA & Credit Contract") setTitle("Tier-1 CSP Distributor Master SLA & Credit Contract");
+                else if (t === "Mutual Customer Data NDA") setTitle("Mutual Customer Data NDA & Wholesale Rate Protection");
+                else if (t === "Volume Rebate Commitment") setTitle("Annual Volume Milestone Rebate & Tiered Margin Agreement");
+                else if (t === "Transfer Token Guarantee") setTitle("Instant Transfer Token & CSP Provisioning Guarantee");
+              }}
+              className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm font-semibold"
+            >
+              <option value="Master SLA & Credit Contract">📜 Master SLA & Credit Line Contract</option>
+              <option value="Mutual Customer Data NDA">🔒 Mutual Customer Data NDA & Protection</option>
+              <option value="Volume Rebate Commitment">🎯 Volume Rebate & Target Milestone Agreement</option>
+              <option value="Transfer Token Guarantee">⚡ Transfer Token & Instant Delivery Guarantee</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Contract Title *</label>
+            <Input
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="bg-paper font-semibold"
+            />
+          </div>
+
+          <div className="grid grid-cols-4 gap-3">
+            <div>
+              <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Credit Days Lock</label>
+              <select
+                value={creditDays}
+                onChange={(e) => setCreditDays(e.target.value)}
+                className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-xs font-semibold"
+              >
+                <option value="0">Prepaid (0)</option>
+                <option value="15">Net 15 Days</option>
+                <option value="30">Net 30 Days</option>
+                <option value="45">Net 45 Days</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Price Freeze</label>
+              <select
+                value={priceFreezeMonths}
+                onChange={(e) => setPriceFreezeMonths(e.target.value)}
+                className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-xs font-semibold"
+              >
+                <option value="6">6 Months</option>
+                <option value="12">12 Months</option>
+                <option value="24">24 Months</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">SLA Penalty %</label>
+              <Input
+                type="number"
+                step="0.5"
+                value={slaPenalty}
+                onChange={(e) => setSlaPenalty(e.target.value)}
+                className="bg-paper text-xs font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Expiry Date</label>
+              <Input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="bg-paper text-xs"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-bold text-ink-3 uppercase tracking-wider mb-1">Custom Clauses / Notes</label>
+            <textarea
+              rows={3}
+              placeholder="Enter special terms e.g. 5% rebate on >500 seats or Net 30 penalty clause..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-xs"
+            />
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" icon="sparkles" className="font-bold">
+              ✍️ Sign & Execute Agreement
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function CompareVendorsModal({
   bids,
@@ -839,10 +1221,13 @@ function EditVendorCardModal({
 
 export default function VendorPortalPage() {
   const { data: dbVendors } = useVendors();
-  const [activeTab, setActiveTab] = React.useState<"comparison" | "calculator" | "rfqs" | "scorecards" | "addBid" | "bills" | "keys">("comparison");
+  const [activeTab, setActiveTab] = React.useState<"comparison" | "calculator" | "rfqs" | "scorecards" | "addBid" | "bills" | "keys" | "agreements">("comparison");
   const [bids, setBids] = React.useState<VendorBid[]>(INITIAL_BIDS);
   const [rfqs, setRfqs] = React.useState<SourcingRfq[]>(INITIAL_RFQS);
   const [bills] = React.useState<VendorBillItem[]>(INITIAL_BILLS);
+  const [agreements, setAgreements] = React.useState<VendorAgreement[]>(INITIAL_AGREEMENTS);
+  const [viewingAgreement, setViewingAgreement] = React.useState<VendorAgreement | null>(null);
+  const [isCreateAgreementOpen, setIsCreateAgreementOpen] = React.useState(false);
   const [selectedSku, setSelectedSku] = React.useState<string>("All");
   const [vendorSourceFilter, setVendorSourceFilter] = React.useState<"all" | "dbOnly" | "benchmarks">("all");
   const [autoProcureEnabled, setAutoProcureEnabled] = React.useState(true);
@@ -1471,6 +1856,18 @@ export default function VendorPortalPage() {
         >
           <Icon name="file" size={14} />
           <span>🔑 License Provisioning Keys</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("agreements")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+            activeTab === "agreements"
+              ? "bg-primary text-white shadow-xs"
+              : "bg-paper-2/70 text-ink-3 hover:text-ink"
+          }`}
+        >
+          <Icon name="sparkles" size={14} />
+          <span>📜 B2B Legal & SLA Agreements ({agreements.length})</span>
         </button>
       </div>
 
@@ -2237,6 +2634,126 @@ export default function VendorPortalPage() {
         </Card>
       )}
 
+      {/* ── TAB 8: B2B Vendor Legal & SLA Agreements ────────────────────── */}
+      {activeTab === "agreements" && (
+        <div className="space-y-4">
+          <div className="p-4 bg-paper border border-hairline rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+            <div>
+              <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider mb-1">
+                <Icon name="sparkles" size={14} />
+                <span>Enterprise B2B Governance & Legal Binding</span>
+              </div>
+              <h3 className="font-bold text-lg text-ink">B2B Vendor SLA & Rate Lock Agreements Hub</h3>
+              <p className="text-xs text-ink-3">
+                Manage, execute, and legally bind Tier-1 Distributors & Sub-Resellers to wholesale rate locks, credit lines, SLA delivery speeds, and customer NDAs.
+              </p>
+            </div>
+
+            <Button
+              variant="primary"
+              size="sm"
+              icon="sparkles"
+              onClick={() => setIsCreateAgreementOpen(true)}
+              className="font-bold text-xs shrink-0"
+            >
+              + Execute New B2B Agreement
+            </Button>
+          </div>
+
+          {/* KPI Summary */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-4 bg-paper border-hairline shadow-2xs space-y-1">
+              <div className="text-xs text-ink-3 font-semibold uppercase tracking-wider">Active Binding Contracts</div>
+              <div className="text-xl font-bold font-mono text-ink">
+                {agreements.filter((a) => a.status === "Active (Signed)").length} Enforceable
+              </div>
+              <div className="text-[11px] text-emerald-600 font-semibold">100% Digitally Verified</div>
+            </Card>
+
+            <Card className="p-4 bg-paper border-hairline shadow-2xs space-y-1">
+              <div className="text-xs text-ink-3 font-semibold uppercase tracking-wider">Protected Wholesale Margin</div>
+              <div className="text-xl font-bold font-mono text-emerald-600">{rupee(485000)}/mo</div>
+              <div className="text-[11px] text-ink-3">Under 12-Month Rate Freeze</div>
+            </Card>
+
+            <Card className="p-4 bg-paper border-hairline shadow-2xs space-y-1">
+              <div className="text-xs text-ink-3 font-semibold uppercase tracking-wider">Binding Credit Lines</div>
+              <div className="text-xl font-bold font-mono text-primary">Net 30/45 Days</div>
+              <div className="text-[11px] text-ink-3">Enforceable Payment Guarantee</div>
+            </Card>
+
+            <Card className="p-4 bg-paper border-hairline shadow-2xs space-y-1">
+              <div className="text-xs text-ink-3 font-semibold uppercase tracking-wider">Expiry & Renewal Alerts</div>
+              <div className="text-xl font-bold font-mono text-amber-ink">1 Renewing Soon</div>
+              <div className="text-[11px] text-amber-ink font-semibold">Auto-Notification Active</div>
+            </Card>
+          </div>
+
+          {/* Agreements Table */}
+          <Card className="overflow-hidden border-hairline bg-paper shadow-2xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-paper-2 text-ink-3 font-bold uppercase tracking-wider border-b border-hairline">
+                  <tr>
+                    <th className="p-3">Contract Code</th>
+                    <th className="p-3">Vendor / Supplier</th>
+                    <th className="p-3">Agreement Title & Type</th>
+                    <th className="p-3">Terms Lock</th>
+                    <th className="p-3">Expiry Date</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-hairline">
+                  {agreements.map((ag) => (
+                    <tr key={ag.id} className="hover:bg-paper-2/50 transition-all">
+                      <td className="p-3 font-mono font-bold text-primary">{ag.contractCode}</td>
+                      <td className="p-3 font-bold text-ink">{ag.vendorName}</td>
+                      <td className="p-3">
+                        <div className="font-bold text-ink">{ag.title}</div>
+                        <Badge kind="info" size="sm" className="text-[10px] mt-0.5 font-mono">
+                          {ag.type}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-ink-2">
+                        <div><b>Net {ag.creditDaysLock} Days</b> Credit</div>
+                        <div className="text-[10px] text-emerald-600 font-semibold">{ag.priceFreezeMonths}-Mo Price Freeze</div>
+                      </td>
+                      <td className="p-3 font-medium text-ink-3">{ag.expiryDate}</td>
+                      <td className="p-3">
+                        <Badge
+                          kind={
+                            ag.status === "Active (Signed)"
+                              ? "success"
+                              : ag.status === "Pending Signature"
+                              ? "warning"
+                              : "muted"
+                          }
+                          size="sm"
+                          className="font-bold"
+                        >
+                          {ag.status}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setViewingAgreement(ag)}
+                          className="text-xs font-semibold"
+                        >
+                          📄 View Document
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {editingBid && (
         <EditVendorCardModal
           bid={editingBid}
@@ -2276,6 +2793,21 @@ export default function VendorPortalPage() {
           bids={comparedBids}
           onClose={() => setIsCompareModalOpen(false)}
           onPlacePo={handlePlacePo}
+        />
+      )}
+
+      {viewingAgreement && (
+        <ViewAgreementModal
+          agreement={viewingAgreement}
+          onClose={() => setViewingAgreement(null)}
+        />
+      )}
+
+      {isCreateAgreementOpen && (
+        <CreateAgreementModal
+          vendors={Array.from(new Set(mergedBids.map((b) => b.vendorName)))}
+          onClose={() => setIsCreateAgreementOpen(false)}
+          onCreate={(newAg) => setAgreements((prev) => [newAg, ...prev])}
         />
       )}
     </div>
