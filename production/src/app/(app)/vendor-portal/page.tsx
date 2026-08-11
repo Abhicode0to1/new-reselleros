@@ -1524,6 +1524,26 @@ export default function VendorPortalPage() {
     return list;
   }, [mergedBids, selectedSku, vendorSourceFilter, searchTerm]);
 
+  // Unique Vendor Counts for Filter Tabs (matches deduplicated view)
+  const uniqueVendorCounts = React.useMemo(() => {
+    const seenAll = new Set<string>();
+    const seenDb = new Set<string>();
+    const seenBench = new Set<string>();
+
+    mergedBids.forEach((b) => {
+      const key = b.vendorName.toLowerCase();
+      seenAll.add(key);
+      if (b.isFromDb) seenDb.add(key);
+      else seenBench.add(key);
+    });
+
+    return {
+      all: seenAll.size,
+      dbOnly: seenDb.size,
+      benchmarks: seenBench.size,
+    };
+  }, [mergedBids]);
+
   // Dynamic #1 Best Deal Vendor calculation for active selection
   const bestDealBid = React.useMemo(() => {
     if (filteredBids.length === 0) return null;
@@ -1895,7 +1915,7 @@ export default function VendorPortalPage() {
                       : "text-ink-3 hover:text-ink"
                   }`}
                 >
-                  All Vendors ({mergedBids.length})
+                  All Vendors ({uniqueVendorCounts.all})
                 </button>
                 <button
                   type="button"
@@ -1908,7 +1928,7 @@ export default function VendorPortalPage() {
                 >
                   <span>🏛️ My Vendors Master</span>
                   <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-white/20 text-white font-mono font-bold">
-                    {mergedBids.filter((b) => b.isFromDb).length}
+                    {uniqueVendorCounts.dbOnly}
                   </span>
                 </button>
                 <button
@@ -1920,7 +1940,7 @@ export default function VendorPortalPage() {
                       : "text-ink-3 hover:text-ink"
                   }`}
                 >
-                  🌐 Tier-1 CSP Benchmarks ({mergedBids.filter((b) => !b.isFromDb).length})
+                  🌐 Tier-1 CSP Benchmarks ({uniqueVendorCounts.benchmarks})
                 </button>
               </div>
 
