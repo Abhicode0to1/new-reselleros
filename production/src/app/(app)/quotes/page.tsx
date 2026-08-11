@@ -453,9 +453,9 @@ export default function QuotesPage() {
         </div>
       )}
 
-      {/* Sleek Horizontal TabBar + Date Range + Search */}
+      {/* Sticky Horizontal TabBar + Date Range + Search */}
       {!isLoading && quotes && quotes.length > 0 && (
-        <div className="mb-4 space-y-3">
+        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
           <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
           <div className="flex justify-between items-center gap-3 flex-wrap">
             <div className="text-xs text-ink-3">
