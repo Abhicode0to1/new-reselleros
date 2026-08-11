@@ -51,6 +51,7 @@ const schema = z.object({
   amount:       z.coerce.number().int().min(1, "Amount received required"),
   method:       z.string().min(1, "Method required"),
   reference:    z.string().min(1, "Transaction reference required"),
+  receivedDate: z.string().min(1, "Payment date required"),
   notes:        z.string().optional(),
   // Optional — the customer's domain (Google Workspace / M365 subscriptions need
   // it). Stamped onto the subscription that record_payment creates.
@@ -183,13 +184,14 @@ export function RecordPaymentDialog({
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      amount:      remaining,
-      method:      "upi",
-      domain:      defaultDomain ?? "",
-      tdsDeducted: false,
-      tdsSection:  "194J",
-      tdsRatePct:  10,
-      customerTan: "",
+      amount:       remaining,
+      method:       "upi",
+      receivedDate: new Date().toISOString().slice(0, 10),
+      domain:       defaultDomain ?? "",
+      tdsDeducted:  false,
+      tdsSection:   "194J",
+      tdsRatePct:   10,
+      customerTan:  "",
     },
   });
 
@@ -227,12 +229,13 @@ export function RecordPaymentDialog({
       setReceiptFile(null);
     } else {
       reset({
-        amount:      remaining,
-        method:      "upi",
-        tdsDeducted: false,
-        tdsSection:  customerTdsDefaults.section,
-        tdsRatePct:  customerTdsDefaults.ratePct,
-        customerTan: customerTdsDefaults.tan ?? "",
+        amount:       remaining,
+        method:       "upi",
+        receivedDate: new Date().toISOString().slice(0, 10),
+        tdsDeducted:  false,
+        tdsSection:   customerTdsDefaults.section,
+        tdsRatePct:   customerTdsDefaults.ratePct,
+        customerTan:  customerTdsDefaults.tan ?? "",
       });
       setAmountEdited(false);
     }
@@ -344,16 +347,22 @@ export function RecordPaymentDialog({
       // double-fire (which would duplicate a customer credit or a TDS row).
       const isReplay = Boolean(r.already_recorded || r.idempotent_replay);
 
-      // ── 2b. Tag which bank account received this money (best-effort) ──────
-      // Additive to the RPC — a reporting/reconciliation aid, NOT a balance
-      // mover. If it fails the payment is still recorded; the operator can set
-      // it later from the payment's Edit sheet.
-      if (bankAccountId && r.payment_id) {
-        const { error: bankErr } = await supabase
-          .from("payments")
-          .update({ bank_account_id: bankAccountId })
-          .eq("id", r.payment_id);
-        if (bankErr) console.error("[record-payment] bank_account tag failed (payment still recorded):", bankErr);
+      // ── 2b. Tag date + bank account that received this money ──────
+      if (r.payment_id) {
+        const patchData: { received_at?: string; bank_account_id?: string } = {};
+        if (data.receivedDate) {
+          patchData.received_at = new Date(data.receivedDate).toISOString();
+        }
+        if (bankAccountId) {
+          patchData.bank_account_id = bankAccountId;
+        }
+        if (Object.keys(patchData).length > 0) {
+          const { error: bankErr } = await supabase
+            .from("payments")
+            .update(patchData as any)
+            .eq("id", r.payment_id);
+          if (bankErr) console.error("[record-payment] date/bank tag failed (payment still recorded):", bankErr);
+        }
       }
 
       // ── 2c. Attach the optional payment-receipt file (best-effort) ───────
@@ -706,27 +715,37 @@ export function RecordPaymentDialog({
             <input type="hidden" {...register("method")} value={method} />
           </FormField>
 
-          {(bankAccounts?.length ?? 0) > 0 && (
-            <FormField label="Received in (bank account)" htmlFor="bankAccount">
-              <Select value={bankAccountId || "none"} onValueChange={(v) => setBankAccountId(v === "none" ? "" : v)}>
-                <SelectTrigger id="bankAccount">
-                  <SelectValue placeholder="Not linked" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Not linked</SelectItem>
-                  {(bankAccounts ?? []).map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name} · {bankLabel(a.bank_name, a.account_number_last4)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] text-ink-3 mt-1">
-                Tags which account got the money (for reports + easier reconciliation).
-                Balance still comes from your bank statement, not this.
-              </p>
-            </FormField>
-          )}
+          <FormField label="Payment Received Date" required htmlFor="receivedDate">
+            <Input
+              id="receivedDate"
+              type="date"
+              error={errors.receivedDate?.message}
+              {...register("receivedDate")}
+            />
+          </FormField>
+
+          <FormField label="Received In (Bank / Target Account)" required htmlFor="bankAccount">
+            <Select value={bankAccountId || "hdfc_primary"} onValueChange={(v) => setBankAccountId(v)}>
+              <SelectTrigger id="bankAccount">
+                <SelectValue placeholder="Select Bank Account" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hdfc_primary">HDFC Bank · Current Account (Primary)</SelectItem>
+                <SelectItem value="icici_corp">ICICI Bank · Corporate Account</SelectItem>
+                <SelectItem value="razorpay_gateway">Razorpay · Online Payment Gateway</SelectItem>
+                <SelectItem value="upi_direct">UPI Direct (Google Pay / Paytm / PhonePe)</SelectItem>
+                <SelectItem value="cash_box">Cash in Hand</SelectItem>
+                {(bankAccounts ?? []).map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name} · {bankLabel(a.bank_name, a.account_number_last4)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-ink-3 mt-1">
+              Select which bank account or payment gateway received this transaction.
+            </p>
+          </FormField>
 
           <FormField label="Transaction reference" required htmlFor="reference">
             <Input
