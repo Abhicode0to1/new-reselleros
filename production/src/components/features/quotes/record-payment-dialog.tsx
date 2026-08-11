@@ -565,7 +565,7 @@ export function RecordPaymentDialog({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="right"
-          className="w-full sm:max-w-[640px] md:max-w-[760px] lg:max-w-[860px] p-0 flex flex-col bg-paper text-ink shadow-2xl border-l border-hairline relative overflow-hidden z-[50]"
+          className="w-full sm:max-w-[640px] md:max-w-[760px] lg:max-w-[860px] p-0 flex flex-col bg-paper text-ink shadow-2xl border-l border-hairline overflow-hidden z-[50]"
         >
           <SheetHeader className="pr-12 pt-4 px-6 pb-3 border-b border-hairline bg-paper-2/40">
             <div className="flex items-center justify-between gap-3">
