@@ -20,7 +20,7 @@ import { formatDate, rupee } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   useProjectTasks, useCreateProjectTask, useUpdateProjectTask, useDeleteProjectTask,
-  useCreateProjectTasksBulk, generateProjectPlan, fetchProjectQuestions, type PlannedTask,
+  useCreateProjectTasksBulk, generateProjectPlan, fetchProjectQuestions, type PlannedTask, type QuestionItem,
 } from "@/lib/queries/projects";
 import type { ProjectTaskStatus } from "@/lib/supabase/database.types";
 
@@ -200,7 +200,8 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
   const [loadingQuestions, setLoadingQuestions] = React.useState(false);
   const [generatingPlan, setGeneratingPlan] = React.useState(false);
 
-  const [questions, setQuestions] = React.useState<string[]>([]);
+  const [lang, setLang] = React.useState<"en" | "hi">("en");
+  const [questions, setQuestions] = React.useState<QuestionItem[]>([]);
   const [answers, setAnswers] = React.useState<Record<number, string>>({});
 
   const [clientProposal, setClientProposal] = React.useState("");
@@ -239,7 +240,10 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
     setGeneratingPlan(true);
     try {
       const formattedAnswers = questions
-        .map((q, idx) => answers[idx] ? `Q: ${q}\nA: ${answers[idx]}` : "")
+        .map((q, idx) => {
+          const qText = typeof q === "string" ? q : (q.en || q.hi);
+          return answers[idx] ? `Q: ${qText}\nA: ${answers[idx]}` : "";
+        })
         .filter(Boolean)
         .join("\n\n");
 
@@ -397,28 +401,57 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
           {/* STEP 2: Interactive AI Clarifying Questions */}
           {step === "questions" && (
             <div className="space-y-4">
-              <div className="p-3 bg-amber-soft/40 border border-amber/20 rounded-xl text-xs text-amber-ink flex items-start gap-2">
-                <Icon name="help_circle" size={16} className="shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold">Project Clarification Questions</span>
-                  <p className="text-[11px] text-ink-2 mt-0.5">
-                    Answer these key questions to help AI generate an accurate client presentation proposal and structured phase-wise delivery tasks.
-                  </p>
+              <div className="p-3 bg-amber-soft/40 border border-amber/20 rounded-xl text-xs text-amber-ink flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Icon name="help_circle" size={16} className="shrink-0 text-amber-ink" />
+                  <div>
+                    <span className="font-bold">Project Clarification Questions</span>
+                    <p className="text-[11px] text-ink-2 mt-0.5">
+                      {lang === "hi"
+                        ? "AI proposal aur delivery roadmap ke liye in sawalon ka jawab dein:"
+                        : "Answer these key questions to refine your client proposal & phase roadmap:"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Language Toggle Switch */}
+                <div className="flex items-center gap-1 bg-paper border border-hairline p-1 rounded-lg shadow-2xs shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setLang("en")}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                      lang === "en" ? "bg-primary text-white shadow-2xs" : "text-ink-3 hover:text-ink"
+                    }`}
+                  >
+                    🌐 English
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLang("hi")}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+                      lang === "hi" ? "bg-amber text-paper shadow-2xs" : "text-ink-3 hover:text-ink"
+                    }`}
+                  >
+                    🇮🇳 Hinglish
+                  </button>
                 </div>
               </div>
 
               <div className="space-y-3">
-                {questions.map((q, idx) => (
-                  <div key={idx} className="p-3.5 bg-paper-2/50 border border-hairline rounded-xl space-y-1.5">
-                    <label className="block text-xs font-semibold text-ink leading-snug">{q}</label>
-                    <Input
-                      placeholder="Type answer or key requirement..."
-                      value={answers[idx] || ""}
-                      onChange={(e) => setAnswers({ ...answers, [idx]: e.target.value })}
-                      className="bg-paper text-xs"
-                    />
-                  </div>
-                ))}
+                {questions.map((qObj, idx) => {
+                  const qText = typeof qObj === "string" ? qObj : (lang === "hi" ? (qObj.hi || qObj.en) : (qObj.en || qObj.hi));
+                  return (
+                    <div key={idx} className="p-3.5 bg-paper-2/50 border border-hairline rounded-xl space-y-1.5">
+                      <label className="block text-xs font-semibold text-ink leading-snug">{qText}</label>
+                      <Input
+                        placeholder={lang === "hi" ? "Jawab ya zaroori details type karein..." : "Type answer or key requirement..."}
+                        value={answers[idx] || ""}
+                        onChange={(e) => setAnswers({ ...answers, [idx]: e.target.value })}
+                        className="bg-paper text-xs"
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex items-center justify-between gap-3 pt-3 border-t border-hairline">

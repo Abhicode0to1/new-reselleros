@@ -758,17 +758,18 @@ export function useDeleteProjectTask() {
 
 /** AI project planner — returns a detailed explanation + a suggested task list. */
 export type PlannedTask = { title: string; phase?: string; assignee?: string };
+export type QuestionItem = { en: string; hi: string };
 export type ProjectPlan = {
   explanation: string;
   clientProposal?: string;
   tasks: PlannedTask[];
-  questions?: string[];
+  questions?: QuestionItem[];
   mode: string;
 };
 
 export async function fetchProjectQuestions(input: {
   title: string; customer?: string; details?: string;
-}): Promise<string[]> {
+}): Promise<QuestionItem[]> {
   const res = await fetch("/api/ai/plan-project", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({

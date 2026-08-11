@@ -29,28 +29,34 @@ const bodySchema = z.object({
 });
 
 export type PlannedTask = { title: string; phase?: string; assignee?: string };
+export type QuestionItem = { en: string; hi: string };
+
 export type ProjectPlan = {
   explanation: string;
   clientProposal?: string;
   tasks: PlannedTask[];
-  questions?: string[];
+  questions?: QuestionItem[];
   mode: string;
 };
 
 function buildQuestionsPrompt(b: z.infer<typeof bodySchema>): string {
   return (
-    `You are a Senior Technical Project Manager & Solution Architect at an IT reseller and software consultancy company in India.\n` +
+    `You are a Senior Technical Project Manager & Solution Architect at an Indian IT consultancy.\n` +
     `A project description has been submitted for: "${b.title}" (Client: ${b.customer || "Prospect Client"}).\n` +
     `Project Details: "${b.details || "Standard IT / Software project"}"\n\n` +
     `Formulate 4-5 concise, highly relevant, project-specific clarifying questions that the client/project owner should answer before starting execution.\n` +
-    `These questions must help define scope, tech stack, integrations, milestones, and client expectations to build a world-class client proposal and phase-wise delivery plan.\n\n` +
+    `Each question MUST be provided in BOTH English ("en") AND Hinglish ("hi" - simple Indian conversational Hindi written in English/Latin script, e.g. "Is project me konsi core features chahiye?").\n\n` +
     `Return ONLY JSON in this exact format (no prose, no markdown code blocks):\n` +
     `{\n` +
     `  "questions": [\n` +
-    `    "1. Question about scope & core features...",\n` +
-    `    "2. Question about key third-party integrations & database...",\n` +
-    `    "3. Question about target milestones & demo schedule...",\n` +
-    `    "4. Question about security, compliance & user roles..."\n` +
+    `    {\n` +
+    `      "en": "1. What are the core must-have features required for the initial MVP launch?",\n` +
+    `      "hi": "1. Is project ke MVP launch ke liye konsi sabse zaroori core features aur functionalities chahiye?"\n` +
+    `    },\n` +
+    `    {\n` +
+    `      "en": "2. What third-party systems or payment gateways need to be integrated?",\n` +
+    `      "hi": "2. Is project me konse third-party APIs, databases ya payment gateways integrate karne hain?"\n` +
+    `    }\n` +
     `  ]\n` +
     `}`
   );
@@ -103,11 +109,23 @@ async function genWithGemini(apiKey: string, model: string, prompt: string): Pro
   }
 }
 
-const STUB_QUESTIONS = [
-  "1. What are the key features and primary goals for this project?",
-  "2. What third-party systems, APIs, or databases need to be integrated?",
-  "3. What is the target timeline, milestone demo schedule, and go-live deadline?",
-  "4. Are there any specific security, role-based access, or compliance standards required?",
+const STUB_QUESTIONS: QuestionItem[] = [
+  {
+    en: "1. What are the absolute must-have core functionalities for the MVP launch?",
+    hi: "1. Is project ke MVP release ke liye konsi sabse main aur zaroori features pehle chahiye?",
+  },
+  {
+    en: "2. What third-party systems, APIs, or databases need to be integrated?",
+    hi: "2. Is software me konsi third-party APIs (e.g. WhatsApp, GST, Payment Gateway) integrate karni hain?",
+  },
+  {
+    en: "3. What is the target milestone schedule and client demo frequency?",
+    hi: "3. Project delivery ka timeline kya hai aur client ko demo kitne weeks me dikhana hai?",
+  },
+  {
+    en: "4. Are there specific security, role-based access, or data compliance rules required?",
+    hi: "4. System me user roles, permissions aur data security ke kya specific rules rakhne hain?",
+  },
 ];
 
 const STUB = (title: string, customer?: string): ProjectPlan => ({
