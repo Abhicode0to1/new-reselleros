@@ -110,7 +110,7 @@ export function RecordPaymentDialog({
   isProspect = false,
   invoiceId = null,
   customerId = null,
-  askDomain = false,
+  askDomain: _askDomain = false,
   defaultDomain = null,
 }: RecordPaymentDialogProps) {
   const qc = useQueryClient();
@@ -622,6 +622,21 @@ export function RecordPaymentDialog({
           className="flex flex-col flex-1 min-h-0 min-w-0 w-full"
         >
           <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+          {/* 🌐 PRIMARY CUSTOMER DOMAIN — HIGHEST PREFERENCE FOR GOOGLE WORKSPACE / M365 */}
+          <div className="rounded-xl border border-primary/30 bg-primary-soft/30 p-3 space-y-1.5 shadow-xs">
+            <FormField label="🌐 Primary Customer Domain" required htmlFor="domain">
+              <Input
+                id="domain"
+                placeholder="e.g. exceltechnologies.in or acme.com"
+                className="font-mono text-sm font-semibold bg-paper"
+                {...register("domain")}
+              />
+            </FormField>
+            <p className="text-[11px] text-ink-3">
+              Essential for Google Workspace / M365 provisioning & Partner Sales Console (PSC) tracking.
+            </p>
+          </div>
+
           {/* Prospect → Customer activation notice — fires on FIRST payment now (advance ok) */}
           {isProspect && !hasPriorPayments && (
             <div className="rounded-md bg-amber-soft border border-amber/40 px-3 py-2.5 text-xs flex items-start gap-2">
@@ -923,19 +938,6 @@ export function RecordPaymentDialog({
               {...register("notes")}
             />
           </FormField>
-
-          {/* Domain — optional. Google Workspace / M365 subscriptions are keyed
-              to the customer's domain; capture it here so the subscription is
-              ready to provision. Purely optional — leave blank if not known yet. */}
-          {askDomain && (
-            <FormField label="Customer domain (optional)" htmlFor="domain">
-              <Input
-                id="domain"
-                placeholder="acme.in — needed for Google Workspace / M365 provisioning"
-                {...register("domain")}
-              />
-            </FormField>
-          )}
 
           {/* Optional proof-of-payment attachment (screenshot / PDF). */}
           <FormField label="Payment receipt (optional)" htmlFor="receipt">
