@@ -19,6 +19,12 @@ interface FeedbackDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+interface ScreenshotItem {
+  id: string;
+  name: string;
+  dataUrl: string;
+}
+
 export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const pathname = usePathname();
   const { data: currentUser } = useCurrentUser();
@@ -26,14 +32,13 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const [type, setType] = React.useState<FeedbackType>("bug");
   const [priority, setPriority] = React.useState<FeedbackPriority>("medium");
   const [promptText, setPromptText] = React.useState("");
-  const [screenshotData, setScreenshotData] = React.useState<string | null>(null);
-  const [screenshotName, setScreenshotName] = React.useState<string | null>(null);
+  const [screenshots, setScreenshots] = React.useState<ScreenshotItem[]>([]);
   const [capturing, setCapturing] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Global Clipboard Paste (Ctrl + V) Handler for Screenshots
+  // Global Clipboard Paste (Ctrl + V) Handler for MULTIPLE Screenshots
   const handlePaste = React.useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -47,12 +52,15 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
 
         const reader = new FileReader();
         reader.onload = (evt) => {
-          setScreenshotData(evt.target?.result as string);
-          setScreenshotName(`pasted_screenshot_${Date.now()}.png`);
+          const newScreenshot: ScreenshotItem = {
+            id: crypto.randomUUID(),
+            name: `pasted_screen_${Date.now()}_${i + 1}.png`,
+            dataUrl: evt.target?.result as string,
+          };
+          setScreenshots((prev) => [...prev, newScreenshot]);
           toast.success("Screenshot pasted from Clipboard! (Ctrl + V)");
         };
         reader.readAsDataURL(file);
-        break;
       }
     }
   }, []);
@@ -63,7 +71,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     toast.info("Capturing current screen...", { duration: 1500 });
 
     try {
-      // Hide dialog temporarily for 200ms to capture clean web page DOM
+      // Hide dialog temporarily for 220ms to capture clean web page DOM
       onOpenChange(false);
       await new Promise((resolve) => setTimeout(resolve, 220));
 
@@ -74,13 +82,17 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
       });
 
       const dataUrl = canvas.toDataURL("image/png");
-      setScreenshotData(dataUrl);
-      setScreenshotName(`auto_screen_${Date.now()}.png`);
+      const newScreenshot: ScreenshotItem = {
+        id: crypto.randomUUID(),
+        name: `auto_screen_${Date.now()}.png`,
+        dataUrl,
+      };
+      setScreenshots((prev) => [...prev, newScreenshot]);
 
       toast.success("Screen captured & attached successfully!");
     } catch (err: unknown) {
       console.error("Auto screen capture failed:", err);
-      toast.error("Could not auto-capture screen. Use Ctrl + V or upload an image file.");
+      toast.error("Could not auto-capture screen. Use Ctrl + V or upload image files.");
     } finally {
       setCapturing(false);
       onOpenChange(true);
@@ -88,31 +100,37 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please upload an image file (PNG, JPG, WebP)");
-      return;
-    }
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith("image/")) {
+        toast.error(`"${file.name}" is not an image file.`);
+        return;
+      }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image file size should be less than 5MB");
-      return;
-    }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`"${file.name}" exceeds 5MB size limit.`);
+        return;
+      }
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      setScreenshotData(evt.target?.result as string);
-      setScreenshotName(file.name);
-    };
-    reader.readAsDataURL(file);
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const newScreenshot: ScreenshotItem = {
+          id: crypto.randomUUID(),
+          name: file.name,
+          dataUrl: evt.target?.result as string,
+        };
+        setScreenshots((prev) => [...prev, newScreenshot]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleClearScreenshot = () => {
-    setScreenshotData(null);
-    setScreenshotName(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  const handleRemoveScreenshot = (id: string) => {
+    setScreenshots((prev) => prev.filter((s) => s.id !== id));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,17 +154,22 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
 
       const formattedSubject = `[${type.toUpperCase()}] [${priority.toUpperCase()}] ${extractedTitle}`;
 
+      const screenshotsListText = screenshots
+        .map((s, idx) => `ATTACHMENT_${idx + 1}: ${s.name}`)
+        .join("\n");
+
       const fullBody = `
 REPORTER: ${reporterName} (${reporterEmail})
 PAGE URL: ${pathname}
 TYPE: ${type}
 PRIORITY: ${priority}
+ATTACHED SCREENSHOTS COUNT: ${screenshots.length}
 SUBMITTED AT: ${new Date().toLocaleString("en-IN")}
 
 DESCRIPTION:
 ${cleanedPrompt}
 
-${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
+${screenshotsListText}
 `.trim();
 
       const mappedPriority: "low" | "normal" | "high" | "urgent" =
@@ -168,13 +191,15 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
         console.warn("Supabase ticket error, saving to local feedback store:", error);
       }
 
-      toast.success("Thank you! Your testing report & screenshot have been submitted.", {
-        description: "Pardeep and the engineering team will review it immediately.",
-      });
+      toast.success(
+        `Thank you! Your testing report & ${screenshots.length} screenshot(s) have been submitted.`,
+        {
+          description: "Pardeep and the engineering team will review it immediately.",
+        }
+      );
 
       setPromptText("");
-      setScreenshotData(null);
-      setScreenshotName(null);
+      setScreenshots([]);
       onOpenChange(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed submitting report";
@@ -188,7 +213,7 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         onPaste={handlePaste}
-        className="sm:max-w-[580px] p-6 max-h-[92vh] overflow-y-auto shadow-2xl z-[99999]"
+        className="sm:max-w-[620px] p-6 max-h-[92vh] overflow-y-auto shadow-2xl z-[99999]"
       >
         <DialogHeader>
           <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider mb-1">
@@ -197,7 +222,7 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
           </div>
           <DialogTitle className="text-xl md:text-2xl font-serif">Report Bug / Suggest Feature</DialogTitle>
           <DialogDescription className="text-xs text-ink-3">
-            Ask or report anything in 1 box (like AI Chat). Use 1-Click Auto Screen Capture or press <b>Ctrl + V</b> to paste a screenshot directly!
+            Ask or report anything in 1 box. Press <b>Ctrl + V</b> multiple times to paste multiple screenshots!
           </DialogDescription>
         </DialogHeader>
 
@@ -272,7 +297,7 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
           <FormField label="Details & Steps (All-in-One AI Box)">
             <div className="relative">
               <textarea
-                className="w-full min-h-[120px] p-3 rounded-lg border border-hairline bg-paper text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:ring-2 focus:ring-primary font-mono leading-relaxed"
+                className="w-full min-h-[110px] p-3 rounded-lg border border-hairline bg-paper text-sm text-ink placeholder:text-ink-4 focus:outline-none focus:ring-2 focus:ring-primary font-mono leading-relaxed"
                 placeholder={
                   type === "bug"
                     ? "Explain what happened, steps to reproduce, or paste your error here... (e.g. Payment Date option missing on Record Payment page)"
@@ -285,7 +310,7 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
                 required
               />
               <div className="text-[11px] text-ink-4 mt-1 flex items-center justify-between">
-                <span>💡 Tip: Press <b>Ctrl + V</b> anywhere to paste a screenshot!</span>
+                <span>💡 Tip: Press <b>Ctrl + V</b> repeatedly to paste multiple screenshots!</span>
                 <span className="font-mono">{promptText.length} chars</span>
               </div>
             </div>
@@ -301,60 +326,71 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
             <span className="text-[10px] uppercase font-bold text-emerald flex-shrink-0 ml-2">Auto-Captured</span>
           </div>
 
-          {/* Screenshot Options: Auto-Capture + File Upload + Paste */}
-          <FormField label="Screenshot Attachment">
+          {/* MULTIPLE Screenshot Attachments (Ctrl + V / Upload / Auto Capture) */}
+          <FormField label={`Screenshot Attachments (${screenshots.length})`}>
             <input
               type="file"
               accept="image/*"
+              multiple
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
             />
-            {screenshotData ? (
-              <div className="relative rounded-lg border border-emerald/40 p-2.5 bg-emerald-soft/30 flex items-center gap-3">
-                <img
-                  src={screenshotData}
-                  alt="Screenshot preview"
-                  className="w-20 h-14 object-cover rounded border border-hairline shadow-sm"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-ink truncate">{screenshotName}</p>
-                  <p className="text-[11px] text-emerald font-bold flex items-center gap-1 mt-0.5">
-                    <Icon name="check" size={14} />
-                    <span>Screenshot Attached & Ready to Submit</span>
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClearScreenshot}
-                  className="text-rose hover:text-rose-ink"
+
+            <div className="space-y-2">
+              {/* Render List of Attached Screenshots */}
+              {screenshots.map((s, idx) => (
+                <div
+                  key={s.id}
+                  className="rounded-lg border border-emerald/40 p-2 bg-emerald-soft/20 flex items-center gap-3 shadow-2xs"
                 >
-                  <Icon name="trash" size={14} />
-                </Button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <img
+                    src={s.dataUrl}
+                    alt={`Screenshot ${idx + 1}`}
+                    className="w-16 h-12 object-cover rounded border border-hairline shadow-sm flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-ink truncate">{s.name}</p>
+                    <p className="text-[10px] text-emerald font-bold flex items-center gap-1 mt-0.5">
+                      <Icon name="check" size={12} />
+                      <span>Screen #{idx + 1} Attached & Ready</span>
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveScreenshot(s.id)}
+                    className="text-rose hover:text-rose-ink p-1 h-auto"
+                    title="Remove this screenshot"
+                  >
+                    <Icon name="trash" size={14} />
+                  </Button>
+                </div>
+              ))}
+
+              {/* Action Buttons to Add Screenshots */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 <button
                   type="button"
                   onClick={handleAutoCaptureScreen}
                   disabled={capturing}
-                  className="py-3 px-3 border border-primary/40 hover:border-primary rounded-lg bg-primary-soft/50 hover:bg-primary-soft text-xs font-bold text-primary flex items-center justify-center gap-2 transition-all shadow-sm"
+                  className="py-2.5 px-3 border border-primary/40 hover:border-primary rounded-lg bg-primary-soft/50 hover:bg-primary-soft text-xs font-bold text-primary flex items-center justify-center gap-2 transition-all shadow-sm"
                 >
-                  <Icon name="camera" size={16} />
-                  <span>{capturing ? "Capturing Screen..." : "📸 1-Click Auto Capture"}</span>
+                  <Icon name="camera" size={15} />
+                  <span>{capturing ? "Capturing Screen..." : "📸 Auto Capture Screen"}</span>
                 </button>
+
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="py-3 px-3 border border-hairline hover:border-hairline-strong rounded-lg bg-paper-2 hover:bg-paper-3 text-xs font-medium text-ink-2 flex items-center justify-center gap-2 transition-all"
+                  className="py-2.5 px-3 border border-hairline hover:border-hairline-strong rounded-lg bg-paper-2 hover:bg-paper-3 text-xs font-medium text-ink-2 flex items-center justify-center gap-2 transition-all"
                 >
-                  <Icon name="upload" size={16} className="text-ink-3" />
-                  <span>Upload or Paste (Ctrl+V)</span>
+                  <Icon name="upload" size={15} className="text-ink-3" />
+                  <span>{screenshots.length > 0 ? "➕ Add Another (Ctrl+V)" : "Upload / Paste (Ctrl+V)"}</span>
                 </button>
               </div>
-            )}
+            </div>
           </FormField>
 
           {/* Actions */}
@@ -363,7 +399,7 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
               Cancel
             </Button>
             <Button type="submit" disabled={submitting} className="bg-primary text-white font-bold">
-              {submitting ? "Submitting Report..." : "Submit Report to Pardeep"}
+              {submitting ? "Submitting Report..." : `Submit Report (${screenshots.length} Screenshots)`}
             </Button>
           </div>
         </form>
