@@ -461,7 +461,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="md:!max-w-2xl">
+      <DialogContent className="sm:!max-w-3xl md:!max-w-4xl">
         <DialogHeader>
           <DialogTitle>{employee ? "Edit employee" : "Add employee"}</DialogTitle>
           <DialogDescription>
@@ -576,7 +576,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                 {showCustomControls && (
                   <div className="mt-3 p-3.5 bg-paper-2/90 border border-hairline rounded-2xl space-y-3 text-xs shadow-2xs">
                     <p className="text-[10px] uppercase tracking-wider text-ink-3 font-bold">⚙️ Component Overrides &amp; Custom Allowances</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                       <Field label="Basic Salary %">
                         <select
                           value={basicPct}
@@ -590,7 +590,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         </select>
                       </Field>
 
-                      <Field label="Custom Basic (₹/mo, optional)">
+                      <Field label="Custom Basic (₹/mo)">
                         <Input
                           type="number"
                           min={0}
@@ -600,7 +600,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         />
                       </Field>
 
-                      <Field label="Custom HRA (₹/mo, optional)">
+                      <Field label="Custom HRA (₹/mo)">
                         <Input
                           type="number"
                           min={0}
@@ -610,7 +610,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         />
                       </Field>
 
-                      <Field label="Conveyance Allowance (₹/mo)">
+                      <Field label="Conveyance (₹/mo)">
                         <Input
                           type="number"
                           min={0}
@@ -620,7 +620,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         />
                       </Field>
 
-                      <Field label="Medical Allowance (₹/mo)">
+                      <Field label="Medical (₹/mo)">
                         <Input
                           type="number"
                           min={0}
@@ -630,7 +630,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         />
                       </Field>
 
-                      <Field label="Special Allowance (₹/mo, optional)">
+                      <Field label="Special Allowance (₹/mo)">
                         <Input
                           type="number"
                           min={0}
@@ -640,7 +640,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                         />
                       </Field>
 
-                      <Field label="Professional Tax / PT (₹/mo)">
+                      <Field label="Professional Tax (₹/mo)">
                         <Input
                           type="number"
                           min={0}
@@ -701,101 +701,93 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
                     </Button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
                     {/* Column 1: Gross Monthly Salary Breakdown */}
-                    <div className="bg-paper p-3 rounded-xl border border-hairline space-y-2">
-                      <div className="flex items-center justify-between pb-1.5 border-b border-hairline">
-                        <span className="font-bold text-ink uppercase tracking-wider text-[9.5px]">1. Earnings (Gross Base)</span>
-                        <span className="font-bold text-ink text-xs">{rupee(ctcBreakdown.grossMonthly)}</span>
+                    <div className="bg-paper p-3.5 rounded-xl border border-blue-200/60 shadow-2xs space-y-2.5">
+                      <div className="flex items-center justify-between pb-2 border-b border-hairline">
+                        <span className="font-extrabold text-blue-900 uppercase tracking-wider text-[10px]">1. Gross Earnings</span>
+                        <Badge kind="info" size="sm" className="font-mono font-bold">{rupee(ctcBreakdown.grossMonthly)}/mo</Badge>
                       </div>
-                      <div className="space-y-1 text-ink-2">
-                        <div className="flex justify-between">
-                          <span>• Basic Salary (50%):</span>
-                          <span className="font-mono font-semibold">{rupee(ctcBreakdown.basicMonthly)}</span>
+                      <div className="space-y-1.5 text-ink-2 text-[11px]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-ink-3">Basic Salary ({Math.round(ctcBreakdown.basicPct * 100)}%):</span>
+                          <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.basicMonthly)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>• HRA ({isMetro ? "50%" : "40%"}):</span>
-                          <span className="font-mono font-semibold">{rupee(ctcBreakdown.hraMonthly)}</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-ink-3">HRA ({isMetro ? "50%" : "40%"}):</span>
+                          <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.hraMonthly)}</span>
                         </div>
                         {ctcBreakdown.conveyanceMonthly > 0 && (
-                          <div className="flex justify-between">
-                            <span>• Conveyance Allowance:</span>
-                            <span className="font-mono font-semibold">{rupee(ctcBreakdown.conveyanceMonthly)}</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-ink-3">Conveyance:</span>
+                            <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.conveyanceMonthly)}</span>
                           </div>
                         )}
                         {ctcBreakdown.medicalMonthly > 0 && (
-                          <div className="flex justify-between">
-                            <span>• Medical Allowance:</span>
-                            <span className="font-mono font-semibold">{rupee(ctcBreakdown.medicalMonthly)}</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-ink-3">Medical Allowance:</span>
+                            <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.medicalMonthly)}</span>
                           </div>
                         )}
-                        <div className="flex justify-between text-ink-3">
-                          <span>• Special / Flexi Allowance:</span>
-                          <span className="font-mono font-semibold">{rupee(ctcBreakdown.specialAllowanceMonthly)}</span>
+                        <div className="flex items-center justify-between pt-1 border-t border-hairline/60">
+                          <span className="text-ink-3">Special Allowance:</span>
+                          <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.specialAllowanceMonthly)}</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Column 2: Employer Retirals & Benefits */}
-                    <div className="bg-paper p-3 rounded-xl border border-hairline space-y-2">
-                      <div className="flex items-center justify-between pb-1.5 border-b border-hairline">
-                        <span className="font-bold text-amber-800 uppercase tracking-wider text-[9.5px]">2. Employer Contributions</span>
-                        <span className="font-bold text-amber-700 text-xs">{rupee(ctcBreakdown.totalEmployerContributionMonthly)}</span>
+                    <div className="bg-paper p-3.5 rounded-xl border border-amber-200/60 shadow-2xs space-y-2.5">
+                      <div className="flex items-center justify-between pb-2 border-b border-hairline">
+                        <span className="font-extrabold text-amber-900 uppercase tracking-wider text-[10px]">2. Employer Retirals</span>
+                        <Badge kind="warning" size="sm" className="font-mono font-bold">{rupee(ctcBreakdown.totalEmployerContributionMonthly)}/mo</Badge>
                       </div>
-                      <div className="space-y-1 text-ink-2">
-                        <div className="flex justify-between">
-                          <span>• EPF Share (3.67%):</span>
-                          <span className="font-mono font-semibold">{rupee(ctcBreakdown.employerEpfShareMonthly)}</span>
+                      <div className="space-y-1.5 text-ink-2 text-[11px]">
+                        <div className="flex items-center justify-between">
+                          <span className="text-ink-3">EPF Share (3.67%):</span>
+                          <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.employerEpfShareMonthly)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>• EPS Pension (8.33%):</span>
-                          <span className="font-mono font-semibold">{rupee(ctcBreakdown.employerEpsMonthly)}</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-ink-3">EPS Pension (8.33%):</span>
+                          <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.employerEpsMonthly)}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span>• ESI Share (3.25%):</span>
-                          <span className="font-mono font-semibold">{rupee(ctcBreakdown.employerEsiMonthly)}</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-ink-3">Employer ESI (3.25%):</span>
+                          <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.employerEsiMonthly)}</span>
                         </div>
-                        <div className="flex justify-between text-ink-3">
-                          <span>• Gratuity Fund (4.81%):</span>
-                          <span className="font-mono font-semibold">{rupee(ctcBreakdown.gratuityMonthly)}</span>
+                        <div className="flex items-center justify-between pt-1 border-t border-hairline/60">
+                          <span className="text-ink-3">Gratuity Fund (4.81%):</span>
+                          <span className="font-mono font-bold text-ink">{rupee(ctcBreakdown.gratuityMonthly)}</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Column 3: Employee Deductions & Net Take Home */}
-                    <div className="bg-paper p-3 rounded-xl border border-hairline space-y-2">
-                      <div className="flex items-center justify-between pb-1.5 border-b border-hairline">
-                        <span className="font-bold text-emerald-800 uppercase tracking-wider text-[9.5px]">3. Employee Net In-Hand</span>
-                        <span className="font-extrabold text-emerald-700 text-xs">{rupee(ctcBreakdown.netTakeHomeMonthly)}</span>
+                    <div className="bg-paper p-3.5 rounded-xl border border-emerald-200/60 shadow-2xs space-y-2.5">
+                      <div className="flex items-center justify-between pb-2 border-b border-hairline">
+                        <span className="font-extrabold text-emerald-900 uppercase tracking-wider text-[10px]">3. Employee Net In-Hand</span>
+                        <Badge kind="success" size="sm" className="font-mono font-bold">{rupee(ctcBreakdown.netTakeHomeMonthly)}/mo</Badge>
                       </div>
-                      <div className="space-y-1 text-ink-2">
-                        <div className="flex justify-between text-rose-700">
-                          <span>• Employee PF (12%):</span>
-                          <span className="font-mono font-semibold">-{rupee(ctcBreakdown.employeePfMonthly)}</span>
-                        </div>
-                        <div className="flex justify-between text-rose-700">
-                          <span>• Professional Tax (PT):</span>
-                          <span className="font-mono font-semibold">-{rupee(ctcBreakdown.professionalTaxMonthly)}</span>
+                      <div className="space-y-1.5 text-ink-2 text-[11px]">
+                        <div className="flex items-center justify-between text-rose-700">
+                          <span>Employee PF (12%):</span>
+                          <span className="font-mono font-bold">-{rupee(ctcBreakdown.employeePfMonthly)}</span>
                         </div>
                         {ctcBreakdown.employeeEsiMonthly > 0 && (
-                          <div className="flex justify-between text-rose-700">
-                            <span>• Employee ESI (0.75%):</span>
-                            <span className="font-mono font-semibold">-{rupee(ctcBreakdown.employeeEsiMonthly)}</span>
+                          <div className="flex items-center justify-between text-rose-700">
+                            <span>Employee ESI (0.75%):</span>
+                            <span className="font-mono font-bold">-{rupee(ctcBreakdown.employeeEsiMonthly)}</span>
                           </div>
                         )}
-                        <div className="flex justify-between pt-1 border-t border-hairline font-bold text-ink">
-                          <span>Net Take Home / Year:</span>
-                          <span className="font-mono text-emerald-700">{rupee(ctcBreakdown.netTakeHomeAnnual)}</span>
+                        <div className="flex items-center justify-between pt-2 border-t border-emerald-200 text-emerald-800 font-extrabold text-xs">
+                          <span>Annual Net Take Home:</span>
+                          <span className="font-mono">{rupee(ctcBreakdown.netTakeHomeAnnual)}</span>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              ) : (
-                <div className="p-4 bg-paper-2/40 border border-hairline rounded-xl text-center text-xs text-ink-3">
-                  Type an Annual CTC above (e.g. ₹6,00,000) to auto-generate the complete CTC Salary Breakdown card.
-                </div>
-              )}
+              ) : null}
             </section>
           )}
 
