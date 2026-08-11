@@ -614,7 +614,7 @@ export default function VendorPortalPage() {
               provisioningTime: "Instant API (< 5 Mins)",
               slaScore: 99.2,
               rating: 4.8,
-              notes: v.contact_email ? `Sub-reseller supplier rate. Contact: ${v.contact_email}` : "Registered Sub-reseller supplier.",
+              notes: v.notes || (v.contact_email ? `Sub-reseller supplier rate. Contact: ${v.contact_email}` : "Registered Sub-reseller supplier."),
               updatedAt: new Date().toISOString().split("T")[0],
               supportContact: v.contact_email || undefined,
               isFromDb: true,
@@ -633,7 +633,64 @@ export default function VendorPortalPage() {
               provisioningTime: "Instant API",
               slaScore: 99.0,
               rating: 4.8,
-              notes: v.contact_email ? `Contact: ${v.contact_email}` : "Registered Sub-reseller supplier.",
+              notes: v.notes || (v.contact_email ? `Contact: ${v.contact_email}` : "Registered Sub-reseller supplier."),
+              updatedAt: new Date().toISOString().split("T")[0],
+              supportContact: v.contact_email || undefined,
+              isFromDb: true,
+            });
+          }
+
+          if (prods.includes("Zoho One & Business Apps")) {
+            list.push({
+              id: `db-vendor-zoho-${v.id}`,
+              vendorName: v.name,
+              vendorCategory: "Direct Sub-Reseller",
+              productSku: "Zoho One License",
+              unitCostMonthly: 290,
+              unitCostYearly: 3480,
+              creditDays: 30,
+              provisioningTime: "Instant API",
+              slaScore: 98.9,
+              rating: 4.7,
+              notes: v.notes || (v.contact_email ? `Contact: ${v.contact_email}` : "Registered Sub-reseller supplier."),
+              updatedAt: new Date().toISOString().split("T")[0],
+              supportContact: v.contact_email || undefined,
+              isFromDb: true,
+            });
+          }
+
+          if (prods.includes("AWS & Cloud Hosting")) {
+            list.push({
+              id: `db-vendor-aws-${v.id}`,
+              vendorName: v.name,
+              vendorCategory: "Direct Sub-Reseller",
+              productSku: "AWS EC2 Cloud Compute",
+              unitCostMonthly: 850,
+              unitCostYearly: 10200,
+              creditDays: 30,
+              provisioningTime: "Instant API",
+              slaScore: 99.4,
+              rating: 4.9,
+              notes: v.notes || "Cloud Infrastructure reseller rate.",
+              updatedAt: new Date().toISOString().split("T")[0],
+              supportContact: v.contact_email || undefined,
+              isFromDb: true,
+            });
+          }
+
+          if (prods.includes("SSL & Domain Names")) {
+            list.push({
+              id: `db-vendor-ssl-${v.id}`,
+              vendorName: v.name,
+              vendorCategory: "Direct Sub-Reseller",
+              productSku: "DigiCert Wildcard SSL",
+              unitCostMonthly: 450,
+              unitCostYearly: 5400,
+              creditDays: 15,
+              provisioningTime: "30 Minutes",
+              slaScore: 99.1,
+              rating: 4.8,
+              notes: v.notes || "SSL & Domain wholesale supplier.",
               updatedAt: new Date().toISOString().split("T")[0],
               supportContact: v.contact_email || undefined,
               isFromDb: true,
