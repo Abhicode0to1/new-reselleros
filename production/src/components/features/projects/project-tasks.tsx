@@ -437,14 +437,44 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3.5">
                 {questions.map((qObj, idx) => {
                   const qText = typeof qObj === "string" ? qObj : (lang === "hi" ? (qObj.hi || qObj.en) : (qObj.en || qObj.hi));
+                  const opts = typeof qObj === "object" && Array.isArray(qObj.options) ? qObj.options : [];
+                  const selectedVal = answers[idx] || "";
+
                   return (
-                    <div key={idx} className="p-3.5 bg-paper-2/50 border border-hairline rounded-xl space-y-1.5">
-                      <label className="block text-xs font-semibold text-ink leading-snug">{qText}</label>
+                    <div key={idx} className="p-3.5 bg-paper-2/50 border border-hairline rounded-xl space-y-2">
+                      <label className="block text-xs font-bold text-ink leading-snug">{qText}</label>
+
+                      {/* 1-Click Objective Multiple Choice Chips */}
+                      {opts.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-0.5">
+                          {opts.map((opt, oIdx) => {
+                            const optText = lang === "hi" ? (opt.labelHi || opt.labelEn) : (opt.labelEn || opt.labelHi);
+                            const isSelected = selectedVal === optText;
+
+                            return (
+                              <button
+                                key={oIdx}
+                                type="button"
+                                onClick={() => setAnswers({ ...answers, [idx]: optText })}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold text-left transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                                  isSelected
+                                    ? "bg-rose-50 border-rose-500 text-rose-700 font-bold shadow-xs"
+                                    : "bg-paper border-hairline text-ink-2 hover:bg-paper-3 hover:border-hairline-strong"
+                                }`}
+                              >
+                                <span className={`h-2.5 w-2.5 rounded-full border ${isSelected ? "bg-rose-500 border-rose-600" : "border-ink-3 bg-transparent"}`} />
+                                <span>{optText}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
                       <Input
-                        placeholder={lang === "hi" ? "Jawab ya zaroori details type karein..." : "Type answer or key requirement..."}
+                        placeholder={lang === "hi" ? "Ya custom jawab yahan type karein..." : "Or type custom answer/notes here..."}
                         value={answers[idx] || ""}
                         onChange={(e) => setAnswers({ ...answers, [idx]: e.target.value })}
                         className="bg-paper text-xs"

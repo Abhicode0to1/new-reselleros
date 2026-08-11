@@ -758,7 +758,8 @@ export function useDeleteProjectTask() {
 
 /** AI project planner — returns a detailed explanation + a suggested task list. */
 export type PlannedTask = { title: string; phase?: string; assignee?: string };
-export type QuestionItem = { en: string; hi: string };
+export type QuestionOption = { labelEn: string; labelHi: string };
+export type QuestionItem = { en: string; hi: string; options?: QuestionOption[] };
 export type ProjectPlan = {
   explanation: string;
   clientProposal?: string;

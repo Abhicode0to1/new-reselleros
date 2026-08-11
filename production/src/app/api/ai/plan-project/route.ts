@@ -29,7 +29,8 @@ const bodySchema = z.object({
 });
 
 export type PlannedTask = { title: string; phase?: string; assignee?: string };
-export type QuestionItem = { en: string; hi: string };
+export type QuestionOption = { labelEn: string; labelHi: string };
+export type QuestionItem = { en: string; hi: string; options: QuestionOption[] };
 
 export type ProjectPlan = {
   explanation: string;
@@ -44,18 +45,20 @@ function buildQuestionsPrompt(b: z.infer<typeof bodySchema>): string {
     `You are a Senior Technical Project Manager & Solution Architect at an Indian IT consultancy.\n` +
     `A project description has been submitted for: "${b.title}" (Client: ${b.customer || "Prospect Client"}).\n` +
     `Project Details: "${b.details || "Standard IT / Software project"}"\n\n` +
-    `Formulate 4-5 concise, highly relevant, project-specific clarifying questions that the client/project owner should answer before starting execution.\n` +
-    `Each question MUST be provided in BOTH English ("en") AND Hinglish ("hi" - simple Indian conversational Hindi written in English/Latin script, e.g. "Is project me konsi core features chahiye?").\n\n` +
+    `Formulate 4-5 concise, highly relevant, project-specific clarifying questions.\n` +
+    `CRITICAL REQUIREMENT: For EACH question, provide 3-4 distinct OBJECTIVE MULTIPLE-CHOICE OPTIONS so the user can answer with a 1-click selection!\n` +
+    `Provide each question AND its options in BOTH English ("en", "labelEn") AND Hinglish ("hi", "labelHi").\n\n` +
     `Return ONLY JSON in this exact format (no prose, no markdown code blocks):\n` +
     `{\n` +
     `  "questions": [\n` +
     `    {\n` +
-    `      "en": "1. What are the core must-have features required for the initial MVP launch?",\n` +
-    `      "hi": "1. Is project ke MVP launch ke liye konsi sabse zaroori core features aur functionalities chahiye?"\n` +
-    `    },\n` +
-    `    {\n` +
-    `      "en": "2. What third-party systems or payment gateways need to be integrated?",\n` +
-    `      "hi": "2. Is project me konse third-party APIs, databases ya payment gateways integrate karne hain?"\n` +
+    `      "en": "1. What is the target scope for the initial MVP release?",\n` +
+    `      "hi": "1. Shuru ke Go-Live (MVP) ke liye kitna scope pehle chahiye?",\n` +
+    `      "options": [\n` +
+    `        { "labelEn": "Core Modules Only (Fast Launch)", "labelHi": "Sirf Main Core Modules (Fast Launch)" },\n` +
+    `        { "labelEn": "Full Feature Suite (Complete Scope)", "labelHi": "Full Complete Feature Suite" },\n` +
+    `        { "labelEn": "Phased Step-by-Step Release", "labelHi": "Phased Step-by-Step Release" }\n` +
+    `      ]\n` +
     `    }\n` +
     `  ]\n` +
     `}`
@@ -111,20 +114,40 @@ async function genWithGemini(apiKey: string, model: string, prompt: string): Pro
 
 const STUB_QUESTIONS: QuestionItem[] = [
   {
-    en: "1. What are the absolute must-have core functionalities for the MVP launch?",
-    hi: "1. Is project ke MVP release ke liye konsi sabse main aur zaroori features pehle chahiye?",
+    en: "1. What is the target scope for the initial Go-Live (MVP) release?",
+    hi: "1. Shuru ke Go-Live (MVP) ke liye kitna scope pehle chahiye?",
+    options: [
+      { labelEn: "Core Modules Only (Fast Launch)", labelHi: "Sirf Main Core Modules (Fast Launch)" },
+      { labelEn: "Full Feature Suite (Complete Scope)", labelHi: "Full Complete Feature Suite" },
+      { labelEn: "Phased Step-by-Step Release", labelHi: "Phased Step-by-Step Release" },
+    ],
   },
   {
-    en: "2. What third-party systems, APIs, or databases need to be integrated?",
-    hi: "2. Is software me konsi third-party APIs (e.g. WhatsApp, GST, Payment Gateway) integrate karni hain?",
+    en: "2. What is the existing data migration requirement?",
+    hi: "2. Existing data migration ki kya zaroorat hai?",
+    options: [
+      { labelEn: "Excel / CSV Data Import", labelHi: "Excel / CSV Data Import" },
+      { labelEn: "Direct Database Migration", labelHi: "Direct Database Migration" },
+      { labelEn: "Fresh Setup (No Migration)", labelHi: "Fresh Setup (No Migration)" },
+    ],
   },
   {
-    en: "3. What is the target milestone schedule and client demo frequency?",
-    hi: "3. Project delivery ka timeline kya hai aur client ko demo kitne weeks me dikhana hai?",
+    en: "3. What third-party integrations are required for Phase 1?",
+    hi: "3. Phase 1 ke liye konsi third-party APIs integrate karni hain?",
+    options: [
+      { labelEn: "Razorpay & WhatsApp APIs", labelHi: "Razorpay & WhatsApp APIs" },
+      { labelEn: "Google Workspace & M365 APIs", labelHi: "Google Workspace & M365 APIs" },
+      { labelEn: "No External Integrations Needed", labelHi: "No External Integrations Needed" },
+    ],
   },
   {
-    en: "4. Are there specific security, role-based access, or data compliance rules required?",
-    hi: "4. System me user roles, permissions aur data security ke kya specific rules rakhne hain?",
+    en: "4. What is the preferred client milestone & demo schedule?",
+    hi: "4. Client ko demo aur milestone updates ki frequency kya rakhni hai?",
+    options: [
+      { labelEn: "Weekly Milestone Demos", labelHi: "Weekly Milestone Demos" },
+      { labelEn: "Bi-Weekly (Every 2 Weeks)", labelHi: "Har 2 Hafte Me (Bi-Weekly)" },
+      { labelEn: "Monthly Major Phase Releases", labelHi: "Monthly Major Phase Releases" },
+    ],
   },
 ];
 
