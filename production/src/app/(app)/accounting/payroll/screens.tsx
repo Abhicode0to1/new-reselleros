@@ -30,6 +30,7 @@ import { daysElapsedInPeriod, prorateSalary } from "@/lib/payroll/proration";
 import { nationalHolidaysForYear, FIXED_NATIONAL_HOLIDAYS, indiaPublicHolidaysForYear } from "@/lib/payroll/holidays-india";
 import { computeEsi, isEsiEligible, ESI_WAGE_CEILING } from "@/lib/payroll/esi";
 import { computePf, PF_WAGE_CEILING } from "@/lib/payroll/pf";
+import { calculateCtcBreakdown } from "@/lib/payroll/ctc";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useEmployeeLoans } from "@/lib/queries/employee-loans";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -400,6 +401,19 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
   const [esiApplicable, setEsiApplicable] = React.useState<boolean>(employee?.esi_applicable ?? false);
   const [esiTouched, setEsiTouched] = React.useState(false);
   const [pfApplicable, setPfApplicable] = React.useState<boolean>(employee?.pf_applicable ?? false);
+
+  // CTC Calculator State
+  const [annualCtc, setAnnualCtc] = React.useState<string>(
+    employee?.monthly_gross ? String(employee.monthly_gross * 12) : ""
+  );
+  const [isMetro, setIsMetro] = React.useState(false);
+  const [showCtcCalc, setShowCtcCalc] = React.useState(false);
+
+  const ctcBreakdown = React.useMemo(() => {
+    const val = Number(annualCtc);
+    if (!val || val <= 0) return null;
+    return calculateCtcBreakdown(val, { isMetro });
+  }, [annualCtc, isMetro]);
   // For a NEW employee, suggest ESI coverage from the wage ceiling until the
   // user decides for themselves. Existing employees keep their saved value.
   React.useEffect(() => {
@@ -457,6 +471,106 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
             <Field label="Address">
               <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Residential address" />
             </Field>
+          </section>
+
+          {/* CTC Calculator & Breakdown Helper */}
+          <section className="space-y-3 border-t border-hairline pt-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold flex items-center gap-1">
+                <span>💼 Cost to Company (CTC) Calculator</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowCtcCalc(!showCtcCalc)}
+                className="text-xs text-primary font-bold hover:underline"
+              >
+                {showCtcCalc ? "Hide CTC Breakdown" : "⚡ Calculate CTC Breakdown"}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Annual CTC (₹/yr)">
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 600000"
+                  value={annualCtc}
+                  onChange={(e) => {
+                    setAnnualCtc(e.target.value);
+                    if (!showCtcCalc) setShowCtcCalc(true);
+                  }}
+                />
+              </Field>
+              <Field label="City HRA Standard">
+                <select
+                  value={isMetro ? "metro" : "nonmetro"}
+                  onChange={(e) => setIsMetro(e.target.value === "metro")}
+                  className={selectCls}
+                >
+                  <option value="nonmetro">Non-Metro (40% HRA)</option>
+                  <option value="metro">Metro City (50% HRA)</option>
+                </select>
+              </Field>
+            </div>
+
+            {ctcBreakdown && showCtcCalc && (
+              <div className="p-3.5 bg-paper-2/60 border border-hairline rounded-xl space-y-3 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-hairline">
+                  <div>
+                    <span className="font-bold text-ink">Monthly CTC: {rupee(ctcBreakdown.monthlyCtc)}/mo</span>
+                    <span className="text-[11px] text-ink-3 block">Annual Package: {rupee(ctcBreakdown.annualCtc)}/yr</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      setGross(String(ctcBreakdown.grossMonthly));
+                      setPfApplicable(true);
+                      if (ctcBreakdown.employerEsiMonthly > 0) setEsiApplicable(true);
+                      toast.success(`Applied Monthly Gross ${rupee(ctcBreakdown.grossMonthly)} & PF/ESI settings!`);
+                    }}
+                    className="text-xs font-bold"
+                  >
+                    ⚡ Apply to Monthly Salary
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                  <div className="bg-paper p-2 rounded-lg border border-hairline/60">
+                    <span className="text-ink-3 font-semibold block uppercase tracking-wider text-[9px]">1. Gross Salary (Base)</span>
+                    <div className="font-bold text-ink text-sm mt-0.5">{rupee(ctcBreakdown.grossMonthly)}/mo</div>
+                    <div className="text-[10px] text-ink-3 mt-1 space-y-0.5">
+                      <div>Basic (50%): {rupee(ctcBreakdown.basicMonthly)}</div>
+                      <div>HRA: {rupee(ctcBreakdown.hraMonthly)}</div>
+                      <div>Special Allowance: {rupee(ctcBreakdown.specialAllowanceMonthly)}</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-paper p-2 rounded-lg border border-hairline/60">
+                    <span className="text-ink-3 font-semibold block uppercase tracking-wider text-[9px]">2. Employer Retirals</span>
+                    <div className="font-bold text-amber-700 text-sm mt-0.5">
+                      {rupee(ctcBreakdown.employerPfMonthly + ctcBreakdown.employerEsiMonthly + ctcBreakdown.gratuityMonthly)}/mo
+                    </div>
+                    <div className="text-[10px] text-ink-3 mt-1 space-y-0.5">
+                      <div>Employer PF (12%): {rupee(ctcBreakdown.employerPfMonthly)}</div>
+                      <div>Employer ESI: {rupee(ctcBreakdown.employerEsiMonthly)}</div>
+                      <div>Gratuity Provision: {rupee(ctcBreakdown.gratuityMonthly)}</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-paper p-2 rounded-lg border border-hairline/60">
+                    <span className="text-ink-3 font-semibold block uppercase tracking-wider text-[9px]">3. Employee Net Take-Home</span>
+                    <div className="font-bold text-emerald-700 text-sm mt-0.5">{rupee(ctcBreakdown.netTakeHomeMonthly)}/mo</div>
+                    <div className="text-[10px] text-ink-3 mt-1 space-y-0.5">
+                      <div>Employee PF: -{rupee(ctcBreakdown.employeePfMonthly)}</div>
+                      <div>Prof. Tax (PT): -{rupee(ctcBreakdown.professionalTaxMonthly)}</div>
+                      <div>In-Hand Annual: {rupee(ctcBreakdown.netTakeHomeAnnual)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Payroll & statutory */}
