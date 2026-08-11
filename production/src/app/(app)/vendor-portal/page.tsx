@@ -1051,18 +1051,21 @@ export default function VendorPortalPage() {
                   )}
                 </div>
 
-                <div className="pt-3 border-t border-hairline flex items-center justify-between gap-2">
-                  <div className="text-[11px] text-ink-3 flex items-center gap-1">
-                    <Icon name="clock" size={13} />
-                    <span>Speed: <b>{bid.provisioningTime}</b></span>
+                <div className="pt-3 border-t border-hairline space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-ink-3">
+                    <span className="flex items-center gap-1">
+                      <Icon name="clock" size={13} />
+                      <span>Speed: <b>{bid.provisioningTime}</b></span>
+                    </span>
+                    <span className="text-[10px] text-ink-3">Updated {bid.updatedAt}</span>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setEditingBid(bid)}
-                      className="text-xs font-semibold text-ink"
+                      className="text-xs font-semibold text-ink w-full justify-center"
                     >
                       ✏️ Edit Card
                     </Button>
@@ -1071,9 +1074,9 @@ export default function VendorPortalPage() {
                       size="sm"
                       icon="cart"
                       onClick={() => handlePlacePo(bid)}
-                      className="text-xs font-bold"
+                      className="text-xs font-bold w-full justify-center"
                     >
-                      🛒 Place PO
+                      Place PO
                     </Button>
                   </div>
                 </div>
