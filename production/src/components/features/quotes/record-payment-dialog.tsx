@@ -814,12 +814,11 @@ export function RecordPaymentDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="upi_hdfc">🏦 HDFC Bank — Direct UPI / QR Code</SelectItem>
-                <SelectItem value="razorpay">💳 Razorpay — Online Gateway</SelectItem>
-                <SelectItem value="bank_hdfc">🏦 HDFC Bank — Current A/c (NEFT/RTGS/IMPS)</SelectItem>
-                <SelectItem value="bank_icici">🏦 ICICI Bank — Corporate A/c (NEFT/RTGS/IMPS)</SelectItem>
-                <SelectItem value="cheque">📝 Cheque Deposit (HDFC/ICICI Clearing)</SelectItem>
-                <SelectItem value="cash">💵 Cash in Hand (Petty Cash)</SelectItem>
+                <SelectItem value="upi_hdfc">🏦 Anutech Digital — Bank A/c (Direct UPI / QR Code)</SelectItem>
+                <SelectItem value="bank_hdfc">🏦 Anutech Digital — Bank A/c (NEFT / RTGS / IMPS)</SelectItem>
+                <SelectItem value="razorpay">💳 Anutech Digital — Razorpay Gateway</SelectItem>
+                <SelectItem value="cheque">📝 Anutech Digital — Cheque Clearing</SelectItem>
+                <SelectItem value="cash">💵 Anutech Digital — Petty Cash</SelectItem>
               </SelectContent>
             </Select>
             <input type="hidden" {...register("method")} value={method} />
