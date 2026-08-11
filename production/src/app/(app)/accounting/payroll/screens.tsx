@@ -236,7 +236,11 @@ export function EmployeesTab() {
                     >
                       <td className="px-4 py-3">
                         <div className="font-medium text-ink group-hover:text-amber-ink transition-colors">{toTitleCase(e.name)}</div>
-                        {employeeSubline(e) && <div className="text-[11px] text-ink-3 mt-0.5">{employeeSubline(e)}</div>}
+                        <div className="text-[11px] text-ink-3 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                          {employeeSubline(e) && <span>{employeeSubline(e)}</span>}
+                          {employeeSubline(e) && e.email && <span className="text-ink-4">·</span>}
+                          {e.email && <span className="font-mono text-ink-2">{e.email}</span>}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         {e.monthly_gross > 0 ? (
@@ -284,6 +288,12 @@ export function EmployeesTab() {
                       <div className="min-w-0">
                         <div className="font-medium text-ink leading-tight">{toTitleCase(e.name)}</div>
                         {employeeSubline(e) && <div className="text-[11px] text-ink-3 mt-0.5">{employeeSubline(e)}</div>}
+                        {e.email && (
+                          <div className="text-[11px] font-mono text-amber-ink mt-0.5 flex items-center gap-1">
+                            <Icon name="mail" size={11} className="text-amber-ink shrink-0" />
+                            <span className="truncate">{e.email}</span>
+                          </div>
+                        )}
                       </div>
                       {e.monthly_gross > 0 ? (
                         <div className="font-serif text-xl leading-none text-ink shrink-0">{rupee(e.monthly_gross)}</div>
