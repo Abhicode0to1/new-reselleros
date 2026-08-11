@@ -1947,16 +1947,13 @@ export default function VendorPortalPage() {
                 <button
                   type="button"
                   onClick={() => setVendorSourceFilter("dbOnly")}
-                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     vendorSourceFilter === "dbOnly"
                       ? "bg-primary text-white shadow-2xs font-extrabold"
                       : "text-ink-3 hover:text-ink"
                   }`}
                 >
-                  <span>🏛️ My Vendors Master</span>
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-white/20 text-white font-mono font-bold">
-                    {uniqueVendorCounts.dbOnly}
-                  </span>
+                  🏛️ My Vendors Master ({uniqueVendorCounts.dbOnly})
                 </button>
                 <button
                   type="button"
