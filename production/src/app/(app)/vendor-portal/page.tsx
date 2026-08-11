@@ -303,12 +303,16 @@ const VENDOR_SCORECARDS: VendorScorecard[] = [
 function parseProductsFromBid(bid: VendorBid): string[] {
   if (bid.notes) {
     const match = bid.notes.match(/\[Supplied Products: (.*?)\]/);
-    if (match?.[1]) return match[1].split(",").map((s) => s.trim()).filter(Boolean);
+    if (match?.[1]) {
+      const list = match[1].split(",").map((s) => s.trim()).filter(Boolean);
+      if (list.length === 1 && list[0] === "None") return [];
+      return list;
+    }
   }
   if (bid.productSku.includes("Google")) return ["Google Workspace & GCP"];
   if (bid.productSku.includes("Microsoft") || bid.productSku.includes("M365")) return ["Microsoft 365 & Azure"];
   if (bid.productSku.includes("Zoho")) return ["Zoho One & Business Apps"];
-  return ["Google Workspace & GCP"];
+  return [];
 }
 
 function EditVendorCardModal({
@@ -371,16 +375,12 @@ function EditVendorCardModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedProducts.length === 0) {
-      // If user unselected all products, remove vendor card from rate cards
-      onSave(bid, true);
-      onClose();
-      return;
-    }
-
     const mCost = Number(monthlyCost) || 0;
-    const prodTagStr = `[Supplied Products: ${selectedProducts.join(", ")}]`;
-    const cleanNotes = notes.trim();
+    const prodTagStr = selectedProducts.length > 0
+      ? `[Supplied Products: ${selectedProducts.join(", ")}]`
+      : `[Supplied Products: None]`;
+
+    const cleanNotes = notes.replace(/\[Supplied Products: .*?\]/, "").trim();
     const finalNotes = [prodTagStr, cleanNotes].filter(Boolean).join(" ");
 
     const updatedBid: VendorBid = {
@@ -394,7 +394,7 @@ function EditVendorCardModal({
       notes: finalNotes,
       updatedAt: new Date().toISOString().split("T")[0],
     };
-    onSave(updatedBid, false);
+    onSave(updatedBid, selectedProducts.length === 0);
     onClose();
   };
 
@@ -595,14 +595,26 @@ export default function VendorPortalPage() {
       dbVendors.forEach((v) => {
         const notesStr = v.notes || "";
         const match = notesStr.match(/\[Supplied Products: (.*?)\]/);
-        const prods = match?.[1] ? match[1].split(",").map((s) => s.trim()) : [];
+        const hasProductTag = Boolean(match?.[1]);
+        const prods = match?.[1] ? match[1].split(",").map((s) => s.trim()).filter(Boolean) : [];
+
+        const isGoogleSeller = hasProductTag
+          ? prods.includes("Google Workspace & GCP")
+          : (
+              v.name.toLowerCase().includes("google") ||
+              v.name.toLowerCase().includes("net2secure") ||
+              v.name.toLowerCase().includes("net secure") ||
+              v.name.toLowerCase().includes("rajesh") ||
+              notesStr.toLowerCase().includes("workspace") ||
+              notesStr.toLowerCase().includes("google")
+            );
 
         // Check if vendor already exists in list
         const existsInList = list.some((b) => b.vendorName.toLowerCase() === v.name.toLowerCase());
 
         if (!existsInList) {
-          // If tagged with Google Workspace OR default fallback
-          if (prods.length === 0 || prods.includes("Google Workspace & GCP")) {
+          // If tagged with Google Workspace or matches reseller criteria
+          if (isGoogleSeller) {
             list.push({
               id: `db-vendor-gw-${v.id}`,
               vendorName: v.name,
