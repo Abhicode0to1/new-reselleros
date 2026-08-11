@@ -199,12 +199,24 @@ export const APP_NAV: NavSection[] = [
     ],
   },
   {
+    section: "HR & Payroll",
+    icon: "users",
+    roles: ["owner", "manager", "billing"],
+    items: [
+      { id: "employees",         href: "/accounting/employees",       label: "Employees & Team",       icon: "users" },
+      { id: "attendance-reg",    href: "/accounting/attendance",      label: "Attendance Register",    icon: "calendar", hint: "Daily attendance logs, check-in/out & hours." },
+      { id: "leave-reg",         href: "/accounting/leave",           label: "Leave Register",         icon: "file",     hint: "Casual leave, sick leave & earned leave tracking." },
+      { id: "payroll",           href: "/accounting/payroll",         label: "Payroll Overview",       icon: "rupee" },
+      { id: "salary-register",   href: "/accounting/salary-register", label: "Salary & Payroll Register", icon: "receipt", hint: "Monthly salary slip register, CTC & net payouts." },
+      { id: "esi-register",      href: "/accounting/esi-register",    label: "ESI & PF Register",      icon: "file" },
+      { id: "emp-loans",         href: "/accounting/loans",           label: "Loans & Salary Advances",icon: "rupee" },
+    ],
+  },
+  {
     section: "Admin & Control",
     icon: "settings",
     roles: ["owner", "manager", "billing"],
     items: [
-      { id: "employees", href: "/accounting/employees", label: "Employees & Team", icon: "users" },
-      { id: "payroll",   href: "/accounting/payroll",   label: "Payroll",          icon: "rupee" },
       { id: "settings",  href: "/settings",             label: "Settings",         icon: "settings" },
       { id: "help",      href: "/help",                 label: "Help & Tutorial",  icon: "question" },
     ],
