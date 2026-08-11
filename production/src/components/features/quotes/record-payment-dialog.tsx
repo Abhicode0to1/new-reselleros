@@ -559,14 +559,64 @@ export function RecordPaymentDialog({
   });
 
   const [reportBugOpen, setReportBugOpen] = React.useState(false);
+  const [drawerWidth, setDrawerWidth] = React.useState<number>(680);
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  // Load saved width from localStorage if available
+  React.useEffect(() => {
+    const saved = localStorage.getItem("resellersos_payment_drawer_width");
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (!isNaN(parsed) && parsed >= 420 && parsed <= 1400) {
+        setDrawerWidth(parsed);
+      }
+    }
+  }, []);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    const startX = e.clientX;
+    const startWidth = drawerWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const dx = startX - moveEvent.clientX; // drag left -> dx > 0 -> width increases!
+      const newWidth = Math.max(420, Math.min(window.innerWidth - 40, startWidth + dx));
+      setDrawerWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      localStorage.setItem("resellersos_payment_drawer_width", drawerWidth.toString());
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
 
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="right"
-          className="w-full sm:max-w-[640px] md:max-w-[760px] lg:max-w-[860px] p-0 flex flex-col bg-paper text-ink shadow-2xl border-l border-hairline overflow-hidden z-[50]"
+          style={{ width: `${drawerWidth}px`, maxWidth: "96vw" }}
+          className="w-full sm:max-w-none p-0 flex flex-col bg-paper text-ink shadow-2xl border-l border-hairline overflow-visible z-[50]"
         >
+          {/* ↔️ PROMINENT VISIBLE LEFT EDGE DRAG HANDLE */}
+          <div
+            onMouseDown={handleResizeStart}
+            title="↔️ Click and drag left/right to stretch or shrink form panel"
+            className={`absolute left-0 top-0 bottom-0 w-4 -ml-2 cursor-ew-resize hover:bg-rose-500/20 bg-transparent z-[100] flex items-center justify-center group select-none ${
+              isDragging ? "bg-rose-500/30" : ""
+            }`}
+          >
+            <div className="w-1.5 h-24 bg-rose-500 hover:bg-rose-600 rounded-full shadow-md group-hover:scale-125 transition-all flex items-center justify-center">
+              <div className="w-0.5 h-6 bg-white/80 rounded-full" />
+            </div>
+          </div>
+
           <SheetHeader className="pr-12 pt-4 px-6 pb-3 border-b border-hairline bg-paper-2/40">
             <div className="flex items-center justify-between gap-3">
               <SheetTitle>
