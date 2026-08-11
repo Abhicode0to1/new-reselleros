@@ -613,10 +613,11 @@ export default function VendorPortalPage() {
         const existsInList = list.some((b) => b.vendorName.toLowerCase() === v.name.toLowerCase());
 
         if (!existsInList) {
-          // If tagged with Google Workspace or matches reseller criteria
+          // If tagged with Google Workspace or matches reseller criteria, generate cards for ALL Google Workspace editions
           if (isGoogleSeller) {
+            // Google Workspace Business Starter
             list.push({
-              id: `db-vendor-gw-${v.id}`,
+              id: `db-vendor-gw-starter-${v.id}`,
               vendorName: v.name,
               vendorCategory: "Direct Sub-Reseller",
               productSku: "Google Workspace Business Starter",
@@ -631,16 +632,69 @@ export default function VendorPortalPage() {
               supportContact: v.contact_email || undefined,
               isFromDb: true,
             });
+
+            // Google Workspace Business Standard
+            list.push({
+              id: `db-vendor-gw-standard-${v.id}`,
+              vendorName: v.name,
+              vendorCategory: "Direct Sub-Reseller",
+              productSku: "Google Workspace Business Standard",
+              unitCostMonthly: 650,
+              unitCostYearly: 7800,
+              creditDays: 30,
+              provisioningTime: "Instant API (< 5 Mins)",
+              slaScore: 99.2,
+              rating: 4.8,
+              notes: v.notes || (v.contact_email ? `Sub-reseller supplier rate. Contact: ${v.contact_email}` : "Registered Sub-reseller supplier."),
+              updatedAt: new Date().toISOString().split("T")[0],
+              supportContact: v.contact_email || undefined,
+              isFromDb: true,
+            });
+
+            // Google Workspace Business Plus
+            list.push({
+              id: `db-vendor-gw-plus-${v.id}`,
+              vendorName: v.name,
+              vendorCategory: "Direct Sub-Reseller",
+              productSku: "Google Workspace Business Plus",
+              unitCostMonthly: 1260,
+              unitCostYearly: 15120,
+              creditDays: 30,
+              provisioningTime: "Instant API (< 5 Mins)",
+              slaScore: 99.2,
+              rating: 4.8,
+              notes: v.notes || (v.contact_email ? `Sub-reseller supplier rate. Contact: ${v.contact_email}` : "Registered Sub-reseller supplier."),
+              updatedAt: new Date().toISOString().split("T")[0],
+              supportContact: v.contact_email || undefined,
+              isFromDb: true,
+            });
           }
 
           if (prods.includes("Microsoft 365 & Azure")) {
             list.push({
-              id: `db-vendor-m365-${v.id}`,
+              id: `db-vendor-m365-basic-${v.id}`,
               vendorName: v.name,
               vendorCategory: "Direct Sub-Reseller",
               productSku: "Microsoft 365 Business Basic",
               unitCostMonthly: 114,
               unitCostYearly: 1368,
+              creditDays: 30,
+              provisioningTime: "Instant API",
+              slaScore: 99.0,
+              rating: 4.8,
+              notes: v.notes || (v.contact_email ? `Contact: ${v.contact_email}` : "Registered Sub-reseller supplier."),
+              updatedAt: new Date().toISOString().split("T")[0],
+              supportContact: v.contact_email || undefined,
+              isFromDb: true,
+            });
+
+            list.push({
+              id: `db-vendor-m365-standard-${v.id}`,
+              vendorName: v.name,
+              vendorCategory: "Direct Sub-Reseller",
+              productSku: "Microsoft 365 Business Standard",
+              unitCostMonthly: 660,
+              unitCostYearly: 7920,
               creditDays: 30,
               provisioningTime: "Instant API",
               slaScore: 99.0,
