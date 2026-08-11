@@ -170,6 +170,26 @@ export function ProjectTasks({ projectId, team, project }: { projectId: string; 
   );
 }
 
+/* Standard Description Preset Templates */
+const SAMPLE_TEMPLATES = [
+  {
+    label: "💻 Software & ERP Billing App",
+    text: "Development of a cloud-based ERP & GST Billing System for a mid-sized IT reseller. Key requirements include multi-tenant customer CRM, GST invoicing with dynamic tax calculation & PDF export, subscription renewal tracking for Google Workspace/M365 with automated 30-day alerts, bank reconciliation (UPI/NEFT/Razorpay), and GSTR-1 JSON export. Target delivery: 6 weeks across 3 milestones.",
+  },
+  {
+    label: "🌐 Cloud Workspace & Mail Migration",
+    text: "Enterprise Cloud Migration & Data Provisioning for 250 users migrating from legacy cPanel email to Google Workspace Business Starter and Microsoft 365 Business Standard. Key scope includes DNS MX/SPF/DKIM setup, automated IMAP mailbox migration without downtime, Google Admin & M365 Entra ID setup with 2FA enforcement, admin training, and 14-day hypercare support.",
+  },
+  {
+    label: "🛒 B2B E-Commerce & Warehouse Portal",
+    text: "Custom B2B E-Commerce Portal & Warehouse Inventory System for a regional electronics distributor. Requirements include B2B ordering portal with tier pricing & credit limit checks, real-time multi-warehouse inventory sync, Razorpay payment gateway integration, Shiprocket/Delhivery tracking APIs, and daily sales analytics dashboard. Timeline: 8 weeks.",
+  },
+  {
+    label: "🔌 API Integration & Automation",
+    text: "Custom API Integration & Workflow Automation connecting Customer CRM, GST e-invoicing portal, WhatsApp Business API for instant invoice delivery, and Tally Prime accounting software. Includes automated daily data sync and audit logging.",
+  },
+];
+
 // ── AI planner dialog ────────────────────────────────────────────────────────
 function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
   projectId: string; team: TeamMember[]; project: ProjectSummary; startSeq: number; onClose: () => void;
@@ -305,14 +325,46 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
           {step === "input" && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1.5">
-                  1. Project Description / Client Requirements Brief *
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold">
+                    1. Project Description / Client Requirements Brief *
+                  </label>
+                  {details && (
+                    <button
+                      type="button"
+                      onClick={() => setDetails("")}
+                      className="text-[11px] font-semibold text-rose-600 hover:underline"
+                    >
+                      Clear Text
+                    </button>
+                  )}
+                </div>
+
+                {/* 1-Click Sample Description Templates */}
+                <div className="p-3 mb-3 bg-paper-2/60 border border-hairline rounded-xl space-y-2">
+                  <div className="text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                    <Icon name="sparkles" size={13} />
+                    <span>⚡ 1-Click Standard Sample Templates (Click to fill):</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {SAMPLE_TEMPLATES.map((tmpl, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setDetails(tmpl.text)}
+                        className="p-2 rounded-lg border border-hairline bg-paper hover:bg-primary-soft/30 hover:border-primary/40 text-xs text-ink text-left transition-all flex items-center gap-2 shadow-2xs cursor-pointer group"
+                      >
+                        <span className="font-semibold text-ink group-hover:text-primary leading-tight">{tmpl.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <textarea
                   value={details}
                   onChange={(e) => setDetails(e.target.value)}
                   rows={5}
-                  placeholder="Paste or type project description... e.g. Custom ERP & Billing Solution for Private Ltd company with GST invoicing, inventory tracking, role-based access, payment gateway integration, and automated WhatsApp notifications. Delivery in 6 weeks."
+                  placeholder="Click a sample template above OR paste custom project description... e.g. Custom ERP & Billing Solution for Private Ltd company with GST invoicing, inventory tracking, role-based access, payment gateway integration, and automated WhatsApp notifications. Delivery in 6 weeks."
                   className="w-full rounded-xl border border-hairline bg-paper px-4 py-3 text-sm focus:border-amber focus:ring-amber font-sans"
                 />
                 <p className="text-[11px] text-ink-3 mt-1.5">
