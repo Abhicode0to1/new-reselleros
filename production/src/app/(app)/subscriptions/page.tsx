@@ -17,7 +17,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { EmptyState } from "@/components/shared/empty-state";
-import { StatStrip } from "@/components/shared/stat-strip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button, IconButton } from "@/components/ui/button";
 import { FAB } from "@/components/ui/fab";
@@ -87,6 +86,7 @@ export default function SubscriptionsPage() {
   const [importOpen,  setImportOpen]  = React.useState(false);
   const [reconcileOpen, setReconcileOpen] = React.useState(false);
   const [addGoogleOpen, setAddGoogleOpen] = React.useState(false);
+  const [kpiOpen, setKpiOpen] = React.useState(true);
   const [visible, setVisible] = React.useState(60);  // render cap — paginates large lists
 
   const today = new Date();
@@ -205,22 +205,78 @@ export default function SubscriptionsPage() {
         </div>
       </div>
 
-      {/* Compact metric strip (replaces the big KPI-card grid) */}
-      {!isLoading && subs && (
-        <StatStrip
-          className="mb-5"
-          items={[
-            { label: "Active MRR",   value: rupee(activeMRR, { compact: true }), tone: "amber" },
-            { label: "Active ARR",   value: rupee(activeARR, { compact: true }), tone: "emerald" },
-            { label: "Margin · ARR", value: `${rupee(annualMargin, { compact: true })} · ${avgMarginPct}%`, tone: "emerald" },
-            { label: "Total subs",   value: `${counts.all} · ${counts.active} active` },
-            { label: "Seats used",   value: `${usedSeats} of ${totalSeats}` },
-            { label: "Trials",       value: trials?.length ?? 0 },
-          ]}
-        />
+      {/* Collapsible Subscriptions Analytics Banner */}
+      {!isLoading && subs && subs.length > 0 && (
+        <div className="mb-4 bg-paper border border-hairline rounded-lg overflow-hidden transition-all shadow-xs">
+          <button
+            type="button"
+            onClick={() => setKpiOpen((o) => !o)}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 bg-paper-2/70 hover:bg-paper-2 transition-colors text-left cursor-pointer"
+          >
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <Icon name="bar_chart" size={15} className="text-amber-ink" />
+              <span className="font-semibold text-ink">Subscriptions Revenue Analytics</span>
+              <span className="text-ink-3">·</span>
+              <span className="text-ink-2 font-mono font-medium">MRR: <b className="text-amber-ink">{rupee(activeMRR, { compact: true })}</b></span>
+              <span className="text-ink-3 font-mono">·</span>
+              <span className="text-ink-2 font-mono font-medium">ARR: <b className="text-emerald">{rupee(activeARR, { compact: true })}</b></span>
+              <span className="text-ink-3 font-mono">·</span>
+              <span className="text-ink-2 font-mono font-medium">Seats: <b className="text-ink">{usedSeats}/{totalSeats}</b></span>
+            </div>
+            <div className="flex items-center gap-1 text-xs font-semibold text-amber-ink shrink-0 ml-2">
+              <span>{kpiOpen ? "Collapse" : "Expand"}</span>
+              <Icon name={kpiOpen ? "chevron_up" : "chevron_down"} size={14} />
+            </div>
+          </button>
+
+          {kpiOpen && (
+            <div className="p-3 border-t border-hairline space-y-3 bg-paper">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Active MRR</p>
+                  <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(activeMRR, { compact: true })}</p>
+                </div>
+                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Active ARR</p>
+                  <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(activeARR, { compact: true })}</p>
+                </div>
+                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Margin (ARR)</p>
+                  <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(annualMargin, { compact: true })} <span className="text-xs text-ink-3 font-normal">({avgMarginPct}%)</span></p>
+                </div>
+                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Total Subscriptions</p>
+                  <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{counts.all} <span className="text-xs text-emerald font-normal">({counts.active} active)</span></p>
+                </div>
+                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Seats In Use</p>
+                  <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{usedSeats} <span className="text-xs text-ink-3 font-normal">/ {totalSeats}</span></p>
+                </div>
+                <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Active Trials</p>
+                  <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{trials?.length ?? 0}</p>
+                </div>
+              </div>
+
+              {/* Renewal intelligence */}
+              {atRiskCount > 0 && (
+                <GeminiCard
+                  title="Renewal intelligence"
+                  actions={
+                    <Button size="sm" variant="primary" icon="mail" onClick={() => router.push("/renewals" as never)}>Bulk renewal email</Button>
+                  }
+                  compact
+                >
+                  <b>{atRiskCount} subscription{atRiskCount === 1 ? "" : "s"} expiring in next 30 days.</b>{" "}
+                  Worth {rupee(atRiskMRR, { compact: true })} MRR — start renewal conversations now.
+                </GeminiCard>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Trials in progress — virtual subs (deployed in Google CSP, not billed yet) */}
+      {/* Trials in progress — virtual subs */}
       {!isLoading && trials && trials.length > 0 && tab !== "trials" && (
         <Card
           title="Trials in progress"
@@ -267,65 +323,41 @@ export default function SubscriptionsPage() {
               );
             })}
           </ul>
-          <p className="text-[11px] text-ink-3 mt-3 pt-3 border-t border-hairline flex items-center gap-1.5">
-            <Icon name="info" size={11} />
-            Trials are NOT counted in MRR/ARR. Click a row to open the lead and send a paid quote.
-          </p>
         </Card>
       )}
 
-      {/* AI suggestion */}
-      {!isLoading && subs && atRiskCount > 0 && (
-        <div className="mb-4">
-          <GeminiCard
-            title="Renewal intelligence"
-            actions={
-              <Button size="sm" variant="primary" icon="mail" onClick={() => router.push("/renewals" as never)}>Bulk renewal email</Button>
-            }
-            compact
-          >
-            <b>{atRiskCount} subscription{atRiskCount === 1 ? "" : "s"} expiring in next 30 days.</b>{" "}
-            Worth {rupee(atRiskMRR, { compact: true })} MRR — start renewal conversations now.
-          </GeminiCard>
-        </div>
-      )}
-
-      {/* Tabs */}
+      {/* Sticky Horizontal TabBar + Vendor Filter + Search */}
       {!isLoading && subs && subs.length > 0 && (
-        <div className="mb-3">
-          <TabBar value={tab} onChange={setTab} items={tabs} />
-        </div>
-      )}
-
-      {/* Filter row */}
-      {!isLoading && subs && subs.length > 0 && (
-        <div className="flex justify-between items-center gap-3 flex-wrap mb-3">
-          <div className="inline-flex gap-1 bg-paper-2 rounded-md p-0.5">
-            {[
-              { value: "all", label: "All Vendors" },
-              { value: "google", label: "Google" },
-              { value: "microsoft", label: "Microsoft" },
-              { value: "zoho", label: "Zoho" },
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setVendor(opt.value)}
-                className={cn(
-                  "px-3 py-1 text-xs font-medium rounded transition-colors",
-                  vendor === opt.value ? "bg-paper text-ink shadow-sm" : "text-ink-3 hover:text-ink"
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <div className="w-64">
-            <Input
-              prefix={<Icon name="search" size={14} />}
-              placeholder="Customer or domain…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
+          <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
+          <div className="flex justify-between items-center gap-3 flex-wrap">
+            <div className="inline-flex gap-1 bg-paper-2 rounded-md p-0.5">
+              {[
+                { value: "all", label: "All Vendors" },
+                { value: "google", label: "Google" },
+                { value: "microsoft", label: "Microsoft" },
+                { value: "zoho", label: "Zoho" },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setVendor(opt.value)}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium rounded transition-colors cursor-pointer",
+                    vendor === opt.value ? "bg-paper text-ink shadow-xs font-semibold" : "text-ink-3 hover:text-ink"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="w-full sm:w-64">
+              <Input
+                prefix={<Icon name="search" size={14} />}
+                placeholder="Customer, plan, domain…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -371,9 +403,9 @@ export default function SubscriptionsPage() {
         />
       )}
 
-      {/* Mobile card list — phones only */}
+      {/* Adaptive card list — phones, tablets, and medium viewports (< 1280px) */}
       {!isLoading && !error && filtered.length > 0 && (
-        <ul className="md:hidden space-y-2 mb-3">
+        <ul className="xl:hidden space-y-2 mb-3">
           {shown.map((s) => {
             const dl = daysUntil(s.renewal_date);
             return (
@@ -418,9 +450,9 @@ export default function SubscriptionsPage() {
         </ul>
       )}
 
-      {/* Desktop table */}
+      {/* Desktop table — viewports >= 1280px */}
       {!isLoading && !error && filtered.length > 0 && (
-        <Card flush className="hidden md:block">
+        <Card flush className="hidden xl:block">
             <table className="w-full">
               <thead className="bg-paper-2 border-b border-hairline-strong">
                 <tr>
