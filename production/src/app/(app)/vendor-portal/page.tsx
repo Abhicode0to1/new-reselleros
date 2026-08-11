@@ -31,6 +31,7 @@ export interface VendorBid {
   updatedAt: string;
   supportContact?: string;
   partnerId?: string;
+  isFromDb?: boolean;
 }
 
 export interface SourcingRfq {
@@ -568,6 +569,7 @@ export default function VendorPortalPage() {
   const [rfqs, setRfqs] = React.useState<SourcingRfq[]>(INITIAL_RFQS);
   const [bills] = React.useState<VendorBillItem[]>(INITIAL_BILLS);
   const [selectedSku, setSelectedSku] = React.useState<string>("All");
+  const [vendorSourceFilter, setVendorSourceFilter] = React.useState<"all" | "dbOnly" | "benchmarks">("all");
   const [autoProcureEnabled, setAutoProcureEnabled] = React.useState(true);
   const [editingBid, setEditingBid] = React.useState<VendorBid | null>(null);
 
@@ -587,7 +589,7 @@ export default function VendorPortalPage() {
 
   // Merge static bids + real vendors created in Vendor Master (like Rajesh)
   const mergedBids = React.useMemo(() => {
-    const list = [...bids];
+    const list = bids.map((b) => ({ ...b, isFromDb: false }));
 
     if (dbVendors && dbVendors.length > 0) {
       dbVendors.forEach((v) => {
@@ -615,6 +617,7 @@ export default function VendorPortalPage() {
               notes: v.contact_email ? `Sub-reseller supplier rate. Contact: ${v.contact_email}` : "Registered Sub-reseller supplier.",
               updatedAt: new Date().toISOString().split("T")[0],
               supportContact: v.contact_email || undefined,
+              isFromDb: true,
             });
           }
 
@@ -633,6 +636,7 @@ export default function VendorPortalPage() {
               notes: v.contact_email ? `Contact: ${v.contact_email}` : "Registered Sub-reseller supplier.",
               updatedAt: new Date().toISOString().split("T")[0],
               supportContact: v.contact_email || undefined,
+              isFromDb: true,
             });
           }
         }
@@ -659,11 +663,19 @@ export default function VendorPortalPage() {
     return ["All", ...list];
   }, [mergedBids]);
 
-  // Filtered Bids
+  // Filtered Bids by SKU and Source Filter
   const filteredBids = React.useMemo(() => {
-    if (selectedSku === "All") return mergedBids;
-    return mergedBids.filter((b) => b.productSku === selectedSku);
-  }, [mergedBids, selectedSku]);
+    let list = mergedBids;
+    if (vendorSourceFilter === "dbOnly") {
+      list = list.filter((b) => b.isFromDb);
+    } else if (vendorSourceFilter === "benchmarks") {
+      list = list.filter((b) => !b.isFromDb);
+    }
+    if (selectedSku !== "All") {
+      list = list.filter((b) => b.productSku === selectedSku);
+    }
+    return list;
+  }, [mergedBids, selectedSku, vendorSourceFilter]);
 
   // Handle Add New Vendor Rate Quote
   const handleAddBid = (e: React.FormEvent) => {
@@ -962,30 +974,73 @@ export default function VendorPortalPage() {
       {/* ── TAB 1: Wholesale Rate Comparison & Bids Matrix ───────────────── */}
       {activeTab === "comparison" && (
         <div className="space-y-4">
-          {/* SKU Filter Bar */}
+          {/* SKU & Source Filter Bar */}
           <div className="flex items-center justify-between flex-wrap gap-3 bg-paper p-3 border border-hairline rounded-xl shadow-2xs">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-ink-3 uppercase tracking-wider">Filter Product SKU:</span>
-              <div className="flex flex-wrap gap-1.5">
-                {skus.map((sku) => (
-                  <button
-                    key={sku}
-                    type="button"
-                    onClick={() => setSelectedSku(sku)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      selectedSku === sku
-                        ? "bg-amber text-paper font-bold shadow-2xs"
-                        : "bg-paper-2 text-ink-3 hover:text-ink"
-                    }`}
-                  >
-                    {sku}
-                  </button>
-                ))}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Source Filter Group */}
+              <div className="flex items-center gap-1 bg-paper-2 p-1 rounded-lg border border-hairline">
+                <button
+                  type="button"
+                  onClick={() => setVendorSourceFilter("all")}
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    vendorSourceFilter === "all"
+                      ? "bg-paper text-primary shadow-2xs font-extrabold"
+                      : "text-ink-3 hover:text-ink"
+                  }`}
+                >
+                  All Vendors ({mergedBids.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVendorSourceFilter("dbOnly")}
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    vendorSourceFilter === "dbOnly"
+                      ? "bg-primary text-white shadow-2xs font-extrabold"
+                      : "text-ink-3 hover:text-ink"
+                  }`}
+                >
+                  <span>🏛️ My Vendors Master</span>
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-white/20 text-white font-mono font-bold">
+                    {mergedBids.filter((b) => b.isFromDb).length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVendorSourceFilter("benchmarks")}
+                  className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    vendorSourceFilter === "benchmarks"
+                      ? "bg-paper text-ink font-extrabold shadow-2xs"
+                      : "text-ink-3 hover:text-ink"
+                  }`}
+                >
+                  🌐 Tier-1 CSP Benchmarks ({mergedBids.filter((b) => !b.isFromDb).length})
+                </button>
+              </div>
+
+              {/* SKU Filter Group */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-ink-3 uppercase tracking-wider">SKU:</span>
+                <div className="flex flex-wrap gap-1">
+                  {skus.map((sku) => (
+                    <button
+                      key={sku}
+                      type="button"
+                      onClick={() => setSelectedSku(sku)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        selectedSku === sku
+                          ? "bg-amber text-paper font-bold shadow-2xs"
+                          : "bg-paper-2 text-ink-3 hover:text-ink"
+                      }`}
+                    >
+                      {sku}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="text-xs text-ink-3">
-              Showing <b>{filteredBids.length}</b> vendor rate bids
+            <div className="text-xs text-ink-3 font-semibold">
+              Showing <b>{filteredBids.length}</b> rate bids
             </div>
           </div>
 
@@ -1004,9 +1059,22 @@ export default function VendorPortalPage() {
                 {bid.isBestValue && (
                   <div className="absolute -top-3 right-4 bg-amber-500 text-white font-bold text-[10px] uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs flex items-center gap-1">
                     <Icon name="award" size={12} />
-                    <span>🏆 Best Price & Margin Deal</span>
+                    <span>Best Price & Margin Deal</span>
                   </div>
                 )}
+
+                {/* Source Badge */}
+                <div className="flex items-center justify-between pt-1">
+                  {bid.isFromDb ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-soft text-primary border border-primary/20">
+                      🏛️ Vendors Master
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-paper-2 text-ink-3 border border-hairline">
+                      🌐 CSP Benchmark Rate
+                    </span>
+                  )}
+                </div>
 
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
