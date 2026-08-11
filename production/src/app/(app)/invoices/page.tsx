@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
+import { getInvoiceWhatsAppUrl } from "@/lib/whatsapp";
 import type { Invoice, Payment } from "@/lib/supabase/database.types";
 
 const INV_COL_ORDER = ["select", "invoice", "customer", "date", "due", "amount", "status", "action"];
@@ -817,8 +818,11 @@ function InvoiceRow({
                     <Icon name="rupee" size={15} /> Record payment
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    className="gap-2.5 py-2 cursor-pointer"
-                    onClick={() => setPreviewOpen(true)}
+                    className="gap-2.5 py-2 cursor-pointer font-medium text-emerald"
+                    onClick={() => {
+                      const url = getInvoiceWhatsAppUrl(inv);
+                      window.open(url, "_blank");
+                    }}
                   >
                     <Icon name="whatsapp" size={15} /> Send / remind on WhatsApp
                   </DropdownMenuItem>
