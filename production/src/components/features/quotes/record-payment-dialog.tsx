@@ -12,6 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { FeedbackDialog } from "@/components/shared/feedback-dialog";
 
 import {
   Sheet,
@@ -557,23 +558,84 @@ export function RecordPaymentDialog({
     onError: (err) => toast.error((err as Error).message),
   });
 
+  const [drawerWidth, setDrawerWidth] = React.useState<number>(640);
+  const [resizing, setResizing] = React.useState(false);
+  const [reportBugOpen, setReportBugOpen] = React.useState(false);
+  const resizeRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setResizing(true);
+    resizeRef.current = { startX: e.clientX, startWidth: drawerWidth };
+  };
+
+  React.useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const dx = resizeRef.current.startX - e.clientX;
+      const newWidth = Math.max(420, Math.min(1200, resizeRef.current.startWidth + dx));
+      setDrawerWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setResizing(false);
+      resizeRef.current = null;
+    };
+
+    if (resizing) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [resizing]);
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-[640px] md:max-w-[780px] lg:max-w-[880px] p-0 flex flex-col overflow-x-hidden shadow-2xl"
-      >
-        <SheetHeader>
-          <SheetTitle>
-            {hasPriorPayments ? "Record additional payment" : "Record payment received"}
-          </SheetTitle>
-          <SheetDescription>
-            Log a payment against quote <span className="font-mono font-semibold">{quoteId}</span> from <b>{customerName}</b>.
-            {hasPriorPayments
-              ? " Multiple payments are supported (installments / partial)."
-              : " You can record more payments later if it's paid in installments."}
-          </SheetDescription>
-        </SheetHeader>
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent
+          side="right"
+          style={{ width: `${drawerWidth}px`, maxWidth: "95vw" }}
+          className="w-full sm:max-w-none p-0 flex flex-col overflow-x-hidden shadow-2xl relative select-none-children"
+        >
+          {/* ↔️ Horizontal Drag Handle on Left Edge to resize panel width */}
+          <div
+            onMouseDown={handleResizeStart}
+            title="↔️ Click and drag left/right to resize panel width"
+            className={`absolute left-0 top-0 bottom-0 w-3.5 cursor-ew-resize hover:bg-primary/20 z-50 flex items-center justify-center group transition-colors ${
+              resizing ? "bg-primary/30" : "bg-transparent"
+            }`}
+          >
+            <div className="w-1.5 h-16 bg-hairline-strong rounded-full group-hover:bg-primary transition-colors shadow-xs" />
+          </div>
+
+          <SheetHeader className="pr-12 pt-4 px-6 pb-3 border-b border-hairline bg-paper-2/40">
+            <div className="flex items-center justify-between gap-3">
+              <SheetTitle>
+                {hasPriorPayments ? "Record additional payment" : "Record payment received"}
+              </SheetTitle>
+
+              {/* 🐛 Top Header Report Bug Button inside Slider Panel */}
+              <button
+                type="button"
+                onClick={() => setReportBugOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-full shadow-2xs transition-all hover:scale-105"
+                title="Report Bug / Issue on this Record Payment drawer"
+              >
+                <Icon name="bug" size={14} />
+                <span>Report Bug</span>
+              </button>
+            </div>
+
+            <SheetDescription className="mt-1">
+              Log a payment against quote <span className="font-mono font-semibold">{quoteId}</span> from <b>{customerName}</b>.
+              {hasPriorPayments
+                ? " Multiple payments are supported (installments / partial)."
+                : " You can record more payments later if it's paid in installments."}
+            </SheetDescription>
+          </SheetHeader>
 
         <form
           onSubmit={handleSubmit((data) => recordPayment.mutate(data))}
@@ -978,5 +1040,7 @@ export function RecordPaymentDialog({
         </form>
       </SheetContent>
     </Sheet>
+    <FeedbackDialog open={reportBugOpen} onOpenChange={setReportBugOpen} />
+  </>
   );
 }
