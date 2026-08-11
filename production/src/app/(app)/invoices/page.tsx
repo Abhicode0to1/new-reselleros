@@ -804,6 +804,7 @@ function InvoiceRow({
   /** Invoice came from a project milestone (vs a subscription quote). */
   isProject?: boolean;
 }) {
+  const router = useRouter();
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const [delOpen, setDelOpen] = React.useState(false);
   const [payOpen, setPayOpen] = React.useState(false);
@@ -941,6 +942,24 @@ function InvoiceRow({
               <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setPreviewOpen(true)}>
                 <Icon name="file" size={15} /> View / download PDF
               </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2.5 py-2 cursor-pointer"
+                onClick={() => {
+                  const url = `${window.location.origin}/invoices?open=${inv.id}`;
+                  navigator.clipboard.writeText(url);
+                  toast.success("Invoice link copied to clipboard!");
+                }}
+              >
+                <Icon name="link" size={15} /> Copy invoice link
+              </DropdownMenuItem>
+              {inv.quote_id && (
+                <DropdownMenuItem
+                  className="gap-2.5 py-2 cursor-pointer"
+                  onClick={() => router.push(`/quotes/${inv.quote_id}` as any)}
+                >
+                  <Icon name="edit" size={15} /> Edit underlying quote
+                </DropdownMenuItem>
+              )}
               {moneyDue && (
                 <>
                   <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => (isProject ? setPayOpen(true) : setSubPayOpen(true))}>
