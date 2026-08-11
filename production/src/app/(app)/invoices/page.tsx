@@ -68,12 +68,13 @@ function InvoicesPageInner() {
   const { data: projectInvoiceIds } = useProjectInvoiceIds();
   const { data: pending } = useQuotesAwaitingInvoice();
   const generateInvoice = useGenerateInvoice();
-  const [tab, setTab] = React.useState("all");
-  const [search, setSearch] = React.useState("");
   // Combined by default — Subscription & Project invoices live in one list
   // (each row carries a Type badge). The tabs below are just an optional filter.
   const [view, setView] = React.useState<"all" | "subscription" | "project">("all");
+  const [tab, setTab]           = React.useState<string>("all");
+  const [search, setSearch]     = React.useState<string>("");
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [pendingOpen, setPendingOpen] = React.useState<boolean>(false);
 
   const isProjectInv = React.useCallback((id: string) => projectInvoiceIds?.has(id) ?? false, [projectInvoiceIds]);
   const viewInvoices = React.useMemo(
@@ -275,177 +276,201 @@ function InvoicesPageInner() {
         };
 
         return (
-          <Card className="mb-6 border-amber/40 bg-amber-soft/30">
-            <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-              <div className="flex items-center gap-2.5">
-                <Icon name="receipt" size={18} className="text-amber-ink" />
-                <div>
-                  <h2 className="font-semibold text-ink">Pending GST invoice generation</h2>
-                  <p className="text-xs text-ink-3">
-                    {pending.length} quote{pending.length === 1 ? "" : "s"} ·{" "}
-                    {pending.filter((q: any) => q.payment_status === "partial").length} partially paid ·{" "}
-                    {rupee(totalAmt)} total · invoice mandatory within 30 days of first advance (CGST §13, Rule 47)
+          <Card className="mb-4 border-amber/40 bg-amber-soft/20 p-3 overflow-hidden transition-all">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setPendingOpen((o) => !o)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPendingOpen((o) => !o); } }}
+              className="flex items-center justify-between gap-3 cursor-pointer select-none"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Icon name="receipt" size={16} className="text-amber-ink shrink-0" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="font-semibold text-xs text-ink truncate">Pending GST invoice generation</h2>
+                    <Badge kind="warning" size="sm" dot>
+                      {pending.length} quote{pending.length === 1 ? "" : "s"} ({rupee(totalAmt)})
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-ink-3 truncate hidden sm:block">
+                    Invoice mandatory within 30 days of first advance (CGST §13, Rule 47)
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {pendingSelected.size > 0 && (
                   <Button
+                    size="sm"
                     variant="primary"
                     icon="receipt"
                     loading={generating}
-                    onClick={generateSelected}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      generateSelected();
+                    }}
                   >
-                    Generate {pendingSelected.size} invoice{pendingSelected.size === 1 ? "" : "s"}
+                    Generate {pendingSelected.size}
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-amber-ink gap-1 text-xs px-2 h-7"
+                >
+                  <span>{pendingOpen ? "Collapse" : "Expand"}</span>
+                  <Icon name={pendingOpen ? "chevron_up" : "chevron_down"} size={14} />
+                </Button>
               </div>
             </div>
 
-            {/* Aging buckets — 30-day GST clock (Rule 47) */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-              <BucketTile label="0–15 days · fresh"      count={buckets.fresh.length}   amount={sumAmt(buckets.fresh)}   tone="emerald" />
-              <BucketTile label="16–30 days · issue soon" count={buckets.warn.length}    amount={sumAmt(buckets.warn)}    tone="amber" />
-              <BucketTile label="31–60 days · overdue"   count={buckets.urgent.length}  amount={sumAmt(buckets.urgent)}  tone="rose-soft" />
-              <BucketTile label="60+ days · audit risk"  count={buckets.overdue.length} amount={sumAmt(buckets.overdue)} tone="rose" />
-            </div>
+            {pendingOpen && (
+              <div className="mt-3 pt-3 border-t border-hairline/60">
+                {/* Aging buckets — 30-day GST clock (Rule 47) */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                  <BucketTile label="0–15 days · fresh"      count={buckets.fresh.length}   amount={sumAmt(buckets.fresh)}   tone="emerald" />
+                  <BucketTile label="16–30 days · issue soon" count={buckets.warn.length}    amount={sumAmt(buckets.warn)}    tone="amber" />
+                  <BucketTile label="31–60 days · overdue"   count={buckets.urgent.length}  amount={sumAmt(buckets.urgent)}  tone="rose-soft" />
+                  <BucketTile label="60+ days · audit risk"  count={buckets.overdue.length} amount={sumAmt(buckets.overdue)} tone="rose" />
+                </div>
 
-            {/* Mobile card list — phones only. Keeps the primary "Generate"
-                action; bulk-select stays a desktop power feature. */}
-            <ul className="md:hidden space-y-2">
-              {pending.map((q: any) => {
-                const anchor = q.first_advance_at ?? q.payment_received_at;
-                const days = anchor ? Math.floor((now - new Date(anchor).getTime()) / 86400000) : 0;
-                const ageKind: "emerald" | "amber" | "rose" = days <= 15 ? "emerald" : days <= 30 ? "amber" : "rose";
-                const isPartial = q.payment_status === "partial";
-                return (
-                  <li key={q.id} className="rounded-lg border border-hairline bg-paper p-3">
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="min-w-0 flex-1">
-                        <Link href={`/quotes/${q.id}` as any} className="font-mono text-xs font-semibold text-ink hover:text-amber-ink hover:underline block truncate">{q.id}</Link>
-                        <p className="text-sm text-ink truncate mt-0.5">{q.customer_name}</p>
-                        <p className="text-[11px] text-ink-3 mt-0.5">First advance {anchor ? formatDate(anchor) : "—"}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-serif text-base tabular-nums text-ink">{rupee(q.amount ?? 0)}</p>
-                        {isPartial && q.payment_amount != null && (
-                          <p className="text-[10px] text-amber-ink mt-0.5">{rupee(q.payment_amount)} received</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-hairline/60">
-                      <div className="flex items-center gap-1.5">
-                        {isPartial ? <Badge kind="info" size="sm" dot>Partial</Badge> : <Badge kind="success" size="sm" dot>Fully paid</Badge>}
-                        <Badge kind={ageKind === "rose" ? "danger" : ageKind === "amber" ? "warning" : "success"} size="sm" dot>{days}d ago</Badge>
-                      </div>
-                      <Button size="sm" variant="primary" icon="receipt" loading={generateInvoice.isPending} onClick={() => generateInvoice.mutate(q.id)}>
-                        Generate
-                      </Button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {/* Table of pending quotes */}
-            <div className="hidden md:block rounded-md border border-hairline bg-paper overflow-auto max-h-[calc(100vh-15rem)]">
-              <table className="w-full">
-                <thead className="sticky top-0 z-10 bg-paper-2 border-b border-hairline">
-                  <tr>
-                    <th className="p-2 w-10">
-                      <input
-                        type="checkbox"
-                        checked={pendingSelected.size === pending.length && pending.length > 0}
-                        onChange={toggleAllPending}
-                        className="w-3.5 h-3.5 accent-amber cursor-pointer"
-                        aria-label="Select all pending"
-                      />
-                    </th>
-                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Quote</th>
-                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Customer</th>
-                    <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Amount</th>
-                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Payment</th>
-                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">First advance</th>
-                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Aging</th>
-                    <th className="w-32"></th>
-                  </tr>
-                </thead>
-                <tbody>
+                {/* Mobile card list — phones only. Keeps the primary "Generate"
+                    action; bulk-select stays a desktop power feature. */}
+                <ul className="md:hidden space-y-2">
                   {pending.map((q: any) => {
-                    // Legal aging anchor — first advance receipt date (Sec 13(2))
                     const anchor = q.first_advance_at ?? q.payment_received_at;
-                    const days = anchor
-                      ? Math.floor((now - new Date(anchor).getTime()) / 86400000)
-                      : 0;
-                    const ageKind: "emerald" | "amber" | "rose" =
-                      days <= 15 ? "emerald" : days <= 30 ? "amber" : "rose";
-                    const isSel = pendingSelected.has(q.id);
+                    const days = anchor ? Math.floor((now - new Date(anchor).getTime()) / 86400000) : 0;
+                    const ageKind: "emerald" | "amber" | "rose" = days <= 15 ? "emerald" : days <= 30 ? "amber" : "rose";
                     const isPartial = q.payment_status === "partial";
                     return (
-                      <tr
-                        key={q.id}
-                        className={`border-b border-hairline last:border-0 hover:bg-paper-2/30 ${
-                          isSel ? "bg-amber-soft/30" : ""
-                        }`}
-                      >
-                        <td className="p-2">
-                          <input
-                            type="checkbox"
-                            checked={isSel}
-                            onChange={() => togglePending(q.id)}
-                            className="w-3.5 h-3.5 accent-amber cursor-pointer"
-                            aria-label={`Select ${q.id}`}
-                          />
-                        </td>
-                        <td className="p-2">
-                          <Link
-                            href={`/quotes/${q.id}` as any}
-                            className="font-mono text-xs font-semibold text-ink hover:text-amber-ink hover:underline"
-                          >
-                            {q.id}
-                          </Link>
-                        </td>
-                        <td className="p-2 text-sm">{q.customer_name}</td>
-                        <td className="p-2 text-right tabular-nums text-sm font-medium">
-                          {rupee(q.amount ?? 0)}
-                          {isPartial && q.payment_amount != null && (
-                            <div className="text-[10px] text-amber-ink mt-0.5">
-                              {rupee(q.payment_amount)} received
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-2">
-                          {isPartial ? (
-                            <Badge kind="info" dot>Partial</Badge>
-                          ) : (
-                            <Badge kind="success" dot>Fully paid</Badge>
-                          )}
-                        </td>
-                        <td className="p-2 text-xs text-ink-2">
-                          {anchor ? formatDate(anchor) : "—"}
-                        </td>
-                        <td className="p-2">
-                          <Badge kind={ageKind === "rose" ? "danger" : ageKind === "amber" ? "warning" : "success"} dot>
-                            {days}d ago
-                          </Badge>
-                        </td>
-                        <td className="p-2 text-right">
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            icon="receipt"
-                            loading={generateInvoice.isPending}
-                            onClick={() => generateInvoice.mutate(q.id)}
-                          >
+                      <li key={q.id} className="rounded-lg border border-hairline bg-paper p-3">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="min-w-0 flex-1">
+                            <Link href={`/quotes/${q.id}` as any} className="font-mono text-xs font-semibold text-ink hover:text-amber-ink hover:underline block truncate">{q.id}</Link>
+                            <p className="text-sm text-ink truncate mt-0.5">{q.customer_name}</p>
+                            <p className="text-[11px] text-ink-3 mt-0.5">First advance {anchor ? formatDate(anchor) : "—"}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-serif text-base tabular-nums text-ink">{rupee(q.amount ?? 0)}</p>
+                            {isPartial && q.payment_amount != null && (
+                              <p className="text-[10px] text-amber-ink mt-0.5">{rupee(q.payment_amount)} received</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-hairline/60">
+                          <div className="flex items-center gap-1.5">
+                            {isPartial ? <Badge kind="info" size="sm" dot>Partial</Badge> : <Badge kind="success" size="sm" dot>Fully paid</Badge>}
+                            <Badge kind={ageKind === "rose" ? "danger" : ageKind === "amber" ? "warning" : "success"} size="sm" dot>{days}d ago</Badge>
+                          </div>
+                          <Button size="sm" variant="primary" icon="receipt" loading={generateInvoice.isPending} onClick={() => generateInvoice.mutate(q.id)}>
                             Generate
                           </Button>
-                        </td>
-                      </tr>
+                        </div>
+                      </li>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
+                </ul>
+
+                {/* Table of pending quotes */}
+                <div className="hidden md:block rounded-md border border-hairline bg-paper overflow-auto max-h-[calc(100vh-15rem)]">
+                  <table className="w-full">
+                    <thead className="sticky top-0 z-10 bg-paper-2 border-b border-hairline">
+                      <tr>
+                        <th className="p-2 w-10">
+                          <input
+                            type="checkbox"
+                            checked={pendingSelected.size === pending.length && pending.length > 0}
+                            onChange={toggleAllPending}
+                            className="w-3.5 h-3.5 accent-amber cursor-pointer"
+                            aria-label="Select all pending"
+                          />
+                        </th>
+                        <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Quote</th>
+                        <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Customer</th>
+                        <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Amount</th>
+                        <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Payment</th>
+                        <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">First advance</th>
+                        <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Aging</th>
+                        <th className="w-32"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pending.map((q: any) => {
+                        const anchor = q.first_advance_at ?? q.payment_received_at;
+                        const days = anchor
+                          ? Math.floor((now - new Date(anchor).getTime()) / 86400000)
+                          : 0;
+                        const ageKind: "emerald" | "amber" | "rose" =
+                          days <= 15 ? "emerald" : days <= 30 ? "amber" : "rose";
+                        const isSel = pendingSelected.has(q.id);
+                        const isPartial = q.payment_status === "partial";
+                        return (
+                          <tr
+                            key={q.id}
+                            className={`border-b border-hairline last:border-0 hover:bg-paper-2/30 ${
+                              isSel ? "bg-amber-soft/30" : ""
+                            }`}
+                          >
+                            <td className="p-2">
+                              <input
+                                type="checkbox"
+                                checked={isSel}
+                                onChange={() => togglePending(q.id)}
+                                className="w-3.5 h-3.5 accent-amber cursor-pointer"
+                                aria-label={`Select ${q.id}`}
+                              />
+                            </td>
+                            <td className="p-2">
+                              <Link
+                                href={`/quotes/${q.id}` as any}
+                                className="font-mono text-xs font-semibold text-ink hover:text-amber-ink hover:underline"
+                              >
+                                {q.id}
+                              </Link>
+                            </td>
+                            <td className="p-2 text-sm">{q.customer_name}</td>
+                            <td className="p-2 text-right tabular-nums text-sm font-medium">
+                              {rupee(q.amount ?? 0)}
+                              {isPartial && q.payment_amount != null && (
+                                <div className="text-[10px] text-amber-ink mt-0.5">
+                                  {rupee(q.payment_amount)} received
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-2">
+                              {isPartial ? (
+                                <Badge kind="info" dot>Partial</Badge>
+                              ) : (
+                                <Badge kind="success" dot>Fully paid</Badge>
+                              )}
+                            </td>
+                            <td className="p-2 text-xs text-ink-2">
+                              {anchor ? formatDate(anchor) : "—"}
+                            </td>
+                            <td className="p-2">
+                              <Badge kind={ageKind === "rose" ? "danger" : ageKind === "amber" ? "warning" : "success"} dot>
+                                {days}d ago
+                              </Badge>
+                            </td>
+                            <td className="p-2 text-right">
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                icon="receipt"
+                                loading={generateInvoice.isPending}
+                                onClick={() => generateInvoice.mutate(q.id)}
+                              >
+                                Generate
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </Card>
         );
       })()}
