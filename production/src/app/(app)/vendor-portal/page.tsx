@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { rupee, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
-import { useVendors, useUpsertVendor } from "@/lib/queries/vendors";
+import { useVendors, useUpsertVendor, useDeleteVendor } from "@/lib/queries/vendors";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1597,12 +1597,15 @@ export default function VendorPortalPage() {
   };
 
   const upsertVendor = useUpsertVendor();
+  const deleteVendor = useDeleteVendor();
 
   // Save Edited Vendor Bid & Rate (Persisted to Supabase Database)
   const handleSaveEditedBid = async (updated: VendorBid, removed?: boolean) => {
     setBids((prev) => {
       if (removed) {
-        return prev.filter((b) => b.id !== updated.id);
+        return prev.filter(
+          (b) => b.id !== updated.id && b.vendorName.toLowerCase() !== updated.vendorName.toLowerCase()
+        );
       }
       const exists = prev.some((b) => b.id === updated.id);
       if (exists) {
@@ -1619,7 +1622,16 @@ export default function VendorPortalPage() {
         updated.id.includes(v.id)
     );
 
-    if (targetDbVendor || updated.isFromDb) {
+    if (removed) {
+      if (targetDbVendor?.id) {
+        try {
+          await deleteVendor.mutateAsync(targetDbVendor.id);
+        } catch (err) {
+          console.error("Supabase vendor delete sync error:", err);
+        }
+      }
+      toast.success(`Deleted vendor ${updated.vendorName} permanently from Vendors Master!`);
+    } else if (targetDbVendor || updated.isFromDb) {
       try {
         await upsertVendor.mutateAsync({
           id: targetDbVendor?.id,
@@ -1627,15 +1639,10 @@ export default function VendorPortalPage() {
           notes: updated.notes || targetDbVendor?.notes || undefined,
           contactEmail: updated.supportContact || targetDbVendor?.contact_email || undefined,
         });
+        toast.success(`Saved card & updated rates for ${updated.vendorName} permanently!`);
       } catch (err) {
         console.error("Supabase vendor update sync error:", err);
       }
-    }
-
-    if (removed) {
-      toast.success(`Removed ${updated.vendorName} from active rate cards.`);
-    } else {
-      toast.success(`Saved card & updated rates for ${updated.vendorName} permanently!`);
     }
   };
 
@@ -2117,21 +2124,34 @@ export default function VendorPortalPage() {
                     <span className="text-[10px] text-ink-3">Updated {bid.updatedAt}</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-1.5">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setEditingBid(bid)}
-                      className="text-xs font-semibold text-ink w-full justify-center"
+                      className="text-xs font-semibold text-ink flex-1 justify-center"
                     >
-                      ✏️ Edit Card
+                      ✏️ Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to delete vendor "${bid.vendorName}"? This will permanently delete them from Vendors Master.`)) {
+                          handleSaveEditedBid(bid, true);
+                        }
+                      }}
+                      className="text-xs font-semibold text-rose-600 hover:bg-rose-50 border-rose-200 justify-center px-2 shrink-0"
+                      title="Delete Vendor"
+                    >
+                      🗑️
                     </Button>
                     <Button
                       variant={bid.isBestValue ? "primary" : "outline"}
                       size="sm"
                       icon="cart"
                       onClick={() => handlePlacePo(bid)}
-                      className="text-xs font-bold w-full justify-center"
+                      className="text-xs font-bold flex-1 justify-center"
                     >
                       Place PO
                     </Button>
