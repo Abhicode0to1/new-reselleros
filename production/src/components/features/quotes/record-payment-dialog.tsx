@@ -34,18 +34,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { createClient } from "@/lib/supabase/client";
-import { rupee, bankLabel } from "@/lib/utils";
+import { rupee } from "@/lib/utils";
 import { fiscalYearFromDate, TDS_SECTIONS } from "@/lib/queries/tds-receivable";
-import { useBankAccounts } from "@/lib/queries/bank";
-
-const METHODS = [
-  { value: "upi",           label: "UPI (Google Pay / PhonePe / Paytm)" },
-  { value: "razorpay",      label: "Razorpay (online)" },
-  { value: "bank_transfer", label: "Bank transfer (NEFT/RTGS/IMPS)" },
-  { value: "cheque",        label: "Cheque" },
-  { value: "cash",          label: "Cash" },
-  { value: "other",         label: "Other" },
-] as const;
 
 const schema = z.object({
   amount:       z.coerce.number().int().min(1, "Amount received required"),
@@ -129,7 +119,6 @@ export function RecordPaymentDialog({
   // Optional proof-of-payment file (screenshot / PDF). Uploaded best-effort
   // AFTER record_payment succeeds, so it never blocks the money.
   const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
-  const { data: bankAccounts } = useBankAccounts();
 
   const remaining = Math.max(0, expectedAmount - alreadyReceived);
   const hasPriorPayments = alreadyReceived > 0;
@@ -693,28 +682,69 @@ export function RecordPaymentDialog({
             />
           </FormField>
 
-          <FormField label="Payment method" required htmlFor="method">
+          {/* ── Unified Payment Mode & Target Account Selector ────── */}
+          <FormField label="Deposit To (Payment Mode & Target Account)" required htmlFor="paymentAccountPreset">
             <Select
-              value={method}
-              onValueChange={(v) => {
-                setMethod(v);
-                (register("method") as any).onChange({ target: { value: v, name: "method" } });
+              value={
+                method === "upi" ? "upi_hdfc" :
+                method === "razorpay" ? "razorpay" :
+                method === "bank_transfer" && bankAccountId === "icici_corp" ? "bank_icici" :
+                method === "bank_transfer" ? "bank_hdfc" :
+                method === "cash" ? "cash" :
+                method === "cheque" ? "cheque" : "other"
+              }
+              onValueChange={(val) => {
+                if (val === "upi_hdfc") {
+                  setMethod("upi");
+                  setBankAccountId("hdfc_primary");
+                  setValue("method", "upi");
+                } else if (val === "razorpay") {
+                  setMethod("razorpay");
+                  setBankAccountId("razorpay_gateway");
+                  setValue("method", "razorpay");
+                } else if (val === "bank_hdfc") {
+                  setMethod("bank_transfer");
+                  setBankAccountId("hdfc_primary");
+                  setValue("method", "bank_transfer");
+                } else if (val === "bank_icici") {
+                  setMethod("bank_transfer");
+                  setBankAccountId("icici_corp");
+                  setValue("method", "bank_transfer");
+                } else if (val === "cash") {
+                  setMethod("cash");
+                  setBankAccountId("cash_box");
+                  setValue("method", "cash");
+                } else if (val === "cheque") {
+                  setMethod("cheque");
+                  setBankAccountId("hdfc_primary");
+                  setValue("method", "cheque");
+                } else {
+                  setMethod("other");
+                  setBankAccountId("");
+                  setValue("method", "other");
+                }
               }}
             >
-              <SelectTrigger id="method">
+              <SelectTrigger id="paymentAccountPreset">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {METHODS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
+                <SelectItem value="upi_hdfc">🏦 HDFC Bank — Direct UPI / QR Code</SelectItem>
+                <SelectItem value="razorpay">💳 Razorpay — Online Payment Gateway</SelectItem>
+                <SelectItem value="bank_hdfc">🏦 HDFC Bank — Bank Transfer (NEFT/RTGS/IMPS)</SelectItem>
+                <SelectItem value="bank_icici">🏦 ICICI Bank — Corporate Account</SelectItem>
+                <SelectItem value="cash">💵 Cash in Hand</SelectItem>
+                <SelectItem value="cheque">📝 Cheque Payment</SelectItem>
+                <SelectItem value="other">🌐 Other Payment Account</SelectItem>
               </SelectContent>
             </Select>
             <input type="hidden" {...register("method")} value={method} />
+            <p className="text-[11px] text-ink-3 mt-1">
+              Selects the payment mode and destination account in 1 click (e.g. HDFC Bank UPI).
+            </p>
           </FormField>
 
+          {/* Payment Received Date */}
           <FormField label="Payment Received Date" required htmlFor="receivedDate">
             <Input
               id="receivedDate"
@@ -724,38 +754,27 @@ export function RecordPaymentDialog({
             />
           </FormField>
 
-          <FormField label="Received In (Bank / Target Account)" required htmlFor="bankAccount">
-            <Select value={bankAccountId || "hdfc_primary"} onValueChange={(v) => setBankAccountId(v)}>
-              <SelectTrigger id="bankAccount">
-                <SelectValue placeholder="Select Bank Account" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="hdfc_primary">HDFC Bank · Current Account (Primary)</SelectItem>
-                <SelectItem value="icici_corp">ICICI Bank · Corporate Account</SelectItem>
-                <SelectItem value="razorpay_gateway">Razorpay · Online Payment Gateway</SelectItem>
-                <SelectItem value="upi_direct">UPI Direct (Google Pay / Paytm / PhonePe)</SelectItem>
-                <SelectItem value="cash_box">Cash in Hand</SelectItem>
-                {(bankAccounts ?? []).map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name} · {bankLabel(a.bank_name, a.account_number_last4)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[11px] text-ink-3 mt-1">
-              Select which bank account or payment gateway received this transaction.
-            </p>
-          </FormField>
-
-          <FormField label="Transaction reference" required htmlFor="reference">
+          {/* Transaction Reference Number */}
+          <FormField
+            label={
+              method === "upi" ? "UPI Transaction Ref ID (12 digits)" :
+              method === "razorpay" ? "Razorpay Payment ID" :
+              method === "bank_transfer" ? "Bank UTR / Transaction No." :
+              method === "cheque" ? "Cheque Number (6 digits)" :
+              method === "cash" ? "Cash Voucher / Receipt Ref" :
+              "Transaction Reference"
+            }
+            required
+            htmlFor="reference"
+          >
             <Input
               id="reference"
               placeholder={
-                method === "upi" ? "UPI Ref ID (e.g., 4xxxxxxxxxxx)" :
-                method === "razorpay" ? "pay_xxxxxxxxxxxxxx" :
-                method === "bank_transfer" ? "UTR / Bank reference" :
-                method === "cheque" ? "Cheque number" :
-                "Reference number"
+                method === "upi" ? "e.g. 402312345678" :
+                method === "razorpay" ? "e.g. pay_N12345678" :
+                method === "bank_transfer" ? "e.g. UTR123456789" :
+                method === "cheque" ? "e.g. 000123" :
+                "e.g. Cash Receipt #102"
               }
               error={errors.reference?.message}
               {...register("reference")}
