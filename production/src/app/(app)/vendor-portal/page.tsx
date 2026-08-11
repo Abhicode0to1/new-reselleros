@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { rupee, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
-import { useVendors } from "@/lib/queries/vendors";
+import { useVendors, useUpsertVendor } from "@/lib/queries/vendors";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -738,9 +738,14 @@ export default function VendorPortalPage() {
     toast.success(`Winning bid accepted for ${rfq.rfqCode}! Purchase Order generated.`);
   };
 
-  // Save Edited Vendor Bid & Rate
-  const handleSaveEditedBid = (updated: VendorBid) => {
+  const upsertVendor = useUpsertVendor();
+
+  // Save Edited Vendor Bid & Rate (Persisted to Supabase Database)
+  const handleSaveEditedBid = async (updated: VendorBid, removed?: boolean) => {
     setBids((prev) => {
+      if (removed) {
+        return prev.filter((b) => b.id !== updated.id);
+      }
       const exists = prev.some((b) => b.id === updated.id);
       if (exists) {
         return prev.map((b) => (b.id === updated.id ? updated : b));
@@ -748,7 +753,32 @@ export default function VendorPortalPage() {
         return [updated, ...prev];
       }
     });
-    toast.success(`Updated wholesale rate & products for ${updated.vendorName}!`);
+
+    // Persist changes to Supabase vendors table
+    const targetDbVendor = dbVendors?.find(
+      (v) =>
+        v.name.toLowerCase() === updated.vendorName.toLowerCase() ||
+        updated.id.includes(v.id)
+    );
+
+    if (targetDbVendor || updated.isFromDb) {
+      try {
+        await upsertVendor.mutateAsync({
+          id: targetDbVendor?.id,
+          name: updated.vendorName,
+          notes: updated.notes || targetDbVendor?.notes || null,
+          contactEmail: updated.supportContact || targetDbVendor?.contact_email || null,
+        });
+      } catch (err) {
+        console.error("Supabase vendor update sync error:", err);
+      }
+    }
+
+    if (removed) {
+      toast.success(`Removed ${updated.vendorName} from active rate cards.`);
+    } else {
+      toast.success(`Saved card & updated rates for ${updated.vendorName} permanently!`);
+    }
   };
 
   // Bids for Margin Calculator
