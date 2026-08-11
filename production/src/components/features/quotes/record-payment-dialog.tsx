@@ -815,17 +815,16 @@ export function RecordPaymentDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="upi_hdfc">🏦 HDFC Bank — Direct UPI / QR Code</SelectItem>
-                <SelectItem value="razorpay">💳 Razorpay — Online Payment Gateway</SelectItem>
-                <SelectItem value="bank_hdfc">🏦 HDFC Bank — Bank Transfer (NEFT/RTGS/IMPS)</SelectItem>
-                <SelectItem value="bank_icici">🏦 ICICI Bank — Corporate Account</SelectItem>
-                <SelectItem value="cash">💵 Cash in Hand</SelectItem>
-                <SelectItem value="cheque">📝 Cheque Payment</SelectItem>
-                <SelectItem value="other">🌐 Other Payment Account</SelectItem>
+                <SelectItem value="razorpay">💳 Razorpay — Online Gateway</SelectItem>
+                <SelectItem value="bank_hdfc">🏦 HDFC Bank — Current A/c (NEFT/RTGS/IMPS)</SelectItem>
+                <SelectItem value="bank_icici">🏦 ICICI Bank — Corporate A/c (NEFT/RTGS/IMPS)</SelectItem>
+                <SelectItem value="cheque">📝 Cheque Deposit (HDFC/ICICI Clearing)</SelectItem>
+                <SelectItem value="cash">💵 Cash in Hand (Petty Cash)</SelectItem>
               </SelectContent>
             </Select>
             <input type="hidden" {...register("method")} value={method} />
             <p className="text-[11px] text-ink-3 mt-1">
-              Selects the payment mode and destination account in 1 click (e.g. HDFC Bank UPI).
+              Select company target account & payment mode in 1 click.
             </p>
           </FormField>
 
@@ -839,31 +838,40 @@ export function RecordPaymentDialog({
             />
           </FormField>
 
-          {/* Transaction Reference Number */}
+          {/* Transaction Reference Number — Dynamic prompts per payment mode */}
           <FormField
             label={
-              method === "upi" ? "UPI Transaction Ref ID (12 digits)" :
-              method === "razorpay" ? "Razorpay Payment ID" :
-              method === "bank_transfer" ? "Bank UTR / Transaction No." :
-              method === "cheque" ? "Cheque Number (6 digits)" :
-              method === "cash" ? "Cash Voucher / Receipt Ref" :
-              "Transaction Reference"
+              method === "upi" ? "UPI Transaction Ref ID (12 digits) *" :
+              method === "razorpay" ? "Razorpay Payment ID *" :
+              method === "bank_transfer" ? "Bank UTR / Transaction Ref No. *" :
+              method === "cheque" ? "Cheque No. & Issuing Bank *" :
+              method === "cash" ? "Cash Voucher / Receipt Ref (Optional)" :
+              "Transaction Reference *"
             }
-            required
+            required={method !== "cash"}
             htmlFor="reference"
           >
             <Input
               id="reference"
               placeholder={
-                method === "upi" ? "e.g. 402312345678" :
-                method === "razorpay" ? "e.g. pay_N12345678" :
-                method === "bank_transfer" ? "e.g. UTR123456789" :
-                method === "cheque" ? "e.g. 000123" :
-                "e.g. Cash Receipt #102"
+                method === "upi" ? "e.g. 402312345678 (12-digit UTR)" :
+                method === "razorpay" ? "e.g. pay_P1a2B3c4D5e6F7" :
+                method === "bank_transfer" ? "e.g. HDFCR520240811001234" :
+                method === "cheque" ? "e.g. Cheque #004521 - SBI Bank" :
+                "e.g. Cash Receipt #CR-102"
               }
               error={errors.reference?.message}
               {...register("reference")}
             />
+            <p className="text-[11px] text-ink-3 mt-1">
+              {
+                method === "upi" ? "12-digit UTR/UPI reference received on GPay, PhonePe, Paytm or HDFC QR." :
+                method === "razorpay" ? "Unique Razorpay payment ID starting with pay_." :
+                method === "bank_transfer" ? "Bank UTR or NEFT/RTGS reference number from bank statement." :
+                method === "cheque" ? "Enter 6-digit cheque number and customer's bank name for clearing." :
+                "Optional internal cash voucher or receipt reference."
+              }
+            </p>
           </FormField>
 
           {/* ── TDS section ─────────────────────────────────────────
