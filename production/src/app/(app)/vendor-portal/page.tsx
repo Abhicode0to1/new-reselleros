@@ -299,6 +299,17 @@ const VENDOR_SCORECARDS: VendorScorecard[] = [
 
 // ── Edit Vendor Card & Products Modal ───────────────────────────────────────
 
+function parseProductsFromBid(bid: VendorBid): string[] {
+  if (bid.notes) {
+    const match = bid.notes.match(/\[Supplied Products: (.*?)\]/);
+    if (match?.[1]) return match[1].split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  if (bid.productSku.includes("Google")) return ["Google Workspace & GCP"];
+  if (bid.productSku.includes("Microsoft") || bid.productSku.includes("M365")) return ["Microsoft 365 & Azure"];
+  if (bid.productSku.includes("Zoho")) return ["Zoho One & Business Apps"];
+  return ["Google Workspace & GCP"];
+}
+
 function EditVendorCardModal({
   bid,
   onClose,
@@ -306,21 +317,71 @@ function EditVendorCardModal({
 }: {
   bid: VendorBid;
   onClose: () => void;
-  onSave: (updated: VendorBid) => void;
+  onSave: (updated: VendorBid, removed?: boolean) => void;
 }) {
   const [vendorName, setVendorName] = React.useState(bid.vendorName);
+  const [selectedProducts, setSelectedProducts] = React.useState<string[]>(() => parseProductsFromBid(bid));
   const [productSku, setProductSku] = React.useState(bid.productSku);
   const [monthlyCost, setMonthlyCost] = React.useState(bid.unitCostMonthly.toString());
   const [creditDays, setCreditDays] = React.useState(bid.creditDays.toString());
   const [provisioningTime, setProvisioningTime] = React.useState(bid.provisioningTime);
-  const [notes, setNotes] = React.useState(bid.notes || "");
-  const [selectedProducts, setSelectedProducts] = React.useState<string[]>([
-    "Google Workspace & GCP",
-  ]);
+  const [notes, setNotes] = React.useState(() => {
+    if (!bid.notes) return "";
+    return bid.notes.replace(/\[Supplied Products: .*?\]/, "").trim();
+  });
+
+  // Dynamic SKUs based on selected products
+  const availableSkus = React.useMemo(() => {
+    const list: string[] = [];
+    if (selectedProducts.includes("Google Workspace & GCP")) {
+      list.push("Google Workspace Business Starter", "Google Workspace Business Standard", "Google Workspace Business Plus");
+    }
+    if (selectedProducts.includes("Microsoft 365 & Azure")) {
+      list.push("Microsoft 365 Business Basic", "Microsoft 365 Business Standard");
+    }
+    if (selectedProducts.includes("Zoho One & Business Apps")) {
+      list.push("Zoho One License");
+    }
+    if (selectedProducts.includes("AWS & Cloud Hosting")) {
+      list.push("AWS EC2 Cloud Compute", "GCP Compute Engine");
+    }
+    if (selectedProducts.includes("SSL & Domain Names")) {
+      list.push("DigiCert Wildcard SSL", "Domain Registration .com");
+    }
+    if (selectedProducts.includes("IT Hardware & Laptops")) {
+      list.push("Dell Enterprise Laptop", "Lenovo ThinkPad Server");
+    }
+    if (selectedProducts.includes("Software Services & Dev")) {
+      list.push("Software Dev Consulting (Hourly)");
+    }
+
+    if (list.length === 0) {
+      list.push("No Product Selected");
+    }
+    return list;
+  }, [selectedProducts]);
+
+  // Keep SKU in sync with available list
+  React.useEffect(() => {
+    if (availableSkus.length > 0 && !availableSkus.includes(productSku)) {
+      setProductSku(availableSkus[0]);
+    }
+  }, [availableSkus, productSku]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (selectedProducts.length === 0) {
+      // If user unselected all products, remove vendor card from rate cards
+      onSave(bid, true);
+      onClose();
+      return;
+    }
+
     const mCost = Number(monthlyCost) || 0;
+    const prodTagStr = `[Supplied Products: ${selectedProducts.join(", ")}]`;
+    const cleanNotes = notes.trim();
+    const finalNotes = [prodTagStr, cleanNotes].filter(Boolean).join(" ");
+
     const updatedBid: VendorBid = {
       ...bid,
       vendorName,
@@ -329,23 +390,23 @@ function EditVendorCardModal({
       unitCostYearly: mCost * 12,
       creditDays: Number(creditDays) || 0,
       provisioningTime,
-      notes: notes.trim() || undefined,
+      notes: finalNotes,
       updatedAt: new Date().toISOString().split("T")[0],
     };
-    onSave(updatedBid);
+    onSave(updatedBid, false);
     onClose();
   };
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="md:!max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+        <DialogHeader className="space-y-1">
+          <DialogTitle className="text-xl font-bold font-sans flex items-center gap-2">
             <Icon name="sparkles" size={18} className="text-primary" />
-            <span>Edit Vendor Card & Products — {bid.vendorName}</span>
+            <span>Edit Vendor Card & Products</span>
           </DialogTitle>
-          <DialogDescription>
-            Update wholesale unit rate, credit terms, and add or remove products supplied by this vendor.
+          <DialogDescription className="text-xs text-ink-3">
+            Update wholesale unit rate, credit terms, and add or remove products supplied by <b>{bid.vendorName}</b>.
           </DialogDescription>
         </DialogHeader>
 
@@ -361,22 +422,68 @@ function EditVendorCardModal({
             />
           </div>
 
+          {/* Multi-select Products Supplied Chips */}
+          <div className="space-y-1.5 p-3 bg-paper-2/60 border border-hairline rounded-xl">
+            <label className="block text-xs uppercase tracking-wider text-primary font-bold">
+              🛒 Products & Services Supplied (Add / Remove)
+            </label>
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {[
+                "Google Workspace & GCP",
+                "Microsoft 365 & Azure",
+                "Zoho One & Business Apps",
+                "AWS & Cloud Hosting",
+                "SSL & Domain Names",
+                "IT Hardware & Laptops",
+                "Software Services & Dev",
+              ].map((prod) => {
+                const isSel = selectedProducts.includes(prod);
+                return (
+                  <button
+                    key={prod}
+                    type="button"
+                    onClick={() => {
+                      if (isSel) {
+                        setSelectedProducts(selectedProducts.filter((p) => p !== prod));
+                      } else {
+                        setSelectedProducts([...selectedProducts, prod]);
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                      isSel
+                        ? "bg-primary text-white border-primary font-bold shadow-2xs"
+                        : "bg-paper border-hairline text-ink hover:border-primary/40"
+                    }`}
+                  >
+                    {isSel ? `✓ ${prod}` : `+ ${prod}`}
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedProducts.length === 0 && (
+              <p className="text-xs text-amber-ink font-semibold pt-1">
+                ⚠️ All products unselected. Saving will remove this vendor from active rate cards until a product is selected.
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
-                Product SKU
+                Product License SKU *
               </label>
               <select
                 value={productSku}
+                disabled={selectedProducts.length === 0}
                 onChange={(e) => setProductSku(e.target.value)}
-                className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm font-semibold focus:border-amber"
+                className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm font-semibold focus:border-amber disabled:opacity-50"
               >
-                <option value="Google Workspace Business Starter">Google Workspace Business Starter</option>
-                <option value="Google Workspace Business Standard">Google Workspace Business Standard</option>
-                <option value="Google Workspace Business Plus">Google Workspace Business Plus</option>
-                <option value="Microsoft 365 Business Basic">Microsoft 365 Business Basic</option>
-                <option value="Microsoft 365 Business Standard">Microsoft 365 Business Standard</option>
-                <option value="Zoho One License">Zoho One License</option>
+                {availableSkus.map((sku) => (
+                  <option key={sku} value={sku}>
+                    {sku}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -423,46 +530,6 @@ function EditVendorCardModal({
                 <option value="30 Minutes">30 Minutes Turnaround</option>
                 <option value="Same Day">Same Day Delivery</option>
               </select>
-            </div>
-          </div>
-
-          {/* Multi-select Products Supplied Chips */}
-          <div className="space-y-1.5 p-3 bg-paper-2/60 border border-hairline rounded-xl">
-            <label className="block text-xs uppercase tracking-wider text-primary font-bold">
-              🛒 Products & Services Supplied (Add / Remove)
-            </label>
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {[
-                "Google Workspace & GCP",
-                "Microsoft 365 & Azure",
-                "Zoho One & Business Apps",
-                "AWS & Cloud Hosting",
-                "SSL & Domain Names",
-                "IT Hardware & Laptops",
-                "Software Services & Dev",
-              ].map((prod) => {
-                const isSel = selectedProducts.includes(prod);
-                return (
-                  <button
-                    key={prod}
-                    type="button"
-                    onClick={() => {
-                      if (isSel) {
-                        setSelectedProducts(selectedProducts.filter((p) => p !== prod));
-                      } else {
-                        setSelectedProducts([...selectedProducts, prod]);
-                      }
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                      isSel
-                        ? "bg-primary text-white border-primary font-bold shadow-2xs"
-                        : "bg-paper border-hairline text-ink hover:border-primary/40"
-                    }`}
-                  >
-                    {isSel ? `✓ ${prod}` : `+ ${prod}`}
-                  </button>
-                );
-              })}
             </div>
           </div>
 
