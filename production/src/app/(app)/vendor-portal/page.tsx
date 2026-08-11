@@ -1047,6 +1047,33 @@ export default function VendorPortalPage() {
               isFromDb: true,
             });
           }
+
+          // Ensure EVERY vendor in Vendors Master appears in Vendor Portal
+          const isPushedToAnyCategory =
+            isGoogleSeller ||
+            prods.includes("Microsoft 365 & Azure") ||
+            prods.includes("Zoho One & Business Apps") ||
+            prods.includes("AWS & Cloud Hosting") ||
+            prods.includes("SSL & Domain Names");
+
+          if (!isPushedToAnyCategory) {
+            list.push({
+              id: `db-vendor-gen-${v.id}`,
+              vendorName: v.name,
+              vendorCategory: "Direct Sub-Reseller",
+              productSku: v.default_category || "Software Services & Dev",
+              unitCostMonthly: parsedRates["General"] || 150,
+              unitCostYearly: (parsedRates["General"] || 150) * 12,
+              creditDays: 30,
+              provisioningTime: "Instant API",
+              slaScore: 99.0,
+              rating: 4.8,
+              notes: v.notes || (v.contact_email ? `Contact: ${v.contact_email}` : "Registered Supplier."),
+              updatedAt: new Date().toISOString().split("T")[0],
+              supportContact: v.contact_email || undefined,
+              isFromDb: true,
+            });
+          }
         }
       });
     }
