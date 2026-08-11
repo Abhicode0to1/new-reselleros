@@ -529,9 +529,9 @@ export default function QuotesPage() {
         </div>
       )}
 
-      {/* Mobile card list — phones only */}
+      {/* Adaptive card list — phones, tablets, and medium viewports (< 1280px) */}
       {!isLoading && !error && filtered.length > 0 && (
-        <ul className="md:hidden space-y-2 mb-3">
+        <ul className="xl:hidden space-y-2 mb-3">
           {filtered.map((q) => {
             const uStatus = unifiedStatus(q);
             const dl = q.expires_date ? daysBetween(new Date(), q.expires_date) : null;
@@ -539,7 +539,7 @@ export default function QuotesPage() {
               <li key={q.id}>
                 <Link
                   href={`/quotes/${q.id}` as never}
-                  className="block bg-paper border border-hairline rounded-lg p-3 active:bg-paper-2/50"
+                  className="block bg-paper border border-hairline rounded-lg p-3.5 active:bg-paper-2/50 hover:border-amber/50 transition-colors"
                 >
                   {/* Top row: ID + amount */}
                   <div className="flex items-start justify-between gap-3 mb-1.5">
@@ -558,28 +558,28 @@ export default function QuotesPage() {
                           <Badge kind="muted" className="font-sans text-[10px]">Direct invoice</Badge>
                         ) : null}
                       </div>
-                      <p className="text-sm font-medium text-ink mt-0.5 truncate">
+                      <p className="text-sm font-semibold text-ink mt-1 truncate">
                         {cleanDisplayName(q.customer_name)}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-serif text-base tabular-nums text-ink">
+                      <p className="font-serif text-base font-bold tabular-nums text-ink">
                         {quoteMoney(q)}
                       </p>
-                      <p className="text-[10px] text-ink-3 tabular-nums">
+                      <p className="text-[11px] text-ink-3 tabular-nums">
                         {q.seats ?? "—"} seats
                       </p>
                     </div>
                   </div>
                   {/* Bottom row: plan + status badges */}
                   <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-hairline/60">
-                    <span className="text-xs text-ink-3 truncate">
+                    <span className="text-xs text-ink-2 truncate font-medium">
                       {q.plan ?? "—"}
                     </span>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {dl !== null && dl >= 0 && dl <= 7 && q.status === "sent" && (
                         <Badge kind="warning" size="sm">
-                          {dl}d
+                          {dl}d left
                         </Badge>
                       )}
                       <Badge kind={uStatus.kind} size="sm" dot>{uStatus.label}</Badge>
@@ -595,13 +595,11 @@ export default function QuotesPage() {
         </ul>
       )}
 
-      {/* Desktop / tablet table */}
+      {/* Desktop table — large viewports (>= 1280px) */}
       {!isLoading && !error && filtered.length > 0 && (
-        <div className="hidden md:block">
+        <div className="hidden xl:block">
           <Card flush>
-            {/* Card `flush` already wraps children in one overflow-x-auto — do NOT
-                add another here or you get two stacked horizontal scrollbars. */}
-            <table className="w-full min-w-[900px]">
+            <table className="w-full">
               <thead className="bg-paper-2 border-b border-hairline-strong">
                 <tr>
                   <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Quote</th>

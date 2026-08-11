@@ -665,9 +665,9 @@ function InvoicesPageInner() {
         )
       )}
 
-      {/* Mobile card list — phones only */}
+      {/* Mobile & tablet card list — viewports < 1280px */}
       {!isLoading && !error && rows.length > 0 && (
-        <ul className="md:hidden space-y-2 mb-3">
+        <ul className="xl:hidden space-y-2 mb-3">
           {rows.map((inv) => (
             <li key={inv.id}>
               <MobileInvoiceCard
@@ -679,9 +679,9 @@ function InvoicesPageInner() {
         </ul>
       )}
 
-      {/* Desktop table — fluid % columns so it always fits the viewport (no horizontal scroll). */}
+      {/* Desktop table — large viewports >= 1280px */}
       {!isLoading && !error && rows.length > 0 && (
-        <Card flush className="hidden md:block">
+        <Card flush className="hidden xl:block">
           <table className="w-full table-fixed">
             <colgroup>
               {INV_COL_ORDER.map((id) => <col key={id} style={{ width: INV_COL_WIDTHS[id] }} />)}
