@@ -407,15 +407,14 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
 
   // CTC Calculator State
   const [annualCtc, setAnnualCtc] = React.useState<string>(
-    employee?.monthly_gross ? String(employee.monthly_gross * 12) : ""
+    employee?.monthly_gross ? String(employee.monthly_gross * 12) : "600000"
   );
   const [isMetro, setIsMetro] = React.useState(false);
 
   const ctcBreakdown = React.useMemo(() => {
-    const val = Number(annualCtc);
-    if (!val || val <= 0) return null;
+    const val = Number(annualCtc) || (Number(gross) > 0 ? Number(gross) * 12 : 600000);
     return calculateCtcBreakdown(val, { isMetro });
-  }, [annualCtc, isMetro]);
+  }, [annualCtc, gross, isMetro]);
   // For a NEW employee, suggest ESI coverage from the wage ceiling until the
   // user decides for themselves. Existing employees keep their saved value.
   React.useEffect(() => {
