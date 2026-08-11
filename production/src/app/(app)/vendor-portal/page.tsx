@@ -301,7 +301,7 @@ const VENDOR_SCORECARDS: VendorScorecard[] = [
 // ── Edit Vendor Card & Products Modal ───────────────────────────────────────
 
 function parseProductsFromBid(bid: VendorBid): string[] {
-  if (bid.notes) {
+  if (bid?.notes) {
     const match = bid.notes.match(/\[Supplied Products: (.*?)\]/);
     if (match?.[1]) {
       const list = match[1].split(",").map((s) => s.trim()).filter(Boolean);
@@ -309,22 +309,31 @@ function parseProductsFromBid(bid: VendorBid): string[] {
       return list;
     }
   }
-  if (bid.productSku.includes("Google")) return ["Google Workspace & GCP"];
-  if (bid.productSku.includes("Microsoft") || bid.productSku.includes("M365")) return ["Microsoft 365 & Azure"];
-  if (bid.productSku.includes("Zoho")) return ["Zoho One & Business Apps"];
+  const sku = bid?.productSku || "";
+  if (sku.includes("Google")) return ["Google Workspace & GCP"];
+  if (sku.includes("Microsoft") || sku.includes("M365")) return ["Microsoft 365 & Azure"];
+  if (sku.includes("Zoho")) return ["Zoho One & Business Apps"];
   return [];
 }
 
 function parseRatesFromBid(notesStr?: string | null): Record<string, number> {
   const rates: Record<string, number> = {};
   if (!notesStr) return rates;
-  const match = notesStr.match(/\[Supplied Rates: (.*?)\]/);
-  if (match?.[1]) {
-    const pairs = match[1].split(",");
-    pairs.forEach((p) => {
-      const [k, v] = p.split("=").map((s) => s.trim());
-      if (k && v) rates[k] = Number(v) || 0;
-    });
+  try {
+    const match = notesStr.match(/\[Supplied Rates: (.*?)\]/);
+    if (match?.[1]) {
+      const pairs = match[1].split(",");
+      pairs.forEach((p) => {
+        const parts = p.split("=");
+        if (parts.length === 2) {
+          const k = parts[0].trim();
+          const v = parts[1].trim();
+          if (k && v) rates[k] = Number(v) || 0;
+        }
+      });
+    }
+  } catch {
+    // Ignore error
   }
   return rates;
 }
@@ -724,6 +733,8 @@ export default function VendorPortalPage() {
 
     if (dbVendors && dbVendors.length > 0) {
       dbVendors.forEach((v) => {
+        if (!v || !v.name) return;
+        const vName = (v.name || "").toLowerCase();
         const notesStr = v.notes || "";
         const match = notesStr.match(/\[Supplied Products: (.*?)\]/);
         const hasProductTag = Boolean(match?.[1]);
@@ -740,16 +751,16 @@ export default function VendorPortalPage() {
         const isGoogleSeller = hasProductTag
           ? prods.includes("Google Workspace & GCP")
           : (
-              v.name.toLowerCase().includes("google") ||
-              v.name.toLowerCase().includes("net2secure") ||
-              v.name.toLowerCase().includes("net secure") ||
-              v.name.toLowerCase().includes("rajesh") ||
+              vName.includes("google") ||
+              vName.includes("net2secure") ||
+              vName.includes("net secure") ||
+              vName.includes("rajesh") ||
               notesStr.toLowerCase().includes("workspace") ||
               notesStr.toLowerCase().includes("google")
             );
 
         // Check if vendor already exists in list
-        const existsInList = list.some((b) => b.vendorName.toLowerCase() === v.name.toLowerCase());
+        const existsInList = list.some((b) => (b.vendorName || "").toLowerCase() === vName);
 
         if (!existsInList) {
           // If tagged with Google Workspace or matches reseller criteria, generate cards for ALL Google Workspace editions
