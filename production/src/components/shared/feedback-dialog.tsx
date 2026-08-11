@@ -3,6 +3,7 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -29,9 +30,40 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const [description, setDescription] = React.useState("");
   const [screenshotData, setScreenshotData] = React.useState<string | null>(null);
   const [screenshotName, setScreenshotName] = React.useState<string | null>(null);
+  const [capturing, setCapturing] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Instant Auto Screenshot Capture feature
+  const handleAutoCaptureScreen = async () => {
+    setCapturing(true);
+    toast.info("Capturing current screen...", { duration: 1500 });
+
+    try {
+      // Hide dialog temporarily for 150ms to capture clear screen background
+      onOpenChange(false);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const canvas = await html2canvas(document.body, {
+        useCORS: true,
+        allowTaint: true,
+        scale: 1, // Standard resolution capture
+      });
+
+      const dataUrl = canvas.toDataURL("image/png");
+      setScreenshotData(dataUrl);
+      setScreenshotName(`auto_screen_${Date.now()}.png`);
+
+      toast.success("Screen screenshot captured successfully!");
+    } catch (err: unknown) {
+      console.error("Auto screen capture failed:", err);
+      toast.error("Could not auto-capture screen. You can upload an image file manually.");
+    } finally {
+      setCapturing(false);
+      onOpenChange(true);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,10 +111,8 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
       const reporterEmail = currentUser?.authEmail ?? "testing-team@anutech.in";
       const tenantId = currentUser?.tenantId ?? "fbb976f1-9090-4f10-9726-0901bd144e42";
 
-      // Subject formatted with type tag
       const formattedSubject = `[${type.toUpperCase()}] [${priority.toUpperCase()}] ${title}`;
 
-      // Detailed body including Page URL, Reporter info, Description, and Base64 screenshot
       const fullBody = `
 REPORTER: ${reporterName} (${reporterEmail})
 PAGE URL: ${pathname}
@@ -96,7 +126,6 @@ ${description}
 ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
 `.trim();
 
-      // Map priority to valid SupportTicketPriority
       const mappedPriority: "low" | "normal" | "high" | "urgent" =
         priority === "critical" ? "urgent" : priority === "medium" ? "normal" : priority;
 
@@ -116,11 +145,10 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
         console.warn("Supabase ticket error, saving to local feedback store:", error);
       }
 
-      toast.success("Thank you! Your testing report & screenshot have been submitted.", {
+      toast.success("Thank you! Your testing report & screen capture have been submitted.", {
         description: "Pardeep and the engineering team will review it immediately.",
       });
 
-      // Reset form & close
       setTitle("");
       setDescription("");
       setScreenshotData(null);
@@ -144,7 +172,7 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
           </div>
           <DialogTitle className="text-xl font-serif">Report Bug / Suggest Feature</DialogTitle>
           <DialogDescription className="text-xs text-ink-3">
-            Found an error, alignment issue, or have a new feature idea? Attach a screenshot and submit your report directly to Pardeep.
+            Found an error, alignment issue, or have a new feature idea? Use 1-click screen capture or attach a screenshot to submit directly to Pardeep.
           </DialogDescription>
         </DialogHeader>
 
@@ -252,8 +280,8 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
             <span className="text-[10px] uppercase font-bold text-emerald">Auto-Captured</span>
           </div>
 
-          {/* Screenshot Upload / Attachment */}
-          <FormField label="Attach Screenshot (Optional)">
+          {/* Screenshot Options: Auto-Capture + File Upload */}
+          <FormField label="Screenshot Attachment">
             <input
               type="file"
               accept="image/*"
@@ -262,15 +290,18 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
               className="hidden"
             />
             {screenshotData ? (
-              <div className="relative rounded-lg border border-hairline p-2 bg-paper-2 flex items-center gap-3">
+              <div className="relative rounded-lg border border-hairline p-2.5 bg-paper-2 flex items-center gap-3">
                 <img
                   src={screenshotData}
                   alt="Screenshot preview"
-                  className="w-16 h-12 object-cover rounded border border-hairline"
+                  className="w-20 h-14 object-cover rounded border border-hairline shadow-sm"
                 />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-ink truncate">{screenshotName}</p>
-                  <p className="text-[10px] text-emerald font-semibold">✓ Image Attached Ready to Send</p>
+                  <p className="text-xs font-semibold text-ink truncate">{screenshotName}</p>
+                  <p className="text-[11px] text-emerald font-semibold flex items-center gap-1 mt-0.5">
+                    <Icon name="check" size={13} />
+                    <span>Screenshot Attached & Ready to Submit</span>
+                  </p>
                 </div>
                 <Button
                   type="button"
@@ -283,14 +314,25 @@ ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
                 </Button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full py-4 border-2 border-dashed border-hairline hover:border-primary/40 rounded-lg bg-paper-2/50 hover:bg-paper-2 text-xs text-ink-3 flex flex-col items-center justify-center gap-1.5 transition-colors"
-              >
-                <Icon name="upload" size={18} className="text-ink-3" />
-                <span>Click to Upload Screenshot (PNG, JPG, WebP)</span>
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleAutoCaptureScreen}
+                  disabled={capturing}
+                  className="py-3 px-3 border border-primary/30 hover:border-primary rounded-lg bg-primary-soft/50 hover:bg-primary-soft text-xs font-semibold text-primary flex items-center justify-center gap-2 transition-all shadow-sm"
+                >
+                  <Icon name="camera" size={16} />
+                  <span>{capturing ? "Capturing Screen..." : "📸 1-Click Auto Capture Screen"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="py-3 px-3 border border-hairline hover:border-hairline-strong rounded-lg bg-paper-2 hover:bg-paper-3 text-xs font-medium text-ink-2 flex items-center justify-center gap-2 transition-all"
+                >
+                  <Icon name="upload" size={16} className="text-ink-3" />
+                  <span>Upload File Manually</span>
+                </button>
+              </div>
             )}
           </FormField>
 
