@@ -389,7 +389,7 @@ export default function QuotesPage() {
         <>
           {/* Interactive KPI Stat Grid */}
           {!isLoading && quotes && (
-        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-5">
           <button
             type="button"
             onClick={() => setTab("all")}
