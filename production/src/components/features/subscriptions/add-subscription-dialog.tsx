@@ -50,6 +50,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
     return d.toISOString().split("T")[0];
   });
 
+  const [selectedCustomerId, setSelectedCustomerId] = React.useState<string>("");
   const [submitting, setSubmitting] = React.useState(false);
   const [existingCustomers, setExistingCustomers] = React.useState<Array<{ id: string; name: string; domain?: string | null }>>([]);
 
@@ -82,11 +83,23 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
   };
 
   const handleSelectExistingCustomer = (val: string) => {
+    if (val === "NEW_CUSTOMER") {
+      handleClearCustomerSelection();
+      return;
+    }
     const found = existingCustomers.find((c) => c.id === val);
     if (found) {
+      setSelectedCustomerId(found.id);
       setCustomerName(found.name);
       if (found.domain) setDomain(found.domain);
     }
+  };
+
+  const handleClearCustomerSelection = () => {
+    setSelectedCustomerId("");
+    setCustomerName("");
+    setDomain("");
+    setCustomerEmail("");
   };
 
   const totalAnnualAmount = seats * pricePerSeatYear;
@@ -227,12 +240,13 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Customer Selection or New Input */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Existing Customer (Optional Autocomplete)">
-              <Select onValueChange={handleSelectExistingCustomer}>
+            <FormField label="Existing Customer (Select or Clear)">
+              <Select value={selectedCustomerId} onValueChange={handleSelectExistingCustomer}>
                 <SelectTrigger id="existingCustomerSelect">
                   <SelectValue placeholder="-- Select Existing Customer --" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="NEW_CUSTOMER">➕ -- Type New Customer / Clear Selection --</SelectItem>
                   {existingCustomers.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name} {c.domain ? `(${c.domain})` : ""}
@@ -240,6 +254,16 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                   ))}
                 </SelectContent>
               </Select>
+              {selectedCustomerId && (
+                <button
+                  type="button"
+                  onClick={handleClearCustomerSelection}
+                  className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 mt-1 cursor-pointer"
+                >
+                  <Icon name="x" size={12} />
+                  <span>Clear Selection & Type Brand New Customer</span>
+                </button>
+              )}
             </FormField>
 
             <FormField label="Customer Company Name *" required htmlFor="custName">
