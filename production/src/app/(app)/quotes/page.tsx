@@ -110,6 +110,7 @@ export default function QuotesPage() {
   const [editProject, setEditProject] = React.useState<ProjectSaleWithTotals | null>(null);
   const deleteProject = useDeleteProjectSale();
   const [previewing, setPreviewing] = React.useState<Quote | null>(null);
+  const [kpiOpen, setKpiOpen] = React.useState(true);
   const confirm = useConfirm();
 
   const handleDelete = async (q: Quote) => {
@@ -387,93 +388,119 @@ export default function QuotesPage() {
 
       {view === "subscription" && (
         <>
-          {/* Interactive KPI Stat Grid */}
-          {!isLoading && quotes && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-5">
-          <button
-            type="button"
-            onClick={() => setTab("all")}
-            className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
-          >
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Pipeline</p>
-            <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalValue, { compact: true })}</p>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("sent")}
-            className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
-          >
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Out for review</p>
-            <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(sentValue, { compact: true })}</p>
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("accepted")}
-            className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-emerald/60 transition-all cursor-pointer"
-          >
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Accepted</p>
-            <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(acceptedValue, { compact: true })}</p>
-          </button>
-          <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Pipeline Margin</p>
-            <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(pipelineMargin, { compact: true })}</p>
-          </div>
-          <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
-            <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{winRate}%</p>
-          </div>
-          <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Total Quotes</p>
-            <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{quotes.length}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Quote Intelligence */}
-      {!isLoading && quotes && expiringCount > 0 && (
-        <div className="mb-4">
-          <GeminiCard
-            title="Quote intelligence"
-            actions={
-              <Button
-                size="sm"
-                variant="primary"
-                icon="mail"
-                onClick={() => {
-                  toast.success(`Nudge sent for ${expiringCount} expiring quotes`);
-                }}
+          {/* Collapsible KPI & Quote Intelligence Banner */}
+          {!isLoading && quotes && quotes.length > 0 && (
+            <div className="mb-4 bg-paper border border-hairline rounded-lg overflow-hidden transition-all shadow-xs">
+              <button
+                type="button"
+                onClick={() => setKpiOpen((o) => !o)}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 bg-paper-2/70 hover:bg-paper-2 transition-colors text-left cursor-pointer"
               >
-                Nudge expiring quotes
-              </Button>
-            }
-            compact
-          >
-            <b>{expiringCount} quote{expiringCount === 1 ? "" : "s"} out for review.</b> Expiring within 7 days are highest priority — send a nudge to those customers.
-          </GeminiCard>
-        </div>
-      )}
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  <Icon name="bar_chart" size={15} className="text-amber-ink" />
+                  <span className="font-semibold text-ink">Quote Analytics &amp; Intelligence</span>
+                  <span className="text-ink-3">·</span>
+                  <span className="text-ink-2 font-mono font-medium">Pipeline: <b className="text-amber-ink">{rupee(totalValue, { compact: true })}</b></span>
+                  <span className="text-ink-3 font-mono">·</span>
+                  <span className="text-ink-2 font-mono font-medium">Out for Review: <b className="text-ink">{rupee(sentValue, { compact: true })}</b> ({sentishCount})</span>
+                  <span className="text-ink-3 font-mono">·</span>
+                  <span className="text-ink-2 font-mono font-medium">Accepted: <b className="text-emerald">{rupee(acceptedValue, { compact: true })}</b> ({acceptedCount})</span>
+                </div>
+                <div className="flex items-center gap-1 text-xs font-semibold text-amber-ink shrink-0 ml-2">
+                  <span>{kpiOpen ? "Collapse" : "Expand"}</span>
+                  <Icon name={kpiOpen ? "chevron_up" : "chevron_down"} size={14} />
+                </div>
+              </button>
 
-      {/* Sticky Horizontal TabBar + Date Range + Search */}
-      {!isLoading && quotes && quotes.length > 0 && (
-        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
-          <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
-          <div className="flex justify-between items-center gap-3 flex-wrap">
-            <div className="text-xs text-ink-3">
-              Showing {filtered.length} of {counts.all ?? 0} quote{counts.all === 1 ? "" : "s"}
+              {kpiOpen && (
+                <div className="p-3 border-t border-hairline space-y-3 bg-paper">
+                  {/* Interactive KPI Stat Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setTab("all")}
+                      className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
+                    >
+                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Pipeline</p>
+                      <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalValue, { compact: true })}</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTab("sent")}
+                      className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
+                    >
+                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Out for review</p>
+                      <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(sentValue, { compact: true })}</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTab("accepted")}
+                      className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-emerald/60 transition-all cursor-pointer"
+                    >
+                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Accepted</p>
+                      <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(acceptedValue, { compact: true })}</p>
+                    </button>
+                    <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Pipeline Margin</p>
+                      <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(pipelineMargin, { compact: true })}</p>
+                    </div>
+                    <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
+                      <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{winRate}%</p>
+                    </div>
+                    <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
+                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Total Quotes</p>
+                      <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{quotes.length}</p>
+                    </div>
+                  </div>
+
+                  {/* Quote Intelligence */}
+                  {expiringCount > 0 && (
+                    <GeminiCard
+                      title="Quote intelligence"
+                      actions={
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          icon="mail"
+                          onClick={() => {
+                            toast.success(`Nudge sent for ${expiringCount} expiring quotes`);
+                          }}
+                        >
+                          Nudge expiring quotes
+                        </Button>
+                      }
+                      compact
+                    >
+                      <b>{expiringCount} quote{expiringCount === 1 ? "" : "s"} out for review.</b> Expiring within 7 days are highest priority — send a nudge to those customers.
+                    </GeminiCard>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="w-full sm:w-64">
-                <Input
-                  prefix={<Icon name="search" size={14} />}
-                  placeholder="Quote ID, customer, product…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+          )}
+
+          {/* Sticky Horizontal TabBar + Date Range + Search */}
+          {!isLoading && quotes && quotes.length > 0 && (
+            <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
+              <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
+              <div className="flex justify-between items-center gap-3 flex-wrap">
+                <div className="text-xs text-ink-3">
+                  Showing {filtered.length} of {counts.all ?? 0} quote{counts.all === 1 ? "" : "s"}
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="w-full sm:w-64">
+                    <Input
+                      prefix={<Icon name="search" size={14} />}
+                      placeholder="Quote ID, customer, product…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
       {/* Error */}
       {error && (
