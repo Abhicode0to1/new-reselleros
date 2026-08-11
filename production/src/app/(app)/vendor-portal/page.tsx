@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { rupee, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { useVendors } from "@/lib/queries/vendors";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -296,6 +297,7 @@ const VENDOR_SCORECARDS: VendorScorecard[] = [
 // ── Main Page Component ──────────────────────────────────────────────────────
 
 export default function VendorPortalPage() {
+  const { data: dbVendors } = useVendors();
   const [activeTab, setActiveTab] = React.useState<"comparison" | "calculator" | "rfqs" | "scorecards" | "addBid" | "bills" | "keys">("comparison");
   const [bids, setBids] = React.useState<VendorBid[]>(INITIAL_BIDS);
   const [rfqs, setRfqs] = React.useState<SourcingRfq[]>(INITIAL_RFQS);
@@ -317,17 +319,85 @@ export default function VendorPortalPage() {
   const [newProvisioningTime, setNewProvisioningTime] = React.useState("Instant API (< 5 Mins)");
   const [newNotes, setNewNotes] = React.useState("");
 
+  // Merge static bids + real vendors created in Vendor Master (like Rajesh)
+  const mergedBids = React.useMemo(() => {
+    const list = [...bids];
+
+    if (dbVendors && dbVendors.length > 0) {
+      dbVendors.forEach((v) => {
+        const notesStr = v.notes || "";
+        const match = notesStr.match(/\[Supplied Products: (.*?)\]/);
+        const prods = match?.[1] ? match[1].split(",").map((s) => s.trim()) : [];
+
+        // Check if vendor already exists in list
+        const existsInList = list.some((b) => b.vendorName.toLowerCase() === v.name.toLowerCase());
+
+        if (!existsInList) {
+          // If tagged with Google Workspace OR default fallback
+          if (prods.length === 0 || prods.includes("Google Workspace & GCP")) {
+            list.push({
+              id: `db-vendor-gw-${v.id}`,
+              vendorName: v.name,
+              vendorCategory: "Direct Sub-Reseller",
+              productSku: "Google Workspace Business Starter",
+              unitCostMonthly: 121,
+              unitCostYearly: 1452,
+              creditDays: 30,
+              provisioningTime: "Instant API (< 5 Mins)",
+              slaScore: 99.2,
+              rating: 4.8,
+              notes: v.contact_email ? `Sub-reseller supplier rate. Contact: ${v.contact_email}` : "Registered Sub-reseller supplier.",
+              updatedAt: new Date().toISOString().split("T")[0],
+              supportContact: v.contact_email || undefined,
+            });
+          }
+
+          if (prods.includes("Microsoft 365 & Azure")) {
+            list.push({
+              id: `db-vendor-m365-${v.id}`,
+              vendorName: v.name,
+              vendorCategory: "Direct Sub-Reseller",
+              productSku: "Microsoft 365 Business Basic",
+              unitCostMonthly: 114,
+              unitCostYearly: 1368,
+              creditDays: 30,
+              provisioningTime: "Instant API",
+              slaScore: 99.0,
+              rating: 4.8,
+              notes: v.contact_email ? `Contact: ${v.contact_email}` : "Registered Sub-reseller supplier.",
+              updatedAt: new Date().toISOString().split("T")[0],
+              supportContact: v.contact_email || undefined,
+            });
+          }
+        }
+      });
+    }
+
+    // Recalculate isBestValue per productSku
+    const minRates: Record<string, number> = {};
+    list.forEach((b) => {
+      if (!minRates[b.productSku] || b.unitCostMonthly < minRates[b.productSku]) {
+        minRates[b.productSku] = b.unitCostMonthly;
+      }
+    });
+
+    return list.map((b) => ({
+      ...b,
+      isBestValue: b.unitCostMonthly === minRates[b.productSku],
+    }));
+  }, [bids, dbVendors]);
+
   // Product SKUs for filtering
   const skus = React.useMemo(() => {
-    const list = Array.from(new Set(bids.map((b) => b.productSku)));
+    const list = Array.from(new Set(mergedBids.map((b) => b.productSku)));
     return ["All", ...list];
-  }, [bids]);
+  }, [mergedBids]);
 
   // Filtered Bids
   const filteredBids = React.useMemo(() => {
-    if (selectedSku === "All") return bids;
-    return bids.filter((b) => b.productSku === selectedSku);
-  }, [bids, selectedSku]);
+    if (selectedSku === "All") return mergedBids;
+    return mergedBids.filter((b) => b.productSku === selectedSku);
+  }, [mergedBids, selectedSku]);
 
   // Handle Add New Vendor Rate Quote
   const handleAddBid = (e: React.FormEvent) => {
@@ -392,8 +462,8 @@ export default function VendorPortalPage() {
 
   // Bids for Margin Calculator
   const calcBids = React.useMemo(() => {
-    return bids.filter((b) => b.productSku === calcSelectedSku);
-  }, [bids, calcSelectedSku]);
+    return mergedBids.filter((b) => b.productSku === calcSelectedSku);
+  }, [mergedBids, calcSelectedSku]);
 
   return (
     <div className="space-y-6 pb-12 max-w-7xl mx-auto px-4 sm:px-6">
