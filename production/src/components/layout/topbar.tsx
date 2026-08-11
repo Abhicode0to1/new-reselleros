@@ -1,12 +1,6 @@
-/**
- * TopBar — sticky header with breadcrumb, ⌘K search, theme toggle, bell.
- *
- * Mounted by the (app) layout group.
- */
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 

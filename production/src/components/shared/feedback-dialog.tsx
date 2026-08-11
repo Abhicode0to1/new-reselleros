@@ -96,12 +96,20 @@ ${description}
 ${screenshotData ? `ATTACHMENT_SCREENSHOT_DATA:${screenshotName}` : ""}
 `.trim();
 
+      // Map priority to valid SupportTicketPriority
+      const mappedPriority: "low" | "normal" | "high" | "urgent" =
+        priority === "critical" ? "urgent" : priority === "medium" ? "normal" : priority;
+
       const { error } = await supabase.from("support_tickets").insert({
+        id: crypto.randomUUID(),
         tenant_id: tenantId,
+        customer_name: reporterName,
+        raised_by_email: reporterEmail,
+        category: "other",
         subject: formattedSubject,
-        description: fullBody,
+        body: fullBody,
         status: "open",
-        priority: priority === "critical" ? "high" : priority,
+        priority: mappedPriority,
       });
 
       if (error) {
