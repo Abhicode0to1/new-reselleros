@@ -11,59 +11,6 @@ import type { Customer, Database } from "@/lib/supabase/database.types";
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
 
-const DEMO_CUSTOMERS: Customer[] = [
-  {
-    id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
-    tenant_id: "11111111-1111-1111-1111-111111111111",
-    name: "Acme Corp Pvt Ltd",
-    display_name: "Acme Corp",
-    domain: "acmecorp.com",
-    gstin: "27AABCS1234D1Z5",
-    state: "Maharashtra",
-    state_code: "27",
-    health: 85,
-    contact_name: "Rajesh K",
-    contact_title: "CTO",
-    contact_email: "rajesh@acmecorp.com",
-    contact_phone: "+91 98765 43210",
-    since: "2023-09-15",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    is_active: true,
-    customer_number: "CUST-001",
-    place_of_supply: "27-Maharashtra",
-    unused_credits: 0,
-    zoho_contact_id: null,
-    customer_type: "business",
-    city: "Mumbai",
-  },
-  {
-    id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
-    tenant_id: "11111111-1111-1111-1111-111111111111",
-    name: "Cosmo Tech",
-    display_name: "Cosmo Tech",
-    domain: "cosmotech.in",
-    gstin: "27AABCC3456E2F7",
-    state: "Maharashtra",
-    state_code: "27",
-    health: 72,
-    contact_name: "Sneha M",
-    contact_title: "IT Head",
-    contact_email: "sneha@cosmotech.in",
-    contact_phone: "+91 98123 11111",
-    since: "2025-05-21",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    is_active: true,
-    customer_number: "CUST-002",
-    place_of_supply: "27-Maharashtra",
-    unused_credits: 0,
-    zoho_contact_id: null,
-    customer_type: "business",
-    city: "Mumbai",
-  },
-] as unknown as Customer[];
-
 // ============================================================
 // List
 // ============================================================
@@ -77,10 +24,11 @@ export function useCustomers() {
         .select("*")
         .order("name", { ascending: true });
 
-      if (error || !data || data.length === 0) {
-        return DEMO_CUSTOMERS;
+      if (error) {
+        console.warn("Supabase customers query error:", error.message);
+        return [];
       }
-      return data;
+      return data ?? [];
     },
   });
 }
