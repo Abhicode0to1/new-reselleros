@@ -33,7 +33,7 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm",
+      "fixed top-[57px] inset-x-0 bottom-0 z-40 bg-ink/25 backdrop-blur-[2px]",
       "data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
@@ -45,18 +45,18 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  "fixed z-50 gap-4 bg-paper shadow-lg transition ease-in-out " +
+  "fixed z-50 gap-4 bg-paper shadow-2xl transition ease-in-out " +
   "data-[state=open]:animate-in data-[state=closed]:animate-out " +
   "data-[state=closed]:duration-200 data-[state=open]:duration-200",
   {
     variants: {
       side: {
-        top: "inset-x-0 top-0 border-b border-hairline data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
+        top: "inset-x-0 top-[57px] border-b border-hairline data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
           "inset-x-0 bottom-0 border-t border-hairline data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-        left: "inset-y-0 left-0 h-full border-r border-hairline data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left",
+        left: "top-[57px] bottom-0 left-0 h-[calc(100vh-57px)] border-r border-hairline data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left",
         right:
-          "inset-y-0 right-0 h-full border-l border-hairline data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
+          "top-[57px] bottom-0 right-0 h-[calc(100vh-57px)] border-l border-hairline data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
       },
     },
     defaultVariants: {
