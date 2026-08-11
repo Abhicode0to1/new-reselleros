@@ -301,6 +301,7 @@ export default function VendorPortalPage() {
   const [rfqs, setRfqs] = React.useState<SourcingRfq[]>(INITIAL_RFQS);
   const [bills] = React.useState<VendorBillItem[]>(INITIAL_BILLS);
   const [selectedSku, setSelectedSku] = React.useState<string>("All");
+  const [autoProcureEnabled, setAutoProcureEnabled] = React.useState(true);
 
   // Margin Calculator State
   const [calcSellingPrice, setCalcSellingPrice] = React.useState<number>(150);
@@ -437,6 +438,39 @@ export default function VendorPortalPage() {
             🛒 View Open RFQs ({rfqs.filter((r) => r.status === "Open Bidding").length})
           </Button>
         </div>
+      </div>
+
+      {/* ── Auto-Procure Engine Banner ──────────────────────────────────── */}
+      <div className="p-3.5 bg-paper border border-hairline rounded-xl flex items-center justify-between flex-wrap gap-3 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg ${autoProcureEnabled ? "bg-emerald-100 text-emerald-800" : "bg-paper-2 text-ink-3"}`}>
+            <Icon name="sparkles" size={18} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-xs text-ink uppercase tracking-wider">⚡ Auto-Procure & Lowest Margin Engine</span>
+              <Badge kind={autoProcureEnabled ? "success" : "muted"} size="sm" className="font-bold text-[10px]">
+                {autoProcureEnabled ? "ACTIVE (AUTO-ROUTING POs)" : "MANUAL MODE"}
+              </Badge>
+            </div>
+            <p className="text-[11px] text-ink-3 mt-0.5">
+              Automatically routes new customer subscription orders to the Distributor offering lowest rate & Net 30+ credit.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setAutoProcureEnabled(!autoProcureEnabled);
+            toast.success(autoProcureEnabled ? "Auto-Procure Engine set to Manual Mode." : "Auto-Procure Engine Enabled!");
+          }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            autoProcureEnabled ? "bg-emerald-600 text-white shadow-2xs" : "bg-paper-2 border border-hairline text-ink"
+          }`}
+        >
+          {autoProcureEnabled ? "✓ Auto-Procure Enabled" : "Enable Auto-Procure Engine"}
+        </button>
       </div>
 
       {/* ── KPI Summary Cards ─────────────────────────────────────────────── */}
