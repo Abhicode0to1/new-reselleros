@@ -315,6 +315,20 @@ function parseProductsFromBid(bid: VendorBid): string[] {
   return [];
 }
 
+function parseRatesFromBid(notesStr?: string | null): Record<string, number> {
+  const rates: Record<string, number> = {};
+  if (!notesStr) return rates;
+  const match = notesStr.match(/\[Supplied Rates: (.*?)\]/);
+  if (match?.[1]) {
+    const pairs = match[1].split(",");
+    pairs.forEach((p) => {
+      const [k, v] = p.split("=").map((s) => s.trim());
+      if (k && v) rates[k] = Number(v) || 0;
+    });
+  }
+  return rates;
+}
+
 function EditVendorCardModal({
   bid,
   onClose,
@@ -332,7 +346,21 @@ function EditVendorCardModal({
   const [provisioningTime, setProvisioningTime] = React.useState(bid.provisioningTime);
   const [notes, setNotes] = React.useState(() => {
     if (!bid.notes) return "";
-    return bid.notes.replace(/\[Supplied Products: .*?\]/, "").trim();
+    return bid.notes
+      .replace(/\[Supplied Products: .*?\]/, "")
+      .replace(/\[Supplied Rates: .*?\]/, "")
+      .trim();
+  });
+  const [skuRates, setSkuRates] = React.useState<Record<string, string>>(() => {
+    const parsed = parseRatesFromBid(bid.notes);
+    return {
+      "Google Workspace Business Starter": (parsed["Starter"] || parsed["Google Workspace Business Starter"] || bid.unitCostMonthly || 121).toString(),
+      "Google Workspace Business Standard": (parsed["Standard"] || parsed["Google Workspace Business Standard"] || 650).toString(),
+      "Google Workspace Business Plus": (parsed["Plus"] || parsed["Google Workspace Business Plus"] || 1260).toString(),
+      "Microsoft 365 Business Basic": (parsed["M365Basic"] || parsed["Microsoft 365 Business Basic"] || 114).toString(),
+      "Microsoft 365 Business Standard": (parsed["M365Std"] || parsed["Microsoft 365 Business Standard"] || 660).toString(),
+      "Zoho One License": (parsed["Zoho"] || parsed["Zoho One License"] || 290).toString(),
+    };
   });
 
   // Dynamic SKUs based on selected products
@@ -375,13 +403,19 @@ function EditVendorCardModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const mCost = Number(monthlyCost) || 0;
+    const mCost = Number(skuRates[productSku] || monthlyCost) || 121;
     const prodTagStr = selectedProducts.length > 0
       ? `[Supplied Products: ${selectedProducts.join(", ")}]`
       : `[Supplied Products: None]`;
 
-    const cleanNotes = notes.replace(/\[Supplied Products: .*?\]/, "").trim();
-    const finalNotes = [prodTagStr, cleanNotes].filter(Boolean).join(" ");
+    const ratesPairStr = `[Supplied Rates: Starter=${skuRates["Google Workspace Business Starter"] || 121}, Standard=${skuRates["Google Workspace Business Standard"] || 650}, Plus=${skuRates["Google Workspace Business Plus"] || 1260}, M365Basic=${skuRates["Microsoft 365 Business Basic"] || 114}, M365Std=${skuRates["Microsoft 365 Business Standard"] || 660}, Zoho=${skuRates["Zoho One License"] || 290}]`;
+
+    const cleanNotes = notes
+      .replace(/\[Supplied Products: .*?\]/, "")
+      .replace(/\[Supplied Rates: .*?\]/, "")
+      .trim();
+
+    const finalNotes = [prodTagStr, ratesPairStr, cleanNotes].filter(Boolean).join(" ");
 
     const updatedBid: VendorBid = {
       ...bid,
@@ -468,6 +502,103 @@ function EditVendorCardModal({
               </p>
             )}
           </div>
+
+          {/* Product Group Wholesale Rates Section */}
+          {selectedProducts.length > 0 && (
+            <div className="space-y-3 p-3.5 bg-paper-2/70 border border-hairline rounded-xl">
+              <div className="flex items-center justify-between">
+                <label className="text-xs uppercase tracking-wider text-primary font-bold flex items-center gap-1.5">
+                  <Icon name="sparkles" size={14} />
+                  <span>Product Group Wholesale Rates (₹ / User / Month)</span>
+                </label>
+                <span className="text-[11px] text-ink-3">Set rate per edition</span>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                {selectedProducts.includes("Google Workspace & GCP") && (
+                  <div className="p-2.5 bg-paper border border-hairline rounded-lg space-y-2">
+                    <span className="text-xs font-bold text-ink flex items-center gap-1">
+                      <span>🔵</span> Google Workspace Group Rates
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Starter Rate (₹)</label>
+                        <Input
+                          type="number"
+                          value={skuRates["Google Workspace Business Starter"] || "121"}
+                          onChange={(e) => setSkuRates({ ...skuRates, "Google Workspace Business Starter": e.target.value })}
+                          className="bg-paper text-xs font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Standard Rate (₹)</label>
+                        <Input
+                          type="number"
+                          value={skuRates["Google Workspace Business Standard"] || "650"}
+                          onChange={(e) => setSkuRates({ ...skuRates, "Google Workspace Business Standard": e.target.value })}
+                          className="bg-paper text-xs font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Plus Rate (₹)</label>
+                        <Input
+                          type="number"
+                          value={skuRates["Google Workspace Business Plus"] || "1260"}
+                          onChange={(e) => setSkuRates({ ...skuRates, "Google Workspace Business Plus": e.target.value })}
+                          className="bg-paper text-xs font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedProducts.includes("Microsoft 365 & Azure") && (
+                  <div className="p-2.5 bg-paper border border-hairline rounded-lg space-y-2">
+                    <span className="text-xs font-bold text-ink flex items-center gap-1">
+                      <span>🔷</span> Microsoft 365 Group Rates
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Basic Rate (₹)</label>
+                        <Input
+                          type="number"
+                          value={skuRates["Microsoft 365 Business Basic"] || "114"}
+                          onChange={(e) => setSkuRates({ ...skuRates, "Microsoft 365 Business Basic": e.target.value })}
+                          className="bg-paper text-xs font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Standard Rate (₹)</label>
+                        <Input
+                          type="number"
+                          value={skuRates["Microsoft 365 Business Standard"] || "660"}
+                          onChange={(e) => setSkuRates({ ...skuRates, "Microsoft 365 Business Standard": e.target.value })}
+                          className="bg-paper text-xs font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedProducts.includes("Zoho One & Business Apps") && (
+                  <div className="p-2.5 bg-paper border border-hairline rounded-lg space-y-2">
+                    <span className="text-xs font-bold text-ink flex items-center gap-1">
+                      <span>🔶</span> Zoho One License Rate
+                    </span>
+                    <div className="w-1/2">
+                      <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Zoho One Rate (₹)</label>
+                      <Input
+                        type="number"
+                        value={skuRates["Zoho One License"] || "290"}
+                        onChange={(e) => setSkuRates({ ...skuRates, "Zoho One License": e.target.value })}
+                        className="bg-paper text-xs font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -598,6 +729,14 @@ export default function VendorPortalPage() {
         const hasProductTag = Boolean(match?.[1]);
         const prods = match?.[1] ? match[1].split(",").map((s) => s.trim()).filter(Boolean) : [];
 
+        const parsedRates = parseRatesFromBid(v.notes);
+        const gwStarterRate = parsedRates["Starter"] || parsedRates["Google Workspace Business Starter"] || 121;
+        const gwStandardRate = parsedRates["Standard"] || parsedRates["Google Workspace Business Standard"] || 650;
+        const gwPlusRate = parsedRates["Plus"] || parsedRates["Google Workspace Business Plus"] || 1260;
+        const m365BasicRate = parsedRates["M365Basic"] || parsedRates["Microsoft 365 Business Basic"] || 114;
+        const m365StdRate = parsedRates["M365Std"] || parsedRates["Microsoft 365 Business Standard"] || 660;
+        const zohoRate = parsedRates["Zoho"] || parsedRates["Zoho One License"] || 290;
+
         const isGoogleSeller = hasProductTag
           ? prods.includes("Google Workspace & GCP")
           : (
@@ -621,8 +760,8 @@ export default function VendorPortalPage() {
               vendorName: v.name,
               vendorCategory: "Direct Sub-Reseller",
               productSku: "Google Workspace Business Starter",
-              unitCostMonthly: 121,
-              unitCostYearly: 1452,
+              unitCostMonthly: gwStarterRate,
+              unitCostYearly: gwStarterRate * 12,
               creditDays: 30,
               provisioningTime: "Instant API (< 5 Mins)",
               slaScore: 99.2,
@@ -639,8 +778,8 @@ export default function VendorPortalPage() {
               vendorName: v.name,
               vendorCategory: "Direct Sub-Reseller",
               productSku: "Google Workspace Business Standard",
-              unitCostMonthly: 650,
-              unitCostYearly: 7800,
+              unitCostMonthly: gwStandardRate,
+              unitCostYearly: gwStandardRate * 12,
               creditDays: 30,
               provisioningTime: "Instant API (< 5 Mins)",
               slaScore: 99.2,
@@ -657,8 +796,8 @@ export default function VendorPortalPage() {
               vendorName: v.name,
               vendorCategory: "Direct Sub-Reseller",
               productSku: "Google Workspace Business Plus",
-              unitCostMonthly: 1260,
-              unitCostYearly: 15120,
+              unitCostMonthly: gwPlusRate,
+              unitCostYearly: gwPlusRate * 12,
               creditDays: 30,
               provisioningTime: "Instant API (< 5 Mins)",
               slaScore: 99.2,
@@ -676,8 +815,8 @@ export default function VendorPortalPage() {
               vendorName: v.name,
               vendorCategory: "Direct Sub-Reseller",
               productSku: "Microsoft 365 Business Basic",
-              unitCostMonthly: 114,
-              unitCostYearly: 1368,
+              unitCostMonthly: m365BasicRate,
+              unitCostYearly: m365BasicRate * 12,
               creditDays: 30,
               provisioningTime: "Instant API",
               slaScore: 99.0,
@@ -693,8 +832,8 @@ export default function VendorPortalPage() {
               vendorName: v.name,
               vendorCategory: "Direct Sub-Reseller",
               productSku: "Microsoft 365 Business Standard",
-              unitCostMonthly: 660,
-              unitCostYearly: 7920,
+              unitCostMonthly: m365StdRate,
+              unitCostYearly: m365StdRate * 12,
               creditDays: 30,
               provisioningTime: "Instant API",
               slaScore: 99.0,
@@ -712,8 +851,8 @@ export default function VendorPortalPage() {
               vendorName: v.name,
               vendorCategory: "Direct Sub-Reseller",
               productSku: "Zoho One License",
-              unitCostMonthly: 290,
-              unitCostYearly: 3480,
+              unitCostMonthly: zohoRate,
+              unitCostYearly: zohoRate * 12,
               creditDays: 30,
               provisioningTime: "Instant API",
               slaScore: 98.9,
@@ -889,8 +1028,8 @@ export default function VendorPortalPage() {
         await upsertVendor.mutateAsync({
           id: targetDbVendor?.id,
           name: updated.vendorName,
-          notes: updated.notes || targetDbVendor?.notes || null,
-          contactEmail: updated.supportContact || targetDbVendor?.contact_email || null,
+          notes: updated.notes || targetDbVendor?.notes || undefined,
+          contactEmail: updated.supportContact || targetDbVendor?.contact_email || undefined,
         });
       } catch (err) {
         console.error("Supabase vendor update sync error:", err);
