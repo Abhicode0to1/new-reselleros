@@ -559,14 +559,57 @@ export function RecordPaymentDialog({
   });
 
   const [reportBugOpen, setReportBugOpen] = React.useState(false);
+  const [drawerWidth, setDrawerWidth] = React.useState<number>(640);
+
+  // Load saved width from localStorage if available
+  React.useEffect(() => {
+    const saved = localStorage.getItem("resellersos_payment_drawer_width");
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (!isNaN(parsed) && parsed >= 420 && parsed <= 1400) {
+        setDrawerWidth(parsed);
+      }
+    }
+  }, []);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = drawerWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const dx = startX - moveEvent.clientX; // drag left -> dx > 0 -> width increases!
+      const newWidth = Math.max(420, Math.min(window.innerWidth - 40, startWidth + dx));
+      setDrawerWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      localStorage.setItem("resellersos_payment_drawer_width", drawerWidth.toString());
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
 
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="right"
-          className="w-full sm:max-w-[640px] md:max-w-[760px] lg:max-w-[860px] p-0 flex flex-col bg-paper text-ink shadow-2xl border-l border-hairline"
+          style={{ width: `${drawerWidth}px`, maxWidth: "96vw" }}
+          className="w-full sm:max-w-none p-0 flex flex-col bg-paper text-ink shadow-2xl border-l border-hairline relative"
         >
+          {/* ↔️ Interactive Left Edge Drag Handle */}
+          <div
+            onMouseDown={handleResizeStart}
+            title="↔️ Click and drag left/right to stretch or shrink form panel"
+            className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-primary/20 bg-transparent z-[100] flex items-center justify-center group transition-colors"
+          >
+            <div className="w-1.5 h-20 bg-hairline-strong rounded-full group-hover:bg-primary transition-colors shadow-sm" />
+          </div>
+
           <SheetHeader className="pr-12 pt-4 px-6 pb-3 border-b border-hairline bg-paper-2/40">
             <div className="flex items-center justify-between gap-3">
               <SheetTitle>
