@@ -1222,7 +1222,34 @@ function EditVendorCardModal({
 export default function VendorPortalPage() {
   const { data: dbVendors } = useVendors();
   const [activeTab, setActiveTab] = React.useState<"comparison" | "calculator" | "rfqs" | "scorecards" | "addBid" | "bills" | "keys" | "agreements">("comparison");
-  const [bids, setBids] = React.useState<VendorBid[]>(INITIAL_BIDS);
+  
+  // Persistent Bids State with localStorage persistence across page refreshes
+  const [bids, setBids] = React.useState<VendorBid[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("resellersos_vendor_bids_v3");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (err) {
+        console.error("Error reading vendor bids from localStorage:", err);
+      }
+    }
+    return INITIAL_BIDS;
+  });
+
+  // Sync bids to localStorage whenever modified or deleted
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("resellersos_vendor_bids_v3", JSON.stringify(bids));
+      } catch (err) {
+        console.error("Error saving vendor bids to localStorage:", err);
+      }
+    }
+  }, [bids]);
+
   const [rfqs, setRfqs] = React.useState<SourcingRfq[]>(INITIAL_RFQS);
   const [bills] = React.useState<VendorBillItem[]>(INITIAL_BILLS);
   const [agreements, setAgreements] = React.useState<VendorAgreement[]>(INITIAL_AGREEMENTS);
