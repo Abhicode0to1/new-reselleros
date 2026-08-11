@@ -25,6 +25,52 @@ import { rupee } from "@/lib/utils";
 
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
 
+interface ProductItem {
+  id: string;
+  name: string;
+  defaultPrice: number;
+}
+
+const PRODUCTS_BY_VENDOR: Record<"google" | "microsoft" | "zoho" | "other", ProductItem[]> = {
+  google: [
+    { id: "gw-starter", name: "Google Workspace Business Starter", defaultPrice: 2160 },
+    { id: "gw-standard", name: "Google Workspace Business Standard", defaultPrice: 10080 },
+    { id: "gw-plus", name: "Google Workspace Business Plus", defaultPrice: 15120 },
+    { id: "gw-ent-starter", name: "Google Workspace Enterprise Starter", defaultPrice: 14400 },
+    { id: "gw-ent-standard", name: "Google Workspace Enterprise Standard", defaultPrice: 21600 },
+    { id: "gw-ent-plus", name: "Google Workspace Enterprise Plus", defaultPrice: 32400 },
+    { id: "gw-ind", name: "Google Workspace Individual", defaultPrice: 7200 },
+    { id: "gw-vault", name: "Google Vault Add-on", defaultPrice: 3600 },
+    { id: "gcp-credits", name: "Google Cloud Platform (GCP) Credits", defaultPrice: 12000 },
+  ],
+  microsoft: [
+    { id: "m365-basic", name: "Microsoft 365 Business Basic", defaultPrice: 1800 },
+    { id: "m365-standard", name: "Microsoft 365 Business Standard", defaultPrice: 7920 },
+    { id: "m365-premium", name: "Microsoft 365 Business Premium", defaultPrice: 18000 },
+    { id: "m365-apps", name: "Microsoft 365 Apps for Business", defaultPrice: 5400 },
+    { id: "o365-e1", name: "Office 365 E1", defaultPrice: 7200 },
+    { id: "o365-e3", name: "Office 365 E3", defaultPrice: 18000 },
+    { id: "o365-e5", name: "Office 365 E5", defaultPrice: 32000 },
+    { id: "teams-essentials", name: "Microsoft Teams Essentials", defaultPrice: 1800 },
+    { id: "exchange-p1", name: "Exchange Online Plan 1", defaultPrice: 2880 },
+    { id: "azure-sub", name: "Microsoft Azure Cloud Subscription", defaultPrice: 15000 },
+  ],
+  zoho: [
+    { id: "zoho-wp-std", name: "Zoho Workplace Standard", defaultPrice: 1188 },
+    { id: "zoho-wp-pro", name: "Zoho Workplace Professional", defaultPrice: 2388 },
+    { id: "zoho-one", name: "Zoho One (All-in-One)", defaultPrice: 21600 },
+    { id: "zoho-mail-lite", name: "Zoho Mail Lite", defaultPrice: 708 },
+    { id: "zoho-crm-pro", name: "Zoho CRM Professional", defaultPrice: 16800 },
+    { id: "zoho-books-pro", name: "Zoho Books Professional", defaultPrice: 15000 },
+  ],
+  other: [
+    { id: "custom-saas", name: "Custom Cloud SaaS Solution", defaultPrice: 3000 },
+    { id: "domain-reg", name: "Domain Registration & DNS", defaultPrice: 850 },
+    { id: "ssl-cert", name: "SSL Certificate (Wildcard)", defaultPrice: 3500 },
+    { id: "tally-gold", name: "Tally Prime Gold License", defaultPrice: 18000 },
+  ],
+};
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -40,6 +86,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
   const [domain, setDomain] = React.useState("");
   const [vendor, setVendor] = React.useState<"google" | "microsoft" | "zoho" | "other">("google");
   const [plan, setPlan] = React.useState("Google Workspace Business Starter");
+  const [isCustomPlan, setIsCustomPlan] = React.useState(false);
   const [seats, setSeats] = React.useState(10);
   const [pricePerSeatYear, setPricePerSeatYear] = React.useState(2160);
   const [paymentTerms, setPaymentTerms] = React.useState<"paid" | "credit">("credit");
@@ -64,21 +111,32 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
     })();
   }, [open]);
 
-  // Handle plan preset selection
+  // Handle vendor change — select default product of vendor
   const handleVendorChange = (v: "google" | "microsoft" | "zoho" | "other") => {
     setVendor(v);
-    if (v === "google") {
-      setPlan("Google Workspace Business Starter");
-      setPricePerSeatYear(2160);
-    } else if (v === "microsoft") {
-      setPlan("Microsoft 365 Business Basic");
-      setPricePerSeatYear(1800);
-    } else if (v === "zoho") {
-      setPlan("Zoho Workplace Standard");
-      setPricePerSeatYear(1200);
+    setIsCustomPlan(false);
+    const firstProduct = PRODUCTS_BY_VENDOR[v][0];
+    if (firstProduct) {
+      setPlan(firstProduct.name);
+      setPricePerSeatYear(firstProduct.defaultPrice);
+    }
+  };
+
+  // Handle plan product select change
+  const handlePlanSelect = (val: string) => {
+    if (val === "CUSTOM_PLAN") {
+      setIsCustomPlan(true);
+      setPlan("");
+      return;
+    }
+    setIsCustomPlan(false);
+    const catalog = PRODUCTS_BY_VENDOR[vendor];
+    const found = catalog.find((p) => p.name === val || p.id === val);
+    if (found) {
+      setPlan(found.name);
+      setPricePerSeatYear(found.defaultPrice);
     } else {
-      setPlan("Custom Cloud License");
-      setPricePerSeatYear(3000);
+      setPlan(val);
     }
   };
 
@@ -317,14 +375,47 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
               </Select>
             </FormField>
 
-            <FormField label="Plan / SKU Name *" required htmlFor="planName">
-              <Input
-                id="planName"
-                placeholder="e.g. Google Workspace Business Starter"
-                value={plan}
-                onChange={(e) => setPlan(e.target.value)}
-                required
-              />
+            <FormField label="Plan / SKU Product *" required htmlFor="planSelect">
+              {!isCustomPlan ? (
+                <Select value={plan} onValueChange={handlePlanSelect}>
+                  <SelectTrigger id="planSelect">
+                    <SelectValue placeholder="-- Select Vendor Product / SKU --" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRODUCTS_BY_VENDOR[vendor].map((p) => (
+                      <SelectItem key={p.id} value={p.name}>
+                        {p.name} (₹{p.defaultPrice.toLocaleString()}/yr)
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="CUSTOM_PLAN">✍️ Custom Product Name / Other SKU...</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="space-y-1.5">
+                  <Input
+                    id="planName"
+                    placeholder="Type custom plan name (e.g. Acme Custom License)"
+                    value={plan}
+                    onChange={(e) => setPlan(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomPlan(false);
+                      const first = PRODUCTS_BY_VENDOR[vendor][0];
+                      if (first) {
+                        setPlan(first.name);
+                        setPricePerSeatYear(first.defaultPrice);
+                      }
+                    }}
+                    className="text-[11px] font-bold text-amber-ink hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Icon name="arrow_left" size={12} />
+                    <span>Back to Product Catalog Dropdown</span>
+                  </button>
+                </div>
+              )}
             </FormField>
           </div>
 
