@@ -9,6 +9,7 @@ import { useSubscriptions, useSetSubscriptionDomain, useDeleteSubscription } fro
 import { useActiveTrials } from "@/lib/queries/trials";
 import ExtendSubscriptionDialog from "@/components/features/subscriptions/extend-subscription-dialog";
 import AddSeatsDialog            from "@/components/features/subscriptions/add-seats-dialog";
+import { AddSubscriptionDialog } from "@/components/features/subscriptions/add-subscription-dialog";
 import { EditSubscriptionDialog } from "@/components/features/subscriptions/edit-subscription-dialog";
 import { ImportSubscriptionsDialog } from "@/components/features/subscriptions/import-subscriptions-dialog";
 import { ReconcileGoogleDialog } from "@/components/features/subscriptions/reconcile-google-dialog";
@@ -83,9 +84,10 @@ export default function SubscriptionsPage() {
       danger: true,
     })) delSub.mutate(s.id);
   };
-  const [importOpen,  setImportOpen]  = React.useState(false);
-  const [reconcileOpen, setReconcileOpen] = React.useState(false);
-  const [addGoogleOpen, setAddGoogleOpen] = React.useState(false);
+  const [importOpen,     setImportOpen]     = React.useState(false);
+  const [addDirectOpen,  setAddDirectOpen]  = React.useState(false);
+  const [reconcileOpen,  setReconcileOpen]  = React.useState(false);
+  const [addGoogleOpen,  setAddGoogleOpen]  = React.useState(false);
   const [kpiOpen, setKpiOpen] = React.useState(true);
   const [visible, setVisible] = React.useState(60);  // render cap — paginates large lists
 
@@ -192,16 +194,16 @@ export default function SubscriptionsPage() {
           <p className="text-sm text-ink-3 mt-1">All active + expired across vendors</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button icon="refresh" onClick={() => setReconcileOpen(true)}>Reconcile Google</Button>
-          <Button icon="upload" onClick={() => setImportOpen(true)}>Import</Button>
           <Button
             variant="primary"
             icon="plus"
-            onClick={() => router.push("/quotes/new" as never)}
-            title="A subscription starts from a paid quote — this opens the quote builder"
+            onClick={() => setAddDirectOpen(true)}
+            title="1-Click Onboard Subscription: Auto-syncs Customer CRM, Quote/Invoice & Active Subscription"
           >
-            New subscription
+            ➕ Add Subscription
           </Button>
+          <Button icon="refresh" onClick={() => setReconcileOpen(true)}>Reconcile Google</Button>
+          <Button icon="upload" onClick={() => setImportOpen(true)}>Import CSV</Button>
         </div>
       </div>
 
@@ -819,8 +821,15 @@ export default function SubscriptionsPage() {
         </div>
       )}
 
-      {/* Mobile primary — the header "New subscription" scrolls away on a phone. */}
-      <FAB icon="plus" label="New subscription" onClick={() => router.push("/quotes/new" as never)} />
+      {/* 1-Click Onboard Subscription Modal */}
+      <AddSubscriptionDialog
+        open={addDirectOpen}
+        onOpenChange={setAddDirectOpen}
+        onSuccess={refetch}
+      />
+
+      {/* Mobile primary FAB */}
+      <FAB icon="plus" label="Add Subscription" onClick={() => setAddDirectOpen(true)} />
     </div>
   );
 }
