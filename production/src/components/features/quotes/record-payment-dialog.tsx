@@ -559,17 +559,19 @@ export function RecordPaymentDialog({
   });
 
   const [reportBugOpen, setReportBugOpen] = React.useState(false);
-  const [drawerWidth, setDrawerWidth] = React.useState<number>(680);
+  const [drawerWidth, setDrawerWidth] = React.useState<number>(880);
   const [isDragging, setIsDragging] = React.useState(false);
 
   // Load saved width from localStorage if available
   React.useEffect(() => {
-    const saved = localStorage.getItem("resellersos_payment_drawer_width");
+    const saved = localStorage.getItem("resellersos_payment_drawer_width_v2");
     if (saved) {
       const parsed = parseInt(saved, 10);
       if (!isNaN(parsed) && parsed >= 420 && parsed <= 1400) {
         setDrawerWidth(parsed);
       }
+    } else {
+      setDrawerWidth(880);
     }
   }, []);
 
@@ -589,7 +591,7 @@ export function RecordPaymentDialog({
       setIsDragging(false);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
-      localStorage.setItem("resellersos_payment_drawer_width", drawerWidth.toString());
+      localStorage.setItem("resellersos_payment_drawer_width_v2", drawerWidth.toString());
     };
 
     window.addEventListener("mousemove", handleMouseMove);
