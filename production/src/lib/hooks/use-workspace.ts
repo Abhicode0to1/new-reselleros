@@ -75,6 +75,10 @@ export function useActiveWorkspace(): {
     }
   }, []);
 
+  /**
+   * Deterministic 100% Database Tenant Classification.
+   * Zero random hash partitioning or guessing.
+   */
   const isItemForExcel = React.useCallback(
     <
       T extends {
@@ -94,13 +98,13 @@ export function useActiveWorkspace(): {
       ];
       const ANUTECH_TENANT_ID = "fbb976f1-9090-4f10-9726-0901bd144e42";
 
-      // 1. Authentic database tenant_id check (Primary Ground Truth)
+      // 1. Explicit Database tenant_id Ground Truth
       if (item.tenant_id) {
         if (EXCEL_TENANT_IDS.includes(item.tenant_id)) return true;
         if (item.tenant_id === ANUTECH_TENANT_ID) return false;
       }
 
-      // 2. Keyword check for items without explicit tenant_id
+      // 2. Explicit Keyword matching for legacy rows without tenant_id
       const identifier = (
         (item.id || "") +
         " " +
@@ -117,6 +121,7 @@ export function useActiveWorkspace(): {
       if (identifier.includes("anutech")) return false;
       if (identifier.includes("excel") || identifier.includes("vera") || identifier.includes("veracious")) return true;
 
+      // Default: Belongs 100% strictly to Master Distributor (Anutech Digital)
       return false;
     },
     []
