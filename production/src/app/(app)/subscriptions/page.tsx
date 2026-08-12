@@ -90,6 +90,21 @@ export default function SubscriptionsPage() {
   const [addGoogleOpen,  setAddGoogleOpen]  = React.useState(false);
   const [kpiOpen, setKpiOpen] = React.useState(true);
   const [visible, setVisible] = React.useState(60);  // render cap — paginates large lists
+  const [activeWorkspace, setActiveWorkspace] = React.useState<"anutech" | "excel" | "group">("anutech");
+
+  React.useEffect(() => {
+    const updateWs = () => {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("resellersos_active_workspace");
+        if (saved === "excel" || saved === "group" || saved === "anutech") {
+          setActiveWorkspace(saved as any);
+        }
+      }
+    };
+    updateWs();
+    window.addEventListener("storage", updateWs);
+    return () => window.removeEventListener("storage", updateWs);
+  }, []);
 
   const today = new Date();
   const daysUntil = (renewal: string | null) =>
@@ -97,6 +112,11 @@ export default function SubscriptionsPage() {
 
   // Filter — paid subs only (trials handled separately below)
   const filtered = (subs ?? []).filter((s) => {
+    // Workspace filtering based on active workspace selection
+    const isAnutech = s.domain?.toLowerCase().includes("anutech") || s.customer_name?.toLowerCase().includes("anutech");
+    if (activeWorkspace === "anutech" && !isAnutech) return false;
+    if (activeWorkspace === "excel" && isAnutech) return false;
+
     const dl = daysUntil(s.renewal_date);
     if (tab === "active" && s.status !== "active") return false;
     if (tab === "expiring" && (dl === null || dl < 0 || dl > 30)) return false;
@@ -144,15 +164,24 @@ export default function SubscriptionsPage() {
     return true;
   });
 
+  const subsByWorkspace = React.useMemo(() => {
+    return (subs ?? []).filter((s) => {
+      const isAnutech = s.domain?.toLowerCase().includes("anutech") || s.customer_name?.toLowerCase().includes("anutech");
+      if (activeWorkspace === "anutech") return isAnutech;
+      if (activeWorkspace === "excel") return !isAnutech;
+      return true;
+    });
+  }, [subs, activeWorkspace]);
+
   // Counts
   const counts = {
-    all: subs?.length ?? 0,
-    active: (subs ?? []).filter((s) => s.status === "active").length,
-    expiring: (subs ?? []).filter((s) => {
+    all: subsByWorkspace.length,
+    active: subsByWorkspace.filter((s) => s.status === "active").length,
+    expiring: subsByWorkspace.filter((s) => {
       const dl = daysUntil(s.renewal_date);
       return dl !== null && dl >= 0 && dl <= 30;
     }).length,
-    expired: (subs ?? []).filter((s) => s.status === "expired").length,
+    expired: subsByWorkspace.filter((s) => s.status === "expired").length,
     trials: trials?.length ?? 0,
   };
 
@@ -165,7 +194,7 @@ export default function SubscriptionsPage() {
   ];
 
   // KPIs
-  const activeSubs = (subs ?? []).filter((s) => s.status === "active");
+  const activeSubs = subsByWorkspace.filter((s) => s.status === "active");
   const activeMRR = activeSubs.reduce((s, x) => s + x.mrr, 0);
   const activeARR = activeMRR * 12;
   const totalSeats = activeSubs.reduce((s, x) => s + x.seats, 0);
@@ -175,11 +204,11 @@ export default function SubscriptionsPage() {
   const avgMarginPct = activeSubs.length > 0
     ? Math.round(activeSubs.reduce((a, s) => a + estimateMargin(s).marginPct, 0) / activeSubs.length)
     : 0;
-  const atRiskCount = (subs ?? []).filter((s) => {
+  const atRiskCount = subsByWorkspace.filter((s) => {
     const dl = daysUntil(s.renewal_date);
     return s.status === "active" && dl !== null && dl >= 0 && dl <= 30;
   }).length;
-  const atRiskMRR = (subs ?? []).filter((s) => {
+  const atRiskMRR = subsByWorkspace.filter((s) => {
     const dl = daysUntil(s.renewal_date);
     return s.status === "active" && dl !== null && dl >= 0 && dl <= 30;
   }).reduce((s, x) => s + x.mrr, 0);
@@ -487,7 +516,14 @@ export default function SubscriptionsPage() {
                       onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && s.customer_id) { e.preventDefault(); router.push(`/customers/${s.customer_id}` as never); } }}
                     >
                       <td className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
-                        <div className="font-medium text-sm text-ink break-words leading-snug">{cleanDisplayName(s.customer_name)}</div>
+                        <div className="font-medium text-sm text-ink break-words leading-snug flex items-center gap-2 flex-wrap">
+                          <span>{cleanDisplayName(s.customer_name)}</span>
+                          {activeWorkspace === "group" && (
+                            <Badge kind={s.domain?.toLowerCase().includes("anutech") || s.customer_name?.toLowerCase().includes("anutech") ? "info" : "warning"} size="sm">
+                              {s.domain?.toLowerCase().includes("anutech") || s.customer_name?.toLowerCase().includes("anutech") ? "Anutech Digital" : "Excel Tech"}
+                            </Badge>
+                          )}
+                        </div>
                         <DomainCell sub={s} />
                       </td>
                       <td className="px-3 py-2.5 text-sm text-ink-2 align-top">
