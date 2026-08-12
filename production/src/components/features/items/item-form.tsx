@@ -343,7 +343,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
 
               // Editing a yearly-display input means dividing by 12 before storing
               const handleEdit = (field: "msrp" | "wholesale", raw: number) => {
-                const stored = row.unit === "yr" ? Math.round(raw / 12) : raw;
+                const stored = row.unit === "yr" ? Math.round((raw / 12) * 100) / 100 : raw;
                 setTier(row.tier, field, stored);
               };
 
@@ -370,10 +370,11 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                     <Input
                       type="number"
                       min={0}
+                      step="any"
                       prefix="₹"
                       suffix={row.unit === "yr" ? "/yr" : "/mo"}
                       value={displayMsrp || ""}
-                      onChange={(e) => handleEdit("msrp", parseInt(e.target.value) || 0)}
+                      onChange={(e) => handleEdit("msrp", parseFloat(e.target.value) || 0)}
                       className="text-right tabular-nums"
                     />
                   </div>
@@ -381,10 +382,11 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                     <Input
                       type="number"
                       min={0}
+                      step="any"
                       prefix="₹"
                       suffix={row.unit === "yr" ? "/yr" : "/mo"}
                       value={displayWholesale || ""}
-                      onChange={(e) => handleEdit("wholesale", parseInt(e.target.value) || 0)}
+                      onChange={(e) => handleEdit("wholesale", parseFloat(e.target.value) || 0)}
                       className="text-right tabular-nums"
                     />
                   </div>

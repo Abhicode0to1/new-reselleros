@@ -24,8 +24,8 @@ import type { Item } from "@/lib/supabase/database.types";
 
 const schema = z.object({
   name:      z.string().min(2, "Name required").max(120),
-  msrp:      z.coerce.number().int().min(0, "Sale price ≥ 0"),
-  wholesale: z.coerce.number().int().min(0).optional(),
+  msrp:      z.coerce.number().min(0, "Sale price ≥ 0"),
+  wholesale: z.coerce.number().min(0).optional(),
   hsn:       z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;
@@ -58,8 +58,8 @@ export function OneTimeItemForm({ open, onOpenChange, item }: Props) {
   }, [open, item, reset]);
 
   const onSubmit = async (data: FormData) => {
-    const cost = Math.max(0, Math.round(data.wholesale ?? 0));
-    const price = Math.max(0, Math.round(data.msrp));
+    const cost = Math.max(0, Math.round((data.wholesale ?? 0) * 100) / 100);
+    const price = Math.max(0, Math.round(data.msrp * 100) / 100);
     try {
       if (item) {
         await update.mutateAsync({
@@ -102,11 +102,11 @@ export function OneTimeItemForm({ open, onOpenChange, item }: Props) {
 
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Sale price (₹)" required htmlFor="ot_msrp">
-                <Input id="ot_msrp" inputMode="numeric" prefix="₹" placeholder="0" error={errors.msrp?.message} {...register("msrp")} />
+                <Input id="ot_msrp" type="number" step="any" prefix="₹" placeholder="0.00" error={errors.msrp?.message} {...register("msrp")} />
                 <p className="text-[10px] text-ink-3 mt-1">Default price — editable per deal/quote.</p>
               </FormField>
               <FormField label="Your cost (₹)" htmlFor="ot_cost">
-                <Input id="ot_cost" inputMode="numeric" prefix="₹" placeholder="0" error={errors.wholesale?.message} {...register("wholesale")} />
+                <Input id="ot_cost" type="number" step="any" prefix="₹" placeholder="0.00" error={errors.wholesale?.message} {...register("wholesale")} />
                 <p className="text-[10px] text-ink-3 mt-1">Optional — for margin.</p>
               </FormField>
             </div>
