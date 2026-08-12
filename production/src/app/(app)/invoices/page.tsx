@@ -47,6 +47,7 @@ import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
 import { getInvoiceWhatsAppUrl } from "@/lib/whatsapp";
 import type { Invoice, Payment } from "@/lib/supabase/database.types";
+import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 
 const INV_COL_ORDER = ["select", "invoice", "customer", "date", "due", "amount", "status", "action"];
 // Fluid percentage widths (sum = 100) so the table always fits the viewport —
@@ -75,10 +76,18 @@ function InvoicesPageInner() {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [pendingOpen, setPendingOpen] = React.useState<boolean>(false);
 
+  const { filterEntity, workspace } = useActiveWorkspace();
+
   const isProjectInv = React.useCallback((id: string) => projectInvoiceIds?.has(id) ?? false, [projectInvoiceIds]);
+
+  const workspaceInvoices = React.useMemo(
+    () => (invoices ?? []).filter((inv) => filterEntity(inv)),
+    [invoices, filterEntity, workspace]
+  );
+
   const viewInvoices = React.useMemo(
-    () => (invoices ?? []).filter((inv) => view === "all" || (view === "project" ? isProjectInv(inv.id) : !isProjectInv(inv.id))),
-    [invoices, view, isProjectInv]
+    () => workspaceInvoices.filter((inv) => view === "all" || (view === "project" ? isProjectInv(inv.id) : !isProjectInv(inv.id))),
+    [workspaceInvoices, view, isProjectInv]
   );
 
   const dateFilteredInvoices = React.useMemo(() => {
