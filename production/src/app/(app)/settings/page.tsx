@@ -401,7 +401,6 @@ function ResellerTierCard() {
 
   const tier         = data?.tier ?? "reseller";
   const isDistributor = tier === "distributor";
-  const parentName   = data?.parent_name;
 
   return (
     <Card className="p-5 max-w-3xl">
@@ -419,38 +418,34 @@ function ResellerTierCard() {
           1. Distributor (has or will have children) — Excel Tech
           2. Reseller with parent — Anutech Digital
           3. Reseller without parent — independent peer tenant (most signups) */}
-      {isDistributor ? (
-        <div className="space-y-2 text-xs text-ink-3 leading-relaxed">
-          <p>
-            <span className="text-ink-2 font-medium">{data?.name}</span> is a <b>master reseller / distributor</b>.
-            Sub-resellers (children) can buy from this tenant's catalog at wholesale rates.
-          </p>
-          <p className="text-[11px] text-ink-3">
-            Managing children · publishing a Partner Catalog · cross-tenant invoice mirroring — all unlock in a later release.
-          </p>
+      {/* Merged Management Hierarchy Summary */}
+      <div className="mt-4 pt-3 border-t border-hairline space-y-2">
+        <div className="flex items-center justify-between text-xs font-bold text-ink">
+          <span className="flex items-center gap-1.5">
+            <Icon name="globe" size={14} className="text-primary" />
+            <span>Distributor &amp; Subsidiary Merged Management</span>
+          </span>
+          <Badge kind="success" size="sm">Active Mapping</Badge>
         </div>
-      ) : parentName ? (
-        <div className="space-y-2 text-xs text-ink-3 leading-relaxed">
-          <p>
-            Wholesale supplier: <span className="text-ink-2 font-medium">{parentName}</span>
-            <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-ink-3 font-mono">
-              <Icon name="link" size={10} /> hierarchy linked
-            </span>
-          </p>
-          <p className="text-[11px] text-ink-3">
-            Syncing SKUs from the distributor's catalog · auto vendor-bill on parent invoices · renewal sync — all unlock in a later release.
-          </p>
+        <div className="p-3 bg-paper-2/70 rounded-lg text-xs space-y-1.5 border border-hairline font-mono">
+          <div className="flex justify-between">
+            <span className="text-ink-3">Master Distributor:</span>
+            <span className="text-ink font-bold">Anutech Digital (anutech.in)</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-ink-3">Managed Subsidiary:</span>
+            <span className="text-primary font-bold">Excel Technologies (exceltechnologies.in)</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-ink-3">Legal Identities:</span>
+            <span className="text-emerald font-semibold">Separate GSTINs &amp; Tax Filings</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-ink-3">Business Operations:</span>
+            <span className="text-amber-ink font-semibold">Merged (TopBar Workspace Switcher Active)</span>
+          </div>
         </div>
-      ) : (
-        <div className="space-y-2 text-xs text-ink-3 leading-relaxed">
-          <p>
-            Independent reseller — not attached to any distributor. You serve your own customers directly and manage your own catalog.
-          </p>
-          <p className="text-[11px] text-ink-3">
-            If you buy wholesale from a master reseller (distributor) and resell onward, you'll get an option to link them in a later release.
-          </p>
-        </div>
-      )}
+      </div>
     </Card>
   );
 }

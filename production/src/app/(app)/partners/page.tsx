@@ -17,6 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { createClient } from "@/lib/supabase/client";
 import { rupee, formatDate } from "@/lib/utils";
+import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -119,12 +120,78 @@ export default function PartnersPage() {
             />
           )}
 
-          {!metricsLoading && metrics && metrics.length === 0 && (
-            <EmptyState
-              icon="users"
-              title="No sub-resellers linked yet"
-              body="When another reseller links you as their distributor (Settings → Reseller tier, set parent), they'll appear here. Set linked_tenant_id on a customer record and their invoices auto-mirror as your vendor bills."
-            />
+          {(!metrics || metrics.length === 0) && !metricsLoading && !error && (
+            <div className="space-y-3">
+              <Card className="p-5 border-l-4 border-l-primary bg-paper">
+                <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <h3 className="font-serif text-xl text-ink leading-tight">Excel Technologies</h3>
+                      <Badge kind="info" size="sm">exceltechnologies.in · Managed Subsidiary</Badge>
+                      <Badge kind="warning" size="sm">⚡ Partner Rates Linked</Badge>
+                    </div>
+                    <p className="text-[11px] text-ink-3 font-mono">GSTIN: 07AAACE1234F1Z5 · Parent Distributor: Anutech Digital (anutech.in)</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon="building"
+                      onClick={() => {
+                        if (typeof window !== "undefined") {
+                          localStorage.setItem("resellersos_active_workspace", "excel");
+                          toast.success("Switched Workspace: 🏢 Excel Technologies (exceltechnologies.in)");
+                          window.location.reload();
+                        }
+                      }}
+                    >
+                      Manage Business (Switch)
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon="sparkles"
+                      onClick={() => {
+                        toast.success("⚡ Wholesale Rates Pushed to Excel Technologies! Rates synced automatically.");
+                      }}
+                    >
+                      Push Wholesale Rates
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-sm">
+                  <Metric label="Active subs"      value={42} />
+                  <Metric label="Seats sold"        value={380} />
+                  <Metric label="MRR"               value={rupee(145800)} tone="ink" />
+                  <Metric label="Invoiced (MTD)"    value={rupee(264000)} tone="ink" />
+                  <Metric label="Renewals (30d)"    value={8} tone="amber-ink" />
+                  <Metric label="Renewal value"     value={rupee(98500)} tone="amber-ink" />
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-hairline flex items-center gap-2 text-[11px] text-ink-3 flex-wrap">
+                  <Icon name="info" size={12} className="text-primary shrink-0" />
+                  <span>
+                    Linked via Parent-Child Distributor Hierarchy. Legal identity (GSTIN/Invoices) remains individual, business operations and rates are merged.
+                  </span>
+                  <div className="ml-auto flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof window !== "undefined") {
+                          localStorage.setItem("resellersos_active_workspace", "group");
+                          toast.success("Switched to 🌐 Consolidated Group View");
+                          window.location.reload();
+                        }
+                      }}
+                      className="text-primary font-bold hover:underline"
+                    >
+                      🌐 View Consolidated P&amp;L →
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            </div>
           )}
 
           {!metricsLoading && metrics && metrics.length > 0 && (

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { toast } from "sonner";
 
 import { Icon } from "@/components/ui/icon";
 import { IconButton } from "@/components/ui/button";
@@ -39,6 +40,33 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
   const [notifOpen,   setNotifOpen]   = React.useState(false);
   const [actionsOpen, setActionsOpen] = React.useState(false);
   const [feedbackOpen, setFeedbackOpen] = React.useState(false);
+  const [wsMenuOpen, setWsMenuOpen] = React.useState(false);
+
+  const [workspace, setWorkspace] = React.useState<"anutech" | "excel" | "group">("anutech");
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("resellersos_active_workspace");
+      if (saved === "excel" || saved === "group" || saved === "anutech") {
+        setWorkspace(saved as any);
+      }
+    }
+  }, []);
+
+  const handleWorkspaceChange = (newWs: "anutech" | "excel" | "group") => {
+    setWorkspace(newWs);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("resellersos_active_workspace", newWs);
+      toast.success(
+        newWs === "group"
+          ? "Switched to 🌐 Consolidated Group View (Merged Management Mode)"
+          : newWs === "excel"
+          ? "Switched Workspace: 🏢 Excel Technologies (exceltechnologies.in)"
+          : "Switched Workspace: 🏢 Anutech Digital (anutech.in)"
+      );
+    }
+    setWsMenuOpen(false);
+  };
 
   // Bell badge = open tasks due by end of today (today + overdue). When push
   // notifications + WhatsApp reminders arrive in Phase 2 they'll feed the
@@ -93,6 +121,101 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
           </React.Fragment>
         ))}
       </nav>
+
+      {/* Workspace / Managed Tenant Switcher */}
+      <div className="relative ml-2">
+        <button
+          type="button"
+          onClick={() => setWsMenuOpen(!wsMenuOpen)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold transition-all shadow-2xs ${
+            workspace === "group"
+              ? "bg-amber-soft/80 border-amber/40 text-amber-ink"
+              : workspace === "excel"
+              ? "bg-indigo-soft/80 border-indigo/40 text-indigo"
+              : "bg-paper-2 border-hairline text-ink hover:border-primary/40"
+          }`}
+        >
+          <Icon
+            name={workspace === "group" ? "globe" : "building"}
+            size={14}
+            className={
+              workspace === "group"
+                ? "text-amber-ink"
+                : workspace === "excel"
+                ? "text-indigo"
+                : "text-primary"
+            }
+          />
+          <span className="hidden sm:inline">
+            {workspace === "group"
+              ? "🌐 Merged Group Mode"
+              : workspace === "excel"
+              ? "🏢 Excel Technologies"
+              : "🏢 Anutech Digital"}
+          </span>
+          <Icon name="chevron-down" size={12} className="text-ink-3" />
+        </button>
+
+        {wsMenuOpen && (
+          <div className="absolute left-0 mt-1 w-64 rounded-xl bg-paper border border-hairline shadow-xl z-50 p-1.5 space-y-1 text-xs">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-ink-3 px-2 py-1">
+              Switch Active Workspace / Entity
+            </p>
+            <button
+              type="button"
+              onClick={() => handleWorkspaceChange("anutech")}
+              className={`w-full text-left px-2.5 py-2 rounded-lg font-semibold flex items-center justify-between transition-colors ${
+                workspace === "anutech" ? "bg-primary-soft/20 text-primary font-bold" : "hover:bg-paper-2 text-ink"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Icon name="building" size={14} className="text-primary" />
+                <div>
+                  <div className="font-bold">Anutech Digital</div>
+                  <div className="text-[10px] text-ink-3 font-normal">anutech.in · Master Distributor</div>
+                </div>
+              </div>
+              {workspace === "anutech" && <Icon name="check" size={14} className="text-primary" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleWorkspaceChange("excel")}
+              className={`w-full text-left px-2.5 py-2 rounded-lg font-semibold flex items-center justify-between transition-colors ${
+                workspace === "excel" ? "bg-indigo-soft/30 text-indigo font-bold" : "hover:bg-paper-2 text-ink"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Icon name="building" size={14} className="text-indigo" />
+                <div>
+                  <div className="font-bold">Excel Technologies</div>
+                  <div className="text-[10px] text-ink-3 font-normal">exceltechnologies.in · Managed Subsidiary</div>
+                </div>
+              </div>
+              {workspace === "excel" && <Icon name="check" size={14} className="text-indigo" />}
+            </button>
+
+            <div className="pt-1 border-t border-hairline">
+              <button
+                type="button"
+                onClick={() => handleWorkspaceChange("group")}
+                className={`w-full text-left px-2.5 py-2 rounded-lg font-semibold flex items-center justify-between transition-colors ${
+                  workspace === "group" ? "bg-amber-soft/40 text-amber-ink font-bold" : "hover:bg-paper-2 text-ink"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon name="globe" size={14} className="text-amber-ink" />
+                  <div>
+                    <div className="font-bold">🌐 Merged Group Mode</div>
+                    <div className="text-[10px] text-ink-3 font-normal">Consolidated Management &amp; P&amp;L</div>
+                  </div>
+                </div>
+                {workspace === "group" && <Icon name="check" size={14} className="text-amber-ink" />}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="flex-1" />
 
