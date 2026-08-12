@@ -155,7 +155,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
       const formattedSubject = `[${type.toUpperCase()}] [${priority.toUpperCase()}] ${extractedTitle}`;
 
       const screenshotsListText = screenshots
-        .map((s, idx) => `ATTACHMENT_${idx + 1}: ${s.name}`)
+        .map((s, idx) => `ATTACHMENT_${idx + 1}: ${s.name}\nDATA_URL_${idx + 1}: ${s.dataUrl}`)
         .join("\n");
 
       const fullBody = `

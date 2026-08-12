@@ -43,10 +43,36 @@ function useTickets(scope: ViewScope, statusFilter: "all" | SupportTicketStatus)
   });
 }
 
+function extractAttachments(body: string | null): Array<{ name: string; url?: string }> {
+  if (!body) return [];
+  const attachments: Array<{ name: string; url?: string }> = [];
+
+  // Match ATTACHMENT_N: name
+  const attachMatches = Array.from(body.matchAll(/ATTACHMENT_\d+:\s*([^\n]+)/g));
+  // Match DATA_URL_N: url
+  const urlMatches = Array.from(body.matchAll(/DATA_URL_\d+:\s*(data:image\/[^\s\n]+|https?:\/\/[^\s\n]+)/g));
+
+  attachMatches.forEach((m, idx) => {
+    const name = m[1]?.trim() ?? `Attachment ${idx + 1}`;
+    const url = urlMatches[idx]?.[1]?.trim();
+    attachments.push({ name, url });
+  });
+
+  if (attachments.length === 0) {
+    const standaloneUrls = Array.from(body.matchAll(/(data:image\/[^\s\n]+|https?:\/\/[^\s\n]+\.(png|jpg|jpeg|gif|webp))/gi));
+    standaloneUrls.forEach((m, idx) => {
+      attachments.push({ name: `Screenshot ${idx + 1}`, url: m[1] });
+    });
+  }
+
+  return attachments;
+}
+
 export default function SupportPage() {
   const [scope, setScope] = React.useState<ViewScope>("tenant_feedback");
   const [statusFilter, setStatusFilter] = React.useState<"all" | SupportTicketStatus>("open");
   const [selected, setSelected] = React.useState<SupportTicketRow | null>(null);
+  const [previewImage, setPreviewImage] = React.useState<{ name: string; url: string } | null>(null);
 
   const { data, isLoading, refetch } = useTickets(scope, statusFilter);
   const tickets = data?.tickets ?? [];
@@ -316,6 +342,63 @@ export default function SupportPage() {
               </div>
             </div>
 
+            {/* Attached Screenshots & Files */}
+            {(() => {
+              const atts = extractAttachments(selected.body);
+              if (atts.length === 0) return null;
+              return (
+                <div className="space-y-2 pt-2 border-t border-hairline">
+                  <label className="block text-xs font-bold text-ink-3 uppercase tracking-wider flex items-center gap-1.5">
+                    <Icon name="image" size={14} className="text-primary" />
+                    <span>Attached Screenshots &amp; Files ({atts.length})</span>
+                  </label>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {atts.map((att, idx) => (
+                      <div
+                        key={idx}
+                        className="rounded-lg border border-hairline bg-paper-2/60 p-2.5 flex items-center gap-3 group hover:border-primary/50 transition-all"
+                      >
+                        {att.url ? (
+                          <div
+                            onClick={() => setPreviewImage({ name: att.name, url: att.url! })}
+                            className="relative w-16 h-16 rounded bg-ink/10 overflow-hidden shrink-0 cursor-pointer group-hover:opacity-90 border border-hairline"
+                          >
+                            <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-ink/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                              <Icon name="search" size={14} />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded bg-paper border border-hairline grid place-items-center shrink-0 text-ink-3">
+                            <Icon name="file" size={18} />
+                          </div>
+                        )}
+
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-ink truncate font-mono">{att.name}</p>
+                          {att.url ? (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage({ name: att.name, url: att.url! })}
+                              className="text-[11px] text-primary font-bold hover:underline flex items-center gap-1 mt-0.5"
+                            >
+                              <Icon name="eye" size={12} />
+                              <span>View Full Screenshot</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-ink-3 block mt-0.5">
+                              Filename logged with submission
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Resolution Note Input */}
             <div className="space-y-1.5 pt-2 border-t border-hairline">
               <label htmlFor="resNote" className="block text-xs font-bold text-ink-3 uppercase tracking-wider">
@@ -376,6 +459,45 @@ export default function SupportPage() {
                   Save &amp; Close
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Lightbox Viewer Modal */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[9999] bg-ink/80 flex items-center justify-center p-4 backdrop-blur-md"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div
+            className="relative max-w-4xl w-full max-h-[90vh] bg-paper rounded-xl shadow-2xl border border-hairline overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-paper-2">
+              <span className="text-xs font-bold text-ink font-mono truncate">{previewImage.name}</span>
+              <div className="flex items-center gap-3">
+                <a
+                  href={previewImage.url}
+                  download={previewImage.name}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary font-bold hover:underline flex items-center gap-1"
+                >
+                  <Icon name="download" size={14} />
+                  <span>Download</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewImage(null)}
+                  className="text-ink-3 hover:text-ink p-1 rounded-md hover:bg-paper-3"
+                >
+                  <Icon name="x" size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="p-4 bg-ink/90 flex items-center justify-center overflow-auto max-h-[80vh]">
+              <img src={previewImage.url} alt={previewImage.name} className="max-w-full max-h-[75vh] object-contain rounded shadow-lg" />
             </div>
           </div>
         </div>
