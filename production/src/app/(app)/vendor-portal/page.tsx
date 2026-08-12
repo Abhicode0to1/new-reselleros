@@ -1037,42 +1037,66 @@ function EditVendorCardModal({
                   <Icon name="sparkles" size={14} />
                   <span>Product Group Wholesale Rates (₹ / User / Month)</span>
                 </label>
-                <span className="text-[11px] text-ink-3">Set rate per edition</span>
+                <span className="text-[11px] text-ink-3 font-bold">🗓️ Billed Monthly · 📅 Annual = Rate × 12</span>
               </div>
 
               <div className="space-y-3 pt-1">
                 {selectedProducts.includes("Google Workspace & GCP") && (
                   <div className="p-2.5 bg-paper border border-hairline rounded-lg space-y-2">
-                    <span className="text-xs font-bold text-ink flex items-center gap-1">
-                      <span>🔵</span> Google Workspace Group Rates
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-ink flex items-center gap-1">
+                        <span>🔵</span> Google Workspace Group Rates
+                      </span>
+                      <span className="text-[10px] text-ink-3">All 3 editions supplied</span>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Starter Rate (₹)</label>
+                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Starter (₹/usr/mo)</label>
                         <Input
                           type="number"
                           value={skuRates["Google Workspace Business Starter"] || "121"}
-                          onChange={(e) => setSkuRates({ ...skuRates, "Google Workspace Business Starter": e.target.value })}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSkuRates({ ...skuRates, "Google Workspace Business Starter": val });
+                            if (productSku === "Google Workspace Business Starter") setMonthlyCost(val);
+                          }}
                           className="bg-paper text-xs font-mono font-bold"
                         />
+                        <span className="text-[10px] text-primary font-semibold block mt-0.5">
+                          📅 ₹{(Number(skuRates["Google Workspace Business Starter"] || 121) * 12).toLocaleString()} / yr
+                        </span>
                       </div>
                       <div>
-                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Standard Rate (₹)</label>
+                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Standard (₹/usr/mo)</label>
                         <Input
                           type="number"
                           value={skuRates["Google Workspace Business Standard"] || "650"}
-                          onChange={(e) => setSkuRates({ ...skuRates, "Google Workspace Business Standard": e.target.value })}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSkuRates({ ...skuRates, "Google Workspace Business Standard": val });
+                            if (productSku === "Google Workspace Business Standard") setMonthlyCost(val);
+                          }}
                           className="bg-paper text-xs font-mono font-bold"
                         />
+                        <span className="text-[10px] text-primary font-semibold block mt-0.5">
+                          📅 ₹{(Number(skuRates["Google Workspace Business Standard"] || 650) * 12).toLocaleString()} / yr
+                        </span>
                       </div>
                       <div>
-                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Plus Rate (₹)</label>
+                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Plus (₹/usr/mo)</label>
                         <Input
                           type="number"
                           value={skuRates["Google Workspace Business Plus"] || "1260"}
-                          onChange={(e) => setSkuRates({ ...skuRates, "Google Workspace Business Plus": e.target.value })}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSkuRates({ ...skuRates, "Google Workspace Business Plus": val });
+                            if (productSku === "Google Workspace Business Plus") setMonthlyCost(val);
+                          }}
                           className="bg-paper text-xs font-mono font-bold"
                         />
+                        <span className="text-[10px] text-primary font-semibold block mt-0.5">
+                          📅 ₹{(Number(skuRates["Google Workspace Business Plus"] || 1260) * 12).toLocaleString()} / yr
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1080,27 +1104,44 @@ function EditVendorCardModal({
 
                 {selectedProducts.includes("Microsoft 365 & Azure") && (
                   <div className="p-2.5 bg-paper border border-hairline rounded-lg space-y-2">
-                    <span className="text-xs font-bold text-ink flex items-center gap-1">
-                      <span>🔷</span> Microsoft 365 Group Rates
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-ink flex items-center gap-1">
+                        <span>🔷</span> Microsoft 365 Group Rates
+                      </span>
+                      <span className="text-[10px] text-ink-3">Basic &amp; Standard supplied</span>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Basic Rate (₹)</label>
+                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Basic (₹/usr/mo)</label>
                         <Input
                           type="number"
                           value={skuRates["Microsoft 365 Business Basic"] || "114"}
-                          onChange={(e) => setSkuRates({ ...skuRates, "Microsoft 365 Business Basic": e.target.value })}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSkuRates({ ...skuRates, "Microsoft 365 Business Basic": val });
+                            if (productSku === "Microsoft 365 Business Basic") setMonthlyCost(val);
+                          }}
                           className="bg-paper text-xs font-mono font-bold"
                         />
+                        <span className="text-[10px] text-primary font-semibold block mt-0.5">
+                          📅 ₹{(Number(skuRates["Microsoft 365 Business Basic"] || 114) * 12).toLocaleString()} / yr
+                        </span>
                       </div>
                       <div>
-                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Standard Rate (₹)</label>
+                        <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Standard (₹/usr/mo)</label>
                         <Input
                           type="number"
                           value={skuRates["Microsoft 365 Business Standard"] || "660"}
-                          onChange={(e) => setSkuRates({ ...skuRates, "Microsoft 365 Business Standard": e.target.value })}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSkuRates({ ...skuRates, "Microsoft 365 Business Standard": val });
+                            if (productSku === "Microsoft 365 Business Standard") setMonthlyCost(val);
+                          }}
                           className="bg-paper text-xs font-mono font-bold"
                         />
+                        <span className="text-[10px] text-primary font-semibold block mt-0.5">
+                          📅 ₹{(Number(skuRates["Microsoft 365 Business Standard"] || 660) * 12).toLocaleString()} / yr
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1112,13 +1153,20 @@ function EditVendorCardModal({
                       <span>🔶</span> Zoho One License Rate
                     </span>
                     <div className="w-1/2">
-                      <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Zoho One Rate (₹)</label>
+                      <label className="block text-[10px] uppercase text-ink-3 font-semibold mb-0.5">Zoho One (₹/usr/mo)</label>
                       <Input
                         type="number"
                         value={skuRates["Zoho One License"] || "290"}
-                        onChange={(e) => setSkuRates({ ...skuRates, "Zoho One License": e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSkuRates({ ...skuRates, "Zoho One License": val });
+                          if (productSku === "Zoho One License") setMonthlyCost(val);
+                        }}
                         className="bg-paper text-xs font-mono font-bold"
                       />
+                      <span className="text-[10px] text-primary font-semibold block mt-0.5">
+                        📅 ₹{(Number(skuRates["Zoho One License"] || 290) * 12).toLocaleString()} / yr
+                      </span>
                     </div>
                   </div>
                 )}
@@ -1128,13 +1176,20 @@ function EditVendorCardModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
-                Product License SKU *
+              <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1 flex items-center justify-between">
+                <span>Featured / Primary SKU *</span>
+                <span className="text-[10px] text-primary font-bold">Auto-syncs rate</span>
               </label>
               <select
                 value={productSku}
                 disabled={selectedProducts.length === 0}
-                onChange={(e) => setProductSku(e.target.value)}
+                onChange={(e) => {
+                  const newSku = e.target.value;
+                  setProductSku(newSku);
+                  if (skuRates[newSku]) {
+                    setMonthlyCost(skuRates[newSku]);
+                  }
+                }}
                 className="w-full rounded-xl border border-hairline bg-paper px-3 py-2 text-sm font-semibold focus:border-amber disabled:opacity-50"
               >
                 {availableSkus.map((sku) => (
@@ -1143,18 +1198,31 @@ function EditVendorCardModal({
                   </option>
                 ))}
               </select>
+              <p className="text-[10px] text-ink-3 mt-1">
+                *(Vendor supplies all selected product group editions above)*
+              </p>
             </div>
 
             <div>
               <label className="block text-xs uppercase tracking-wider text-ink-3 font-bold mb-1">
-                Wholesale Unit Rate (₹/usr/mo) *
+                Wholesale Unit Rate (₹ / user / mo) *
               </label>
               <Input
                 type="number"
                 value={monthlyCost}
-                onChange={(e) => setMonthlyCost(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setMonthlyCost(val);
+                  if (productSku) {
+                    setSkuRates((prev) => ({ ...prev, [productSku]: val }));
+                  }
+                }}
                 className="bg-paper font-mono font-bold text-sm"
               />
+              <div className="flex items-center justify-between text-[10px] mt-1 font-mono">
+                <span className="text-primary font-bold">🗓️ ₹{Number(monthlyCost || 0).toLocaleString()} / mo</span>
+                <span className="text-ink-3 font-semibold">📅 ₹{(Number(monthlyCost || 0) * 12).toLocaleString()} / yr</span>
+              </div>
             </div>
           </div>
 
