@@ -786,7 +786,7 @@ function LeadsPageInner() {
           target the single TOP hot lead (highest value) — Call opens the
           phone dialer; Send nudge opens the mail client with a pre-written
           follow-up. Both gracefully degrade if the contact info is missing. */}
-      {!isLoading && leads && leads.length > 0 && !isSales && (() => {
+      {!isLoading && leads && leads.length > 0 && !isSales && search.trim() === "" && (() => {
         const hotLeads = filtered
           .filter((l) => l.stage === "quote" || l.stage === "trial")
           .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
@@ -875,7 +875,7 @@ function LeadsPageInner() {
           row to open that lead's detail drawer. Hidden if no leads have
           follow_up_date set or none are due. */}
       {(() => {
-        if (!leads || leads.length === 0) return null;
+        if (!leads || leads.length === 0 || search.trim() !== "") return null;
         const today      = new Date().toISOString().slice(0, 10);  // YYYY-MM-DD
         const dueToday   = leads.filter((l) => l.follow_up_date && l.follow_up_date <= today &&
                                                 l.stage !== "won" && l.stage !== "lost");
