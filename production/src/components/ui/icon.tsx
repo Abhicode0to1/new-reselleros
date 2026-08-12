@@ -65,6 +65,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   alert: AlertTriangle,
   info: Info,
   edit: Edit,
+  pencil: Edit,
   trash: Trash2,
   copy: Copy,
   link: Link,

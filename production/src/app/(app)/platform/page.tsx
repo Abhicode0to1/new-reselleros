@@ -286,7 +286,7 @@ export default function PlatformSignupsPage() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <IconButton
-                          icon="pencil"
+                          icon="edit"
                           title="Edit workspace"
                           aria-label="Edit workspace"
                           className="text-ink-3 hover:text-ink h-7 w-7"
