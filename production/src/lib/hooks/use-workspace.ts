@@ -110,6 +110,11 @@ export function useActiveWorkspace(): {
         (item.company || "")
       ).toLowerCase();
 
+      // Excel Technologies as a customer account belongs to Anutech Digital (Distributor)
+      if (identifier.includes("excel technologies")) {
+        return false;
+      }
+
       // Keywords matching Anutech vs Excel
       if (identifier.includes("anutech")) return false;
       if (identifier.includes("excel") || identifier.includes("vera") || identifier.includes("veracious")) return true;
@@ -138,6 +143,24 @@ export function useActiveWorkspace(): {
       item: T
     ): boolean => {
       if (workspace === "group") return true;
+
+      const identifier = (
+        (item.id || "") +
+        " " +
+        (item.customer_name || "") +
+        " " +
+        (item.domain || "") +
+        " " +
+        (item.name || "") +
+        " " +
+        (item.company || "")
+      ).toLowerCase();
+
+      // Excel Technologies as a Sub-Reseller Customer Account belongs in Anutech Digital's workspace
+      if (identifier.includes("excel technologies")) {
+        return workspace === "anutech" || (workspace as string) === "group";
+      }
+
       const belongsToExcel = isItemForExcel(item);
       if (workspace === "excel") return belongsToExcel;
       if (workspace === "anutech") return !belongsToExcel;
@@ -159,6 +182,22 @@ export function useActiveWorkspace(): {
     >(
       item: T
     ) => {
+      const identifier = (
+        (item.id || "") +
+        " " +
+        (item.customer_name || "") +
+        " " +
+        (item.domain || "") +
+        " " +
+        (item.name || "") +
+        " " +
+        (item.company || "")
+      ).toLowerCase();
+
+      if (identifier.includes("excel technologies")) {
+        return { label: "Sub-Reseller Account", kind: "info" as const };
+      }
+
       const belongsToExcel = isItemForExcel(item);
       return belongsToExcel
         ? { label: "Excel Tech", kind: "warning" as const }
