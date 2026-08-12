@@ -16,7 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/shared/empty-state";
 import { FormField } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -50,7 +49,7 @@ export default function MyExpensesPage() {
       if (auth?.user) {
         setUserEmail(auth.user.email || "");
         const { data: profile } = await supabase.from("users").select("full_name").eq("id", auth.user.id).single();
-        if (profile) setUserName(profile.full_name);
+        if (profile && profile.full_name) setUserName(profile.full_name);
       }
     }
     void loadUser();
