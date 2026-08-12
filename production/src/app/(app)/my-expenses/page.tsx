@@ -55,23 +55,28 @@ export default function MyExpensesPage() {
     void loadUser();
   }, []);
 
-  // Filter advances matching logged-in user (e.g. Darshan / sales@anutech.in)
+  // Filter advances strictly matching logged-in user (e.g. Darshan / sales@anutech.in)
   const myAdvances = advances.filter((a) => {
     if (!a || a.status !== "active") return false;
     const empNameLower = (a.employee_name || "").toLowerCase();
     const curNameLower = userName.toLowerCase();
     const curEmailLower = userEmail.toLowerCase();
 
-    return (
-      empNameLower.includes("darshan") ||
-      empNameLower.includes("sales") ||
-      (curNameLower && (empNameLower.includes(curNameLower) || curNameLower.includes(empNameLower))) ||
-      (curEmailLower && (curEmailLower.includes("sales") || curEmailLower.includes("darshan"))) ||
-      advances.filter((x) => x.status === "active").length === 1
+    // Check strict match by employee name or email
+    const nameMatch = curNameLower && (empNameLower.includes(curNameLower) || curNameLower.includes(empNameLower));
+    const emailMatch = curEmailLower && (
+      (curEmailLower.includes("sales") && empNameLower.includes("darshan")) ||
+      (curEmailLower.includes("pawan") && empNameLower.includes("pawan")) ||
+      (curEmailLower.includes("ranjeet") && empNameLower.includes("ranjeet")) ||
+      (curEmailLower.includes("abhishek") && empNameLower.includes("abhishek")) ||
+      (curEmailLower.includes("pratik") && empNameLower.includes("pratik")) ||
+      (curEmailLower.includes("hitesh") && empNameLower.includes("hitesh"))
     );
+
+    return nameMatch || emailMatch;
   });
 
-  const activeAdvance = myAdvances[0] ?? advances.find((a) => a.status === "active") ?? null;
+  const activeAdvance = myAdvances[0] ?? null;
   const totalAvailable = activeAdvance ? activeAdvance.remaining_balance : 0;
   const totalSpent = activeAdvance ? activeAdvance.total_spent : 0;
   const totalDisbursed = activeAdvance ? activeAdvance.disbursed_amount : 0;
