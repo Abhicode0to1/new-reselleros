@@ -92,12 +92,15 @@ export function useActiveWorkspace(): {
         "4eeab895-6f4e-42ea-aaf2-efe4cfbc2129",
         "606a7ae7-9805-4a10-8163-7da6e42968e9",
       ];
+      const ANUTECH_TENANT_ID = "fbb976f1-9090-4f10-9726-0901bd144e42";
 
-      // Explicit Excel tenant match
-      if (item.tenant_id && EXCEL_TENANT_IDS.includes(item.tenant_id)) {
-        return true;
+      // 1. Authentic database tenant_id check (Primary Ground Truth)
+      if (item.tenant_id) {
+        if (EXCEL_TENANT_IDS.includes(item.tenant_id)) return true;
+        if (item.tenant_id === ANUTECH_TENANT_ID) return false;
       }
 
+      // 2. Keyword check for items without explicit tenant_id
       const identifier = (
         (item.id || "") +
         " " +
@@ -110,21 +113,11 @@ export function useActiveWorkspace(): {
         (item.company || "")
       ).toLowerCase();
 
-      // Excel Technologies as a customer account belongs to Anutech Digital (Distributor)
-      if (identifier.includes("excel technologies")) {
-        return false;
-      }
-
-      // Keywords matching Anutech vs Excel
+      if (identifier.includes("excel technologies")) return false;
       if (identifier.includes("anutech")) return false;
       if (identifier.includes("excel") || identifier.includes("vera") || identifier.includes("veracious")) return true;
 
-      // Deterministic hash partitioning over neutral rows where tenant_id is single-tenant defaulted
-      let hash = 0;
-      for (let i = 0; i < identifier.length; i++) {
-        hash = (hash * 31 + identifier.charCodeAt(i)) >>> 0;
-      }
-      return hash % 10 >= 4;
+      return false;
     },
     []
   );
@@ -156,7 +149,7 @@ export function useActiveWorkspace(): {
         (item.company || "")
       ).toLowerCase();
 
-      // Excel Technologies as a Sub-Reseller Customer Account belongs in Anutech Digital's workspace
+      // Excel Technologies as a Sub-Reseller Account belongs to Anutech Digital's workspace
       if (identifier.includes("excel technologies")) {
         return workspace === "anutech" || (workspace as string) === "group";
       }
