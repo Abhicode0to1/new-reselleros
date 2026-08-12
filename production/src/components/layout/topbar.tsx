@@ -45,18 +45,33 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
   const [workspace, setWorkspace] = React.useState<"anutech" | "excel" | "group">("anutech");
 
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("resellersos_active_workspace");
-      if (saved === "excel" || saved === "group" || saved === "anutech") {
-        setWorkspace(saved as any);
+    const sync = () => {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("resellersos_active_workspace");
+        if (saved === "excel" || saved === "group" || saved === "anutech") {
+          setWorkspace(saved as any);
+        }
       }
-    }
+    };
+    sync();
+    const handleCustom = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) setWorkspace(detail);
+      else sync();
+    };
+    window.addEventListener("storage", sync);
+    window.addEventListener("resellersos-workspace-change", handleCustom);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("resellersos-workspace-change", handleCustom);
+    };
   }, []);
 
   const handleWorkspaceChange = (newWs: "anutech" | "excel" | "group") => {
     setWorkspace(newWs);
     if (typeof window !== "undefined") {
       localStorage.setItem("resellersos_active_workspace", newWs);
+      window.dispatchEvent(new CustomEvent("resellersos-workspace-change", { detail: newWs }));
       toast.success(
         newWs === "group"
           ? "Switched to 🌐 Consolidated Group View (Merged Management Mode)"

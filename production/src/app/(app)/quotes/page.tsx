@@ -12,6 +12,7 @@ import { useProjectSales, useDeleteProjectSale, type ProjectSaleWithTotals } fro
 import { CreateProjectQuoteDialog } from "@/components/features/projects/create-project-quote-dialog";
 import { useCustomer } from "@/lib/queries/customers";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -139,13 +140,19 @@ export default function QuotesPage() {
     router.push(`/quotes/new?${params.toString()}` as any);
   };
 
+  const { filterEntity } = useActiveWorkspace();
+
+  const quotesByWorkspace = React.useMemo(() => {
+    return (quotes ?? []).filter((q) => filterEntity(q));
+  }, [quotes, filterEntity]);
+
   // Counts per status — adds an "invoiced" bucket on top of the quote.status
   // enum, derived from payment_status. Truly-done deals (accepted + paid +
   // GST invoice issued) get their own tab; the Accepted tab then surfaces
   // only the still-in-flight ones (accepted but money flow incomplete).
   const counts = React.useMemo(() => {
-    const map: Record<string, number> = { all: quotes?.length ?? 0, invoiced: 0 };
-    for (const q of quotes ?? []) {
+    const map: Record<string, number> = { all: quotesByWorkspace.length, invoiced: 0 };
+    for (const q of quotesByWorkspace) {
       if (q.payment_status === "invoiced") {
         map.invoiced += 1;
         // also count under the underlying status (usually 'accepted') for
@@ -156,7 +163,7 @@ export default function QuotesPage() {
       }
     }
     return map;
-  }, [quotes]);
+  }, [quotesByWorkspace]);
 
   // Accepted-but-not-yet-invoiced count for the tab badge
   const acceptedActive = (counts.accepted ?? 0) - (counts.invoiced ?? 0);
@@ -168,7 +175,7 @@ export default function QuotesPage() {
     q.payment_status === "awaiting" ||
     q.payment_status === "partial" ||
     (q.payment_status === "invoiced" && (q.amount ?? 0) - (q.payment_amount ?? 0) > 0);
-  const awaitingPayment = (quotes ?? []).filter(isAwaitingCash).length;
+  const awaitingPayment = quotesByWorkspace.filter(isAwaitingCash).length;
 
   const tabs: TabBarItem[] = [
     { id: "all",      label: "All",      count: counts.all ?? 0 },
@@ -182,7 +189,7 @@ export default function QuotesPage() {
   ];
 
   // Filter
-  const filtered = (quotes ?? []).filter((q) => {
+  const filtered = quotesByWorkspace.filter((q) => {
     if (tab === "expired") {
       if (q.status !== "expired" && q.status !== "rejected") return false;
     } else if (tab === "awaiting") {
@@ -205,21 +212,21 @@ export default function QuotesPage() {
   });
 
   // KPIs
-  const totalValue = (quotes ?? []).reduce((s, q) => s + (q.amount ?? 0), 0);
-  const acceptedValue = (quotes ?? [])
+  const totalValue = quotesByWorkspace.reduce((s, q) => s + (q.amount ?? 0), 0);
+  const acceptedValue = quotesByWorkspace
     .filter((q) => q.status === "accepted")
     .reduce((s, q) => s + (q.amount ?? 0), 0);
-  const sentValue = (quotes ?? [])
+  const sentValue = quotesByWorkspace
     .filter((q) => q.status === "sent" || q.status === "viewed")
     .reduce((s, q) => s + (q.amount ?? 0), 0);
-  const pipelineMargin = (quotes ?? [])
+  const pipelineMargin = quotesByWorkspace
     .filter((q) => q.status === "sent" || q.status === "viewed")
     .reduce((s, q) => s + estimateMarginForQuote(q).margin, 0);
   const acceptedCount = counts.accepted ?? 0;
   const sentishCount = (counts.sent ?? 0) + (counts.viewed ?? 0);
   const expiringCount = sentishCount;
-  const winRate = (quotes ?? []).length > 0
-    ? Math.round((acceptedCount / Math.max(1, (quotes?.length ?? 1) - (counts.draft ?? 0))) * 100)
+  const winRate = quotesByWorkspace.length > 0
+    ? Math.round((acceptedCount / Math.max(1, quotesByWorkspace.length - (counts.draft ?? 0))) * 100)
     : 0;
 
   return (

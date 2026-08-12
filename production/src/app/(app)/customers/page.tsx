@@ -18,6 +18,7 @@ import { useCustomers, useOpenCreditsByCustomer } from "@/lib/queries/customers"
 import { useProjectReceivablesByCustomer } from "@/lib/queries/projects";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useOutstandingReceivables } from "@/lib/queries/payments";
+import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 import { FAB } from "@/components/ui/fab";
 import { ImportCustomersDialog } from "@/components/features/customers/import-customers-dialog";
 import { ImportDomainsDialog } from "@/components/features/customers/import-domains-dialog";
@@ -97,6 +98,7 @@ function subStatus(hasActiveSub: boolean, archived: boolean):
 }
 
 export default function CustomersPage() {
+  const { filterEntity } = useActiveWorkspace();
   const { data: customers, isLoading, error, refetch } = useCustomers();
   const { data: subscriptions } = useSubscriptions();
   const { data: outstanding } = useOutstandingReceivables();
@@ -156,16 +158,19 @@ export default function CustomersPage() {
   const viewCounts = React.useMemo(() => {
     const m: Record<string, number> = Object.fromEntries(VIEW_DEFS.map((v) => [v.id, 0]));
     for (const c of customers ?? []) {
+      if (!filterEntity(c)) continue;
       const out = outstandingByCustomer.get(c.id);
       const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id) };
       for (const v of VIEW_DEFS) if (v.test(ctx)) m[v.id]++;
     }
     return m;
-  }, [customers, outstandingByCustomer, creditsByCustomer, subsByCustomer]);
+  }, [customers, outstandingByCustomer, creditsByCustomer, subsByCustomer, filterEntity]);
 
   // Filter — segment then free-text.
-  const archivedCount = (customers ?? []).filter((c) => c.is_active === false).length;
+  const archivedCount = (customers ?? []).filter((c) => filterEntity(c) && c.is_active === false).length;
   const filtered = (customers ?? []).filter((c) => {
+    // Workspace Filter
+    if (!filterEntity(c)) return false;
     // Active by default; the Archived toggle swaps to show only inactive ones.
     if ((c.is_active === false) !== showArchived) return false;
     const out = outstandingByCustomer.get(c.id);

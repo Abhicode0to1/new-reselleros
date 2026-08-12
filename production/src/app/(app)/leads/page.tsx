@@ -30,6 +30,7 @@ import { useQuotesByLead } from "@/lib/queries/quotes";
 import { QuoteActionBar } from "@/components/features/quotes/quote-action-bar";
 import { useTasks, useTasksForLead, useCompleteTask, useSnoozeTask, useDeleteTask } from "@/lib/queries/tasks";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 import { AddTaskDialog } from "@/components/features/tasks/add-task-dialog";
 import { LeadCard } from "@/components/features/leads/lead-card";
 import { AddLeadForm } from "@/components/features/leads/add-lead-form";
@@ -295,10 +296,12 @@ function LeadsPageInner() {
     [leads],
   );
 
+  const { filterEntity } = useActiveWorkspace();
+
   // Search + filter both apply BEFORE the tab cut so each view respects them.
   const searched = React.useMemo(() => {
     if (!leads) return [];
-    let list = leads;
+    let list = leads.filter((l) => filterEntity(l));
     // 0. Junk cut — confirmed junk is hidden from EVERY working view. The "Junk"
     //    view is the cleanup workspace: confirmed junk + heuristic SUSPECTS (so
     //    you can review + mark them). Suspects still appear in working views
