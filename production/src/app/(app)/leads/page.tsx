@@ -225,7 +225,7 @@ function LeadsPageInner() {
   // Sort state for the list view (kanban ignores this)
   const [sortBy, setSortBy] = React.useState<"created" | "value" | "company" | "stage" | "age">("created");
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
-  const [kpiOpen, setKpiOpen] = React.useState(true);
+  const [kpiOpen, setKpiOpen] = React.useState(false);
 
   // ── Deep-link: open the drawer for the lead in ?lead=<id> ──
   // Runs once when leads load and the URL param is present.
@@ -451,7 +451,7 @@ function LeadsPageInner() {
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto min-h-[calc(100vh-3.5rem)] md:h-[calc(100vh-3.5rem)] flex flex-col">
+    <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto min-h-[calc(100vh-3.5rem)] flex flex-col space-y-4">
       {/* Header */}
       <div className="flex items-end justify-between gap-3 flex-wrap mb-4">
         <div>
