@@ -242,6 +242,144 @@ export default function SupportPage() {
           ))}
         </div>
       )}
+
+      {/* Ticket Detail Modal — opens when any bug/ticket card is clicked */}
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 bg-ink/50 flex items-center justify-center p-4 backdrop-blur-xs overflow-y-auto"
+          onClick={() => setSelected(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-paper w-full max-w-2xl rounded-xl shadow-2xl border border-hairline p-6 max-h-[90vh] overflow-y-auto space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-hairline pb-4">
+              <div className="space-y-1.5 min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge kind={scope === "team_testing" ? "danger" : "info"}>
+                    {scope === "team_testing" ? "BUG REPORT" : "TENANT FEEDBACK"}
+                  </Badge>
+                  <Badge kind={selected.status === "open" ? "danger" : selected.status === "resolved" ? "success" : "warning"}>
+                    {STATUS_LABEL[selected.status as SupportTicketStatus] ?? selected.status}
+                  </Badge>
+                  {selected.priority && (
+                    <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded ${
+                      selected.priority === "urgent" || selected.priority === "high" ? "bg-rose-soft text-rose" : "bg-amber-soft text-amber-ink"
+                    }`}>
+                      Priority: {selected.priority}
+                    </span>
+                  )}
+                </div>
+                <h2 className="font-serif text-xl md:text-2xl text-ink leading-snug break-words">
+                  {selected.subject}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="text-ink-3 hover:text-ink p-1.5 rounded-md hover:bg-paper-2 transition-colors shrink-0"
+              >
+                <Icon name="x" size={20} />
+              </button>
+            </div>
+
+            {/* Reporter Meta Details */}
+            <div className="bg-paper-2/70 rounded-lg p-3.5 text-xs space-y-1.5 font-sans border border-hairline">
+              <div className="flex justify-between flex-wrap gap-1">
+                <span className="text-ink-3 font-medium">Reporter:</span>
+                <span className="font-semibold text-ink">
+                  {selected.customer_name || "Unknown"} ({selected.raised_by_email || "no-email"})
+                </span>
+              </div>
+              <div className="flex justify-between flex-wrap gap-1">
+                <span className="text-ink-3 font-medium">Reported Date:</span>
+                <span className="text-ink font-mono">{formatDate(selected.created_at, "short")}</span>
+              </div>
+              {selected.resolved_at && (
+                <div className="flex justify-between flex-wrap gap-1">
+                  <span className="text-ink-3 font-medium">Resolved Date:</span>
+                  <span className="text-emerald font-semibold font-mono">{formatDate(selected.resolved_at, "short")}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Full Bug Description / Content */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-ink-3 uppercase tracking-wider">
+                Full Bug Description &amp; Details
+              </label>
+              <div className="bg-paper-2/50 border border-hairline rounded-lg p-4 font-mono text-xs text-ink leading-relaxed whitespace-pre-wrap break-words max-h-[350px] overflow-y-auto shadow-inner">
+                {selected.body || "No detailed description provided."}
+              </div>
+            </div>
+
+            {/* Resolution Note Input */}
+            <div className="space-y-1.5 pt-2 border-t border-hairline">
+              <label htmlFor="resNote" className="block text-xs font-bold text-ink-3 uppercase tracking-wider">
+                Resolution / Workaround Note
+              </label>
+              <textarea
+                id="resNote"
+                rows={3}
+                placeholder="Enter details on how this bug was resolved or reply note..."
+                defaultValue={(selected as any).resolution_note || ""}
+                onChange={(e) => {
+                  (selected as any).resolution_note = e.target.value;
+                }}
+                className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-xs text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-primary font-sans"
+              />
+            </div>
+
+            {/* Modal Actions Footer */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-hairline">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-ink-3 font-medium">Status:</span>
+                <select
+                  value={selected.status}
+                  onChange={(e) => {
+                    const newStatus = e.target.value as SupportTicketStatus;
+                    setSelected({ ...selected, status: newStatus });
+                  }}
+                  className="text-xs bg-paper border border-hairline rounded-md px-2.5 py-1.5 font-semibold text-ink focus:outline-none cursor-pointer"
+                >
+                  {STATUSES.filter((s) => s !== "all").map((s) => (
+                    <option key={s} value={s}>{STATUS_LABEL[s as SupportTicketStatus]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelected(null)}
+                >
+                  Close
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => {
+                    updateTicket.mutate({
+                      id: selected.id,
+                      patch: {
+                        status: selected.status,
+                        resolution_note: (selected as any).resolution_note,
+                      },
+                    });
+                    setSelected(null);
+                  }}
+                >
+                  Save &amp; Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
