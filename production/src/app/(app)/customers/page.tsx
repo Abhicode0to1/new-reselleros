@@ -153,24 +153,25 @@ export default function CustomersPage() {
     return map;
   }, [subscriptions]);
 
+  const customersByWorkspace = React.useMemo(() => {
+    return (customers ?? []).filter((c) => filterEntity(c));
+  }, [customers, filterEntity]);
+
   const activeView = VIEW_DEFS.find((v) => v.id === view) ?? VIEW_DEFS[0];
 
   const viewCounts = React.useMemo(() => {
     const m: Record<string, number> = Object.fromEntries(VIEW_DEFS.map((v) => [v.id, 0]));
-    for (const c of customers ?? []) {
-      if (!filterEntity(c)) continue;
+    for (const c of customersByWorkspace) {
       const out = outstandingByCustomer.get(c.id);
       const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id) };
       for (const v of VIEW_DEFS) if (v.test(ctx)) m[v.id]++;
     }
     return m;
-  }, [customers, outstandingByCustomer, creditsByCustomer, subsByCustomer, filterEntity]);
+  }, [customersByWorkspace, outstandingByCustomer, creditsByCustomer, subsByCustomer]);
 
   // Filter — segment then free-text.
-  const archivedCount = (customers ?? []).filter((c) => filterEntity(c) && c.is_active === false).length;
-  const filtered = (customers ?? []).filter((c) => {
-    // Workspace Filter
-    if (!filterEntity(c)) return false;
+  const archivedCount = customersByWorkspace.filter((c) => c.is_active === false).length;
+  const filtered = customersByWorkspace.filter((c) => {
     // Active by default; the Archived toggle swaps to show only inactive ones.
     if ((c.is_active === false) !== showArchived) return false;
     const out = outstandingByCustomer.get(c.id);
@@ -221,11 +222,11 @@ export default function CustomersPage() {
         : { key, dir: key === "name" ? "asc" : "desc" },
     );
 
-  // KPIs.
-  const total = customers?.length ?? 0;
-  const totalMRR = Array.from(subsByCustomer.values()).reduce((s, x) => s + x.mrr, 0);
+  // KPIs — calculated over active workspace customers.
+  const total = customersByWorkspace.filter((c) => (c.is_active === false) === showArchived).length;
+  const totalMRR = customersByWorkspace.reduce((sum, c) => sum + (subsByCustomer.get(c.id)?.mrr ?? 0), 0);
   const totalARR = totalMRR * 12;
-  const totalReceivables = Array.from(outstandingByCustomer.values()).reduce((s, x) => s + x.amount, 0);
+  const totalReceivables = customersByWorkspace.reduce((sum, c) => sum + (outstandingByCustomer.get(c.id)?.amount ?? 0), 0);
 
   const stats: React.ComponentProps<typeof StatStrip>["items"] = [];
   if (!isLoading && customers) {
