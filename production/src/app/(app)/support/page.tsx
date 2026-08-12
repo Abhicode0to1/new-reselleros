@@ -1,8 +1,9 @@
 /**
  * /support — reseller-side support & tenant feedback inbox.
  *
- * Pardeep & Deepak see tickets raised by Tenants / Customers +
- * internal employee software testing reports.
+ * Platform Admins see ALL tickets and bug reports across all reseller workspaces
+ * (including Ranjeet Raj, Pawan, Sales, Hitesh bug reports).
+ * regular users see their tenant's tickets.
  */
 "use client";
 
@@ -17,7 +18,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import type { SupportTicketRow, SupportTicketStatus } from "@/lib/supabase/database.types";
 
 export type ViewScope = "tenant_feedback" | "team_testing";
@@ -29,82 +29,45 @@ const STATUS_LABEL: Record<SupportTicketStatus, string> = {
   resolved:          "Resolved",
   closed:            "Closed",
 };
-const STATUS_COLOR: Record<SupportTicketStatus, "rose" | "amber" | "indigo" | "emerald" | "slate"> = {
-  open:              "rose",
-  in_progress:       "amber",
-  awaiting_customer: "indigo",
-  resolved:          "emerald",
-  closed:            "slate",
-};
+
 const STATUSES: ("all" | SupportTicketStatus)[] = ["open", "in_progress", "awaiting_customer", "resolved", "closed", "all"];
 
 function useTickets(scope: ViewScope, statusFilter: "all" | SupportTicketStatus) {
   return useQuery({
     queryKey: ["support_tickets", scope, statusFilter],
-    queryFn: async (): Promise<SupportTicketRow[]> => {
-      const supabase = createClient();
-      let q = supabase.from("support_tickets").select("*").order("created_at", { ascending: false });
-      
-      if (scope === "team_testing") {
-        q = q.or("subject.ilike.[BUG]%,subject.ilike.[FEATURE]%,subject.ilike.[UI_IMPROVEMENT]%");
-      } else {
-        // Tenant / Customer Feedback — exclude team tags
-        q = q.not("subject", "ilike", "[BUG]%").not("subject", "ilike", "[FEATURE]%").not("subject", "ilike", "[UI_IMPROVEMENT]%");
-      }
-
-      if (statusFilter !== "all") {
-        q = q.eq("status", statusFilter);
-      }
-      
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as SupportTicketRow[];
-    },
-  });
-}
-
-function useTicketCounts(scope: ViewScope) {
-  return useQuery({
-    queryKey: ["support_tickets", "counts", scope],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data } = await supabase.from("support_tickets").select("status, subject");
-      const out: Record<string, number> = { all: 0, open: 0, in_progress: 0, awaiting_customer: 0, resolved: 0, closed: 0 };
-      
-      for (const r of data ?? []) {
-        const isTeam = r.subject && (r.subject.includes("[BUG]") || r.subject.includes("[FEATURE]") || r.subject.includes("[UI_IMPROVEMENT]"));
-        
-        if (scope === "team_testing" && isTeam) {
-          out.all += 1;
-          out[r.status as string] = (out[r.status as string] ?? 0) + 1;
-        } else if (scope === "tenant_feedback" && !isTeam) {
-          out.all += 1;
-          out[r.status as string] = (out[r.status as string] ?? 0) + 1;
-        }
-      }
-      return out;
+    queryFn: async (): Promise<{ tickets: SupportTicketRow[]; counts: Record<string, number>; scopeCounts: Record<string, number> }> => {
+      const res = await fetch(`/api/support/tickets?scope=${scope}&status=${statusFilter}`);
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? "Failed to load tickets");
+      return res.json();
     },
   });
 }
 
 export default function SupportPage() {
-  const [scope, setScope] = React.useState<ViewScope>("tenant_feedback");
+  const [scope, setScope] = React.useState<ViewScope>("team_testing");
   const [statusFilter, setStatusFilter] = React.useState<"all" | SupportTicketStatus>("open");
   const [selected, setSelected] = React.useState<SupportTicketRow | null>(null);
 
-  const { data: tickets = [], isLoading } = useTickets(scope, statusFilter);
-  const { data: counts }                  = useTicketCounts(scope);
+  const { data, isLoading, refetch } = useTickets(scope, statusFilter);
+  const tickets = data?.tickets ?? [];
+  const counts = data?.counts ?? { all: 0, open: 0, in_progress: 0, awaiting_customer: 0, resolved: 0, closed: 0 };
+  const scopeCounts = data?.scopeCounts ?? { tenant_feedback: 0, team_testing: 0 };
+
   const qc = useQueryClient();
 
   const updateTicket = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<Omit<SupportTicketRow, "id" | "tenant_id" | "created_at" | "updated_at">> }) => {
-      const supabase = createClient();
-      const { error } = await supabase.from("support_tickets").update(patch).eq("id", id);
-      if (error) throw error;
+      const res = await fetch("/api/support/tickets", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...patch }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? "Failed to update");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["support_tickets"] });
-      toast.success("Ticket updated");
+      toast.success("Ticket updated successfully");
+      refetch();
     },
     onError: (err) => toast.error((err as Error).message),
   });
@@ -117,7 +80,7 @@ export default function SupportPage() {
           <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Engage & Feedback Inbox</p>
           <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Support & Feedback Desk</h1>
           <p className="text-sm text-ink-3 mt-1">
-            Manage feedback and support queries from your Tenants / Customers + internal employee bug reports.
+            Manage feedback and support queries from Tenants / Customers + internal employee bug reports across all workspaces.
           </p>
         </div>
 
@@ -134,6 +97,11 @@ export default function SupportPage() {
           >
             <Icon name="building" size={15} />
             <span>🏢 Tenant / Customer Feedback</span>
+            {scopeCounts.tenant_feedback > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
+                {scopeCounts.tenant_feedback}
+              </span>
+            )}
           </button>
 
           <button
@@ -146,7 +114,12 @@ export default function SupportPage() {
             }`}
           >
             <Icon name="bug" size={15} />
-            <span>🐛 Internal Team Reports</span>
+            <span>🐛 Bug Reports &amp; Testing</span>
+            {scopeCounts.team_testing > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose text-white font-bold">
+                {scopeCounts.team_testing}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -156,7 +129,7 @@ export default function SupportPage() {
         <div className="flex flex-wrap gap-1.5">
           {STATUSES.map((s) => {
             const active = statusFilter === s;
-            const count  = counts?.[s] ?? 0;
+            const count  = counts[s] ?? 0;
             const label = s === "all" ? "All Tickets" : STATUS_LABEL[s];
             return (
               <button
@@ -179,7 +152,7 @@ export default function SupportPage() {
         </div>
 
         <div className="text-xs text-ink-3 font-medium">
-          Showing <span className="font-bold text-ink">{tickets.length}</span> {scope === "tenant_feedback" ? "Tenant/Customer Tickets" : "Team Bug Reports"}
+          Showing <span className="font-bold text-ink">{tickets.length}</span> {scope === "tenant_feedback" ? "Tenant/Customer Tickets" : "Bug Reports"}
         </div>
       </div>
 
@@ -202,208 +175,71 @@ export default function SupportPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {tickets.map((t) => {
-            const isTeam = t.subject.includes("[BUG]") || t.subject.includes("[FEATURE]") || t.subject.includes("[UI_IMPROVEMENT]");
-            return (
-              <Card
-                key={t.id}
-                className={`p-5 hover:bg-paper-2/30 cursor-pointer transition-all border-l-4 ${
-                  isTeam ? "border-l-rose hover:border-l-rose-ink" : "border-l-primary hover:border-l-primary"
-                }`}
-                onClick={() => setSelected(t)}
-              >
-                <div className="flex items-start justify-between gap-3 flex-wrap mb-1">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      {scope === "tenant_feedback" ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary-soft text-primary border border-primary/30">
-                          🏢 Tenant Feedback
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-soft text-rose-ink border border-rose/30">
-                          🐛 Team Bug Report
-                        </span>
-                      )}
-                      <div className="font-semibold text-ink text-base leading-tight">{t.subject}</div>
-                    </div>
-                    <div className="text-[11px] text-ink-3 mt-1 flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-ink-2">{t.id.slice(0, 8)}</span>
-                      <span>·</span>
-                      <span className="font-semibold text-ink">{t.customer_name} ({t.raised_by_email})</span>
-                      <span>·</span>
-                      <span>{formatDate(t.created_at.slice(0, 10))}</span>
-                      <span>·</span>
-                      <span className="capitalize">{t.category.replace("_", " ")}</span>
-                      {t.priority !== "normal" && (
-                        <>
-                          <span>·</span>
-                          <span className={t.priority === "urgent" ? "text-rose font-bold uppercase" : "text-amber-ink font-semibold"}>
-                            {t.priority}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <Badge color={STATUS_COLOR[t.status]}>{STATUS_LABEL[t.status]}</Badge>
-                </div>
-                <p className="text-xs text-ink-2 leading-relaxed line-clamp-2 mt-2 font-mono bg-paper-2/50 p-2.5 rounded border border-hairline/60">
-                  {t.body}
-                </p>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Detail dialog */}
-      {selected && (
-        <TicketDetail
-          ticket={selected}
-          onClose={() => setSelected(null)}
-          onUpdate={(patch) => updateTicket.mutateAsync({ id: selected.id, patch })}
-        />
-      )}
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────
-// Detail modal — show + action
-// ────────────────────────────────────────────────────────────────
-
-function TicketDetail({
-  ticket, onClose, onUpdate,
-}: {
-  ticket: SupportTicketRow;
-  onClose: () => void;
-  onUpdate: (patch: Partial<Omit<SupportTicketRow, "id" | "tenant_id" | "created_at" | "updated_at">>) => Promise<unknown>;
-}) {
-  const [note, setNote] = React.useState(ticket.resolution_note ?? "");
-  const [busy, setBusy] = React.useState(false);
-  const [zoomImage, setZoomImage] = React.useState<string | null>(null);
-
-  const isTeamReport = ticket.subject.includes("[BUG]") || ticket.subject.includes("[FEATURE]") || ticket.subject.includes("[UI_IMPROVEMENT]");
-
-  async function setStatus(newStatus: SupportTicketStatus) {
-    setBusy(true);
-    const patch: Partial<Omit<SupportTicketRow, "id" | "tenant_id" | "created_at" | "updated_at">> = { status: newStatus };
-    if (newStatus === "resolved") {
-      patch.resolved_at     = new Date().toISOString();
-      patch.resolution_note = note;
-    }
-    try {
-      await onUpdate(patch);
-      onClose();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-ink/50 backdrop-blur-xs z-50 grid place-items-center p-4" onClick={onClose}>
-      <Card className="max-w-3xl w-full p-6 max-h-[92vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Badge color={STATUS_COLOR[ticket.status]}>{STATUS_LABEL[ticket.status]}</Badge>
-              {isTeamReport ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-soft text-rose-ink border border-rose/30">
-                  🐛 Employee Testing Report
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary-soft text-primary border border-primary/30">
-                  🏢 Tenant / Client Feedback
-                </span>
-              )}
-            </div>
-            <h2 className="font-serif text-xl md:text-2xl text-ink leading-tight">{ticket.subject}</h2>
-            <div className="text-[11px] text-ink-3 mt-1 font-mono">{ticket.id}</div>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-md text-ink-3 hover:text-ink hover:bg-paper-2"><Icon name="x" size={20} /></button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 text-xs border-y border-hairline py-3 mb-4 bg-paper-2/40 p-3 rounded-lg">
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Tenant / Client Name</div>
-            <div className="text-ink font-semibold text-sm">{ticket.customer_name}</div>
-            <div className="text-ink-3 font-mono text-[11px]">{ticket.raised_by_email}</div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Category · Priority</div>
-            <div className="text-ink font-medium capitalize">{ticket.category.replace("_", " ")}</div>
-            <div className={`text-[11px] font-semibold ${ticket.priority === "urgent" ? "text-rose" : ticket.priority === "high" ? "text-amber-ink" : "text-ink-3"}`}>
-              {ticket.priority.toUpperCase()} priority
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Feedback / Issue Details</div>
-          <div className="text-xs text-ink-2 leading-relaxed whitespace-pre-wrap font-mono p-3 bg-paper border border-hairline rounded-lg">
-            {ticket.body}
-          </div>
-        </div>
-
-        {/* Resolution note */}
-        <div className="mb-4">
-          <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1 block">
-            Resolution Note (Visible to Tenant on Portal)
-          </label>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 text-xs border border-hairline rounded-md bg-paper text-ink placeholder:text-ink-4 focus:outline-none focus:ring-1 focus:ring-primary font-mono"
-            placeholder="Describe the action taken or response for this tenant feedback..."
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-hairline">
-          <Button variant="ghost" onClick={onClose}>Close</Button>
-          {ticket.status === "open" && (
-            <Button variant="default" loading={busy} onClick={() => setStatus("in_progress")}>
-              Mark In Progress
-            </Button>
-          )}
-          {ticket.status !== "resolved" && (
-            <Button variant="primary" loading={busy} onClick={() => setStatus("resolved")}>
-              <Icon name="check" size={14} className="mr-1" /> Mark Resolved
-            </Button>
-          )}
-          {ticket.status === "resolved" && (
-            <Button variant="default" loading={busy} onClick={() => setStatus("closed")}>
-              Close Ticket
-            </Button>
-          )}
-        </div>
-
-        {/* Contact Reporter */}
-        <div className="mt-4 pt-3 border-t border-hairline flex items-center justify-between text-xs text-ink-3">
-          <span>Tenant Email: <span className="font-mono text-ink">{ticket.raised_by_email}</span></span>
-          <a
-            href={`https://wa.me/?text=${encodeURIComponent(`Hi ${ticket.customer_name}, regarding your feedback ${ticket.id}: ${ticket.subject}\n\n`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-md text-white font-semibold shadow-xs"
-            style={{ background: "#25D366" }}
-          >
-            <Icon name="whatsapp" size={14} /> Contact Tenant on WhatsApp
-          </a>
-        </div>
-      </Card>
-
-      {/* Image Zoom Modal */}
-      {zoomImage && (
-        <div className="fixed inset-0 bg-ink/90 z-50 grid place-items-center p-4" onClick={() => setZoomImage(null)}>
-          <div className="relative max-w-4xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => setZoomImage(null)}
-              className="absolute top-2 right-2 p-2 rounded-full bg-ink/70 text-white hover:bg-ink"
+          {tickets.map((t) => (
+            <Card
+              key={t.id}
+              className={`p-4 md:p-5 transition-all cursor-pointer border-l-4 hover:shadow-md ${
+                selected?.id === t.id
+                  ? "border-l-primary bg-primary-soft/10"
+                  : t.priority === "urgent" || t.priority === "high"
+                  ? "border-l-rose bg-rose-soft/10"
+                  : "border-l-amber bg-paper"
+              }`}
+              onClick={() => setSelected(t)}
             >
-              <Icon name="x" size={20} />
-            </button>
-            <img src={zoomImage} alt="Zoomed screenshot" className="w-full h-auto max-h-[85vh] object-contain rounded-lg border border-paper/20" />
-          </div>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge kind={scope === "team_testing" ? "danger" : "info"} size="sm">
+                      {scope === "team_testing" ? "BUG REPORT" : "TENANT FEEDBACK"}
+                    </Badge>
+                    <span className="font-bold text-sm text-ink truncate">{t.subject}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-ink-3 flex-wrap">
+                    <span>
+                      Reporter: <strong className="text-ink-2">{t.customer_name || "Unknown"}</strong> ({t.raised_by_email || "no-email"})
+                    </span>
+                    <span>·</span>
+                    <span>{formatDate(t.created_at, "short")}</span>
+                    {t.priority && (
+                      <>
+                        <span>·</span>
+                        <span className={`capitalize font-semibold ${t.priority === "urgent" || t.priority === "high" ? "text-rose" : "text-amber-dark"}`}>
+                          Priority: {t.priority}
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {t.body && (
+                    <p className="text-xs text-ink-2 line-clamp-2 pt-1 font-mono bg-paper-2/40 p-2 rounded border border-hairline">
+                      {t.body}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge kind={t.status === "open" ? "danger" : t.status === "resolved" ? "success" : "warning"}>
+                    {STATUS_LABEL[t.status as SupportTicketStatus] ?? t.status}
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      updateTicket.mutate({
+                        id: t.id,
+                        patch: { status: t.status === "resolved" ? "open" : "resolved" },
+                      });
+                    }}
+                  >
+                    {t.status === "resolved" ? "Re-open" : "Mark Resolved"}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
       )}
     </div>
