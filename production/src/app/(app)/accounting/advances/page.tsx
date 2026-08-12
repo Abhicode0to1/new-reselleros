@@ -374,7 +374,7 @@ function DisburseAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 <SelectContent>
                   {bankAccounts.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
-                      {b.name} ({rupee(b.balance)})
+                      {b.name} ({rupee(b.current_balance ?? b.opening_balance)})
                     </SelectItem>
                   ))}
                 </SelectContent>

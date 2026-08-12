@@ -62,8 +62,8 @@ export function useEmployeeAdvances() {
 
       // Fetch advances & linked expenses
       const [{ data: advs, error: aErr }, { data: exps, error: eErr }] = await Promise.all([
-        supabase.from("employee_expense_advances").select("*").eq("tenant_id", tenant_id).order("disbursed_date", { ascending: false }),
-        supabase.from("expenses").select("*").eq("tenant_id", tenant_id).not("prepaid_advance_id", "is", null),
+        (supabase.from("employee_expense_advances" as any) as any).select("*").eq("tenant_id", tenant_id).order("disbursed_date", { ascending: false }),
+        (supabase.from("expenses" as any) as any).select("*").eq("tenant_id", tenant_id).not("prepaid_advance_id", "is", null),
       ]);
 
       if (aErr) throw aErr;
@@ -110,8 +110,7 @@ export function useDisburseAdvance() {
       const supabase = createClient();
       const tenant_id = await getTenantId();
 
-      const { data, error } = await supabase
-        .from("employee_expense_advances")
+      const { data, error } = await (supabase.from("employee_expense_advances" as any) as any)
         .insert({
           tenant_id,
           employee_id: input.employee_id || null,
@@ -153,8 +152,7 @@ export function useRecordAdvanceExpense() {
       const supabase = createClient();
       const tenant_id = await getTenantId();
 
-      const { data, error } = await supabase
-        .from("expenses")
+      const { data, error } = await (supabase.from("expenses" as any) as any)
         .insert({
           tenant_id,
           category: input.category,
@@ -188,8 +186,7 @@ export function useSettleAdvance() {
   return useMutation({
     mutationFn: async (advance_id: string) => {
       const supabase = createClient();
-      const { error } = await supabase
-        .from("employee_expense_advances")
+      const { error } = await (supabase.from("employee_expense_advances" as any) as any)
         .update({ status: "settled", updated_at: new Date().toISOString() })
         .eq("id", advance_id);
 
