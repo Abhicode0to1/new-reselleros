@@ -138,9 +138,8 @@ export const APP_NAV: NavSection[] = [
     icon: "target",
     roles: ["owner", "manager", "sales", "billing"],
     items: [
-      { id: "leads",           href: "/leads",            label: "Leads",         icon: "inbox",  roles: ["owner", "manager", "sales"] },
+      { id: "leads",           href: "/leads",            label: "Sales & Pipeline", icon: "target", roles: ["owner", "manager", "sales"] },
       { id: "enquiries",       href: "/enquiries",        label: "Enquiries",     icon: "mail",   roles: ["owner", "manager", "sales"] },
-      { id: "deals",           href: "/deals",            label: "Deal Pipeline", icon: "target", roles: ["owner", "manager", "sales"] },
       { id: "tasks",           href: "/tasks",            label: "Tasks",         icon: "clock",  roles: ["owner", "manager", "sales"] },
       { id: "my-expenses",     href: "/my-expenses",      label: "My Advance & Expenses", icon: "wallet", roles: ["owner", "manager", "sales"] },
       { id: "customers",       href: "/customers",        label: "Customers",     icon: "users",  roles: ["owner", "manager", "billing"] },

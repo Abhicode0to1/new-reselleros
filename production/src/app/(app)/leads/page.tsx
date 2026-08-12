@@ -280,7 +280,10 @@ function LeadsPageInner() {
   // Tab is purely URL-derived now — no internal state, no setter. /leads
   // gives the raw inbox, /deals gives the qualified pipeline. The legacy
   // tab-bar UI is removed; navigation between the two is via sidebar.
-  const tab: "leads" | "deals" = isDealsPage ? "deals" : "leads";
+  const [salesTab, setSalesTab] = React.useState<"raw" | "deals" | "all">(
+    isDealsPage ? "deals" : "raw"
+  );
+  const tab: "leads" | "deals" = salesTab === "deals" ? "deals" : "leads";
 
   const { filterEntity, workspace } = useActiveWorkspace();
 
@@ -374,9 +377,13 @@ function LeadsPageInner() {
   const qualifiedDeals = React.useMemo(() => searched.filter((l) => !isRaw(l)), [searched]);
 
   // The Kanban / List views consume this — points at whichever tab is active.
-  // Junk is stage-agnostic (spam is spam at any stage), so its view bypasses the
-  // raw/deals cut and shows every junk + suspect — matching the chip's count.
-  const filtered = smartView === "junk" ? searched : (tab === "leads" ? rawLeads : qualifiedDeals);
+  const filtered = smartView === "junk"
+    ? searched
+    : salesTab === "raw"
+    ? rawLeads
+    : salesTab === "deals"
+    ? qualifiedDeals
+    : searched;
 
   // Tab-scoped UNFILTERED subset for the insight band, Smart Views chips,
   // Today strip, and right rail. Derived from `workspaceLeads` so counts stay
@@ -437,15 +444,67 @@ function LeadsPageInner() {
       {/* Header */}
       <div className="flex items-end justify-between gap-3 flex-wrap mb-4">
         <div>
-          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Sales</p>
+          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Sales & Pipeline Hub</p>
           <h1 className="font-serif text-3xl md:text-4xl leading-tight">
-            {isDealsPage ? "Deal Pipeline" : "Leads"}
+            Sales & Pipeline
           </h1>
           <p className="text-sm text-ink-3 mt-1 tabular-nums">
-            {isDealsPage
-              ? `Manage active opportunities, track stage velocity, close deals`
-              : `Raw inquiries queue — qualify, call, email, and convert to deals`}
+            Unified workspace for raw inquiries, qualified deals, and revenue forecasting
           </p>
+        </div>
+
+        {/* 1-Click Segmented View Switcher */}
+        <div className="flex items-center gap-1.5 bg-paper-2 p-1 rounded-lg border border-hairline">
+          <button
+            type="button"
+            onClick={() => setSalesTab("raw")}
+            className={cn(
+              "px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
+              salesTab === "raw"
+                ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
+                : "text-ink-2 hover:text-ink hover:bg-paper/50"
+            )}
+          >
+            <Icon name="inbox" size={14} className={salesTab === "raw" ? "text-amber-ink" : "text-ink-3"} />
+            <span>📥 Raw Inquiries</span>
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
+              {rawLeads.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSalesTab("deals")}
+            className={cn(
+              "px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
+              salesTab === "deals"
+                ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
+                : "text-ink-2 hover:text-ink hover:bg-paper/50"
+            )}
+          >
+            <Icon name="target" size={14} className={salesTab === "deals" ? "text-amber-ink" : "text-ink-3"} />
+            <span>📊 Deal Pipeline</span>
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
+              {qualifiedDeals.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSalesTab("all")}
+            className={cn(
+              "px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
+              salesTab === "all"
+                ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
+                : "text-ink-2 hover:text-ink hover:bg-paper/50"
+            )}
+          >
+            <Icon name="list" size={14} className={salesTab === "all" ? "text-amber-ink" : "text-ink-3"} />
+            <span>📋 All Records</span>
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
+              {searched.length}
+            </span>
+          </button>
         </div>
       </div>
 
