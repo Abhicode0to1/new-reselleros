@@ -2,9 +2,9 @@
  * Outlook-Style CRM Sales Email Suite — /enquiries
  *
  * Microsoft Outlook 3-Pane Email Hub with Missive/Front/HubSpot B2B Sales Inbox features:
- *   - Pane 1: Folders & Smart Filters (All, Untriaged, Converted Leads, Thread Replies, Skipped)
- *   - Pane 2: Email Threads List (Search, Sender avatars, Relative timestamps, Hover actions)
- *   - Pane 3: Rich Email Reading Pane + AI Gemini Draft Assistant + Internal Team Notes + Canned Templates + CRM Actions
+ *   - Pane 1: Folders & Smart Filters (Sales Enquiries Only by default, All, Untriaged, Converted Leads, Thread Replies, System/Skipped)
+ *   - Pane 2: Email Threads List (Search, Sender avatars, Relative timestamps, Hover actions, Domain badges)
+ *   - Pane 3: Rich Email Reading Pane + AI Gemini Draft Assistant + Internal Team Notes + Canned Templates + CRM Actions + Prospect Communication Timeline
  */
 "use client";
 
@@ -25,7 +25,7 @@ import { inboundStatusMeta, canConvertToLead } from "@/lib/inbound/status";
 import type { InboundEmailRow } from "@/lib/supabase/database.types";
 import { toast } from "sonner";
 
-type FilterFolder = "all" | "untriaged" | "leads" | "appended" | "skipped";
+type FilterFolder = "sales_only" | "all" | "untriaged" | "leads" | "appended" | "skipped";
 type ReadingTab = "email" | "notes";
 type AiTone = "professional" | "warm" | "formal" | "urgent";
 
@@ -58,7 +58,8 @@ export default function EnquiriesOutlookPage() {
   const { data: rows, isLoading, error, refetch } = useInboundEmails();
   const convert = useConvertInboundToLead();
 
-  const [activeFolder, setActiveFolder] = React.useState<FilterFolder>("all");
+  // Default view is "sales_only" to hide non-sales/system mails by default
+  const [activeFolder, setActiveFolder] = React.useState<FilterFolder>("sales_only");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
@@ -82,11 +83,12 @@ export default function EnquiriesOutlookPage() {
   const totals = React.useMemo(() => {
     const list = rows ?? [];
     return {
-      total:     list.length,
-      untriaged: list.filter((r) => r.status === "received" && !r.lead_id).length,
-      leads:     list.filter((r) => !!r.lead_id).length,
-      appended:  list.filter((r) => r.status === "appended_to_lead").length,
-      skipped:   list.filter((r) => r.status === "skipped_non_enquiry").length,
+      total:      list.length,
+      salesOnly:  list.filter((r) => r.status !== "skipped_non_enquiry").length,
+      untriaged:  list.filter((r) => r.status === "received" && !r.lead_id).length,
+      leads:      list.filter((r) => !!r.lead_id).length,
+      appended:   list.filter((r) => r.status === "appended_to_lead").length,
+      skipped:    list.filter((r) => r.status === "skipped_non_enquiry").length,
     };
   }, [rows]);
 
@@ -95,7 +97,10 @@ export default function EnquiriesOutlookPage() {
     let list = rows ?? [];
 
     // Apply Folder Filter
-    if (activeFolder === "untriaged") {
+    if (activeFolder === "sales_only") {
+      // Default: Only show genuine sales enquiries (exclude Google account confirmation / system mails)
+      list = list.filter((r) => r.status !== "skipped_non_enquiry");
+    } else if (activeFolder === "untriaged") {
       list = list.filter((r) => r.status === "received" && !r.lead_id);
     } else if (activeFolder === "leads") {
       list = list.filter((r) => !!r.lead_id);
@@ -211,9 +216,9 @@ export default function EnquiriesOutlookPage() {
 
     let message = "";
     if (templateKey === "gworkspace") {
-      message = `Hi ${recipientName},\n\nThank you for your enquiry regarding Google Workspace licenses. We are an authorized Google Cloud Partner in India.\n\nHere is our special volume pricing:\n• Business Starter: ₹145/user/month (excl GST)\n• Business Standard: ₹730/user/month (excl GST)\n\nWe provide free domain setup, data migration, 24/7 technical support, and GST tax invoicing.\n\nWould you like me to share a formal quotation for your team?\n\nBest regards,\nSales Team`;
+      message = `Hi ${recipientName},\n\nThank you for your enquiry regarding Google Workspace licenses. We are an authorized Google Cloud Partner in India.\n\nHere is our special volume pricing:\n• Business Starter: ₹145/user/month (excl GST)\n• Business Standard: ₹730/user/month (excl GST)\n\nWe provide free domain setup, data migration, 24/7 technical support, and GST tax invoicing.\n\nWould you like me to share a formal quotation for your team?\n\nBest regards,\nSales Team\nAnutech Digital Private Limited`;
     } else if (templateKey === "m365") {
-      message = `Hi ${recipientName},\n\nThank you for contacting us regarding Microsoft 365 plans for your organization.\n\nWe provide official Microsoft 365 Business Basic, Standard, and Enterprise licenses with local INR billing and GST tax compliance.\n\nCould you please share your required user count so we can prepare a customized quote for you?\n\nBest regards,\nSales Team`;
+      message = `Hi ${recipientName},\n\nThank you for contacting us regarding Microsoft 365 plans for your organization.\n\nWe provide official Microsoft 365 Business Basic, Standard, and Enterprise licenses with local INR billing and GST tax compliance.\n\nCould you please share your required user count so we can prepare a customized quote for you?\n\nBest regards,\nSales Team\nAnutech Digital Private Limited`;
     } else if (templateKey === "bank") {
       message = `Hi ${recipientName},\n\nPlease find our company bank details for official payment transfer:\n\nAccount Name: Anutech Digital Private Limited\nBank: HDFC Bank\nAccount No: 50200012345678\nIFSC Code: HDFC0001234\n\nAlternatively, you can pay online via UPI or Card using our secure payment link.\n\nBest regards,\nFinance Team`;
     }
@@ -291,7 +296,7 @@ export default function EnquiriesOutlookPage() {
           <div className="flex items-center gap-2">
             <span className="text-xs uppercase tracking-wider text-ink-3 font-semibold">Sales CRM</span>
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber/10 text-amber font-medium">Outlook Suite</span>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-paper-2 border border-hairline text-ink-3">Shortcuts: J/K Navigate · C Compose</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald/10 text-emerald-dark font-medium">Inbox: sales@anutech.in</span>
           </div>
           <h1 className="font-serif text-2xl md:text-3xl font-bold leading-tight">Sales Email Suite</h1>
         </div>
@@ -301,9 +306,10 @@ export default function EnquiriesOutlookPage() {
           <StatStrip
             className="py-1 px-3 border border-hairline bg-paper rounded-lg"
             items={[
+              { label: "Sales Mails", value: String(totals.salesOnly), tone: "emerald" },
               { label: "Untriaged", value: String(totals.untriaged), tone: totals.untriaged > 0 ? "amber" : undefined },
-              { label: "Leads Created", value: String(totals.leads), tone: "emerald" },
-              { label: "Total Mails", value: String(totals.total) },
+              { label: "Leads Created", value: String(totals.leads) },
+              { label: "Total Received", value: String(totals.total) },
             ]}
           />
         )}
@@ -341,17 +347,17 @@ export default function EnquiriesOutlookPage() {
             <nav className="space-y-1 flex-1">
               <button
                 type="button"
-                onClick={() => setActiveFolder("all")}
+                onClick={() => setActiveFolder("sales_only")}
                 className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
-                  activeFolder === "all" ? "bg-amber/15 text-amber-dark font-semibold" : "text-ink-2 hover:bg-paper-2"
+                  activeFolder === "sales_only" ? "bg-amber/15 text-amber-dark font-semibold" : "text-ink-2 hover:bg-paper-2"
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <Icon name="mail" size={15} />
-                  <span>All Inbound</span>
+                  <Icon name="sparkles" size={15} className="text-amber" />
+                  <span>Sales Enquiries Only</span>
                 </div>
-                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-paper border border-hairline text-ink-3">
-                  {totals.total}
+                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-amber/20 font-bold text-amber-dark">
+                  {totals.salesOnly}
                 </span>
               </button>
 
@@ -409,6 +415,22 @@ export default function EnquiriesOutlookPage() {
 
               <button
                 type="button"
+                onClick={() => setActiveFolder("all")}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
+                  activeFolder === "all" ? "bg-amber/15 text-amber-dark font-semibold" : "text-ink-2 hover:bg-paper-2"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon name="mail" size={15} />
+                  <span>All Inbound Mails</span>
+                </div>
+                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-paper border border-hairline text-ink-3">
+                  {totals.total}
+                </span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setActiveFolder("skipped")}
                 className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
                   activeFolder === "skipped" ? "bg-amber/15 text-amber-dark font-semibold" : "text-ink-2 hover:bg-paper-2"
@@ -416,7 +438,7 @@ export default function EnquiriesOutlookPage() {
               >
                 <div className="flex items-center gap-2">
                   <Icon name="x" size={15} />
-                  <span>Skipped / Spam</span>
+                  <span>System / Non-Sales</span>
                 </div>
                 <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-paper border border-hairline text-ink-3">
                   {totals.skipped}
@@ -427,10 +449,10 @@ export default function EnquiriesOutlookPage() {
             <div className="mt-auto p-3 rounded-lg border border-hairline bg-paper text-xs text-ink-3 space-y-1">
               <div className="flex items-center gap-1.5 font-medium text-ink">
                 <Icon name="sparkles" size={14} className="text-amber" />
-                <span>AI Auto-Triage</span>
+                <span>Smart AI Filtering</span>
               </div>
               <p className="text-[11px] leading-tight">
-                Gemini automatically extracts prospect details &amp; auto-creates leads for genuine enquiries.
+                System filters out non-sales emails (Google account confirmations/newsletters) so you focus 100% on potential customers.
               </p>
             </div>
           </div>
@@ -440,13 +462,17 @@ export default function EnquiriesOutlookPage() {
           {/* ========================================================================= */}
           <div className="w-full md:w-64 lg:w-80 border-b md:border-b-0 md:border-r border-hairline bg-paper flex flex-col shrink-0">
             {/* Search Header */}
-            <div className="p-3 border-b border-hairline bg-paper-2/20">
+            <div className="p-3 border-b border-hairline bg-paper-2/20 flex flex-col gap-1.5">
               <Input
-                placeholder="Search subject or sender..."
+                placeholder="Search prospect name, email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-8 text-xs bg-paper"
               />
+              <div className="flex items-center justify-between text-[11px] text-ink-3 px-1">
+                <span>Showing: {filteredRows.length} threads</span>
+                {activeFolder === "sales_only" && <span className="text-amber font-semibold">Sales Mails Only</span>}
+              </div>
             </div>
 
             {/* List */}
@@ -459,6 +485,7 @@ export default function EnquiriesOutlookPage() {
                 filteredRows.map((e) => {
                   const isSelected = e.id === selectedId;
                   const isStarred = starredIds.has(e.id);
+                  const isNonEnquiry = e.status === "skipped_non_enquiry";
                   return (
                     <button
                       key={e.id}
@@ -467,12 +494,16 @@ export default function EnquiriesOutlookPage() {
                       className={`w-full text-left p-3.5 transition-colors flex flex-col gap-1.5 relative group ${
                         isSelected
                           ? "bg-amber/10 border-l-4 border-amber pl-2.5"
+                          : isNonEnquiry
+                          ? "opacity-60 bg-paper-2/20"
                           : "hover:bg-paper-2/40"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-6 h-6 rounded-full bg-paper-2 border border-hairline flex items-center justify-center text-[10px] font-bold text-ink-2 shrink-0">
+                          <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                            isNonEnquiry ? "bg-paper-2 border-hairline text-ink-3" : "bg-amber/10 border-amber/30 text-amber-dark"
+                          }`}>
                             {senderInitials(e)}
                           </div>
                           <span className="font-semibold text-xs text-ink truncate">
@@ -539,13 +570,16 @@ export default function EnquiriesOutlookPage() {
                       </h2>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         <span className="text-xs font-semibold text-ink">
-                          {senderLabel(selectedThread)}
+                          From: {senderLabel(selectedThread)}
                         </span>
                         {selectedThread.from_email && (
                           <span className="text-xs text-ink-3">
                             &lt;{selectedThread.from_email}&gt;
                           </span>
                         )}
+                        <span className="text-xs text-emerald-dark font-medium px-1.5 py-0.5 rounded bg-emerald/10">
+                          To: sales@anutech.in
+                        </span>
                         <span className="text-xs text-ink-3">· {formatDate(selectedThread.created_at, "long")}</span>
                       </div>
                     </div>
@@ -594,7 +628,7 @@ export default function EnquiriesOutlookPage() {
                 </div>
 
                 {/* Reading Pane View Switcher (Email Content vs Internal Team Notes) */}
-                <div className="flex items-center justify-between border-b border-hairline pb-2">
+                <div className="flex items-center justify-between border-b border-hairline pb-2 flex-wrap gap-2">
                   <div className="flex items-center gap-1 bg-paper-2/40 p-1 rounded-lg border border-hairline">
                     <button
                       type="button"
@@ -622,7 +656,7 @@ export default function EnquiriesOutlookPage() {
                   </div>
 
                   {activeTab === "email" && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-[11px] text-ink-3">Quick Snippets:</span>
                       <button
                         type="button"
@@ -653,8 +687,8 @@ export default function EnquiriesOutlookPage() {
                 {activeTab === "email" && (
                   <div className="flex-1 bg-paper-2/20 border border-hairline rounded-xl p-5 overflow-y-auto min-h-[160px]">
                     <div className="flex items-center justify-between text-xs text-ink-3 mb-3 border-b border-hairline/60 pb-2">
-                      <span className="font-semibold uppercase tracking-wider text-[10px]">Email Body</span>
-                      <span>Captured via Inbound Webhook</span>
+                      <span className="font-semibold uppercase tracking-wider text-[10px]">Prospect Email Body</span>
+                      <span>Captured via Inbound Mailbox</span>
                     </div>
 
                     {selectedThread.body_text?.trim() ? (
