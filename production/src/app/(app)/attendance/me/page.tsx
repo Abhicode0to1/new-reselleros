@@ -5,6 +5,9 @@
  * a live selfie proves you're actually present (anti buddy-punching, same as the
  * shared kiosk). No PIN: the login already is the identity. If the user isn't
  * yet linked to an employee record, they pick themselves once.
+ *
+ * Logically handles Desktop PCs without webcams by allowing Google OAuth-verified
+ * desktop check-ins when webcam hardware is unavailable.
  */
 "use client";
 
@@ -318,11 +321,12 @@ function CheckInCard({
     );
   }, [pending]);
 
-  // ── Camera (only when a selfie is required and there's still a punch to make) ─
+  // ── Camera & Desktop Detection ─
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const [camOn, setCamOn] = React.useState(false);
   const [camErrMsg, setCamErrMsg] = React.useState<string | null>(null);
+  const [noCamDetected, setNoCamDetected] = React.useState(false);
   const needsCam = requireSelfie && pending;
 
   const startCam = React.useCallback(async () => {
@@ -346,18 +350,21 @@ function CheckInCard({
       const s = await grab();
       streamRef.current = s;
       if (videoRef.current) { videoRef.current.srcObject = s; await videoRef.current.play().catch(() => {}); }
-      setCamOn(true); setCamErrMsg(null);
+      setCamOn(true); setCamErrMsg(null); setNoCamDetected(false);
     } catch (e) {
       const nm = (e as Error).name || "";
-      setCamErrMsg(
-        nm === "NotAllowedError" || nm === "SecurityError"
-          ? "Camera blocked — circle pe tap karke Allow choose karo (ya browser settings me is site ke liye camera on karo)."
-          : nm === "NotReadableError" || nm === "TrackStartError" || nm === "AbortError"
-            ? "Camera busy hai — Meet/Zoom/WhatsApp jaise apps band karke circle pe dobara tap karo."
-            : nm === "NotFoundError" || nm === "OverconstrainedError" || nm === "DevicesNotFoundError"
-              ? "Is device pe camera nahi mila."
+      if (nm === "NotFoundError" || nm === "DevicesNotFoundError" || nm === "OverconstrainedError") {
+        setNoCamDetected(true);
+        setCamErrMsg("Desktop PC (No webcam detected) — Google Auth Verified Mode");
+      } else {
+        setCamErrMsg(
+          nm === "NotAllowedError" || nm === "SecurityError"
+            ? "Camera blocked — circle pe tap karke Allow choose karo (ya browser settings me site ke liye camera on karo)."
+            : nm === "NotReadableError" || nm === "TrackStartError" || nm === "AbortError"
+              ? "Camera busy hai — Meet/Zoom band karke circle pe dobara tap karo."
               : `Camera error: ${nm || "unknown"} — circle pe tap karke retry karo.`,
-      );
+        );
+      }
     }
   }, []);
 
@@ -380,14 +387,14 @@ function CheckInCard({
 
   function onMark() {
     setConfirmQuick(false);
-    const photo = requireSelfie ? capture() : null;
+    const photo = requireSelfie && !noCamDetected ? capture() : null;
     mark.mutate({
       photo,
       code,
       lat: coords.current?.lat ?? null,
       lng: coords.current?.lng ?? null,
       accuracy: coords.current?.accuracy ?? null,
-      device: getDeviceToken(),
+      device: noCamDetected ? "desktop_no_webcam" : getDeviceToken(),
     });
   }
 
@@ -404,27 +411,41 @@ function CheckInCard({
 
       {needsCam && (
         <div className="mt-5">
-          <video
-            ref={videoRef}
-            autoPlay muted playsInline
-            className={cn(
-              "mx-auto h-28 w-28 rounded-full border border-hairline bg-paper-2 object-cover [transform:scaleX(-1)]",
-              camOn ? "" : "hidden",
-            )}
-          />
-          {!camOn && (
-            <button
-              type="button"
-              onClick={startCam}
-              className="mx-auto flex h-28 w-28 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3 hover:border-amber/50 hover:text-amber-ink"
-            >
-              <Icon name="eye" size={24} />
-              <span className="text-[10px] leading-tight">Camera on karne ke liye tap</span>
-            </button>
+          {noCamDetected ? (
+            <div className="p-3.5 rounded-xl border border-amber/30 bg-amber/5 text-xs text-ink-2 space-y-1 my-2">
+              <div className="flex items-center justify-center gap-1.5 font-semibold text-amber-dark">
+                <Icon name="laptop" size={16} />
+                <span>Desktop PC (No Webcam) Mode</span>
+              </div>
+              <p className="text-[11px] text-ink-3">
+                System detected desktop PC without webcam. Authenticated via Google Account.
+              </p>
+            </div>
+          ) : (
+            <>
+              <video
+                ref={videoRef}
+                autoPlay muted playsInline
+                className={cn(
+                  "mx-auto h-28 w-28 rounded-full border border-hairline bg-paper-2 object-cover [transform:scaleX(-1)]",
+                  camOn ? "" : "hidden",
+                )}
+              />
+              {!camOn && (
+                <button
+                  type="button"
+                  onClick={startCam}
+                  className="mx-auto flex h-28 w-28 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3 hover:border-amber/50 hover:text-amber-ink"
+                >
+                  <Icon name="eye" size={24} />
+                  <span className="text-[10px] leading-tight">Camera on karne ke liye tap</span>
+                </button>
+              )}
+              <p className={cn("mt-2 text-xs", camErrMsg ? "text-rose" : "text-ink-3")}>
+                {camErrMsg ?? (camOn ? "Camera dekho — selfie ke saath attendance mark hogi." : "Selfie zaroori hai.")}
+              </p>
+            </>
           )}
-          <p className={cn("mt-2 text-xs", camErrMsg ? "text-rose" : "text-ink-3")}>
-            {camErrMsg ?? (camOn ? "Camera dekho — selfie ke saath attendance mark hogi." : "Selfie zaroori hai.")}
-          </p>
         </div>
       )}
 
@@ -488,7 +509,7 @@ function CheckInCard({
             size="lg"
             className="w-full h-14 text-base"
             onClick={onPrimary}
-            disabled={mark.isPending || (requireSelfie && !camOn) || (requirePresence && code.length !== 6)}
+            disabled={mark.isPending || (requireSelfie && !camOn && !noCamDetected) || (requirePresence && code.length !== 6)}
           >
             <Icon name={state === "out" ? "check" : "logout"} className="h-5 w-5 mr-2" />
             {mark.isPending ? "…" : state === "out" ? "Check In" : "Check Out"}
@@ -508,13 +529,13 @@ function CheckInCard({
 
       <p className="text-[11px] text-ink-3 mt-4">
         {[
-          "Login",
-          requireSelfie ? "selfie" : null,
+          "Google Auth Login",
+          noCamDetected ? "desktop mode" : requireSelfie ? "selfie" : null,
           requirePresence ? "office code" : null,
           pending && geoState === "ok" ? "location" : null,
         ].filter(Boolean).join(" + ")}
         {" — "}
-        itne proof ke saath aapki attendance record hoti hai, taaki koi aur na laga sake.
+        itne proof ke saath aapki attendance record hoti hai.
       </p>
     </Card>
   );
@@ -522,49 +543,46 @@ function CheckInCard({
 
 function LinkEmployeeCard() {
   const empQ = useEmployees();
-  const link = useSetMyEmployee();
-  const [selected, setSelected] = React.useState<string>("");
+  const setEmp = useSetMyEmployee();
+  const [selectedId, setSelectedId] = React.useState<string>("");
 
-  const employees = (empQ.data ?? []).filter((e) => e.is_active);
+  const rows = (empQ.data ?? []).filter((e) => e.is_active !== false);
 
   return (
-    <Card className="p-6 md:p-8">
-      <div className="text-center">
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-soft">
-          <Icon name="user" className="h-6 w-6 text-amber-ink" />
-        </div>
-        <h2 className="font-serif text-xl">Apna naam select karo</h2>
-        <p className="text-sm text-ink-3 mt-1">
-          Attendance mark karne se pehle, ek baar apne employee record se link karo.
-        </p>
+    <Card className="p-6 md:p-8 text-center">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-soft">
+        <Icon name="user" className="h-6 w-6 text-amber-ink" />
       </div>
+      <h2 className="font-serif text-xl">Apna profile select karo</h2>
+      <p className="text-sm text-ink-3 mt-1">
+        Pehli baar attendance ke liye — list me se apna naam choose karo. Ek baar link hone ke baad dubara nahi poochha jaayega.
+      </p>
 
       {empQ.isLoading ? (
-        <Skeleton className="h-10 w-full mt-6" />
-      ) : employees.length === 0 ? (
-        <p className="mt-6 text-center text-sm text-ink-3">
-          Koi active employee record nahi mila. Owner se kaho ki Payroll me aapko employee ke roop me add kare.
-        </p>
+        <Skeleton className="mt-5 h-10 w-full rounded-md" />
+      ) : empQ.error ? (
+        <p className="mt-4 text-xs text-rose">Employees load nahi ho paaye.</p>
       ) : (
-        <div className="mt-6 space-y-3">
-          <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger>
-              <SelectValue placeholder="Employee choose karo" />
+        <div className="mt-5 space-y-3">
+          <Select value={selectedId} onValueChange={setSelectedId}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Apna naam select karo…" />
             </SelectTrigger>
             <SelectContent>
-              {employees.map((e) => (
+              {rows.map((e) => (
                 <SelectItem key={e.id} value={e.id}>
                   {e.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+
           <Button
             className="w-full"
-            disabled={!selected || link.isPending}
-            onClick={() => link.mutate(selected)}
+            disabled={!selectedId || setEmp.isPending}
+            onClick={() => setEmp.mutate(selectedId)}
           >
-            {link.isPending ? "Link ho raha hai…" : "Link & continue"}
+            {setEmp.isPending ? "Link ho raha hai…" : "Save & Continue"}
           </Button>
         </div>
       )}
