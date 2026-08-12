@@ -282,26 +282,30 @@ function LeadsPageInner() {
   // tab-bar UI is removed; navigation between the two is via sidebar.
   const tab: "leads" | "deals" = isDealsPage ? "deals" : "leads";
 
-  // Duplicate index — computed over ALL leads (dups can span the whole tenant),
+  const { filterEntity, workspace } = useActiveWorkspace();
+
+  const workspaceLeads = React.useMemo(
+    () => (leads ?? []).filter((l) => filterEntity(l)),
+    [leads, filterEntity, workspace]
+  );
+
+  // Duplicate index — computed over workspace leads (dups can span the workspace),
   // surfaced as a per-row "Duplicate?" flag + a "Duplicates" smart view. Declared
   // here (before `searched`) because the Duplicates view filters on dup.flagged.
   // Non-destructive: it only flags; merging is an explicit action in the dialog.
-  const dup = React.useMemo(() => computeDuplicates(leads ?? []), [leads]);
+  const dup = React.useMemo(() => computeDuplicates(workspaceLeads), [workspaceLeads]);
 
   // Junk (spam/fake) — a stored flag. junkCount drives the Junk chip; suspects
   // are non-junk leads the heuristic flags for review (surfaced in the Junk view).
-  const junkCount = React.useMemo(() => (leads ?? []).filter((l) => l.is_junk).length, [leads]);
+  const junkCount = React.useMemo(() => workspaceLeads.filter((l) => l.is_junk).length, [workspaceLeads]);
   const junkSuspectCount = React.useMemo(
-    () => (leads ?? []).filter((l) => !l.is_junk && looksLikeJunk(l).suspect).length,
-    [leads],
+    () => workspaceLeads.filter((l) => !l.is_junk && looksLikeJunk(l).suspect).length,
+    [workspaceLeads],
   );
-
-  const { filterEntity } = useActiveWorkspace();
 
   // Search + filter both apply BEFORE the tab cut so each view respects them.
   const searched = React.useMemo(() => {
-    if (!leads) return [];
-    let list = leads.filter((l) => filterEntity(l));
+    let list = workspaceLeads;
     // 0. Junk cut — confirmed junk is hidden from EVERY working view. The "Junk"
     //    view is the cleanup workspace: confirmed junk + heuristic SUSPECTS (so
     //    you can review + mark them). Suspects still appear in working views
@@ -355,7 +359,7 @@ function LeadsPageInner() {
       }
     }
     return list;
-  }, [leads, search, stageFilter, priorityFilter, smartView, currentUser, dup]);
+  }, [workspaceLeads, search, stageFilter, priorityFilter, smartView, currentUser, dup]);
   const activeFilterCount = stageFilter.length + priorityFilter.length;
 
   // A lead is "raw" (Leads inbox) only while it's early — New or Contacted with
@@ -375,14 +379,11 @@ function LeadsPageInner() {
   const filtered = smartView === "junk" ? searched : (tab === "leads" ? rawLeads : qualifiedDeals);
 
   // Tab-scoped UNFILTERED subset for the insight band, Smart Views chips,
-  // Today strip, and right rail. Without this they show tenant-wide counts
-  // (e.g. "All 3") while the table only renders the tab's slice (2 rows),
-  // creating the bug Pardeep flagged in dogfood (chip count ≠ table count).
-  // Derived from `leads` (not `searched`) so counts stay accurate while
-  // the user is searching / filtering.
+  // Today strip, and right rail. Derived from `workspaceLeads` so counts stay
+  // accurate per active workspace while the user is searching / filtering.
   const leadsForTab = React.useMemo(
-    () => (tab === "leads" ? (leads ?? []).filter(isRaw) : (leads ?? []).filter((l) => !isRaw(l))),
-    [leads, tab],
+    () => (tab === "leads" ? workspaceLeads.filter(isRaw) : workspaceLeads.filter((l) => !isRaw(l))),
+    [workspaceLeads, tab],
   );
 
   // Per-tab duplicate count + merge opener (the `dup` index itself is computed
