@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
@@ -73,11 +74,23 @@ export default function SupportPage() {
   const [statusFilter, setStatusFilter] = React.useState<"all" | SupportTicketStatus>("all");
   const [selected, setSelected] = React.useState<SupportTicketRow | null>(null);
   const [previewImage, setPreviewImage] = React.useState<{ name: string; url: string } | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
 
   const { data, isLoading, refetch } = useTickets(scope, statusFilter);
   const tickets = data?.tickets ?? [];
   const counts = data?.counts ?? { all: 0, open: 0, in_progress: 0, awaiting_customer: 0, resolved: 0, closed: 0 };
   const scopeCounts = data?.scopeCounts ?? { tenant_feedback: 0, team_testing: 0 };
+
+  const visibleTickets = React.useMemo(() => {
+    if (!searchQuery.trim()) return tickets;
+    const q = searchQuery.toLowerCase().trim();
+    return tickets.filter((t) =>
+      (t.customer_name && t.customer_name.toLowerCase().includes(q)) ||
+      (t.raised_by_email && t.raised_by_email.toLowerCase().includes(q)) ||
+      (t.subject && t.subject.toLowerCase().includes(q)) ||
+      (t.body && t.body.toLowerCase().includes(q))
+    );
+  }, [tickets, searchQuery]);
 
   const qc = useQueryClient();
 
@@ -190,8 +203,16 @@ export default function SupportPage() {
           })}
         </div>
 
-        <div className="text-xs text-ink-3 font-medium">
-          Showing <span className="font-bold text-ink">{tickets.length}</span> {scope === "tenant_feedback" ? "Tenant/Customer Tickets" : "Bug Reports"}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Input
+            placeholder="🔍 Search reporter, email, keyword..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full sm:w-72 h-8 text-xs font-sans"
+          />
+          <div className="text-xs text-ink-3 font-medium whitespace-nowrap">
+            Showing <span className="font-bold text-ink">{visibleTickets.length}</span> {scope === "all" ? "Total Tickets" : scope === "tenant_feedback" ? "Tenant/Customer Tickets" : "Bug Reports"}
+          </div>
         </div>
       </div>
 
@@ -200,13 +221,15 @@ export default function SupportPage() {
         <div className="space-y-3">
           {[1,2,3].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
         </div>
-      ) : tickets.length === 0 ? (
+      ) : visibleTickets.length === 0 ? (
         <Card className="py-10 text-center">
           <EmptyState
             icon={scope === "tenant_feedback" ? "building" : "bug"}
-            title={scope === "tenant_feedback" ? "No Customer / Tenant Tickets Found" : "No Team Bug Reports Found"}
+            title={searchQuery ? "No matching tickets found" : scope === "tenant_feedback" ? "No Customer / Tenant Tickets Found" : "No Team Bug Reports Found"}
             body={
-              scope === "tenant_feedback"
+              searchQuery
+                ? `No support ticket matches "${searchQuery}". Try clearing your search.`
+                : scope === "tenant_feedback"
                 ? "Feedback and support requests submitted by your Tenants & Clients on the portal will appear here."
                 : "Bug reports and feature suggestions submitted by employees via the Report Bug button will appear here."
             }
@@ -214,7 +237,7 @@ export default function SupportPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {tickets.map((t) => (
+          {visibleTickets.map((t) => (
             <Card
               key={t.id}
               className={`p-4 md:p-5 transition-all cursor-pointer border-l-4 hover:shadow-md ${

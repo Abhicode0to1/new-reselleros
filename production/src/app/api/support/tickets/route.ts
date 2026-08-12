@@ -49,14 +49,16 @@ export async function GET(request: Request) {
     // A ticket is from an Internal Team Employee if it comes from the primary Anutech Digital tenant AND has a team bug tag AND raised by internal employee
     const isInternalTag = t.subject && (t.subject.includes("[BUG]") || t.subject.includes("[FEATURE]") || t.subject.includes("[UI_IMPROVEMENT]"));
     const isInternalTenant = t.tenant_id === ANUTECH_PRIMARY_TENANT_ID;
-    const isExternalTenantEmail = Boolean(
-      t.raised_by_email &&
-      !t.raised_by_email.endsWith("@anutechdigital.com") &&
-      !t.raised_by_email.endsWith("@anutech.in")
+    
+    // Check if the ticket explicitly belongs to an external tenant (by email, body text, or reporter name)
+    const isExternalTenant = Boolean(
+      (t.raised_by_email && !t.raised_by_email.endsWith("@anutechdigital.com") && !t.raised_by_email.endsWith("@anutech.in")) ||
+      (t.body && /exceltechnologies|ranjeetraj|veraciouscreate|apexglobal/i.test(t.body)) ||
+      (t.customer_name && /ranjeet|veracious|apex/i.test(t.customer_name))
     );
     
     // External Tenants (e.g. ranjeetraj@exceltechnologies.in) ALWAYS belong in tenant_feedback even if they report a bug
-    const isTeamScope = isInternalTenant && isInternalTag && !isExternalTenantEmail;
+    const isTeamScope = isInternalTenant && isInternalTag && !isExternalTenant;
 
     if (isTeamScope) scopeCounts.team_testing += 1;
     else scopeCounts.tenant_feedback += 1;
