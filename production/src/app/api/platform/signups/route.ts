@@ -21,34 +21,41 @@ export async function GET() {
 
   const admin = createAdminClient();
   const [{ data: tenants, error: tErr }, { data: users }, { data: customers }] = await Promise.all([
-    admin.from("tenants").select("id, name, created_at, tier, gstin, state, setup_completed_at").order("created_at", { ascending: false }),
-    admin.from("users").select("tenant_id, role, full_name"),
+    admin.from("tenants").select("id, name, email, phone, created_at, tier, gstin, state, setup_completed_at").order("created_at", { ascending: false }),
+    admin.from("users").select("tenant_id, role, full_name, email"),
     admin.from("customers").select("tenant_id"),
   ]);
   if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
 
-  // Owner name + per-tenant counts (small N — aggregate in memory).
-  const ownerByTenant = new Map<string, string>();
+  // Owner name + email + per-tenant counts (small N — aggregate in memory).
+  const ownerByTenant = new Map<string, { name: string; email: string }>();
   const userCount = new Map<string, number>();
   for (const u of users ?? []) {
     userCount.set(u.tenant_id, (userCount.get(u.tenant_id) ?? 0) + 1);
-    if (u.role === "owner" && !ownerByTenant.has(u.tenant_id)) ownerByTenant.set(u.tenant_id, u.full_name ?? "—");
+    if (u.role === "owner" && !ownerByTenant.has(u.tenant_id)) {
+      ownerByTenant.set(u.tenant_id, { name: u.full_name ?? "—", email: u.email });
+    }
   }
   const custCount = new Map<string, number>();
   for (const c of customers ?? []) custCount.set(c.tenant_id, (custCount.get(c.tenant_id) ?? 0) + 1);
 
-  const rows = (tenants ?? []).map((t) => ({
-    id: t.id,
-    name: t.name,
-    owner: ownerByTenant.get(t.id) ?? "—",
-    signedUp: t.created_at,
-    tier: t.tier,
-    gstin: t.gstin,
-    state: t.state,
-    activated: Boolean(t.setup_completed_at),
-    users: userCount.get(t.id) ?? 0,
-    customers: custCount.get(t.id) ?? 0,
-  }));
+  const rows = (tenants ?? []).map((t) => {
+    const ownerData = ownerByTenant.get(t.id);
+    return {
+      id: t.id,
+      name: t.name,
+      owner: ownerData?.name ?? "—",
+      email: t.email || ownerData?.email || null,
+      phone: t.phone || null,
+      signedUp: t.created_at,
+      tier: t.tier,
+      gstin: t.gstin,
+      state: t.state,
+      activated: Boolean(t.setup_completed_at),
+      users: userCount.get(t.id) ?? 0,
+      customers: custCount.get(t.id) ?? 0,
+    };
+  });
 
   return NextResponse.json({ count: rows.length, tenants: rows });
 }
