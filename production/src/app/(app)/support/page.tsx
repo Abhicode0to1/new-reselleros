@@ -44,7 +44,7 @@ function useTickets(scope: ViewScope, statusFilter: "all" | SupportTicketStatus)
 }
 
 export default function SupportPage() {
-  const [scope, setScope] = React.useState<ViewScope>("team_testing");
+  const [scope, setScope] = React.useState<ViewScope>("tenant_feedback");
   const [statusFilter, setStatusFilter] = React.useState<"all" | SupportTicketStatus>("open");
   const [selected, setSelected] = React.useState<SupportTicketRow | null>(null);
 

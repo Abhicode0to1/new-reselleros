@@ -1,12 +1,16 @@
 /**
  * GET & PATCH /api/support/tickets — Cross-Tenant Support Desk & Bug Tracker.
  *
- * Platform Admins see ALL tickets and bug reports across all reseller workspaces.
- * Regular tenant users see their tenant-scoped tickets.
+ * Logically classifies:
+ * 1. Tenant / Customer Feedback: All tickets & bug reports submitted by external Resellers/Tenants
+ *    (e.g., ranjeetraj@exceltechnologies.in, support@veraciouscreate.com, it-head@apexglobal.com).
+ * 2. Internal Team Reports: Bug reports submitted by internal Anutech Digital team employees.
  */
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { isPlatformAdmin } from "@/lib/platform";
+
+const ANUTECH_PRIMARY_TENANT_ID = "fbb976f1-9090-4f10-9726-0901bd144e42";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -27,52 +31,48 @@ export async function GET(request: Request) {
     tenantId = me?.tenant_id ?? null;
   }
 
-  // 2. Build ticket query
+  // 2. Fetch all relevant tickets for evaluation & classification
   let q = client.from("support_tickets").select("*").order("created_at", { ascending: false });
 
   if (!isAdmin && tenantId) {
     q = q.eq("tenant_id", tenantId);
   }
 
-  if (scope === "team_testing") {
-    q = q.or("subject.ilike.[BUG]%,subject.ilike.[FEATURE]%,subject.ilike.[UI_IMPROVEMENT]%");
-  } else {
-    q = q.not("subject", "ilike", "[BUG]%").not("subject", "ilike", "[FEATURE]%").not("subject", "ilike", "[UI_IMPROVEMENT]%");
-  }
-
-  if (statusFilter !== "all") {
-    q = q.eq("status", statusFilter as any);
-  }
-
-  const { data: tickets, error } = await q;
+  const { data: allTickets, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // 3. Compute counts across scope
-  let countQ = client.from("support_tickets").select("status, subject");
-  if (!isAdmin && tenantId) {
-    countQ = countQ.eq("tenant_id", tenantId);
-  }
-
-  const { data: allTicketMeta } = await countQ;
+  // 3. Logically filter and compute counts based on Tenant vs Internal Employee origin
   const counts: Record<string, number> = { all: 0, open: 0, in_progress: 0, awaiting_customer: 0, resolved: 0, closed: 0 };
   const scopeCounts = { tenant_feedback: 0, team_testing: 0 };
 
-  for (const r of allTicketMeta ?? []) {
-    const isTeam = r.subject && (r.subject.includes("[BUG]") || r.subject.includes("[FEATURE]") || r.subject.includes("[UI_IMPROVEMENT]"));
+  const filteredTickets = (allTickets ?? []).filter((t) => {
+    // A ticket is from an Internal Team Employee if it comes from the primary Anutech Digital tenant AND has a team bug tag
+    const isInternalTag = t.subject && (t.subject.includes("[BUG]") || t.subject.includes("[FEATURE]") || t.subject.includes("[UI_IMPROVEMENT]"));
+    const isInternalTenant = t.tenant_id === ANUTECH_PRIMARY_TENANT_ID;
     
-    if (isTeam) scopeCounts.team_testing += 1;
+    // External Tenants (e.g. ranjeetraj@exceltechnologies.in) ALWAYS belong in tenant_feedback even if they report a bug
+    const isTeamScope = isInternalTenant && isInternalTag;
+
+    if (isTeamScope) scopeCounts.team_testing += 1;
     else scopeCounts.tenant_feedback += 1;
 
-    if (scope === "team_testing" && isTeam) {
-      counts.all += 1;
-      counts[r.status as string] = (counts[r.status as string] ?? 0) + 1;
-    } else if (scope === "tenant_feedback" && !isTeam) {
-      counts.all += 1;
-      counts[r.status as string] = (counts[r.status as string] ?? 0) + 1;
-    }
-  }
+    // Check if ticket matches current scope filter
+    const matchesScope = scope === "team_testing" ? isTeamScope : !isTeamScope;
+    if (!matchesScope) return false;
 
-  return NextResponse.json({ tickets: tickets ?? [], counts, scopeCounts });
+    // Increment status counter for current scope
+    counts.all += 1;
+    counts[t.status as string] = (counts[t.status as string] ?? 0) + 1;
+
+    // Check status filter
+    if (statusFilter !== "all" && t.status !== statusFilter) {
+      return false;
+    }
+
+    return true;
+  });
+
+  return NextResponse.json({ tickets: filteredTickets, counts, scopeCounts });
 }
 
 export async function PATCH(request: Request) {
