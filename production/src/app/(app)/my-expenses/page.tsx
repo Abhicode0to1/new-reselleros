@@ -65,7 +65,7 @@ export default function MyExpensesPage() {
     // Check strict match by employee name or email
     const nameMatch = curNameLower && (empNameLower.includes(curNameLower) || curNameLower.includes(empNameLower));
     const emailMatch = curEmailLower && (
-      (curEmailLower.includes("sales") && empNameLower.includes("darshan")) ||
+      (curEmailLower.includes("sales") && (empNameLower.includes("darshan") || empNameLower.includes("sales"))) ||
       (curEmailLower.includes("pawan") && empNameLower.includes("pawan")) ||
       (curEmailLower.includes("ranjeet") && empNameLower.includes("ranjeet")) ||
       (curEmailLower.includes("abhishek") && empNameLower.includes("abhishek")) ||
@@ -73,7 +73,10 @@ export default function MyExpensesPage() {
       (curEmailLower.includes("hitesh") && empNameLower.includes("hitesh"))
     );
 
-    return nameMatch || emailMatch;
+    const isSalesUser = curEmailLower.includes("sales") || curNameLower.includes("darshan") || curNameLower.includes("sales");
+    const isDarshanAdvance = empNameLower.includes("darshan") || empNameLower.includes("sales");
+
+    return nameMatch || emailMatch || (isSalesUser && isDarshanAdvance);
   });
 
   const activeAdvance = myAdvances[0] ?? null;

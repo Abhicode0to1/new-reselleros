@@ -55,6 +55,7 @@ const TAB_TASKS:     BottomNavItem = { id: "tasks",     href: "/tasks",         
 const TAB_PAYMENTS:  BottomNavItem = { id: "payments",  href: "/payments",      label: "Payments",  icon: "rupee"  };
 const TAB_CUSTOMERS: BottomNavItem = { id: "customers", href: "/customers",     label: "Customers", icon: "users"  };
 const TAB_RENEWALS:  BottomNavItem = { id: "renewals",  href: "/renewals",      label: "Renewals",  icon: "refresh"};
+const TAB_MY_EXPENSES: BottomNavItem = { id: "my-expenses", href: "/my-expenses", label: "Expenses", icon: "wallet" };
 const TAB_MORE:      BottomNavItem = { id: "more",      href: "#",              label: "More",      icon: "more_h", action: "menu" };
 
 interface Props {
@@ -76,6 +77,7 @@ export function MobileBottomNav({ onMoreClick }: Props) {
     // Sales Senior always handles deals; plain sales only if granted.
     if (me.role === "sales_senior" || me.canViewDeals) tabs.push(TAB_DEALS);
     tabs.push(TAB_TASKS);
+    tabs.push(TAB_MY_EXPENSES);
     tabs.push(TAB_MORE);
   } else {
     // owner / manager (default for unknown / loading state too — safest
