@@ -129,8 +129,8 @@ export const APP_NAV: NavSection[] = [
     icon: "home",
     items: [
       { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home", roles: ["owner", "manager", "billing"] },
-      { id: "my-attendance", href: "/attendance/me", label: "My Attendance", icon: "calendar", hint: "Apni attendance khud mark karo — login hi identity proof hai." },
-      { id: "my-expenses", href: "/my-expenses", label: "My Advance & Expenses", icon: "wallet", hint: "Advance cash balances & mobile expense entries." },
+      { id: "my-attendance", href: "/attendance/me", label: "My Attendance", icon: "calendar", roles: ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"], hint: "Apni attendance khud mark karo — login hi identity proof hai." },
+      { id: "my-expenses", href: "/my-expenses", label: "My Advance & Expenses", icon: "wallet", roles: ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"], hint: "Advance cash balances & mobile expense entries." },
     ],
   },
   {

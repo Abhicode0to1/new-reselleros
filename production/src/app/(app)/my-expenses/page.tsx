@@ -58,16 +58,16 @@ export default function MyExpensesPage() {
   // Filter advances matching logged-in user (e.g. Darshan / sales@anutech.in)
   const myAdvances = advances.filter((a) => {
     if (!a || a.status !== "active") return false;
-    const empNameLower = a.employee_name.toLowerCase();
+    const empNameLower = (a.employee_name || "").toLowerCase();
     const curNameLower = userName.toLowerCase();
     const curEmailLower = userEmail.toLowerCase();
 
     return (
       empNameLower.includes("darshan") ||
       empNameLower.includes("sales") ||
-      (curNameLower && empNameLower.includes(curNameLower)) ||
-      (curEmailLower && curEmailLower.includes("sales") && empNameLower.includes("darshan")) ||
-      advances.length === 1 // Fallback if 1 active advance exists in workspace
+      (curNameLower && (empNameLower.includes(curNameLower) || curNameLower.includes(empNameLower))) ||
+      (curEmailLower && (curEmailLower.includes("sales") || curEmailLower.includes("darshan"))) ||
+      advances.filter((x) => x.status === "active").length === 1
     );
   });
 
