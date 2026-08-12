@@ -69,6 +69,9 @@ export function Hero() {
             <Button asChild variant="primary" iconRight="arrow_right" size="lg" className="shadow-lg shadow-amber/20 hover:shadow-amber/40 transition-shadow">
               <Link href="/signup">Start free trial</Link>
             </Button>
+            <Button asChild variant="ghost" size="lg" icon="rocket" className="border border-hairline bg-paper hover:bg-paper-2 transition-colors">
+              <Link href="/dashboard?preview=1">Explore Interactive Demo</Link>
+            </Button>
             <Button asChild variant="default" size="lg" className="hover:bg-paper-2 transition-colors">
               <Link href="/login">Sign in</Link>
             </Button>
@@ -110,6 +113,8 @@ export function TrustRibbon() {
     <section className="border-y border-hairline bg-paper-2/60 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-7 gap-y-2 px-6 py-5 font-mono text-[11px] uppercase tracking-wider text-ink-3">
         <span className="text-amber-ink font-semibold">★ Google Premier Partner · since 2014</span>
+        <Dot />
+        <span className="text-emerald font-semibold">⚡ 1-Click Excel & Tally Migration</span>
         <Dot />
         <span>🇮🇳 Built in Mumbai</span>
         <Dot />

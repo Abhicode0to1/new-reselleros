@@ -68,6 +68,9 @@ export function QuoteAcceptView({
   const [paying, setPaying] = React.useState(false);
   const [paid, setPaid] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [poOpen, setPoOpen] = React.useState(false);
+  const [poNumber, setPoNumber] = React.useState("");
+  const [poNotes, setPoNotes] = React.useState("");
 
   // ── Money, computed CONSISTENTLY in the display currency ──
   // For a foreign quote we work per-unit in the client's currency (₹ ÷ rate,
@@ -119,6 +122,26 @@ export function QuoteAcceptView({
       setConfirmOpen(false);
       setAccepted(true);
       toast.success("Quote accepted · the reseller has been notified");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  const handlePoAccept = async () => {
+    setAccepting(true);
+    try {
+      const res = await fetch(`/api/public/quote/${quote.id}/accept?t=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ poNumber: poNumber.trim(), notes: poNotes.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Could not accept quote");
+      setPoOpen(false);
+      setAccepted(true);
+      toast.success("Quote accepted with Purchase Order · reseller notified");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -423,21 +446,105 @@ export function QuoteAcceptView({
               {payOnline ? "Accept & pay later" : `Accept this quote · ${fmtC(dTotal)}`}
             </Button>
             <Button
+              variant="default"
+              size="lg"
+              icon="file"
+              disabled={paying || accepting}
+              onClick={() => setPoOpen(true)}
+              className="w-full justify-center border border-hairline bg-paper hover:bg-paper-2 transition-colors"
+            >
+              Submit Purchase Order (PO) / Request PI
+            </Button>
+            <Button
               variant="ghost"
               icon="mail"
               onClick={handleRequestChanges}
               className="w-full justify-center"
             >
-              Request changes
+              Request changes / revision
             </Button>
             <p className="text-[11px] text-ink-3 text-center leading-relaxed pt-2">
               {payOnline
-                ? <>Pay securely via Razorpay (UPI / card / net-banking) — your GST invoice is issued automatically once payment is confirmed. Or accept now and {tenantName} will share payment instructions.</>
+                ? <>Pay securely via Razorpay (UPI / card / net-banking) — your GST invoice is issued automatically once payment is confirmed. Or accept with PO and {tenantName} will share payment instructions.</>
                 : <>By accepting, you agree to the pricing and billing terms shown above. {tenantName} will share payment instructions and issue your GST invoice once payment is received. No payment is taken on this page.</>}
             </p>
           </div>
         </div>
       </div>
+
+      {/* Accept with Purchase Order (PO) Dialog */}
+      {poOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => !accepting && setPoOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-paper w-full sm:max-w-md rounded-t-2xl sm:rounded-xl shadow-lg border border-hairline p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-10 w-10 rounded-full bg-indigo/10 text-indigo grid place-items-center shrink-0">
+                <Icon name="file" size={20} />
+              </div>
+              <div>
+                <h3 className="font-serif text-xl text-ink leading-tight">
+                  Submit Purchase Order (PO)
+                </h3>
+                <p className="text-xs text-ink-3">Accept quote with PO details or request Proforma Invoice</p>
+              </div>
+            </div>
+            <div className="space-y-3 mt-4">
+              <div>
+                <label htmlFor="poNum" className="block text-xs font-semibold text-ink-2 mb-1">
+                  Purchase Order Number (Optional)
+                </label>
+                <input
+                  id="poNum"
+                  type="text"
+                  placeholder="e.g. PO-2026-8941"
+                  value={poNumber}
+                  onChange={(e) => setPoNumber(e.target.value)}
+                  className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm font-mono text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink"
+                />
+              </div>
+              <div>
+                <label htmlFor="poNotes" className="block text-xs font-semibold text-ink-2 mb-1">
+                  Notes / Billing Instructions
+                </label>
+                <textarea
+                  id="poNotes"
+                  rows={3}
+                  placeholder="e.g. Please issue Proforma Invoice to Accounts Dept."
+                  value={poNotes}
+                  onChange={(e) => setPoNotes(e.target.value)}
+                  className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
+              <Button
+                variant="ghost"
+                onClick={() => setPoOpen(false)}
+                disabled={accepting}
+                className="sm:w-auto justify-center"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                icon="check_circle"
+                loading={accepting}
+                onClick={handlePoAccept}
+                className="sm:w-auto justify-center"
+              >
+                Submit &amp; Accept
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Accept confirmation — styled dialog, not a browser confirm() */}
       {confirmOpen && (

@@ -45,6 +45,18 @@ export default async function HomePage({
       <BetaPricing />
       <FinalCta />
       <Footer />
+
+      {/* Floating WhatsApp Chat Widget for Instant B2B Trust */}
+      <a
+        href="https://wa.me/919876543210?text=Hi%20ResellerOS%20team,%20I'd%20like%20to%20know%20more%20about%20ResellerOS"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-full bg-[#25D366] px-4 py-3 text-white shadow-xl hover:bg-[#20bd5a] hover:scale-105 transition-all focus:outline-none"
+        title="Chat on WhatsApp with Founder / Support"
+      >
+        <Icon name="message_square" className="h-5 w-5 fill-current" />
+        <span className="text-xs font-semibold tracking-wide sm:inline">Chat on WhatsApp</span>
+      </a>
     </main>
   );
 }

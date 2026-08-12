@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/label";
 import { Button, IconButton } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MarginPill, computeMargin } from "@/components/features/margin-pill";
 import { GeminiCard } from "@/components/shared/gemini-card";
@@ -809,8 +810,18 @@ export function QuoteBuilder() {
             duplicate button row up here. */}
       </div>
 
+      {/* Loss-making quote guardrail */}
+      {lineItems.length > 0 && margin.margin < 0 && (
+        <div className="mb-3 p-3.5 bg-rose-soft border border-rose/60 rounded-lg text-xs font-medium text-rose flex items-center gap-2.5 shadow-sm">
+          <Icon name="alert" size={18} className="shrink-0 text-rose" />
+          <div>
+            <b>⚠️ LOSS-MAKING QUOTE WARNING:</b> Your total quote price ({fmtDispC(taxable)}) is lower than wholesale cost ({fmtDispC(totalCost)}). Net Loss: {fmtDispC(Math.abs(margin.margin))}. Please review line item pricing before sending.
+          </div>
+        </div>
+      )}
+
       {/* AI margin warning */}
-      {lineItems.length > 0 && margin.marginPct < 14 && (
+      {lineItems.length > 0 && margin.marginPct >= 0 && margin.marginPct < 14 && (
         <GeminiCard title="Margin alert" compact>
           <b>Margin below 14% ({margin.marginPct}%).</b> Consider reducing discount or upselling higher-tier products.
         </GeminiCard>

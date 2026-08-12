@@ -29,13 +29,38 @@ type FormData = z.infer<typeof schema>;
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = React.useState(false);
+  const [gstLoading, setGstLoading] = React.useState(false);
   const {
     register,
     handleSubmit,
+    setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const configured = isSupabaseConfigured();
+
+  const handleGstinBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+    const val = e.target.value.trim().toUpperCase();
+    if (val && isValidGstin(val)) {
+      setGstLoading(true);
+      try {
+        const res = await fetch(`/api/gst/verify?gstin=${encodeURIComponent(val)}`);
+        const data = await res.json();
+        if (res.ok && (data.tradeName || data.legalName)) {
+          const name = data.tradeName || data.legalName;
+          if (!getValues("companyName")) {
+            setValue("companyName", name);
+            toast.success(`✨ Verified GSTIN: Auto-filled "${name}"`);
+          }
+        }
+      } catch {
+        // Silent catch for invalid/mock failures
+      } finally {
+        setGstLoading(false);
+      }
+    }
+  };
 
   async function onSubmit(values: FormData) {
     // Server-side signup: uses service role key to create auth user
@@ -112,10 +137,10 @@ export default function SignupPage() {
             id="gstin"
             placeholder="e.g. 27AABCE9876D1Z3"
             className="font-mono uppercase"
-            helper="You can add this later in Settings"
+            helper={gstLoading ? "Verifying GSTIN details..." : "Auto-fills company name when typed"}
             error={errors.gstin?.message}
-            disabled={!configured}
-            {...register("gstin")}
+            disabled={!configured || gstLoading}
+            {...register("gstin", { onBlur: handleGstinBlur })}
           />
         </FormField>
 
