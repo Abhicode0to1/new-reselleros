@@ -81,13 +81,34 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}${next}`);
   }
 
-  // ─── First-time sign-in ──────────────────────────────────────────────────
+  // ─── First-time sign-in with Google OAuth ──────────────────────────────────────────────────
   const email = authUser.email ?? "";
   const fullName =
     (authUser.user_metadata?.full_name as string | undefined) ||
     (authUser.user_metadata?.name as string | undefined) ||
     authUser.email?.split("@")[0] ||
     "New user";
+
+  // Check if a pre-existing user record exists with this email address in public.users
+  const { data: preExistingUser } = await admin
+    .from("users")
+    .select("id, tenant_id, role")
+    .ilike("email", normalizeEmail(email))
+    .maybeSingle();
+
+  if (preExistingUser) {
+    // Re-link pre-existing user profile to this new Auth UID
+    await admin
+      .from("users")
+      .update({
+        id: authUser.id,
+        full_name: fullName,
+        initials: initials(fullName),
+      })
+      .eq("id", preExistingUser.id);
+
+    return NextResponse.redirect(`${origin}${next}`);
+  }
 
   // Was this email invited to an existing tenant by its owner? If so, JOIN that
   // tenant instead of creating a new one. Matched case-insensitively; the unique
