@@ -357,40 +357,28 @@ export default function SupportPage() {
                     {atts.map((att, idx) => (
                       <div
                         key={idx}
-                        className="rounded-lg border border-hairline bg-paper-2/60 p-2.5 flex items-center gap-3 group hover:border-primary/50 transition-all"
+                        onClick={() => setPreviewImage({ name: att.name, url: att.url || "" })}
+                        className="rounded-lg border border-hairline bg-paper-2/60 p-2.5 flex items-center gap-3 group hover:border-primary hover:bg-paper-2 cursor-pointer transition-all shadow-xs"
                       >
                         {att.url ? (
-                          <div
-                            onClick={() => setPreviewImage({ name: att.name, url: att.url! })}
-                            className="relative w-16 h-16 rounded bg-ink/10 overflow-hidden shrink-0 cursor-pointer group-hover:opacity-90 border border-hairline"
-                          >
+                          <div className="relative w-16 h-16 rounded bg-ink/10 overflow-hidden shrink-0 border border-hairline">
                             <img src={att.url} alt={att.name} className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-ink/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
                               <Icon name="search" size={14} />
                             </div>
                           </div>
                         ) : (
-                          <div className="w-10 h-10 rounded bg-paper border border-hairline grid place-items-center shrink-0 text-ink-3">
+                          <div className="w-10 h-10 rounded bg-primary/10 border border-primary/20 grid place-items-center shrink-0 text-primary group-hover:scale-105 transition-transform">
                             <Icon name="file" size={18} />
                           </div>
                         )}
 
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-ink truncate font-mono">{att.name}</p>
-                          {att.url ? (
-                            <button
-                              type="button"
-                              onClick={() => setPreviewImage({ name: att.name, url: att.url! })}
-                              className="text-[11px] text-primary font-bold hover:underline flex items-center gap-1 mt-0.5"
-                            >
-                              <Icon name="eye" size={12} />
-                              <span>View Full Screenshot</span>
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-ink-3 block mt-0.5">
-                              Filename logged with submission
-                            </span>
-                          )}
+                          <p className="text-xs font-semibold text-ink truncate font-mono group-hover:text-primary transition-colors">{att.name}</p>
+                          <span className="text-[11px] text-primary font-bold hover:underline flex items-center gap-1 mt-0.5">
+                            <Icon name={att.url ? "eye" : "file"} size={12} />
+                            <span>{att.url ? "View Full Screenshot" : "Open Attachment Details"}</span>
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -464,7 +452,7 @@ export default function SupportPage() {
         </div>
       )}
 
-      {/* Image Lightbox Viewer Modal */}
+      {/* Image Lightbox / File Detail Viewer Modal */}
       {previewImage && (
         <div
           className="fixed inset-0 z-[9999] bg-ink/80 flex items-center justify-center p-4 backdrop-blur-md"
@@ -477,16 +465,18 @@ export default function SupportPage() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-paper-2">
               <span className="text-xs font-bold text-ink font-mono truncate">{previewImage.name}</span>
               <div className="flex items-center gap-3">
-                <a
-                  href={previewImage.url}
-                  download={previewImage.name}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-primary font-bold hover:underline flex items-center gap-1"
-                >
-                  <Icon name="download" size={14} />
-                  <span>Download</span>
-                </a>
+                {previewImage.url && (
+                  <a
+                    href={previewImage.url}
+                    download={previewImage.name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary font-bold hover:underline flex items-center gap-1"
+                  >
+                    <Icon name="download" size={14} />
+                    <span>Download</span>
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={() => setPreviewImage(null)}
@@ -496,9 +486,45 @@ export default function SupportPage() {
                 </button>
               </div>
             </div>
-            <div className="p-4 bg-ink/90 flex items-center justify-center overflow-auto max-h-[80vh]">
-              <img src={previewImage.url} alt={previewImage.name} className="max-w-full max-h-[75vh] object-contain rounded shadow-lg" />
-            </div>
+
+            {previewImage.url ? (
+              <div className="p-4 bg-ink/90 flex items-center justify-center overflow-auto max-h-[80vh]">
+                <img src={previewImage.url} alt={previewImage.name} className="max-w-full max-h-[75vh] object-contain rounded shadow-lg" />
+              </div>
+            ) : (
+              <div className="p-8 text-center space-y-4 max-w-lg mx-auto">
+                <div className="w-14 h-14 rounded-full bg-primary/10 text-primary grid place-items-center mx-auto border border-primary/20">
+                  <Icon name="file" size={26} />
+                </div>
+                <div>
+                  <h3 className="font-serif text-xl text-ink font-mono break-all">{previewImage.name}</h3>
+                  <p className="text-xs text-ink-3 mt-1">Screen capture reference logged during report submission</p>
+                </div>
+
+                <div className="bg-paper-2 rounded-lg p-3.5 text-xs text-left space-y-2 font-mono border border-hairline">
+                  <div className="flex justify-between">
+                    <span className="text-ink-3">File Reference:</span>
+                    <span className="text-ink font-semibold">{previewImage.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-3">Origin Page:</span>
+                    <span className="text-primary font-semibold">{selected?.body?.match(/PAGE URL:\s*([^\s\n]+)/)?.[1] || "/items"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-ink-3">Status:</span>
+                    <span className="text-emerald font-semibold">Logged with ticket</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-ink-3 leading-relaxed">
+                  ✨ <i>System Note:</i> All newly submitted bug reports generate full embedded image previews. Older reports logged file references.
+                </p>
+
+                <Button size="sm" variant="outline" className="w-full justify-center" onClick={() => setPreviewImage(null)}>
+                  Close File Window
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}
