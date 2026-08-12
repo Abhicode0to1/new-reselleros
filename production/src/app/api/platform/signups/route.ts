@@ -20,21 +20,43 @@ export async function GET() {
   }
 
   const admin = createAdminClient();
-  const [{ data: tenants, error: tErr }, { data: users }, { data: customers }] = await Promise.all([
+  
+  // Fetch tenants, public users, customers, and auth users in parallel
+  const [{ data: tenants, error: tErr }, { data: users }, { data: customers }, authUsersRes] = await Promise.all([
     admin.from("tenants").select("id, name, email, phone, created_at, tier, gstin, state, setup_completed_at").order("created_at", { ascending: false }),
-    admin.from("users").select("tenant_id, role, full_name, email"),
+    admin.from("users").select("id, tenant_id, role, full_name, email"),
     admin.from("customers").select("tenant_id"),
+    admin.auth.admin.listUsers().catch(() => ({ data: { users: [] } })),
   ]);
+
   if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
 
+  // Map auth users by ID
+  const authMap = new Map<string, { email?: string | null; phone?: string | null; name?: string | null }>();
+  const authUsers = authUsersRes && "data" in authUsersRes && authUsersRes.data?.users ? authUsersRes.data.users : [];
+  
+  for (const au of authUsers) {
+    const meta = au.user_metadata || {};
+    const name = meta.full_name || meta.name || meta.display_name || au.email?.split("@")[0] || null;
+    const phone = au.phone || meta.phone || meta.mobile || meta.contact_phone || null;
+    authMap.set(au.id, { email: au.email, phone, name });
+  }
+
   // Map users per tenant: prioritize owner role, fallback to any user
-  const ownerByTenant = new Map<string, { name: string; email: string }>();
-  const firstUserByTenant = new Map<string, { name: string; email: string }>();
+  const ownerByTenant = new Map<string, { name: string; email: string | null; phone: string | null }>();
+  const firstUserByTenant = new Map<string, { name: string; email: string | null; phone: string | null }>();
   const userCount = new Map<string, number>();
 
   for (const u of users ?? []) {
     userCount.set(u.tenant_id, (userCount.get(u.tenant_id) ?? 0) + 1);
-    const userInfo = { name: u.full_name ?? "—", email: u.email ?? "" };
+    
+    // Resolve email & phone from authMap if public.users is missing it
+    const au = authMap.get(u.id);
+    const resolvedName = u.full_name || au?.name || u.email?.split("@")[0] || "—";
+    const resolvedEmail = u.email || au?.email || null;
+    const resolvedPhone = au?.phone || null;
+
+    const userInfo = { name: resolvedName, email: resolvedEmail, phone: resolvedPhone };
 
     if (!firstUserByTenant.has(u.tenant_id)) {
       firstUserByTenant.set(u.tenant_id, userInfo);
@@ -50,12 +72,15 @@ export async function GET() {
 
   const rows = (tenants ?? []).map((t) => {
     const ownerData = ownerByTenant.get(t.id) || firstUserByTenant.get(t.id);
+    const email = ownerData?.email || t.email || null;
+    const phone = t.phone || ownerData?.phone || null;
+
     return {
       id: t.id,
       name: t.name,
       owner: ownerData?.name ?? "—",
-      email: ownerData?.email || t.email || null,
-      phone: t.phone || null,
+      email,
+      phone,
       signedUp: t.created_at,
       tier: t.tier,
       gstin: t.gstin,
