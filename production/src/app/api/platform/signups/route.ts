@@ -27,25 +27,34 @@ export async function GET() {
   ]);
   if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
 
-  // Owner name + email + per-tenant counts (small N — aggregate in memory).
+  // Map users per tenant: prioritize owner role, fallback to any user
   const ownerByTenant = new Map<string, { name: string; email: string }>();
+  const firstUserByTenant = new Map<string, { name: string; email: string }>();
   const userCount = new Map<string, number>();
+
   for (const u of users ?? []) {
     userCount.set(u.tenant_id, (userCount.get(u.tenant_id) ?? 0) + 1);
+    const userInfo = { name: u.full_name ?? "—", email: u.email ?? "" };
+
+    if (!firstUserByTenant.has(u.tenant_id)) {
+      firstUserByTenant.set(u.tenant_id, userInfo);
+    }
+
     if (u.role === "owner" && !ownerByTenant.has(u.tenant_id)) {
-      ownerByTenant.set(u.tenant_id, { name: u.full_name ?? "—", email: u.email });
+      ownerByTenant.set(u.tenant_id, userInfo);
     }
   }
+
   const custCount = new Map<string, number>();
   for (const c of customers ?? []) custCount.set(c.tenant_id, (custCount.get(c.tenant_id) ?? 0) + 1);
 
   const rows = (tenants ?? []).map((t) => {
-    const ownerData = ownerByTenant.get(t.id);
+    const ownerData = ownerByTenant.get(t.id) || firstUserByTenant.get(t.id);
     return {
       id: t.id,
       name: t.name,
       owner: ownerData?.name ?? "—",
-      email: t.email || ownerData?.email || null,
+      email: ownerData?.email || t.email || null,
       phone: t.phone || null,
       signedUp: t.created_at,
       tier: t.tier,
