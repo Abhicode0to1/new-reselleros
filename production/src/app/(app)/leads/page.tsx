@@ -415,15 +415,26 @@ function LeadsPageInner() {
   const effectiveView = isMobile ? "list" : (tab === "leads" ? "list" : view);
 
   // Stats are based on Deals (where value lives — raw leads have no value yet).
-  // "Open" deals = qualified but NOT closed (won/lost). Header stats use these
-  // so "active deals" + "open pipeline" never count closed outcomes (a Lost
-  // deal is not active pipeline). Conversion still uses the full qualified set
-  // as the win-rate denominator.
-  const openDeals  = qualifiedDeals.filter((l) => l.stage !== "won" && l.stage !== "lost");
-  const totalValue = openDeals.reduce((s, l) => s + (l.value ?? 0), 0);
-  const wonCount = qualifiedDeals.filter((l) => l.stage === "won").length;
+  // Derived directly from `workspaceLeads` so header KPIs always stay 100% accurate
+  // regardless of active smartView filters or chip selections.
+  const allQualifiedDeals = React.useMemo(
+    () => workspaceLeads.filter((l) => !isRaw(l) && !l.is_junk),
+    [workspaceLeads]
+  );
+  const openDeals = React.useMemo(
+    () => allQualifiedDeals.filter((l) => l.stage !== "won" && l.stage !== "lost"),
+    [allQualifiedDeals]
+  );
+  const totalValue = React.useMemo(
+    () => openDeals.reduce((s, l) => s + (l.value ?? 0), 0),
+    [openDeals]
+  );
+  const wonCount = React.useMemo(
+    () => allQualifiedDeals.filter((l) => l.stage === "won").length,
+    [allQualifiedDeals]
+  );
   const conversion =
-    qualifiedDeals.length > 0 ? Math.round((wonCount / qualifiedDeals.length) * 100) : 0;
+    allQualifiedDeals.length > 0 ? Math.round((wonCount / allQualifiedDeals.length) * 100) : 0;
 
   // Drag handlers
   const handleDrop = (toStage: Lead["stage"]) => {
@@ -457,7 +468,7 @@ function LeadsPageInner() {
         <div className="flex items-center gap-1.5 bg-paper-2 p-1 rounded-lg border border-hairline">
           <button
             type="button"
-            onClick={() => setSalesTab("raw")}
+            onClick={() => { setSalesTab("raw"); setSmartView("all"); }}
             className={cn(
               "px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
               salesTab === "raw"
@@ -474,7 +485,7 @@ function LeadsPageInner() {
 
           <button
             type="button"
-            onClick={() => setSalesTab("deals")}
+            onClick={() => { setSalesTab("deals"); setSmartView("all"); }}
             className={cn(
               "px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
               salesTab === "deals"
@@ -485,13 +496,13 @@ function LeadsPageInner() {
             <Icon name="target" size={14} className={salesTab === "deals" ? "text-amber-ink" : "text-ink-3"} />
             <span>📊 Deal Pipeline</span>
             <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
-              {qualifiedDeals.length}
+              {allQualifiedDeals.length}
             </span>
           </button>
 
           <button
             type="button"
-            onClick={() => setSalesTab("all")}
+            onClick={() => { setSalesTab("all"); setSmartView("all"); }}
             className={cn(
               "px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
               salesTab === "all"
@@ -502,7 +513,7 @@ function LeadsPageInner() {
             <Icon name="list" size={14} className={salesTab === "all" ? "text-amber-ink" : "text-ink-3"} />
             <span>📋 All Records</span>
             <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
-              {searched.length}
+              {workspaceLeads.filter((l) => !l.is_junk).length}
             </span>
           </button>
         </div>
