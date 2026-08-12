@@ -20,7 +20,7 @@ import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/utils";
 import type { SupportTicketRow, SupportTicketStatus } from "@/lib/supabase/database.types";
 
-export type ViewScope = "tenant_feedback" | "team_testing";
+export type ViewScope = "all" | "tenant_feedback" | "team_testing";
 
 const STATUS_LABEL: Record<SupportTicketStatus, string> = {
   open:              "Open",
@@ -30,7 +30,7 @@ const STATUS_LABEL: Record<SupportTicketStatus, string> = {
   closed:            "Closed",
 };
 
-const STATUSES: ("all" | SupportTicketStatus)[] = ["open", "in_progress", "awaiting_customer", "resolved", "closed", "all"];
+const STATUSES: ("all" | SupportTicketStatus)[] = ["all", "open", "in_progress", "awaiting_customer", "resolved", "closed"];
 
 function useTickets(scope: ViewScope, statusFilter: "all" | SupportTicketStatus) {
   return useQuery({
@@ -70,7 +70,7 @@ function extractAttachments(body: string | null): Array<{ name: string; url?: st
 
 export default function SupportPage() {
   const [scope, setScope] = React.useState<ViewScope>("tenant_feedback");
-  const [statusFilter, setStatusFilter] = React.useState<"all" | SupportTicketStatus>("open");
+  const [statusFilter, setStatusFilter] = React.useState<"all" | SupportTicketStatus>("all");
   const [selected, setSelected] = React.useState<SupportTicketRow | null>(null);
   const [previewImage, setPreviewImage] = React.useState<{ name: string; url: string } | null>(null);
 
@@ -110,12 +110,25 @@ export default function SupportPage() {
           </p>
         </div>
 
-        {/* Primary View Switcher: Tenant Feedback vs Team Testing */}
-        <div className="flex items-center gap-1.5 p-1 bg-paper-2 border border-hairline rounded-xl shadow-xs">
+        {/* Primary View Switcher: All vs Tenant Feedback vs Team Testing */}
+        <div className="flex items-center gap-1.5 p-1 bg-paper-2 border border-hairline rounded-xl shadow-xs flex-wrap">
           <button
             type="button"
-            onClick={() => { setScope("tenant_feedback"); setStatusFilter("open"); }}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+            onClick={() => { setScope("all"); setStatusFilter("all"); }}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+              scope === "all"
+                ? "bg-paper text-ink shadow-sm border border-hairline"
+                : "text-ink-3 hover:text-ink hover:bg-paper-3"
+            }`}
+          >
+            <Icon name="globe" size={15} />
+            <span>🌐 All Tickets &amp; Reports</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setScope("tenant_feedback"); setStatusFilter("all"); }}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
               scope === "tenant_feedback"
                 ? "bg-paper text-primary shadow-sm border border-hairline"
                 : "text-ink-3 hover:text-ink hover:bg-paper-3"
@@ -132,8 +145,8 @@ export default function SupportPage() {
 
           <button
             type="button"
-            onClick={() => { setScope("team_testing"); setStatusFilter("open"); }}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
+            onClick={() => { setScope("team_testing"); setStatusFilter("all"); }}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
               scope === "team_testing"
                 ? "bg-rose-soft text-rose-ink shadow-sm border border-rose/30"
                 : "text-ink-3 hover:text-ink hover:bg-paper-3"

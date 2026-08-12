@@ -46,18 +46,23 @@ export async function GET(request: Request) {
   const scopeCounts = { tenant_feedback: 0, team_testing: 0 };
 
   const filteredTickets = (allTickets ?? []).filter((t) => {
-    // A ticket is from an Internal Team Employee if it comes from the primary Anutech Digital tenant AND has a team bug tag
+    // A ticket is from an Internal Team Employee if it comes from the primary Anutech Digital tenant AND has a team bug tag AND raised by internal employee
     const isInternalTag = t.subject && (t.subject.includes("[BUG]") || t.subject.includes("[FEATURE]") || t.subject.includes("[UI_IMPROVEMENT]"));
     const isInternalTenant = t.tenant_id === ANUTECH_PRIMARY_TENANT_ID;
+    const isExternalTenantEmail = Boolean(
+      t.raised_by_email &&
+      !t.raised_by_email.endsWith("@anutechdigital.com") &&
+      !t.raised_by_email.endsWith("@anutech.in")
+    );
     
     // External Tenants (e.g. ranjeetraj@exceltechnologies.in) ALWAYS belong in tenant_feedback even if they report a bug
-    const isTeamScope = isInternalTenant && isInternalTag;
+    const isTeamScope = isInternalTenant && isInternalTag && !isExternalTenantEmail;
 
     if (isTeamScope) scopeCounts.team_testing += 1;
     else scopeCounts.tenant_feedback += 1;
 
-    // Check if ticket matches current scope filter
-    const matchesScope = scope === "team_testing" ? isTeamScope : !isTeamScope;
+    // Check if ticket matches current scope filter (all | tenant_feedback | team_testing)
+    const matchesScope = scope === "all" ? true : scope === "team_testing" ? isTeamScope : !isTeamScope;
     if (!matchesScope) return false;
 
     // Increment status counter for current scope
