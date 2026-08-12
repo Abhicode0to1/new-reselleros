@@ -6,12 +6,11 @@
  * Returns active employee advances & claims for the authenticated user.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const supabase = createClient();
     const { data: authData, error: authErr } = await supabase.auth.getUser();
 
     if (authErr || !authData?.user) {
@@ -96,7 +95,7 @@ export async function GET(request: NextRequest) {
     const curEmailLower = (email || "").toLowerCase();
     const curNameLower = (full_name || "").toLowerCase();
 
-    const myAdvances = allAdvances.filter((a) => {
+    const myAdvances = allAdvances.filter((a: any) => {
       const empNameLower = (a.employee_name || "").toLowerCase();
       
       const nameMatch = curNameLower && (empNameLower.includes(curNameLower) || curNameLower.includes(empNameLower));
@@ -153,8 +152,7 @@ export async function POST(request: NextRequest) {
 
     // Insert expense claim using admin client with explicit UUID
     const newId = crypto.randomUUID();
-    const { data: newExpense, error: insErr } = await admin
-      .from("expenses")
+    const { data: newExpense, error: insErr } = await (admin.from("expenses" as any) as any)
       .insert({
         id: newId,
         tenant_id: profile.tenant_id,
