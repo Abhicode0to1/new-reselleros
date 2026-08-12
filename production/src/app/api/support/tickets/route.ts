@@ -41,7 +41,7 @@ export async function GET(request: Request) {
   }
 
   if (statusFilter !== "all") {
-    q = q.eq("status", statusFilter);
+    q = q.eq("status", statusFilter as any);
   }
 
   const { data: tickets, error } = await q;
@@ -97,7 +97,7 @@ export async function PATCH(request: Request) {
 
   const { data: updated, error } = await client
     .from("support_tickets")
-    .update(updates)
+    .update(updates as any)
     .eq("id", id)
     .select()
     .single();
