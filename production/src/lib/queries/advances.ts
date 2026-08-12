@@ -1,10 +1,9 @@
 /**
  * Employee Expense Advances & Petty Cash Management — TanStack Query hooks.
  *
- * Logically handles:
- * 1. Giving advance money to employees for official expenses (Assets / Petty cash in hand).
- * 2. Booking expenses against that advance (Hits P&L as Expense & reduces available advance balance).
- * 3. Settling / refunding remaining advance balance when project/travel completes.
+ * Uses existing `expenses` table with category='Employee Advance Disbursal' and
+ * `prepaid_advance_id` linking for 100% zero-migration compatibility across
+ * local and production Supabase environments.
  */
 "use client";
 
@@ -40,6 +39,8 @@ export const ADVANCE_PAYMENT_METHODS: Record<string, string> = {
   cheque: "Cheque",
 };
 
+const ADVANCE_CATEGORY = "Employee Advance Disbursal";
+
 async function getTenantId(): Promise<string> {
   const supabase = createClient();
   const { data: authData } = await supabase.auth.getUser();
@@ -60,31 +61,55 @@ export function useEmployeeAdvances() {
       const supabase = createClient();
       const tenant_id = await getTenantId();
 
-      // Fetch advances & linked expenses
-      const [{ data: advs, error: aErr }, { data: exps, error: eErr }] = await Promise.all([
-        (supabase.from("employee_expense_advances" as any) as any).select("*").eq("tenant_id", tenant_id).order("disbursed_date", { ascending: false }),
-        (supabase.from("expenses" as any) as any).select("*").eq("tenant_id", tenant_id).not("prepaid_advance_id", "is", null),
+      // Fetch all advance disbursals + claimed expenses
+      const [{ data: disbursals, error: dErr }, { data: claims, error: cErr }] = await Promise.all([
+        (supabase.from("expenses" as any) as any)
+          .select("*")
+          .eq("tenant_id", tenant_id)
+          .eq("category", ADVANCE_CATEGORY)
+          .order("expense_date", { ascending: false }),
+        (supabase.from("expenses" as any) as any)
+          .select("*")
+          .eq("tenant_id", tenant_id)
+          .not("prepaid_advance_id", "is", null),
       ]);
 
-      if (aErr) throw aErr;
-      if (eErr) throw eErr;
+      if (dErr) throw dErr;
+      if (cErr) throw cErr;
 
-      const expenseMap = new Map<string, Expense[]>();
-      for (const e of (exps ?? []) as Expense[]) {
-        if (e.prepaid_advance_id) {
-          const list = expenseMap.get(e.prepaid_advance_id) ?? [];
-          list.push(e);
-          expenseMap.set(e.prepaid_advance_id, list);
+      const claimMap = new Map<string, Expense[]>();
+      for (const c of (claims ?? []) as Expense[]) {
+        if (c.prepaid_advance_id) {
+          const list = claimMap.get(c.prepaid_advance_id) ?? [];
+          list.push(c);
+          claimMap.set(c.prepaid_advance_id, list);
         }
       }
 
-      return (advs ?? []).map((a: any) => {
-        const linked = expenseMap.get(a.id) ?? [];
+      return (disbursals ?? []).map((d: any) => {
+        const linked = claimMap.get(d.id) ?? [];
         const total_spent = linked.reduce((sum, item) => sum + (item.amount || 0), 0);
-        const remaining_balance = Math.max(0, (a.disbursed_amount || 0) - total_spent);
+        const disbursed_amount = Number(d.amount);
+        const remaining_balance = Math.max(0, disbursed_amount - total_spent);
+
+        // Parse employee name and purpose from vendor_name and description
+        const empName = d.vendor_name || "Employee";
+        const isSettled = d.notes?.includes("[SETTLED]") || (remaining_balance === 0 && linked.length > 0);
+
         return {
-          ...a,
-          disbursed_amount: Number(a.disbursed_amount),
+          id: d.id,
+          tenant_id: d.tenant_id,
+          employee_id: d.project_id || null,
+          employee_name: empName,
+          disbursed_amount,
+          disbursed_date: d.expense_date,
+          payment_method: d.payment_method || "bank_transfer",
+          bank_account_id: d.bank_account_id || null,
+          purpose: d.description || "Company Expenses Advance",
+          status: isSettled ? "settled" : "active",
+          notes: d.notes || null,
+          created_at: d.created_at,
+          updated_at: d.updated_at,
           total_spent,
           remaining_balance,
           linked_expenses: linked,
@@ -110,18 +135,19 @@ export function useDisburseAdvance() {
       const supabase = createClient();
       const tenant_id = await getTenantId();
 
-      const { data, error } = await (supabase.from("employee_expense_advances" as any) as any)
+      const { data, error } = await (supabase.from("expenses" as any) as any)
         .insert({
           tenant_id,
-          employee_id: input.employee_id || null,
-          employee_name: input.employee_name,
-          disbursed_amount: input.disbursed_amount,
-          disbursed_date: input.disbursed_date,
+          category: ADVANCE_CATEGORY,
+          amount: input.disbursed_amount,
+          expense_date: input.disbursed_date,
+          vendor_name: input.employee_name,
+          description: input.purpose || "Employee Expense Advance",
           payment_method: input.payment_method,
           bank_account_id: input.bank_account_id || null,
-          purpose: input.purpose || null,
+          paid: true,
+          paid_date: input.disbursed_date,
           notes: input.notes || null,
-          status: "active",
         })
         .select()
         .single();
@@ -131,7 +157,8 @@ export function useDisburseAdvance() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employee_expense_advances"] });
-      toast.success("Employee advance disbursed successfully");
+      qc.invalidateQueries({ queryKey: ["expenses"] });
+      toast.success("Employee advance disbursed successfully!");
     },
     onError: (err) => toast.error((err as Error).message),
   });
@@ -175,7 +202,7 @@ export function useRecordAdvanceExpense() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employee_expense_advances"] });
       qc.invalidateQueries({ queryKey: ["expenses"] });
-      toast.success("Expense recorded and adjusted against advance!");
+      toast.success("Expense recorded & deducted from employee advance!");
     },
     onError: (err) => toast.error((err as Error).message),
   });
@@ -186,8 +213,8 @@ export function useSettleAdvance() {
   return useMutation({
     mutationFn: async (advance_id: string) => {
       const supabase = createClient();
-      const { error } = await (supabase.from("employee_expense_advances" as any) as any)
-        .update({ status: "settled", updated_at: new Date().toISOString() })
+      const { error } = await (supabase.from("expenses" as any) as any)
+        .update({ notes: "[SETTLED] Employee advance closed", updated_at: new Date().toISOString() })
         .eq("id", advance_id);
 
       if (error) throw error;
