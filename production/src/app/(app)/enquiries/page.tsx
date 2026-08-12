@@ -282,10 +282,22 @@ export default function EnquiriesOutlookPage() {
   }
 
   function handleCopyReply() {
-    if (!aiDraft) return;
+    if (!aiDraft || !selectedId) return;
     const fullText = `Subject: ${aiDraft.subject}\n\n${aiDraft.message}`;
     navigator.clipboard.writeText(fullText);
     toast.success("AI draft response copied to clipboard!");
+
+    // Automatically log audit note for team transparency
+    const auditNote: InternalNote = {
+      id: "note-" + Date.now(),
+      author: "Sales Rep (System)",
+      text: `📤 Email reply drafted & copied: "${aiDraft.subject}"`,
+      createdAt: new Date().toISOString(),
+    };
+    setInternalNotes((prev) => ({
+      ...prev,
+      [selectedId]: [...(prev[selectedId] || []), auditNote],
+    }));
   }
 
   return (
