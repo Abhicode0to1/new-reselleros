@@ -98,7 +98,7 @@ function subStatus(hasActiveSub: boolean, archived: boolean):
 }
 
 export default function CustomersPage() {
-  const { filterEntity } = useActiveWorkspace();
+  const { filterEntity, getEntityBadge, workspace } = useActiveWorkspace();
   const { data: customers, isLoading, error, refetch } = useCustomers();
   const { data: subscriptions } = useSubscriptions();
   const { data: outstanding } = useOutstandingReceivables();
@@ -550,7 +550,14 @@ export default function CustomersPage() {
                           <div className="flex items-center gap-2.5 min-w-0">
                             <Avatar name={primaryName} color={avatarColor(c.id)} size="sm" className="shrink-0" />
                             <div className="min-w-0">
-                              <div className="font-medium text-sm text-ink truncate">{primaryName}</div>
+                              <div className="font-medium text-sm text-ink truncate flex items-center gap-1.5 flex-wrap">
+                                <span>{primaryName}</span>
+                                {workspace === "group" && (
+                                  <Badge kind={getEntityBadge(c).kind} size="sm">
+                                    {getEntityBadge(c).label}
+                                  </Badge>
+                                )}
+                              </div>
                               {customerSubline(c) && (
                                 <div className="text-[11px] text-ink-3 truncate mt-0.5">{customerSubline(c)}</div>
                               )}

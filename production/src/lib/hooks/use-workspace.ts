@@ -10,9 +10,28 @@ export function useActiveWorkspace(): {
   isAnutech: boolean;
   isExcel: boolean;
   isGroup: boolean;
-  filterEntity: <T extends { customer_name?: string | null; domain?: string | null; name?: string | null; company?: string | null }>(
+  filterEntity: <
+    T extends {
+      tenant_id?: string | null;
+      customer_name?: string | null;
+      domain?: string | null;
+      name?: string | null;
+      company?: string | null;
+    }
+  >(
     item: T
   ) => boolean;
+  getEntityBadge: <
+    T extends {
+      tenant_id?: string | null;
+      customer_name?: string | null;
+      domain?: string | null;
+      name?: string | null;
+      company?: string | null;
+    }
+  >(
+    item: T
+  ) => { label: string; kind: "info" | "warning" };
 } {
   const [workspace, setWorkspaceState] = React.useState<WorkspaceMode>("anutech");
 
@@ -54,11 +73,28 @@ export function useActiveWorkspace(): {
     }
   }, []);
 
-  const filterEntity = React.useCallback(
-    <T extends { customer_name?: string | null; domain?: string | null; name?: string | null; company?: string | null }>(
+  const isItemForExcel = React.useCallback(
+    <
+      T extends {
+        tenant_id?: string | null;
+        customer_name?: string | null;
+        domain?: string | null;
+        name?: string | null;
+        company?: string | null;
+      }
+    >(
       item: T
     ): boolean => {
-      if (workspace === "group") return true;
+      const EXCEL_TENANT_IDS = [
+        "4eeab895-6f4e-42ea-aaf2-efe4cfbc2129",
+        "606a7ae7-9805-4a10-8163-7da6e42968e9",
+      ];
+      const ANUTECH_TENANT_ID = "fbb976f1-9090-4f10-9726-0901bd144e42";
+
+      if (item.tenant_id) {
+        if (EXCEL_TENANT_IDS.includes(item.tenant_id)) return true;
+        if (item.tenant_id === ANUTECH_TENANT_ID) return false;
+      }
 
       const identifier = (
         (item.customer_name || "") +
@@ -70,20 +106,58 @@ export function useActiveWorkspace(): {
         (item.company || "")
       ).toLowerCase();
 
-      const isAnutechItem = identifier.includes("anutech");
-      const isExcelItem = identifier.includes("excel") || identifier.includes("vera") || identifier.includes("veracious");
+      if (identifier.includes("anutech")) return false;
+      if (identifier.includes("excel") || identifier.includes("vera") || identifier.includes("veracious")) return true;
 
-      if (workspace === "anutech") {
-        return !isExcelItem || isAnutechItem;
+      // Deterministic partitioning for neutral items (split ~55% Excel, 45% Anutech)
+      let hash = 0;
+      for (let i = 0; i < identifier.length; i++) {
+        hash = (hash * 31 + identifier.charCodeAt(i)) >>> 0;
       }
+      return hash % 10 >= 4;
+    },
+    []
+  );
 
-      if (workspace === "excel") {
-        return !isAnutechItem;
+  const filterEntity = React.useCallback(
+    <
+      T extends {
+        tenant_id?: string | null;
+        customer_name?: string | null;
+        domain?: string | null;
+        name?: string | null;
+        company?: string | null;
       }
-
+    >(
+      item: T
+    ): boolean => {
+      if (workspace === "group") return true;
+      const belongsToExcel = isItemForExcel(item);
+      if (workspace === "excel") return belongsToExcel;
+      if (workspace === "anutech") return !belongsToExcel;
       return true;
     },
-    [workspace]
+    [workspace, isItemForExcel]
+  );
+
+  const getEntityBadge = React.useCallback(
+    <
+      T extends {
+        tenant_id?: string | null;
+        customer_name?: string | null;
+        domain?: string | null;
+        name?: string | null;
+        company?: string | null;
+      }
+    >(
+      item: T
+    ) => {
+      const belongsToExcel = isItemForExcel(item);
+      return belongsToExcel
+        ? { label: "Excel Tech", kind: "warning" as const }
+        : { label: "Anutech Digital", kind: "info" as const };
+    },
+    [isItemForExcel]
   );
 
   return {
@@ -93,5 +167,6 @@ export function useActiveWorkspace(): {
     isExcel: workspace === "excel",
     isGroup: workspace === "group",
     filterEntity,
+    getEntityBadge,
   };
 }
