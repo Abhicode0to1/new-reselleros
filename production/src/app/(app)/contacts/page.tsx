@@ -25,6 +25,8 @@ import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
 import { initials } from "@/lib/utils";
 
+import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
+
 // Contacts are grouped by their unified "kind" (see contactKind): leads +
 // customers come from their own tables; partners / vendors / personal / other
 // are standalone contacts classified by their `relationship` field.
@@ -133,8 +135,14 @@ export default function ContactsPage() {
     router.push(path as never);
   };
 
+  const { filterEntity, workspace } = useActiveWorkspace();
+
+  const contactsByWorkspace = React.useMemo(() => {
+    return (contacts ?? []).filter((c) => filterEntity(c));
+  }, [contacts, filterEntity, workspace]);
+
   // Filter
-  const filtered = (contacts ?? []).filter((c) => {
+  const filtered = contactsByWorkspace.filter((c) => {
     if (tab !== "all" && contactKind(c) !== tab) return false;
     if (search.trim()) {
       const s = search.toLowerCase();
@@ -152,8 +160,8 @@ export default function ContactsPage() {
   });
 
   // Counts by unified kind
-  const counts: Record<string, number> = { all: contacts?.length ?? 0 };
-  for (const c of contacts ?? []) {
+  const counts: Record<string, number> = { all: contactsByWorkspace.length };
+  for (const c of contactsByWorkspace) {
     const k = contactKind(c);
     counts[k] = (counts[k] ?? 0) + 1;
   }

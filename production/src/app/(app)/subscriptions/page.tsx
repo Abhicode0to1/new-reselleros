@@ -33,6 +33,7 @@ import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import type { Subscription } from "@/lib/supabase/database.types";
+import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 
 // Vendor pill — capitalised label + a stable colour per vendor (Google/Microsoft
 // blue, Zoho green) so the vendor reads at a glance.
@@ -90,33 +91,18 @@ export default function SubscriptionsPage() {
   const [addGoogleOpen,  setAddGoogleOpen]  = React.useState(false);
   const [kpiOpen, setKpiOpen] = React.useState(true);
   const [visible, setVisible] = React.useState(60);  // render cap — paginates large lists
-  const [activeWorkspace, setActiveWorkspace] = React.useState<"anutech" | "excel" | "group">("anutech");
-
-  React.useEffect(() => {
-    const updateWs = () => {
-      if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("resellersos_active_workspace");
-        if (saved === "excel" || saved === "group" || saved === "anutech") {
-          setActiveWorkspace(saved as any);
-        }
-      }
-    };
-    updateWs();
-    window.addEventListener("storage", updateWs);
-    return () => window.removeEventListener("storage", updateWs);
-  }, []);
+  const { filterEntity, workspace: activeWorkspace } = useActiveWorkspace();
 
   const today = new Date();
   const daysUntil = (renewal: string | null) =>
     renewal ? daysBetween(today, renewal) : null;
 
-  // Filter — paid subs only (trials handled separately below)
-  const filtered = (subs ?? []).filter((s) => {
-    // Workspace filtering based on active workspace selection
-    const isAnutech = s.domain?.toLowerCase().includes("anutech") || s.customer_name?.toLowerCase().includes("anutech");
-    if (activeWorkspace === "anutech" && !isAnutech) return false;
-    if (activeWorkspace === "excel" && isAnutech) return false;
+  const subsByWorkspace = React.useMemo(() => {
+    return (subs ?? []).filter((s) => filterEntity(s));
+  }, [subs, filterEntity, activeWorkspace]);
 
+  // Filter — paid subs only (trials handled separately below)
+  const filtered = subsByWorkspace.filter((s) => {
     const dl = daysUntil(s.renewal_date);
     if (tab === "active" && s.status !== "active") return false;
     if (tab === "expiring" && (dl === null || dl < 0 || dl > 30)) return false;
@@ -163,17 +149,6 @@ export default function SubscriptionsPage() {
     }
     return true;
   });
-
-  const subsByWorkspace = React.useMemo(() => {
-    return (subs ?? []).filter((s) => {
-      const isAnutech = s.domain?.toLowerCase().includes("anutech") || s.customer_name?.toLowerCase().includes("anutech");
-      if (activeWorkspace === "anutech") return isAnutech;
-      if (activeWorkspace === "excel") return !isAnutech;
-      return true;
-    });
-  }, [subs, activeWorkspace]);
-
-  // Counts
   const counts = {
     all: subsByWorkspace.length,
     active: subsByWorkspace.filter((s) => s.status === "active").length,
