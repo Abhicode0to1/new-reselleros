@@ -1,10 +1,10 @@
 /**
  * Outlook-Style CRM Sales Email Suite — /enquiries
  *
- * Microsoft Outlook 3-Pane Email Hub:
+ * Microsoft Outlook 3-Pane Email Hub with Missive/Front/HubSpot B2B Sales Inbox features:
  *   - Pane 1: Folders & Smart Filters (All, Untriaged, Converted Leads, Thread Replies, Skipped)
- *   - Pane 2: Email Threads List (Search bar, Sender avatars, Relative timestamps, Badges)
- *   - Pane 3: Rich Email Reading Pane + AI Gemini Draft Assistant + Instant CRM Actions
+ *   - Pane 2: Email Threads List (Search, Sender avatars, Relative timestamps, Hover actions)
+ *   - Pane 3: Rich Email Reading Pane + AI Gemini Draft Assistant + Internal Team Notes + Canned Templates + CRM Actions
  */
 "use client";
 
@@ -26,6 +26,15 @@ import type { InboundEmailRow } from "@/lib/supabase/database.types";
 import { toast } from "sonner";
 
 type FilterFolder = "all" | "untriaged" | "leads" | "appended" | "skipped";
+type ReadingTab = "email" | "notes";
+type AiTone = "professional" | "warm" | "formal" | "urgent";
+
+interface InternalNote {
+  id: string;
+  author: string;
+  text: string;
+  createdAt: string;
+}
 
 function StatusBadge({ status }: { status: string }) {
   const meta = inboundStatusMeta(status);
@@ -52,6 +61,17 @@ export default function EnquiriesOutlookPage() {
   const [activeFolder, setActiveFolder] = React.useState<FilterFolder>("all");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+
+  // Tabs & Views
+  const [activeTab, setActiveTab] = React.useState<ReadingTab>("email");
+  const [aiTone, setAiTone] = React.useState<AiTone>("professional");
+
+  // Internal Notes State (persisted in local state per thread)
+  const [internalNotes, setInternalNotes] = React.useState<Record<string, InternalNote[]>>({});
+  const [newNoteText, setNewNoteText] = React.useState("");
+
+  // Starred / Flagged Threads
+  const [starredIds, setStarredIds] = React.useState<Set<string>>(new Set());
 
   // AI Reply State
   const [isAiDrafting, setIsAiDrafting] = React.useState(false);
@@ -110,6 +130,35 @@ export default function EnquiriesOutlookPage() {
     }
   }, [filteredRows, selectedId]);
 
+  // Keyboard Shortcuts (J / K navigation, C to compose)
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (["input", "textarea"].includes((e.target as HTMLElement)?.tagName?.toLowerCase())) {
+        return;
+      }
+
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault();
+        const currentIndex = filteredRows.findIndex((r) => r.id === selectedId);
+        if (currentIndex < filteredRows.length - 1) {
+          setSelectedId(filteredRows[currentIndex + 1].id);
+        }
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const currentIndex = filteredRows.findIndex((r) => r.id === selectedId);
+        if (currentIndex > 0) {
+          setSelectedId(filteredRows[currentIndex - 1].id);
+        }
+      } else if (e.key === "c") {
+        e.preventDefault();
+        setShowReplyComposer((prev) => !prev);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [filteredRows, selectedId]);
+
   // Currently Selected Thread
   const selectedThread = React.useMemo(
     () => (rows ?? []).find((r) => r.id === selectedId) ?? null,
@@ -120,10 +169,58 @@ export default function EnquiriesOutlookPage() {
   React.useEffect(() => {
     setAiDraft(null);
     setShowReplyComposer(false);
+    setActiveTab("email");
   }, [selectedId]);
 
   async function handleConvert(id: string) {
     await convert.mutateAsync(id);
+  }
+
+  function toggleStar(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setStarredIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Add Internal Note
+  function handleAddInternalNote() {
+    if (!selectedId || !newNoteText.trim()) return;
+    const note: InternalNote = {
+      id: "note-" + Date.now(),
+      author: "Sales Rep",
+      text: newNoteText.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    setInternalNotes((prev) => ({
+      ...prev,
+      [selectedId]: [...(prev[selectedId] || []), note],
+    }));
+    setNewNoteText("");
+    toast.success("Internal note added to thread.");
+  }
+
+  // Canned Responses / Snippets
+  function applyCannedTemplate(templateKey: "gworkspace" | "m365" | "bank") {
+    if (!selectedThread) return;
+    const recipientName = (selectedThread.from_name || selectedThread.from_email || "Customer").split("@")[0];
+    const subject = selectedThread.subject ? `Re: ${selectedThread.subject.replace(/^Re:\s*/i, "")}` : "Quotation & Details";
+
+    let message = "";
+    if (templateKey === "gworkspace") {
+      message = `Hi ${recipientName},\n\nThank you for your enquiry regarding Google Workspace licenses. We are an authorized Google Cloud Partner in India.\n\nHere is our special volume pricing:\n• Business Starter: ₹145/user/month (excl GST)\n• Business Standard: ₹730/user/month (excl GST)\n\nWe provide free domain setup, data migration, 24/7 technical support, and GST tax invoicing.\n\nWould you like me to share a formal quotation for your team?\n\nBest regards,\nSales Team`;
+    } else if (templateKey === "m365") {
+      message = `Hi ${recipientName},\n\nThank you for contacting us regarding Microsoft 365 plans for your organization.\n\nWe provide official Microsoft 365 Business Basic, Standard, and Enterprise licenses with local INR billing and GST tax compliance.\n\nCould you please share your required user count so we can prepare a customized quote for you?\n\nBest regards,\nSales Team`;
+    } else if (templateKey === "bank") {
+      message = `Hi ${recipientName},\n\nPlease find our company bank details for official payment transfer:\n\nAccount Name: Anutech Digital Private Limited\nBank: HDFC Bank\nAccount No: 50200012345678\nIFSC Code: HDFC0001234\n\nAlternatively, you can pay online via UPI or Card using our secure payment link.\n\nBest regards,\nFinance Team`;
+    }
+
+    setAiDraft({ subject, message });
+    setShowReplyComposer(true);
+    toast.success("Canned sales template applied.");
   }
 
   // Generate AI Draft
@@ -149,9 +246,17 @@ export default function EnquiriesOutlookPage() {
 
       if (response.ok) {
         const data = await response.json();
+        let message = data.message || `Hi ${recipientName},\n\nThank you for reaching out regarding ${selectedThread.subject || "your enquiry"}.\n\nWe have received your requirements and our solutions team is preparing the details for you.\n\nBest regards,\nSales Team`;
+        
+        if (aiTone === "warm") {
+          message = message.replace(/^Hi /, "Hello ").replace(/\n\nBest regards,/, "\n\nWarm regards,\nSales Team");
+        } else if (aiTone === "formal") {
+          message = `Dear ${recipientName},\n\nThank you for contacting Anutech Digital. We reference your inquiry: "${selectedThread.subject || "Software licenses"}".\n\nOur team is reviewing your requirements to provide an official quotation.\n\nSincerely,\nAnutech Digital Sales Operations`;
+        }
+
         setAiDraft({
           subject: data.subject || subject,
-          message: data.message || `Hi ${recipientName},\n\nThank you for reaching out regarding ${selectedThread.subject || "your enquiry"}.\n\nWe have received your requirements and our solutions team is preparing the details for you.\n\nBest regards,\nSales Team`,
+          message,
         });
       } else {
         // Fallback Draft
@@ -179,13 +284,14 @@ export default function EnquiriesOutlookPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto flex flex-col h-[calc(100vh-80px)]">
+    <div className="p-4 md:p-6 lg:p-8 max-w-[1450px] mx-auto flex flex-col h-[calc(100vh-80px)]">
       {/* Top Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap mb-4 shrink-0">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs uppercase tracking-wider text-ink-3 font-semibold">Sales CRM</span>
             <span className="text-xs px-2 py-0.5 rounded-full bg-amber/10 text-amber font-medium">Outlook Suite</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-paper-2 border border-hairline text-ink-3">Shortcuts: J/K Navigate · C Compose</span>
           </div>
           <h1 className="font-serif text-2xl md:text-3xl font-bold leading-tight">Sales Email Suite</h1>
         </div>
@@ -352,12 +458,13 @@ export default function EnquiriesOutlookPage() {
               ) : (
                 filteredRows.map((e) => {
                   const isSelected = e.id === selectedId;
+                  const isStarred = starredIds.has(e.id);
                   return (
                     <button
                       key={e.id}
                       type="button"
                       onClick={() => setSelectedId(e.id)}
-                      className={`w-full text-left p-3.5 transition-colors flex flex-col gap-1.5 relative ${
+                      className={`w-full text-left p-3.5 transition-colors flex flex-col gap-1.5 relative group ${
                         isSelected
                           ? "bg-amber/10 border-l-4 border-amber pl-2.5"
                           : "hover:bg-paper-2/40"
@@ -372,9 +479,17 @@ export default function EnquiriesOutlookPage() {
                             {senderLabel(e)}
                           </span>
                         </div>
-                        <span className="text-[10px] text-ink-3 shrink-0">
-                          {formatDate(e.created_at, "relative")}
-                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span
+                            onClick={(ev) => toggleStar(e.id, ev)}
+                            className={`text-xs cursor-pointer ${isStarred ? "text-amber" : "text-ink-3 opacity-0 group-hover:opacity-100"}`}
+                          >
+                            ★
+                          </span>
+                          <span className="text-[10px] text-ink-3">
+                            {formatDate(e.created_at, "relative")}
+                          </span>
+                        </div>
                       </div>
 
                       <p className="text-xs font-medium text-ink-2 truncate">
@@ -413,7 +528,7 @@ export default function EnquiriesOutlookPage() {
                 />
               </div>
             ) : (
-              <div className="flex-1 flex flex-col p-6 space-y-6">
+              <div className="flex-1 flex flex-col p-6 space-y-5">
                 
                 {/* Email Header Bar */}
                 <div className="border-b border-hairline pb-4 space-y-3">
@@ -478,34 +593,147 @@ export default function EnquiriesOutlookPage() {
                   </div>
                 </div>
 
-                {/* Email Body Message */}
-                <div className="flex-1 bg-paper-2/20 border border-hairline rounded-xl p-5 overflow-y-auto">
-                  <div className="flex items-center justify-between text-xs text-ink-3 mb-3 border-b border-hairline/60 pb-2">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">Email Body</span>
-                    <span>Captured via Inbound Webhook</span>
+                {/* Reading Pane View Switcher (Email Content vs Internal Team Notes) */}
+                <div className="flex items-center justify-between border-b border-hairline pb-2">
+                  <div className="flex items-center gap-1 bg-paper-2/40 p-1 rounded-lg border border-hairline">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("email")}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                        activeTab === "email" ? "bg-paper shadow-xs text-ink font-semibold" : "text-ink-3 hover:text-ink"
+                      }`}
+                    >
+                      ✉️ Customer Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("notes")}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${
+                        activeTab === "notes" ? "bg-paper shadow-xs text-ink font-semibold" : "text-ink-3 hover:text-ink"
+                      }`}
+                    >
+                      <span>📝 Team Internal Notes</span>
+                      {internalNotes[selectedThread.id]?.length ? (
+                        <span className="text-[10px] px-1.5 rounded-full bg-amber text-white font-bold">
+                          {internalNotes[selectedThread.id].length}
+                        </span>
+                      ) : null}
+                    </button>
                   </div>
 
-                  {selectedThread.body_text?.trim() ? (
-                    <pre className="whitespace-pre-wrap break-words font-sans text-sm text-ink leading-relaxed">
-                      {selectedThread.body_text}
-                    </pre>
-                  ) : selectedThread.body_html?.trim() ? (
-                    <div className="p-4 rounded-lg border border-amber/30 bg-amber/5 text-xs text-ink-2">
-                      <p className="font-semibold text-amber-dark mb-1">HTML-Only Mail Received</p>
-                      <p>This email was sent in HTML-only format. Plain-text view is unavailable to prevent XSS security issues.</p>
+                  {activeTab === "email" && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] text-ink-3">Quick Snippets:</span>
+                      <button
+                        type="button"
+                        onClick={() => applyCannedTemplate("gworkspace")}
+                        className="text-[11px] px-2 py-0.5 rounded border border-hairline bg-paper hover:bg-paper-2 text-ink-2 font-medium"
+                      >
+                        Google Workspace Quote
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyCannedTemplate("m365")}
+                        className="text-[11px] px-2 py-0.5 rounded border border-hairline bg-paper hover:bg-paper-2 text-ink-2 font-medium"
+                      >
+                        M365 Quote
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyCannedTemplate("bank")}
+                        className="text-[11px] px-2 py-0.5 rounded border border-hairline bg-paper hover:bg-paper-2 text-ink-2 font-medium"
+                      >
+                        Bank Details
+                      </button>
                     </div>
-                  ) : (
-                    <p className="text-sm text-ink-3 italic">No body text captured for this email.</p>
                   )}
                 </div>
+
+                {/* TAB 1: CUSTOMER EMAIL CONTENT */}
+                {activeTab === "email" && (
+                  <div className="flex-1 bg-paper-2/20 border border-hairline rounded-xl p-5 overflow-y-auto min-h-[160px]">
+                    <div className="flex items-center justify-between text-xs text-ink-3 mb-3 border-b border-hairline/60 pb-2">
+                      <span className="font-semibold uppercase tracking-wider text-[10px]">Email Body</span>
+                      <span>Captured via Inbound Webhook</span>
+                    </div>
+
+                    {selectedThread.body_text?.trim() ? (
+                      <pre className="whitespace-pre-wrap break-words font-sans text-sm text-ink leading-relaxed">
+                        {selectedThread.body_text}
+                      </pre>
+                    ) : selectedThread.body_html?.trim() ? (
+                      <div className="p-4 rounded-lg border border-amber/30 bg-amber/5 text-xs text-ink-2">
+                        <p className="font-semibold text-amber-dark mb-1">HTML-Only Mail Received</p>
+                        <p>This email was sent in HTML-only format. Plain-text view is unavailable to prevent XSS security issues.</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-ink-3 italic">No body text captured for this email.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* TAB 2: INTERNAL TEAM NOTES (Missive / Front Style) */}
+                {activeTab === "notes" && (
+                  <div className="flex-1 border border-hairline rounded-xl p-5 bg-paper space-y-4 min-h-[160px] flex flex-col">
+                    <div className="flex items-center justify-between text-xs text-ink-3 border-b border-hairline pb-2">
+                      <span className="font-semibold text-ink">Internal Team Discussion (Not visible to customer)</span>
+                      <span>{internalNotes[selectedThread.id]?.length || 0} notes</span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-3 max-h-[220px]">
+                      {(!internalNotes[selectedThread.id] || internalNotes[selectedThread.id].length === 0) ? (
+                        <p className="text-xs text-ink-3 italic py-4 text-center">
+                          No internal notes added yet. Add a comment below to discuss this lead with your sales team.
+                        </p>
+                      ) : (
+                        internalNotes[selectedThread.id].map((note) => (
+                          <div key={note.id} className="p-3 rounded-lg border border-amber/20 bg-amber/5 text-xs space-y-1">
+                            <div className="flex items-center justify-between text-ink-3">
+                              <span className="font-semibold text-amber-dark">{note.author}</span>
+                              <span className="text-[10px]">{formatDate(note.createdAt, "relative")}</span>
+                            </div>
+                            <p className="text-ink-2">{note.text}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="pt-2 border-t border-hairline flex gap-2">
+                      <Input
+                        placeholder="Add an internal note or @mention teammate..."
+                        value={newNoteText}
+                        onChange={(e) => setNewNoteText(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAddInternalNote(); }}
+                        className="text-xs"
+                      />
+                      <Button variant="primary" icon="plus" onClick={handleAddInternalNote}>
+                        Add Note
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* AI Gemini Auto-Reply Draft Assistant */}
                 {showReplyComposer && (
                   <div className="border border-amber/30 bg-amber/5 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-amber-dark">
-                        <Icon name="sparkles" size={15} />
-                        <span>Gemini AI Reply Assistant</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-dark">
+                          <Icon name="sparkles" size={15} />
+                          <span>Gemini AI Reply Assistant</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[11px] text-ink-3">
+                          <span>Tone:</span>
+                          <select
+                            value={aiTone}
+                            onChange={(e) => setAiTone(e.target.value as AiTone)}
+                            className="bg-paper border border-hairline rounded px-1.5 py-0.5 text-xs font-medium text-ink"
+                          >
+                            <option value="professional">Professional</option>
+                            <option value="warm">Warm &amp; Consultative</option>
+                            <option value="formal">Formal Corporate</option>
+                          </select>
+                        </div>
                       </div>
                       <Button variant="ghost" icon="x" onClick={() => setShowReplyComposer(false)}>
                         Close
