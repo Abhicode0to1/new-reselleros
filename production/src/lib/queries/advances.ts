@@ -58,63 +58,13 @@ export function useEmployeeAdvances() {
   return useQuery({
     queryKey: ["employee_expense_advances"],
     queryFn: async (): Promise<EmployeeAdvance[]> => {
-      const supabase = createClient();
-      const tenant_id = await getTenantId();
-
-      // Fetch all advance disbursals + claimed expenses
-      const [{ data: disbursals, error: dErr }, { data: claims, error: cErr }] = await Promise.all([
-        (supabase.from("expenses" as any) as any)
-          .select("*")
-          .eq("tenant_id", tenant_id)
-          .eq("category", ADVANCE_CATEGORY)
-          .order("expense_date", { ascending: false }),
-        (supabase.from("expenses" as any) as any)
-          .select("*")
-          .eq("tenant_id", tenant_id)
-          .not("prepaid_advance_id", "is", null),
-      ]);
-
-      if (dErr) throw dErr;
-      if (cErr) throw cErr;
-
-      const claimMap = new Map<string, Expense[]>();
-      for (const c of (claims ?? []) as Expense[]) {
-        if (c.prepaid_advance_id) {
-          const list = claimMap.get(c.prepaid_advance_id) ?? [];
-          list.push(c);
-          claimMap.set(c.prepaid_advance_id, list);
-        }
+      const res = await fetch("/api/my-advances");
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to load employee advances");
       }
-
-      return (disbursals ?? []).map((d: any) => {
-        const linked = claimMap.get(d.id) ?? [];
-        const total_spent = linked.reduce((sum, item) => sum + (item.amount || 0), 0);
-        const disbursed_amount = Number(d.amount);
-        const remaining_balance = Math.max(0, disbursed_amount - total_spent);
-
-        // Parse employee name and purpose from vendor_name and description
-        const empName = d.vendor_name || "Employee";
-        const isSettled = d.notes?.includes("[SETTLED]") || (remaining_balance === 0 && linked.length > 0);
-
-        return {
-          id: d.id,
-          tenant_id: d.tenant_id,
-          employee_id: d.project_id || null,
-          employee_name: empName,
-          disbursed_amount,
-          disbursed_date: d.expense_date,
-          payment_method: d.payment_method || "bank_transfer",
-          bank_account_id: d.bank_account_id || null,
-          purpose: d.description || "Company Expenses Advance",
-          status: isSettled ? "settled" : "active",
-          notes: d.notes || null,
-          created_at: d.created_at,
-          updated_at: d.updated_at,
-          total_spent,
-          remaining_balance,
-          linked_expenses: linked,
-        };
-      });
+      const data = await res.json();
+      return data.advances || [];
     },
   });
 }
@@ -177,29 +127,19 @@ export function useRecordAdvanceExpense() {
       description?: string | null;
       attachment_url?: string | null;
     }) => {
-      const supabase = createClient();
-      const tenant_id = await getTenantId();
+      const res = await fetch("/api/my-advances", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
 
-      const { data, error } = await (supabase.from("expenses" as any) as any)
-        .insert({
-          id: crypto.randomUUID(),
-          tenant_id,
-          category: input.category,
-          amount: input.amount,
-          expense_date: input.expense_date,
-          vendor_name: input.vendor_name || null,
-          description: input.description || null,
-          attachment_url: input.attachment_url || null,
-          paid: true,
-          paid_date: input.expense_date,
-          prepaid_advance_id: input.advance_id,
-          payment_method: "advance_deduction",
-        })
-        .select()
-        .single();
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to record advance expense");
+      }
 
-      if (error) throw error;
-      return data;
+      const data = await res.json();
+      return data.expense;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["employee_expense_advances"] });
