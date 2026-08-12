@@ -130,6 +130,7 @@ export const APP_NAV: NavSection[] = [
     items: [
       { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home", roles: ["owner", "manager", "billing"] },
       { id: "my-attendance", href: "/attendance/me", label: "My Attendance", icon: "calendar", hint: "Apni attendance khud mark karo — login hi identity proof hai." },
+      { id: "my-expenses", href: "/my-expenses", label: "My Advance & Expenses", icon: "wallet", hint: "Advance cash balances & mobile expense entries." },
     ],
   },
   {
