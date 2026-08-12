@@ -137,6 +137,7 @@ export function useDisburseAdvance() {
 
       const { data, error } = await (supabase.from("expenses" as any) as any)
         .insert({
+          id: crypto.randomUUID(),
           tenant_id,
           category: ADVANCE_CATEGORY,
           amount: input.disbursed_amount,
@@ -181,6 +182,7 @@ export function useRecordAdvanceExpense() {
 
       const { data, error } = await (supabase.from("expenses" as any) as any)
         .insert({
+          id: crypto.randomUUID(),
           tenant_id,
           category: input.category,
           amount: input.amount,
