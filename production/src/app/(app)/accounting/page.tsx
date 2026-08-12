@@ -121,6 +121,7 @@ export default function AccountingOverviewPage() {
         <JumpCard href="/accounting/tds-receivable" icon="rupee" title="TDS Receivable" sub="TDS credits to claim" />
         <JumpCard href="/accounting/assets" icon="cart" title="Assets & EMIs" sub="Fixed assets + loans" />
         <JumpCard href="/accounting/business-loans" icon="rupee" title="Business Loans" sub="Borrowings + EMIs" />
+        <JumpCard href="/accounting/advances" icon="wallet" title="Employee Advances" sub="Petty cash + expense claims" />
         <JumpCard href="/accounting/saas-metrics" icon="sparkles" title="SaaS Metrics" sub="MRR · churn · LTV" />
       </div>
     </div>
