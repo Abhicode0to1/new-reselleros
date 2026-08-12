@@ -224,12 +224,12 @@ export default function EnquiriesOutlookPage() {
       )}
 
       {!isLoading && !error && rows && (
-        <div className="flex-1 flex flex-col lg:flex-row border border-hairline rounded-xl bg-paper overflow-hidden shadow-sm min-h-0">
+        <div className="flex-1 flex flex-col md:flex-row border border-hairline rounded-xl bg-paper overflow-hidden shadow-sm min-h-[550px] md:min-h-0">
           
           {/* ========================================================================= */}
           {/* PANE 1: FOLDERS & SMART FILTERS */}
           {/* ========================================================================= */}
-          <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-hairline bg-paper-2/30 flex flex-col p-3 shrink-0">
+          <div className="w-full md:w-48 lg:w-56 border-b md:border-b-0 md:border-r border-hairline bg-paper-2/30 flex flex-col p-3 shrink-0">
             <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold px-2 mb-2">Mail Folders</p>
             
             <nav className="space-y-1 flex-1">
@@ -332,7 +332,7 @@ export default function EnquiriesOutlookPage() {
           {/* ========================================================================= */}
           {/* PANE 2: EMAIL THREADS LIST */}
           {/* ========================================================================= */}
-          <div className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-hairline bg-paper flex flex-col shrink-0">
+          <div className="w-full md:w-64 lg:w-80 border-b md:border-b-0 md:border-r border-hairline bg-paper flex flex-col shrink-0">
             {/* Search Header */}
             <div className="p-3 border-b border-hairline bg-paper-2/20">
               <Input
