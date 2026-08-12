@@ -12,6 +12,7 @@ export function useActiveWorkspace(): {
   isGroup: boolean;
   filterEntity: <
     T extends {
+      id?: string | null;
       tenant_id?: string | null;
       customer_name?: string | null;
       domain?: string | null;
@@ -23,6 +24,7 @@ export function useActiveWorkspace(): {
   ) => boolean;
   getEntityBadge: <
     T extends {
+      id?: string | null;
       tenant_id?: string | null;
       customer_name?: string | null;
       domain?: string | null;
@@ -76,6 +78,7 @@ export function useActiveWorkspace(): {
   const isItemForExcel = React.useCallback(
     <
       T extends {
+        id?: string | null;
         tenant_id?: string | null;
         customer_name?: string | null;
         domain?: string | null;
@@ -89,14 +92,15 @@ export function useActiveWorkspace(): {
         "4eeab895-6f4e-42ea-aaf2-efe4cfbc2129",
         "606a7ae7-9805-4a10-8163-7da6e42968e9",
       ];
-      const ANUTECH_TENANT_ID = "fbb976f1-9090-4f10-9726-0901bd144e42";
 
-      if (item.tenant_id) {
-        if (EXCEL_TENANT_IDS.includes(item.tenant_id)) return true;
-        if (item.tenant_id === ANUTECH_TENANT_ID) return false;
+      // Explicit Excel tenant match
+      if (item.tenant_id && EXCEL_TENANT_IDS.includes(item.tenant_id)) {
+        return true;
       }
 
       const identifier = (
+        (item.id || "") +
+        " " +
         (item.customer_name || "") +
         " " +
         (item.domain || "") +
@@ -106,10 +110,11 @@ export function useActiveWorkspace(): {
         (item.company || "")
       ).toLowerCase();
 
+      // Keywords matching Anutech vs Excel
       if (identifier.includes("anutech")) return false;
       if (identifier.includes("excel") || identifier.includes("vera") || identifier.includes("veracious")) return true;
 
-      // Deterministic partitioning for neutral items (split ~55% Excel, 45% Anutech)
+      // Deterministic hash partitioning over neutral rows where tenant_id is single-tenant defaulted
       let hash = 0;
       for (let i = 0; i < identifier.length; i++) {
         hash = (hash * 31 + identifier.charCodeAt(i)) >>> 0;
@@ -122,6 +127,7 @@ export function useActiveWorkspace(): {
   const filterEntity = React.useCallback(
     <
       T extends {
+        id?: string | null;
         tenant_id?: string | null;
         customer_name?: string | null;
         domain?: string | null;
@@ -143,6 +149,7 @@ export function useActiveWorkspace(): {
   const getEntityBadge = React.useCallback(
     <
       T extends {
+        id?: string | null;
         tenant_id?: string | null;
         customer_name?: string | null;
         domain?: string | null;
