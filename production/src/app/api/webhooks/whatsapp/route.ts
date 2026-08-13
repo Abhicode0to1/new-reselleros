@@ -15,15 +15,17 @@
  *
  * Security:
  *  - Verify token check on GET (tenant-specific)
- *  - Optional HMAC signature check on POST using whatsapp_app_secret
- *    (if set in tenant_secrets) — Meta sends `x-hub-signature-256` header
+ *  - MANDATORY HMAC signature check on POST using whatsapp_app_secret. No
+ *    secret stored → every POST is refused, because an unverified webhook is
+ *    unauthenticated write access rather than a weaker check. Save the App
+ *    Secret in Settings → Integrations → WhatsApp before going live.
  *  - All inbound writes use the service-role admin client (Meta is not
  *    authenticated as one of our users)
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
+import { verifyMetaSignature, signatureRefusalReason } from "@/lib/crypto/webhook-signature";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -119,23 +121,36 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient();
 
-  // Optional HMAC signature check — Meta signs with the App Secret using
-  // sha256, sent as `x-hub-signature-256: sha256=<hex>`.
+  // MANDATORY HMAC check — Meta signs with the App Secret (sha256), sent as
+  // `x-hub-signature-256: sha256=<hex>` over the RAW body.
+  //
+  // This was conditional: `if (secrets?.whatsapp_app_secret) { ...verify... }`,
+  // so a tenant with no app secret stored had NO verification at all and the
+  // payload was processed. Production has no whatsapp_app_secret, which made
+  // this endpoint unauthenticated remote write access — anyone with the URL and
+  // a tenant id could inject inbound "messages" that the app turns into
+  // contacts, conversations and lead activity.
+  //
+  // Now it fails closed, matching the Razorpay webhook. The cost of refusing is
+  // one configuration step; the cost of allowing is whatever an attacker sends.
   const { data: secrets } = await admin
     .from("tenant_secrets")
     .select("whatsapp_app_secret")
     .eq("tenant_id", tenantId)
     .maybeSingle();
-  if (secrets?.whatsapp_app_secret) {
-    const sig = req.headers.get("x-hub-signature-256") ?? "";
-    const expected = "sha256=" + crypto
-      .createHmac("sha256", secrets.whatsapp_app_secret)
-      .update(rawBody)
-      .digest("hex");
-    if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
-      console.warn("[/api/webhooks/whatsapp] HMAC mismatch — dropping payload");
-      return NextResponse.json({ error: "bad signature" }, { status: 401 });
-    }
+
+  const verdict = verifyMetaSignature(
+    rawBody,
+    req.headers.get("x-hub-signature-256"),
+    secrets?.whatsapp_app_secret,
+  );
+  if (!verdict.ok) {
+    console.warn(
+      `[/api/webhooks/whatsapp] refused for tenant ${tenantId} — ${signatureRefusalReason(verdict.reason)}`,
+    );
+    // Same body for every reason: telling a caller whether a secret exists is
+    // itself information about the tenant.
+    return NextResponse.json({ error: "bad signature" }, { status: 401 });
   }
 
   let body: { entry?: Array<{ id?: string; changes?: Array<{ field?: string; value?: MetaChangeValue }> }> };
