@@ -754,6 +754,18 @@ type LeadRow = {
   /** Migration 0197 — the master contact (person) this lead belongs to.
    *  Auto-linked on insert via resolve_or_create_contact. */
   contact_id: string | null;
+  /** Migration 0232 — inbound attribution, captured by lib/marketing/utm.ts on the
+   *  four public lead-creating routes. NULL on every lead created before 0232 and
+   *  on anything typed in by hand: NULL means "nothing was captured", which is a
+   *  different fact from "unknown". */
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  /** Origin + path only; query string stripped (it leaks search terms/tokens). */
+  referrer_url: string | null;
+  /** Path + utm params ONLY. Other query params are dropped before storage --
+   *  they routinely carry email/phone/session ids (DPDP). */
+  landing_page_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -788,6 +800,13 @@ type LeadInsert = {
   lost_reason?:        string | null;   // migration 0225
   lost_note?:          string | null;
   lost_at?:            string | null;
+  // Migration 0232 — inbound attribution. Optional: only the public routes have
+  // a landing URL to read, and a hand-typed lead legitimately has none.
+  utm_source?:         string | null;
+  utm_medium?:         string | null;
+  utm_campaign?:       string | null;
+  referrer_url?:       string | null;
+  landing_page_url?:   string | null;
 }
 type LeadUpdate = Partial<LeadInsert>;
 
@@ -1224,6 +1243,89 @@ type ComplianceReminderLogInsert = {
 };
 type ComplianceReminderLogUpdate = Partial<ComplianceReminderLogInsert>;
 
+// ============================================================
+// Migration 0231 — gamified task collaboration
+// ============================================================
+/**
+ * Co-workers on a shared task. A join table rather than a `uuid[]` on `tasks`,
+ * because kudos and join-time attach per collaborator and an array can hold
+ * neither a foreign key nor per-row state.
+ */
+type TaskCollaboratorRow = {
+  id:         string;
+  tenant_id:  string;
+  task_id:    string;
+  user_id:    string;
+  added_by:   string | null;
+  created_at: string;
+};
+type TaskCollaboratorInsert = {
+  id?:         string;
+  tenant_id:   string;
+  task_id:     string;
+  user_id:     string;
+  added_by?:   string | null;
+  created_at?: string;
+};
+type TaskCollaboratorUpdate = Partial<TaskCollaboratorInsert>;
+
+/** Discussion thread on a task, with @mention targets and an optional file. */
+type TaskCommentRow = {
+  id:              string;
+  tenant_id:       string;
+  task_id:         string;
+  user_id:         string;
+  content:         string;
+  /** users.id values to notify. A plain array is fine here — a mention carries
+   *  no state of its own and is never a parent row. */
+  mentions:        string[];
+  attachment_path: string | null;
+  attachment_name: string | null;
+  created_at:      string;
+  edited_at:       string | null;
+};
+type TaskCommentInsert = {
+  id?:              string;
+  tenant_id:        string;
+  task_id:          string;
+  user_id:          string;
+  content:          string;
+  mentions?:        string[];
+  attachment_path?: string | null;
+  attachment_name?: string | null;
+  created_at?:      string;
+  edited_at?:       string | null;
+};
+type TaskCommentUpdate = Partial<TaskCommentInsert>;
+
+/**
+ * Peer kudos (+10 pts) on a shared task.
+ *
+ * Rows rather than a counter: the per-giver budget and the "kudos from 3+
+ * different people" badge both need the individual awards. `awarded_by` is NOT
+ * NULL — an unattributed kudos cannot be budgeted, and the tally rejects it.
+ * DB constraints enforce one per (task, recipient, giver) and no self-kudos.
+ */
+type TaskKudosRow = {
+  id:         string;
+  tenant_id:  string;
+  task_id:    string;
+  user_id:    string;
+  awarded_by: string;
+  note:       string | null;
+  created_at: string;
+};
+type TaskKudosInsert = {
+  id?:         string;
+  tenant_id:   string;
+  task_id:     string;
+  user_id:     string;
+  awarded_by:  string;
+  note?:       string | null;
+  created_at?: string;
+};
+type TaskKudosUpdate = Partial<TaskKudosInsert>;
+
 type RenewalEmailLogRow = {
   id:              string;
   tenant_id:       string;
@@ -1392,6 +1494,10 @@ export type ExpenseRow = {
   bank_account_id:  string | null;            // migration 0203 — source bank account (bank/UPI/card/cheque)
   notes:            string | null;            // migration 0204 — free-text comment / extra detail
   prepaid_advance_id: string | null;          // migration 0209 — advance this expense was consumed from
+  /** Migration 0232 — marketing channel for ad spend. Set only on marketing-category
+   *  rows. Deliberately here and NOT in a separate ad-spend table, so CAC/ROAS read
+   *  the same rows the accountant reconciles against the bank. */
+  channel:          string | null;
   created_at:       string;
   updated_at:       string;
 };
@@ -1421,6 +1527,8 @@ type ExpenseInsert = {
   tds_amount?:      number;
   bank_account_id?: string | null;
   notes?:           string | null;
+  /** Migration 0232 — marketing channel for ad spend. Set only on marketing rows. */
+  channel?:         string | null;
 };
 type ExpenseUpdate = Partial<ExpenseInsert>;
 
@@ -1822,6 +1930,8 @@ type StatutoryDuesPaymentInsert = {
   paid_on:          string;
   bank_account_id?: string | null;
   notes?:           string | null;
+  /** Migration 0232 — marketing channel for ad spend. Set only on marketing rows. */
+  channel?:         string | null;
 };
 type StatutoryDuesPaymentUpdate = Partial<Omit<StatutoryDuesPaymentInsert, "tenant_id">>;
 
@@ -2888,6 +2998,9 @@ export type Database = {
       tasks:              { Row: TaskRow;              Insert: TaskInsert;              Update: TaskUpdate;              Relationships: [] };
       renewal_email_log:  { Row: RenewalEmailLogRow;   Insert: RenewalEmailLogInsert;   Update: RenewalEmailLogUpdate;   Relationships: [] };
       compliance_reminder_log: { Row: ComplianceReminderLogRow; Insert: ComplianceReminderLogInsert; Update: ComplianceReminderLogUpdate; Relationships: [] };
+      task_collaborators: { Row: TaskCollaboratorRow; Insert: TaskCollaboratorInsert; Update: TaskCollaboratorUpdate; Relationships: [] };
+      task_comments:      { Row: TaskCommentRow;      Insert: TaskCommentInsert;      Update: TaskCommentUpdate;      Relationships: [] };
+      task_kudos:         { Row: TaskKudosRow;        Insert: TaskKudosInsert;        Update: TaskKudosUpdate;        Relationships: [] };
       quote_send_log:     { Row: QuoteSendLogRow;      Insert: QuoteSendLogInsert;      Update: QuoteSendLogUpdate;      Relationships: [] };
       vendors:            { Row: VendorRow;             Insert: VendorInsert;            Update: VendorUpdate;            Relationships: [] };
       vendor_bills:       { Row: VendorBillRow;        Insert: VendorBillInsert;        Update: VendorBillUpdate;        Relationships: [] };

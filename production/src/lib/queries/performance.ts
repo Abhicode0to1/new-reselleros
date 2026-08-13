@@ -15,6 +15,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { useTeamMembers, memberLabel } from "@/lib/queries/team";
+import {
+  tallyKudos, badgesFor, type BadgeDef, type KudosRow,
+} from "@/lib/performance/gamification";
 
 /** Point weights — tune to taste. Documented so scores are explainable. */
 export const PERF_WEIGHTS = {
@@ -24,7 +27,21 @@ export const PERF_WEIGHTS = {
   paymentRecorded: 5, // +5 per payment collected
   taskOnTime: 3, // +3 per task completed on/before due
   taskLate: -1, // −1 per task completed after due
+  kudosReceived: 10, // +10 per peer kudos (budgeted — see gamification.ts)
 };
+
+/**
+ * ⚠ KNOWN GAMING VECTOR IN `paymentRecorded`, flagged 13 Aug 2026.
+ *
+ * It pays per payment ROW, and staff choose how to record a collection:
+ *
+ *     one payment of ₹1,00,000        →  5 + (100000/5000) = 25 pts
+ *     the same ₹1,00,000 as 10 × ₹10k →  50 + 20           = 70 pts
+ *
+ * Same rupees, 2.8× the score — and score splits a cash bonus pool. Setting
+ * `paymentRecorded: 0` closes it at no other cost, because `revenuePerRupees`
+ * already rewards collecting. Left as-is because the weights are Pardeep's call.
+ */
 
 export interface PerfBreakdown { label: string; detail: string; points: number }
 export interface PerfRow {
@@ -41,7 +58,18 @@ export interface PerfRow {
   activityCount: number; // leading signal (activity log) — this month
   score: number;
   breakdown: PerfBreakdown[];
+  // ── Gamification (added 13 Aug 2026). Optional so existing consumers of
+  //    PerfRow — /scorecard — keep compiling untouched.
+  kudosReceived?: number;
+  distinctKudosGivers?: number;
+  renewalPayments?: number;
+  badges?: BadgeDef[];
 }
+
+export type PerfScope = "month" | "week";
+
+/** Notes the UI must show rather than silently scoring a tier as zero. */
+export interface PerfNote { title: string; detail: string }
 
 /** What each role is PRIMARILY judged on — the scorecard highlights this. */
 export function roleFocus(role: string): { label: string; hint: string } {
@@ -61,24 +89,51 @@ function monthWindow(period: string): { start: string; end: string } {
   return { start, end };
 }
 
-/** Per-member outcome scores for a month (period = 'YYYY-MM'). */
-export function usePerformance(period: string) {
+/**
+ * The current Monday-to-Monday week, in IST.
+ *
+ * A weekly board is always "this week" — the month picker does not narrow it,
+ * because a month contains four or five weeks and there is no sensible single
+ * answer to "which week of August". IST has no DST, so a fixed +5:30 is exact.
+ */
+export function weekWindow(now: Date = new Date()): { start: string; end: string } {
+  const IST_MS = 5.5 * 3_600_000;
+  const ist = new Date(now.getTime() + IST_MS);
+  const dow = (ist.getUTCDay() + 6) % 7;              // 0 = Monday
+  const monday = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()));
+  monday.setUTCDate(monday.getUTCDate() - dow);
+  const next = new Date(monday);
+  next.setUTCDate(next.getUTCDate() + 7);
+  // Back to real instants before comparing against timestamptz columns.
+  return {
+    start: new Date(monday.getTime() - IST_MS).toISOString(),
+    end:   new Date(next.getTime()   - IST_MS).toISOString(),
+  };
+}
+
+/**
+ * Per-member outcome scores.
+ *
+ * @param period 'YYYY-MM' — used when scope is 'month'.
+ * @param scope  'month' (default, unchanged behaviour) or 'week' (this week).
+ */
+export function usePerformance(period: string, scope: PerfScope = "month") {
   const membersQ = useTeamMembers();
   const members = membersQ.data ?? [];
 
   return useQuery({
-    queryKey: ["performance", period, members.map((m) => m.id).join(",")],
+    queryKey: ["performance", period, scope, members.map((m) => m.id).join(",")],
     enabled: members.length > 0,
     queryFn: async (): Promise<PerfRow[]> => {
       const supabase = createClient();
-      const { start, end } = monthWindow(period);
+      const { start, end } = scope === "week" ? weekWindow() : monthWindow(period);
 
-      const [leadsR, quotesR, paymentsR, tasksR, usersR, attR, actR] = await Promise.all([
+      const [leadsR, quotesR, paymentsR, tasksR, usersR, attR, actR, kudosR, renewalQuotesR] = await Promise.all([
         supabase.from("leads").select("owner_id, value, stage, updated_at")
           .eq("stage", "won").gte("updated_at", start).lt("updated_at", end),
         supabase.from("quotes").select("owner_id, created_at")
           .gte("created_at", start).lt("created_at", end),
-        supabase.from("payments").select("recorded_by, amount, received_at, status")
+        supabase.from("payments").select("recorded_by, amount, received_at, status, quote_id")
           .eq("status", "received").gte("received_at", start).lt("received_at", end),
         supabase.from("tasks").select("owner_id, status, due_at, completed_at")
           .eq("status", "done").gte("completed_at", start).lt("completed_at", end),
@@ -87,6 +142,14 @@ export function usePerformance(period: string) {
           .gte("work_date", start).lt("work_date", end),
         supabase.from("activity_log").select("user_id, created_at")
           .gte("created_at", start).lt("created_at", end),
+        // Peer kudos. Arrives with migration 0231 — before that this errors, so
+        // the result is checked rather than spread, and the page still renders.
+        supabase.from("task_kudos").select("user_id, awarded_by, created_at")
+          .gte("created_at", start).lt("created_at", end),
+        // Renewal quotes for the Renewal Guardian badge. Fetched by flag, NOT
+        // by date: a payment inside this week can settle a quote raised months
+        // ago, so filtering the quotes by window would miss most renewals.
+        supabase.from("quotes").select("id").eq("is_renewal", true),
       ]);
 
       // user → employee, then present-days per user (reliability).
@@ -100,6 +163,17 @@ export function usePerformance(period: string) {
         if (a.user_id) activityByUser.set(a.user_id, (activityByUser.get(a.user_id) ?? 0) + 1);
       }
 
+      // Kudos, with the per-giver budget applied. `kudosR.error` means 0231 is
+      // not applied yet; an empty tally is the honest answer, not a crash.
+      const kudosRows: KudosRow[] = kudosR.error
+        ? []
+        : (kudosR.data ?? []).map((r) => ({
+            userId: r.user_id, awardedBy: r.awarded_by, createdAt: r.created_at,
+          }));
+      const kudos = tallyKudos(kudosRows);
+
+      const renewalQuoteIds = new Set((renewalQuotesR.data ?? []).map((q) => q.id));
+
       const rows: PerfRow[] = members.map((mem) => {
         const dealsWon = (leadsR.data ?? []).filter((l) => l.owner_id === mem.id).length;
         const revenue = (paymentsR.data ?? []).filter((p) => p.recorded_by === mem.id)
@@ -110,6 +184,11 @@ export function usePerformance(period: string) {
         const tasksOnTime = myTasks.filter((t) => t.completed_at && t.due_at && t.completed_at <= t.due_at).length;
         const tasksLate = myTasks.length - tasksOnTime;
 
+        const renewalPayments = (paymentsR.data ?? [])
+          .filter((p) => p.recorded_by === mem.id && p.quote_id && renewalQuoteIds.has(p.quote_id)).length;
+
+        const myKudos = kudos.byUser[mem.id] ?? { points: 0, received: 0, distinctGivers: 0 };
+
         const revPts = Math.round(revenue / PERF_WEIGHTS.revenuePerRupees);
         const breakdown: PerfBreakdown[] = [
           { label: "Revenue collected", detail: `₹${revenue.toLocaleString("en-IN")}`, points: revPts },
@@ -119,6 +198,15 @@ export function usePerformance(period: string) {
           { label: "Tasks on time", detail: `${tasksOnTime}`, points: tasksOnTime * PERF_WEIGHTS.taskOnTime },
           { label: "Tasks late", detail: `${tasksLate}`, points: tasksLate * PERF_WEIGHTS.taskLate },
         ];
+        // Only shown once kudos exist, so the breakdown does not carry a
+        // permanent "Peer kudos 0" line on a workspace that has none yet.
+        if (myKudos.received > 0) {
+          breakdown.push({
+            label: "Peer kudos",
+            detail: `${myKudos.received} from ${myKudos.distinctGivers} ${myKudos.distinctGivers === 1 ? "person" : "people"}`,
+            points: myKudos.points,
+          });
+        }
         const score = Math.max(0, breakdown.reduce((s, b) => s + b.points, 0));
 
         const empId = empOf.get(mem.id);
@@ -129,6 +217,16 @@ export function usePerformance(period: string) {
           userId: mem.id, name: memberLabel(mem), role: mem.role,
           dealsWon, revenue, quotesSent, paymentsCount, tasksOnTime, tasksLate,
           presentDays, activityCount, score, breakdown,
+          kudosReceived: myKudos.received,
+          distinctKudosGivers: myKudos.distinctGivers,
+          renewalPayments,
+          badges: badgesFor({
+            score,
+            tasksOnTime,
+            renewalPayments,
+            kudosReceived: myKudos.received,
+            distinctKudosGivers: myKudos.distinctGivers,
+          }),
         };
       });
 

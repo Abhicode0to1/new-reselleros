@@ -14,8 +14,11 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { rupee } from "@/lib/utils";
-import { usePerformance, PERF_WEIGHTS, type PerfRow } from "@/lib/queries/performance";
+import { usePerformance, PERF_WEIGHTS, type PerfRow, type PerfScope } from "@/lib/queries/performance";
+import { KUDOS_PER_GIVER_PER_PERIOD } from "@/lib/performance/gamification";
 
 function thisMonth(): string {
   const d = new Date();
@@ -24,8 +27,14 @@ function thisMonth(): string {
 
 export default function PerformancePage() {
   const [period, setPeriod] = React.useState(thisMonth());
+  const [scope, setScope] = React.useState<PerfScope>("month");
   const [pool, setPool] = React.useState("");
-  const { data: rows, isLoading } = usePerformance(period);
+  const { data: rows, isLoading } = usePerformance(period, scope);
+
+  const scopeTabs: TabBarItem[] = [
+    { id: "week",  label: "This week" },
+    { id: "month", label: "Month" },
+  ];
 
   const totalScore = (rows ?? []).reduce((s, r) => s + r.score, 0);
   const poolN = Math.max(0, Math.round(Number(pool) || 0));
@@ -40,17 +49,27 @@ export default function PerformancePage() {
             Ranked by real results — revenue, deals, quotes, on-time tasks. Not screen-time.
           </p>
         </div>
-        <div>
-          <label className="block text-[11px] text-ink-3 mb-1">Month</label>
-          <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="w-44" />
-        </div>
+        {/* The month picker only applies to the monthly board. A weekly board is
+            always "this week" — a month holds four or five weeks, so there is no
+            single sensible answer to "which week of August". Hiding it beats
+            leaving a control that silently does nothing. */}
+        {scope === "month" && (
+          <div>
+            <label className="block text-[11px] text-ink-3 mb-1">Month</label>
+            <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="w-44" />
+          </div>
+        )}
       </header>
+
+      <TabBar items={scopeTabs} value={scope} onChange={(v) => setScope(v as PerfScope)} />
 
       {/* Bonus pool splitter */}
       <Card className="p-4">
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="block text-[11px] text-ink-3 mb-1">Bonus pool for this month (₹)</label>
+            <label className="block text-[11px] text-ink-3 mb-1">
+              Bonus pool for {scope === "week" ? "this week" : "this month"} (₹)
+            </label>
             <Input type="number" min={0} value={pool} onChange={(e) => setPool(e.target.value)} placeholder="e.g. 50000" className="w-48" />
           </div>
           <p className="text-[12px] text-ink-3 flex-1 min-w-[200px]">
@@ -67,7 +86,10 @@ export default function PerformancePage() {
         </Card>
       ) : totalScore === 0 ? (
         <Card className="py-2">
-          <EmptyState icon="chart" title="No scored activity this month" body="Deals won, payments collected, quotes and on-time tasks earn points. Once the team logs work this month, the leaderboard fills in." />
+          <EmptyState
+            icon="chart"
+            title={`No scored activity ${scope === "week" ? "this week" : "this month"}`}
+            body="Deals won, payments collected, quotes and on-time tasks earn points. Once the team logs work in this period, the leaderboard fills in." />
         </Card>
       ) : (
         <div className="space-y-3">
@@ -79,7 +101,8 @@ export default function PerformancePage() {
 
       <p className="text-[11px] text-ink-3">
         Weights: +1 pt / ₹{PERF_WEIGHTS.revenuePerRupees.toLocaleString("en-IN")} collected · deal won +{PERF_WEIGHTS.dealWon} ·
-        quote +{PERF_WEIGHTS.quoteSent} · payment +{PERF_WEIGHTS.paymentRecorded} · task on-time +{PERF_WEIGHTS.taskOnTime} · late {PERF_WEIGHTS.taskLate}.
+        quote +{PERF_WEIGHTS.quoteSent} · payment +{PERF_WEIGHTS.paymentRecorded} · task on-time +{PERF_WEIGHTS.taskOnTime} · late {PERF_WEIGHTS.taskLate} ·
+        peer kudos +{PERF_WEIGHTS.kudosReceived} (max {KUDOS_PER_GIVER_PER_PERIOD} given per person per period).
       </p>
     </div>
   );
@@ -96,7 +119,19 @@ function PerfCard({ row, rank, share }: { row: PerfRow; rank: number; share: num
           <div className="font-semibold text-ink">{row.name} <span className="text-[11px] font-normal text-ink-3">· {row.role}</span></div>
           <div className="text-[12px] text-ink-3 mt-0.5">
             {rupee(row.revenue)} collected · {row.dealsWon} won · {row.quotesSent} quotes · {row.tasksOnTime} tasks on-time
+            {(row.kudosReceived ?? 0) > 0 && <> · {row.kudosReceived} kudos</>}
           </div>
+          {/* Badges render only when earned — a row of greyed-out "not yet"
+              badges reads as a scolding, not an achievement. */}
+          {(row.badges?.length ?? 0) > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              {row.badges?.map((b) => (
+                <Badge key={b.id} kind="success" size="sm" title={b.criterion}>
+                  {b.emoji} {b.label}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
         <div className="text-right">
           <div className="font-serif text-2xl text-ink tabular-nums">{row.score}</div>
