@@ -80,7 +80,6 @@ import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import type { Lead } from "@/lib/supabase/database.types";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
-import { FAB } from "@/components/ui/fab";
 import { WhatsAppActionDialog } from "@/components/shared/whatsapp-action-dialog";
 
 // ============================================================
@@ -462,17 +461,45 @@ function LeadsPageInner() {
 
   return (
     <div className="h-[calc(100vh-3.5rem)] max-w-[1800px] mx-auto p-3 sm:p-4 flex flex-col overflow-hidden min-w-0">
-      {/* Top App Bar — Compact single row header with Title, Segmented Switcher, CTA */}
-      <div className="flex items-center justify-between gap-3 shrink-0 mb-2.5 flex-wrap sm:flex-nowrap">
-        <div className="flex items-center gap-2">
-          <h1 className="font-serif text-xl sm:text-2xl font-bold leading-none text-ink">
-            Sales & Pipeline
-          </h1>
-          <span className="text-xs text-ink-3 hidden md:inline-block">· Unified inquiry queue & deal stage pipeline</span>
+      {/* Top App Bar — sticky, so the primary action never scrolls away.
+          TWO rows on purpose. It used to be one `flex-wrap` row holding title +
+          switcher + CTA; below ~640px the CTA wrapped onto a line of its own and
+          landed bottom-LEFT, which is the opposite of a primary action. Pinning
+          the title and the CTA together in row 1 keeps "Add Lead" in the
+          top-right corner at every width.
+
+          `top-14` and `z-20` are BOTH load-bearing. The app's own TopBar is
+          `sticky top-0 z-30 h-14` (components/layout/topbar.tsx). A first attempt
+          used `top-0 z-30` here — the same offset and the same z-index — so this
+          bar stuck to the viewport top ON TOP OF the TopBar (equal z-index, and
+          this element comes later in the DOM, so it won). `top-14` parks it flush
+          under the 56px TopBar; `z-20` guarantees it can never paint over it even
+          if the offsets are edited again later. */}
+      <div className="sticky top-14 z-20 shrink-0 mb-2.5 -mx-3 sm:-mx-4 px-3 sm:px-4 pt-1.5 pb-1.5 bg-paper/95 backdrop-blur-sm border-b border-hairline/60">
+        {/* Row 1 — title, opposite the primary action */}
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="font-serif text-xl sm:text-2xl font-bold leading-none text-ink truncate">
+              Sales & Pipeline
+            </h1>
+            <span className="text-xs text-ink-3 hidden md:inline-block">· Unified inquiry queue & deal stage pipeline</span>
+          </div>
+
+          {/* Primary action — top-right, and sticky with this bar. */}
+          <Button
+            variant="primary"
+            icon="plus"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setAddOpen(true)}
+          >
+            {salesTab === "raw" ? "Add Lead" : "Add Deal"}
+          </Button>
         </div>
 
-        {/* 1-Click Segmented View Switcher */}
-        <div className="flex items-center gap-1 bg-paper-2 p-1 rounded-lg border border-hairline">
+        {/* Row 2 — 1-Click Segmented View Switcher. Scrolls sideways rather
+            than wrapping, so it can never push the CTA out of the corner. */}
+        <div className="flex items-center gap-1 bg-paper-2 p-1 rounded-lg border border-hairline w-fit max-w-full overflow-x-auto">
           <button
             type="button"
             onClick={() => { setSalesTab("raw"); setSmartView("all"); }}
@@ -525,17 +552,6 @@ function LeadsPageInner() {
           </button>
         </div>
 
-        {/* Primary Action Button */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            icon="plus"
-            size="sm"
-            onClick={() => setAddOpen(true)}
-          >
-            {salesTab === "raw" ? "Add Lead" : "Add Deal"}
-          </Button>
-        </div>
       </div>
 
       {/* Revenue Intelligence Pill Strip */}
@@ -1304,22 +1320,20 @@ function LeadsPageInner() {
       {/* Share the public enquiry form — collect a prospect's details, auto-creates a lead. */}
       {shareOpen && <ShareFormSheet target={ENQUIRY_SHARE} onClose={() => setShareOpen(false)} />}
 
-      {/* Mobile FAB — thumb-zone primary action, label switches with the URL.
-          /leads → "Add lead", /deals → "Add deal".
-          The stacked mini-FAB above ("⚡ Quick") opens the 4-field quick
-          capture form — same hover-reveal pattern we use on desktop, but
-          here it's always-visible since mobile has no hover. */}
-      <FAB
-        icon="plus"
-        label={tab === "leads" ? "Add lead" : "Add deal"}
-        onClick={() => setAddOpen(true)}
-        quickAction={{
-          icon:      "zap",
-          label:     "Quick",
-          ariaLabel: "Quick add lead — only company + contact + email + phone",
-          onClick:   () => setQuickOpen(true),
-        }}
-      />
+      {/* NO FAB HERE, deliberately (removed 13 Aug 2026 at Pardeep's request).
+          The primary action lives in the sticky header instead, so it is visible
+          at every scroll position without covering the last row of the list —
+          which is what the bottom-right FAB was doing over the card grid.
+
+          §20 asks for a FAB on mobile for thumb reach, and this does trade that
+          away: the top-right corner is a longer stretch one-handed than the
+          bottom-right. Noted as a deliberate deviation, not an oversight.
+
+          The "⚡ Quick" mini-FAB went with it. The 4-field quick-capture form is
+          NOT orphaned — it is still reachable from the top-bar quick-actions
+          panel (quick-actions-panel.tsx) and from Ctrl+K → "Open the quick-add
+          form" (command-palette.tsx), both of which route here via
+          ?action=quick-add. */}
     </div>
   );
 }
