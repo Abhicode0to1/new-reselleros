@@ -39,6 +39,8 @@ export interface EmailAttachment {
   contentType?: string;
 }
 
+import { recordEmail } from "./log";
+
 export interface EmailMessage {
   /** Single recipient for now. Cc / Bcc come when needed. */
   to:          string;
@@ -62,6 +64,11 @@ export interface EmailMessage {
    * applies; omit it and this behaves exactly as it did before.
    */
   route?: EmailRoute;
+  /** Label for email_log — "renewal_reminder", "quote", "invoice", …
+   *  Optional: an unlabelled send is still logged, just less searchable.
+   *  Never required, because a log that can be skipped by forgetting an
+   *  argument is the exact failure this table exists to remove. */
+  kind?: string;
 }
 
 export interface EmailRoute {
@@ -76,13 +83,37 @@ export interface EmailSendResult {
   status:       EmailSendStatus;
   providerId:   string | null;
   errorMessage: string | null;
+  /** Which transport actually carried it. Recorded per message because a
+   *  tenant can switch provider between two sends and the log must stay
+   *  truthful about which one each went through. */
+  provider?:    "resend" | "gmail" | "stub";
 }
 
 /**
  * Send an email. Safe to call without RESEND_API_KEY — falls back to stub
  * mode so callers don't need to branch.
  */
+/**
+ * Send an email and record the attempt.
+ *
+ * The wrapper exists so the log write cannot be skipped. Logging inside
+ * sendEmailInner would mean repeating it at every return point, and the next
+ * return point somebody adds would silently not log — precisely how the three
+ * existing per-feature logs ended up with gaps.
+ */
 export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
+  const result = await sendEmailInner(msg);
+  await recordEmail({
+    tenantId: msg.route?.tenantId ?? null,
+    recipient: msg.to,
+    subject: msg.subject,
+    kind: msg.kind ?? null,
+    provider: result.provider ?? (result.status === "stubbed" ? "stub" : "resend"),
+  }, result);
+  return result;
+}
+
+async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const fromDefault = process.env.RESEND_FROM_DEFAULT?.trim() || "onboarding@resend.dev";
   // INTERIM (until the tenant's sending domain is verified on Resend): when set,
@@ -101,7 +132,7 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
     const decision = await routeForTenant(msg.route, Boolean(apiKey));
 
     if (decision.blocked) {
-      return { status: "failed", providerId: null, errorMessage: decision.blocked };
+      return { status: "failed", providerId: null, errorMessage: decision.blocked, provider: "resend" };
     }
     // A fallback is never silent: the tenant asked for Gmail and did not get it,
     // and the only way anyone finds out otherwise is by noticing the From address.
@@ -124,7 +155,7 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
         accessToken: decision.gmail.accessToken,
         refreshToken: decision.gmail.refreshToken,
       });
-      if (r.ok) return { status: "sent", providerId: r.messageId || null, errorMessage: null };
+      if (r.ok) return { status: "sent", providerId: r.messageId || null, errorMessage: null, provider: "gmail" };
       return {
         status: "failed",
         providerId: null,
@@ -149,7 +180,7 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
         `  attachments: ${msg.attachments?.map((a) => a.filename).join(", ") ?? "(none)"}`
       );
     }
-    return { status: "stubbed", providerId: null, errorMessage: null };
+    return { status: "stubbed", providerId: null, errorMessage: null, provider: "stub" };
   }
 
   // ── Real mode (Resend) ────────────────────────────────────────────
