@@ -104,3 +104,54 @@ describe("worstSeverity", () => {
     expect(worstSeverity(moneyHealth({ ...HEALTHY, upiVpa: false }))).toBe("warning");
   });
 });
+
+describe("Razorpay on TEST credentials", () => {
+  it("is reported, because every other check passing made the panel silent", () => {
+    // The real state of this workspace on 14 Aug 2026: keys present, webhook
+    // secret present, mode 'test'. Nothing was reported, so the panel implied
+    // payments were ready while a real customer could not have paid.
+    const f = moneyHealth({ ...HEALTHY, razorpayLive: false });
+    expect(f.map((x) => x.id)).toContain("razorpay-test-mode");
+  });
+
+  it("says plainly that real customers cannot pay", () => {
+    const f = moneyHealth({ ...HEALTHY, razorpayLive: false })
+      .find((x) => x.id === "razorpay-test-mode")!;
+    expect(f.title).toMatch(/real customers cannot pay/i);
+    // The insidious part is not the failure, it is the false success.
+    expect(f.consequence).toMatch(/look successful and settle nothing/i);
+  });
+
+  it("mentions that the live webhook secret is a DIFFERENT secret", () => {
+    // The trap when going live: people swap the key pair and keep the test
+    // webhook secret, which lands straight in the collect-without-reconcile state.
+    const f = moneyHealth({ ...HEALTHY, razorpayLive: false })
+      .find((x) => x.id === "razorpay-test-mode")!;
+    expect(f.fix).toMatch(/webhook secrets are different/i);
+  });
+
+  it("stays a warning, so it cannot crowd out a finding that loses money", () => {
+    // Test mode is the CORRECT state during a build. A permanent critical alert
+    // for a correct state is how a panel trains people to ignore it.
+    const f = moneyHealth({ ...HEALTHY, razorpayLive: false })
+      .find((x) => x.id === "razorpay-test-mode")!;
+    expect(f.severity).toBe("warning");
+  });
+
+  it("is silent on live keys", () => {
+    expect(moneyHealth({ ...HEALTHY, razorpayLive: true }).map((x) => x.id))
+      .not.toContain("razorpay-test-mode");
+  });
+
+  it("does not fire when Razorpay is not configured at all", () => {
+    // Nothing set up is a different problem from the wrong thing set up, and
+    // telling someone their absent integration is "on test keys" is noise.
+    expect(moneyHealth({ razorpayKeys: false, razorpayLive: false }).map((x) => x.id))
+      .not.toContain("razorpay-test-mode");
+  });
+
+  it("does not guess when the mode is unknown", () => {
+    expect(moneyHealth({ razorpayKeys: true, razorpayWebhookSecret: true }).map((x) => x.id))
+      .not.toContain("razorpay-test-mode");
+  });
+});

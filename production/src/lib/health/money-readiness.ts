@@ -120,6 +120,33 @@ export function moneyHealth(cfg: MoneyConfigSnapshot): HealthFinding[] {
     });
   }
 
+  // ── Razorpay is on TEST credentials ──────────────────────────────────────
+  // Measured 14 Aug 2026: this workspace has razorpay_mode 'test' and a
+  // rzp_test_ key id, with a webhook secret present. Every other check passes, so
+  // the panel said nothing at all — keys present, webhook present, no findings —
+  // while a real customer clicking Pay could not actually pay. `razorpayLive` was
+  // already computed and only used to reword a different finding, so the one fact
+  // an operator most needs was being collected and thrown away.
+  //
+  // WARNING rather than critical, deliberately. During a build or soft launch test
+  // mode is the CORRECT state, and a permanent critical alert for a correct state
+  // is how a health panel trains people to ignore it. The wording carries the
+  // weight instead: it says plainly that real customers cannot pay.
+  if (cfg.razorpayKeys === true && cfg.razorpayLive === false) {
+    findings.push({
+      id: "razorpay-test-mode",
+      severity: "warning",
+      title: "Razorpay is on TEST keys — real customers cannot pay",
+      consequence:
+        "Online checkout and payment links will not take real money. Test-mode payments look " +
+        "successful and settle nothing, so an order can appear paid while no funds exist.",
+      fix: "Correct while you are still testing. Before taking real orders, swap in the live " +
+           "key id and secret from the Razorpay dashboard (they start rzp_live_), and set the " +
+           "live webhook secret too — the test and live webhook secrets are different.",
+      href: "/settings",
+    });
+  }
+
   // ── No UPI ID ────────────────────────────────────────────────────────────
   // Not critical: nothing breaks, an invoice is just harder to pay. Kept at
   // warning so it can never crowd out a finding that costs money.
