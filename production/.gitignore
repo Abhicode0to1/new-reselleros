@@ -34,7 +34,11 @@ yarn-error.log*
 # env files (sensitive — never commit)
 .env*.local
 .env
+# .env.test holds a SERVICE-ROLE key (bypasses RLS). The pattern above does not
+# match it — `.env*.local` needs the .local suffix — so it was committable.
+.env.test
 !.env.example
+!.env.test.example
 
 # vercel
 .vercel

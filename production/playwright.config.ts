@@ -21,10 +21,52 @@
  *   Uses BASE_URL env from secrets pointing at staging Cloud Run URL.
  */
 import { defineConfig, devices } from "@playwright/test";
+import fs from "node:fs";
+
+/**
+ * Load `.env.test`.
+ *
+ * Every suite except the smoke tests calls `test.skip(!hasEnv, "Set … in
+ * .env.test to enable.")` — 70 of 78 tests. But nothing ever read that file:
+ * there was no dotenv import and no globalSetup, and dotenv is not even a
+ * dependency. So the instruction printed on every skipped test was impossible
+ * to follow — you could create `.env.test` exactly as told and all 70 would
+ * still skip, with the same message telling you to create it.
+ *
+ * Read here, deliberately WITHOUT falling back to `.env.local`. That fallback
+ * would be one line and would silently point a suite that creates leads and
+ * records payments at the production database. Turning that on has to be a
+ * decision someone makes on purpose, by creating the file.
+ */
+function loadEnvTest() {
+  if (!fs.existsSync(".env.test")) return;
+  for (const line of fs.readFileSync(".env.test", "utf8").split(/\r?\n/)) {
+    const m = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!m || line.trim().startsWith("#")) continue;
+    if (!process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
+  }
+}
+loadEnvTest();
 
 // Resolve base URL from env so the same suite runs against local / staging / prod.
-// Default: local dev server at port 3000.
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+//
+// PORT 3100, NOT 3000 — deliberately. The everyday dev server on :3000 runs with
+// NEXT_PUBLIC_DEMO_MODE=true, which makes the middleware skip the auth gate
+// entirely so the UI can be reviewed without logging in. That is fine for dev and
+// fatal for this suite: the smoke test asserts that an unauthenticated /leads
+// redirects to /login, and against a demo-mode server it cannot pass no matter
+// how correct the middleware is.
+//
+// It did exactly that — the suite reused the running dev server (reuseExistingServer)
+// and reported the auth gate as broken when the gate was fine and the environment
+// was wrong. A security test that fails for an environmental reason is worse than
+// no test: it teaches everyone to ignore a red e2e run.
+//
+// So the suite now brings up its OWN server, on its own port, with demo mode off.
+// A separate port means it never collides with the dev server someone already has
+// running, so no reuse is needed and no misconfigured server can be inherited.
+const E2E_PORT = process.env.PLAYWRIGHT_PORT ?? "3100";
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${E2E_PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -81,10 +123,13 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {
-        command: "npm run dev",
-        url:     "http://localhost:3000",
-        // Reuse the already-running dev server in dev cycles (faster).
-        reuseExistingServer: !process.env.CI,
+        command: `npm run dev -- -p ${E2E_PORT}`,
+        url:     BASE_URL,
+        // Never reuse: an inherited server may have demo mode on, which silently
+        // disables the very auth gate these tests exist to verify.
+        reuseExistingServer: false,
+        // The auth gate must be REAL here, whatever .env.local says.
+        env: { NEXT_PUBLIC_DEMO_MODE: "false" },
         timeout: 120_000,
       },
 });
