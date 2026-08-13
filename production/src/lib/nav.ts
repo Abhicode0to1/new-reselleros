@@ -244,6 +244,9 @@ export const APP_NAV: NavSection[] = [
     roles: ["owner", "manager", "billing"],
     items: [
       { id: "settings",  href: "/settings",             label: "Settings",         icon: "settings" },
+      // owner/manager only — these are customers' admin console passwords, and
+      // "billing" has no reason to reach a Google Admin login.
+      { id: "vault",     href: "/vault",                label: "Password Vault",   icon: "lock", roles: ["owner", "manager"] },
       { id: "help",      href: "/help",                 label: "Help & Tutorial",  icon: "question" },
     ],
   },
@@ -276,6 +279,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/dashboard":       ["Home", "Dashboard"],
   "/leads":           ["Sales", "Leads"],
   "/my-expenses":     ["Me", "My Advance & Expenses"],
+  "/vault":           ["Admin", "Password Vault"],
   "/marketing/reports": ["Marketing", "ROAS & CAC"],
   "/enquiries":       ["Sales", "Enquiries"],
   "/deals":           ["Sales", "Deal Pipeline"],

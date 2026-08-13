@@ -80,6 +80,30 @@ export function isEncrypted(stored: string | null | undefined): boolean {
 }
 
 /**
+ * Keyed fingerprint of a password, for spotting the same one reused across
+ * several customer consoles.
+ *
+ * HMAC, not a plain hash, and this matters: a bare sha256 of an admin password
+ * can be attacked offline with a wordlist by anyone who obtains the table, and
+ * these are Google Workspace and M365 admin accounts. An HMAC cannot be
+ * attacked without the master key, and the master key is not in the database.
+ *
+ * Returns null when no key is configured — the caller stores null rather than
+ * a weaker unkeyed digest, because a fingerprint that is secretly attackable is
+ * worse than no fingerprint at all.
+ *
+ * Lives here rather than in lib/vault/passwords.ts so that module stays free of
+ * node:crypto and can be unit-tested in a browser environment.
+ */
+export function fingerprintPassword(plaintext: string): string | null {
+  const master = masterKey();
+  if (!master || !plaintext) return null;
+  // Domain-separated: this key is also used for encryption, and reusing it raw
+  // across two primitives is the kind of shortcut that quietly weakens both.
+  return crypto.createHmac("sha256", master).update(`vault-fp:${plaintext}`).digest("hex");
+}
+
+/**
  * Encrypt a secret. Throws when no master key is configured — callers must
  * decide whether to store plaintext or refuse, and doing that silently is how a
  * secret ends up unencrypted while everyone believes otherwise.
