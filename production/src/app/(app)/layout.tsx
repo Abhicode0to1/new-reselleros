@@ -11,6 +11,7 @@ import * as React from "react";
 import { Sidebar, MobileSidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/topbar";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
+import { WorkspaceTabBar } from "@/components/layout/workspace-tab-bar";
 import { GlobalBugReporter } from "@/components/shared/global-bug-reporter";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -27,6 +28,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar onMobileMenuClick={() => setMobileNavOpen(true)} />
+        {/* Renders nothing until a second tab is open — a one-tab strip is
+            decoration that costs vertical space on every screen. */}
+        <WorkspaceTabBar />
         {/* pb-16 on mobile so content doesn't hide behind the bottom tab bar */}
         <main className="flex-1 min-w-0 pb-16 md:pb-0">{children}</main>
       </div>

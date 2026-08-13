@@ -245,3 +245,54 @@ describe("purity — the reducer never mutates what it was given", () => {
     expect(r.state.tabs[0].lastAccessedAt).toBe(1234);
   });
 });
+
+describe("background open — found in the browser, not by a test", () => {
+  // A Ctrl+click opened the tab AND made it active, so the address bar jumped to
+  // the new page while the content stayed on the old one. A modified click means
+  // "put this somewhere for later" everywhere else.
+  const bgOpen = (s: TabsState, url: string, at = 100) =>
+    tabsReducer(s, { type: "open", url, title: url, at, background: true });
+
+  it("adds the tab without stealing focus", () => {
+    const s = state([{ id: "/customers" }], "/customers");
+    const r = bgOpen(s, "/quotes");
+    expect(r.state.tabs.map((t) => t.id)).toEqual(["/customers", "/quotes"]);
+    expect(r.state.activeId).toBe("/customers");
+  });
+
+  it("does not steal focus for a page that is already open either", () => {
+    const s = state([{ id: "/a" }, { id: "/b" }], "/a");
+    expect(bgOpen(s, "/b").state.activeId).toBe("/a");
+  });
+
+  it("still focuses when there was nothing active to keep", () => {
+    // Opening the first tab in the background would otherwise leave the workspace
+    // with tabs and no active one, and nothing to render.
+    expect(bgOpen(emptyTabs, "/first").state.activeId).toBe("/first");
+  });
+
+  it("focuses the new tab when eviction removed the ACTIVE one", () => {
+    // Focus has to land somewhere, and the new tab is the only sensible place.
+    const s = state(
+      Array.from({ length: MAX_TABS }, (_, i) => ({ id: `/t${i}`, lastAccessedAt: i })),
+      "/t0",   // the active tab is also the oldest, so it gets evicted
+    );
+    const r = bgOpen(s, "/new", 999);
+    expect(r.state.tabs.map((t) => t.id)).not.toContain("/t0");
+    expect(r.state.activeId).toBe("/new");
+  });
+
+  it("keeps focus when eviction removed a tab that was NOT active", () => {
+    const s = state(
+      Array.from({ length: MAX_TABS }, (_, i) => ({ id: `/t${i}`, lastAccessedAt: i })),
+      "/t5",
+    );
+    const r = bgOpen(s, "/new", 999);
+    expect(r.state.activeId).toBe("/t5");
+  });
+
+  it("a foreground open still focuses, as before", () => {
+    const s = state([{ id: "/a" }], "/a");
+    expect(tabsReducer(s, { type: "open", url: "/b", title: "B", at: 1 }).state.activeId).toBe("/b");
+  });
+});

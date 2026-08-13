@@ -64,7 +64,16 @@ export function tabIdFor(url: string): string {
 }
 
 export type TabsAction =
-  | { type: "open"; url: string; title: string; icon?: string; at: number }
+  /**
+   * `background: true` adds the tab WITHOUT focusing it.
+   *
+   * Added after browser verification, which caught what no unit test would have:
+   * a Ctrl+click opened the tab and immediately made it active, so the address
+   * bar jumped to the new page while the content stayed on the old one. A
+   * modified click means "put this somewhere for later" everywhere else, and
+   * taking the user off the page they were reading is the opposite of that.
+   */
+  | { type: "open"; url: string; title: string; icon?: string; at: number; background?: boolean }
   | { type: "activate"; id: string; at: number }
   | { type: "close"; id: string }
   | { type: "closeOthers"; id: string }
@@ -116,7 +125,7 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsResult {
         return {
           state: {
             tabs: state.tabs.map((t) => (t.id === id ? { ...t, lastAccessedAt: action.at } : t)),
-            activeId: id,
+            activeId: action.background ? state.activeId : id,
           },
         };
       }
@@ -127,7 +136,7 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsResult {
       };
 
       if (state.tabs.length < MAX_TABS) {
-        return { state: { tabs: [...state.tabs, fresh], activeId: id } };
+        return { state: { tabs: [...state.tabs, fresh], activeId: action.background ? (state.activeId ?? id) : id } };
       }
 
       // At the limit: evict the least-recently-used tab that is NOT a draft.
@@ -155,7 +164,9 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsResult {
       return {
         state: {
           tabs: [...state.tabs.filter((t) => t.id !== victim), fresh],
-          activeId: id,
+          // If the evicted tab WAS the active one, focus has to land somewhere;
+          // the new tab is the only sensible place.
+          activeId: action.background && state.activeId !== victim ? state.activeId : id,
         },
       };
     }
