@@ -24,8 +24,10 @@
 #
 #   gcloud scheduler jobs list --location=asia-south1
 #
-# This script is idempotent: it updates a job if present, creates it if not. Safe
-# to re-run.
+# This script CREATES missing jobs and SKIPS ones that already exist, so it is
+# safe to re-run and cannot disturb a job that is working. Set UPDATE_EXISTING=1
+# only when you mean to overwrite every job — rotating CRON_SECRET is the case
+# that calls for it.
 #
 #   chmod +x scripts/setup-cloud-scheduler.sh
 #   CRON_SECRET='<the same value the service runs with>' ./scripts/setup-cloud-scheduler.sh
@@ -69,6 +71,21 @@ for row in "${JOBS[@]}"; do
   # `describe` is the cheapest existence check that does not depend on parsing
   # `list` output, which changes between gcloud versions.
   if gcloud scheduler jobs describe "$NAME" --location="$REGION" >/dev/null 2>&1; then
+    # SKIP BY DEFAULT — do not touch a job that already works.
+    #
+    # This script used to `update` here, and that was dangerous. An update rewrites
+    # the Authorization header, so running it with the wrong CRON_SECRET would
+    # break jobs that are currently fine. Three of these (renewals, trial-expiry,
+    # birthday-greetings) have been running in production since July; renewals last
+    # fired at 09:00 IST today. Silently re-pointing their credentials to "whatever
+    # was in my shell" is not a setup step, it is an outage.
+    #
+    # Pass UPDATE_EXISTING=1 to overwrite deliberately — e.g. when rotating the
+    # secret, which is the one time you actually want every job rewritten.
+    if [[ "${UPDATE_EXISTING:-0}" != "1" ]]; then
+      echo "==> skip:   $NAME  (already exists — set UPDATE_EXISTING=1 to overwrite)"
+      continue
+    fi
     ACTION="update"
   else
     ACTION="create"
