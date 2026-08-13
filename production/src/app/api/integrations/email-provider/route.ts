@@ -64,15 +64,25 @@ async function loadContext(userId: string) {
   // Whose Google account would send, and can it? Read from the token row rather
   // than trusted from the settings, because the grant can be revoked at Google
   // without anything in this app changing.
-  const senderId = tenant?.gmail_sender_user_id ?? null;
-  let gmail = { senderId, email: null as string | null, canSend: false };
+  // Falls back to the CALLER when no sender is designated, because PATCH does
+  // exactly the same (`|| user.id`). Reading only the stored column made GET and
+  // PATCH disagree: the card said "Not connected" for an account that was in
+  // fact connected and able to send, and pressing Gmail would have worked. A
+  // status screen that contradicts the button beside it is worse than no status.
+  const senderId = tenant?.gmail_sender_user_id ?? userId;
+  const isDesignated = Boolean(tenant?.gmail_sender_user_id);
+  let gmail = {
+    senderId, isDesignated,
+    email: null as string | null,
+    canSend: false,
+  };
   if (senderId) {
     const { data: tok } = await admin
       .from("user_google_tokens")
       .select("google_email, refresh_token, scopes")
       .eq("user_id", senderId).maybeSingle();
     gmail = {
-      senderId,
+      ...gmail,
       email: tok?.google_email ?? null,
       canSend: Boolean(tok?.refresh_token) && canSendWithScopes(tok?.scopes ?? null),
     };

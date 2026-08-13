@@ -34,7 +34,14 @@ interface EmailSettings {
   fromName: string | null;
   hasResendKey: boolean;
   hasEnvResendKey: boolean;
-  gmail: { senderId: string | null; email: string | null; canSend: boolean };
+  gmail: {
+    senderId: string | null;
+    /** True once a sender has been stored on the tenant, rather than assumed
+     *  to be the person looking at the page. */
+    isDesignated: boolean;
+    email: string | null;
+    canSend: boolean;
+  };
   canSendNow: boolean;
 }
 
@@ -191,9 +198,13 @@ export default function EmailSendingCard() {
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="text-xs font-medium text-ink">Google account</p>
+            {/* Three states, kept distinct because they need different actions:
+                connected and ready, connected but missing the send scope, and
+                not connected at all. Collapsing the first two into "Not
+                connected" told the user to redo work they had already done. */}
             <p className="truncate text-[11px] text-ink-3">
               {gmailReady
-                ? `${data.gmail.email} · ready to send`
+                ? `${data.gmail.email} · ready to send${data.gmail.isDesignated ? "" : " (not yet selected)"}`
                 : data.gmail.email
                   ? `${data.gmail.email} · send permission missing`
                   : "Not connected"}
