@@ -9,7 +9,7 @@
  * without the QR — never throws. A missing QR costs a scan; a thrown error
  * costs the customer their invoice.
  */
-import { invoiceUpiIntent } from "@/lib/payments/upi";
+import { invoiceUpiIntent, quoteUpiIntent } from "@/lib/payments/upi";
 
 export interface UpiQr {
   dataUrl: string;
@@ -27,9 +27,31 @@ export async function buildInvoiceUpiQr(args: {
   invoiceId: string;
   amountDue: number | null | undefined;
 }): Promise<UpiQr | null> {
-  const uri = invoiceUpiIntent(args);
-  if (!uri || !args.vpa) return null;
+  return encodeQr(invoiceUpiIntent(args), args.vpa);
+}
 
+/**
+ * Build the QR for a QUOTE. Same never-throws contract as the invoice version.
+ *
+ * Pass `quoteAmountDue()` as `amountDue`, not the raw `amount` column. That helper
+ * refuses two cases this function cannot see: a quote billed in a currency other
+ * than INR (UPI settles only in rupees, so `am=500.00` on a $500 quote collects
+ * ₹500), and a quote already turned into an invoice (the invoice carries its own
+ * QR at its own outstanding balance, and two documents asking for the same money
+ * is how a customer pays twice).
+ */
+export async function buildQuoteUpiQr(args: {
+  vpa: string | null | undefined;
+  payeeName: string | null | undefined;
+  quoteId: string;
+  amountDue: number | null | undefined;
+}): Promise<UpiQr | null> {
+  return encodeQr(quoteUpiIntent(args), args.vpa);
+}
+
+/** Shared encoder. Returns null on every failure path — never throws. */
+async function encodeQr(uri: string | null, vpa: string | null | undefined): Promise<UpiQr | null> {
+  if (!uri || !vpa) return null;
   try {
     const QRCode = await import("qrcode");
     const dataUrl = await QRCode.toDataURL(uri, {
@@ -38,9 +60,9 @@ export async function buildInvoiceUpiQr(args: {
       width: 320,                  // crisp when printed at ~28mm
       color: { dark: "#1A1815", light: "#FFFFFF" },  // --ink on white
     });
-    return { dataUrl, vpa: args.vpa.trim() };
+    return { dataUrl, vpa: vpa.trim() };
   } catch {
-    // Encoding failed — print the invoice anyway.
+    // Encoding failed — print the document anyway.
     return null;
   }
 }

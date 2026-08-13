@@ -122,15 +122,48 @@ export function invoiceUpiIntent(args: {
   amountDue: number | null | undefined;
 }): string | null {
   if (!args.vpa || !args.payeeName) return null;
-  if (typeof args.amountDue !== "number" || !Number.isFinite(args.amountDue) || args.amountDue <= 0) {
-    return null;
-  }
+  if (!isCollectable(args.amountDue)) return null;
   const r = buildUpiIntent({
     vpa: args.vpa,
     payeeName: args.payeeName,
     amount: args.amountDue ?? null,
     note: `Invoice ${args.invoiceId}`,
     ref: args.invoiceId,
+  });
+  return r.ok ? r.uri : null;
+}
+
+/** Shared guard: an amount is collectable only if it is a real positive number. */
+function isCollectable(v: number | null | undefined): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v > 0;
+}
+
+/**
+ * Convenience for a QUOTE. Same strictness as the invoice version — no amount
+ * means no QR — but the note says "Advance", because that is what the money
+ * legally is: a payment received before the tax invoice exists, which the seller
+ * must acknowledge with a Receipt Voucher under CGST §31(3)(d), not a tax
+ * invoice. Getting that word right in the bank narration is what lets the
+ * reseller tell an advance apart from an invoice settlement at reconciliation
+ * time, months later, from the statement alone.
+ *
+ * Pass `quoteAmountDue()` — it refuses non-INR quotes, which a UPI QR cannot
+ * collect, and refuses quotes already handed over to an invoice.
+ */
+export function quoteUpiIntent(args: {
+  vpa: string | null | undefined;
+  payeeName: string | null | undefined;
+  quoteId: string;
+  amountDue: number | null | undefined;
+}): string | null {
+  if (!args.vpa || !args.payeeName) return null;
+  if (!isCollectable(args.amountDue)) return null;
+  const r = buildUpiIntent({
+    vpa:       args.vpa,
+    payeeName: args.payeeName,
+    amount:    args.amountDue,
+    note:      `Advance ${args.quoteId}`,
+    ref:       args.quoteId,
   });
   return r.ok ? r.uri : null;
 }

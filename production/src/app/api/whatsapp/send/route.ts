@@ -23,6 +23,8 @@ import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendWhatsApp } from "@/lib/whatsapp/client";
 import { renderQuotePDF } from "@/lib/pdf";
+import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
+import { quoteAmountDue } from "@/lib/payments/amount-due";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
 
@@ -107,7 +109,7 @@ export async function POST(req: NextRequest) {
 
       const { data: tenant } = await admin
         .from("tenants")
-        .select("name, email, phone, gstin, address, state_code")
+        .select("name, email, phone, gstin, address, state_code, upi_vpa, upi_payee_name")
         .eq("id", me.tenant_id)
         .single();
       const { data: customer } = quote.customer_id
@@ -127,7 +129,21 @@ export async function POST(req: NextRequest) {
       const total    = quote.amount ?? taxable + tax;
       const lineItems = (quote.line_items ?? []) as QuoteLineItem[];
 
+      // Scan-to-pay on the PDF the customer receives over WhatsApp. This is the
+      // shortest path there is from "quote arrives" to "money sent": the QR and
+      // the UPI app are on the same phone. quoteAmountDue() gates it — non-INR
+      // and already-invoiced quotes get no QR.
+      const tUpi = tenant as { upi_vpa?: string | null; upi_payee_name?: string | null } | null;
+      const upi = await buildQuoteUpiQr({
+        vpa:       tUpi?.upi_vpa,
+        payeeName: tUpi?.upi_payee_name ?? tenant?.name,
+        quoteId:   quote.id,
+        amountDue: quoteAmountDue(quote),
+      });
+
       const blob = await renderQuotePDF({
+        upiQrDataUrl:  upi?.dataUrl ?? null,
+        upiVpa:        upi?.vpa ?? null,
         tenantName:    tenant?.name    ?? "Workspace",
         tenantGstin:   tenant?.gstin   ?? null,
         tenantEmail:   tenant?.email   ?? null,

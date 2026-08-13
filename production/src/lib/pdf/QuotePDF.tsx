@@ -21,6 +21,7 @@ import {
   Page,
   View,
   Text,
+  Image,
   StyleSheet,
 } from "@react-pdf/renderer";
 import { rupee, formatDate } from "@/lib/utils";
@@ -79,6 +80,12 @@ export interface QuotePDFProps {
   /** When true, renders "Renewal Quotation" label + visible "RENEWAL" stamp.
    *  Set by lib/renewals/create-renewal-quote.ts on the source quote. */
   isRenewal?:    boolean;
+  /** Scan-to-pay QR as a PNG data-URL, from buildQuoteUpiQr(). Null → no block.
+   *  The decision of WHETHER to offer a QR belongs to the caller, not here: it
+   *  depends on currency and payment status, which this component doesn't see. */
+  upiQrDataUrl?: string | null;
+  /** Printed under the QR so a payer whose camera struggles can type it. */
+  upiVpa?:       string | null;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────
@@ -318,6 +325,19 @@ const s = StyleSheet.create({
     paddingTop:     10,
     marginTop:      16,
   },
+  upiRow: {
+    flexDirection:  "row",
+    alignItems:     "center",
+    marginTop:      10,
+    paddingTop:     8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.hairline,
+  },
+  upiQr:    { width: 78, height: 78, marginRight: 10 },
+  upiText:  { flex: 1 },
+  upiTitle: { fontSize: 10, fontFamily: "Helvetica-Bold", color: COLORS.ink2, marginBottom: 2 },
+  upiSub:   { fontSize: 8, color: COLORS.ink3, lineHeight: 1.4 },
+  upiVpa:   { fontSize: 9, fontFamily: "Helvetica-Bold", color: COLORS.ink2, marginTop: 2, marginBottom: 2 },
   footerLine: {
     fontSize:   9,
     color:      COLORS.ink3,
@@ -339,6 +359,7 @@ export function QuotePDF(props: QuotePDFProps) {
     createdDate, expiresDate, validityDays,
     lineItems, subtotal, discountPct, discount, taxable, taxRate, tax, total,
     interState, isExport = false, currency, exchangeRate, billingCycle, notes, termsConditions, isRenewal,
+    upiQrDataUrl, upiVpa,
   } = props;
 
   const brandInitial = (tenantName?.trim()?.[0] ?? "?").toUpperCase();
@@ -609,6 +630,30 @@ export function QuotePDF(props: QuotePDFProps) {
             <Text style={s.footerBold}>Quote validity: </Text>
             {validityDays} days from issue date.
           </Text>
+
+          {/* Scan-to-pay. Drawn only when the caller supplied a QR — which it
+              does only for an INR quote that is still awaiting payment. The
+              wording says ADVANCE deliberately: money paid against a quote
+              arrives before the tax invoice exists, so it is an advance and the
+              seller answers it with a Receipt Voucher under CGST §31(3)(d).
+              Calling it a payment here would set up the wrong expectation about
+              which document the customer gets back. */}
+          {upiQrDataUrl ? (
+            <View style={s.upiRow}>
+              <Image src={upiQrDataUrl} style={s.upiQr} />
+              <View style={s.upiText}>
+                <Text style={s.upiTitle}>Scan to pay this advance</Text>
+                <Text style={s.upiSub}>
+                  Any UPI app — GPay, PhonePe, Paytm, BHIM.
+                </Text>
+                {upiVpa ? <Text style={s.upiVpa}>{upiVpa}</Text> : null}
+                <Text style={s.upiSub}>
+                  Amount and quote number are pre-filled. You&apos;ll receive a receipt
+                  voucher, and a GST tax invoice when the order is provisioned.
+                </Text>
+              </View>
+            </View>
+          ) : null}
           <Text style={[s.footerLine, { marginTop: 4 }]}>
             Thank you for considering {tenantName}.
             {tenantEmail && ` Reach out at ${tenantEmail} for any clarifications.`}

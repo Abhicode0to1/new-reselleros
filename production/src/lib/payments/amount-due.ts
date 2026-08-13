@@ -56,3 +56,51 @@ export function invoiceAmountDue(inv: InvoiceBalanceFields): number {
 function num(v: number | null | undefined): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quotes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Only the fields that bear on whether a quote is still collectable. */
+export interface QuoteBalanceFields {
+  amount?: number | null;
+  payment_amount?: number | null;
+  payment_status?: string | null;
+  /** Billing currency (migration 0153). 'INR' for domestic. */
+  currency?: string | null;
+}
+
+/**
+ * Rupees still collectable against a QUOTE, for a scan-to-pay QR.
+ *
+ * A quote is not an invoice and the rules differ in two ways that both matter:
+ *
+ * 1. CURRENCY. UPI settles in rupees and nothing else. A USD quote for $500 with
+ *    `am=500.00` in the intent is not a $500 request — every UPI app reads it as
+ *    ₹500. That is a silently wrong amount on a real payment, so a non-INR quote
+ *    gets no QR at all rather than a QR that is 98% wrong.
+ *
+ * 2. WHO OWNS THE ASK. Once a quote has been invoiced, the INVOICE is the payable
+ *    document and carries its own QR with its own outstanding balance, computed
+ *    from advances and receipts. A QR on the quote as well would be a second
+ *    document asking for the same money at a stale amount — the clearest possible
+ *    route to being paid twice. So `invoiced` yields nothing here.
+ *
+ * Returns 0 whenever nothing should be asked for, and 0 means "print no QR".
+ */
+export function quoteAmountDue(q: QuoteBalanceFields): number {
+  // UPI is rupees-only. Absent currency means the pre-0153 default, INR.
+  const currency = (q.currency ?? "INR").trim().toUpperCase();
+  if (currency !== "INR") return 0;
+
+  // Only a quote still waiting to be paid is collectable. 'received' is settled;
+  // 'invoiced' has handed the ask to the invoice; anything unrecognised is not
+  // assumed to be collectable.
+  const status = (q.payment_status ?? "none").toLowerCase();
+  if (status !== "none" && status !== "awaiting" && status !== "partial") return 0;
+
+  const total = num(q.amount);
+  if (total === null) return 0;
+
+  return Math.max(0, total - (num(q.payment_amount) ?? 0));
+}

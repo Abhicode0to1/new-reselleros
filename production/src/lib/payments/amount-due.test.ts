@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { invoiceAmountDue } from "./amount-due";
-import { invoiceUpiIntent } from "./upi";
+import { invoiceAmountDue, quoteAmountDue } from "./amount-due";
+import { invoiceUpiIntent, quoteUpiIntent } from "./upi";
 
 const VPA = "pardeep@okhdfcbank";
 const PAYEE = "Anutech Digital";
@@ -86,6 +86,77 @@ describe("invoiceUpiIntent refuses to print a QR when nothing is owed", () => {
     expect(invoiceUpiIntent({
       vpa: VPA, payeeName: PAYEE, invoiceId: "INV-ET-2026-27-0001",
       amountDue: invoiceAmountDue(settled),
+    })).toBeNull();
+  });
+});
+
+describe("quoteAmountDue — a quote is not an invoice", () => {
+  const OPEN = { amount: 19258, payment_amount: 0, payment_status: "awaiting", currency: "INR" };
+
+  it("collects the full amount on an open INR quote", () => {
+    expect(quoteAmountDue(OPEN)).toBe(19258);
+  });
+
+  it("treats a missing currency as INR (pre-0153 rows)", () => {
+    expect(quoteAmountDue({ amount: 5000, payment_status: "awaiting" })).toBe(5000);
+  });
+
+  it("subtracts a part payment", () => {
+    expect(quoteAmountDue({ ...OPEN, payment_amount: 9000, payment_status: "partial" })).toBe(10258);
+  });
+
+  // ── Currency: the bug this rule exists to prevent ────────────────────────
+  it("refuses a non-INR quote entirely", () => {
+    // UPI settles only in rupees. `am=500.00` on a $500 quote is not a $500
+    // request — every UPI app reads it as Rs.500. Better no QR than 98% wrong.
+    expect(quoteAmountDue({ ...OPEN, currency: "USD" })).toBe(0);
+    expect(quoteAmountDue({ ...OPEN, currency: "AED" })).toBe(0);
+    expect(quoteAmountDue({ ...OPEN, currency: "usd" })).toBe(0);
+    expect(quoteAmountDue({ ...OPEN, currency: " inr " })).toBe(19258);  // trimmed + upper
+  });
+
+  // ── Who owns the ask ─────────────────────────────────────────────────────
+  it("refuses an invoiced quote — the invoice carries that ask", () => {
+    // All three unpaid production quotes are status 'invoiced'. A QR here plus a
+    // QR on the invoice is two documents asking for the same money.
+    expect(quoteAmountDue({ ...OPEN, payment_status: "invoiced" })).toBe(0);
+  });
+
+  it("refuses a settled quote", () => {
+    expect(quoteAmountDue({ ...OPEN, payment_status: "received" })).toBe(0);
+  });
+
+  it("refuses an unrecognised status rather than assuming it is collectable", () => {
+    expect(quoteAmountDue({ ...OPEN, payment_status: "something_new" })).toBe(0);
+  });
+
+  it("never goes negative, never NaN", () => {
+    expect(quoteAmountDue({ ...OPEN, payment_amount: 99999 })).toBe(0);
+    expect(quoteAmountDue({ ...OPEN, amount: null })).toBe(0);
+    expect(quoteAmountDue({ ...OPEN, amount: Number.NaN })).toBe(0);
+  });
+});
+
+describe("quoteUpiIntent", () => {
+  const VPA2 = "pardeep@okhdfcbank";
+
+  it("says ADVANCE, not Invoice — that is what the money legally is", () => {
+    const uri = quoteUpiIntent({ vpa: VPA2, payeeName: "Anutech Digital", quoteId: "Q-ET-2026-27-0071", amountDue: 19258 });
+    expect(uri).toContain("tn=Advance%20Q-ET-2026-27-0071");
+    expect(uri).not.toContain("Invoice");
+    expect(uri).toContain("am=19258.00");
+  });
+
+  it("prints no QR when nothing is collectable", () => {
+    for (const a of [0, null, undefined, -5, Number.NaN]) {
+      expect(quoteUpiIntent({ vpa: VPA2, payeeName: "X", quoteId: "Q-1", amountDue: a })).toBeNull();
+    }
+  });
+
+  it("end-to-end: a USD quote yields no QR at all", () => {
+    const usd = { amount: 500, payment_amount: 0, payment_status: "awaiting", currency: "USD" };
+    expect(quoteUpiIntent({
+      vpa: VPA2, payeeName: "Anutech Digital", quoteId: "Q-USD-1", amountDue: quoteAmountDue(usd),
     })).toBeNull();
   });
 });

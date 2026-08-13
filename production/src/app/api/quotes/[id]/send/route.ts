@@ -24,6 +24,8 @@ import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { renderQuotePDF } from "@/lib/pdf";
+import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
+import { quoteAmountDue } from "@/lib/payments/amount-due";
 import { rupee } from "@/lib/utils";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { quoteAcceptUrl } from "@/lib/quotes/accept-link";
@@ -90,7 +92,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // ── 4. Tenant + customer info ────────────────────────────────────
   const { data: tenant } = await supabase
     .from("tenants")
-    .select("name, email, phone, gstin, address, state, state_code")
+    .select("name, email, phone, gstin, address, state, state_code, upi_vpa, upi_payee_name")
     .eq("id", me.tenant_id)
     .single();
   if (!tenant) {
@@ -164,9 +166,23 @@ ${tenant.name}${tenant.phone ? `\n${tenant.phone}` : ""}${tenant.email ? `\n${te
   });
 
   // ── 7. Render PDF attachment ─────────────────────────────────────
+  // This is the PDF the customer actually receives, so the scan-to-pay QR
+  // matters more here than on the in-app download. quoteAmountDue() decides
+  // whether one is offered at all — it refuses non-INR quotes (UPI settles only
+  // in rupees) and quotes already invoiced (the invoice owns that ask).
+  const tenantUpi = tenant as { name?: string; upi_vpa?: string | null; upi_payee_name?: string | null };
+  const upi = await buildQuoteUpiQr({
+    vpa:       tenantUpi.upi_vpa,
+    payeeName: tenantUpi.upi_payee_name ?? tenant.name,
+    quoteId:   quote.id,
+    amountDue: quoteAmountDue(quote),
+  });
+
   let attachments: { filename: string; content: Buffer; contentType: string }[] | undefined;
   try {
     const blob = await renderQuotePDF({
+      upiQrDataUrl: upi?.dataUrl ?? null,
+      upiVpa:       upi?.vpa ?? null,
       tenantName:    tenant.name,
       tenantGstin:   tenant.gstin,
       tenantEmail:   tenant.email,
