@@ -179,10 +179,16 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
     lastAppliedUrl.current = target;
     // replace, not push: switching tabs must not add a history entry. That single
     // choice is what makes Back mean "the previous page in this tab".
+    //
+    // router.replace, NOT window.history.replaceState. The raw History API was
+    // the original implementation and it is why clicking a tab appeared to do
+    // nothing: it rewrites the address bar without telling the App Router, so
+    // the URL and the highlighted tab both changed while the page underneath
+    // stayed exactly where it was. Every tab switch was cosmetic.
     if (historyOpFor("tab_switch") === "replace") {
-      window.history.replaceState({ rosTab: tab.id }, "", target);
+      router.replace(target as never);
     }
-  }, [state.activeId, state.tabs]);
+  }, [state.activeId, state.tabs, router]);
 
   // ── Browser Back / Forward ──────────────────────────────────────────────
   React.useEffect(() => {
