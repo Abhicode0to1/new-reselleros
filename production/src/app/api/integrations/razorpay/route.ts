@@ -16,17 +16,31 @@ import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { razorpayReadiness, razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { sealTenantSecrets } from "@/lib/crypto/tenant-secrets";
+import { buildSecretPatch } from "@/lib/integrations/secret-field";
 import { maskSecret } from "@/lib/crypto/vault";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
 
+/**
+ * Secrets are OPTIONAL here on purpose, and length is checked by
+ * `resolveSecretField` rather than by zod.
+ *
+ * The dialog never prefills a secret — correct, since a server that hands a live
+ * key secret back to the browser has already lost — so a blank box means "I did
+ * not retype it", not "make it empty". zod's `.min(10)` on `key_secret` turned an
+ * ordinary Save into a validation failure, and the optional `webhook_secret` was
+ * worse: it sailed through and the route then wrote NULL over a live secret,
+ * landing the workspace in the critical collect-without-reconcile state.
+ */
 const saveSchema = z.object({
   key_id:         z.string().trim().min(10).max(80)
                     .refine((v) => /^rzp_(test|live)_/.test(v),
                             "Key ID must start with rzp_test_ or rzp_live_"),
-  key_secret:     z.string().trim().min(10).max(200),
+  key_secret:     z.string().trim().max(200).optional(),
   webhook_secret: z.string().trim().max(200).optional(),
+  /** Explicit removal. A blank box never means this. */
+  clear_webhook_secret: z.boolean().optional(),
 });
 
 /**
@@ -114,15 +128,38 @@ export async function POST(req: NextRequest) {
   // Mode is inferred from the key_id prefix — single source of truth.
   const mode = v.key_id.startsWith("rzp_live_") ? "live" : "test";
 
-  // Seal the credentials before they touch the database. key_id is NOT a secret
-  // (it ships to the browser for Checkout) so it stays readable; the key secret
-  // and webhook secret are wrapped.
-  const sealed = sealTenantSecrets({
-    razorpay_key_secret:     v.key_secret,
-    razorpay_webhook_secret: v.webhook_secret ?? null,
+  const admin = createAdminClient();
+
+  // What is already stored decides whether a blank box is "keep" or "missing".
+  const { data: current } = await admin
+    .from("tenant_secrets")
+    .select("razorpay_key_secret, razorpay_webhook_secret")
+    .eq("tenant_id", r.tenantId)
+    .maybeSingle();
+
+  const { patch, errors, unchanged } = buildSecretPatch({
+    razorpay_key_secret: {
+      incoming: v.key_secret,
+      hasExisting: Boolean(current?.razorpay_key_secret),
+      required: true, minLength: 10, label: "Key secret",
+    },
+    razorpay_webhook_secret: {
+      incoming: v.webhook_secret,
+      hasExisting: Boolean(current?.razorpay_webhook_secret),
+      clear: v.clear_webhook_secret === true,
+      minLength: 8, label: "Webhook secret",
+    },
   });
 
-  const admin = createAdminClient();
+  if (errors.length > 0) {
+    return NextResponse.json({ ok: false, error: errors.join(" ") }, { status: 400 });
+  }
+
+  // Seal only the fields actually being written. An untouched field is ABSENT
+  // from the patch, so the upsert leaves its stored value alone — that absence is
+  // the whole fix.
+  const sealed = sealTenantSecrets(patch);
+
   const { error } = await admin
     .from("tenant_secrets")
     .upsert({
@@ -141,7 +178,13 @@ export async function POST(req: NextRequest) {
       `[integrations/razorpay] stored in PLAINTEXT (${sealed.storedInClear.join(", ")}) — SECRETS_MASTER_KEY is not configured`,
     );
   }
-  return NextResponse.json({ ok: true, mode, encrypted: sealed.storedInClear.length === 0 });
+  return NextResponse.json({
+    ok: true, mode,
+    encrypted: sealed.storedInClear.length === 0,
+    // So the UI can say "webhook secret left unchanged" instead of implying it
+    // was rewritten.
+    unchanged,
+  });
 }
 
 export async function DELETE() {

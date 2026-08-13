@@ -69,15 +69,21 @@ export default function RazorpayConfigureDialog({ open, onOpenChange }: Props) {
 
   const save = useMutation({
     mutationFn: async () => {
-      if (!keyId.trim() || !keySecret.trim()) {
-        throw new Error("Key ID and Secret are required");
+      if (!keyId.trim()) throw new Error("Key ID is required");
+      // A secret is only required the FIRST time. After that a blank box means
+      // "I did not retype it" and the server keeps what is stored — which is the
+      // whole point of the fix, since this dialog never prefills a secret.
+      if (!status?.configured && !keySecret.trim()) {
+        throw new Error("Key Secret is required the first time you connect Razorpay");
       }
       const res = await fetch("/api/integrations/razorpay", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          key_id:         keyId.trim(),
-          key_secret:     keySecret.trim(),
+          key_id:     keyId.trim(),
+          // Omitted entirely when blank. Sending "" would be a request to store an
+          // empty secret; sending nothing is a request to leave it alone.
+          key_secret:     keySecret.trim() || undefined,
           webhook_secret: webhookSecret.trim() || undefined,
         }),
       });
@@ -184,12 +190,12 @@ export default function RazorpayConfigureDialog({ open, onOpenChange }: Props) {
             </div>
 
             <div className="min-w-0">
-              <Label>Key Secret *</Label>
+              <Label>{status?.configured ? "Key Secret" : "Key Secret *"}</Label>
               <div className="flex gap-2 min-w-0">
                 <Input
                   type={showSecret ? "text" : "password"}
                   className="font-mono min-w-0 flex-1"
-                  placeholder="server-only secret"
+                  placeholder={status?.configured ? "leave blank to keep the saved secret" : "server-only secret"}
                   value={keySecret}
                   onChange={(e) => setKeySecret(e.target.value)}
                   autoComplete="off"
@@ -236,7 +242,7 @@ export default function RazorpayConfigureDialog({ open, onOpenChange }: Props) {
                     <Input
                       type={showWebhook ? "text" : "password"}
                       className="font-mono min-w-0 flex-1"
-                      placeholder="webhook signing secret"
+                      placeholder={status?.webhook_secret_mask ? "leave blank to keep the saved secret" : "webhook signing secret"}
                       value={webhookSecret}
                       onChange={(e) => setWebhookSecret(e.target.value)}
                       autoComplete="off"
