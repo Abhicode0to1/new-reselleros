@@ -766,6 +766,21 @@ type LeadRow = {
   /** Path + utm params ONLY. Other query params are dropped before storage --
    *  they routinely carry email/phone/session ids (DPDP). */
   landing_page_url: string | null;
+  /**
+   * Ad-platform click ids (migration 0232).
+   *
+   * These exist for ONE purpose: offline conversion import. Telling Google or
+   * Meta that a click became a paid deal requires sending the original click id
+   * back, and an id that was never stored can never be sent. Captured before any
+   * API integration exists because token approval takes weeks and the leads that
+   * arrive in the meantime would otherwise be permanently un-attributable.
+   *
+   * wbraid is what Google sends INSTEAD of gclid when consent limits tracking,
+   * so reading only gclid silently loses every consent-limited click.
+   */
+  gclid: string | null;
+  wbraid: string | null;
+  fbclid: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -807,6 +822,9 @@ type LeadInsert = {
   utm_campaign?:       string | null;
   referrer_url?:       string | null;
   landing_page_url?:   string | null;
+  gclid?:              string | null;
+  wbraid?:             string | null;
+  fbclid?:             string | null;
 }
 type LeadUpdate = Partial<LeadInsert>;
 

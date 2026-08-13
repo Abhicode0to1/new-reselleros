@@ -40,11 +40,31 @@ export interface UtmCapture {
   utm_campaign: string | null;
   referrer_url: string | null;
   landing_page_url: string | null;
+  /**
+   * Ad-platform click ids, captured from the landing URL.
+   *
+   * WHY THESE MATTER MORE THAN THE UTM PARAMS. Offline conversion import --
+   * telling Google or Meta that a click eventually became a paid deal, so their
+   * bidding can learn from it -- requires sending the ORIGINAL click id back.
+   * You cannot send back an id you never stored. Every inbound lead that arrives
+   * without these captured is permanently un-attributable, no matter what
+   * credentials arrive later. That is why this is captured before any API
+   * integration exists: the approval process takes weeks, and the data lost in
+   * the meantime does not come back.
+   *
+   * gclid  -- Google Ads click id
+   * wbraid -- Googles cookieless equivalent, sent when consent limits gclid
+   * fbclid -- Meta click id
+   */
+  gclid: string | null;
+  wbraid: string | null;
+  fbclid: string | null;
 }
 
 export const EMPTY_UTM: UtmCapture = {
   utm_source: null, utm_medium: null, utm_campaign: null,
   referrer_url: null, landing_page_url: null,
+  gclid: null, wbraid: null, fbclid: null,
 };
 
 function clean(v: string | null | undefined, max: number): string | null {
@@ -117,7 +137,14 @@ export function captureUtm(input: {
     referrer_url = clean(`${referrer.origin}${referrer.pathname}`, MAX_URL);
   }
 
-  return { utm_source, utm_medium, utm_campaign, referrer_url, landing_page_url };
+  return {
+    utm_source, utm_medium, utm_campaign, referrer_url, landing_page_url,
+    // Click ids are read from the landing URL only. They are opaque platform
+    // identifiers, not personal data, so they are kept in full.
+    gclid:  clean(p?.get("gclid"),  MAX_PARAM),
+    wbraid: clean(p?.get("wbraid"), MAX_PARAM),
+    fbclid: clean(p?.get("fbclid"), MAX_PARAM),
+  };
 }
 
 /**
