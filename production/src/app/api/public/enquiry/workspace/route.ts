@@ -34,6 +34,7 @@
  * - Rate limit TODO: bolt on at the edge later (Cloudflare or upstream proxy)
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
@@ -121,6 +122,8 @@ export async function POST(request: NextRequest) {
       value,
       stage:         "new",
       source:        "buy-workspace",
+      // Migration 0232 — inbound attribution. Nulls when nothing was captured.
+      ...captureFromRequest(request, body as Record<string, unknown>),
       notes:         leadNotes,
       // Place-of-supply for GST (copied to the customer on conversion). Optional —
       // blank falls back to intra-state until set on the customer in-app.

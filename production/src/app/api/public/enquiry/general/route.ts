@@ -18,6 +18,7 @@
  *   surface. (Same model as the workspace enquiry route.)
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
@@ -92,6 +93,8 @@ export async function POST(request: NextRequest) {
       subscription_type: subscriptionType ?? null,
       stage:         "new",
       source:        "enquiry-form",
+      // Migration 0232 — inbound attribution. Nulls when nothing was captured.
+      ...captureFromRequest(request, body as Record<string, unknown>),
       notes:         leadNotes,
     });
 

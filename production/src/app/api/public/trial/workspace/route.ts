@@ -18,6 +18,7 @@
  *     (TODO: build trial-conversion cron — for v1 Pardeep tracks manually)
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
@@ -106,6 +107,8 @@ export async function POST(request: NextRequest) {
       value:             0,                                  // trial is free — no deal value yet
       stage:             "trial",                            // qualified lead, not raw inquiry
       source:            "buy-workspace-trial",
+      // Migration 0232 — inbound attribution. Nulls when nothing was captured.
+      ...captureFromRequest(request, body as Record<string, unknown>),
       domain:            cleanDomain,                        // structured — flows lead→quote→subscription
       notes,
       trial_started_at:  trialStartedAt.toISOString(),

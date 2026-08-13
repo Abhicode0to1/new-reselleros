@@ -23,6 +23,7 @@
  *   - Webhook signature verification done in the webhook route, not here
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import Razorpay from "razorpay";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -336,6 +337,8 @@ export async function POST(request: NextRequest) {
       value:         subtotal,
       stage:         "quote",
       source:        sourceTag,
+      // Migration 0232 — inbound attribution. Nulls when nothing was captured.
+      ...captureFromRequest(request, body as Record<string, unknown>),
       domain:        cleanDomain,        // structured — flows lead→quote→subscription
       notes:         leadNotes,
     });
