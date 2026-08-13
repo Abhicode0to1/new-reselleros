@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { verifyPdfToken } from "@/lib/pdf/pdf-token";
 import { buildInvoicePdfProps, type TenantPdfInfo } from "@/lib/pdf/build-props";
 import { buildInvoiceUpiQr } from "@/lib/pdf/upi-qr";
+import { invoiceAmountDue } from "@/lib/payments/amount-due";
 import type { Invoice, Quote, Customer } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
@@ -48,14 +49,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     tenant:   (tenant as TenantPdfInfo) ?? { name: inv.customer_name, gstin: null, email: null, phone: null, address: null, state: null, state_code: null },
   });
 
-  // Scan-to-pay QR — net_payable, not gross, so the QR asks for what is
-  // actually still owed once advances are adjusted (migration 0005).
+  // Scan-to-pay QR — see invoiceAmountDue(): advances AND receipts both reduce
+  // the balance, and asking for the gross would bill money already collected.
   const t = tenant as { name?: string; upi_vpa?: string | null; upi_payee_name?: string | null } | null;
   const upi = await buildInvoiceUpiQr({
     vpa:       t?.upi_vpa,
     payeeName: t?.upi_payee_name ?? t?.name,
     invoiceId: inv.id,
-    amountDue: inv.net_payable ?? inv.amount,
+    amountDue: invoiceAmountDue(inv),
   });
 
   const { renderToBuffer } = await import("@react-pdf/renderer");

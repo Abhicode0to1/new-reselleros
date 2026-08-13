@@ -19,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { getPortalSession } from "@/lib/portal/session";
 import { buildInvoicePdfProps, type TenantPdfInfo } from "@/lib/pdf/build-props";
 import { buildInvoiceUpiQr } from "@/lib/pdf/upi-qr";
+import { invoiceAmountDue } from "@/lib/payments/amount-due";
 import type { Invoice, Quote, Customer } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
@@ -71,15 +72,16 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     },
   });
 
-  // Scan-to-pay QR. `net_payable` is what's actually left to pay once advances
-  // are adjusted (migration 0005), so the QR asks for the right amount rather
-  // than the gross. Returns null and the PDF simply omits the block.
+  // Scan-to-pay QR. The amount MUST come from invoiceAmountDue() — `net_payable`
+  // alone ignores receipts already banked against the invoice, which on a real
+  // production row would have asked a customer for ₹5,40,000 they had already
+  // paid. Nothing owed → no QR at all, so a settled invoice can't be paid twice.
   const t = tenant as { name?: string; upi_vpa?: string | null; upi_payee_name?: string | null } | null;
   const upi = await buildInvoiceUpiQr({
     vpa:        t?.upi_vpa,
     payeeName:  t?.upi_payee_name ?? t?.name,
     invoiceId:  inv.id,
-    amountDue:  inv.net_payable ?? inv.amount,
+    amountDue:  invoiceAmountDue(inv),
   });
 
   // Imported lazily so @react-pdf/renderer never enters a shared bundle — it

@@ -102,6 +102,18 @@ export function buildUpiIntent(input: UpiIntentInput): UpiResult {
 /**
  * Convenience for an invoice. Returns null when the tenant hasn't set a VPA —
  * callers render nothing rather than a broken QR.
+ *
+ * An INVOICE is stricter than the primitive above. `buildUpiIntent` may legitimately
+ * emit an open-amount QR — that is what a shop counter's static QR is. An invoice
+ * is the opposite: the amount is the entire point, and a nothing-owed invoice must
+ * print no QR at all. Otherwise a fully-settled invoice carries a live "scan to pay"
+ * block with no amount in it, and a customer doing the diligent thing — paying what
+ * the document appears to ask for — pays twice.
+ *
+ * So `amountDue` must be a positive number here. Zero, null and negative all mean
+ * "nothing is owed", and all three yield no QR. Pass the result of
+ * `invoiceAmountDue()` rather than a raw column: `net_payable` alone ignores
+ * receipts and over-asks by exactly what has already been paid.
  */
 export function invoiceUpiIntent(args: {
   vpa: string | null | undefined;
@@ -110,6 +122,9 @@ export function invoiceUpiIntent(args: {
   amountDue: number | null | undefined;
 }): string | null {
   if (!args.vpa || !args.payeeName) return null;
+  if (typeof args.amountDue !== "number" || !Number.isFinite(args.amountDue) || args.amountDue <= 0) {
+    return null;
+  }
   const r = buildUpiIntent({
     vpa: args.vpa,
     payeeName: args.payeeName,
