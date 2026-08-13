@@ -56,5 +56,13 @@ drop policy if exists compliance_reminder_log_sel on public.compliance_reminder_
 create policy compliance_reminder_log_sel on public.compliance_reminder_log
   for select to authenticated using (tenant_id = public.current_tenant_id());
 
+-- An RLS policy alone is NOT enough. RLS filters rows a role may see; the GRANT
+-- is what lets the role touch the table at all, and PostgREST will not even
+-- expose a table to a role that holds no privilege on it. 0201 does the same for
+-- compliance_log. SELECT only here: reminders are written exclusively by the
+-- cron's service-role connection, so no client needs insert/update/delete and
+-- nobody can forge or erase a reminder trail.
+grant select on public.compliance_reminder_log to authenticated;
+
 comment on table public.compliance_reminder_log is
   'One row per statutory reminder actually sent. Unique on (tenant, obligation, period, days_before, lower(email)) so a cron re-run cannot duplicate a reminder.';
