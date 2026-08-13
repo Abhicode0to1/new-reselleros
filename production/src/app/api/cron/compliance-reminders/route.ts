@@ -1,9 +1,12 @@
 /**
  * Statutory-compliance reminder cron — T-15 / T-7 / T-3.
  *
- * Runs daily at 04:00 UTC = 09:30 IST (vercel.json) — half an hour after the
- * renewals job, and inside working hours, so a due-date mail can be acted on the
- * moment it is read rather than sitting overnight.
+ * Runs daily at 09:30 IST via CLOUD SCHEDULER (scripts/setup-cloud-scheduler.sh)
+ * — half an hour after the renewals job and inside working hours, so a due-date
+ * mail can be acted on the moment it is read rather than sitting overnight.
+ *
+ * NOT vercel.json. The live deployment is Cloud Run, where Vercel crons do not
+ * exist; that file schedules nothing here.
  *
  * For every tenant it computes which statutory obligations are approaching, and
  * emails the OWNER and any user with the `accountant` role — the CA already sits

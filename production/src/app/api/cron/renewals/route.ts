@@ -1,7 +1,9 @@
 /**
  * Renewal automation cron — runs daily.
  *
- * Schedule: 09:00 IST (03:30 UTC) — set via vercel.json. Local dev can
+ * Schedule: 09:00 IST, via CLOUD SCHEDULER (scripts/setup-cloud-scheduler.sh).
+ * NOT vercel.json — the live deployment is Cloud Run, where Vercel crons do not
+ * exist. That file is inert here and its presence is misleading. Local dev can
  * trigger by hitting `curl http://localhost:3000/api/cron/renewals` with
  * Authorization: Bearer <CRON_SECRET>.
  *
