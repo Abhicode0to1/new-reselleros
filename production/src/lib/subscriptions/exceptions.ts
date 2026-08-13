@@ -1,0 +1,123 @@
+/**
+ * Subscription exception flags — the facts that stay invisible until they matter.
+ *
+ * WHY THIS IS A PURE FUNCTION AND NOT JUST JSX. Measured against production on
+ * 13 Aug 2026: across all 54 of the tenant's subscriptions, `auto_renew` is true
+ * on every row, `renewal_state` is 'pending' on every row, and `reminder_count`,
+ * `outstanding_amount`, `used`, `suspended_at` and `written_off_at` are
+ * zero/empty on every row.
+ *
+ * So NONE of these branches render in production today. A bug in any of them
+ * would be invisible on screen — which is precisely the failure mode this
+ * project keeps hitting: built, looks configured, does nothing. Pulling the
+ * decision out of the component is what makes it testable at all.
+ *
+ * WHY CONDITIONAL RATHER THAN ALWAYS-ON. Rendering these unconditionally would
+ * put 54 identical badges on screen: pure noise, zero information. Rendering
+ * them only on deviation costs nothing today and makes each one the loudest
+ * thing on the row the day it goes wrong.
+ */
+import { rupee, formatDate } from "@/lib/utils";
+import { renewalStateLabel, renewalStateTone, type RenewalState } from "@/lib/renewals/cadence";
+
+export type ExceptionTone = "muted" | "info" | "warning" | "danger" | "success";
+
+export interface SubExceptionFlag {
+  /** Stable React key / test handle. */
+  key: string;
+  label: string;
+  tone: ExceptionTone;
+  /** Hover explanation. §24: a signal that only alarms is a dead end. */
+  title?: string;
+}
+
+/** Only the fields this decision reads — so tests need not build a whole row. */
+export interface SubExceptionFields {
+  auto_renew?: boolean | null;
+  renewal_state?: RenewalState | null;
+  reminder_count?: number | null;
+  last_reminder_sent_at_v2?: string | null;
+  outstanding_amount?: number | null;
+  seats?: number | null;
+  used?: number | null;
+  suspended_at?: string | null;
+  written_off_at?: string | null;
+}
+
+const n = (v: number | null | undefined): number =>
+  typeof v === "number" && Number.isFinite(v) ? v : 0;
+
+export function subscriptionExceptions(s: SubExceptionFields): SubExceptionFlag[] {
+  const out: SubExceptionFlag[] = [];
+
+  // Auto-renew off means the renewals cron generates no quote and the
+  // subscription lapses to `expired` on its date with nobody told. This was
+  // not surfaced anywhere in the app — mobile or desktop.
+  if (s.auto_renew === false) {
+    out.push({
+      key: "auto_renew_off",
+      label: "Won't auto-renew",
+      tone: "danger",
+      title: "Auto-renew is off — no renewal quote will be generated and this will lapse on its renewal date",
+    });
+  }
+
+  // Where the renewal chase has actually reached, so nobody rings a customer
+  // unaware that four reminders already went out under their name.
+  // `pending` is the resting state and carries no news.
+  if (s.renewal_state && s.renewal_state !== "pending") {
+    const sent = n(s.reminder_count);
+    out.push({
+      key: "renewal_state",
+      label: renewalStateLabel(s.renewal_state) + (sent > 0 ? ` · ${sent} sent` : ""),
+      tone: renewalStateTone(s.renewal_state),
+      title: s.last_reminder_sent_at_v2
+        ? `Last reminder ${formatDate(s.last_reminder_sent_at_v2)}`
+        : undefined,
+    });
+  }
+
+  // Service can be live with money still owed.
+  if (n(s.outstanding_amount) > 0) {
+    out.push({
+      key: "outstanding",
+      label: `${rupee(n(s.outstanding_amount))} due`,
+      tone: "warning",
+      title: "Service is active but this amount is still unpaid",
+    });
+  }
+
+  // Seat utilisation is gated on `used > 0` DELIBERATELY. `used` is 0 on every
+  // production row because seat counts are not synced from the vendor yet — so
+  // "0 of 5 in use" would assert idle licences that are probably being used
+  // perfectly well. Silence is the honest output for untracked data.
+  const used = n(s.used), seats = n(s.seats);
+  if (used > 0 && seats > 0 && used / seats < 0.5) {
+    out.push({
+      key: "low_utilisation",
+      label: `Only ${used}/${seats} seats used`,
+      tone: "warning",
+      title: "Unused licences are a churn risk at renewal — or a downgrade the customer will ask for",
+    });
+  }
+
+  if (s.suspended_at) {
+    out.push({
+      key: "suspended",
+      label: "Auto-suspended",
+      tone: "danger",
+      title: `Suspended ${formatDate(s.suspended_at)} for non-payment after the grace period`,
+    });
+  }
+
+  if (s.written_off_at) {
+    out.push({
+      key: "written_off",
+      label: "Written off",
+      tone: "danger",
+      title: `Written off ${formatDate(s.written_off_at)} as uncollectable`,
+    });
+  }
+
+  return out;
+}

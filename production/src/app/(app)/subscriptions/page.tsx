@@ -30,6 +30,8 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
+import { subscriptionExceptions } from "@/lib/subscriptions/exceptions";
+import { term, renewalDistance } from "@/lib/subscriptions/renewal-display";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import type { Subscription } from "@/lib/supabase/database.types";
@@ -51,14 +53,28 @@ function estimateMargin(s: Subscription) {
   return { margin: s.mrr - cost, marginPct: Math.round(((s.mrr - cost) / s.mrr) * 100), cost };
 }
 
-/** Billing cycle / term, derived from the start↔renewal span. */
-function billingCycle(start: string | null, renewal: string | null): string | null {
-  if (!start || !renewal) return null;
-  const m = Math.round(daysBetween(start, renewal) / 30.44);
-  if (m <= 1) return "Monthly";
-  if (m <= 4) return "Quarterly";
-  if (m <= 8) return "Half-yearly";
-  return "Annual";
+/**
+ * The facts about a subscription that stay invisible until they matter —
+ * auto-renew off, cadence position, money owed, idle seats, suspension,
+ * write-off. Every one of these fields was previously unreachable from this
+ * page, on mobile and on desktop alike.
+ *
+ * The decision lives in `lib/subscriptions/exceptions.ts` and is tested there,
+ * because none of these branches fire against today's production data — a bug
+ * in any of them would look exactly like silence on screen.
+ */
+function SubExceptions({ sub, size = "sm" }: { sub: Subscription; size?: "sm" | "md" }) {
+  const flags = subscriptionExceptions(sub);
+  if (flags.length === 0) return null;
+  return (
+    <>
+      {flags.map((f) => (
+        <Badge key={f.key} kind={f.tone} size={size} dot title={f.title}>
+          {f.label}
+        </Badge>
+      ))}
+    </>
+  );
 }
 
 export default function SubscriptionsPage() {
@@ -410,8 +426,11 @@ export default function SubscriptionsPage() {
         <ul className="xl:hidden space-y-2 mb-3">
           {shown.map((s) => {
             const dl = daysUntil(s.renewal_date);
+            const t  = term(s.start_date, s.renewal_date);
+            const vm = vendorMeta(s.vendor);
             return (
               <li key={s.id} className="bg-paper border border-hairline rounded-lg p-3">
+                {/* Who they are, and what they pay */}
                 <div className="flex items-start justify-between gap-3 mb-1.5">
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-ink truncate">{cleanDisplayName(s.customer_name)}</p>
@@ -422,9 +441,34 @@ export default function SubscriptionsPage() {
                     <p className="text-[10px] text-ink-3">/mo · {s.seats} seats</p>
                   </div>
                 </div>
-                <p className="text-xs text-ink-2 mb-2 truncate">{s.plan}</p>
-                <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-hairline/60 text-xs">
-                  <div className="flex items-center gap-1.5">
+
+                {/* Plan wraps rather than truncates — on a phone this is the
+                    only place the plan name appears (§20: don't hide data). */}
+                <p className="text-xs text-ink-2 mb-2 break-words leading-snug">{s.plan}</p>
+
+                {/* Vendor, and the term with what renewal actually bills —
+                    both desktop-only until now.
+
+                    NO MARGIN BADGE HERE, deliberately. `estimateMargin()` is
+                    `mrr * 0.83`, a hardcoded heuristic, so it returns 17% for
+                    every subscription that has ever existed. Putting it on the
+                    card would place a fabricated constant next to real numbers
+                    and imply cost data is tracked. Same rule as the seat-
+                    utilisation gate: don't assert what isn't measured. */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Badge kind={vm.kind} size="sm" dot>{vm.label}</Badge>
+                  {t && (
+                    <Badge kind="muted" size="sm"
+                           title={`${t.label} term — ${rupee(s.mrr * t.months)} invoiced at each renewal`}>
+                      {t.label}{t.months > 1 ? ` · ${rupee(s.mrr * t.months)}` : ""}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Status, anything abnormal, and the renewal clock. The day
+                    count is always shown — see renewalDistance() for why. */}
+                <div className="flex items-end justify-between gap-2 mt-2 pt-2 border-t border-hairline/60">
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                     <Badge
                       kind={
                         s.status === "active"    ? "success" :
@@ -436,15 +480,26 @@ export default function SubscriptionsPage() {
                     >
                       {s.status}
                     </Badge>
-                    {dl !== null && dl >= 0 && dl <= 30 && (
-                      <Badge kind={dl <= 7 ? "danger" : "warning"} size="sm">
-                        {dl}d
-                      </Badge>
+                    <SubExceptions sub={s} />
+                  </div>
+                  <div className="text-right shrink-0">
+                    {/* The date needs saying what it IS. On desktop the column
+                        header does that job; the card has no header, so a bare
+                        date could read as "started", "paid" or "expires". */}
+                    <p className="text-[9px] uppercase tracking-wider text-ink-3 leading-none mb-0.5">Renewal</p>
+                    <p className="text-xs text-ink-2 tabular-nums">
+                      {s.renewal_date ? formatDate(s.renewal_date) : "—"}
+                    </p>
+                    {dl !== null && (
+                      <p className={cn(
+                        "text-[10px] tabular-nums",
+                        dl <= 7  ? "text-rose font-medium"     :
+                        dl <= 30 ? "text-amber-ink font-medium" : "text-ink-3"
+                      )}>
+                        {renewalDistance(dl)}
+                      </p>
                     )}
                   </div>
-                  <span className="text-ink-3 tabular-nums">
-                    {s.renewal_date ? formatDate(s.renewal_date) : "—"}
-                  </span>
                 </div>
               </li>
             );
@@ -474,7 +529,7 @@ export default function SubscriptionsPage() {
                 {shown.map((s) => {
                   const m = estimateMargin(s);
                   const dl = daysUntil(s.renewal_date);
-                  const cycle = billingCycle(s.start_date, s.renewal_date);
+                  const t  = term(s.start_date, s.renewal_date);
                   const isUrgent = dl !== null && dl >= 0 && dl <= 30;
                   return (
                     <tr
@@ -494,7 +549,12 @@ export default function SubscriptionsPage() {
                       </td>
                       <td className="px-3 py-2.5 text-sm text-ink-2 align-top">
                         <div className="break-words leading-snug">{s.plan}</div>
-                        {cycle && <Badge kind="muted" size="sm" className="mt-1">{cycle}</Badge>}
+                        {t && (
+                          <Badge kind="muted" size="sm" className="mt-1"
+                                 title={`${t.label} term — ${rupee(s.mrr * t.months)} invoiced at each renewal`}>
+                            {t.label}{t.months > 1 ? ` · ${rupee(s.mrr * t.months)}` : ""}
+                          </Badge>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 align-top">
                         {(() => { const vm = vendorMeta(s.vendor); return <Badge kind={vm.kind} dot>{vm.label}</Badge>; })()}
@@ -521,9 +581,13 @@ export default function SubscriptionsPage() {
                       <td className="px-3 py-2.5 text-sm text-ink-2 align-top whitespace-nowrap">{s.start_date ? formatDate(s.start_date) : "—"}</td>
                       <td className="px-3 py-2.5 text-sm align-top whitespace-nowrap">
                         <div className="text-ink-2">{s.renewal_date ? formatDate(s.renewal_date) : "—"}</div>
-                        {dl !== null && s.status !== "expired" && dl >= 0 && dl <= 30 && (
+                        {dl !== null && s.status !== "expired" && dl >= 0 && dl <= 30 ? (
                           <div className="mt-0.5"><Badge kind={dl <= 7 ? "danger" : "warning"} dot>{dl === 0 ? "Due today" : `In ${dl}d`}</Badge></div>
-                        )}
+                        ) : dl !== null && s.status !== "expired" ? (
+                          // Beyond 30 days the badge would be alarmist, but the
+                          // distance still beats making the reader subtract dates.
+                          <div className="mt-0.5 text-[11px] text-ink-3 tabular-nums">{renewalDistance(dl)}</div>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2.5 align-top">
                         {s.status === "expired" && dl !== null ? (
@@ -533,13 +597,12 @@ export default function SubscriptionsPage() {
                         ) : (
                           <Badge kind="muted">{s.status}</Badge>
                         )}
-                        {s.outstanding_amount > 0 && (
-                          <div className="mt-1">
-                            <Badge kind="warning" dot>
-                              {rupee(s.outstanding_amount)} due
-                            </Badge>
-                          </div>
-                        )}
+                        {/* Outstanding, auto-renew off, cadence position,
+                            suspension, write-off — one shared component so the
+                            table and the mobile card can never drift apart. */}
+                        <div className="flex flex-col items-start gap-1 mt-1 empty:mt-0">
+                          <SubExceptions sub={s} size="md" />
+                        </div>
                       </td>
                       <td className="px-2 py-2.5 text-right align-top" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
