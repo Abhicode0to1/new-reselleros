@@ -40,7 +40,13 @@ export interface MxRecord {
 export type CheckState = "pass" | "warn" | "fail" | "missing";
 
 export interface DnsCheck {
-  id: "mx" | "txt" | "spf";
+  /**
+   * Receiving checks (mx/txt/spf) live here; sending checks (spf-sending, dkim,
+   * dmarc) come from ./email-sending.ts. One union and one interface on purpose —
+   * both render through the same UI, and two near-identical shapes is how they
+   * drift apart.
+   */
+  id: "mx" | "txt" | "spf" | "spf-sending" | "dkim" | "dmarc";
   label: string;
   state: CheckState;
   /** One line the operator can read out to the customer. */
@@ -49,6 +55,8 @@ export interface DnsCheck {
   expected?: string[];
   /** What was actually found, for the "why do you say it's wrong" conversation. */
   found?: string[];
+  /** The next step in words (§24 — a check that only says "wrong" is a dead end). */
+  fix?: string;
 }
 
 // ── Google's published values ────────────────────────────────────────────────

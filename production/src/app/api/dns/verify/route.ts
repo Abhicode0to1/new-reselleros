@@ -22,6 +22,9 @@ import {
   parseMx, checkMx, checkVerificationTxt, checkSpf, overallState,
   type MxRecord, type DnsCheck,
 } from "@/lib/dns/workspace-dns";
+import {
+  sendingReport, dkimHost, dmarcHost, RESEND_DEFAULTS,
+} from "@/lib/dns/email-sending";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -40,6 +43,66 @@ export async function GET(req: NextRequest) {
   }
 
   const token = req.nextUrl.searchParams.get("token")?.trim() || null;
+
+  /**
+   * `?check=sending` answers the other half: can this domain SEND?
+   *
+   * That is what blocks per-tenant email today. `RESEND_FROM_OVERRIDE` is set in
+   * production precisely because no tenant domain is verified with the provider,
+   * so every message goes out under one shared From. The senders already pass
+   * `from: tenant.email` — it is DNS, not code, that is missing. This makes the
+   * gap visible instead of leaving it to a dashboard nobody opens.
+   *
+   * The provider's expected values are overridable by query param, because a
+   * checker that hardcodes one provider's records goes stale and then calls a
+   * healthy domain broken.
+   */
+  if ((req.nextUrl.searchParams.get("check") ?? "").toLowerCase() === "sending") {
+    const expected = {
+      spfInclude:   req.nextUrl.searchParams.get("spf_include")?.trim()   || RESEND_DEFAULTS.spfInclude,
+      dkimSelector: req.nextUrl.searchParams.get("dkim_selector")?.trim() || RESEND_DEFAULTS.dkimSelector,
+      providerName: req.nextUrl.searchParams.get("provider")?.trim()      || RESEND_DEFAULTS.providerName,
+    };
+
+    const [rootTxt, dkimTxt, dmarcTxt] = await Promise.all([
+      resolveDoh(domain, DNS_TYPE.TXT),
+      resolveDoh(dkimHost(domain, expected.dkimSelector), DNS_TYPE.TXT),
+      resolveDoh(dmarcHost(domain), DNS_TYPE.TXT),
+    ]);
+
+    // Same rule as below: only the ROOT lookup failing is a real resolver error.
+    // A missing DKIM or DMARC name legitimately returns nxdomain, and reporting
+    // that as "our lookup failed" would hide the actual finding.
+    if (!rootTxt.ok && rootTxt.error) {
+      return NextResponse.json(
+        { ok: false, domain, error: `DNS lookup failed — ${rootTxt.error}. That's our lookup, not the customer's DNS; try again.` },
+        { status: 502 },
+      );
+    }
+
+    const report = sendingReport(
+      domain,
+      rootTxt.ok ? rootTxt.data : [],
+      dkimTxt.ok ? dkimTxt.data : [],
+      dmarcTxt.ok ? dmarcTxt.data : [],
+      expected,
+    );
+
+    return NextResponse.json({
+      ok: true,
+      domain,
+      mode: "sending" as const,
+      provider: report.provider,
+      overall: report.state,
+      canSend: report.canSend,
+      checks: report.checks,
+      raw: {
+        txt:   rootTxt.ok ? rootTxt.data : [],
+        dkim:  dkimTxt.ok ? dkimTxt.data : [],
+        dmarc: dmarcTxt.ok ? dmarcTxt.data : [],
+      },
+    });
+  }
 
   const [mxRes, txtRes] = await Promise.all([
     resolveDoh(domain, DNS_TYPE.MX),
