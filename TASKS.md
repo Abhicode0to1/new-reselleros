@@ -5,6 +5,168 @@
 
 ## Active
 
+### 📢 Marketing & Advertising OS (Pardeep, 13 Aug 2026) — 🟡 CHANNEL ECONOMICS DONE (29 tests). CAC/ROAS deliberately withheld — see below.
+
+**Already existed, so the brief shrank:** `/campaigns` and `/coupons` pages · `/api/campaigns/ai-generate` (the Gemini copywriter — directive 3's generator, with a deterministic stub fallback) · `/api/campaigns/send` · `/api/public/coupons/validate` · and **`/accounting/saas-metrics` already computes LTV** as ARPC ÷ monthly churn rate, which is half of directive 6.
+
+**`campaigns` is the wrong table for ad spend.** Its columns are `subject`, `body`, `body_html`, `audience_filter`, `recipients_count`, `sent_count`, `failed_count` — it is an email blast. Adding `impressions`/`clicks`/`actual_spend` to it produces a table where half the columns are always null. Paid channels need their own table.
+
+**The measured reality, and why CAC/ROAS is withheld:**
+
+| | |
+|---|---|
+| Total recorded marketing spend, ever | **₹4,000** (one Facebook expense, 9 Aug, in `expenses`) |
+| Won lead value | **₹66,64,199** |
+| Naive ROAS | **≈1,650×** |
+
+That multiple is not impressive, it is meaningless — it measures the absence of spend records, not the ads. A dashboard rendering it invites a real decision ("pour money into Facebook") off one ₹4,000 row. So [channel-economics.ts](production/src/lib/marketing/channel-economics.ts) returns **CAC and ROAS as null with a stated reason** whenever recorded spend covers under 2% of won value, and reports them normally once spend is genuinely tracked (tested both ways).
+
+**What DOES work today — real channel data, no new integrations:** `leads.source` holds 61 leads across 8 sources with genuine outcomes. WhatsApp leads 23/18-won/₹29.3L; referral 7/6/₹6.8L; buy-workspace-v2 7/6/₹5.1L; tele-calling 5/3/₹1.6L; email-inbound 2/0/₹0.
+
+**`manual` and `csv` are not channels.** They are data-entry provenance, and they are **16 of 61 leads**. On raw won value `manual` (₹19.2L) outranks every real channel but WhatsApp — a ranking that included it would imply "manual" as somewhere to invest. They are reported as a separate *unattributed* bucket rather than dropped, because the size of that bucket is the most useful number on the page: the share of pipeline whose origin nobody knows.
+
+**Done:** [channel-economics.ts](production/src/lib/marketing/channel-economics.ts) + [tests](production/src/lib/marketing/channel-economics.test.ts) — **29 tests**, suite 698 → **727, 0 failed**, typecheck + lint clean. Win rate divides by CLOSED deals (dividing by all leads punishes a channel for having a full pipeline) and stays null under 5 closed deals. `notes` is an **array**, not a string — the first test to hit a channel with two problems at once (no spend AND too few closed deals) proved a single string hid one of them, and half an explanation is worse than none.
+
+**Blocked on credentials, not code:** `GEMINI_API_KEY` absent → the AI copywriter runs in stub mode · `RAZORPAY_KEY_ID` + webhook secret absent → coupons cannot link to a checkout that reconciles · WhatsApp has **zero** credentials → instant brochure dispatch cannot deliver. **A/B testing is gated behind all of this**: splitting variants across buckets is meaningless while the send path logs instead of sending, because there is no CTR to measure.
+
+**Follow-up DONE (Pardeep: "1, 2 dono karo, jo app ki behtri ke point of view se sahi ho"):**
+
+- **Ad spend stays in `expenses`, with one new `channel` column — NOT a separate ad-spend table.** This was the judgement call. Marketing spend already lands in `expenses` (the ₹4,000 Facebook row), flows into the P&L, and is reconciled against the bank statement. A separate table would be a *second* place spend lives, and that second place **bypasses bank reconciliation** — producing marketing spend that shows on a dashboard and never appears in the bank, with CAC disagreeing with the accounts while both look authoritative. `impressions`/`clicks` deliberately omitted: without the Google/Meta APIs they would be hand-typed, they add nothing to CAC or ROAS, and empty columns invite a dashboard that reports zero as if it were measured.
+- **`leads` gets the 5 UTM columns; NO touchpoint table yet.** Nothing in the app records a second touch, so `lead_touchpoints` would be created empty and stay empty — built, looks configured, does nothing. First-touch-at-creation is available on a write path that already runs, so that is what was built.
+- [utm.ts](production/src/lib/marketing/utm.ts) + [tests](production/src/lib/marketing/utm.test.ts) — **26 tests**. Two privacy decisions: `landing_page_url` keeps path + utm params only (real landing URLs carry `?email=`, `?phone=`, session tokens — a marketing table is the last place anyone looks for personal data, DPDP), and `referrer_url` keeps origin + path (a referrer query string leaks search terms and, from some apps, a token). Both are tested against an actual `?email=pardeep@anutech.in&phone=…` URL. **Self-referrals are discarded** — otherwise every internal click counts as an arrival and this site becomes its own top channel. `utm_medium=cpc` upgrades `google-organic` → `google-ads`, because only one of the two has a CAC.
+- **The Referer header IS the landing page** on a same-origin form POST, so utm capture works today with **no change to any form**. `request.url` is the API path and is useless for attribution. Only the browser knows the pre-landing referrer (`document.referrer`); a form may send it as `pageReferrer`, and when absent `referrer_url` stays null rather than being filled with our own page.
+- Wired into **all four** public lead-creating routes (`enquiry/general`, `enquiry/workspace`, `trial/workspace`, `checkout/workspace`) — not two of four.
+- [0232_marketing_attribution.sql](production/supabase/migrations/0232_marketing_attribution.sql) — `expenses.channel` + partial index, `leads` × 5 UTM columns + partial index, separate verify block. **Not applied.**
+
+**Two self-inflicted bugs caught here, both worth remembering.** Writing a control-character regex as *literal* control characters put a **NUL byte** in `utm.ts` and turned the file binary; the first repair left `[-]`, which silently stripped **hyphens** — that would have folded `google-ads` into `googleads` and split one channel into two, with spend booked against one and leads against the other. Replaced with a codepoint filter that neither mistake can mangle, and the first test in the file now locks hyphens in. Separately, a typo in a test fixture (`reselleros.in`, one 's' short) exposed that self-host matching is **exact** — correct behaviour, but it means an incomplete `selfHosts` list lets internal navigation through as a channel; now documented and tested.
+
+Suite 727 → **753, 0 failed**. Typecheck + lint clean.
+
+**Still not built:** multi-touch first/last attribution (needs a touchpoint table, and a second touch to put in it) · `/marketing` page · backfilling `channel` on the one existing Facebook expense row.
+
+### 🧠 Employee Mastery OS (Pardeep, 13 Aug 2026) — 🟡 LEVELS + BURNOUT PROTECTION DONE (41 tests). 4 of 6 directives blocked on measured grounds.
+
+**Built, test-verified:**
+- [levels.ts](production/src/lib/mastery/levels.ts) (23 tests) — L1–50 on a closed quadratic curve (a 50-row table is 50 chances to fat-finger a number that decides a pay band), 4 tiers with 1.0/1.1/1.2/1.3× multipliers, and `allocatePool`. **The multiplier is safe here only because payout is pool ÷ share** — total cost stays the pool the owner typed. On a ₹-per-point rate the same multiplier would raise the wage bill by an amount nobody approved. It is however **zero-sum**: a Master's larger share comes out of everyone else's, and the UI must say so. `allocatePool` uses **largest remainder**, so shares sum to EXACTLY the pool — rounding each share independently drifts by a few rupees on ₹50,000, which is exactly small enough to stop a payroll run balancing. Corrupt XP (NaN/Infinity) resolves to **level 1, never 50** — bad data must fail downward, not promote someone into the top pay band.
+- [quiet-hours.ts](production/src/lib/mastery/quiet-hours.ts) (18 tests) — burnout protection with a real target: `resellersos-birthday-greetings` is scheduled `1 21 * * *` Asia/Kolkata = **21:01 IST**. Emails are stubbed today, so the day `RESEND_API_KEY` lands this app starts mailing people at 9pm and nobody decided that. **Suppression is deferral, never deletion** — a swallowed renewal notice is a money bug, because the cadence records it as sent while the customer hears nothing. `transactional` and `security` are exempt (a payment receipt at 3am is what the payer is refreshing for; an OTP is useless tomorrow). Friday-night mail correctly queues to **Monday** 09:00, not Saturday.
+
+**Measured blockers on the rest — none of these are guesses:**
+
+| Directive | Why it cannot work today |
+|---|---|
+| Quest 1 "Create & send quote **via WhatsApp**" | `GUPSHUP_API_KEY`, `WHATSAPP_TOKEN`, `META_APP_SECRET` all absent. Unfinishable. |
+| Quest 2 "Match 3 bank feeds **via Setu AA**" | `SETU_CLIENT_ID` absent → simulation only; live needs FIU registration with an RBI-licensed AA. **But manual reconcile works** — 28 of 39 bank lines are already hand-matched, so re-point the quest there. |
+| Quest 3 "Use Ctrl+K 10 times" | No usage tracking exists anywhere. Needs new instrumentation + a table. Genuinely worth doing — it drives adoption of the palette work from earlier today. |
+| Streak "3 completed tasks/day" 🔥 | **Total tasks completed ever = 3**, all on 2026-08-01. The counter would read 🔥0 for everyone, indefinitely. A mechanic that always shows zero teaches the team the system is fake. |
+| Personal Best (beat last month) | Only **one** month of collection data exists (2026-08). No baseline to beat. |
+| Team Co-Op "₹50L monthly renewal collection" | See the `is_renewal` finding below. |
+
+**`is_renewal` investigation — NOT a bug (and this corrects yesterday's badge work).** `is_renewal: true` is set correctly at [create-renewal-quote.ts:138](production/src/lib/renewals/create-renewal-quote.ts:138) and [create-extension-quote.ts:135](production/src/lib/renewals/create-extension-quote.ts:135), reached from the renewals cron, `/api/renewals/send-now`, and `/api/subscriptions/[id]/generate-renewal-quote`. It is empty on all 52 quotes because **no renewal quote has ever been created**: `renewal_quote_id` is null on 54 of 54 subscriptions and `renewal_state` is `pending` on all of them. The nearest `renewal_date` is **2027-07-23 — 344 days out**, so the T-15 trigger first fires **2027-07-08**. The machinery is correct and will populate itself in ~11 months. Consequence: the co-op renewal target **and the Renewal Guardian badge I added yesterday** are dormant until then, not broken.
+
+**Decided with Pardeep:** no revenue share for Master tier — the 1.3× multiplier stays inside the pool, so cost stays bounded; a revenue share is an unbounded commitment and nobody is near L41 anyway.
+
+**Not built:** `/mastery` page — deliberately not started, because `/performance` and `/scorecard` already exist and a third performance page is the duplication trap that cost real work earlier today. Also open: quest event instrumentation, streak engine (pending a reachable target), personal-best baselines, and wiring `quietHoursDecision` into `lib/email/send.ts` (the single chokepoint).
+
+### 🎮 Gamified tasks + Performance Points (Pardeep, 13 Aug 2026) — 🟡 KUDOS + BADGES + WEEKLY BOARD DONE (test-green, typecheck+lint clean). Migration 0231 written, NOT applied. Sharing/comments UI pending.
+
+> **Two corrections to my own analysis, both found by checking rather than assuming — recorded so the next reader does not repeat them.**
+>
+> **1. `users.employee_id` already exists**, populated for 6 of 8 logins — including `sales@anutech.in`, which I had claimed "could never become a bonus". `usePerformance` has been reading it all along to join attendance. My draft of `0231` added a reverse `employees.user_id`; that would have created two links that can disagree — the exact second-source-of-truth flaw I was criticising the brief for. **Removed from the migration.** The real gap is data: `ranjeet@anutech.in` has an employee record (Ranjeet Raj) but no `employee_id` on his login — one UPDATE in HR, not a migration.
+>
+> **2. `/performance` and `/scorecard` already exist**, and [performance.ts](production/src/lib/queries/performance.ts) already scored outcomes against `PERF_WEIGHTS`, already floored the score at zero, already showed a per-person breakdown, and already converted score to cash by **splitting a bonus pool proportionally**. The outcome-based architecture I "recommended" was already the architecture. I had written a parallel engine (`points.ts` + `incentive.ts`, 52 tests) — **deleted**, because two scoring systems deciding pay is the failure, not the feature.
+>
+> **On the ₹ rate.** Pardeep set 1,000 pts = ₹1,000. Measured against real data (30 days: 52 payments, ₹69,55,963 collected, 54 qualified leads) the brief's scale yields **4,376 points ⇒ ₹4,376 for the whole team**, ~₹600 each — too small to change behaviour. It is also insensitive: 3× the revenue only reaches ₹5,767, because the flat per-payment component dominates. The existing **pool ÷ share** model was kept instead: the payout is bounded by what the business decided to spend.
+>
+> **⚠ Still-open gaming vector, flagged not fixed** (weights are Pardeep's call, documented in `PERF_WEIGHTS`): `paymentRecorded: 5` pays per payment ROW, and staff choose how to record a collection. One payment of ₹1,00,000 scores 25 pts; the same ₹1,00,000 as 10 × ₹10,000 scores 70 — **2.8× for identical rupees**, and score splits cash. `paymentRecorded: 0` closes it at no other cost, since `revenuePerRupees` already rewards collecting.
+
+**Already existed, so the brief shrank:** `0121_salary_incentive.sql` is applied and already delivers directive 5's DB half — `salary_payments.incentive` plus `pay_salary(..., p_incentive)` folding it into earned/net and booking the Salaries expense. The work is feeding a number into that parameter, not building it. And `pay_salary` is run by a human, so **an approval gate already exists** — points can never auto-pay.
+
+**The flaw that had to be fixed first.** The brief awards points for completing tasks, and points become cash. But `tasks.kind` is only `call · email · meeting · followup · custom` — none of the money-bearing types (Lead Qualified, Quote Sent, Payment Recovered, Project) are tasks; they are events the system already records. Self-created + self-completed + converts to cash = **self-issued salary**: create "Payment Recovered — ₹5,00,000", mark it done, earn real money with nothing collected. **Decision: the money tiers derive from the ledger** (`payments.recorded_by` — 52/52 attributed · `quotes.owner_id` · `leads.owner_id` / `lead_activities.created_by`). A payment cannot exist without money landing. Tasks still earn, but only the 10-point tier.
+
+**The blocker for directive 5.** `employees` had **no** `user_id`; tasks belong to `users`, payroll pays `employees`, and the only join was a nullable email. Measured: 6 of 10 employees matched a login. **4 staff (KESHAV MALIK, PRASHANT, Darshan, Deepak Sharma) had no login → could never earn a point.** `sales@anutech.in` (role `sales_senior` — exactly the target user) had **no employee record → points could never become a bonus.** `0231` adds the column; the rows still need populating.
+
+**Four design corrections, agreed with Pardeep:**
+- **Lateness removes the reward, never creates a debt** (floor 0). The brief's −10%/day with no floor is −300% at 30 days, which eats other earnings and pushes a month's incentive negative — a Payment of Wages Act §7 problem, not just a UX one.
+- **"Payment Recovered" bounty replaced.** Paying for *recovery* pays more the longer an invoice rots. Applying lateness instead means a 7-month-old collection scores zero, so nobody chases old debt. Rule adopted: **early collection earns +20%, late collection earns full base.** (My first implementation applied lateness to payments, contradicting its own comment — the test `is never reduced for lateness` caught it.)
+- **Kudos are budgeted per giver** (10/month). Uncapped, two colleagues awarding each other 10/day print 300 points of cash a month each. Self-kudos rejected in code *and* by a DB constraint; RLS allows insert only with `awarded_by = auth.uid()`.
+- **Ultimate Teammate needs kudos from 3+ different people** — a bare count is earnable by one friend clicking five times.
+
+**Deliberately NOT built as specified:** `tasks.assignee_id` (duplicates `owner_id`; added `delegated_by` instead — the fact actually missing) · `collaborators uuid[]` (an array can't be FK'd or carry per-collaborator kudos → `task_collaborators`) · `tasks.performance_points/bonus/penalty` (a second source of truth that drifts from the engine and can be edited to mint points; derived instead, and **frozen only at payout** via new `salary_payments.performance_points`) · `kudos_count` (a counter that drifts from the rows it counts).
+
+**Delivery reality:** `GUPSHUP_API_KEY`, `WHATSAPP_TOKEN`, `META_APP_SECRET` are all absent → "instant WhatsApp alert on task share" would be the 5th feature in this repo that logs and never sends. In-app bell works. Supabase Realtime is used **nowhere** in the codebase; TanStack Query polling gives ~95% of a live thread at a fraction of the risk.
+
+**Done — added INTO the existing system, not beside it:**
+- [gamification.ts](production/src/lib/performance/gamification.ts) — peer kudos with a **per-giver budget** (10/period; uncapped, two colleagues awarding each other 10/day print 300 pts of cash a month each), self-kudos rejected, order-independent tally, and 4 badges. `Ultimate Teammate` requires kudos from **3+ different people** — a bare count is earnable by one friend clicking five times.
+- [gamification.test.ts](production/src/lib/performance/gamification.test.ts) — **21 tests**. Suite **657 passed, 0 failed**. Typecheck + lint clean.
+- [performance.ts](production/src/lib/queries/performance.ts) — extended: `scope: "month" | "week"` (weekly board is always *this week*; a month holds 4–5 weeks so the month picker cannot narrow it), kudos folded into score + breakdown, `renewalPayments` joined via `quotes.is_renewal` **by flag not by date** (a payment this week can settle a quote raised months ago), badges per row. `PerfRow` additions are optional so `/scorecard` compiles untouched. `task_kudos` read is error-checked so the page still renders **before** 0231 is applied.
+- [performance/page.tsx](production/src/app/(app)/performance/page.tsx) — week/month TabBar, badges on each card, kudos in the summary line, weights footnote updated. Month picker hidden in weekly view rather than left as a control that does nothing.
+- [database.types.ts](production/src/lib/supabase/database.types.ts) — `task_collaborators`, `task_comments`, `task_kudos` types.
+- [0231_performance_points.sql](production/supabase/migrations/0231_performance_points.sql) — `tasks.delegated_by/at`, `task_collaborators`, `task_comments`, `task_kudos` (one-per-giver-per-task + no-self-kudos as DB constraints; RLS insert requires `awarded_by = auth.uid()`, because kudos are cash), `salary_payments.performance_points`, 10 RLS policies, separate verify block.
+
+**Not done yet:** apply `0231` · set `employee_id` on `ranjeet@anutech.in` · task share/delegate modal · comment thread with @mentions · a way to actually award kudos in the UI (the tally and schema exist; the button does not) · wire the pool split into `pay_salary`'s `p_incentive`.
+
+**Two tiers from the brief cannot be scored at all, for measured reasons:** `quotes.owner_id` is empty on **0 of 52** quotes, so "Quote sent +30" has no one to credit (the existing `quotesSent` metric is therefore always 0 for everyone); and `project_milestones` has **no actor column**, so a completed milestone records nobody. Both need a data/schema change before they can pay.
+
+**Delivery reality:** `GUPSHUP_API_KEY`, `WHATSAPP_TOKEN`, `META_APP_SECRET` all absent → "instant WhatsApp alert on task share" cannot deliver; it would be the 5th feature here that logs and never sends. Supabase Realtime is used **nowhere** in the codebase, so a live thread means either adopting it or polling with TanStack Query (~95% of the value, a fraction of the risk).
+
+### 🗺️ 14-day 4-phase plan (Pardeep, 13 Aug 2026) — AUDITED AGAINST CODE BEFORE COSTING. 5 of 11 already built · 1 no-op · 3 credential-blocked
+
+Every line below was verified against the repo, `.env.local` key presence and the live health endpoint — not estimated from the brief. §25.1: docs are hypotheses, code is truth.
+
+| Phase item | Verified status |
+|---|---|
+| Envelope encryption AES-256-GCM | ✅ **built** — `src/lib/crypto/vault.ts` + `tenant-secrets.ts` + 2 test files. Only `SECRETS_MASTER_KEY` is missing, so secrets sit in clear. **One env var, not a 3-day build.** |
+| RLS / SECURITY DEFINER audit | ✅ **done** — all 110 SECURITY DEFINER functions audited in prod; one real cross-tenant leak fixed and prod-verified (`0226`). The brief's `auth.jwt() ->> 'tenant_id'` premise would break **150 live policies**; isolation runs on `public.current_tenant_id()`. |
+| GitHub Actions CI | 🟡 **exists** — typecheck + test + lint + no-auth Playwright smoke. Real gaps: no feature-branch trigger, lint/e2e are `continue-on-error`, and **70 auth-gated e2e tests self-skip** for want of `NEXT_PUBLIC_SUPABASE_ANON_KEY` + seeded tenants. |
+| Google / Microsoft CSP adapters | ❌ not built, **blocked** — needs an approved Google Cloud Partner reseller agreement and Microsoft Partner Center MPN + admin consent. Not obtainable by a developer. |
+| ClearTax / NIC e-Invoicing (IRN + QR) | ❌ not built. `CLEARTAX_API_KEY` absent. **Applicability unconfirmed** — mandatory only above ₹5 cr aggregate turnover. Awaiting Pardeep's figure. |
+| Setu AA live reconciliation | ✅ **built** — `src/lib/aa/setu.ts`, `/api/aa/setu/{consent/init,callback,fetch/[connectionId]}`, plus a simulate-approval page. `SETU_CLIENT_ID` absent → simulation mode. Going live needs **FIU registration with an RBI-licensed AA** — a regulated onboarding, not code. |
+| Cloud Tasks / QStash migration | ⚠️ **premature** — Cloud Scheduler already runs 6 jobs (verified 200). Cloud Tasks solves per-item fan-out with retries, a different problem. At 5 tenants / 54 subscriptions it adds failure surface for no gain. |
+| Sentry standardisation | ✅ **done** — CLAUDE.md §22; `lib/sentry.ts` imported from the `supabase/server.ts` chokepoint, plus `global-error.tsx` and `(app)/error.tsx`. |
+| PgBouncer connection pooling | ❌ **no-op** — there is no direct Postgres client in this codebase; everything is PostgREST over HTTPS. PgBouncer pools direct PG connections. It would do nothing. |
+| Onboarding wizard + sample seeder | 🟢 **genuinely missing and worth building.** `/setup` exists but there is no 5-step wizard and no in-app seeder. Directly useful: the seeder is what the test-data reset needs. |
+| Portal self-serve + Razorpay checkout | ⚠️ portal exists (`pay-invoice-button.tsx`), but `RAZORPAY_KEY_ID` and the webhook secret are absent — the **collect-without-reconcile** critical state. Checkout on top of that means money moves and the app never learns. |
+| Sub-50ms Ctrl+K palette | ✅ **done this session** — `src/lib/search/keywords.ts` + palette keywords. Measured: a server round trip is 70–118ms, so sub-50ms is only reachable client-side, which is what was built. |
+
+**The plan's biggest hole: `RESEND_API_KEY` is not in it.** The live health endpoint returns `email-not-configured` at **critical** severity right now — *"a renewal can lapse with the app showing that the customer was reminded six times."* Fourteen days of security, CSP, queue and portal work were scheduled around the one env var that makes a renewals business function.
+
+**Revised order** — Day 0 (30 min, zero code): `RESEND_API_KEY` + `SECRETS_MASTER_KEY`, both of which switch on code that is already written and already tested; best value-to-effort in the whole plan. Day 1: CI feature-branch trigger + seed test tenants → unlocks the 70 skipped e2e tests (`scripts/setup-e2e-tenants.mjs` already exists). Day 2–4: onboarding wizard + sample seeder. Day 5–6: Razorpay **reconciliation first**, checkout second. Put the CSP / GSP / FIU **paperwork** on the critical path today and write those adapters when credentials arrive — a fourth unverifiable integration would repeat the pattern. Drop PgBouncer and Cloud Tasks.
+
+### 📋 Subscriptions page — the information that was on screen vs the information that exists — ✅ DONE (localhost, test-green + browser-verified, awaiting deploy)
+
+Pardeep: *"subscription se related jo bhi jaruri information hai jo yaha dikhni chahiye wo sab show karo."*
+
+**Measured first** (prod, tenant `fbb976f1-9090-…`, 54 rows, 13 Aug 2026) instead of guessing which columns to add:
+
+| Field | Reality across all 54 rows |
+|---|---|
+| `status` | all `active` |
+| `auto_renew` | all `true` |
+| `renewal_state` | all `pending` |
+| `reminder_count` / `outstanding_amount` / `used` / `is_urgent` | all `0` / `false` |
+| term (`start_date`→`renewal_date`) | all **12 months** |
+| renewal horizon | all **181–365 days out** |
+| `domain` | **9 rows empty** |
+
+Two real defects fell out of that, both on the mobile/tablet card (`xl:hidden`):
+
+1. **The day-count never rendered.** The `Xd` badge was gated at `dl <= 30` and nothing is inside 30 days — the page's own "Expiring 30d" tab reads **0**. So the card showed a bare `23 Jul 2027` and left the reader doing date arithmetic on a phone. The whole T-30/15/12/9/6/3/0 cadence turns on that number.
+2. **`₹1,350 /mo` implied monthly billing** on a subscription that is annual. The money that actually changes hands at renewal is **₹16,200**, and it appeared nowhere on mobile.
+
+Fixed, plus five fields that were unreachable from this page on **mobile *and* desktop** (`auto_renew`, `renewal_state`, `reminder_count`, `suspended_at`, `written_off_at`).
+
+**Deliberately conditional, not always-on.** Those five are identical on all 54 rows today, so rendering them unconditionally = 54 identical badges = noise. They render only on deviation — free today, loudest thing on the row the day one goes wrong. `auto_renew: false` leads, because nothing else catches a subscription the cron will silently lapse to `expired`.
+
+**Two things deliberately NOT shown** (same rule — don't assert what isn't measured):
+- **Seat utilisation** is gated on `used > 0`. `used` is 0 on every row because seat counts aren't synced from the vendor yet, so "0 of 5 in use" would claim idle licences that are probably fine.
+- **Margin** is not on the card at all. `estimateMargin()` is `mrr * 0.83` — a hardcoded heuristic that returns **17% for every subscription that has ever existed**. I put it on the card, saw 54 identical "17% margin" badges in the browser, and removed it. It is a fabricated constant dressed as data.
+
+Files: [subscriptions/page.tsx](production/src/app/\(app\)/subscriptions/page.tsx) · new [lib/subscriptions/exceptions.ts](production/src/lib/subscriptions/exceptions.ts) · new [lib/subscriptions/renewal-display.ts](production/src/lib/subscriptions/renewal-display.ts)
+
+**Why the logic sits in `lib/` and not in the component:** none of the exception branches fire against today's production data, so a bug in any of them would look exactly like silence on screen — this repo's signature failure mode. And `term().months` multiplies MRR into a rupee figure the operator reads, so misreading a quarterly term as annual would overstate the renewal by 4×. Both are now test-backed: **35 new unit tests, suite 601 → 636, 0 failed.** Typecheck + lint clean. Card and table both browser-verified in a tab opened after the last edit (zero console errors).
+
+**Still open, needs Pardeep's call (money display, so not changed silently):** the header KPI reads **`MARGIN (ARR) ₹7.1L (17%)`** and **`SEATS IN USE 0 / 731`**. Both come from the same untracked sources — the 17% is the hardcoded heuristic, and 0/731 asserts that 731 licences sit idle. Options: label them as estimates, hide until real cost/seat data syncs, or leave as-is.
+
 ### ✅ SECURITY: cross-tenant read in `bank_account_current_balance` — FIXED & VERIFIED IN PROD (0226)
 
 Found by auditing all **110 SECURITY DEFINER functions** in prod (read-only MCP).
