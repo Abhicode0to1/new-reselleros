@@ -127,7 +127,9 @@
   }
 }
 
-/* Print styles for invoices / quotes */
+/* Print styles for invoices / quotes / reports.
+   These are what make "Save as PDF" in the browser's print dialog produce a real
+   document, so no PDF library is needed — see src/lib/reports/print.ts. */
 @media print {
   @page {
     margin: 1cm;
@@ -137,6 +139,38 @@
   }
   .no-print {
     display: none !important;
+  }
+
+  /* The app shell is never part of a printed report. Without this the sidebar
+     and top bar consume the first page of every export the accountant prints. */
+  aside,
+  header.sticky {
+    display: none !important;
+  }
+
+  /* Fixed-position elements are overlays by definition — FAB, mobile bottom nav,
+     the floating bug reporter. None of them belong in a P&L. */
+  .fixed {
+    display: none !important;
+  }
+
+  /* On screen the reports sit in a 1240px column; on paper that wastes the
+     margins the @page rule already set. */
+  main {
+    padding: 0 !important;
+  }
+
+  /* Repeat column headers on every page. A ten-page A/R ageing whose columns are
+     only labelled on page one is unreadable by the time you reach 90+ days. */
+  thead {
+    display: table-header-group;
+  }
+
+  /* Never split a row, or a card holding a total, across a page break —
+     an amount orphaned from its label is a reporting error, not a layout quirk. */
+  tr,
+  .print-keep {
+    break-inside: avoid;
   }
 }
 

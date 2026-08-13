@@ -27,9 +27,13 @@ import { useQuery } from "@tanstack/react-query";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
+import { reconstructWaterfall, type MrrWaterfall } from "@/lib/accounting/mrr-waterfall";
+import { downloadCSV } from "@/lib/csv";
+import { printReport, reportFilename } from "@/lib/reports/print";
 import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
@@ -77,6 +81,9 @@ interface MetricsData {
   // Derived
   monthlyChurnRate: number;  // % (churn customers / active customers, monthly)
   ltvEstimate:      number;  // ARPC / monthlyChurnRate (capped if churn=0)
+  /** Starting → New → Expansion → Contraction → Churn → Ending, with the parts
+   *  this schema cannot know left explicitly null. See lib/accounting/mrr-waterfall. */
+  waterfall:        MrrWaterfall;
 
   // Breakdowns
   mrrByVendor:      Array<{ vendor: string; mrr: number; count: number; pct: number }>;
@@ -111,6 +118,106 @@ function monthLabel(d: Date): string {
   return d.toLocaleString("en-IN", { month: "short", year: "numeric", timeZone: "UTC" });
 }
 
+/**
+ * One column of the waterfall.
+ *
+ * `amount === null` is the whole reason this component exists: it renders `—`,
+ * never ₹0. Zero would tell the owner "nobody upgraded this month"; the truth is
+ * "this database does not record upgrades". Those lead to opposite decisions.
+ */
+function Step({
+  label, amount, sign, tone, note,
+}: {
+  label:  string;
+  amount: number | null;
+  sign?:  "+" | "−";
+  tone?:  "emerald" | "rose" | "neutral";
+  note?:  string;
+}) {
+  const toneClass =
+    amount === null ? "text-ink-3"
+      : tone === "emerald" ? "text-emerald-700"
+      : tone === "rose"    ? "text-rose-700"
+      :                      "text-ink";
+
+  return (
+    <div className="print-keep">
+      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+        {label}
+      </div>
+      <div className={`font-serif text-xl mt-1 ${toneClass}`}>
+        {amount === null ? "—" : `${sign ?? ""}${rupee(Math.abs(amount))}`}
+      </div>
+      {note && (
+        <div className="text-[10px] text-ink-3 mt-0.5 leading-snug">{note}</div>
+      )}
+    </div>
+  );
+}
+
+function WaterfallCard({ w }: { w: MrrWaterfall }) {
+  const reconciles = w.unexplained === 0;
+
+  return (
+    <Card className="p-5 md:p-6 mb-6 print-keep">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+            MRR waterfall — last 30 days
+          </div>
+          <div className="text-xs text-ink-3 mt-0.5">
+            Starting + New + Expansion − Contraction − Churn = Ending
+          </div>
+        </div>
+        <Badge kind={w.basis === "ledger" ? "success" : "warning"}>
+          {w.basis === "ledger" ? "From ledger" : "Reconstructed"}
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <Step label="Starting MRR"  amount={w.startingMrr} tone="neutral" />
+        <Step label="New"           amount={w.newMrr}      sign="+" tone="emerald" />
+        <Step label="Expansion"     amount={w.expansion}   sign="+" tone="emerald" note={w.expansion === null ? "Not tracked" : undefined} />
+        <Step label="Contraction"   amount={w.contraction} sign="−" tone="rose"    note={w.contraction === null ? "Not tracked" : undefined} />
+        <Step label="Churn"         amount={w.churnedMrr}  sign="−" tone="rose" />
+        <Step label="Ending MRR"    amount={w.endingMrr}   tone="neutral" />
+      </div>
+
+      {/* The residual. Shown BECAUSE it is uncomfortable — its size is the
+          honest measure of how much this report cannot see. */}
+      {!reconciles && (
+        <div className="mt-4 pt-4 border-t border-hairline flex items-baseline gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+            Unexplained movement
+          </span>
+          <span className="font-mono text-sm text-amber-ink">
+            {w.unexplained > 0 ? "+" : "−"}{rupee(Math.abs(w.unexplained))}
+          </span>
+        </div>
+      )}
+
+      {w.notes.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {w.notes.map((n, i) => (
+            <li key={i} className="flex gap-2 text-[11px] text-ink-3 leading-relaxed">
+              <Icon name="info" className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>{n}</span>
+            </li>
+          ))}
+          <li className="flex gap-2 text-[11px] text-ink-3 leading-relaxed">
+            <Icon name="info" className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>
+              Churn timing uses <span className="font-mono">updated_at</span> as a proxy —
+              subscriptions have no cancellation date, and that field moves on any edit,
+              so churn here can be overstated.
+            </span>
+          </li>
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 function useSaasMetrics() {
   return useQuery({
     queryKey: ["accounting", "saas-metrics"],
@@ -139,6 +246,30 @@ function useSaasMetrics() {
       const churnedSubs30d = all.filter((s) =>
         (s.status === "cancelled" || s.status === "expired") &&
         s.updated_at >= thirtyDaysAgoISO,
+      );
+
+      // ── MRR waterfall ────────────────────────────────────────────────────
+      // Computed by a tested library rather than inline, because this is the
+      // figure an owner quotes to a lender or a buyer.
+      //
+      // `endDate` is `updated_at`, and only for rows that are already dead. That
+      // is a PROXY, not a cancellation date: `subscriptions` has no such column
+      // (only `suspended_at`, migration 0008), and `updated_at` moves on ANY
+      // edit — so a subscription cancelled last year whose row was touched
+      // yesterday looks like this month's churn. The caveat is surfaced in the
+      // UI instead of being buried here.
+      const waterfall = reconstructWaterfall(
+        all.map((s) => ({
+          id: s.id,
+          mrr: s.mrr ?? 0,
+          startDate: s.start_date ?? null,
+          endDate: (s.status === "cancelled" || s.status === "expired")
+            ? (s.updated_at ?? null)
+            : null,
+          status: s.status,
+        })),
+        thirtyDaysAgoISO,
+        now.toISOString(),
       );
 
       const newMRR30d   = newSubs30d.reduce((s, x) => s + (x.mrr ?? 0), 0);
@@ -212,6 +343,7 @@ function useSaasMetrics() {
         netMRRChange30d: newMRR30d - churnMRR30d,
         monthlyChurnRate,
         ltvEstimate,
+        waterfall,
         mrrByVendor,
         mrrByTier,
         cohorts,
@@ -226,6 +358,44 @@ function useSaasMetrics() {
 
 export default function SaasMetricsPage() {
   const { data, isLoading } = useSaasMetrics();
+
+  /**
+   * CSV for the CA / board pack.
+   *
+   * Untracked components are written as the literal string "not tracked", not as
+   * an empty cell and never as 0 — a blank in a spreadsheet gets SUMmed as zero
+   * the moment somebody drags a formula down the column, which silently turns
+   * "we don't know" into "it was nothing".
+   */
+  const exportCSV = React.useCallback(() => {
+    if (!data) return;
+    const w = data.waterfall;
+    const na = (n: number | null) => (n === null ? "not tracked" : n);
+
+    downloadCSV(
+      `${reportFilename("saas-metrics")}.csv`,
+      ["Metric", "Value"],
+      [
+        ["MRR", data.mrr],
+        ["ARR", data.arr],
+        ["Active customers", data.activeCustomers],
+        ["ARPC", data.arpc],
+        ["Monthly churn rate %", data.monthlyChurnRate.toFixed(2)],
+        ["Estimated LTV", data.ltvEstimate],
+        ["", ""],
+        ["— MRR waterfall (last 30 days) —", ""],
+        ["Basis", w.basis],
+        ["Starting MRR", w.startingMrr],
+        ["New MRR", w.newMrr],
+        ["Expansion MRR", na(w.expansion)],
+        ["Contraction MRR", na(w.contraction)],
+        ["Churned MRR", w.churnedMrr],
+        ["Ending MRR", w.endingMrr],
+        ["Unexplained movement", w.unexplained],
+        ...w.notes.map((n, i): [string, string] => [`Note ${i + 1}`, n]),
+      ],
+    );
+  }, [data]);
 
   if (isLoading) {
     return (
@@ -246,14 +416,30 @@ export default function SaasMetricsPage() {
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1240px] mx-auto">
       {/* Header */}
-      <div className="mb-6">
-        <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Accounting</p>
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">SaaS Metrics</h1>
-        <p className="text-sm text-ink-3 mt-1 max-w-2xl">
-          Your recurring revenue business at a glance.
-          MRR (Monthly Recurring Revenue), churn, lifetime value — the metrics
-          investors look at first.
-        </p>
+      <div className="mb-6 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Accounting</p>
+          <h1 className="font-serif text-3xl md:text-4xl tracking-tight">SaaS Metrics</h1>
+          <p className="text-sm text-ink-3 mt-1 max-w-2xl">
+            Your recurring revenue business at a glance.
+            MRR (Monthly Recurring Revenue), churn, lifetime value — the metrics
+            investors look at first.
+          </p>
+        </div>
+        {/* no-print: the buttons must not appear in the PDF they produce. */}
+        <div className="flex items-center gap-2 no-print shrink-0">
+          <Button variant="outline" icon="download" onClick={exportCSV} disabled={!data}>
+            CSV
+          </Button>
+          <Button
+            variant="outline"
+            icon="printer"
+            onClick={() => printReport(reportFilename("saas-metrics"))}
+            disabled={!data}
+          >
+            PDF
+          </Button>
+        </div>
       </div>
 
       {noData ? (
@@ -319,6 +505,8 @@ export default function SaasMetricsPage() {
               </div>
             </div>
           </Card>
+
+          <WaterfallCard w={data.waterfall} />
 
           {/* MRR breakdown */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
