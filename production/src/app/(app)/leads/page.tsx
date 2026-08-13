@@ -596,10 +596,16 @@ function LeadsPageInner() {
         </div>
       )}
 
-      {/* Integrated Search Bar + Smart Views Pills + Filter Buttons */}
+      {/* Search + Views dropdown + Filter buttons.
+          The Views control used to be a chip strip in a flex-1 overflow-x-auto
+          box here. Eight chips in the space left over between the search box and
+          the buttons meant one visible chip and two scroll arrows. It is a
+          dropdown now, so the row no longer needs a scrolling middle section —
+          and the width it was hogging goes to the search box, which was the
+          other cramped control on this row. */}
       {!isLoading && leads && (
-        <div className="shrink-0 mb-3 flex items-center justify-between gap-3 flex-wrap">
-          <div className="w-full sm:w-56 shrink-0">
+        <div className="shrink-0 mb-3 flex items-center gap-2 flex-wrap">
+          <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[180px] sm:max-w-sm">
             <Input
               prefix={<Icon name="search" size={14} />}
               placeholder="Search leads & deals…"
@@ -609,17 +615,15 @@ function LeadsPageInner() {
             />
           </div>
 
-          <div className="flex-1 min-w-0 overflow-x-auto py-0.5">
-            <LeadsSmartViews
-              leads={leadsForTab}
-              currentUserId={currentUser?.userId}
-              duplicateCount={duplicateCountForTab}
-              junkCount={junkCount}
-              junkSuspectCount={junkSuspectCount}
-              active={smartView}
-              onChange={setSmartView}
-            />
-          </div>
+          <LeadsSmartViews
+            leads={leadsForTab}
+            currentUserId={currentUser?.userId}
+            duplicateCount={duplicateCountForTab}
+            junkCount={junkCount}
+            junkSuspectCount={junkSuspectCount}
+            active={smartView}
+            onChange={setSmartView}
+          />
 
           <div className="flex items-center gap-2 shrink-0">
             {/* View Switcher: Kanban vs List */}
