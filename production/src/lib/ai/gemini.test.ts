@@ -63,11 +63,10 @@ describe("geminiJson — an AI failure must never break the caller", () => {
   });
 
   it("passes an abort signal, so a stalled Gemini cannot hang the request", async () => {
-    const spy = vi.fn(async () => ok('{"message":"hi"}'));
+    const spy = vi.fn(async (_url: string, _init?: RequestInit) => ok('{"message":"hi"}'));
     vi.stubGlobal("fetch", spy);
     await geminiJson(ARGS);
-    const init = spy.mock.calls[0][1] as RequestInit;
-    expect(init.signal).toBeDefined();
+    expect(spy.mock.calls[0][1]?.signal).toBeDefined();
   });
 });
 

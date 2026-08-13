@@ -20,9 +20,18 @@ const ENTITY_LABEL: Record<string, string> = {
 };
 const ACTION_VERB: Record<string, string> = {
   insert: "banaya", update: "badla", delete: "delete kiya", login: "login kiya",
+  // AI decisions (lib/ai/audit.ts). Phrased so it's obvious these are the app's
+  // own safety checks, not something a person did — the raw slug would otherwise
+  // render as "ai_blocked" in the middle of a Hinglish sentence.
+  ai_blocked:        "— AI ka draft roka gaya",
+  ai_fallback:       "— AI nahi chali, standard draft bheja",
+  ai_low_confidence: "— AI ka bharosa kam tha, review chahiye",
 };
 const ACTION_TONE: Record<string, string> = {
   insert: "text-emerald", update: "text-amber-ink", delete: "text-rose", login: "text-indigo",
+  // Rose for a block: it means the AI tried to state a wrong amount, which is
+  // worth a second look even though nothing wrong actually went out.
+  ai_blocked: "text-rose", ai_fallback: "text-ink-3", ai_low_confidence: "text-amber-ink",
 };
 
 function dayKey(iso: string): string {

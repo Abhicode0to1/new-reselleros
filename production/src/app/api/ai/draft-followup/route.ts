@@ -24,6 +24,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 import { verifyDraftMoney } from "@/lib/ai/money-guard";
+import { logAiDecision, formatGuardBlock } from "@/lib/ai/audit";
 import { rupee } from "@/lib/utils";
 
 const bodySchema = z
@@ -56,10 +57,21 @@ interface Draft {
  * numbers and cannot be wrong about them. Silently correcting the figure would be
  * worse: the sentence around it was written to suit the wrong number.
  */
+/**
+ * Why a draft did not come back. "AI was unavailable" and "AI said something
+ * about money it was not allowed to say" are different events with different
+ * meanings for the operator, and collapsing both into `null` made the second
+ * one — the one worth investigating — indistinguishable from a quiet outage.
+ */
+type DraftOutcome =
+  | { ok: true; draft: Draft }
+  | { ok: false; reason: "unavailable" }
+  | { ok: false; reason: "blocked"; violations: string[] };
+
 async function draftWithGemini(
   apiKey: string, model: string, channel: "whatsapp" | "email",
   intent: string, ctx: string, allowedAmounts: number[],
-): Promise<Draft | null> {
+): Promise<DraftOutcome> {
   const system =
     "You are the assistant for an Indian cloud-software reseller (Google Workspace, " +
     "Microsoft 365, Zoho). " +
@@ -77,7 +89,7 @@ async function draftWithGemini(
   const p = await geminiJson<Partial<Draft>>({
     apiKey, model, system, user, temperature: 0.7, label: "ai/draft-followup",
   });
-  if (!p?.message) return null;
+  if (!p?.message) return { ok: false, reason: "unavailable" };
 
   const draft: Draft = { subject: (p.subject ?? "").toString(), message: p.message.toString() };
 
@@ -90,9 +102,42 @@ async function draftWithGemini(
       `[ai/draft-followup] REJECTED draft — unauthorised amount(s) ${verdict.violations.join(", ")}; ` +
       `allowed ${allowedAmounts.join(", ") || "(none)"}. Falling back to the deterministic draft.`,
     );
-    return null;
+    return { ok: false, reason: "blocked", violations: verdict.violations };
   }
-  return draft;
+  return { ok: true, draft };
+}
+
+/**
+ * Resolve an outcome into the draft to return, recording anything the operator
+ * would want to know about. Audit failures never affect the returned draft.
+ */
+async function settle(
+  client: Awaited<ReturnType<typeof createClient>>,
+  outcome: DraftOutcome | null,
+  fallback: Draft,
+  audit: { entity: string; entityId: string; allowed: number[]; aiConfigured: boolean },
+): Promise<Draft & { mode: "gemini" | "stub" }> {
+  if (outcome?.ok) return { ...outcome.draft, mode: "gemini" };
+
+  if (outcome && !outcome.ok && outcome.reason === "blocked") {
+    await logAiDecision(client, {
+      action: "ai_blocked",
+      entity: audit.entity,
+      entityId: audit.entityId,
+      label: formatGuardBlock(outcome.violations, audit.allowed),
+    });
+  } else if (audit.aiConfigured) {
+    // Only worth a row when AI was SUPPOSED to run. A tenant with no Gemini key
+    // gets the stub by design, and logging that on every draft would be noise.
+    await logAiDecision(client, {
+      action: "ai_fallback",
+      entity: audit.entity,
+      entityId: audit.entityId,
+      label: "AI unavailable (error, timeout or breaker) — sent the standard draft",
+    });
+  }
+
+  return { ...fallback, mode: "stub" };
 }
 
 /** Deterministic fallback so the feature works before GEMINI_API_KEY is set. */
@@ -196,15 +241,15 @@ export async function POST(request: NextRequest) {
     const ai = gemini.apiKey
       ? await draftWithGemini(gemini.apiKey, gemini.model, parsed.channel, intent, ctx, allowed)
       : null;
-    const draft = ai ?? stubDraft({
+    const settled = await settle(supabase, ai, stubDraft({
       channel: parsed.channel,
       firstName: (lead.contact_name || lead.company).split(/\s+/)[0],
       company: lead.company,
       planLabel: lead.plan ? lead.plan.replace(/^google-workspace-/, "Google Workspace ") : "the plan we discussed",
       purpose: "followup",
       outstanding: 0,
-    });
-    return NextResponse.json({ ...draft, mode: ai ? "gemini" : "stub" });
+    }), { entity: "leads", entityId: lead.id, allowed, aiConfigured: Boolean(gemini.apiKey) });
+    return NextResponse.json(settled);
   }
 
   // ── Customer mode ─────────────────────────────────────────────────────────
@@ -256,7 +301,7 @@ export async function POST(request: NextRequest) {
   const ai = gemini.apiKey
     ? await draftWithGemini(gemini.apiKey, gemini.model, parsed.channel, intent, ctx, allowed)
     : null;
-  const draft = ai ?? stubDraft({
+  const settled = await settle(supabase, ai, stubDraft({
     channel: parsed.channel,
     firstName: (customer.contact_name || customer.name).split(/\s+/)[0],
     company: customer.name,
@@ -264,6 +309,6 @@ export async function POST(request: NextRequest) {
     purpose: parsed.purpose,
     outstanding,
     renewalDate,
-  });
-  return NextResponse.json({ ...draft, mode: ai ? "gemini" : "stub" });
+  }), { entity: "customers", entityId: customer.id, allowed, aiConfigured: Boolean(gemini.apiKey) });
+  return NextResponse.json(settled);
 }
