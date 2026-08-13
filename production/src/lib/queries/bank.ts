@@ -17,6 +17,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { toastError } from "@/lib/errors/toast-error";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -167,7 +168,7 @@ export function useCreateBankAccount() {
       toast.success("Bank account added");
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Could not add bank account");
+      toastError(err, { fallback: "Could not add bank account" });
     },
   });
 }
@@ -192,7 +193,7 @@ export function useUpdateBankAccount() {
       toast.success("Account updated");
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Could not update account");
+      toastError(err, { fallback: "Could not update account" });
     },
   });
 }
@@ -243,7 +244,7 @@ export function useDeleteBankAccount() {
       toast.success("Bank account deleted");
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Could not delete account");
+      toastError(err, { fallback: "Could not delete account" });
     },
   });
 }
@@ -274,7 +275,7 @@ export function useRecordTransfer() {
       qc.invalidateQueries({ queryKey: ["bank_transactions"] });
       toast.success("Transfer recorded");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Transfer failed"),
+    onError: (err) => toastError(err, { fallback: "Transfer failed" }),
   });
 }
 
@@ -466,15 +467,9 @@ export function useImportBankTransactions() {
       if (inserted === 0 && duplicates > 0) toast.success(`Sab ${duplicates} lines pehle se hain — kuch naya nahi mila`);
       else toast.success(`${inserted} transaction${inserted === 1 ? "" : "s"} imported${dupMsg}`);
     },
-    onError: (err) => {
-      // Supabase/PostgREST errors aren't Error instances — dig out their message
-      // so the real reason shows instead of a blank "Import failed".
-      const msg =
-        err instanceof Error ? err.message
-        : (err && typeof err === "object" && "message" in err) ? String((err as { message: unknown }).message)
-        : "Import failed";
-      toast.error(msg || "Import failed");
-    },
+    // toastError() already digs the message out of non-Error PostgREST objects,
+    // so the hand-rolled unwrapping that used to live here is gone.
+    onError: (err) => toastError(err, { fallback: "Import failed" }),
   });
 }
 
@@ -553,7 +548,7 @@ export function useBookCreditAsInvoice() {
       qc.invalidateQueries({ queryKey: ["aging"] });
       toast.success(`Invoice ${inv.invoice_id} bana & reconcile ho gaya`);
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -591,7 +586,7 @@ export function useReconcileSalaryAdvanceSplit() {
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
       toast.success("Reconciled — salary paid + advance booked");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -701,7 +696,7 @@ export function useAutoReconcile() {
       if (reconciled === 0) toast.info(review > 0 ? `Koi pakka (exact) match nahi mila — ${review} manual review ke liye` : "Sab pehle se reconciled");
       else toast.success(`${reconciled} auto-reconcile ho gaye${review > 0 ? ` · ${review} manual review ke liye` : ""}`);
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -775,7 +770,7 @@ export function useReconcileTransaction() {
       toast.success(row.matched_to_type ? "Reconciled" : "Un-reconciled");
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Reconcile failed");
+      toastError(err, { fallback: "Reconcile failed" });
     },
   });
 }
@@ -804,7 +799,7 @@ export function useReconcileExpensesToBankTxn() {
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
       toast.success("Expenses matched & reconciled");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Reconcile failed"),
+    onError: (err) => toastError(err, { fallback: "Reconcile failed" }),
   });
 }
 
@@ -835,7 +830,7 @@ export function useBookTxnAsExpense() {
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
       toast.success("Booked as expense & reconciled");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't book expense"),
+    onError: (err) => toastError(err, { fallback: "Couldn't book expense" }),
   });
 }
 
@@ -866,7 +861,7 @@ export function useBookBankTxnAsStatutory() {
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
       toast.success("Booked as statutory payment & reconciled");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't book statutory payment"),
+    onError: (err) => toastError(err, { fallback: "Couldn't book statutory payment" }),
   });
 }
 
@@ -897,7 +892,7 @@ export function useBookBankCredit() {
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
       toast.success(input.kind === "capital" ? "Booked as owner's capital & reconciled" : "Booked as director's loan & reconciled");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't book this credit"),
+    onError: (err) => toastError(err, { fallback: "Couldn't book this credit" }),
   });
 }
 
@@ -924,7 +919,7 @@ export function useBookBankAdvance() {
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
       toast.success("Booked as a loan/advance & reconciled — P&L not affected");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Couldn't book this"),
+    onError: (err) => toastError(err, { fallback: "Couldn't book this" }),
   });
 }
 

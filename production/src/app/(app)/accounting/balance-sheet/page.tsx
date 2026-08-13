@@ -63,7 +63,7 @@ export default function BalanceSheetPage() {
   const autoAssets =
     (auto?.cashAndBank ?? 0) + (auto?.receivables ?? 0) + (auto?.projectReceivable ?? 0) + (auto?.tdsReceivable ?? 0)
     + (auto?.employeeLoans ?? 0) + (auto?.prepaidAdvances ?? 0) + (auto?.fixedAssets ?? 0) + gstCredit;
-  const autoLiab = (auto?.payables ?? 0) + (auto?.salaryPayable ?? 0) + (auto?.salaryDuesPayable ?? 0) + (auto?.reimbursementsPayable ?? 0) + (auto?.creditCardPayable ?? 0) + (auto?.emiLoansPayable ?? 0) + (auto?.businessLoansPayable ?? 0) + gstPayable;
+  const autoLiab = (auto?.payables ?? 0) + (auto?.advancesFromCustomers ?? 0) + (auto?.salaryPayable ?? 0) + (auto?.salaryDuesPayable ?? 0) + (auto?.reimbursementsPayable ?? 0) + (auto?.creditCardPayable ?? 0) + (auto?.emiLoansPayable ?? 0) + (auto?.businessLoansPayable ?? 0) + gstPayable;
 
   const manualAssetRows = manual("asset");
   const manualLiabRows  = manual("liability");
@@ -81,7 +81,7 @@ export default function BalanceSheetPage() {
     (auto?.cashAndBank ?? 0) + (auto?.receivables ?? 0) + (auto?.projectReceivable ?? 0)
     + (auto?.tdsReceivable ?? 0) + gstCredit + sum(manualAssetRows);
   const currentLiab =
-    (auto?.payables ?? 0) + (auto?.salaryPayable ?? 0) + (auto?.salaryDuesPayable ?? 0)
+    (auto?.payables ?? 0) + (auto?.advancesFromCustomers ?? 0) + (auto?.salaryPayable ?? 0) + (auto?.salaryDuesPayable ?? 0)
     + (auto?.reimbursementsPayable ?? 0) + (auto?.creditCardPayable ?? 0) + gstPayable + sum(manualLiabRows);
   const currentRatio = currentLiab > 0 ? currentAssets / currentLiab : null;   // ≥1 = can cover short-term dues
   const debtToEquity = netWorth > 0 ? totalLiab / netWorth : null;             // null = negative equity (insolvent)
@@ -109,6 +109,7 @@ export default function BalanceSheetPage() {
         ["", ""],
         ["LIABILITIES", ""],
         ["Accounts payable", auto.payables ?? 0],
+        ["Advances from customers", auto.advancesFromCustomers ?? 0],
         ["Salary payable", auto.salaryPayable ?? 0],
         ["Statutory dues payable", auto.salaryDuesPayable ?? 0],
         ["Reimbursements payable", auto.reimbursementsPayable ?? 0],
@@ -225,7 +226,7 @@ export default function BalanceSheetPage() {
               <SectionTitle>Assets</SectionTitle>
               <div className="space-y-1 mt-3">
                 <BSLine label="Cash & bank balances" amount={auto?.cashAndBank ?? 0} kind="auto" source="Banking" href="/accounting/banking" />
-                <BSLine label="Trade receivables" hint="customers' unpaid balances" amount={auto?.receivables ?? 0} kind="auto" source="unpaid invoices" href="/invoices" />
+                <BSLine label="Trade receivables" hint="invoiced but unpaid (excl. projects)" amount={auto?.receivables ?? 0} kind="auto" source="unpaid invoices" href="/invoices" />
                 {(auto?.projectReceivable ?? 0) > 0 && (
                   <BSLine label="Project receivables" hint="one-time / custom project sales, unpaid" amount={auto?.projectReceivable ?? 0} kind="auto" source="project invoices" href="/invoices" />
                 )}
@@ -254,6 +255,9 @@ export default function BalanceSheetPage() {
               <SectionTitle>Liabilities</SectionTitle>
               <div className="space-y-1 mt-3">
                 <BSLine label="Trade payables" hint="unpaid vendor bills" amount={auto?.payables ?? 0} kind="auto" source="COGS Bills" href="/accounting/bills" />
+                {(auto?.advancesFromCustomers ?? 0) > 0 && (
+                  <BSLine label="Advances from customers" hint="paid to you, not yet invoiced — service still owed" amount={auto?.advancesFromCustomers ?? 0} kind="auto" source="advance receipts" href="/invoices" />
+                )}
                 {(auto?.salaryPayable ?? 0) > 0 && (
                   <BSLine label="Salary payable" hint="payroll run, not yet paid out" amount={auto?.salaryPayable ?? 0} kind="auto" source="Payroll" href="/payroll" />
                 )}

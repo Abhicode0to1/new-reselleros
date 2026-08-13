@@ -9,6 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "backup:code": "node scripts/backup-code.mjs",
+    "backup:db": "node scripts/backup-db.mjs ../../resellersos-backups",
+    "backup:check": "node scripts/restore-check.mjs",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",

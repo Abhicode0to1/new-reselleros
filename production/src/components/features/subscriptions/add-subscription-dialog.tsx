@@ -184,7 +184,13 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
     setSubmitting(true);
     try {
       const supabase = createClient();
-      const tenantId = me?.tenantId ?? "fbb976f1-9090-4f10-9726-0901bd144e42";
+      // No hardcoded fallback tenant. It used to default to Anutech Digital's id,
+      // so a user from another tenant whose profile hadn't loaded would try to
+      // write a subscription into someone else's books. RLS would reject it
+      // (`WITH CHECK tenant_id = current_tenant_id()`), but the right answer is to
+      // not attempt it — and to say why. Removed 2026-08-13.
+      const tenantId = me?.tenantId;
+      if (!tenantId) throw new Error("Your workspace is still loading — reopen this dialog and try again.");
 
       // ── Step 1: Find or Create Customer Record ──────────────────────────
       let customerId = "";
@@ -384,7 +390,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                   <SelectContent>
                     {PRODUCTS_BY_VENDOR[vendor].map((p) => (
                       <SelectItem key={p.id} value={p.name}>
-                        {p.name} (₹{p.defaultPrice.toLocaleString()}/yr)
+                        {p.name} ({rupee(p.defaultPrice)}/yr)
                       </SelectItem>
                     ))}
                     <SelectItem value="CUSTOM_PLAN">✍️ Custom Product Name / Other SKU...</SelectItem>

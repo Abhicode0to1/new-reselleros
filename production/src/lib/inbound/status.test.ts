@@ -3,10 +3,11 @@ import { inboundStatusMeta, canConvertToLead } from "./status";
 
 describe("inboundStatusMeta", () => {
   it("maps known statuses to label + tone", () => {
-    expect(inboundStatusMeta("lead_created")).toEqual({ label: "Lead created", kind: "success" });
-    expect(inboundStatusMeta("appended_to_lead").kind).toBe("info");
-    expect(inboundStatusMeta("received")).toEqual({ label: "New", kind: "warning" });
-    expect(inboundStatusMeta("skipped_non_enquiry").label).toBe("Not an enquiry");
+    expect(inboundStatusMeta("lead_created")).toEqual({ label: "Lead Created", kind: "success" });
+    // Renamed from "Appended" so an operator reads it as a reply, not a merge.
+    expect(inboundStatusMeta("appended_to_lead")).toEqual({ label: "Follow-up Reply", kind: "info" });
+    expect(inboundStatusMeta("received")).toEqual({ label: "New Enquiry", kind: "warning" });
+    expect(inboundStatusMeta("skipped_non_enquiry").label).toBe("System / Non-Sales");
     expect(inboundStatusMeta("duplicate").kind).toBe("muted");
     expect(inboundStatusMeta("error").kind).toBe("danger");
   });

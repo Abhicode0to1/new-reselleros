@@ -21,6 +21,7 @@ import {
   Rocket, HelpCircle, Ticket, BookOpen, Smile, TrendingUp, TrendingDown,
   Smartphone, Sun, Moon, Building2, Briefcase, SlidersHorizontal,
   List, Grid3x3, Send,
+  Eye, Bug, Wallet, Printer, Laptop, Camera, Menu, Circle, Image as ImageIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -123,6 +124,32 @@ const ICON_MAP: Record<string, LucideIcon> = {
   sun: Sun,
   moon: Moon,
   mobile: Smartphone,
+
+  // ── Added 2026-08-13 ────────────────────────────────────────────────────────
+  // Every one of these was being called somewhere in the app but was absent from
+  // the map, so it fell through to the AlertTriangle fallback and rendered a
+  // WARNING SIGN in normal UI — the breadcrumb separator, the mobile hamburger,
+  // the Report Bug button, view/preview buttons, the sidebar's My Expenses item.
+  eye: Eye,
+  bug: Bug,
+  wallet: Wallet,
+  printer: Printer,
+  laptop: Laptop,
+  camera: Camera,
+  menu: Menu,
+  image: ImageIcon,
+
+  // Aliases. The map's own vocabulary is short (`chart`, `more_h`, `mobile`,
+  // `message`, `question`) but call sites reach for the lucide/HTML-ish names.
+  // Accepting both is cheaper than policing 70+ call sites, and a wrong icon
+  // name should never be a user-visible warning.
+  bar_chart: BarChart3,
+  more_horizontal: MoreHorizontal,
+  smartphone: Smartphone,
+  message_square: MessageSquare,
+  help_circle: HelpCircle,
+  "chevron-left": ChevronLeft,
+  "chevron-right": ChevronRight,
 };
 
 export interface IconProps extends React.SVGProps<SVGSVGElement> {
@@ -238,14 +265,22 @@ export function Icon({ name, size = 16, className, ...rest }: IconProps) {
   if (name === "quote") return <GlyphMark size={size} className={className} fill="#2563EB" d={GLYPH_DOC} {...rest} />;
   if (name === "reminder") return <GlyphMark size={size} className={className} fill="#7C3AED" d={GLYPH_CLOCK} {...rest} />;
   if (name === "email") return <GmailMark size={size} className={className} {...rest} />;
-  const Component = ICON_MAP[name] ?? AlertTriangle;
+  // Fallback for an unknown name. It used to be AlertTriangle in every
+  // environment, which meant a simple typo rendered a WARNING SIGN to the user —
+  // "Sales ⚠ Customers" in the breadcrumb, ⚠ on the hamburger, ⚠ on Report Bug.
+  // A missing icon is a developer problem, never a user alert. So: stay loud in
+  // development (triangle + the rose tint below), and degrade to a neutral dot in
+  // production, where it reads as nothing rather than as danger.
+  const isKnown = Boolean(ICON_MAP[name]);
+  const Component =
+    ICON_MAP[name] ?? (process.env.NODE_ENV === "development" ? AlertTriangle : Circle);
   return (
     <Component
       width={size}
       height={size}
       className={cn(
         "inline-block flex-shrink-0",
-        !ICON_MAP[name] && process.env.NODE_ENV === "development" && "text-rose",
+        !isKnown && process.env.NODE_ENV === "development" && "text-rose",
         className
       )}
       strokeWidth={1.6}

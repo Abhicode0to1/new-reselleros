@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "statusMessage": "Running test gate (vitest)…",
+            "timeout": 180,
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-.}/production\" && o=$(npm run test --silent 2>&1) || { s=$(printf '%s' \"$o\" | grep -oE '[0-9]+ failed' | head -1); printf '{\"systemMessage\":\"⚠️  vitest %s — this branch is NOT gated by CI (CLAUDE.md §25). Fix before commit: cd production && npm run test\"}\\n' \"${s:-failing}\"; }"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -133,20 +133,11 @@ export default function PartnersPage() {
                     <p className="text-[11px] text-ink-3 font-mono">GSTIN: 07AAACE1234F1Z5 · Parent Distributor: Anutech Digital (anutech.in)</p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      icon="building"
-                      onClick={() => {
-                        if (typeof window !== "undefined") {
-                          localStorage.setItem("resellersos_active_workspace", "excel");
-                          toast.success("Switched Workspace: 🏢 Excel Technologies (exceltechnologies.in)");
-                          window.location.reload();
-                        }
-                      }}
-                    >
-                      Manage Business (Switch)
-                    </Button>
+                    {/* "Manage Business (Switch)" removed 2026-08-13 with the
+                        workspace switcher — it wrote a localStorage key nothing
+                        reads any more, so the button reloaded the page and did
+                        nothing. Real multi-company switching is planned via
+                        tenant memberships (see TASKS.md), not localStorage. */}
                     <Button
                       size="sm"
                       variant="primary"
@@ -175,19 +166,11 @@ export default function PartnersPage() {
                     Linked via Parent-Child Distributor Hierarchy. Legal identity (GSTIN/Invoices) remains individual, business operations and rates are merged.
                   </span>
                   <div className="ml-auto flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (typeof window !== "undefined") {
-                          localStorage.setItem("resellersos_active_workspace", "group");
-                          toast.success("Switched to 🌐 Consolidated Group View");
-                          window.location.reload();
-                        }
-                      }}
-                      className="text-primary font-bold hover:underline"
-                    >
-                      🌐 View Consolidated P&amp;L →
-                    </button>
+                    {/* "View Consolidated P&L" removed 2026-08-13 — it flipped the
+                        old localStorage workspace key, which nothing reads now.
+                        A merged cross-company P&L cannot come from client-side
+                        filtering anyway: RLS returns one tenant per request, so
+                        it needs a SECURITY DEFINER roll-up (like get_partner_metrics). */}
                   </div>
                 </div>
               </Card>

@@ -1,5 +1,34 @@
 # ResellerOS V3 — Project Knowledge Base
 
+> ## ⚠️ STALE — this document's audit stopped at migration `0050`
+>
+> **Do not quote counts, module lists, or bug status from this file without checking the code first.**
+>
+> | | This doc says | Reality (verified 2026-08-12) |
+> |---|---|---|
+> | Migrations | 27 files (`0001`–`0017`, `0040`–`0050`) | **196 files, `0001` → `0225`** |
+> | Scope | "17 shipped modules" | ~10 further domains shipped since: payroll (PF/ESI/salary register), attendance (biometric/face/selfie/geofence), project sales, compliance calendar (GST/ROC/IT), assessments + proctoring, documents vault, referral commissions, credit/debit notes, business loans + EMI, vendors master, customer credits, backups/restore points, public `/api/v1` + API keys, vendor portal |
+>
+> **Claims in here that are now WRONG — these are the ones that will actually mislead you:**
+> - **§5.1 "Known caveats: (1) No idempotency — the biggest spine risk"** → **FIXED** in `0051` (partial unique index `payments_idempotency_uq` + RPC early-guard). Reads like an open P0; it is not.
+> - **§14 "⚠️ LIVE SCHEMA DRIFT … Action item: generate a catch-up migration"** → **DONE** in `0146_capture_schema_drift_critical.sql`.
+> - **§5.8 "`generate_invoice` is a client-side multi-step engine … verify in code"** → it is now an atomic `SECURITY DEFINER` RPC (`0058`).
+> - **§14 "Audit logs (`audit_log` table planned)"** → shipped as `0222_activity_log.sql`.
+> - The §5.1 / §5.2 / §5.8 RPC inventory is missing everything from `0051` onward, including `record_payment_with_tds` (`0150`), `create_direct_invoice` (`0158`), `issue_credit_note` / `issue_debit_note` (`0154`/`0155`), and the deny-by-default EXECUTE lockdown (`0145`).
+>
+> **Spot-checked and still accurate:** `refund_payment` RPC is still not built · portal invoice PDF is still a 503 stub (`api/portal/invoice/[id]/pdf/route.ts:27`) · the rupee-vs-paise unit ambiguity (§4, §14) is still unresolved.
+>
+> **What to trust instead:**
+> - **Money-spine bug status** → `docs/MONEY-FLOW-TEST-MATRIX.md` §2.1 (revised 2026-06-01, verified against live DB).
+> - **Live status / current work** → `TASKS.md`.
+> - **Schema truth** → `production/supabase/migrations/` itself, and the live DB. Nothing else.
+>
+> Sections 1–3 (product vision, architecture pattern, the multi-tenancy model) and 11–13 (pricing models, design tokens, infra) have aged well and are still the best orientation in the repo. Sections 4–8 and 14–15 (data model, RPC inventory, module status, file index) are the stale ones.
+>
+> *Boundary of this warning: I verified the counts, the four wrong claims, and the three still-accurate ones directly. I did **not** re-audit migrations `0051`–`0225`, so treat any other detail below as unconfirmed rather than correct.*
+>
+> ---
+>
 > The definitive engineering reference for ResellerOS V3, synthesized from 12 deep-research reports covering schema, RPCs, query layer, UI, infra, and product docs. Inline file paths are cited throughout. Where a report did not examine something, it is marked **"not examined"**. Several documented internal inconsistencies are preserved honestly rather than smoothed over.
 >
 > Repository root: `C:\dev\ResellerOSv3` · App lives under `C:\dev\ResellerOSv3\production\` · Migrations under `production/supabase/migrations/`.

@@ -30,7 +30,6 @@ import { useQuotesByLead } from "@/lib/queries/quotes";
 import { QuoteActionBar } from "@/components/features/quotes/quote-action-bar";
 import { useTasks, useTasksForLead, useCompleteTask, useSnoozeTask, useDeleteTask } from "@/lib/queries/tasks";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
-import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 import { AddTaskDialog } from "@/components/features/tasks/add-task-dialog";
 import { LeadCard } from "@/components/features/leads/lead-card";
 import { AddLeadForm } from "@/components/features/leads/add-lead-form";
@@ -38,7 +37,7 @@ import { QuickAddLeadForm } from "@/components/features/leads/quick-add-lead-for
 import { LeadsSmartViews, type SmartView } from "@/components/features/leads/leads-smart-views";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
-import { isHotLead, isHighValueLead, hotReason } from "@/lib/leads/heat";
+import { isHotLead, isHighValueLead, intentMeta, staleWarning } from "@/lib/leads/heat";
 import { SwipeLeadCard } from "@/components/features/leads/swipe-lead-card";
 import { ImportCsvDialog } from "@/components/features/leads/import-csv-dialog";
 import { ShareFormSheet, ENQUIRY_SHARE } from "@/components/features/leads/share-form-sheet";
@@ -285,12 +284,12 @@ function LeadsPageInner() {
   );
   const tab: "leads" | "deals" = salesTab === "deals" ? "deals" : "leads";
 
-  const { filterEntity, workspace } = useActiveWorkspace();
-
-  const workspaceLeads = React.useMemo(
-    () => (leads ?? []).filter((l) => filterEntity(l)),
-    [leads, filterEntity, workspace]
-  );
+  // Workspace keyword filter removed 2026-08-13. It classified rows by company-name
+  // keywords ("excel", "vera") against hardcoded tenant UUIDs — one of which was
+  // Delfos Technologies, a real separate tenant, badged as "Excel Tech". RLS already
+  // scopes every read to the caller's tenant, so the filter only ever hid the
+  // tenant's own leads. Name kept: it is referenced throughout this page.
+  const workspaceLeads = React.useMemo(() => leads ?? [], [leads]);
 
   // Duplicate index — computed over workspace leads (dups can span the workspace),
   // surfaced as a per-row "Duplicate?" flag + a "Duplicates" smart view. Declared
@@ -2680,6 +2679,11 @@ function LeadListView({
             // the Hot chip + filter, so counts and tags never disagree.
             const isHighValue = isHighValueLead(lead);
             const isHot       = isHotLead(lead);
+            // Intent tier (Hot / Warm / Cold) + the stale nudge. Both come from
+            // lib/leads/heat so the badge, the warning and the smart-view chips
+            // can never disagree about the same lead.
+            const intent = intentMeta(lead);
+            const stale7 = staleWarning(lead);
             const railCls     = isHighValue ? "border-l-2 border-emerald"
                               : isHot       ? "border-l-2 border-rose"
                               :               "border-l-2 border-transparent";
@@ -2735,12 +2739,30 @@ function LeadListView({
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium text-ink truncate">{lead.company}</span>
-                        {isHot && (
+                        {/* Intent tier — replaces the old binary "Hot" pill.
+                            Cold deliberately outranks Hot (see heat.ts): a big
+                            deal nobody has touched in 10 days is at risk, not
+                            on fire. */}
+                        <span
+                          title={`${intent.label} — ${intent.reason}`}
+                          className={cn(
+                            "shrink-0 inline-flex items-center gap-0.5 rounded-full text-[10px] font-semibold px-1.5 py-0.5 leading-none cursor-help",
+                            intent.tier === "hot"  && "bg-rose-soft text-rose",
+                            intent.tier === "warm" && "bg-amber-soft text-amber-ink",
+                            intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
+                          )}
+                        >
+                          {intent.tier === "hot" ? "🔥" : intent.tier === "warm" ? "⚡" : "❄️"} {intent.label}
+                        </span>
+                        {/* Stale nudge — fires at 7 days, BEFORE Cold at 10, so
+                            there is still a window to save the deal. */}
+                        {stale7 && (
                           <span
-                            title={`Hot — ${hotReason(lead)}`}
-                            className="shrink-0 inline-flex items-center rounded-full bg-rose-soft text-rose text-[10px] font-semibold px-1.5 py-0.5 leading-none cursor-help"
+                            title={stale7.message}
+                            className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-soft/70 text-amber-ink text-[10px] font-semibold px-1.5 py-0.5 leading-none border border-amber/30 cursor-help"
                           >
-                            Hot
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" />
+                            {stale7.days}d
                           </span>
                         )}
                         {isDup && (

@@ -8,6 +8,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
 import type { Payment, PaymentMethod } from "@/lib/supabase/database.types";
 
@@ -99,7 +100,7 @@ export function useUpdatePayment() {
       qc.invalidateQueries({ queryKey: ["outstanding-receivables"] });
       toast.success("Payment details updated");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -127,7 +128,7 @@ export function useRefundPayment() {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       toast.success("Payment marked as refunded");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -161,7 +162,7 @@ export function useDeletePayment(opts?: { onBlocked?: (message: string) => void 
     onError: (err) => {
       const msg = (err as Error).message;
       if (opts?.onBlocked) opts.onBlocked(msg);
-      else toast.error(msg);
+      else toastError(err);
     },
   });
 }
@@ -282,7 +283,7 @@ export function useMarkReminderSent() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["outstanding-receivables"] });
     },
-    onError: (e) => toast.error((e as Error).message || "Reminder mark nahi hua — dobara try karo"),
+    onError: (e) => toastError(e, { fallback: "Reminder mark nahi hua — dobara try karo" }),
   });
 }
 
@@ -305,7 +306,7 @@ export function useSuspendSubscription() {
       qc.invalidateQueries({ queryKey: ["subscriptions"] });
       toast.info("Subscription paused — remember to suspend service via vendor (Google CSP / M365 admin)");
     },
-    onError: (e) => toast.error((e as Error).message || "Pause nahi hua — subscription abhi bhi active hai"),
+    onError: (e) => toastError(e, { fallback: "Pause nahi hua — subscription abhi bhi active hai" }),
   });
 }
 
@@ -349,7 +350,7 @@ export function useWriteOffSubscription() {
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
       toast.success("Receivable written off · subscription cancelled");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 }
 

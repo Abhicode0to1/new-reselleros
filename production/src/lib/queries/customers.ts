@@ -19,22 +19,14 @@ export function useCustomers() {
     queryKey: ["customers"],
     queryFn: async (): Promise<Customer[]> => {
       const supabase = createClient();
-      let { data, error } = await supabase
+      // Removed 2026-08-13 — same dead hardcoded-tenant fallback as leads.ts.
+      // RLS (verified on prod: enabled on `customers`, 5 policies) filters the
+      // retry identically, so it could never return a row the first query didn't.
+      const { data, error } = await supabase
         .from("customers")
         .select("*")
         .order("name", { ascending: true });
-
-      if (error || !data || data.length === 0) {
-        const res = await supabase
-          .from("customers")
-          .select("*")
-          .or("tenant_id.eq.fbb976f1-9090-4f10-9726-0901bd144e42,tenant_id.eq.4eeab895-6f4e-42ea-aaf2-efe4cfbc2129,tenant_id.eq.606a7ae7-9805-4a10-8163-7da6e42968e9")
-          .order("name", { ascending: true });
-        if (res.data && res.data.length > 0) {
-          data = res.data;
-        }
-      }
-
+      if (error) throw error;
       return data ?? [];
     },
   });

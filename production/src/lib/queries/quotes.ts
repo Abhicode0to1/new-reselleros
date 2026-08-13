@@ -5,6 +5,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
 import type { Quote, Database } from "@/lib/supabase/database.types";
 
@@ -155,7 +156,7 @@ export function useCreateQuote() {
       qc.invalidateQueries({ queryKey: ["quote"] });
       toast.success("Quote saved");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -185,7 +186,7 @@ export function useDeleteQuote() {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       toast.success("Quote deleted");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -210,6 +211,6 @@ export function useUpdateQuoteStatus() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["quotes"] });
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }

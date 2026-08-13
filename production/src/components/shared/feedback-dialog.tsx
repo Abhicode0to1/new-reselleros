@@ -150,7 +150,10 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
       const supabase = createClient();
       const reporterName = currentUser?.fullName ?? "Team Member";
       const reporterEmail = currentUser?.authEmail ?? "testing-team@anutech.in";
-      const tenantId = currentUser?.tenantId ?? "fbb976f1-9090-4f10-9726-0901bd144e42";
+      // Was defaulting to Anutech Digital's tenant id, which would file another
+      // tenant's bug report into Anutech's books. Removed 2026-08-13.
+      const tenantId = currentUser?.tenantId;
+      if (!tenantId) throw new Error("Your workspace is still loading — please try again in a moment.");
 
       const formattedSubject = `[${type.toUpperCase()}] [${priority.toUpperCase()}] ${extractedTitle}`;
 

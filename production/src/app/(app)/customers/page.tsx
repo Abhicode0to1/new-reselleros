@@ -18,7 +18,6 @@ import { useCustomers, useOpenCreditsByCustomer } from "@/lib/queries/customers"
 import { useProjectReceivablesByCustomer } from "@/lib/queries/projects";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useOutstandingReceivables } from "@/lib/queries/payments";
-import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 import { FAB } from "@/components/ui/fab";
 import { ImportCustomersDialog } from "@/components/features/customers/import-customers-dialog";
 import { ImportDomainsDialog } from "@/components/features/customers/import-domains-dialog";
@@ -98,7 +97,6 @@ function subStatus(hasActiveSub: boolean, archived: boolean):
 }
 
 export default function CustomersPage() {
-  const { filterEntity, getEntityBadge, workspace } = useActiveWorkspace();
   const { data: customers, isLoading, error, refetch } = useCustomers();
   const { data: subscriptions } = useSubscriptions();
   const { data: outstanding } = useOutstandingReceivables();
@@ -153,9 +151,8 @@ export default function CustomersPage() {
     return map;
   }, [subscriptions]);
 
-  const customersByWorkspace = React.useMemo(() => {
-    return (customers ?? []).filter((c) => filterEntity(c));
-  }, [customers, filterEntity]);
+  // Workspace keyword filter removed 2026-08-13 — RLS already scopes to tenant.
+  const customersByWorkspace = React.useMemo(() => customers ?? [], [customers]);
 
   const activeView = VIEW_DEFS.find((v) => v.id === view) ?? VIEW_DEFS[0];
 
@@ -553,11 +550,6 @@ export default function CustomersPage() {
                             <div className="min-w-0">
                               <div className="font-medium text-sm text-ink truncate flex items-center gap-1.5 flex-wrap">
                                 <span>{primaryName}</span>
-                                {workspace === "group" && (
-                                  <Badge kind={getEntityBadge(c).kind} size="sm">
-                                    {getEntityBadge(c).label}
-                                  </Badge>
-                                )}
                               </div>
                               {customerSubline(c) && (
                                 <div className="text-[11px] text-ink-3 truncate mt-0.5">{customerSubline(c)}</div>

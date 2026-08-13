@@ -33,7 +33,6 @@ import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import type { Subscription } from "@/lib/supabase/database.types";
-import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 
 // Vendor pill — capitalised label + a stable colour per vendor (Google/Microsoft
 // blue, Zoho green) so the vendor reads at a glance.
@@ -91,15 +90,12 @@ export default function SubscriptionsPage() {
   const [addGoogleOpen,  setAddGoogleOpen]  = React.useState(false);
   const [kpiOpen, setKpiOpen] = React.useState(true);
   const [visible, setVisible] = React.useState(60);  // render cap — paginates large lists
-  const { filterEntity, workspace: activeWorkspace } = useActiveWorkspace();
-
   const today = new Date();
   const daysUntil = (renewal: string | null) =>
     renewal ? daysBetween(today, renewal) : null;
 
-  const subsByWorkspace = React.useMemo(() => {
-    return (subs ?? []).filter((s) => filterEntity(s));
-  }, [subs, filterEntity, activeWorkspace]);
+  // Workspace keyword filter removed 2026-08-13 — RLS already scopes to tenant.
+  const subsByWorkspace = React.useMemo(() => subs ?? [], [subs]);
 
   // Filter — paid subs only (trials handled separately below)
   const filtered = subsByWorkspace.filter((s) => {
@@ -493,11 +489,6 @@ export default function SubscriptionsPage() {
                       <td className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
                         <div className="font-medium text-sm text-ink break-words leading-snug flex items-center gap-2 flex-wrap">
                           <span>{cleanDisplayName(s.customer_name)}</span>
-                          {activeWorkspace === "group" && (
-                            <Badge kind={s.domain?.toLowerCase().includes("anutech") || s.customer_name?.toLowerCase().includes("anutech") ? "info" : "warning"} size="sm">
-                              {s.domain?.toLowerCase().includes("anutech") || s.customer_name?.toLowerCase().includes("anutech") ? "Anutech Digital" : "Excel Tech"}
-                            </Badge>
-                          )}
                         </div>
                         <DomainCell sub={s} />
                       </td>

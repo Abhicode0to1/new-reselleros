@@ -1,5 +1,67 @@
 import { describe, it, expect } from "vitest";
-import { endOfDayIST, isQuoteExpired, foreignAmount } from "./utils";
+import { endOfDayIST, isQuoteExpired, foreignAmount, rupee, num } from "./utils";
+
+// The most-used function in the app (900+ call sites) and it had no test.
+// These lock the Indian lakh/crore grouping, which is the whole reason we route
+// money through the helper instead of toLocaleString() — an un-pinned
+// toLocaleString() follows the BROWSER locale, so an en-US machine rendered
+// ₹1,560,000 where an Indian reader expects ₹15,60,000. See docs/UX-AUDIT.md G3.
+describe("rupee — Indian grouping", () => {
+  it("groups in lakhs/crores, not thousands", () => {
+    expect(rupee(1560000)).toBe("₹15,60,000");   // NOT ₹1,560,000
+    expect(rupee(490644)).toBe("₹4,90,644");
+    expect(rupee(10000000)).toBe("₹1,00,00,000");
+  });
+
+  it("formats small amounts without stray separators", () => {
+    expect(rupee(0)).toBe("₹0");
+    expect(rupee(999)).toBe("₹999");
+    expect(rupee(1000)).toBe("₹1,000");
+    expect(rupee(1452)).toBe("₹1,452");          // vendor-portal: ₹121/mo × 12
+  });
+
+  it("handles NEGATIVE amounts — a net GST credit is real money", () => {
+    // Regression: −100…−999 used to render "₹-,500" (the sign landed inside the
+    // grouped integer part, leaving `rest` as just "-").
+    expect(rupee(-500)).toBe("₹-500");
+    expect(rupee(-100)).toBe("₹-100");
+    expect(rupee(-999)).toBe("₹-999");
+    expect(rupee(-1)).toBe("₹-1");
+    expect(rupee(-1000)).toBe("₹-1,000");
+    expect(rupee(-1560000)).toBe("₹-15,60,000");
+  });
+
+  it("never renders a negative zero", () => {
+    expect(rupee(-0.4)).toBe("₹0");
+  });
+
+  it("supports decimals on both signs", () => {
+    expect(rupee(1234.5, { decimals: 2 })).toBe("₹1,234.50");
+    expect(rupee(-1234.5, { decimals: 2 })).toBe("₹-1,234.50");
+  });
+
+  it("compact mode uses L / Cr, not K-thousands past a lakh", () => {
+    expect(rupee(1560000, { compact: true })).toBe("₹15.6L");
+    expect(rupee(12345678, { compact: true })).toBe("₹1.2Cr");
+    expect(rupee(5000, { compact: true })).toBe("₹5.0K");
+  });
+
+  it("renders an em-dash for null/undefined rather than ₹NaN", () => {
+    expect(rupee(null)).toBe("—");
+    expect(rupee(undefined)).toBe("—");
+  });
+});
+
+describe("num — Indian grouping, no currency symbol", () => {
+  it("groups in lakhs and omits ₹", () => {
+    expect(num(1234567)).toBe("12,34,567");
+    expect(num(999)).toBe("999");
+  });
+  it("returns an em-dash for null/undefined", () => {
+    expect(num(null)).toBe("—");
+    expect(num(undefined)).toBe("—");
+  });
+});
 
 describe("foreignAmount", () => {
   it("returns null for domestic INR bills or missing rate", () => {

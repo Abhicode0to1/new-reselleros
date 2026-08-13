@@ -1,9 +1,239 @@
 # Tasks
 
 > Living task list — main ise update karta rahunga. Jaise-jaise kaam complete hoga, task `Done` mein strikethrough ho jayega. Tum bhi edit kar sakte ho. Visual board ke liye `dashboard.html` browser mein kholo.
-> Full detail: [docs/MONEY-FLOW-TEST-MATRIX.md](docs/MONEY-FLOW-TEST-MATRIX.md) · context: [docs/PROJECT-KNOWLEDGE.md](docs/PROJECT-KNOWLEDGE.md)
+> Full detail: [docs/MONEY-FLOW-TEST-MATRIX.md](docs/MONEY-FLOW-TEST-MATRIX.md) (per-transaction) · [docs/ACCOUNTING-AUDIT.md](docs/ACCOUNTING-AUDIT.md) (P&L / Balance Sheet) · [docs/UX-AUDIT.md](docs/UX-AUDIT.md) (interaction / behaviour) · context: [docs/PROJECT-KNOWLEDGE.md](docs/PROJECT-KNOWLEDGE.md)
 
 ## Active
+
+### 🔴 UX / behaviour audit — "prevention is engineered, recovery is not". → [docs/UX-AUDIT.md](docs/UX-AUDIT.md)
+
+Not a repeat of the layout rounds below (those were padding/max-width/mobile-cards). This asks what happens to a *person*: defaults, attention, and what they see when something breaks.
+
+> **The finding in one line:** this app prevents errors beautifully (smart defaults, DB guards, atomic RPCs, styled confirms) and gives you **nothing** when one happens. §24 is the project's own rule — *"reason + next step + button"* — and it is followed **1 time out of 278**.
+
+| # | Finding | Sev |
+|---|---|---|
+| **G1** | 🟡 **money spine FIXED.** Built `lib/errors/toast-error.ts` — branches on message **TEXT, not error code**, because our guards raise good copy *with* a technical errcode attached (a code-based rule would have destroyed it). 7 plumbing patterns → plain English + a "why"; everything else passes through. **54 sites migrated** (money-spine query modules + `quotes/[id]`); raw dumps **208 → 160**. Found while migrating: **the blocked-delete path on `quotes/[id]` was bypassing a dialog that already existed** — the very dialog §24 cites as its example — and toasting a bare reason instead. No grep would have caught that; only reading did. ⚠️ **Also corrected my own audit number: the "278" was `.tsx`-only; the true total is 452.** 160 remain in non-money modules, same mechanical pattern. | **P0** |
+| ~~**G3**~~ | ~~`toLocaleString()` with **no locale** in 10 places → on an en-US browser money renders `₹1,560,000` instead of `₹15,60,000`.~~ **✅ FIXED** — 9 sites → `rupee()` (which never touches locale), 1 foreign-currency site pinned to `en-US` (that one was **persisted as an FX audit note**, so the same bill wrote a different note per machine). **Bonus bug fixed:** `rupee()` rendered −100…−999 as `₹-,500` (stray comma) — and negative ₹ is real, `gstPayable` can be a credit. **Coverage gap closed:** `rupee()` had 900+ call sites and **zero tests**; added 18. Suite 196 → **205 green**. | ~~P0~~ |
+| **G2** | `record-payment-dialog` = **21 controls**, ~3 conditional. The 90%-of-the-time fields (amount/method/reference/date) carry the same weight as the 10% ones (TAN/TDS section/domain). People satisfice → a guessed TDS field becomes a wrong ledger row (`0150` posts it atomically). **Fix staging only — the defaults are the best thing on the screen.** | P1 |
+| **G5** | 58 nav items / 11 sections. Role filtering + collapsible groups mitigate it, but the *owner* — who decides whether to pay — sees nearly all of it on day one. A first-run decision, not a bug. | P1 |
+| **G4 / G6** | 3 files still on `window.confirm` (one is quote detail, a money screen) · 22 emoji-as-icons, 16 in `vendor-portal`, one in a money-dialog **label**. | P2 |
+
+**Why the asymmetry exists (and why it inverts):** prevention is visible to whoever builds the feature; recovery only shows up when a real user gets stuck. So far the only real user is Pardeep, who can read a Postgres error. **The first paying customer will never notice the prevention and will only notice the recovery.**
+
+**Order:** G3 first (10 call sites, wrong numbers, invisible locally) → G1 via a shared `toastError()` helper migrated by blast radius, money screens first (§7 of the doc has the approach) → G2 staging → G4/G6 bundled into a single `vendor-portal` cleanup pass.
+
+**Verified STRONG, for balance:** only **12** hardcoded-colour occurrences in the whole authenticated app (§5 genuinely followed) · `useConfirm()` dialog used in **50** places · `rupee()` used **919** times · payment amount auto-locks to `remaining − TDS − credit` until hand-edited, killing a whole class of rounding disputes (`record-payment-dialog.tsx:237`) · success toasts report what's *still due*, not "saved".
+
+⚠️ **Boundary:** code-measured only. **Screens were never viewed in a browser** (dev server stalled), so there is **no** judgement here on visual hierarchy, contrast, spacing or real mobile feel, and `design-critique` / `accessibility-review` (§0.9) were not run. Those are still owed.
+
+*§6 of the doc lists 3 **false alarms** (things a quick grep makes look broken but aren't) — read it before filing new findings; grep consistently reads this codebase worse than it is.*
+
+### 🟡 Off-database backup — first one taken, but NOT yet a real DR plan → [docs/BACKUP.md](docs/BACKUP.md)
+
+Dashboard showed **`LAST BACKUP: No backups`** on a DB holding **₹57,30,703 of invoices and ₹52,08,253 of payments**. Free plan = no automatic backups, no PITR. The in-app snapshots (`0210`–`0212`) write to `backup.snapshots` — **a table inside the same database** — so they survive a bad UPDATE but not the loss of the database. An undo button, not a backup.
+
+**Done:** `npm run backup:db` (`production/scripts/backup-db.mjs`) runs through the **read-only** MCP, so it can never write to prod. Output goes to `C:/dev/resellersos-backups/` — **outside the repo**, because the dump holds customer PII. Verified capture: 80 tables · 1,210 rows · 253 RLS policies · 126 function definitions · 46 triggers · 275 indexes · the applied-migration ledger. ~1.4 MB.
+
+**Bug caught while building it:** the first version used `information_schema.triggers`, which only reports triggers on tables the caller owns — it returned **0** while **46** exist. A silently incomplete backup is worse than none, because you stop worrying. Now reads `pg_trigger`.
+
+**Drift, finally quantified:** prod's migration ledger has **247** records; git has **194** files; **190 prod records have no matching file** (mostly Studio/MCP descriptive names for changes later folded into `0003`/`0146`). ⇒ **git alone cannot reconstruct prod** — which is why the backup dumps live schema rather than trusting the migration files.
+
+**🔴 Restore rehearsal attempted — and it found a blocker before the rehearsal even started.** No Docker / psql / local Postgres here, so instead of asking anyone to install a stack, `npm run backup:check` asked the cheaper question first: *could a restore work at all?*
+
+> **No. 11 tables exist in prod that git's migrations cannot create — 6 hold data, including `contacts` with 58 rows.** `contacts` is ALTERed by 6 migrations and **CREATEd by none**; `support_plans`, `campaign_templates`, `prepaid_advances`, `support_sync_outbox` aren't in git at all.
+
+Same drift as `0003`/`0146`, now measured exactly. Backup also gained **430 constraints** the same day — without them it knew a table's columns but not its rules.
+
+**✅ FIXED — `0224_capture_remaining_drift.sql` generated from the live catalog** (750 lines: 11 tables · 163 columns · 54 constraints · 41 indexes · 30 policies · 5 triggers · **9 functions**). Idempotent, so applying to prod is a no-op. **NOT applied — read-only MCP has no `apply_migration`, and it's your call.**
+
+Two things the generation caught that a hand-written file would have missed:
+- **The drift went past tables into functions.** 9 prod functions have no definition in git — 3 back triggers created here (§5 would have failed on a fresh DB without them) and two are money-adjacent RPCs the reimbursements feature calls: `settle_reimbursement`, `delete_reimbursement`. Verified none overlaps a git function, so nothing is overwritten.
+- Generated with `format_type()`, not `information_schema.data_type`, which flattens enums to `USER-DEFINED` and arrays to `ARRAY` — `contacts.tags text[] default '{}'` would not have round-tripped.
+
+**Verified:** `npm run backup:check` went from `in prod but NOT in git: 11` → **`0`**. Git can now rebuild the full prod schema. *(Third time this drift class has needed cleanup after `0003` and `0146` — the read-only MCP config exists so there isn't a fourth.)*
+
+**⚠️ Still not covered:** no `pg_dump` (restore = rebuild schema + re-insert JSON in FK order, **never rehearsed**) · `auth.users` NOT captured (**8 FK references point at it**) · storage buckets (TDS certificates, receipts, logos) NOT captured · **manual, nothing scheduled** · no PITR.
+**Real fix = Supabase Pro (~$25/mo)** for daily backups + 7-day PITR covering auth and storage — or `supabase db dump` (CLI installed v2.114.0, but project not linked; needs the DB password). **And rehearse one restore** — until then the backup's value is unproven.
+
+### ✅ Prod verified via read-only Supabase MCP — F1 + F2 FIXED, two dead migrations removed (2026-08-12)
+
+Read-only Supabase MCP is configured ([.mcp.json](.mcp.json) — `--read-only --features=database,docs`, so `apply_migration` doesn't exist; token lives in gitignored `settings.local.json`). Everything below moved from **reasoned-only → measured**.
+
+**Balance Sheet was overstating equity by ₹7,02,550.** Two errors, opposite directions, same statement — and the Equity plug meant it always "balanced":
+
+| | Before | After |
+|---|---|---|
+| Trade receivables | **₹0** | **₹97,639** (accrual: unpaid invoices, project ones excluded) |
+| Advances from customers | *(line didn't exist)* | **₹8,00,189** (12 payments — customer money that read as profit) |
+
+Fixed in `useBalanceSheetAuto()` — query-layer only, **no migration**. Two pure helpers extracted (`computeTradeReceivables`, `computeCustomerAdvances`) + **8 tests**, including the double-count trap. Suite **226 → 234 green**.
+
+⚠️ **I had F2's number wrong in the audit.** It implied ~₹7.82L was missing; ₹6,85,000 of that is project-milestone invoices `projectReceivable` already counts, so the naive fix would have **double-counted**. Real gap: ₹97,639. Corrected in the doc.
+
+**F3 / F4 / F6 measured at ₹0** (no fixed assets, no open customer credits) — real design gaps, zero present impact, correctly deferred. This is exactly why the audit's step 1 was "run the query", not "fix the code".
+
+**Two dead migrations deleted, not applied** → git and prod are now in sync at `0223`. Full reasoning in [supabase/migrations/README.md](production/supabase/migrations/README.md):
+- `0224` granted EXECUTE to `anon`+`public` — the direct opposite of `0145`'s P0 security fix. The grants that matter (`authenticated`) were already live and verified.
+- `0225` created a table the feature never uses — Employee Advances deliberately runs on `expenses` ("zero-migration compatibility"). It also used `NUMERIC(14,2)` where all money is `integer` ₹, and inlined its RLS tenant check instead of `current_tenant_id()` (**150 prod policies use the function**) — which would have silently kept single-tenant behaviour when multi-company lands.
+- **My own error, recorded:** I first called this a P0 broken feature. All 4 "references" to that table were TanStack **cache keys**, not DB calls. Third time this session that grep pointed the wrong way — see [UX-AUDIT §6](docs/UX-AUDIT.md).
+
+**Tenancy question SETTLED — my analysis held.** RLS is enabled on every core table (4–6 policies each) and `record_payment` is not anon-callable, so **no live cross-tenant leak** and the `.or()` fallbacks are **confirmed dead code**. But prod has **5 tenants** and `use-workspace.ts` is worse than described: `606a7ae7` is hardcoded as "Excel Tech" and is actually **Delfos Technologies — a real separate tenant with its own user, invoice and payment**; the real Excel Technologies (`13a364c7`) isn't in the hook at all, so its data displays under Anutech. All real business (34 customers / 62 leads / 39 quotes / 26 invoices / 8 users) sits in **one** tenant, Anutech Digital.
+
+**Still open from this session:** off-database backup (dashboard shows **`No backups`**; the in-app snapshots live *inside* the same DB, so they're an undo, not a backup) · `tenants.doc_code = 'ET'` sits on **Anutech Digital**, and 4 of 5 tenants have `doc_code = NULL` — worth confirming GST invoice series are labelled with the right legal entity.
+
+### 🔴 Financial statements audit — 3 P0s found. FIRST STEP IS A QUERY, NOT A FIX. → [docs/ACCOUNTING-AUDIT.md](docs/ACCOUNTING-AUDIT.md)
+
+Controller-grade audit of the **statements** (the transaction spine was already green — different question, different failure modes). Books-lite design is fine; the plug hides errors:
+
+> **Equity = Assets − Liabilities**, so the Balance Sheet can never fail to balance. In double-entry a non-balancing trial balance is the smoke alarm; here it's disconnected — any error flows silently into "retained earnings" and reads as profit.
+
+| # | Finding | Sev |
+|---|---|---|
+| **F1** | Customer advances have **no liability line** — advance cash is an asset, revenue correctly unrecognised, but nothing offsets it → the plug reports it as earnings. Systematic, because annual-advance collection *is* the business model. | **P0** |
+| **F2** | Balance-sheet receivable uses `subscriptions.outstanding_amount`; P&L + Aging use invoices (accrual). Unpaid **direct invoices** show ₹0 on the sheet; un-invoiced amounts get counted. Revenue ↔ receivables cannot be tied. | **P0** |
+| **F3** | **No depreciation in the P&L** — it exists only as a manual Balance Sheet contra line with no P&L link. Net Profit + taxable income overstated. | **P0** |
+| **F4** | `/accounting/assets` reads `useEmiPurchases()` only — a **cash-bought asset can't be recorded**; EMI cost never depreciates. | P1 |
+| **F5** | GST payable is cumulative FY with **no `gst_payments` table** — already-remitted GST still shows as a liability; error grows toward March. | P1 |
+| **F6** | `customer_credits` (open) missing from the sheet — money owed back to customers. | P1 |
+
+**⚠️ Reasoned-only — code read, no live data, so magnitudes are unknown.** F1 could be ₹0 today. **§7 of the doc has copy-paste SQL that turns all of this into rupees — run that before changing any code.**
+
+Then: **F1 + F6 are query-layer additions to `useBalanceSheetAuto()`, no migration** (cheapest fix, biggest correction) → F2 (definition decision: copy the project path's accrual rule) → F5 → F4+F3 **with the CA**, whose call the schedule and rates are.
+
+**Explicitly NOT recommended:** converting to full double-entry. Textbook answer, wrong trade — it touches every money surface across 196 migrations for a business with no paying tenants yet.
+
+**Also verified CORRECT** (audit is not a hit-piece): output GST uses the frozen per-invoice `tax_amount`, never a hardcoded 18%, so zero-rated exports aren't wrongly taxed · credit/debit notes net both revenue and GST · payroll posts exactly one expense row at **earned gross** (not net), linked for clean reversal, **no accrual/payment double-post** · employer ESI 3.25% booked separately · salary payable vs statutory dues correctly split · project receivable is accrual-correct.
+
+*Bonus:* `customer_credits.amount` is documented `-- ₹, always positive` (`0141:11`) — evidence to finally close the rupee-vs-paise ambiguity (matrix #36) in favour of **₹**.
+
+### 🔴 Multi-company (Zoho-Books-style) — decided, planned, BLOCKED on the isolation test suite. No DB change made.
+
+> **✅ The fake switcher is GONE (2026-08-13).** Decisions settled earlier: **(A) real multi-company, one login** · **group/merged view dropped** (wrong accounting) · **billing per company, 3 companies = 3×**.
+>
+> **Removed:** `lib/hooks/use-workspace.ts` (deleted) · `filterEntity`/`getEntityBadge` from all 6 pages · the topbar switcher + its duplicated localStorage logic · two dead partners-page buttons that wrote a key nothing reads · both hardcoded-tenant `.or()` fallbacks in `leads.ts`/`customers.ts` · a second keyword badge hiding in `subscriptions/page.tsx` (`"anutech"` in the name ⇒ label) that only typecheck caught · and two `me?.tenantId ?? "fbb976f1…"` fallbacks (`add-subscription-dialog`, `feedback-dialog`) that would have tried to write another tenant's row into Anutech's books. **Net: +61 / −463 lines.**
+>
+> **Browser-verified** (after clearing a corrupted `.next` cache — `Cannot find module './5836.js'`, not a code fault): `/customers` renders **34 rows**, and prod says Anutech Digital has **exactly 34** customers. RLS alone produces the right set; the keyword filter had only ever *hidden* the tenant's own rows. Topbar switcher confirmed gone, **zero console errors**. 234/234 tests, typecheck clean, lint 0 errors.
+>
+> **Next action is still NOT the migration.** It's unblocking the cross-tenant Playwright suite (TC-1008/1009, stuck on service-role key rotation) — the only automated proof of tenant isolation, and `current_tenant_id()` (150 live policies) must not be touched while it's dark.
+
+**Green first (done, working tree only, NOT committed):** unit suite was 185/189 → **196/196**; typecheck clean, lint 0 errors. Two tests had gone stale against deliberate code changes, so the *tests* were wrong, not the code:
+- `nav.test.ts` — `SCREEN_TITLES` was re-sectioned (Workspace → Home/Sales/Revenue/…) up to `cadffc4`; test still expected `"Workspace"`. Updated + added a mid-path-id case (`/customers/[id]/edit`). Also swapped the "no `[id]` entry" case from `/contacts/abc123` to `/payments/abc123` — `/contacts/[id]` now exists, so that assertion no longer tested what it claimed.
+- `inbound/status.test.ts` — labels were deliberately improved (`e85f997` renamed `appended_to_lead` → "Follow-up Reply"); test still expected the old copy. Updated to the shipped labels.
+- **Stale crumb fallback fixed:** `getCrumb()` fell back to `["Workspace", "Dashboard"]`, a section that no longer exists in `APP_NAV`. Now `["Home", "Dashboard"]`, matching `/dashboard`'s own entry. Browser-verified live on `/platform` (a shell-rendered route with no `SCREEN_TITLES` entry): breadcrumb reads **Home / Dashboard**. *Correction to my first write-up: I claimed this "lost the crumb's link" — it did not. The breadcrumb section renders as a plain `<span>` (`topbar.tsx:133`) and was never a link; `getSectionPrimaryHref()` turns out to be **used nowhere in the codebase** — the linking feature its docstring describes was never wired up. The fix is label correctness only.*
+- **🐞 Real bug found + fixed (mobile Back button dead-ends on deep links).** `topbar.tsx:116` called `getSectionPrimaryHref(pathname)`, but that function takes a **section name** (`"Home"`, `"Sales & CRM"`) — a pathname can never match, so it always returned `null` → `router.push(null as Route)` (the `as Route` cast hid it from tsc). This fires on any detail page on a phone when `window.history.length <= 1`, i.e. **the user deep-linked straight into a quote or invoice from WhatsApp/email** — the single most common entry path for this product. Back did nothing. Straight §24 dead-end.
+  Fix: new pure `getParentListHref(pathname)` in `nav.ts` — walks up `SCREEN_TITLES` to the nearest real list page (`/quotes/Q-1` → `/quotes`, `/accounting/banking/<id>` → `/accounting/banking`, `/customers/<id>/edit` → `/customers`) and **can never return null** (falls back to `/dashboard`). Back now lands on the list, which is what a deep-linked user actually wants. Covered by 12 green `nav.test.ts` tests, including a guard asserting `getSectionPrimaryHref()` returns null for a pathname *and* for a crumb section (`"Sales"` ≠ `"Sales & CRM"`), so this misuse can't come back silently.
+  ⚠️ **Not browser-verified:** the dev server never finished compiling `/customers/[id]` in that session, so the mobile Back click was not exercised in a real browser. Pure-function tests + typecheck only. Worth one manual phone check before deploy.
+- Also noted, not touched: `getSectionPrimaryHref` is now dead code (delete or wire up the breadcrumb links — a decision, not a cleanup); `topbar.tsx:47-68` re-implements the workspace localStorage logic instead of using `useActiveWorkspace()`, with a `saved as any` cast (violates CLAUDE.md §2 "no `any`"); `npm run lint` reports 4 `unnecessary dependency: 'workspace'` warnings across the filtered pages — more symptoms of the switcher below.
+
+**The finding.** `lib/hooks/use-workspace.ts` partitions Customers / Invoices / Quotes / Subscriptions / Leads / Contacts (6 pages) by **hardcoded tenant UUIDs** (`:95-99`) plus **company-name keyword matching** (`:122`):
+```
+if (identifier.includes("excel") || identifier.includes("vera") || identifier.includes("veracious")) return true;
+```
+Verified against the DB, not assumed:
+1. `leads` and `customers` each have exactly **4 RLS policies**, all `tenant_id = current_tenant_id()` (`0002_rls.sql:63-73, 99-109`). The only extra SELECT is portal-side `customers_select_self_customer` → `id = current_customer_id()` (`0016:68`), which is NULL for a reseller user. Partner/distributor cross-tenant reads go through `SECURITY DEFINER` RPCs (`0040`–`0044`), **never through policies**.
+2. A user therefore belongs to exactly one tenant (`lib/auth/membership.ts` — no invite ⇒ new tenant, never joins another), and can only ever read **one** tenant's rows.
+3. **⇒ The switcher is not switching tenants.** It re-filters a single tenant's rows by company name and badges them "Excel Tech" / "Anutech Digital". A customer named e.g. "Excellent Traders" lands in the wrong workspace and gets the wrong badge. The last ~10 commits (`242aa2b` → `646f27b`) are all patches to this same mechanism — which says the *approach* is wrong, not that a bug remains.
+4. **⇒ The hardcoded-tenant fallbacks are dead code.** `leads.ts:31` and `customers.ts:29` re-query with `.or("tenant_id.eq.A,tenant_id.eq.B,tenant_id.eq.C")` whenever the first query is empty/errored. Both queries pass through the same RLS, so the retry can never return a row the first one didn't — including when `current_tenant_id()` is NULL. It cannot help; it only hides *why* the screen was empty ("no data" vs "auth/tenant broken" become indistinguishable).
+
+**Not a live data leak** — RLS is holding. The cost is wrong labels, wrong buckets, and a masked root cause.
+
+**DECIDED by Pardeep (2026-08-12): (A) two real businesses, one login.** Genuine cross-tenant access. Plan below — **NOT APPLIED, awaiting approval before any DB change.**
+
+#### Plan: change the chokepoint, not the 331 policies
+
+`current_tenant_id()` is one line (`0001_init.sql:52-60`): `select tenant_id from public.users where id = auth.uid()`. Every RLS policy in the system — **331 references across 108 migration files** — funnels through it. So we change *only* that function's implementation and keep its meaning ("the tenant this request acts as"). Zero policy rewrites.
+
+**Migration (one reviewable file):**
+1. `user_tenant_memberships (user_id, tenant_id, role)` — PK `(user_id, tenant_id)`. RLS: read own rows; INSERT/DELETE owner + service_role only. **Explicit rows are the authorization — never name inference.**
+2. `users.active_tenant_id uuid references tenants(id)`.
+3. **Backfill:** one membership per existing user from their `users.tenant_id`, and `active_tenant_id = tenant_id`. ⇒ every existing user's visible data is **byte-identical** after the migration. It is a no-op until a second membership row is added by hand. That's the safety property that makes this reviewable.
+4. Write-time trigger: `active_tenant_id` must have a matching membership row (rejects at UPDATE, so the read path stays cheap).
+5. New body — write-time guard *and* a read-time check (defence in depth; both are PK lookups, and the function is `STABLE` so Postgres evaluates it once per statement):
+   ```sql
+   select case
+            when u.active_tenant_id is not null
+             and exists (select 1 from public.user_tenant_memberships m
+                          where m.user_id = u.id and m.tenant_id = u.active_tenant_id)
+            then u.active_tenant_id
+            else u.tenant_id
+          end
+     from public.users u where u.id = auth.uid();
+   ```
+   Fail-safe by construction: a stale or forged `active_tenant_id` degrades to the home tenant. It can never *grant* access.
+6. `set_active_tenant(p_tenant_id)` — validates membership, updates, returns the new tenant. The only way to switch.
+7. `my_tenants()` — the caller's memberships + tenant names, for the switcher UI.
+   Both RPCs: EXECUTE to `authenticated` + `service_role` only, per the `0145` deny-by-default idiom.
+
+**App changes:**
+- **Reads:** delete `filterEntity`/`getEntityBadge` calls from all 6 pages and both `.or()` fallbacks (`leads.ts:31`, `customers.ts:29`). RLS does the filtering now, so this is a **net deletion** — the pages get simpler, not more complex.
+- **Writes:** 32 places across 27 files derive tenant via `select tenant_id from users` for inserts; they must read the *active* tenant. Centralize into one helper (`lib/tenant.ts` server-side + one client equivalent) so there's a single change point. **Fail-safe:** the existing `*_insert` policies are already `WITH CHECK tenant_id = current_tenant_id()`, so a site we miss does not write to the wrong tenant — it errors loudly. This migration fails loud, not silent.
+- Also fix `topbar.tsx:47-68` (duplicated localStorage workspace logic + `as any`) by consuming the new hook.
+
+**⚠️ Two things Pardeep must know before approving:**
+- **"Group" mode → DELETE it, don't rebuild it (decided 2026-08-12).** RLS returns one tenant per request, so today's group mode is fake. But the Zoho Books comparison settled the question properly: **Zoho doesn't merge organizations either, deliberately.** Each GSTIN files its own GSTR-1/3B and each legal entity keeps its own books, so merging two companies' books is *wrong accounting*, not a missing feature. ~~Correct route later: an aggregate RPC~~ — no. Group view was never the goal. If cross-company *reporting* is ever wanted it's a separate read-only roll-up (like `get_partner_metrics`, `0044`), never a merged ledger.
+  *(This also killed one of my own arguments for deferring the whole feature — "(A) doesn't even deliver group view" attacked a feature that shouldn't exist. Recorded so the reasoning isn't reused.)*
+- **`0073` blocks this by design.** `team_invites_email_unique` on `lower(email)` is global — deliberately so one email can't be claimed by two tenants. Memberships must therefore be created owner/service-side, NOT through the invite flow, or that constraint needs a conscious revisit. Flagging rather than quietly working around it.
+
+**Tests before any UI (following the existing 28-test SQL pattern in `supabase/tests/`):** membership grants access · non-member `active_tenant_id` falls back to home tenant (no access) · switching changes visible rows · insert into a non-active tenant rejected · `record_payment` + `generate_invoice` act on the active tenant · document series stays per-tenant across a switch. Plus the Playwright cross-tenant suite TC-1008/1009 — **currently blocked on service-role key rotation; that blocker has to clear first**, since it's the only automated proof of isolation.
+
+**Sequencing:** branch → apply + test against a **restored copy of prod, not prod** → review → then UI. Unrelated but urgent: `session/money-spine-hardening-jun1` is **654 commits ahead of `master`**; a stray `master` deploy would drop the entire ERP layer. Worth settling before this lands.
+
+**Alternative considered and rejected:** JWT custom claims for the active tenant (needs auth hooks, and a stale token keeps stale access); `set_config` session vars (don't survive PgBouncer pooling). The `users` column + membership check is the smallest correct change for this codebase.
+
+#### Why this is a real product feature, not Pardeep's convenience (settled 2026-08-12)
+
+Pardeep asked: "Zoho Books lets a customer create multiple companies — can't we?" Yes, and it's **table stakes for the category**, not a nice-to-have: Zoho Books / Tally / QuickBooks all do it, and an Indian SMB owner running 2–4 legal entities for tax reasons is normal. A reseller evaluating us against Zoho notices its absence immediately.
+
+**The architecture is already ~80% there** — this was the surprise:
+
+| Zoho Books concept | Already built here |
+|---|---|
+| "Organization" = one company | `tenants` row: `name, gstin, state, state_code, address, doc_code, logo_url, lut_number, lut_valid_upto` (`0001`, `0185`) |
+| Each org gets its own gap-free invoice series | `document_series` PK = `(tenant_id, doc_type, fiscal_year)` (`0004:45`) |
+| Org-tagged document numbers | `INV-ET-2026-27-0001` via `tenants.doc_code` (`0054` — whose own comment says "confirmed codes for the **two real tenants**") |
+| Org switcher | ❌ **the only missing piece** |
+
+**One tenant = one company is already true.** Per-company GST series, GSTIN, LUT, logo and doc code all work today. The only thing hard-wired is *a user to a single tenant* — which is exactly what the membership plan above unlocks. Also telling: `lib/platform.ts` already ships **two founder emails for one person** (`pardeep@anutech.in`, `pardeep@exceltechnologies.in`) — the two-identity workaround is already in the code.
+
+**⏱ Also revised: deferring this gets more expensive, not less.** 32 JS write-sites need the active-tenant lookup today; at 196-migrations-and-counting velocity that number only grows. (I originally argued "defer"; the cost curve and the category-standard point both cut the other way. The one thing that did *not* change is the precondition below.)
+
+#### Billing model — DECIDED: per company, 3 companies = 3× (2026-08-12)
+
+Zoho's model, and Pardeep's call: each company is billed separately.
+
+**Billing lives on `tenants`, NOT on the membership.** My first phrasing ("per-membership billing flag") was wrong thinking — here's the counter-example that kills it:
+
+```
+Excel Technologies (COMPANY — Growth ₹2,499/mo)      Anutech Digital (COMPANY — Starter ₹999/mo)
+   ├── Pardeep     ← membership                          └── Pardeep  ← membership
+   └── Accountant  ← membership
+```
+2 companies · 3 memberships · bill = **₹3,498/mo**. Billing per *membership* would charge Pardeep twice for himself and would raise the bill just for adding an accountant to a company you already pay for.
+
+| Table | Job | Carries billing? |
+|---|---|---|
+| `user_tenant_memberships` | who may enter which company (a door key) | ❌ pure access row — keep it clean |
+| `tenants` | one company | ✅ plan / status / period live here |
+
+**Two consequences of "3 dega":**
+1. **"+ Add company" becomes a paid action** — it cannot be a free button, or someone runs 10 companies on a Starter plan. Zoho asks for the plan at org-creation for exactly this reason.
+2. **The paywall must check the ACTIVE tenant, not the user.** If Anutech's payment fails while Excel Tech is paid, switching to Anutech must go read-only/blocked while Excel Tech keeps working. A per-user check cannot express that.
+
+**⚠️ Verified: this billing system does not exist at all.** No `plan`, `billing_status`, `trial_ends`, or subscription column on `tenants` anywhere in 196 migrations; `/pricing` is marketing only; there is no paywall. (The "billing status" mentioned in CLAUDE.md §17 is `api_keys.revoked_at` — unrelated to Model B.) So **"3 dega" is a decision about a system that must be built from zero, and it's a bigger piece of work than multi-company access itself.**
+
+⇒ **Razorpay live is a PREREQUISITE for enforcing this, not a parallel task.**
+
+**What this changes today: nothing to build — but one thing to protect.** Billing columns go on `tenants` (their natural home) and the membership table stays a pure access row. Get that right now and "3× per company" becomes enforceable the day Razorpay lands, **with no migration**. The only way to lose that is to let a billing flag creep onto the membership table.
+
+**Independently of A/B, and safe:** delete both `.or()` fallbacks (dead code) and let an empty list be honestly empty. Deferred only because this repo has a documented history of prod-vs-git drift (`0146_capture_schema_drift_critical.sql`), so settle it against live prod first — as `Pardeep@…`, in Supabase SQL editor:
+```sql
+select current_setting('request.jwt.claims', true);            -- who am I
+select public.current_tenant_id();                              -- my one tenant
+select tenant_id, count(*) from public.customers group by 1;    -- what RLS actually lets me read
+select relrowsecurity from pg_class where relname = 'customers';-- is RLS even on
+```
+If row 3 returns more than one `tenant_id`, my analysis is wrong and RLS is not doing what `0002` says — that would be a P0 and takes priority over everything above.
 
 ### 🎨 /customers world-class redesign (Pardeep: "deep study, logical+UX+psychological, world class banao") — ✅ DONE (localhost, typecheck+lint clean, desktop+mobile verified)
 Deep 4-lens analysis then rebuilt `customers/page.tsx` as a book-of-business tool, not an accountant ledger:

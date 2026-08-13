@@ -1063,7 +1063,7 @@ function EditVendorCardModal({
                           className="bg-paper text-xs font-mono font-bold"
                         />
                         <span className="text-[10px] text-primary font-semibold block mt-0.5">
-                          📅 ₹{(Number(skuRates["Google Workspace Business Starter"] || 121) * 12).toLocaleString()} / yr
+                          📅 {rupee(Number(skuRates["Google Workspace Business Starter"] || 121) * 12)} / yr
                         </span>
                       </div>
                       <div>
@@ -1079,7 +1079,7 @@ function EditVendorCardModal({
                           className="bg-paper text-xs font-mono font-bold"
                         />
                         <span className="text-[10px] text-primary font-semibold block mt-0.5">
-                          📅 ₹{(Number(skuRates["Google Workspace Business Standard"] || 650) * 12).toLocaleString()} / yr
+                          📅 {rupee(Number(skuRates["Google Workspace Business Standard"] || 650) * 12)} / yr
                         </span>
                       </div>
                       <div>
@@ -1095,7 +1095,7 @@ function EditVendorCardModal({
                           className="bg-paper text-xs font-mono font-bold"
                         />
                         <span className="text-[10px] text-primary font-semibold block mt-0.5">
-                          📅 ₹{(Number(skuRates["Google Workspace Business Plus"] || 1260) * 12).toLocaleString()} / yr
+                          📅 {rupee(Number(skuRates["Google Workspace Business Plus"] || 1260) * 12)} / yr
                         </span>
                       </div>
                     </div>
@@ -1124,7 +1124,7 @@ function EditVendorCardModal({
                           className="bg-paper text-xs font-mono font-bold"
                         />
                         <span className="text-[10px] text-primary font-semibold block mt-0.5">
-                          📅 ₹{(Number(skuRates["Microsoft 365 Business Basic"] || 114) * 12).toLocaleString()} / yr
+                          📅 {rupee(Number(skuRates["Microsoft 365 Business Basic"] || 114) * 12)} / yr
                         </span>
                       </div>
                       <div>
@@ -1140,7 +1140,7 @@ function EditVendorCardModal({
                           className="bg-paper text-xs font-mono font-bold"
                         />
                         <span className="text-[10px] text-primary font-semibold block mt-0.5">
-                          📅 ₹{(Number(skuRates["Microsoft 365 Business Standard"] || 660) * 12).toLocaleString()} / yr
+                          📅 {rupee(Number(skuRates["Microsoft 365 Business Standard"] || 660) * 12)} / yr
                         </span>
                       </div>
                     </div>
@@ -1165,7 +1165,7 @@ function EditVendorCardModal({
                         className="bg-paper text-xs font-mono font-bold"
                       />
                       <span className="text-[10px] text-primary font-semibold block mt-0.5">
-                        📅 ₹{(Number(skuRates["Zoho One License"] || 290) * 12).toLocaleString()} / yr
+                        📅 {rupee(Number(skuRates["Zoho One License"] || 290) * 12)} / yr
                       </span>
                     </div>
                   </div>
@@ -1220,8 +1220,8 @@ function EditVendorCardModal({
                 className="bg-paper font-mono font-bold text-sm"
               />
               <div className="flex items-center justify-between text-[10px] mt-1 font-mono">
-                <span className="text-primary font-bold">🗓️ ₹{Number(monthlyCost || 0).toLocaleString()} / mo</span>
-                <span className="text-ink-3 font-semibold">📅 ₹{(Number(monthlyCost || 0) * 12).toLocaleString()} / yr</span>
+                <span className="text-primary font-bold">🗓️ {rupee(Number(monthlyCost || 0))} / mo</span>
+                <span className="text-ink-3 font-semibold">📅 {rupee(Number(monthlyCost || 0) * 12)} / yr</span>
               </div>
             </div>
           </div>

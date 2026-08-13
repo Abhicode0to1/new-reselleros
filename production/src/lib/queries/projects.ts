@@ -13,6 +13,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { toastError } from "@/lib/errors/toast-error";
 import type {
   ProjectSaleRow,
   ProjectMilestoneRow,
@@ -346,7 +347,7 @@ export function useUpdateProjectDates() {
       qc.invalidateQueries({ queryKey: ["project_sales"] });
       toast.success("Dates saved");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 }
 
@@ -378,7 +379,7 @@ export function useSaveProjectLabour() {
       qc.invalidateQueries({ queryKey: ["project_sales"] });
       toast.success("Labour saved");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 }
 
@@ -394,7 +395,7 @@ export function useRemoveProjectLabour() {
       qc.invalidateQueries({ queryKey: ["project_sales"] });
       toast.success("Labour removed");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 }
 
@@ -430,7 +431,7 @@ export function useCreateProjectSale() {
       qc.invalidateQueries({ queryKey: ["project_sales"] });
       toast.success("Project created");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not create project"),
+    onError: (err) => toastError(err, { fallback: "Could not create project" }),
   });
 }
 
@@ -491,7 +492,7 @@ export function useCreateProjectQuote() {
       qc.invalidateQueries({ queryKey: ["project_sales"] });
       toast.success("Quotation created");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not create quotation"),
+    onError: (err) => toastError(err, { fallback: "Could not create quotation" }),
   });
 }
 
@@ -529,7 +530,7 @@ export function useCreateProjectDirectInvoice() {
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
       toast.success(`Invoice ${res.invoice_id} raised`);
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not create invoice"),
+    onError: (err) => toastError(err, { fallback: "Could not create invoice" }),
   });
 }
 
@@ -565,7 +566,7 @@ export function useUpdateProjectQuote() {
       qc.invalidateQueries({ queryKey: ["project_sales", v.projectId] });
       toast.success("Quotation updated");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not update"),
+    onError: (err) => toastError(err, { fallback: "Could not update" }),
   });
 }
 
@@ -588,7 +589,7 @@ export function useUpdateProjectFutureMilestones() {
       qc.invalidateQueries({ queryKey: ["project_sales", v.projectId] });
       toast.success("Remaining schedule updated");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not update"),
+    onError: (err) => toastError(err, { fallback: "Could not update" }),
   });
 }
 
@@ -605,7 +606,7 @@ export function useDeleteProjectSale() {
       qc.invalidateQueries({ queryKey: ["bank_transactions"] });
       toast.success("Project deleted");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not delete"),
+    onError: (err) => toastError(err, { fallback: "Could not delete" }),
   });
 }
 
@@ -624,7 +625,7 @@ export function useAcceptProjectQuote() {
       qc.invalidateQueries({ queryKey: ["project_sales"] });
       toast.success("Quotation accepted — project is now active");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not accept"),
+    onError: (err) => toastError(err, { fallback: "Could not accept" }),
   });
 }
 
@@ -646,7 +647,7 @@ export function useRaiseMilestoneInvoice() {
       qc.invalidateQueries({ queryKey: ["invoices"] });
       toast.success(`Tax invoice ${invId} raised`);
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not raise invoice"),
+    onError: (err) => toastError(err, { fallback: "Could not raise invoice" }),
   });
 }
 
@@ -683,7 +684,7 @@ export function useRecordProjectPayment() {
       qc.invalidateQueries({ queryKey: ["bank_transactions"] });
       toast.success("Payment recorded");
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not record payment"),
+    onError: (err) => toastError(err, { fallback: "Could not record payment" }),
   });
 }
 
@@ -725,7 +726,7 @@ export function useCreateProjectTask() {
       if (error) throw error;
     },
     onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["project_tasks", v.projectId] }); },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 }
 
@@ -739,7 +740,7 @@ export function useUpdateProjectTask() {
       if (error) throw error;
     },
     onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["project_tasks", v.projectId] }); },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 }
 
@@ -752,7 +753,7 @@ export function useDeleteProjectTask() {
       if (error) throw error;
     },
     onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ["project_tasks", v.projectId] }); toast.success("Task removed"); },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 }
 
@@ -824,6 +825,6 @@ export function useCreateProjectTasksBulk() {
       return rows.length;
     },
     onSuccess: (n, v) => { qc.invalidateQueries({ queryKey: ["project_tasks", v.projectId] }); toast.success(`${n} tasks added to the roadmap`); },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 }

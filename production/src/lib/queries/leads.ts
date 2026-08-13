@@ -8,6 +8,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead, Database } from "@/lib/supabase/database.types";
 
@@ -19,21 +20,17 @@ export function useLeads() {
     queryKey: ["leads"],
     queryFn: async (): Promise<Lead[]> => {
       const supabase = createClient();
-      let { data, error } = await supabase
+      // Removed 2026-08-13: a fallback that re-queried with three hardcoded
+      // tenant UUIDs whenever this returned empty. It could never help — RLS
+      // (verified on prod: enabled on `leads` with 4 policies) applies to both
+      // queries, so the retry returns exactly the same rows. All it did was make
+      // "no leads yet" indistinguishable from "auth/tenant is broken". One of the
+      // three UUIDs also belonged to Delfos Technologies, an unrelated tenant.
+      const { data, error } = await supabase
         .from("leads")
         .select("*")
         .order("created_at", { ascending: false });
-
-      if (error || !data || data.length === 0) {
-        const res = await supabase
-          .from("leads")
-          .select("*")
-          .or("tenant_id.eq.fbb976f1-9090-4f10-9726-0901bd144e42,tenant_id.eq.4eeab895-6f4e-42ea-aaf2-efe4cfbc2129,tenant_id.eq.606a7ae7-9805-4a10-8163-7da6e42968e9")
-          .order("created_at", { ascending: false });
-        if (res.data && res.data.length > 0) {
-          data = res.data;
-        }
-      }
+      if (error) throw error;
       return data ?? [];
     },
   });
@@ -82,7 +79,12 @@ export function useUpdateLeadStage() {
     },
     onError: (err, _vars, ctx) => {
       qc.setQueryData(["leads"], ctx?.previous);
-      toast.error("Failed to update lead: " + (err as Error).message);
+      // The optimistic move was just rolled back — say so, or the card silently
+      // snapping back to its old column looks like the drag simply didn't work.
+      toastError(err, {
+        fallback: "Could not move the lead",
+        description: "The card went back to its previous stage — nothing was saved.",
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["leads"] });
@@ -108,7 +110,7 @@ export function useSetLeadJunk() {
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
       toast.success(isJunk ? `${ids.length} lead${ids.length > 1 ? "s" : ""} marked junk` : "Restored from junk");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -137,7 +139,7 @@ export function useClassifyJunk() {
       if (!res.ok) throw new Error(data?.error ?? "Could not run AI review.");
       return data as { verdicts: JunkAiVerdict[]; mode: "gemini" | "stub" };
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -207,7 +209,7 @@ export function useCreateLead() {
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
       toast.success("Lead created");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -234,7 +236,7 @@ export function useUpdateLead() {
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
       toast.success("Lead updated");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -256,7 +258,7 @@ export function useDeleteLead() {
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
       toast.success("Lead deleted");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -283,6 +285,6 @@ export function useMergeLeads() {
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }

@@ -31,7 +31,8 @@ export type BalanceSheetItem = {
 
 export interface BalanceSheetAuto {
   cashAndBank:     number;   // sum of all bank + cash account balances
-  receivables:     number;   // customers' unpaid balances (subscriptions outstanding)
+  receivables:     number;   // invoiced-but-unpaid, EXCLUDING project milestones (accrual)
+  advancesFromCustomers: number; // money received before invoicing — a LIABILITY, not earnings
   projectReceivable: number; // one-time / project sales: total − payments received
   tdsReceivable:   number;   // pending TDS credits from customers
   employeeLoans:   number;   // outstanding loans/advances to employees (an asset)
@@ -46,6 +47,43 @@ export interface BalanceSheetAuto {
   businessLoansPayable: number; // outstanding principal on loans TAKEN by the company (a liability)
   gstPayable:      number;   // net GST this FY (output − input); may be negative (credit)
   fyLabel:         string;   // e.g. "FY 2026-27" for the GST caveat
+}
+
+// ── Pure helpers (unit-tested — see balance-sheet.helpers.test.ts) ──────────
+
+/**
+ * Trade receivables on an ACCRUAL basis: invoiced but unpaid, EXCLUDING invoices
+ * that belong to a project milestone (those are counted by `projectReceivable`,
+ * so including them here would double-count — verified in prod: of ₹7,82,639
+ * unpaid invoices, ₹6,85,000 were project milestones).
+ *
+ * `net_payable` is preferred over `amount` because migration 0005 freezes the
+ * advance adjustment into it (CGST Rule 53) — using `amount` would re-count an
+ * advance that was already applied.
+ */
+export function computeTradeReceivables(
+  openInvoices: ReadonlyArray<{ id: string; amount?: number | null; net_payable?: number | null }>,
+  projectInvoiceIds: ReadonlySet<string>,
+): number {
+  return openInvoices
+    .filter((i) => !projectInvoiceIds.has(i.id))
+    .reduce((s, i) => s + (i.net_payable ?? i.amount ?? 0), 0);
+}
+
+/**
+ * Advances from customers: received payments against quotes that have NO invoice
+ * yet. The cash is already an asset in `cashAndBank`; this is the matching
+ * liability (service still owed). Without it the equity plug reports customer
+ * money as retained earnings.
+ */
+export function computeCustomerAdvances(
+  receivedPayments: ReadonlyArray<{ quote_id?: string | null; amount?: number | null }>,
+  quotes: ReadonlyArray<{ id: string; invoice_id?: string | null }>,
+): number {
+  const unInvoiced = new Set(quotes.filter((q) => !q.invoice_id).map((q) => q.id));
+  return receivedPayments
+    .filter((p) => p.quote_id != null && unInvoiced.has(p.quote_id))
+    .reduce((s, p) => s + (p.amount ?? 0), 0);
 }
 
 // ── Auto figures from app records ───────────────────────────────────────────
@@ -76,14 +114,46 @@ export function useBalanceSheetAuto() {
         }
       }
 
-      // Trade receivables — customers who still owe a balance.
-      const { data: subs, error: subErr } = await supabase
-        .from("subscriptions")
-        .select("outstanding_amount, written_off_at")
-        .gt("outstanding_amount", 0)
-        .is("written_off_at", null);
-      if (subErr) throw subErr;
-      const receivables = (subs ?? []).reduce((s, r) => s + (r.outstanding_amount ?? 0), 0);
+      // Trade receivables — ACCRUAL: invoiced but unpaid.
+      //
+      // Was `sum(subscriptions.outstanding_amount)`, which is a COLLECTIONS metric
+      // (quote expected − received), not a balance-sheet one. Verified against prod
+      // 2026-08-12: it reported ₹0 while ₹7.82L of invoices were genuinely unpaid,
+      // because the spine zeroes `outstanding_amount` once payments land even though
+      // the invoice is still open. It also counted amounts never invoiced (not yet
+      // legally owed) and missed direct invoices entirely (no subscription row).
+      // This now matches the P&L (accrual, on invoice issue) and the Aging report,
+      // so revenue ↔ receivables can finally be tied. `outstanding_amount` stays
+      // in use for chasing/collections UX, which is what it is good for.
+      //
+      // Project milestones are EXCLUDED here because `projectReceivable` below
+      // already counts them — including both would double-count. Verified in prod:
+      // of ₹7,82,639 unpaid invoices, ₹6,85,000 were project milestones.
+      const [{ data: openInv, error: invErr }, { data: msInv, error: msInvErr }] = await Promise.all([
+        supabase.from("invoices").select("id, amount, net_payable, status").in("status", ["pending", "overdue"]),
+        supabase.from("project_milestones").select("invoice_id").not("invoice_id", "is", null),
+      ]);
+      if (invErr) throw invErr;
+      if (msInvErr) throw msInvErr;
+      const projectInvoiceIds = new Set((msInv ?? []).map((m) => m.invoice_id as string));
+      const receivables = computeTradeReceivables(openInv ?? [], projectInvoiceIds);
+
+      // Advances from customers — money banked BEFORE an invoice exists.
+      //
+      // The spine issues a Receipt Voucher for these (CGST §31(3)(d)), so the system
+      // knows they are advances. The cash is already counted in `cashAndBank` above,
+      // but nothing offset it, so the equity plug reported it as retained earnings —
+      // i.e. customer money showed up as profit. Verified in prod: ₹8,00,189 across
+      // 12 payments. Once an invoice is raised, `invoices.adjusted_advances` freezes
+      // the adjustment (migration 0005) and the quote drops out of this set, so the
+      // liability unwinds on its own.
+      const [{ data: recdPays, error: payErr }, { data: quoteInv, error: qiErr }] = await Promise.all([
+        supabase.from("payments").select("quote_id, amount, status").eq("status", "received"),
+        supabase.from("quotes").select("id, invoice_id"),
+      ]);
+      if (payErr) throw payErr;
+      if (qiErr) throw qiErr;
+      const advancesFromCustomers = computeCustomerAdvances(recdPays ?? [], quoteInv ?? []);
 
       // Project-sale receivable — one-time deals (custom software etc.):
       // INVOICED-but-unpaid only (accrual): a milestone becomes a receivable when
@@ -235,7 +305,7 @@ export function useBalanceSheetAuto() {
 
       const gstPayable = outputGST - billsGst - expGst;
 
-      return { cashAndBank, receivables, projectReceivable, tdsReceivable, employeeLoans, prepaidAdvances, fixedAssets, payables, salaryPayable, salaryDuesPayable, reimbursementsPayable, creditCardPayable, emiLoansPayable, businessLoansPayable, gstPayable, fyLabel };
+      return { cashAndBank, receivables, advancesFromCustomers, projectReceivable, tdsReceivable, employeeLoans, prepaidAdvances, fixedAssets, payables, salaryPayable, salaryDuesPayable, reimbursementsPayable, creditCardPayable, emiLoansPayable, businessLoansPayable, gstPayable, fyLabel };
     },
     staleTime: 30_000,
   });

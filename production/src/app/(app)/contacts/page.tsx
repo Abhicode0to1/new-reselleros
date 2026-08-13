@@ -25,7 +25,6 @@ import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
 import { initials } from "@/lib/utils";
 
-import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 
 // Contacts are grouped by their unified "kind" (see contactKind): leads +
 // customers come from their own tables; partners / vendors / personal / other
@@ -135,11 +134,10 @@ export default function ContactsPage() {
     router.push(path as never);
   };
 
-  const { filterEntity, workspace } = useActiveWorkspace();
-
-  const contactsByWorkspace = React.useMemo(() => {
-    return (contacts ?? []).filter((c) => filterEntity(c));
-  }, [contacts, filterEntity, workspace]);
+  // Was client-side filtered by a "workspace" that matched on company-name
+  // keywords. RLS already scopes every read to the caller's tenant, so that
+  // filter only ever HID the tenant's own rows. Removed 2026-08-13.
+  const contactsByWorkspace = React.useMemo(() => contacts ?? [], [contacts]);
 
   // Filter
   const filtered = contactsByWorkspace.filter((c) => {

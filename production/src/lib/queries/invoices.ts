@@ -5,6 +5,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
 import type { Invoice } from "@/lib/supabase/database.types";
 
@@ -166,7 +167,7 @@ export function useGenerateInvoice() {
         toast.success(`Invoice ${invoiceId} generated · ₹${netPayable.toLocaleString("en-IN")} payable`);
       }
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -214,7 +215,7 @@ export function useCreateDirectInvoice() {
         `Invoice ${res.invoice_id} raised · ₹${res.net_payable.toLocaleString("en-IN")} due${res.tax_rate === 0 ? " · export (zero-rated)" : ""}`,
       );
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -240,7 +241,7 @@ export function useDeleteProjectInvoice() {
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
       toast.success("Project invoice deleted — payment reversed, milestone re-opened");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -263,7 +264,7 @@ export function useDeleteSubscriptionInvoice() {
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
       toast.success("Invoice deleted — quote re-opened for re-invoicing");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 

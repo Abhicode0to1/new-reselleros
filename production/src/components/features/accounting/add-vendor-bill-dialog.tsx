@@ -219,8 +219,13 @@ export function AddVendorBillDialog({ onClose }: { onClose: () => void }) {
       .filter((l) => l.name || l.amount > 0);
 
     // Record the FX basis in notes so the ₹ figures are auditable later.
+    // Both locales are PINNED on purpose: this string is persisted, so the same
+    // bill must produce the same note on every machine (an un-pinned
+    // toLocaleString() follows the browser locale). The foreign amount stays
+    // "en-US" — Western grouping is correct for USD/EUR; do NOT "fix" it to
+    // en-IN. Only the ₹ conversion uses Indian lakh grouping.
     const fxNote = isForeign
-      ? `Foreign bill: ${currency} ${values.total.toLocaleString()} @ ₹${rate}/${currency} = ₹${inr(values.total).toLocaleString("en-IN")}.`
+      ? `Foreign bill: ${currency} ${values.total.toLocaleString("en-US")} @ ₹${rate}/${currency} = ₹${inr(values.total).toLocaleString("en-IN")}.`
       : "";
     const notes = [fxNote, values.notes?.trim()].filter(Boolean).join(" ") || null;
 

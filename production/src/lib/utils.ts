@@ -64,14 +64,20 @@ export function rupee(
     return `₹${n.toFixed(decimals)}`;
   }
   // Indian numbering format: 4,90,644
-  const fixed = n.toFixed(decimals);
+  // Group the ABSOLUTE value and re-attach the sign afterwards. Grouping the
+  // signed string put the "-" inside intPart, so for −100…−999 `rest` was just
+  // "-" and the output came out as "₹-,500" (stray comma). Negative rupee values
+  // are real — e.g. a net GST credit on the Balance Sheet.
+  const fixed = Math.abs(n).toFixed(decimals);
   const [intPart, decPart] = fixed.split(".");
   const last3 = intPart.slice(-3);
   const rest = intPart.slice(0, -3);
   const formatted = rest
     ? `${rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",")},${last3}`
     : last3;
-  return `₹${formatted}${decPart ? `.${decPart}` : ""}`;
+  // Sign is taken AFTER rounding, so −0.4 at 0 decimals renders "₹0", not "₹-0".
+  const sign = n < 0 && Number(fixed) !== 0 ? "-" : "";
+  return `₹${sign}${formatted}${decPart ? `.${decPart}` : ""}`;
 }
 
 /**

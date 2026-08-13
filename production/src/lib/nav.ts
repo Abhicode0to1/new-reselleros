@@ -335,7 +335,10 @@ export const SCREEN_TITLES: Record<string, string[]> = {
 
 /**
  * Get breadcrumb path for a URL.
- * Falls back to ["Workspace", "Dashboard"] if no match.
+ * Falls back to ["Home", "Dashboard"] — the same crumb `/dashboard` itself maps
+ * to. (Was ["Workspace", …]: a section that no longer exists in APP_NAV, so a
+ * shell-rendered route with no SCREEN_TITLES entry — e.g. /platform — showed a
+ * stale section name.)
  */
 export function getCrumb(pathname: string): string[] {
   if (SCREEN_TITLES[pathname]) return SCREEN_TITLES[pathname];
@@ -357,7 +360,7 @@ export function getCrumb(pathname: string): string[] {
     if (SCREEN_TITLES[`${prefix}/[id]`]) return SCREEN_TITLES[`${prefix}/[id]`];
     if (SCREEN_TITLES[prefix]) return SCREEN_TITLES[prefix];
   }
-  return ["Workspace", "Dashboard"];
+  return ["Home", "Dashboard"];
 }
 
 /**
@@ -368,6 +371,29 @@ export function getCrumb(pathname: string): string[] {
  * isn't a known section name — e.g., a sub-page label like "Year-End"),
  * returns null and the caller renders plain text.
  */
+/**
+ * Nearest ancestor list page for a detail route — `/quotes/Q-1` → `/quotes`,
+ * `/customers/<id>/edit` → `/customers`, `/accounting/banking/<id>` →
+ * `/accounting/banking`. Mirrors `getCrumb()`'s walk-up over the same map.
+ *
+ * Used by the mobile Back button when there is no history to pop, i.e. the user
+ * DEEP-LINKED straight into a detail page (a quote/invoice link from WhatsApp or
+ * email — the common path for this product). Always returns something navigable,
+ * so Back can never dead-end (CLAUDE.md §24).
+ *
+ * NOTE: do not use `getSectionPrimaryHref()` for this. That takes a *section
+ * name* ("Home", "Sales & CRM"), not a pathname — passing a pathname always
+ * returns null.
+ */
+export function getParentListHref(pathname: string): string {
+  const segs = pathname.split("/").filter(Boolean);
+  for (let i = segs.length - 1; i >= 1; i--) {
+    const prefix = "/" + segs.slice(0, i).join("/");
+    if (SCREEN_TITLES[prefix]) return prefix;
+  }
+  return "/dashboard";
+}
+
 export function getSectionPrimaryHref(sectionName: string): string | null {
   const section = APP_NAV.find((s) => s.section === sectionName);
   if (!section || section.items.length === 0) return null;

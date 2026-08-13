@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/lib/errors/toast-error";
 
 import { useQuote, useDeleteQuote, quoteDeleteBlockReason } from "@/lib/queries/quotes";
 import { useGenerateInvoice } from "@/lib/queries/invoices";
@@ -135,7 +136,15 @@ export default function QuoteDetailPage() {
   const deleteBlock = quote ? quoteDeleteBlockReason(quote) : null;
   const handleDelete = () => {
     if (!quote) return;
-    if (deleteBlock) { toast.error(deleteBlock); return; }
+    if (deleteBlock) {
+      // §24: don't toast a bare reason — open the blocking dialog below, which
+      // lists the exact records holding this quote (invoice + received payments)
+      // each with its own Open button. That dialog already existed and is what
+      // §24 cites as the pattern; this path was the one place still dead-ending
+      // on a plain toast.
+      setBlockedOpen(true);
+      return;
+    }
     setConfirm({
       title: `Delete quote ${quote.id}?`,
       body: "This permanently deletes the quote. It cannot be undone.",
@@ -158,7 +167,7 @@ export default function QuoteDetailPage() {
       qc.invalidateQueries({ queryKey: ["quotes", params.id] });
       toast.success("Quote marked as sent");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 
   /**
@@ -187,7 +196,7 @@ export default function QuoteDetailPage() {
           : "Quote accepted · awaiting payment",
       );
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 
   const markRejected = useMutation({
@@ -201,7 +210,7 @@ export default function QuoteDetailPage() {
       qc.invalidateQueries({ queryKey: ["quotes", params.id] });
       toast("Quote marked as rejected");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 
   // Reopen — revert an accidentally-accepted quote back to 'sent'. The RPC
@@ -217,7 +226,7 @@ export default function QuoteDetailPage() {
       qc.invalidateQueries({ queryKey: ["quotes", params.id] });
       toast.success("Quote reopened — moved back to Sent");
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 
   // Use the central useGenerateInvoice hook — it calls next_document_number RPC
@@ -311,8 +320,15 @@ export default function QuoteDetailPage() {
       `Dhanyavaad,\n${me?.tenantName ?? ""}`;
     const digits = toWhatsAppDigits(recipientPhone);
     if (!digits) {
+      // §24: had the reason + the why, but no way to act on it. Send them to the
+      // exact record that needs the phone number.
       toast.error("No phone number for this customer/lead", {
-        description: "Add a phone on the customer or lead to send on WhatsApp.",
+        description: "Add a phone number on the record, then send on WhatsApp.",
+        action: quote.customer_id
+          ? { label: "Add phone", onClick: () => router.push(`/customers/${quote.customer_id}/edit` as any) }
+          : quote.lead_id
+            ? { label: "Open lead", onClick: () => router.push(`/leads?lead=${quote.lead_id}` as any) }
+            : undefined,
       });
       return;
     }
@@ -451,7 +467,7 @@ export default function QuoteDetailPage() {
                 await downloadQuotePdfFile();
                 toast.success(`${quote.id}.pdf downloaded`);
               } catch (err) {
-                toast.error(`PDF generation failed: ${(err as Error).message}`);
+                toastError(err, { fallback: "PDF generation failed" });
               } finally {
                 setDownloadingPdf(false);
               }

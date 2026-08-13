@@ -12,7 +12,6 @@ import { useProjectSales, useDeleteProjectSale, type ProjectSaleWithTotals } fro
 import { CreateProjectQuoteDialog } from "@/components/features/projects/create-project-quote-dialog";
 import { useCustomer } from "@/lib/queries/customers";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
-import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -140,11 +139,8 @@ export default function QuotesPage() {
     router.push(`/quotes/new?${params.toString()}` as any);
   };
 
-  const { filterEntity } = useActiveWorkspace();
-
-  const quotesByWorkspace = React.useMemo(() => {
-    return (quotes ?? []).filter((q) => filterEntity(q));
-  }, [quotes, filterEntity]);
+  // Workspace keyword filter removed 2026-08-13 — RLS already scopes to tenant.
+  const quotesByWorkspace = React.useMemo(() => quotes ?? [], [quotes]);
 
   // Counts per status — adds an "invoiced" bucket on top of the quote.status
   // enum, derived from payment_status. Truly-done deals (accepted + paid +

@@ -47,7 +47,6 @@ import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
 import { getInvoiceWhatsAppUrl } from "@/lib/whatsapp";
 import type { Invoice, Payment } from "@/lib/supabase/database.types";
-import { useActiveWorkspace } from "@/lib/hooks/use-workspace";
 
 const INV_COL_ORDER = ["select", "invoice", "customer", "date", "due", "amount", "status", "action"];
 // Fluid percentage widths (sum = 100) so the table always fits the viewport —
@@ -76,14 +75,11 @@ function InvoicesPageInner() {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [pendingOpen, setPendingOpen] = React.useState<boolean>(false);
 
-  const { filterEntity, workspace } = useActiveWorkspace();
-
   const isProjectInv = React.useCallback((id: string) => projectInvoiceIds?.has(id) ?? false, [projectInvoiceIds]);
 
-  const workspaceInvoices = React.useMemo(
-    () => (invoices ?? []).filter((inv) => filterEntity(inv)),
-    [invoices, filterEntity, workspace]
-  );
+  // Workspace keyword filter removed 2026-08-13 — RLS already scopes to tenant,
+  // so this only ever hid the tenant's own invoices.
+  const workspaceInvoices = React.useMemo(() => invoices ?? [], [invoices]);
 
   const viewInvoices = React.useMemo(
     () => workspaceInvoices.filter((inv) => view === "all" || (view === "project" ? isProjectInv(inv.id) : !isProjectInv(inv.id))),

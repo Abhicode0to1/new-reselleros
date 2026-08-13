@@ -23,7 +23,7 @@ This file is read by Claude Code on every session. It contains all conventions, 
 
 **The goal (compass):** make the money-spine **lead → quote → pay → subscription → invoice → renewal** provably correct (test-backed) → confident soft launch → first paying customer. *Correct first, beautiful second, big third.*
 
-**Map:** `docs/PROJECT-KNOWLEDGE.md` (whole system) · `docs/MONEY-FLOW-TEST-MATRIX.md` (bugs + launch line) · `TASKS.md` (live status).
+**Map:** `docs/PROJECT-KNOWLEDGE.md` (whole system — ⚠️ audited only to migration `0050`, see its banner) · `docs/MONEY-FLOW-TEST-MATRIX.md` (**transaction**-level money bugs + launch line) · `docs/ACCOUNTING-AUDIT.md` (**statement**-level: P&L / Balance Sheet correctness) · `docs/UX-AUDIT.md` (interaction / behaviour — incl. §24 compliance measured at 1-of-278) · `TASKS.md` (live status).
 
 ---
 
@@ -648,9 +648,79 @@ add-seats orphan trap in migration 0213 was a bug because there wasn't).
 
 **"Done" for any guard/block = reason + next-step hint + (where possible) a button.**
 
+---
+
+## 25. Session hygiene — working with Claude (added 2026-08-12)
+
+> Added after a full-codebase audit session. Every rule here exists because it
+> actually cost something in that session, not because it sounds sensible.
+
+**1. Docs are hypotheses. Code is truth.**
+Docs in this repo go stale faster than anyone updates them. `docs/PROJECT-KNOWLEDGE.md`
+claimed 27 migrations when there were **196**; it also still listed payment
+idempotency as "the biggest spine risk" long after `0051` fixed it. Never quote a
+count, a module list, or a bug status from a doc — verify it, then cite `file:line`.
+**And when you find a doc wrong: fix it or stamp it stale in the same session.**
+Working around a stale doc leaves the trap armed for the next reader.
+
+**2. What "green" means here.**
+```bash
+npm run typecheck && npm run test && npm run lint   # lint warnings OK, errors not
+```
+⚠️ **CI does not gate feature branches.** `.github/workflows/ci.yml` triggers only on
+pushes to `master` / `v3-dev` and on PRs — so on a long-lived session branch **the
+local gate is the only gate.** This is exactly how 4 unit tests sat broken for months:
+nobody was careless, there was simply no door.
+
+**There is now a door:** a `Stop` hook in `.claude/settings.json` (committed, team-wide)
+runs `npm run test` at the end of every Claude turn and surfaces a warning if anything
+fails. It is deliberately **non-blocking** — it makes a red suite impossible to *miss*,
+without trapping a turn in a fix-loop over a pre-existing failure. `typecheck` and
+`lint` are still manual (typecheck is ~40s; too slow to run every turn).
+
+Also: the 28 SQL regression tests in `supabase/tests/` are **not in CI and not in the
+hook**. Any DB/RPC change means running them by hand, or it isn't verified.
+
+*Note for hook authoring on this machine: `jq` is NOT installed, so the usual
+`jq`-based hook recipes will silently fail. Use `grep`/`printf`, or `node -e`.*
+
+**3. Say which kind of verified.**
+Three different things, never blur them:
+- **test-verified** — a test asserts it
+- **browser-verified** — actually observed in the running app
+- **reasoned-only** — inferred from reading code/migrations
+
+"Reasoned-only" is a perfectly good answer. Calling it "verified" is not. If something
+couldn't be checked, say so plainly and say why (no DB access, dev server wouldn't
+compile) rather than leaving a confident impression.
+
+**4. The dev server is slow — plan for it.**
+First compile ~36s; heavy pages (`/customers/[id]`) can take minutes or stall
+outright. If browser verification is part of the task, start the server early. If it
+stalls, **say so and move on** — don't spend the session waiting on it.
+
+**5. Cost before build.**
+For anything risky, irreversible, or money-touching: put the **price and the cheaper
+alternative on the table first**, then the plan. Lesson from this session — a full
+cross-tenant-membership plan got written before anyone noticed the change wouldn't
+even deliver the one feature (group view) that motivated it, and that two logins
+would. Design was right; timing was wrong. That should surface in sentence one, not
+after the plan.
+
+**6. Prod DB access is the highest-leverage thing to hand Claude.**
+Half the tenancy analysis in that session was *reasoned-only* because there was no way
+to query prod. Given this repo's own history of git-vs-prod drift (`0003` consolidated
+19 ad-hoc prod changes; `0146` captured more), inference is not proof. Read-only DB
+access — or just running the SQL and pasting the output — converts careful guesses into
+facts.
+
 ## 23. Updates
 
-This file is updated whenever a new convention is established. Last updated: 2026-05-29.
+This file is updated whenever a new convention is established. Last updated: **2026-08-12**.
+
+**Added 2026-08-12:**
+- **§25 — Session hygiene.** From a full-codebase audit: docs-are-stale discipline, what "green" means (and that **CI does not gate feature branches** — the local gate is the only gate), the test-verified / browser-verified / reasoned-only distinction, dev-server slowness, cost-before-build, and why read-only prod DB access is the highest-leverage thing to provide.
+- Stale-audit banner added to `docs/PROJECT-KNOWLEDGE.md` (it stopped at migration `0050`; there are now 196).
 
 **Major additions since 2026-05-20:**
 - Full renewal automation (Phase 1-4 + lifecycle pieces A/B/C) — schema, cadence engine, daily cron, email seam, auto-suspend with grace, record_payment roll-forward, on-demand "Generate quote" flow
