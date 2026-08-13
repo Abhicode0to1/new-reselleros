@@ -1194,6 +1194,36 @@ type TaskUpdate = Partial<TaskInsert>;
 // ============================================================
 // Renewal email log (migration 0008) — audit of every renewal cadence email
 // ============================================================
+/** Migration 0229 — one row per statutory reminder actually sent. */
+type ComplianceReminderLogRow = {
+  id:              string;
+  tenant_id:       string;
+  /** Obligation.key from lib/compliance/obligations.ts, e.g. 'roc_aoc4'. */
+  obligation_key:  string;
+  /** ComplianceInstance.periodKey, e.g. 'fy2025' or '2026-07'. */
+  period_key:      string;
+  /** Rung of the ladder: 15, 7 or 3. */
+  days_before:     number;
+  recipient_email: string;
+  status:          "sent" | "stubbed" | "failed" | "skipped";
+  provider_id:     string | null;
+  error_message:   string | null;
+  sent_at:         string;
+};
+type ComplianceReminderLogInsert = {
+  id?:              string;
+  tenant_id:        string;
+  obligation_key:   string;
+  period_key:       string;
+  days_before:      number;
+  recipient_email:  string;
+  status:           "sent" | "stubbed" | "failed" | "skipped";
+  provider_id?:     string | null;
+  error_message?:   string | null;
+  sent_at?:         string;
+};
+type ComplianceReminderLogUpdate = Partial<ComplianceReminderLogInsert>;
+
 type RenewalEmailLogRow = {
   id:              string;
   tenant_id:       string;
@@ -2857,6 +2887,7 @@ export type Database = {
       api_keys:           { Row: ApiKeyRow;            Insert: ApiKeyInsert;            Update: ApiKeyUpdate;            Relationships: [] };
       tasks:              { Row: TaskRow;              Insert: TaskInsert;              Update: TaskUpdate;              Relationships: [] };
       renewal_email_log:  { Row: RenewalEmailLogRow;   Insert: RenewalEmailLogInsert;   Update: RenewalEmailLogUpdate;   Relationships: [] };
+      compliance_reminder_log: { Row: ComplianceReminderLogRow; Insert: ComplianceReminderLogInsert; Update: ComplianceReminderLogUpdate; Relationships: [] };
       quote_send_log:     { Row: QuoteSendLogRow;      Insert: QuoteSendLogInsert;      Update: QuoteSendLogUpdate;      Relationships: [] };
       vendors:            { Row: VendorRow;             Insert: VendorInsert;            Update: VendorUpdate;            Relationships: [] };
       vendor_bills:       { Row: VendorBillRow;        Insert: VendorBillInsert;        Update: VendorBillUpdate;        Relationships: [] };

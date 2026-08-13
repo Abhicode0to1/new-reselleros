@@ -1,0 +1,193 @@
+/**
+ * Statutory-compliance reminder cron — T-15 / T-7 / T-3.
+ *
+ * Runs daily at 04:00 UTC = 09:30 IST (vercel.json) — half an hour after the
+ * renewals job, and inside working hours, so a due-date mail can be acted on the
+ * moment it is read rather than sitting overnight.
+ *
+ * For every tenant it computes which statutory obligations are approaching, and
+ * emails the OWNER and any user with the `accountant` role — the CA already sits
+ * in the team list, so no separate contact field is needed that could drift out
+ * of date.
+ *
+ * Auth: CRON_SECRET, FAIL CLOSED. This job emails on the tenant's behalf under
+ * the service role, so it must never run unauthenticated. No secret configured
+ * → 503, not "allow".
+ *
+ * Idempotency is in the database, not here. compliance_reminder_log (0229) has a
+ * unique index on (tenant, obligation, period, days_before, lower(email)), so a
+ * manual re-run, a retry after a deploy, or two overlapping instances cannot send
+ * the same "GSTR-3B due in 7 days" twice. The pre-check below is an optimisation;
+ * the constraint is the guarantee.
+ *
+ * `?dry=1[&on=YYYY-MM-DD]` rehearses without sending or writing — the same shape
+ * as the renewals cron, and for the same reason: a scheduler whose first proof of
+ * life is the day it emails real people is not a scheduler anyone should trust.
+ */
+import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { buildComplianceRows } from "@/lib/compliance/obligations";
+import { dueReminders, renderReminder, type PlannedReminder } from "@/lib/compliance/reminders";
+import { sendEmail, isEmailConfigured } from "@/lib/email/send";
+import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
+
+export const dynamic = "force-dynamic";
+export const runtime  = "nodejs";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
+
+interface Sent { tenant: string; obligation: string; period: string; daysBefore: number; to: string; status: string }
+
+interface RunResult {
+  ran_at: string;
+  evaluated_for: string;
+  dry_run: boolean;
+  email_mode: "real" | "stub";
+  tenants: number;
+  reminders_due: number;
+  sent: number;
+  skipped_already_sent: number;
+  no_recipients: number;
+  errors: { tenant: string; message: string }[];
+  details: Sent[];
+}
+
+export async function GET(req: Request)  { return handle(req); }
+export async function POST(req: Request) { return handle(req); }
+
+async function handle(req: Request) {
+  const expected = process.env.CRON_SECRET?.trim();
+  if (!expected) return NextResponse.json({ error: "cron not configured" }, { status: 503 });
+  const provided = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!timingSafeEqualStr(provided, expected)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const url  = new URL(req.url);
+  const dry  = url.searchParams.get("dry") === "1";
+  const on   = url.searchParams.get("on");
+  if (on && !dry) {
+    return NextResponse.json(
+      { error: "`on` is only allowed with dry=1 — a live run must use today's date" },
+      { status: 400 },
+    );
+  }
+  if (on && !/^\d{4}-\d{2}-\d{2}$/.test(on)) {
+    return NextResponse.json({ error: "`on` must be YYYY-MM-DD" }, { status: 400 });
+  }
+  // Midday IST — far enough from either midnight that the date cannot slip.
+  const today = on ? new Date(`${on}T12:00:00+05:30`) : new Date();
+
+  const supabase = createAdminClient();
+  const result: RunResult = {
+    ran_at: new Date().toISOString(),
+    evaluated_for: today.toISOString().slice(0, 10),
+    dry_run: dry,
+    email_mode: isEmailConfigured() ? "real" : "stub",
+    tenants: 0, reminders_due: 0, sent: 0, skipped_already_sent: 0, no_recipients: 0,
+    errors: [], details: [],
+  };
+
+  const { data: tenants, error: tErr } = await supabase.from("tenants").select("id, name");
+  if (tErr) return NextResponse.json({ error: `tenants fetch failed: ${tErr.message}` }, { status: 500 });
+  result.tenants = tenants?.length ?? 0;
+
+  for (const tenant of tenants ?? []) {
+    try {
+      // Recipients: the owner(s) and the CA. `accountant` is an existing role, so
+      // the CA is whoever the operator already invited as one — no shadow contact
+      // field that drifts out of date.
+      const { data: people } = await supabase
+        .from("users")
+        .select("email, role, is_active")
+        .eq("tenant_id", tenant.id)
+        .in("role", ["owner", "accountant"]);
+      const recipients = [...new Set(
+        (people ?? []).filter((p) => p.is_active !== false && p.email).map((p) => p.email.trim().toLowerCase()),
+      )];
+      if (recipients.length === 0) { result.no_recipients += 1; continue; }
+
+      // What is already filed, so a filed period is neither chased nor counted.
+      const { data: filedRows } = await supabase
+        .from("compliance_log")
+        .select("obligation_key, period_key, filed_date")
+        .eq("tenant_id", tenant.id);
+      const filed = new Map<string, string>(
+        (filedRows ?? []).map((r) => [`${r.obligation_key}|${r.period_key}`, r.filed_date as string]),
+      );
+
+      // What has already been reminded, keyed exactly as the unique index is.
+      //
+      // FAIL CLOSED IF THIS CANNOT BE READ. Migration 0229 creates the table; if
+      // it has not been applied, or a permission changes, this query errors and
+      // an unguarded `?? []` would read as "nothing has been sent yet" — so the
+      // job would email every owner and CA about every approaching deadline,
+      // every single day, and never record a thing. Sending nothing is a missed
+      // reminder the operator can still catch on the page; sending daily is how
+      // they mute the sender for good.
+      const { data: sentRows, error: sentErr } = await supabase
+        .from("compliance_reminder_log")
+        .select("obligation_key, period_key, days_before, recipient_email")
+        .eq("tenant_id", tenant.id);
+      if (sentErr) {
+        result.errors.push({
+          tenant: tenant.id,
+          message: `reminder log unreadable (${sentErr.message}) — skipped without sending, since idempotency cannot be guaranteed. Apply migration 0229.`,
+        });
+        continue;
+      }
+      const sentKey = (o: string, p: string, d: number, to: string) => `${o}|${p}|${d}|${to.toLowerCase()}`;
+      const alreadySentAll = new Set(
+        (sentRows ?? []).map((r) => sentKey(r.obligation_key, r.period_key, r.days_before, r.recipient_email)),
+      );
+
+      const rows = buildComplianceRows(today, filed);
+      // A rung counts as done for the tenant only once EVERY recipient has it —
+      // otherwise adding a CA halfway through a window would never reach them.
+      const plans: PlannedReminder[] = dueReminders(rows, (o, p, d) =>
+        recipients.every((to) => alreadySentAll.has(sentKey(o, p, d, to))));
+      result.reminders_due += plans.length;
+
+      for (const plan of plans) {
+        const msg = renderReminder(plan, APP_URL);
+        for (const to of recipients) {
+          if (alreadySentAll.has(sentKey(plan.obligationKey, plan.periodKey, plan.daysBefore, to))) {
+            result.skipped_already_sent += 1;
+            continue;
+          }
+          if (dry) {
+            result.details.push({ tenant: tenant.name ?? tenant.id, obligation: plan.obligationKey, period: plan.periodKey, daysBefore: plan.daysBefore, to, status: "(dry run)" });
+            continue;
+          }
+
+          let status: "sent" | "stubbed" | "failed" = "sent";
+          let providerId: string | null = null;
+          let errorMessage: string | null = null;
+          try {
+            const r = await sendEmail({ to, subject: msg.subject, text: msg.body });
+            providerId = (r as { id?: string } | undefined)?.id ?? null;
+            if (!isEmailConfigured()) status = "stubbed";
+          } catch (err) {
+            status = "failed";
+            errorMessage = (err as Error).message;
+          }
+
+          // Logged whatever happened. A failed send that leaves no trace is a
+          // reminder nobody knows was lost.
+          await supabase.from("compliance_reminder_log").insert({
+            tenant_id: tenant.id, obligation_key: plan.obligationKey, period_key: plan.periodKey,
+            days_before: plan.daysBefore, recipient_email: to,
+            status, provider_id: providerId, error_message: errorMessage,
+          });
+          if (status === "sent" || status === "stubbed") result.sent += 1;
+          result.details.push({ tenant: tenant.name ?? tenant.id, obligation: plan.obligationKey, period: plan.periodKey, daysBefore: plan.daysBefore, to, status });
+        }
+      }
+    } catch (err) {
+      // One tenant's failure must not stop every other tenant's reminders.
+      result.errors.push({ tenant: tenant.id, message: (err as Error).message });
+    }
+  }
+
+  return NextResponse.json(result);
+}
