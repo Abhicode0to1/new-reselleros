@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { renewalStateLabel, renewalStateTone } from "@/lib/renewals/cadence";
 import { TrialsExpiringCard } from "@/components/features/trials/trials-expiring-card";
 import { GettingStartedCard } from "@/components/features/dashboard/getting-started-card";
+import { MoneyHealthCard } from "@/components/features/dashboard/money-health-card";
 import { PriorityActionHub } from "@/components/features/dashboard/priority-action-hub";
 import { Badge } from "@/components/ui/badge";
 
@@ -554,6 +555,12 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      {/* Money-health — silent when everything works, so its appearance means
+          "stop and read". Placed above onboarding because a payment that is
+          being collected and never recorded outranks every other thing on this
+          page. Renders nothing for non-owners. */}
+      <MoneyHealthCard />
 
       {/* First-run onboarding — guides a new reseller to their first quote, then
           retires itself once they're set up (all steps derived from real data). */}
