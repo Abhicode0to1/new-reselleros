@@ -18,11 +18,21 @@
  * Passing --quote=<real id> makes the last case record a REAL payment against a
  * REAL quote. That is a live mutation. It is opt-in for that reason.
  *
+ * PREFER --from-db OVER --secret. Typing a secret into a shell command failed
+ * three times in a row in practice — the placeholder went through verbatim twice,
+ * and the third attempt sent the "first three characters" example including its
+ * ellipsis. None of those were user error so much as a bad interface: a secret
+ * that has to be re-typed to be tested will be mistyped. With --from-db the
+ * script reads the tenant's stored secret exactly as the route does, so the
+ * comparison is between the route and its own source of truth, and the value
+ * never appears in a command line, a shell history, or a screenshot.
+ *
  * Usage:
+ *   node scripts/webhook-selftest.mjs --url=https://… --tenant=<uuid> --from-db
  *   node scripts/webhook-selftest.mjs --url=http://localhost:3200 --secret=whsec_xxx
- *   node scripts/webhook-selftest.mjs --url=... --secret=... --tenant=<uuid>
  */
 import crypto from "node:crypto";
+import fs from "node:fs";
 
 const arg = (k, d = null) => {
   const hit = process.argv.find((a) => a.startsWith(`--${k}=`));
@@ -30,12 +40,55 @@ const arg = (k, d = null) => {
 };
 
 const BASE   = arg("url", "http://localhost:3000").replace(/\/$/, "");
-const SECRET = arg("secret");
 const TENANT = arg("tenant");
 const QUOTE  = arg("quote");
+const FROM_DB = process.argv.includes("--from-db");
 
-if (!SECRET) {
-  console.error("Missing --secret=<razorpay webhook signing secret>");
+/**
+ * Read the tenant's stored webhook secret the same way the route does, using the
+ * service-role key from .env.local. The value is used to sign and then dropped —
+ * it is never printed, not even masked.
+ */
+async function secretFromDb(tenantId) {
+  const env = {};
+  for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
+    const m = /^([A-Z_][A-Z0-9_]*)=(.*)$/.exec(line.trim());
+    if (m) env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+  }
+  const url = env.NEXT_PUBLIC_SUPABASE_URL, key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing from .env.local");
+
+  const res = await fetch(
+    `${url}/rest/v1/tenant_secrets?tenant_id=eq.${encodeURIComponent(tenantId)}&select=razorpay_webhook_secret`,
+    { headers: { apikey: key, authorization: `Bearer ${key}` } },
+  );
+  if (!res.ok) throw new Error(`Supabase read failed: HTTP ${res.status}`);
+  const rows = await res.json();
+  const v = rows?.[0]?.razorpay_webhook_secret;
+  if (typeof v !== "string" || !v.trim()) {
+    throw new Error("No razorpay_webhook_secret stored for that tenant — save it in Settings first.");
+  }
+  return v;
+}
+
+let SECRET = arg("secret");
+if (FROM_DB) {
+  if (!TENANT) { console.error("--from-db needs --tenant=<uuid>"); process.exit(2); }
+  try {
+    SECRET = await secretFromDb(TENANT);
+    console.log(`secret: read from the database for tenant ${TENANT.slice(0, 8)} (${SECRET.length} chars, not shown)`);
+  } catch (err) {
+    console.error(`Could not read the stored secret — ${err.message}`);
+    process.exit(2);
+  }
+} else if (!SECRET) {
+  console.error("Missing --secret=<signing secret>, or pass --from-db --tenant=<uuid> to read the stored one");
+  process.exit(2);
+} else if (/^(ASLI_SECRET|TUMHARA_SECRET_YAHAN|YOUR_SECRET|.*\.\.\.)$/.test(SECRET)) {
+  // A placeholder was pasted verbatim. Say so, instead of reporting a 401 that
+  // looks like the webhook is broken when nothing is wrong with it.
+  console.error(`--secret looks like a placeholder ("${SECRET}"), not a real secret.`);
+  console.error("Use --from-db --tenant=<uuid> instead and nothing needs typing.");
   process.exit(2);
 }
 
