@@ -202,7 +202,7 @@ ${tenant.name}${tenant.phone ? `\n${tenant.phone}` : ""}${tenant.email ? `\n${te
       tax,
       total,
       // GST head derived from seller (tenant) vs buyer (customer) state. (audit #18-20)
-      interState:    isInterStateSupply(customer?.state_code, tenant.state_code),
+      interState:    isInterStateSupply(customer?.state_code, tenant.state_code, { customerGstin: customer?.gstin, sellerGstin: tenant.gstin }),
       validityDays:  30,
       notes:         quote.notes ?? undefined,
       isRenewal:     quote.is_renewal,

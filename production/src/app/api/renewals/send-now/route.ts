@@ -232,7 +232,7 @@ export async function POST(req: Request) {
         taxRate:       renewalQuote.tax_rate ?? 18,
         tax:           Math.round((renewalQuote.subtotal ?? renewalQuote.amount) * 0.18),
         total:         renewalQuote.amount,
-        interState:    isInterStateSupply(customer?.state_code, tenant.state_code),
+        interState:    isInterStateSupply(customer?.state_code, tenant.state_code, { customerGstin: customer?.gstin, sellerGstin: tenant.gstin }),
         validityDays:  30,
         notes:         "Renewal quote. Reply or call us with any questions.",
         isRenewal:     true,

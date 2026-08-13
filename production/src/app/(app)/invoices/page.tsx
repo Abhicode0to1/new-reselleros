@@ -1110,7 +1110,7 @@ function InvoicePreviewContainer({
   const tax       = Math.round(taxable * (taxRate / 100));
   const total     = quote?.amount ?? invoice.amount;
 
-  const interState = isInterStateSupply(customer?.state_code, meTenant.tenantStateCode);
+  const interState = isInterStateSupply(customer?.state_code, meTenant.tenantStateCode, { customerGstin: customer?.gstin, sellerGstin: meTenant.tenantGstin });
   const receivedPayments = (payments ?? []).filter((p) => p.status === "received");
 
   return (
@@ -1504,7 +1504,7 @@ function InvoicePaymentsAccordion({ inv }: { inv: Invoice }) {
   const [receiptPayment, setReceiptPayment] = React.useState<Payment | null>(null);
 
   const received = (payments ?? []).filter((p) => p.status === "received");
-  const interState = isInterStateSupply(customer?.state_code, me?.tenantStateCode);
+  const interState = isInterStateSupply(customer?.state_code, me?.tenantStateCode, { customerGstin: customer?.gstin, sellerGstin: me?.tenantGstin });
 
   if (isLoading || projLoading) return <div className="text-xs text-ink-3 italic">Loading receipts…</div>;
 

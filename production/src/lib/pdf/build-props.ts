@@ -69,8 +69,18 @@ export function buildInvoicePdfProps(args: {
   const a: Amounts = quote ? quoteAmounts(quote) : invoiceAmounts(invoice);
   const total    = quote?.amount   ?? invoice.amount;
   const subtotal = quote?.subtotal ?? a.subtotal;
-  // GST head: the value persisted at issue time wins; else derive from states.
-  const interState = invoice.inter_state ?? isInterStateSupply(customer?.state_code, tenant.state_code);
+  // GST head: the value persisted at issue time wins; else derive from states,
+  // falling back to each party's GSTIN when a state code is missing.
+  //
+  // The `invoice.inter_state ??` guard matters more than the fallback: an ISSUED
+  // tax invoice's head is frozen at issue time and must never be recomputed. A
+  // reprinted invoice has to say what the original said, whatever we later learn
+  // about the customer's state. So this only decides the head for invoices that
+  // never recorded one.
+  const interState = invoice.inter_state ?? isInterStateSupply(
+    customer?.state_code, tenant.state_code,
+    { customerGstin: customer?.gstin, sellerGstin: tenant.gstin },
+  );
 
   return {
     invoice,
@@ -139,7 +149,12 @@ export function buildQuotePdfProps(args: {
     taxRate:       a.taxRate,
     tax:           a.tax,
     total:         a.total,
-    interState:    isInterStateSupply(customer?.state_code, tenant.state_code),
+    // A quote is not yet a tax document, so unlike an invoice there is nothing
+    // frozen to respect — always compute the best answer available today.
+    interState:    isInterStateSupply(
+      customer?.state_code, tenant.state_code,
+      { customerGstin: customer?.gstin, sellerGstin: tenant.gstin },
+    ),
     isExport:      isExportSupply(customer?.country),
     currency:      quote.currency ?? null,
     exchangeRate:  quote.exchange_rate ?? null,

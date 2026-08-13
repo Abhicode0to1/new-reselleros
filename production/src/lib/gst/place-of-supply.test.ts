@@ -72,3 +72,47 @@ describe("gstTreatment", () => {
     expect(gstTreatment(null, null, "07")).toBe("intra_state");
   });
 });
+
+describe("isInterStateSupply — GSTIN fallback (third argument)", () => {
+  const DELHI_GSTIN     = "07ABDCA0298H1ZP";   // the production seller's own
+  const KARNATAKA_GSTIN = "29AAGCB1286Q1Z0";   // check char minted via isValidGstin
+  const SELLER = "07";
+
+  it("fills in a missing customer state from their GSTIN", () => {
+    // Without the fallback this is the 36-customer production case: no state
+    // code, so CGST+SGST, even though the GSTIN says Karnataka.
+    expect(isInterStateSupply(null, SELLER)).toBe(false);
+    expect(isInterStateSupply(null, SELLER, { customerGstin: KARNATAKA_GSTIN })).toBe(true);
+  });
+
+  it("fills in a missing SELLER state too", () => {
+    expect(isInterStateSupply("29", null, { sellerGstin: DELHI_GSTIN })).toBe(true);
+  });
+
+  it("still says intra-state when the GSTIN is the same state", () => {
+    expect(isInterStateSupply(null, SELLER, { customerGstin: DELHI_GSTIN })).toBe(false);
+  });
+
+  it("ignores a GSTIN that fails the checksum", () => {
+    // A dummy or mistyped GSTIN must never decide a tax head.
+    expect(isInterStateSupply(null, SELLER, { customerGstin: "29AAGCB1286Q1ZZ" })).toBe(false);
+    expect(isInterStateSupply(null, SELLER, { customerGstin: "GUABCDE1234F1Z5" })).toBe(false);
+  });
+
+  it("an entered state code beats the GSTIN", () => {
+    // Registered in Karnataka, billed at a Delhi branch: the human's entry wins.
+    expect(isInterStateSupply("07", SELLER, { customerGstin: KARNATAKA_GSTIN })).toBe(false);
+  });
+
+  it("treats an unpadded state code as the same state", () => {
+    // Entered codes are hand-typed and often unpadded; derived ones never are.
+    expect(isInterStateSupply("7", SELLER, { customerGstin: KARNATAKA_GSTIN })).toBe(false);
+    expect(isInterStateSupply("7", "07")).toBe(false);
+  });
+
+  it("omitting the third argument behaves exactly as before", () => {
+    expect(isInterStateSupply(null, SELLER)).toBe(false);
+    expect(isInterStateSupply("29", SELLER)).toBe(true);
+    expect(isInterStateSupply("07", SELLER)).toBe(false);
+  });
+});

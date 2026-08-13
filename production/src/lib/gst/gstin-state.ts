@@ -15,13 +15,22 @@
  * as a mismatch between what was charged and what the customer's return expects,
  * and it is the customer who cannot claim the credit.
  *
- * In production 36 of 41 customers carrying a GSTIN have no state code at all,
- * so this fallback is not hypothetical plumbing.
+ * In production 36 of 41 customers carrying a GSTIN have no state code at all, so
+ * this fallback is not hypothetical plumbing.
  *
  * THE SAFETY RULE: only a GSTIN that passes the full checksum is trusted. Reading
  * the first two characters of an unvalidated string is how a typo or seeded dummy
- * data ("8P…", "GU…") starts deciding tax heads. Most of the GSTINs on those 36
- * production rows are exactly that, and this function ignores every one of them.
+ * data ("8P…", "GU…") starts deciding tax heads.
+ *
+ * MEASURED BLAST RADIUS, which is why this was safe to wire in: of 49 production
+ * customers exactly ONE holds a checksum-valid GSTIN, and enabling the fallback
+ * changes ZERO tax heads. Nearly every GSTIN on file today is seeded junk and is
+ * ignored. The behaviour starts mattering when real GSTINs arrive — which is the
+ * right time for it to start mattering, and not before.
+ *
+ * Issued invoices are untouched regardless: `invoices.inter_state` freezes the
+ * head at issue time (all 53 production invoices have it set) and a reprint must
+ * say what the original said, whatever is learned about the customer later.
  */
 import { isValidGstin, GST_STATE_BY_CODE } from "@/lib/utils";
 

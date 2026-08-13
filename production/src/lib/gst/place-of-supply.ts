@@ -1,3 +1,5 @@
+import { resolveStateCode } from "./gstin-state";
+
 /**
  * Place-of-supply → GST head (CGST+SGST vs IGST)
  *
@@ -21,16 +23,28 @@
  * but it can be wrong for an inter-state customer when the seller's own
  * `state_code` hasn't been set up yet. Callers should ensure the tenant's GST
  * profile (state_code) is configured — see /setup — so the comparison is real.
+ *
+ * GSTIN FALLBACK (third argument). A party who gave you their GSTIN already told
+ * you their state — it is the first two characters. In production 36 of 41
+ * customers holding a GSTIN have no state_code, and every one of them was being
+ * taxed as intra-state on that basis alone. Pass the GSTINs and a missing state
+ * code is filled in from them.
+ *
+ * Only a checksum-valid GSTIN is used (see stateCodeFromGstin), so a typo or a
+ * seeded dummy cannot start deciding tax heads, and an explicitly entered state
+ * code always wins over a derived one. When neither source knows, the
+ * conservative default above stands unchanged.
  */
 export function isInterStateSupply(
   customerStateCode: string | null | undefined,
   sellerStateCode: string | null | undefined,
+  gstins?: { customerGstin?: string | null; sellerGstin?: string | null },
 ): boolean {
-  return Boolean(
-    customerStateCode &&
-    sellerStateCode &&
-    customerStateCode !== sellerStateCode,
-  );
+  const buyer  = resolveStateCode({ stateCode: customerStateCode, gstin: gstins?.customerGstin });
+  const seller = resolveStateCode({ stateCode: sellerStateCode,   gstin: gstins?.sellerGstin });
+  // Compare numerically so "7" and "07" are one state — an entered code is
+  // hand-typed and often unpadded, while a GSTIN-derived one always is padded.
+  return Boolean(buyer && seller && Number(buyer) !== Number(seller));
 }
 
 /**

@@ -343,7 +343,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
               // never a hardcoded 18% (which taxed foreign auto-renewals wrongly).
               tax:           Math.round((renewalQuote.subtotal ?? renewalQuote.amount) * (renewalQuote.tax_rate ?? 18) / 100),
               total:         renewalQuote.amount,
-              interState:    isInterStateSupply(customer?.state_code, tenant.state_code),
+              interState:    isInterStateSupply(customer?.state_code, tenant.state_code, { customerGstin: customer?.gstin, sellerGstin: tenant.gstin }),
               validityDays:  30,
               notes:         "Renewal quote — auto-generated. Reply or call us with any questions.",
               isRenewal:     true,

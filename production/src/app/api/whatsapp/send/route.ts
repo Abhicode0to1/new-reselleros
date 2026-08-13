@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
       const { data: customer } = quote.customer_id
         ? await admin
             .from("customers")
-            .select("contact_name, contact_email, contact_phone, state_code")
+            .select("contact_name, contact_email, contact_phone, gstin, state_code")
             .eq("id", quote.customer_id)
             .single()
         : { data: null };
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
         taxRate,
         tax,
         total,
-        interState:    isInterStateSupply(customer?.state_code, tenant?.state_code),
+        interState:    isInterStateSupply(customer?.state_code, tenant?.state_code, { customerGstin: customer?.gstin, sellerGstin: tenant?.gstin }),
         validityDays:  30,
         notes:         quote.notes ?? undefined,
         isRenewal:     quote.is_renewal,

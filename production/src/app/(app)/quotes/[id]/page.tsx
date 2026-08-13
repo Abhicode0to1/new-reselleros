@@ -129,7 +129,7 @@ export default function QuoteDetailPage() {
   const receivedPayments = (paymentHistory ?? []).filter((p) => p.status === "received");
 
   // Inter-state? Compare customer state code vs tenant (seller) state code.
-  const interState = isInterStateSupply(customer?.state_code, me?.tenantStateCode);
+  const interState = isInterStateSupply(customer?.state_code, me?.tenantStateCode, { customerGstin: customer?.gstin, sellerGstin: me?.tenantGstin });
 
   // Delete — blocked for quotes with a recorded payment (cascade would wipe the
   // ledger). On success, navigate back to the list since this record is gone.

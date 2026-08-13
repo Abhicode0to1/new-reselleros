@@ -967,7 +967,7 @@ function QuotePreviewContainer({ quote, onClose }: { quote: Quote; onClose: () =
   const validity = quote.expires_date
     ? Math.max(1, daysBetween(new Date(quote.created_at), quote.expires_date))
     : 30;
-  const interState = isInterStateSupply(customer?.state_code, currentUser?.tenantStateCode);
+  const interState = isInterStateSupply(customer?.state_code, currentUser?.tenantStateCode, { customerGstin: customer?.gstin, sellerGstin: currentUser?.tenantGstin });
 
   return (
     <QuotePreviewDialog

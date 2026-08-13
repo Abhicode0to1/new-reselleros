@@ -460,7 +460,7 @@ export function QuoteBuilder() {
   const buyerStateCode = isLeadMode
     ? (leadStateCode || null)
     : (customerId ? (customer?.state_code ?? null) : (prospectStateCode || null));
-  const interState = isInterStateSupply(buyerStateCode, currentUser?.tenantStateCode);
+  const interState = isInterStateSupply(buyerStateCode, currentUser?.tenantStateCode, { customerGstin: customerId ? customer?.gstin : null, sellerGstin: currentUser?.tenantGstin });
 
   // Selling gross = the (negotiated) rate × qty. This is the actual revenue and
   // what gets billed / drives MRR — so it stays the subtotal.
