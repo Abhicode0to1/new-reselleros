@@ -35,6 +35,10 @@ import { useInvoices } from "@/lib/queries/invoices";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { usePayments } from "@/lib/queries/payments";
 import { formatDate } from "@/lib/utils";
+import {
+  customerKeywords, leadKeywords, quoteKeywords,
+  invoiceKeywords, subscriptionKeywords, contactKeywords,
+} from "@/lib/search/keywords";
 import AddSeatsDialog from "@/components/features/subscriptions/add-seats-dialog";
 import type { Subscription } from "@/lib/supabase/database.types";
 
@@ -58,10 +62,28 @@ export function useCommandPalette() {
   return { isOpen, setOpen, open: () => setOpen(true), close: () => setOpen(false) };
 }
 
-// Cap per-group results to keep the palette scannable. Most users find
-// their target in the first 5; we show 10 to be safe. cmdk's filter then
-// narrows further as they type.
-const MAX_PER_GROUP = 10;
+/**
+ * How many rows per group to render when NOTHING has been typed — a browsable
+ * preview, not a search result.
+ *
+ * This used to be applied unconditionally: `customers.slice(0, MAX_PER_GROUP)`.
+ * The order was backwards. Slicing happened BEFORE cmdk filtered, so only the
+ * first ten rows of each group were ever rendered and therefore only those ten
+ * could ever be matched. With 340 records across the groups, roughly 70 were
+ * searchable and 270 were invisible — searching "excel" returned a different
+ * customer entirely, because Excel Technologies was the 30-somethingth row and
+ * never made it into the DOM.
+ *
+ * The old comment claimed "cmdk's filter then narrows further as they type",
+ * which is exactly what could not happen: a filter cannot widen a set that was
+ * already truncated.
+ *
+ * So the cap now applies ONLY to the empty-query view. The moment the operator
+ * types, every row is rendered and cmdk filters the whole set. Rendering a few
+ * hundred rows is what cmdk is built for, and measured scoring cost across the
+ * entire working set is ~2.5ms per keystroke.
+ */
+const PREVIEW_PER_GROUP = 10;
 
 // ============================================================
 // CommandPalette
@@ -127,6 +149,15 @@ export function CommandPalette({
   const activeSubs = React.useMemo(
     () => (subscriptions ?? []).filter((s) => s.status === "active"),
     [subscriptions],
+  );
+
+  // Show a short preview per group when nothing is typed; render EVERYTHING once
+  // the operator types, so cmdk can filter the whole set rather than a truncated
+  // slice of it. See PREVIEW_PER_GROUP for why this is conditional.
+  const searching = query.trim().length > 0;
+  const cap = React.useCallback(
+    <T,>(rows: T[]): T[] => (searching ? rows : rows.slice(0, PREVIEW_PER_GROUP)),
+    [searching],
   );
 
   // Which subscription the seats dialog is open for, if any.
@@ -231,7 +262,7 @@ export function CommandPalette({
               {/* Customers — real, tenant-scoped */}
               {customers && customers.length > 0 && (
                 <Command.Group heading={`Customers · ${customers.length}`}>
-                  {customers.slice(0, MAX_PER_GROUP).map((c) => {
+                  {cap(customers).map((c) => {
                     const meta = [c.contact_name, c.contact_email, c.domain].filter(Boolean).join(" · ");
                     return (
                       <PaletteItem
@@ -239,6 +270,7 @@ export function CommandPalette({
                         icon="users"
                         label={c.name}
                         meta={meta || c.id}
+                        keywords={customerKeywords(c)}
                         onSelect={() => go(`/customers/${c.id}`)}
                       />
                     );
@@ -250,7 +282,7 @@ export function CommandPalette({
                   which pops the detail drawer (existing pattern). */}
               {leads && leads.length > 0 && (
                 <Command.Group heading={`Leads · ${leads.length}`}>
-                  {leads.slice(0, MAX_PER_GROUP).map((l) => {
+                  {cap(leads).map((l) => {
                     const stage = l.stage ? `${l.stage}` : "";
                     const value = l.value ? rupee(l.value, { compact: true }) : "";
                     const plan = l.plan ?? "No plan";
@@ -261,6 +293,7 @@ export function CommandPalette({
                         icon="target"
                         label={l.company}
                         meta={meta}
+                        keywords={leadKeywords(l)}
                         onSelect={() => go(`/leads?lead=${l.id}`)}
                       />
                     );
@@ -271,12 +304,13 @@ export function CommandPalette({
               {/* Contacts — unified across leads/customers/imported */}
               {contacts && contacts.length > 0 && (
                 <Command.Group heading={`Contacts · ${contacts.length}`}>
-                  {contacts.slice(0, MAX_PER_GROUP).map((c) => (
+                  {cap(contacts).map((c) => (
                     <PaletteItem
                       key={c.id}
                       icon="user"
                       label={c.name || c.email || c.phone || "(unnamed)"}
                       meta={[c.company, c.email, c.phone].filter(Boolean).join(" · ")}
+                      keywords={contactKeywords(c)}
                       onSelect={() => go("/contacts")}
                     />
                   ))}
@@ -286,7 +320,7 @@ export function CommandPalette({
               {/* Quotes — real tenant-scoped quotes with status + ₹ */}
               {quotes && quotes.length > 0 && (
                 <Command.Group heading={`Quotes · ${quotes.length}`}>
-                  {quotes.slice(0, MAX_PER_GROUP).map((q) => {
+                  {cap(quotes).map((q) => {
                     const total = q.amount != null ? rupee(q.amount, { compact: true }) : "";
                     const meta = [q.customer_name, total, q.status].filter(Boolean).join(" · ");
                     return (
@@ -295,6 +329,7 @@ export function CommandPalette({
                         icon="file"
                         label={q.id}
                         meta={meta}
+                        keywords={quoteKeywords(q)}
                         onSelect={() => go(`/quotes/${q.id}`)}
                       />
                     );
@@ -306,7 +341,7 @@ export function CommandPalette({
                   which auto-opens that invoice's preview (existing pattern). */}
               {invoices && invoices.length > 0 && (
                 <Command.Group heading={`Invoices · ${invoices.length}`}>
-                  {invoices.slice(0, MAX_PER_GROUP).map((inv) => {
+                  {cap(invoices).map((inv) => {
                     const total = inv.amount != null ? rupee(inv.amount, { compact: true }) : "";
                     const meta = [inv.customer_name, total, inv.status].filter(Boolean).join(" · ");
                     return (
@@ -315,6 +350,7 @@ export function CommandPalette({
                         icon="receipt"
                         label={inv.id}
                         meta={meta}
+                        keywords={invoiceKeywords(inv)}
                         onSelect={() => go(`/invoices?open=${inv.id}`)}
                       />
                     );
@@ -334,7 +370,7 @@ export function CommandPalette({
                   mean "I am looking for a particular customer". */}
               {activeSubs.length > 0 && query.trim().length >= 2 && (
                 <Command.Group heading="Add seats">
-                  {activeSubs.slice(0, MAX_PER_GROUP).map((s) => (
+                  {cap(activeSubs).map((s) => (
                     <PaletteItem
                       key={`seats-${s.id}`}
                       icon="plus"
@@ -356,7 +392,7 @@ export function CommandPalette({
               {/* Subscriptions — real, tenant-scoped */}
               {subscriptions && subscriptions.length > 0 && (
                 <Command.Group heading={`Subscriptions · ${subscriptions.length}`}>
-                  {subscriptions.slice(0, MAX_PER_GROUP).map((s) => {
+                  {cap(subscriptions).map((s) => {
                     const mrr = s.mrr ? `${rupee(s.mrr, { compact: true })}/mo` : "";
                     const meta = [s.plan, mrr, s.status].filter(Boolean).join(" · ");
                     return (
@@ -365,6 +401,7 @@ export function CommandPalette({
                         icon="refresh"
                         label={s.customer_name}
                         meta={meta}
+                        keywords={subscriptionKeywords(s)}
                         onSelect={() => go("/subscriptions")}
                       />
                     );
@@ -376,7 +413,7 @@ export function CommandPalette({
                   customers cache to make receipts name-searchable. */}
               {payments && payments.length > 0 && (
                 <Command.Group heading={`Payments · ${payments.length}`}>
-                  {payments.slice(0, MAX_PER_GROUP).map((p) => {
+                  {cap(payments).map((p) => {
                     const who = (p.customer_id && customerNameById.get(p.customer_id)) || "Payment";
                     const amount = rupee(p.amount, { compact: true });
                     const meta = [amount, p.method, formatDate(p.received_at), p.reference].filter(Boolean).join(" · ");
@@ -435,15 +472,28 @@ function PaletteItem({
   icon,
   label,
   meta,
+  keywords,
   onSelect,
 }: {
   icon: string;
   label: string;
   meta?: string;
+  /**
+   * Extra terms to match on that are NOT displayed — phone digits, GSTIN, the
+   * contact's name. Without these the palette could only find a row by what the
+   * row happened to show, so a lead was unfindable by the person's name or
+   * number: the two things you actually have when the phone rings.
+   *
+   * Kept out of `meta` on purpose. Padding the visible line makes rows
+   * unreadable AND flattens cmdk's ranking, so the right answer stops coming
+   * first.
+   */
+  keywords?: string[];
   onSelect: () => void;
 }) {
   return (
     <Command.Item
+      keywords={keywords}
       onSelect={onSelect}
       className={cn(
         "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer",
