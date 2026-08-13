@@ -12,6 +12,7 @@
 "use client";
 
 import * as React from "react";
+import { useDraftGuard } from "@/lib/hooks/useDraftGuard";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
@@ -234,6 +235,14 @@ export function QuoteBuilder() {
   React.useEffect(() => { if (leadCountryInit) setLeadCountry(leadCountryInit); }, [leadCountryInit]);
   const [notes, setNotes] = React.useState("");
   const [lineItems, setLineItems] = React.useState<QuoteLineItem[]>([]);
+
+  // No react-hook-form here, so "dirty" is defined explicitly: a line item
+  // added, or a customer chosen. Deliberately NOT every keystroke — a quote
+  // where somebody typed one character into a search box is not work worth
+  // interrupting them to protect, and a prompt that fires when it should not
+  // is one users learn to click through, including when it is right.
+  useDraftGuard(lineItems.length > 0 || customerId !== "" || prospectName.trim() !== "");
+
   // For a foreign (USD) quote: which price basis to bill on when an item has BOTH
   // a ₹ price and a real foreign price. "international" = use the item's catalog
   // USD price (fall back to ₹-converted if none); "india" = always the ₹ price

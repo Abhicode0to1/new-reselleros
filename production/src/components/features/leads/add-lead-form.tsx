@@ -19,6 +19,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useForm } from "react-hook-form";
+import { useDraftGuard } from "@/lib/hooks/useDraftGuard";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
@@ -217,7 +218,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
     setValue,
     watch,
     getValues,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: editingLead
@@ -249,6 +250,12 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
           // when the user picks a plan — see the useEffect below.
         },
   });
+
+  // Flags the workspace tab while this form holds unsaved input, so closing
+  // it asks first and the 8-tab limit cannot evict it silently. isDirty is
+  // React Hook Form's own comparison against defaultValues, so re-typing the
+  // original value correctly counts as clean.
+  useDraftGuard(isDirty && !isSubmitting);
 
   const watchedSeats = watch("seats");
 
