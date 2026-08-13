@@ -7,7 +7,8 @@
  * checks renewal_email_log before sending).
  *
  * Cadence (in "days until renewal" form):
- *   d ≥ 16        → 'pending'        no email
+ *   d ≥ 31        → 'pending'        no email
+ *   d == 30       → 'early_notice'   early heads-up (migration 0228)
  *   d == 15       → 'notice_sent'    soft notice + PDF quote attached
  *   d == 12       → 'reminder_1'     soft reminder
  *   d == 9        → 'reminder_2'     friendly
@@ -20,6 +21,8 @@
 
 export type RenewalState =
   | "pending"
+  /** T-30 early heads-up. Requires migration 0228 to exist in the DB enum. */
+  | "early_notice"
   | "notice_sent"
   | "reminder_1"
   | "reminder_2"
@@ -30,10 +33,21 @@ export type RenewalState =
   | "renewed"
   | "suspended";
 
-export type CadenceTone = "soft" | "friendly" | "firm" | "urgent" | "final" | "grace";
+export type CadenceTone = "early" | "soft" | "friendly" | "firm" | "urgent" | "final" | "grace";
 
-/** Trigger map — which day before renewal triggers which step. */
+/**
+ * Trigger map — which day before renewal triggers which step.
+ *
+ * MUST STAY IN DESCENDING daysOut ORDER. decideCadence() walks this list to find
+ * the most-urgent trigger that should already have fired (the catch-up rule for a
+ * cron that missed a day), and that scan assumes the ordering.
+ *
+ * T-30 was added last (migration 0228) and is a heads-up, not a chase: an annual
+ * Workspace renewal often needs a PO raised or a budget signed off, and a
+ * fortnight is not enough room for that during a quarter close.
+ */
 export const CADENCE_TRIGGERS: { daysOut: number; step: RenewalState; tone: CadenceTone }[] = [
+  { daysOut: 30, step: "early_notice", tone: "early"    },
   { daysOut: 15, step: "notice_sent",  tone: "soft"     },
   { daysOut: 12, step: "reminder_1",   tone: "soft"     },
   { daysOut:  9, step: "reminder_2",   tone: "friendly" },
@@ -128,7 +142,7 @@ export function decideCadence(input: CadenceInput): CadenceDecision {
     };
   }
 
-  // Before the first trigger (d ≥ 16) — pending, no email
+  // Before the first trigger (d ≥ 31 since 0228 added T-30) — pending, no email
   return {
     targetState:      "pending",
     daysUntilRenewal: daysOut,
@@ -142,6 +156,7 @@ export function decideCadence(input: CadenceInput): CadenceDecision {
 export function renewalStateLabel(state: RenewalState): string {
   switch (state) {
     case "pending":      return "Pending";
+    case "early_notice": return "Early notice (T-30)";
     case "notice_sent":  return "Notice sent (T-15)";
     case "reminder_1":   return "Reminder 1 (T-12)";
     case "reminder_2":   return "Reminder 2 (T-9)";
@@ -159,6 +174,8 @@ export function renewalStateTone(state: RenewalState): "muted" | "info" | "warni
   switch (state) {
     case "pending":
     case "renewed":      return "muted";
+    // T-30 is a heads-up, not a chase — it must not look like a warning.
+    case "early_notice": return "info";
     case "notice_sent":
     case "reminder_1":   return "info";
     case "reminder_2":

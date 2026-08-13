@@ -43,6 +43,28 @@ const rupee = (n: number) => "₹" + n.toLocaleString("en-IN");
 
 export function renderTemplate(tone: CadenceTone, ctx: RenewalTemplateContext): RenewalTemplate {
   switch (tone) {
+    // T-30 (migration 0228). Deliberately the least pushy message in the ladder:
+    // a month out nothing is wrong yet, and what the customer actually needs is
+    // lead time to raise a PO or get a budget signed off — not urgency.
+    //
+    // It quotes NO price. At T-30 the renewal quote may not exist yet (the cron
+    // only creates one when entering notice_sent at T-15), and a figure invented
+    // here is the single way this email could do harm: a customer who plans around
+    // a number that later changes has been misled, however politely.
+    case "early":
+      return {
+        subject: `Heads-up: your ${ctx.planName} renews on ${ctx.renewalDate}`,
+        body:
+`Hi ${ctx.customerName},
+
+Nothing to action today — this is just early notice that your ${ctx.planName} subscription (${ctx.seats} seats) is due for renewal on ${ctx.renewalDate}, about ${ctx.daysUntil} days away.
+
+I'm sending it a month ahead in case a purchase order or budget approval needs arranging at your end. If you'd like the renewal quote now, or want to change the seat count before we prepare it, just reply and I'll sort it out.
+
+Thanks,
+${ctx.tenantName}${ctx.tenantPhone ? `\n${ctx.tenantPhone}` : ""}${ctx.tenantEmail ? `\n${ctx.tenantEmail}` : ""}`,
+      };
+
     case "soft":
       return {
         subject: `Your ${ctx.planName} renewal is coming up — ${ctx.renewalDate}`,

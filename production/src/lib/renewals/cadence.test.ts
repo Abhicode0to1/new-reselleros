@@ -22,10 +22,59 @@ describe("decideCadence — normal cadence", () => {
     expect(d.shouldSendEmail).toBe(true);
   });
 
-  it("far out (d ≥ 16) → pending, no email", () => {
-    const d = decide("2026-08-20", "pending"); // daysOut 19
+  it("far out (d ≥ 31) → pending, no email", () => {
+    // Was "d ≥ 16" with a 19-day case. Migration 0228 opened the cadence at
+    // T-30, so 19 days out now legitimately fires the early notice — the old
+    // assertion was describing the old ladder, not a broken one.
+    const d = decide("2026-09-20", "pending"); // daysOut 50
     expect(d.targetState).toBe("pending");
     expect(d.shouldSendEmail).toBe(false);
+  });
+});
+
+describe("decideCadence — T-30 early notice (migration 0228)", () => {
+  it("T-30 exactly → early_notice, one email", () => {
+    const d = decide("2026-08-31", "pending"); // daysOut 30
+    expect(d.targetState).toBe("early_notice");
+    expect(d.tone).toBe("early");
+    expect(d.shouldSendEmail).toBe(true);
+  });
+
+  it("T-31 is still too early", () => {
+    const d = decide("2026-09-01", "pending"); // daysOut 31
+    expect(d.targetState).toBe("pending");
+    expect(d.shouldSendEmail).toBe(false);
+  });
+
+  it("catch-up: a cron that missed T-30 still sends it at T-22", () => {
+    // Same catch-up rule the rest of the ladder uses — an outage or a deploy
+    // must not silently swallow a step.
+    const d = decide("2026-08-23", "pending"); // daysOut 22
+    expect(d.targetState).toBe("early_notice");
+    expect(d.shouldSendEmail).toBe(true);
+  });
+
+  it("does not resend the early notice once it has been sent", () => {
+    const d = decide("2026-08-25", "early_notice"); // daysOut 24
+    expect(d.targetState).toBe("early_notice");
+    expect(d.shouldSendEmail).toBe(false);
+  });
+
+  it("T-15 still fires after the early notice — the ladder advances", () => {
+    // The reason early_notice needed its OWN enum value: folding T-30 into
+    // 'notice_sent' would make this look already-sent and skip the real notice.
+    const d = decide("2026-08-16", "early_notice"); // daysOut 15
+    expect(d.targetState).toBe("notice_sent");
+    expect(d.shouldSendEmail).toBe(true);
+  });
+
+  it("a subscription already renewed never gets an early notice", () => {
+    const d = decide("2026-08-31", "renewed");
+    expect(d.shouldSendEmail).toBe(false);
+  });
+
+  it("T-30 does not suspend anything", () => {
+    expect(decide("2026-08-31", "pending").shouldSuspend).toBe(false);
   });
 });
 

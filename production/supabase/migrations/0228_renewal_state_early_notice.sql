@@ -1,0 +1,45 @@
+-- 0228 — add 'early_notice' to the renewal_state enum (the T-30 early heads-up)
+--
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ⚠️  RUN THIS FILE **ALONE**, AS THE ONLY STATEMENT IN THE RUN.
+--
+-- `alter type ... add value` cannot be used in the same transaction that adds it.
+-- The Supabase SQL editor executes a pasted script as ONE transaction, so pasting
+-- this together with anything that references 'early_notice' fails with
+--   "unsafe use of new value 'early_notice' of enum type renewal_state"
+-- and the whole transaction rolls back — including the ALTER.
+--
+-- And do NOT paste a verification SELECT with it. Inside the same uncommitted
+-- transaction the check sees the new value and reports success for a change that
+-- is about to disappear. Verify in a SEPARATE run:
+--
+--   select unnest(enum_range(null::public.renewal_state));
+--
+-- Expect 11 values, with early_notice among them.
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- WHY: the renewal cadence opened at T-15. That is late for an annual Google
+-- Workspace renewal, where the customer often needs to raise a PO, get a budget
+-- sign-off, or simply ask a question before paying — none of which fit in a
+-- fortnight during a quarter close. T-30 is the first point where a heads-up is
+-- useful rather than noise, and it is the one step of the published cadence the
+-- system did not have.
+--
+-- WHY AN ENUM VALUE AND NOT A REUSED ONE: both `subscriptions.renewal_state` and
+-- `renewal_email_log.cadence_step` are this enum, and the log's idempotency key is
+-- (subscription_id, cadence_step). Folding T-30 into 'notice_sent' would make the
+-- T-15 notice look already-sent and silently skip it — trading a missing early
+-- reminder for a missing real one.
+--
+-- SAFETY: `add value` is additive and cannot fail against existing data. No row
+-- is read or written here. Existing states keep their meaning and their order;
+-- the new value sorts last in enum_range, which nothing in the app relies on.
+--
+-- DEPLOY ORDER MATTERS: apply this BEFORE deploying the code that writes
+-- 'early_notice'. Until it exists, a T-30 write raises invalid_text_representation.
+-- The cron isolates each subscription in its own try/catch, so the blast radius is
+-- one row's reminder rather than the whole job — but it would still be a silent
+-- miss, and production's earliest renewal is 2027-07-22, so T-30 first fires around
+-- 2027-06-22. There is time; do it in the right order anyway.
+
+alter type public.renewal_state add value if not exists 'early_notice';

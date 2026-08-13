@@ -1021,6 +1021,9 @@ type InvoiceUpdate = Partial<InvoiceInsert>;
 
 export type RenewalState =
   | "pending"
+  /** T-30 early heads-up. Added to the DB enum by migration 0228 — this union
+   *  mirrors `public.renewal_state`, so it must not list a value the enum lacks. */
+  | "early_notice"
   | "notice_sent"
   | "reminder_1"
   | "reminder_2"
