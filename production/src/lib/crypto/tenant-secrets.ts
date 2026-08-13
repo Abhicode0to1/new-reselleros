@@ -28,6 +28,11 @@ export const SECRET_COLUMNS = [
   "whatsapp_app_secret",
   "whatsapp_verify_token",
   "sandbox_api_secret",
+  // Per-tenant sending key. Until 0237 there was only the deployment-wide
+  // RESEND_API_KEY env var, which meant every tenant sent through one account:
+  // one bill, one domain reputation, and one tenant's spam complaint degrading
+  // delivery for all of them.
+  "resend_api_key",
 ] as const;
 
 const SECRET_SET = new Set<string>(SECRET_COLUMNS);

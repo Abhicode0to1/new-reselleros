@@ -68,14 +68,49 @@ export function contactsRedirectUri(origin: string): string {
   return `${origin}/api/integrations/google-contacts/callback`;
 }
 
-export function buildAuthUrl(clientId: string, redirectUri: string, state: string): string {
+/**
+ * Separate callback from contacts, and therefore a SECOND authorised redirect
+ * URI to register in Google Cloud Console.
+ *
+ * Sharing one callback would be less setup but the handler could no longer tell
+ * which consent it was completing, so it could not decide what to store or where
+ * to send the user back to. Two URIs, two unambiguous handlers.
+ */
+export function gmailRedirectUri(origin: string): string {
+  return `${origin}/api/integrations/google-gmail/callback`;
+}
+
+/**
+ * @param scope Space-separated scopes. Defaults to contacts so the existing
+ *        caller keeps its behaviour — a default that silently changed what a
+ *        consent screen asks for would be a nasty way to break trust.
+ */
+export function buildAuthUrl(
+  clientId: string,
+  redirectUri: string,
+  state: string,
+  scope: string = GOOGLE_CONTACTS_SCOPES,
+): string {
   const p = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: GOOGLE_CONTACTS_SCOPES,
+    scope,
     access_type: "offline",     // → refresh token
     prompt: "consent",          // force refresh-token issuance on reconnect
+    /**
+     * Load-bearing for BOTH flows, and easy to talk yourself out of.
+     *
+     * Contacts and Gmail write the same `user_google_tokens` row (one per
+     * user_id), so the second consent replaces the first one's access token and
+     * `scopes`. Without this flag, connecting Gmail after Contacts would store a
+     * send-only token and contacts sync would start returning 403 — an
+     * integration broken by connecting a different one.
+     *
+     * With it, Google returns a token carrying everything the account has
+     * granted this client, so `scopes` describes the token accurately and
+     * neither flow can knock the other over.
+     */
     include_granted_scopes: "true",
     state,
   });

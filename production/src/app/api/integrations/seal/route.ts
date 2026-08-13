@@ -104,8 +104,20 @@ export async function POST() {
     }, { status: 503 });
   }
 
-  const { error: writeErr } = await admin
-    .from("tenant_secrets")
+  // The cast covers ONE ordering problem, not a type hole: SECRET_COLUMNS now
+  // lists `resend_api_key`, but `types.ts` is generated from the live database
+  // and migration 0237 has not been applied, so that column does not exist to
+  // TypeScript yet. Every key in `sealedRow` still comes from SECRET_COLUMNS, so
+  // a typo cannot sneak through here — it would have to be typo'd in the
+  // constant, where it is one list of seven strings.
+  //
+  // Remove the cast once 0237 is applied and types are regenerated.
+  const secretsTable = admin.from("tenant_secrets") as unknown as {
+    update(patch: Partial<Record<SecretColumn, string>>): {
+      eq(column: string, value: string): Promise<{ error: { message: string } | null }>;
+    };
+  };
+  const { error: writeErr } = await secretsTable
     .update(sealedRow)
     .eq("tenant_id", me.tenant_id);
 
