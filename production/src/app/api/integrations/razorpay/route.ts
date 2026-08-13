@@ -14,6 +14,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { razorpayReadiness, razorpayMode } from "@/lib/payments/razorpay-readiness";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -49,9 +50,10 @@ async function resolveTenantAndOwnership() {
 
 function webhookUrlFor(tenantId: string, req: NextRequest): string {
   const origin = req.nextUrl.origin;
-  // Razorpay routes don't currently use the tenant query param — but we
-  // surface it on the URL anyway so future multi-tenant webhook routing
-  // can pick it up without changing the dashboard config.
+  // The `tenant` param is load-bearing: /api/webhooks/razorpay reads it to pick
+  // WHICH tenant's signing secret to verify against, and to reject an event
+  // whose quote belongs to a different tenant. Registering the URL without it
+  // falls back to the global env secret and skips that tenant check.
   return `${origin}/api/webhooks/razorpay?tenant=${encodeURIComponent(tenantId)}`;
 }
 
@@ -67,10 +69,23 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
+  // `configured` used to mean "has key_id + key_secret" and the Settings card
+  // rendered it as "Accepting payments" — true, and the wrong thing to measure:
+  // without a webhook secret the app never learns that a payment happened. It is
+  // kept here only so nothing that already reads it breaks, and it now means
+  // exactly what it says: money can be collected. Reconciliation is reported
+  // separately, because that is the half that was silently missing.
+  const readiness = razorpayReadiness({
+    keyId:         data?.razorpay_key_id,
+    keySecret:     data?.razorpay_key_secret,
+    webhookSecret: data?.razorpay_webhook_secret,
+  });
+
   return NextResponse.json({
     ok:                    true,
-    configured:            Boolean(data?.razorpay_key_id && data.razorpay_key_secret),
-    mode:                  data?.razorpay_mode ?? "test",
+    configured:            readiness.canCollect,
+    readiness,
+    mode:                  razorpayMode(data?.razorpay_key_id),
     key_id:                data?.razorpay_key_id ?? null,
     key_secret_mask:       mask(data?.razorpay_key_secret),
     webhook_secret_mask:   mask(data?.razorpay_webhook_secret),

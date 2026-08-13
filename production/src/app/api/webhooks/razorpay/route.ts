@@ -26,8 +26,18 @@ import { sendEmail } from "@/lib/email/send";
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
-const PARDEEP_EMAIL  = "Pardeep@exceltechnologies.in";
 const APP_URL        = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
+
+/**
+ * Last-resort recipient for the "money received" alert. This used to be the
+ * ONLY recipient, hard-coded — so in a multi-tenant product every tenant's
+ * payment alert, carrying their customer's name, email and amount, was mailed
+ * to one fixed address. The owner of the tenant that made the sale never got it,
+ * and someone else did. The tenant's own email is used now; this remains only so
+ * that a tenant with no email on file still produces an alert somewhere rather
+ * than silently dropping it.
+ */
+const FALLBACK_OWNER_EMAIL = "Pardeep@exceltechnologies.in";
 
 interface RazorpayPayment {
   id:         string;
@@ -190,6 +200,21 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Send confirmation emails (best-effort) ────────────────────────────
+  // The alert goes to the tenant that made the sale — resolved from the quote's
+  // own tenant_id, so it can never be another tenant's inbox.
+  const { data: sellerTenant } = await admin
+    .from("tenants")
+    .select("name, email, phone, contact_name")
+    .eq("id", quote.tenant_id)
+    .maybeSingle();
+  const seller = (sellerTenant ?? {}) as {
+    name?: string | null; email?: string | null; phone?: string | null; contact_name?: string | null;
+  };
+  const ownerEmail   = seller.email?.trim() || FALLBACK_OWNER_EMAIL;
+  const sellerName   = seller.name?.trim() || "your reseller";
+  const sellerPerson = seller.contact_name?.trim() || sellerName;
+  const sellerPhone  = seller.phone?.trim() || "";
+
   const customerEmail = payment?.email ?? notes.email ?? "";
   const customerName  = notes.contact ?? notes.customerName ?? "";
   const tierName      = notes.tierName ?? "Google Workspace";
@@ -202,7 +227,7 @@ export async function POST(request: NextRequest) {
     customerEmail && sendEmail({
       to:      customerEmail,
       from:    FROM_EMAIL,
-      replyTo: PARDEEP_EMAIL,
+      replyTo: ownerEmail,
       subject: `Payment received · ${quote.id} · ${amountFmt}`,
       text:
 `Hi ${customerName.split(" ")[0] || "there"},
@@ -218,21 +243,21 @@ ORDER SUMMARY
   Total paid  ${amountFmt} (incl 18% GST)
 
 WHAT HAPPENS NEXT
-  Within 4 hours  — Pardeep will WhatsApp you to verify the domain
+  Within 4 hours  — ${sellerPerson} will contact you to verify the domain
   Within 24 hours — Your team is live on Google Workspace
   Day 7           — Health-check call to make sure everything's working
 
-You'll receive a separate email with your GST tax invoice. If you need
-anything before then, WhatsApp Pardeep on +91 99999 30300.
+You'll receive a separate email with your GST tax invoice.${
+  sellerPhone ? ` If you need anything before then, WhatsApp ${sellerPerson} on ${sellerPhone}.` : ""
+}
 
-— Pardeep Sharma
-   Founder, Excel Technologies
-   Google Premier Partner since 2014`,
+— ${sellerPerson}
+   ${sellerName}`,
     }),
 
-    // Pardeep internal alert — money in the bank
+    // Seller alert — money in the bank
     sendEmail({
-      to:      PARDEEP_EMAIL,
+      to:      ownerEmail,
       from:    FROM_EMAIL,
       subject: `💰 PAYMENT RECEIVED · ${quote.customer_name} · ${amountFmt}`,
       text:

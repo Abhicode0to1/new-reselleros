@@ -39,6 +39,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import type { TenantWithParent } from "@/lib/supabase/database.types";
 import { isValidVpa } from "@/lib/payments/upi";
+import type { RazorpayReadiness } from "@/lib/payments/razorpay-readiness";
 
 // ─── Demo data ────────────────────────────────────────────────────────────────
 // Team roster moved to its own /team page. Settings only owns the
@@ -572,14 +573,26 @@ function RazorpayIntegrationCard() {
       return res.ok ? res.json() : null;
     },
   });
+  // Readiness comes from the server, which distinguishes "can take money" from
+  // "can hear about it". A half-configured gateway used to read "Accepting
+  // payments" — reassuring, and precisely wrong: payments would be collected and
+  // never recorded. That state now interrupts rather than reassures.
+  const readiness  = status?.readiness as RazorpayReadiness | undefined;
   const configured = Boolean(status?.configured);
   const mode       = (status?.mode as "test" | "live" | undefined) ?? "test";
+  const broken     = readiness?.severity === "critical";
   return (
     <>
-      <div className="flex items-center justify-between rounded-lg border border-hairline p-3">
+      <div
+        className={`flex items-center justify-between rounded-lg border p-3 ${
+          broken ? "border-danger/40 bg-danger/5" : "border-hairline"
+        }`}
+      >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-paper-2 text-ink-3">
-            <Icon name="rupee" size={16} />
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+            broken ? "bg-danger/10 text-danger" : "bg-paper-2 text-ink-3"
+          }`}>
+            <Icon name={broken ? "alert" : "rupee"} size={16} />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium text-ink inline-flex items-center gap-1.5">
@@ -589,14 +602,24 @@ function RazorpayIntegrationCard() {
                   {mode === "live" ? "LIVE" : "TEST"}
                 </Badge>
               )}
+              {broken && <Badge size="sm" kind="danger">ACTION NEEDED</Badge>}
             </p>
-            <p className="text-xs text-ink-3 truncate">
-              {configured ? "Accepting payments" : "Buy page in simulation mode"}
+            {/* Not truncated when broken: the whole point is that it gets read. */}
+            <p className={`text-xs ${broken ? "text-danger" : "text-ink-3 truncate"}`}>
+              {readiness?.headline ?? (configured ? "Accepting payments" : "Buy page in simulation mode")}
             </p>
+            {broken && readiness?.detail && (
+              <p className="mt-1 text-xs text-ink-3">{readiness.detail}</p>
+            )}
           </div>
         </div>
-        <Button variant={configured ? "ghost" : "primary"} size="sm" onClick={() => setOpen(true)}>
-          {configured ? "Manage" : "Setup"}
+        <Button
+          variant={broken || !configured ? "primary" : "ghost"}
+          size="sm"
+          className="shrink-0"
+          onClick={() => setOpen(true)}
+        >
+          {broken ? "Fix" : configured ? "Manage" : "Setup"}
         </Button>
       </div>
       {open && <RazorpayConfigureDialog open={open} onOpenChange={setOpen} />}
