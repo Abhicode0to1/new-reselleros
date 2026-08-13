@@ -38,6 +38,7 @@ import { useConfirm } from "@/components/providers/confirm-provider";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import type { TenantWithParent } from "@/lib/supabase/database.types";
+import { isValidVpa } from "@/lib/payments/upi";
 
 // ─── Demo data ────────────────────────────────────────────────────────────────
 // Team roster moved to its own /team page. Settings only owns the
@@ -96,6 +97,11 @@ const companySchema = z.object({
   pin_code:   z.string().trim().regex(/^\d{0,6}$/, "6-digit PIN (or blank)").optional(),
   lut_number:     z.string().trim().max(40).optional(),
   lut_valid_upto: z.string().trim().optional(),
+  // Validated with the SAME helper that builds the QR, so Settings can never
+  // accept a VPA the invoice would then silently refuse to print.
+  upi_vpa: z.string().trim().max(80).optional()
+    .refine((v) => !v || isValidVpa(v), "Enter a valid UPI ID, e.g. yourname@okhdfcbank"),
+  upi_payee_name: z.string().trim().max(50).optional(),
   grace_period_days: z.coerce
     .number({ invalid_type_error: "Must be a number" })
     .int("Whole days only")
@@ -122,6 +128,8 @@ function CompanyTab() {
       pin_code:     me?.tenantPinCode     ?? "",
       lut_number:     me?.tenantLutNumber    ?? "",
       lut_valid_upto: me?.tenantLutValidUpto ?? "",
+      upi_vpa:        me?.tenantUpiVpa       ?? "",
+      upi_payee_name: me?.tenantUpiPayeeName ?? "",
       grace_period_days: me?.tenantGracePeriodDays ?? 0,
     }),
     [me],
@@ -166,6 +174,8 @@ function CompanyTab() {
       pin_code:     values.pin_code?.trim()     || null,
       lut_number:     values.lut_number?.trim()     || null,
       lut_valid_upto: values.lut_valid_upto?.trim() || null,
+      upi_vpa:        values.upi_vpa?.trim()        || null,
+      upi_payee_name: values.upi_payee_name?.trim() || null,
       grace_period_days: values.grace_period_days,
     };
     updateTenant.mutate(patch, { onSuccess: () => reset(values) });
@@ -334,6 +344,37 @@ function CompanyTab() {
                 </Field>
                 <Field label="Valid up to">
                   <Input type="date" error={errors.lut_valid_upto?.message} {...register("lut_valid_upto")} />
+                </Field>
+              </div>
+
+              {/* UPI — prints a scan-to-pay QR on every invoice PDF. Works with
+                  any UPI app and needs no Razorpay, so it can be switched on
+                  today. Blank simply means no QR is printed. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Your UPI ID (optional)">
+                  <Input
+                    placeholder="e.g. yourname@okhdfcbank"
+                    className="font-mono"
+                    error={errors.upi_vpa?.message}
+                    {...register("upi_vpa")}
+                  />
+                  <p className="mt-1 text-xs text-ink-3">
+                    Adds a <strong>scan-to-pay QR</strong> to every invoice PDF with the amount and
+                    invoice number pre-filled — customers pay from GPay / PhonePe / Paytm without
+                    typing anything. Money reaches your bank directly, so you still record the
+                    payment here. Leave blank for no QR.
+                  </p>
+                </Field>
+                <Field label="Name shown in the payer's UPI app">
+                  <Input
+                    placeholder="Defaults to your company name"
+                    error={errors.upi_payee_name?.message}
+                    {...register("upi_payee_name")}
+                  />
+                  <p className="mt-1 text-xs text-ink-3">
+                    Set this only if your bank account name differs from your company name —
+                    an unexpected name at the moment of paying is when customers stop.
+                  </p>
                 </Field>
               </div>
 

@@ -36,6 +36,8 @@ export interface CurrentUserInfo {
   /** LUT number + validity for zero-rated exports (CGST Rule 96A). */
   tenantLutNumber: string | null;
   tenantLutValidUpto: string | null;
+  tenantUpiVpa: string | null;
+  tenantUpiPayeeName: string | null;
   /** Days of buffer between renewal_date and auto-suspend (0–30). */
   tenantGracePeriodDays: number;
   /** When Setup Wizard's final step ran. NULL = wizard never completed. */
@@ -57,7 +59,7 @@ export function useCurrentUser() {
 
       const { data: me, error } = await supabase
         .from("users")
-        .select("id, tenant_id, full_name, initials, color, role, can_view_deals, tenants(name, logo_url, gstin, email, phone, address, pin_code, contact_name, state, state_code, lut_number, lut_valid_upto, grace_period_days, setup_completed_at, gstin_verified_at, gstin_verification)")
+        .select("id, tenant_id, full_name, initials, color, role, can_view_deals, tenants(name, logo_url, gstin, email, phone, address, pin_code, contact_name, state, state_code, lut_number, lut_valid_upto, upi_vpa, upi_payee_name, grace_period_days, setup_completed_at, gstin_verified_at, gstin_verification)")
         .eq("id", authData.user.id)
         .single();
 
@@ -87,6 +89,8 @@ export function useCurrentUser() {
         tenantContactName: tenant?.contact_name ?? null,
         tenantLutNumber:    (tenant as { lut_number?: string | null } | null)?.lut_number ?? null,
         tenantLutValidUpto: (tenant as { lut_valid_upto?: string | null } | null)?.lut_valid_upto ?? null,
+        tenantUpiVpa:       (tenant as { upi_vpa?: string | null } | null)?.upi_vpa ?? null,
+        tenantUpiPayeeName: (tenant as { upi_payee_name?: string | null } | null)?.upi_payee_name ?? null,
         tenantGracePeriodDays: tenant?.grace_period_days ?? 0,
         tenantSetupCompletedAt: tenant?.setup_completed_at ?? null,
         tenantGstinVerifiedAt:  tenant?.gstin_verified_at  ?? null,

@@ -707,7 +707,24 @@ even deliver the one feature (group view) that motivated it, and that two logins
 would. Design was right; timing was wrong. That should surface in sentence one, not
 after the plan.
 
-**6. Prod DB access is the highest-leverage thing to hand Claude.**
+**6. Applying a migration through the Supabase SQL editor — two hard rules.**
+Learned the slow way: one migration took five attempts, and every "apply kar
+diya" along the way was honest.
+- **Run DDL in small batches, never a whole migration file.** The editor runs a
+  pasted script as ONE transaction, so if any later statement fails — a `do $$`
+  block, an index, a `comment on` — *everything* rolls back, including the
+  `ALTER` that succeeded. The screen shows an error nobody connects to "nothing
+  applied".
+- **NEVER put a verification `SELECT` in the same run as the DDL.** It executes
+  inside that same uncommitted transaction, sees the new columns, and returns
+  rows — so it reports success for a change that is about to disappear. Run the
+  DDL alone, then verify in a **separate** run.
+
+Also: `current_database()` is `postgres` on *every* Supabase project, so it
+cannot tell two projects apart. Use the project ref in the dashboard URL, or a
+row-count fingerprint.
+
+**7. Prod DB access is the highest-leverage thing to hand Claude.**
 Half the tenancy analysis in that session was *reasoned-only* because there was no way
 to query prod. Given this repo's own history of git-vs-prod drift (`0003` consolidated
 19 ad-hoc prod changes; `0146` captured more), inference is not proof. Read-only DB
