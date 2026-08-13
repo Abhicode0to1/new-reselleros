@@ -15,6 +15,7 @@ import {
   Page,
   View,
   Text,
+  Image,
   StyleSheet,
 } from "@react-pdf/renderer";
 import { rupee, formatDate } from "@/lib/utils";
@@ -59,6 +60,15 @@ export interface InvoicePDFProps {
   tenantPhone?:  string | null;
   tenantAddress?: string | null;
   tenantState?:   string | null;
+
+  /**
+   * Scan-to-pay QR (migration 0227). PNG data-URL built server-side by
+   * lib/pdf/upi-qr.ts — the PDF component stays synchronous. Absent when the
+   * tenant hasn't set a UPI ID, and the block simply isn't drawn.
+   */
+  upiQrDataUrl?: string | null;
+  /** Printed under the QR so a payer whose camera struggles can type it. */
+  upiVpa?:       string | null;
 }
 
 // ─── Styles (shared shape with QuotePDF) ──────────────────────────────────
@@ -315,6 +325,22 @@ const s = StyleSheet.create({
     lineHeight:   1.4,
   },
   footerBold:   { fontFamily: "Helvetica-Bold", color: COLORS.ink2 },
+
+  // Scan-to-pay block. ~28mm square at 72dpi — comfortably scannable from a
+  // printed page, without dominating a document whose job is to be a tax record.
+  upiRow: {
+    flexDirection: "row",
+    alignItems:    "center",
+    marginTop:     10,
+    paddingTop:    8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.hairline,
+  },
+  upiQr:    { width: 78, height: 78, marginRight: 10 },
+  upiText:  { flex: 1 },
+  upiTitle: { fontSize: 10, fontFamily: "Helvetica-Bold", color: COLORS.ink2, marginBottom: 2 },
+  upiSub:   { fontSize: 8, color: COLORS.ink3, lineHeight: 1.4 },
+  upiVpa:   { fontSize: 9, fontFamily: "Helvetica-Bold", color: COLORS.ink2, marginTop: 2, marginBottom: 2 },
   reverseCharge: {
     fontSize:      9,
     color:         COLORS.ink2,
@@ -332,6 +358,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
     customerGstin, customerEmail, customerAddress, customerState, customerCountry,
     currency, exchangeRate, termsConditions,
     tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress, tenantState,
+    upiQrDataUrl, upiVpa,
   } = props;
 
   const cgst = interState ? 0 : Math.round(tax / 2);
@@ -542,6 +569,26 @@ export function InvoicePDF(props: InvoicePDFProps) {
             <Text style={s.footerBold}>Payment terms: </Text>
             {invoice.due_date ? `Due by ${formatDate(invoice.due_date)}. ` : ""}UPI / NEFT / Razorpay accepted.
           </Text>
+
+          {/* Scan-to-pay. Drawn only when the tenant has set a UPI ID — no
+              placeholder box, because an un-scannable QR on a tax invoice is
+              worse than none. The VPA is printed underneath so a payer whose
+              camera struggles can still type it. */}
+          {upiQrDataUrl ? (
+            <View style={s.upiRow}>
+              <Image src={upiQrDataUrl} style={s.upiQr} />
+              <View style={s.upiText}>
+                <Text style={s.upiTitle}>Scan to pay</Text>
+                <Text style={s.upiSub}>
+                  Any UPI app — GPay, PhonePe, Paytm, BHIM.
+                </Text>
+                {upiVpa ? <Text style={s.upiVpa}>{upiVpa}</Text> : null}
+                <Text style={s.upiSub}>
+                  Amount and invoice number are pre-filled.
+                </Text>
+              </View>
+            </View>
+          ) : null}
           {termsConditions?.trim() ? (
             <Text style={[s.footerLine, { marginTop: 6 }]}>
               <Text style={s.footerBold}>Terms &amp; conditions: </Text>

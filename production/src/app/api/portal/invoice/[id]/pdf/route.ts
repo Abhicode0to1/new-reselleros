@@ -18,6 +18,7 @@ import { createElement } from "react";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getPortalSession } from "@/lib/portal/session";
 import { buildInvoicePdfProps, type TenantPdfInfo } from "@/lib/pdf/build-props";
+import { buildInvoiceUpiQr } from "@/lib/pdf/upi-qr";
 import type { Invoice, Quote, Customer } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
@@ -55,7 +56,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       : Promise.resolve({ data: null }),
     admin
       .from("tenants")
-      .select("name, gstin, email, phone, address, state, state_code")
+      .select("name, gstin, email, phone, address, state, state_code, upi_vpa, upi_payee_name")
       .eq("id", inv.tenant_id)
       .maybeSingle(),
   ]);
@@ -70,12 +71,25 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     },
   });
 
+  // Scan-to-pay QR. `net_payable` is what's actually left to pay once advances
+  // are adjusted (migration 0005), so the QR asks for the right amount rather
+  // than the gross. Returns null and the PDF simply omits the block.
+  const t = tenant as { name?: string; upi_vpa?: string | null; upi_payee_name?: string | null } | null;
+  const upi = await buildInvoiceUpiQr({
+    vpa:        t?.upi_vpa,
+    payeeName:  t?.upi_payee_name ?? t?.name,
+    invoiceId:  inv.id,
+    amountDue:  inv.net_payable ?? inv.amount,
+  });
+
   // Imported lazily so @react-pdf/renderer never enters a shared bundle — it
   // loads only when a PDF is actually requested.
   const { renderToBuffer } = await import("@react-pdf/renderer");
   const { InvoicePDF } = await import("@/lib/pdf/InvoicePDF");
   const buffer = await renderToBuffer(
-    createElement(InvoicePDF, props) as unknown as Parameters<typeof renderToBuffer>[0],
+    createElement(InvoicePDF, {
+      ...props, upiQrDataUrl: upi?.dataUrl ?? null, upiVpa: upi?.vpa ?? null,
+    }) as unknown as Parameters<typeof renderToBuffer>[0],
   );
 
   return new Response(new Uint8Array(buffer), {

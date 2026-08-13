@@ -62,6 +62,14 @@ type TenantRow = {
   phone: string | null;
   lut_number: string | null;       // migration 0185 — LUT for zero-rated exports
   lut_valid_upto: string | null;   // LUT validity end date
+  /**
+   * Migration 0227 — the reseller's own UPI ID, used to print a scan-to-pay QR
+   * on invoices. NULL means no QR is drawn. `upi_payee_name` is separate from
+   * `name` because the name shown in the payer's UPI app must match the bank
+   * account the VPA belongs to, which for a proprietor is often a personal name.
+   */
+  upi_vpa: string | null;
+  upi_payee_name: string | null;
   grace_period_days: number;
   setup_completed_at: string | null;
   gstin_verified_at: string | null;
@@ -86,6 +94,8 @@ type TenantInsert = {
   phone?: string | null;
   lut_number?: string | null;
   lut_valid_upto?: string | null;
+  upi_vpa?: string | null;          // migration 0227
+  upi_payee_name?: string | null;
   grace_period_days?: number;
   setup_completed_at?: string | null;
   gstin_verified_at?: string | null;
