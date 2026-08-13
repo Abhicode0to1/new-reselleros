@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { getCrumb, getParentListHref, getSectionPrimaryHref } from "./nav";
+import fs from "node:fs";
+import path from "node:path";
+import { getCrumb, getParentListHref, getSectionPrimaryHref, APP_NAV } from "./nav";
 
 describe("getCrumb", () => {
   it("returns the exact crumb for a known static route", () => {
@@ -81,5 +83,69 @@ describe("getSectionPrimaryHref", () => {
     // so crumb[0] is not a valid argument either.
     expect(getSectionPrimaryHref("Sales")).toBeNull();
     expect(getSectionPrimaryHref("Year-End")).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Nav ↔ filesystem
+//
+// These exist because /marketing/reports sat in the codebase, finished and
+// working, for a whole session with no way to reach it — no sidebar entry, no
+// command-palette hit, no breadcrumb. Nothing failed, because nothing was
+// checking. A page nobody can open is indistinguishable from a page that was
+// never built, and the twelve tests above all passed the entire time.
+//
+// The reverse case is worse: a sidebar link pointing at a route with no page
+// gives the owner a 404 from the app's own menu.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("APP_NAV ↔ app router", () => {
+  const APP_DIR = path.join(__dirname, "..", "app", "(app)");
+
+  /** Every href in the nav tree, including accordion children. */
+  const hrefs = APP_NAV.flatMap((s) =>
+    s.items.flatMap((i) => [i.href, ...(i.children ?? []).map((c) => c.href)]),
+  ).filter((h): h is string => typeof h === "string" && h.startsWith("/"));
+
+  it.each(hrefs)("%s has a page that actually renders", (href) => {
+    // Route groups like (app) are not URL segments, so the href maps directly.
+    const direct = path.join(APP_DIR, href, "page.tsx");
+    if (fs.existsSync(direct)) return;
+
+    // Fall back to a dynamic segment: /customers/groups could be [id]/groups.
+    const segments = href.split("/").filter(Boolean);
+    const parent = path.join(APP_DIR, ...segments.slice(0, -1));
+    const dynamic = fs.existsSync(parent)
+      ? fs.readdirSync(parent).some(
+          (d) => d.startsWith("[") && fs.existsSync(path.join(parent, d, "page.tsx")),
+        )
+      : false;
+
+    expect(
+      dynamic,
+      `Sidebar links to ${href} but there is no page.tsx for it — the menu leads to a 404.`,
+    ).toBe(true);
+  });
+
+  it("gives every nav destination a breadcrumb", () => {
+    // Without one the TopBar falls back to the Dashboard crumb, so the user is
+    // told they are somewhere they are not.
+    const missing = hrefs.filter((h) => {
+      // /dashboard is the one route whose crumb is legitimately "Dashboard" —
+      // it is the fallback AND the real answer, so it cannot be distinguished
+      // by this check and is exempted rather than papered over.
+      if (h === "/dashboard") return false;
+      const crumb = getCrumb(h);
+      return !crumb || crumb.length === 0 || crumb[crumb.length - 1] === "Dashboard";
+    });
+    expect(missing, `No breadcrumb for: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("keeps nav ids unique", () => {
+    // React keys and the command palette both index on id; a duplicate silently
+    // drops one of the two entries.
+    const ids = APP_NAV.flatMap((s) =>
+      s.items.flatMap((i) => [i.id, ...(i.children ?? []).map((c) => c.id)]),
+    );
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

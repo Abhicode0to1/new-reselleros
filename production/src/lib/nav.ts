@@ -141,11 +141,36 @@ export const APP_NAV: NavSection[] = [
       { id: "leads",           href: "/leads",            label: "Sales & Pipeline", icon: "target", roles: ["owner", "manager", "sales"] },
       { id: "enquiries",       href: "/enquiries",        label: "Enquiries",     icon: "mail",   roles: ["owner", "manager", "sales"] },
       { id: "tasks",           href: "/tasks",            label: "Tasks",         icon: "clock",  roles: ["owner", "manager", "sales"] },
-      { id: "my-expenses",     href: "/my-expenses",      label: "My Advance & Expenses", icon: "wallet", roles: ["owner", "manager", "sales"] },
+      // Same destination as the Home entry above, deliberately listed twice for
+      // reach. The id must still differ: the command palette flattens every
+      // section into one list and indexes on id, so two entries sharing one id
+      // silently drop to a single result.
+      { id: "my-expenses-sales", href: "/my-expenses",    label: "My Advance & Expenses", icon: "wallet", roles: ["owner", "manager", "sales"] },
       { id: "customers",       href: "/customers",        label: "Customers",     icon: "users",  roles: ["owner", "manager", "billing"] },
       { id: "customer-groups", href: "/customers/groups", label: "Parent Accounts", icon: "layout", roles: ["owner", "manager"] },
       { id: "contacts",        href: "/contacts",         label: "Contacts",      icon: "user",   roles: ["owner", "manager", "billing"] },
       { id: "referrals",       href: "/referrals",        label: "Referrals",     icon: "award",  roles: ["owner", "manager"] },
+    ],
+  },
+  {
+    // Its own group rather than a line under Sales: marketing answers "where do
+    // leads come from and what does each cost", which is a different question
+    // from "what is in the pipeline" — and this group is where campaigns,
+    // channels and attribution will land as they get built.
+    //
+    // owner/manager only. It shows ad spend and CAC, which are the owner's
+    // numbers, not something a rep needs to open their day on.
+    section: "Marketing",
+    icon: "chart",
+    roles: ["owner", "manager"],
+    items: [
+      // Labelled "Marketing", not "ROAS & CAC", ON PURPOSE. The Sidebar renders
+      // a section holding exactly one item as a standalone row with no group
+      // header (see Sidebar.tsx), so the section NAME is invisible today — the
+      // user would see a lone "ROAS & CAC" link and never learn there is a
+      // Marketing area. Rename this to "ROAS & CAC" the moment a second
+      // marketing page lands and the real "Marketing" header appears.
+      { id: "marketing-roas", href: "/marketing/reports", label: "Marketing", icon: "chart", roles: ["owner", "manager"] },
     ],
   },
   {
@@ -250,6 +275,8 @@ export const CUSTOMER_NAV: NavSection[] = [
 export const SCREEN_TITLES: Record<string, string[]> = {
   "/dashboard":       ["Home", "Dashboard"],
   "/leads":           ["Sales", "Leads"],
+  "/my-expenses":     ["Me", "My Advance & Expenses"],
+  "/marketing/reports": ["Marketing", "ROAS & CAC"],
   "/enquiries":       ["Sales", "Enquiries"],
   "/deals":           ["Sales", "Deal Pipeline"],
   "/tasks":           ["Sales", "Tasks"],
