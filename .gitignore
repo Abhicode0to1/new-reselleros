@@ -21,6 +21,10 @@ next-env.d.ts
 .env.development.local
 .env.test.local
 .env.production.local
+# Timestamped backups written by scripts/set-master-key.mjs. These hold the SAME
+# real credentials as .env.local, and the bare ".env.local" pattern above does NOT
+# match them -- one `git add .` away from committing live secrets.
+.env*.bak-*
 .env*.local
 
 # ===== Logs =====
