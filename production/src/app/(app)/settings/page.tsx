@@ -32,6 +32,7 @@ import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import SandboxConfigureDialog  from "@/components/features/integrations/sandbox-configure-dialog";
 import WhatsAppConfigureDialog from "@/components/features/integrations/whatsapp-configure-dialog";
 import RazorpayConfigureDialog from "@/components/features/integrations/razorpay-configure-dialog";
+import EmailSendingCard from "@/components/features/integrations/email-sending-card";
 import GeminiConfigureDialog from "@/components/features/integrations/gemini-configure-dialog";
 import ApiKeysCard from "@/components/features/integrations/api-keys-card";
 import { useConfirm } from "@/components/providers/confirm-provider";
@@ -796,6 +797,9 @@ function GoogleContactsIntegrationCard() {
 function IntegrationsTab() {
   return (
     <>
+    <div className="mb-4">
+      <EmailSendingCard />
+    </div>
     <Card className="p-5">
       <p className="mb-4 text-sm font-semibold text-ink">Connected services</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
