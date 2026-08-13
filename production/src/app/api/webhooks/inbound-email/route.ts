@@ -22,6 +22,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveGeminiConfig } from "@/lib/ai/gemini";
 import { sendEmail } from "@/lib/email/send";
+import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const INBOUND_SECRET = process.env.INBOUND_EMAIL_SECRET?.trim() || "";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
@@ -124,6 +126,56 @@ export async function POST(request: NextRequest) {
     return "";
   };
 
+  /**
+   * Normalise headers across inbound-parse providers.
+   *
+   * Needed because the bulk-mail suppression in lib/inbound/follow-up.ts keys off
+   * `List-Unsubscribe`, `Precedence` and `Auto-Submitted`. Without this the
+   * headers arrive as undefined and that whole defence is dead code -- it would
+   * look implemented and never fire once. Each provider ships a different shape:
+   *
+   *   Mailgun  "message-headers"  JSON (or string) array of [name, value]
+   *   Postmark "Headers"          array of { Name, Value }
+   *   SendGrid "headers"          one raw "Name: value" block, CRLF separated
+   *
+   * Keys are lower-cased; header names are case-insensitive per RFC 5322.
+   */
+  const extractHeaders = (): Record<string, string> => {
+    const out: Record<string, string> = {};
+    const put = (k: unknown, v: unknown) => {
+      if (typeof k === "string" && k.trim() && typeof v === "string") {
+        out[k.trim().toLowerCase()] = v.trim().slice(0, 500);
+      }
+    };
+
+    let mg = body["message-headers"] ?? body["message_headers"];
+    if (typeof mg === "string") { try { mg = JSON.parse(mg); } catch { mg = null; } }
+    if (Array.isArray(mg)) {
+      for (const pair of mg) if (Array.isArray(pair)) put(pair[0], pair[1]);
+    }
+
+    const pm = body["Headers"] ?? body["headers_json"];
+    if (Array.isArray(pm)) {
+      for (const h of pm) {
+        const o = h as { Name?: unknown; Value?: unknown; name?: unknown; value?: unknown };
+        put(o.Name ?? o.name, o.Value ?? o.value);
+      }
+    }
+
+    const sg = body["headers"];
+    if (typeof sg === "string") {
+      for (const line of sg.split(/\r?\n/)) {
+        const i = line.indexOf(":");
+        if (i > 0) put(line.slice(0, i), line.slice(i + 1));
+      }
+    } else if (sg && typeof sg === "object" && !Array.isArray(sg)) {
+      for (const [k, v] of Object.entries(sg as Record<string, unknown>)) put(k, v);
+    }
+
+    return out;
+  };
+  const rawHeaders = extractHeaders();
+
   const rawFrom   = str("from", "sender", "From", "from_email");
   const { name: parsedName, email: fromEmail } = parseFrom(rawFrom);
   const fromName  = str("fromName", "from_name", "sender_name") || parsedName;
@@ -163,6 +215,66 @@ export async function POST(request: NextRequest) {
     admin.from("inbound_emails").update({ status, lead_id: leadId })
       .eq("tenant_id", tenantId).eq("message_id", messageId);
 
+  /**
+   * Create a follow-up task for an email that earns one.
+   *
+   * IDEMPOTENT BY DESIGN. A thread with five replies must produce one task, not
+   * five — a task list that duplicates itself is one nobody trusts. So an
+   * existing OPEN follow-up on the same lead wins: its due date is pulled
+   * forward if the new email is more urgent, and nothing new is inserted.
+   *
+   * Best-effort throughout. This runs after the lead is already saved, so a
+   * failure here must never turn a captured lead into a 500 and a webhook retry.
+   */
+  const createFollowUpTask = async (
+    db: SupabaseClient,
+    leadId: string,
+    ownerId: string | null,
+    signals: FollowUpInput,
+  ): Promise<void> => {
+    try {
+      const d = decideFollowUp(signals);
+      if (!d.create) {
+        console.log(`[inbound-email] no follow-up task: ${d.suppressedBy} — ${d.reason}`);
+        return;
+      }
+
+      const dueAt = new Date(Date.now() + d.dueInHours * 3_600_000).toISOString();
+
+      const { data: open } = await db
+        .from("tasks")
+        .select("id, due_at")
+        .eq("tenant_id", tenantId)
+        .eq("lead_id", leadId)
+        .eq("status", "pending")
+        .order("due_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (open) {
+        // Only ever pull the date FORWARD. Pushing it back would let a chatty
+        // low-signal reply delay a follow-up that was already urgent.
+        if (open.due_at && dueAt < open.due_at) {
+          await db.from("tasks").update({ due_at: dueAt }).eq("id", open.id);
+        }
+        return;
+      }
+
+      await db.from("tasks").insert({
+        tenant_id: tenantId,
+        lead_id:   leadId,
+        owner_id:  ownerId,          // null lands in the unassigned bucket (0007)
+        title:     d.title,
+        notes:     d.reason,
+        kind:      "followup",
+        due_at:    dueAt,
+        status:    "pending",
+      });
+    } catch (e) {
+      console.error("[inbound-email] follow-up task failed:", e);
+    }
+  };
+
   // ── 4. Extract + classify (Gemini, or stub fallback) ───────────────────
   const gemini = await resolveGeminiConfig(admin, tenantId);
   const ai = gemini.apiKey ? await extractWithGemini(gemini.apiKey, gemini.model, subject, rawFrom, text) : null;
@@ -192,7 +304,7 @@ export async function POST(request: NextRequest) {
   // ── 5. Dedup — recent OPEN lead with the same email? append, don't dup ─
   const { data: existing } = await admin
     .from("leads")
-    .select("id, notes")
+    .select("id, notes, owner_id")
     .eq("tenant_id", tenantId)
     .ilike("contact_email", fromEmail)
     .not("stage", "in", "(won,lost)")
@@ -208,6 +320,18 @@ export async function POST(request: NextRequest) {
     await admin.from("lead_activities").insert({
       tenant_id: tenantId, lead_id: existing.id, kind: "email_in",
       detail: `Reply from ${fromEmail}${subject ? ` · ${subject}` : ""}`,
+    });
+    // A reply on a live deal is the case a follow-up task matters most for --
+    // someone is mid-conversation and waiting.
+    await createFollowUpTask(admin, existing.id, existing.owner_id ?? null, {
+      fromEmail, subject, bodyText: text,
+      // `ai` is null when Gemini did not run. Passing `extracted.isEnquiry`
+      // here would pass the webhook's default-true fallback and let an
+      // unclassified email create a task on an unchecked guess.
+      isEnquiry: ai ? ai.isEnquiry : null,
+      summary: extracted.summary,
+      headers: rawHeaders,
+      isReplyToExistingLead: true,
     });
     await finalize("appended_to_lead", existing.id);
     return NextResponse.json({ received: true, appendedToLead: existing.id });
@@ -237,6 +361,16 @@ export async function POST(request: NextRequest) {
   await admin.from("lead_activities").insert({
     tenant_id: tenantId, lead_id: leadId, kind: "email_in",
     detail: `Email from ${fromEmail}${subject ? ` · ${subject}` : ""}`,
+  });
+  // owner_id is null on a freshly captured email lead, so the task lands in the
+  // unassigned bucket for the owner to hand out -- which is what 0007 designed
+  // that bucket for.
+  await createFollowUpTask(admin, leadId, null, {
+    fromEmail, subject, bodyText: text,
+    isEnquiry: ai ? ai.isEnquiry : null,
+    summary: extracted.summary,
+    headers: rawHeaders,
+    isReplyToExistingLead: false,
   });
 
   // ── 7. Notify the reseller owner (best-effort) ─────────────────────────
