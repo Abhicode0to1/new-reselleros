@@ -39,8 +39,14 @@ export interface Obligation {
   dataHref?: { href: string; label: string };
   /** Step-by-step to actually file it (portal flow) — shown in a "How to file" guide. */
   filingSteps?: string[];
-  /** Next actionable instance given today (upcoming, or a recently-passed one). */
-  next: (today: Date) => ComplianceInstance;
+  /**
+   * Next actionable instance given today.
+   *
+   * `isFiled` lets the picker skip instances already filed, so the row advances
+   * to the next real deadline the moment one is marked done. Optional so callers
+   * that only want "what period is current" can omit it.
+   */
+  next: (today: Date, isFiled?: (periodKey: string) => boolean) => ComplianceInstance;
 }
 
 export const CATEGORY_META: Record<ComplianceCategory, { label: string; short: string; authority: string }> = {
@@ -65,42 +71,83 @@ function fyStart(d: Date): number {
 const fyLabel = (startYear: number) => `FY ${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
 
 /**
- * Pick the "actionable" instance from a list of dated instances: the earliest
- * one whose due date is still upcoming, OR — if the most recent one passed less
- * than 45 days ago — that recently-due one (so an overdue filing stays visible
- * instead of jumping to next year). Falls back to the last instance.
+ * Pick the "actionable" instance: the earliest one still upcoming, OR — if the
+ * most recent one passed less than 45 days ago and is NOT yet filed — that
+ * recently-due one, so an overdue filing stays visible instead of the page
+ * jumping ahead to next period.
+ *
+ * THE `isFiled` PREDICATE IS LOAD-BEARING. Without it this returned the same
+ * instance whether or not it had been filed, and the consequence was severe:
+ * file GSTR-3B for June on 20 July, and the page kept showing that filed June
+ * row for the full 45 days — so the 20 August deadline for July was invisible
+ * until roughly 3 September, two weeks after it had already gone late at ₹50/day.
+ * A compliance page that hides the next deadline the moment you comply is worse
+ * than no page, because the operator trusts it.
  */
-function pick(today: Date, instances: ComplianceInstance[]): ComplianceInstance {
+function pick(
+  today: Date,
+  instances: ComplianceInstance[],
+  isFiled?: (periodKey: string) => boolean,
+): ComplianceInstance {
   const t = day0(today).getTime();
   const sorted = [...instances].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const upcoming = sorted.find((i) => new Date(i.dueDate).getTime() >= t);
+  const done = (i: ComplianceInstance) => Boolean(isFiled?.(i.periodKey));
+
+  // A recently-passed instance is only worth surfacing while it is still owed.
   const recentlyPassed = [...sorted].reverse().find((i) => {
     const diff = t - new Date(i.dueDate).getTime();
-    return diff > 0 && diff <= 45 * 864e5;
+    return diff > 0 && diff <= 45 * 864e5 && !done(i);
   });
-  return recentlyPassed ?? upcoming ?? sorted[sorted.length - 1];
+  if (recentlyPassed) return recentlyPassed;
+
+  // Otherwise the soonest future instance that still needs filing. Falling back
+  // to a filed upcoming one is right when EVERYTHING known is filed — the row
+  // then reads "filed", which is the truth.
+  const upcomingUnfiled = sorted.find((i) => new Date(i.dueDate).getTime() >= t && !done(i));
+  const upcoming = sorted.find((i) => new Date(i.dueDate).getTime() >= t);
+  return upcomingUnfiled ?? upcoming ?? sorted[sorted.length - 1];
 }
 
-// Annual obligation due on a fixed month/day; considers this year + next.
-function annualNext(month: number, dayNum: number, periodIsFy = true): (t: Date) => ComplianceInstance {
-  return (t: Date) => {
+/**
+ * Annual obligation due on a fixed month/day.
+ *
+ * THE PERIOD IS THE FY THAT ENDED BEFORE THE DUE DATE, not the FY the due date
+ * falls in. This was wrong and it mislabelled every annual filing by a full year:
+ * AOC-4 due 29 Oct 2026 was shown as "FY 2026-27" when it is the return for
+ * FY 2025-26 — the year ended 31 Mar 2026, whose accounts the September AGM
+ * adopted. Same for MGT-7A, DIR-3 KYC, DPT-3, ADT-1, ITR-6, 3CD and GSTR-9: all
+ * of them are filed in the year AFTER the one they report on.
+ *
+ * The label is not cosmetic. It is what the operator reads before attaching
+ * financials and what `periodKey` records against in the filed-log, so being a
+ * year out means either filing the wrong year's numbers or believing a year is
+ * done when it is not — against a ₹100/day penalty with no cap.
+ *
+ * WORTH HAVING A CA CONFIRM. These are statutory semantics, not arithmetic. The
+ * rule applied here — "an annual return filed in year Y reports on the FY ending
+ * 31 Mar of year Y" — holds for every obligation in this catalog, but the UI's
+ * "confirm with your CA" caveat matters most on exactly this point.
+ */
+function annualNext(month: number, dayNum: number, periodIsFy = true): Obligation["next"] {
+  return (t, isFiled) => {
     const cands: ComplianceInstance[] = [-1, 0, 1].map((off) => {
       const y = t.getFullYear() + off;
-      const start = fyStart(new Date(y, month - 1, dayNum));
+      // FY the due date sits in, minus one → the FY being reported on.
+      const reportedFy = fyStart(new Date(y, month - 1, dayNum)) - 1;
       return {
         dueDate: iso(y, month, dayNum),
-        periodKey: periodIsFy ? `fy${start}` : `${y}`,
-        periodLabel: periodIsFy ? fyLabel(start) : String(y),
+        periodKey: periodIsFy ? `fy${reportedFy}` : `${y - 1}`,
+        periodLabel: periodIsFy ? fyLabel(reportedFy) : String(y - 1),
       };
     });
-    return pick(t, cands);
+    return pick(t, cands, isFiled);
   };
 }
 
 // Monthly obligation due on `dayNum` of every month (e.g. PF/ESI 15th, GST 20th).
 // Each instance's PERIOD is the previous month (what you're filing FOR).
-function monthlyNext(dayNum: number): (t: Date) => ComplianceInstance {
-  return (t: Date) => {
+function monthlyNext(dayNum: number): Obligation["next"] {
+  return (t, isFiled) => {
     const cands: ComplianceInstance[] = [];
     for (let off = -2; off <= 2; off++) {
       const base = new Date(t.getFullYear(), t.getMonth() + off, dayNum);
@@ -111,16 +158,16 @@ function monthlyNext(dayNum: number): (t: Date) => ComplianceInstance {
         periodLabel: `${MONTHS[forMonth.getMonth()]} ${forMonth.getFullYear()}`,
       });
     }
-    return pick(t, cands);
+    return pick(t, cands, isFiled);
   };
 }
 
 // Fixed set of dated instances per FY (advance tax, quarterly TDS returns).
-function fixedNext(build: (fyStartYear: number) => ComplianceInstance[]): (t: Date) => ComplianceInstance {
-  return (t: Date) => {
+function fixedNext(build: (fyStartYear: number) => ComplianceInstance[]): Obligation["next"] {
+  return (t, isFiled) => {
     const s = fyStart(t);
     const all = [s - 1, s, s + 1].flatMap(build);
-    return pick(t, all);
+    return pick(t, all, isFiled);
   };
 }
 
@@ -428,7 +475,9 @@ export function buildComplianceRows(
     : OBLIGATIONS;
   return list
     .map((ob) => {
-      const inst = ob.next(today);
+      // Tell the picker what is already done, so it advances past a filed period
+      // to the next real deadline instead of showing a settled row for 45 days.
+      const inst = ob.next(today, (periodKey) => filed.has(`${ob.key}|${periodKey}`));
       const filedDate = filed.get(`${ob.key}|${inst.periodKey}`) ?? null;
       const daysToDue = Math.round((new Date(inst.dueDate).getTime() - t0) / 864e5);
       let status: ComplianceStatus;
