@@ -22,7 +22,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { resolveGeminiConfig } from "@/lib/ai/gemini";
+import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
+import { verifyDraftMoney } from "@/lib/ai/money-guard";
 import { rupee } from "@/lib/utils";
 
 const bodySchema = z
@@ -41,7 +42,24 @@ interface Draft {
   message: string;
 }
 
-async function draftWithGemini(apiKey: string, model: string, channel: "whatsapp" | "email", intent: string, ctx: string): Promise<Draft | null> {
+/**
+ * Draft via Gemini, then VERIFY the money in what came back.
+ *
+ * `allowedAmounts` is the set of rupee figures this route computed and put in the
+ * prompt. The prompt also tells the model to use them verbatim — but that is a
+ * request, not a constraint, and a restated ₹4,500 as ₹45,000 used to reach the
+ * operator unchecked. A fluent, plausible payment reminder for money the customer
+ * does not owe is the worst thing this feature could produce.
+ *
+ * So a draft containing any unauthorised figure is DISCARDED, and the caller
+ * falls back to the deterministic stub — which builds its text from the same
+ * numbers and cannot be wrong about them. Silently correcting the figure would be
+ * worse: the sentence around it was written to suit the wrong number.
+ */
+async function draftWithGemini(
+  apiKey: string, model: string, channel: "whatsapp" | "email",
+  intent: string, ctx: string, allowedAmounts: number[],
+): Promise<Draft | null> {
   const system =
     "You are the assistant for an Indian cloud-software reseller (Google Workspace, " +
     "Microsoft 365, Zoho). " +
@@ -54,34 +72,27 @@ async function draftWithGemini(apiKey: string, model: string, channel: "whatsapp
     'Return ONLY JSON: {"subject": string, "message": string}.';
   const user = `Context:\n${ctx}\n\nDraft the ${channel} message now.`;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: "user", parts: [{ text: user }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.7 },
-        }),
-      },
+  // geminiJson carries the timeout and the circuit breaker, and returns null on
+  // every failure path — so an AI outage degrades to the stub instead of hanging.
+  const p = await geminiJson<Partial<Draft>>({
+    apiKey, model, system, user, temperature: 0.7, label: "ai/draft-followup",
+  });
+  if (!p?.message) return null;
+
+  const draft: Draft = { subject: (p.subject ?? "").toString(), message: p.message.toString() };
+
+  // ── Code validates ──────────────────────────────────────────────────────
+  // Subject and body both, because a wrong figure in a subject line is the part
+  // a customer sees before opening anything.
+  const verdict = verifyDraftMoney(`${draft.subject}\n${draft.message}`, allowedAmounts);
+  if (!verdict.ok) {
+    console.error(
+      `[ai/draft-followup] REJECTED draft — unauthorised amount(s) ${verdict.violations.join(", ")}; ` +
+      `allowed ${allowedAmounts.join(", ") || "(none)"}. Falling back to the deterministic draft.`,
     );
-    if (!res.ok) {
-      console.error("[ai/draft-followup] Gemini failed:", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) return null;
-    const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-    const p = JSON.parse(cleaned) as Partial<Draft>;
-    if (!p.message) return null;
-    return { subject: (p.subject ?? "").toString(), message: p.message.toString() };
-  } catch (err) {
-    console.error("[ai/draft-followup] Gemini crashed:", err);
     return null;
   }
+  return draft;
 }
 
 /** Deterministic fallback so the feature works before GEMINI_API_KEY is set. */
@@ -179,7 +190,12 @@ export async function POST(request: NextRequest) {
     ].filter(Boolean).join("\n");
 
     const intent = "Draft a SHORT, warm, professional sales follow-up to a prospect. Reference what we know about them.";
-    const ai = gemini.apiKey ? await draftWithGemini(gemini.apiKey, gemini.model, parsed.channel, intent, ctx) : null;
+    // The estimated deal value is the only figure in this prompt, so it is the
+    // only one the draft may state. Anything else is invented.
+    const allowed = lead.value ? [lead.value] : [];
+    const ai = gemini.apiKey
+      ? await draftWithGemini(gemini.apiKey, gemini.model, parsed.channel, intent, ctx, allowed)
+      : null;
     const draft = ai ?? stubDraft({
       channel: parsed.channel,
       firstName: (lead.contact_name || lead.company).split(/\s+/)[0],
@@ -229,7 +245,17 @@ export async function POST(request: NextRequest) {
       ? "Draft a SHORT, warm RENEWAL nudge. Mention the exact renewal date given, encourage timely renewal to avoid service interruption, and offer to send the renewal quote. Do not invent prices."
       : "Draft a SHORT, warm relationship CHECK-IN with an existing customer. No selling pressure; offer help with seats/renewals/support.";
 
-  const ai = gemini.apiKey ? await draftWithGemini(gemini.apiKey, gemini.model, parsed.channel, intent, ctx) : null;
+  // Only the outstanding balance was given to the model, so only it may appear.
+  // A reminder is the highest-stakes draft here — it asks a real customer for a
+  // specific sum. The guard's bare-number sweep is deliberately NOT enabled even
+  // so: with any useful floor it would flag a year ("renew in 2026") or a phone
+  // number as a monetary claim, and a guard that cries wolf on ordinary drafts is
+  // one somebody turns off. Currency-marked figures are what a model produces
+  // when it restates a number from context, and those are checked strictly.
+  const allowed = outstanding > 0 ? [outstanding] : [];
+  const ai = gemini.apiKey
+    ? await draftWithGemini(gemini.apiKey, gemini.model, parsed.channel, intent, ctx, allowed)
+    : null;
   const draft = ai ?? stubDraft({
     channel: parsed.channel,
     firstName: (customer.contact_name || customer.name).split(/\s+/)[0],
