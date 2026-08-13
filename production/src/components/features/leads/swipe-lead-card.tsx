@@ -44,6 +44,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { rupee, cn, formatDate } from "@/lib/utils";
+import { intentMeta, staleWarning } from "@/lib/leads/heat";
 import type { Lead } from "@/lib/supabase/database.types";
 
 // LEAD_STAGES mirrors the array in leads/page.tsx — kept here as a small
@@ -71,13 +72,16 @@ interface SwipeLeadCardProps {
   onChangeStage: (stage: Lead["stage"]) => void;
   /** Direct "Send quote" — carries lead context into the quote builder. */
   onSendQuote?: (lead: Lead) => void;
-  /** True if the lead's last update is > 14 days old (shows a red stale dot). */
-  stale?: boolean;
   /** Earliest open follow-up task on this lead, if any (shows a chip). */
   task?: { due: string; overdue: boolean; count: number };
 }
 
-export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, stale, task }: SwipeLeadCardProps) {
+export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, task }: SwipeLeadCardProps) {
+  // Derived here rather than passed in, so the card is the single place that
+  // decides how a lead looks on mobile — callers can't hand it a stale rule
+  // that disagrees with the desktop table.
+  const intent = intentMeta(lead);
+  const stale7 = staleWarning(lead);
   const stageMeta = LEAD_STAGES.find((s) => s.id === lead.stage);
 
   // Quote-first funnel gating (mirrors the drawer + desktop row select):
@@ -195,8 +199,32 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, stale, 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className={cn("w-2 h-2 rounded-full shrink-0", prio.color)} title={prio.title} />
-                {stale && <span className="w-1.5 h-1.5 rounded-full bg-rose shrink-0" title="No activity 14d+" />}
                 <p className="font-medium text-ink truncate text-[15px]">{lead.company}</p>
+                {/* Intent tier + stale nudge — same lib/leads/heat helpers the
+                    desktop table uses, so phone and desktop can never disagree
+                    about the same lead. (The old `stale` prop used its own
+                    14-day rule while the table used another — that drift is why
+                    these live in one file now.) */}
+                <span
+                  title={`${intent.label} — ${intent.reason}`}
+                  className={cn(
+                    "shrink-0 inline-flex items-center rounded-full text-[10px] font-semibold px-1.5 py-0.5 leading-none",
+                    intent.tier === "hot"  && "bg-rose-soft text-rose",
+                    intent.tier === "warm" && "bg-amber-soft text-amber-ink",
+                    intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
+                  )}
+                >
+                  {intent.tier === "hot" ? "🔥" : intent.tier === "warm" ? "⚡" : "❄️"}
+                </span>
+                {stale7 && (
+                  <span
+                    title={stale7.message}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-soft/70 text-amber-ink text-[10px] font-semibold px-1.5 py-0.5 leading-none border border-amber/30"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" />
+                    {stale7.days}d
+                  </span>
+                )}
               </div>
               {/* Row 2 — contact name + phone, compact. */}
               {(lead.contact_name || lead.contact_phone) && (

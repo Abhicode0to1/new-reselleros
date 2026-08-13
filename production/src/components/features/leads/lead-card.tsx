@@ -2,6 +2,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { rupee, initials, formatDate } from "@/lib/utils";
 import { getLeadWhatsAppUrl } from "@/lib/whatsapp";
+import { intentMeta, staleWarning, isHighValueLead } from "@/lib/leads/heat";
 import type { Lead } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
 
@@ -16,22 +17,19 @@ interface LeadCardProps {
   onOpenMerge?: (lead: Lead) => void;
 }
 
-// Deals ≥ this get a green highlight so the big-money cards pop on the board.
-const HIGH_VALUE = 100_000; // ₹1L+
 
-export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick, onQuickQuote }: LeadCardProps) {
+export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: LeadCardProps) {
   const ownerInitials = lead.contact_name ? initials(lead.contact_name) : "—";
   const age = formatDate(lead.created_at, "relative");
-  const isHighValue = (lead.value ?? 0) >= HIGH_VALUE;
+  const isHighValue = isHighValueLead(lead);
 
-  // Calculate age in days to flag stale deals (> 7 days untouched)
-  const createdTimestamp = new Date(lead.created_at).getTime();
-  const daysOld = Math.floor((Date.now() - createdTimestamp) / (1000 * 60 * 60 * 24));
-  const isStale = daysOld >= 7 && lead.stage !== "won" && lead.stage !== "lost";
-
-  // Intent score: 🔥 Hot (Quote/Trial or high value), ⚡ Warm (Demo/Contacted), ❄️ Cold
-  const isHot = (lead.stage === "quote" || lead.stage === "trial" || isHighValue) && lead.priority === "high";
-  const isWarm = lead.stage === "demo" || lead.priority === "medium";
+  // Intent + staleness come from lib/leads/heat — the SAME helpers the list view
+  // and the mobile card use. This card used to carry its own third definition
+  // (`isHot` required priority==="high" AND an advanced stage, `isWarm` keyed off
+  // demo/medium), so one lead could read "Hot" on the board and plain in the
+  // list. heat.ts exists precisely to stop that; the local copy is gone.
+  const intent = intentMeta(lead);
+  const stale7 = staleWarning(lead);
 
   const handleWhatsApp = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -65,14 +63,26 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick, on
             <span className="text-[13px] font-semibold text-ink leading-tight truncate" title={lead.company}>
               {lead.company}
             </span>
-            {isHot && (
-              <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
-                🔥 Hot
-              </span>
-            )}
-            {isWarm && !isHot && (
-              <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                ⚡ Warm
+            {/* Design tokens, not raw Tailwind palette values (§5) — the old
+                bg-rose-100/dark:bg-rose-950 pair bypassed the theme. */}
+            <span
+              title={`${intent.label} — ${intent.reason}`}
+              className={cn(
+                "px-1 py-0.5 rounded text-[9px] font-bold leading-none",
+                intent.tier === "hot"  && "bg-rose-soft text-rose",
+                intent.tier === "warm" && "bg-amber-soft text-amber-ink",
+                intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
+              )}
+            >
+              {intent.tier === "hot" ? "🔥 Hot" : intent.tier === "warm" ? "⚡ Warm" : "❄️ Cold"}
+            </span>
+            {stale7 && (
+              <span
+                title={stale7.message}
+                className="inline-flex items-center gap-1 px-1 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-soft/70 text-amber-ink border border-amber/30"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" />
+                {stale7.days}d
               </span>
             )}
           </div>
@@ -109,12 +119,11 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick, on
           {lead.value !== null ? rupee(lead.value, { compact: true }) : "—"}
         </span>
 
+        {/* The stale badge lives next to the company name above (one per card).
+            A second one used to sit here computed from `created_at`, so a lead
+            created 30 days ago but worked on yesterday was labelled "30d" —
+            it measured the lead's AGE, not neglect. */}
         <div className="flex items-center gap-1 text-[10px] text-ink-3">
-          {isStale && (
-            <span className="px-1 py-0.2 rounded bg-amber-100 text-amber-900 font-mono font-medium" title={`${daysOld} days in stage — schedule follow-up`}>
-              ⚠️ {daysOld}d
-            </span>
-          )}
           <span>{age}</span>
         </div>
       </div>

@@ -706,6 +706,17 @@ type LeadRow = {
   value: number | null;
   stage: "new" | "contact" | "demo" | "trial" | "quote" | "won" | "lost";
   is_junk: boolean;                 // migration 0187 — spam/fake; hidden from working views
+  /**
+   * Migration 0225 — why a deal was lost, captured at the moment it's marked
+   * lost. `lost_reason` is CHECK-constrained to the codes in
+   * lib/leads/loss-reasons.ts. `lost_at` is separate from `updated_at` because
+   * any later edit moves updated_at, which would make "lost in the last 90
+   * days" unanswerable. All three are NULL for deals lost before capture
+   * existed — reported as "Not recorded", never back-filled with a guess.
+   */
+  lost_reason: string | null;
+  lost_note:   string | null;
+  lost_at:     string | null;
   owner_id: string | null;
   source: string | null;
   /** Migration 0018 — structured domain captured at lead intake (trial / buy page) */
@@ -764,6 +775,9 @@ type LeadInsert = {
   subscription_type?:  "fresh" | "switch" | null;
   is_junk?:            boolean;
   contact_id?:         string | null;
+  lost_reason?:        string | null;   // migration 0225
+  lost_note?:          string | null;
+  lost_at?:            string | null;
 }
 type LeadUpdate = Partial<LeadInsert>;
 

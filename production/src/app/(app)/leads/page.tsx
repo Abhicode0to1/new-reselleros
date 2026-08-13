@@ -22,7 +22,11 @@
 import * as React from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
-import { useLeads, useUpdateLeadStage, useDeleteLead, useSetLeadJunk } from "@/lib/queries/leads";
+import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead } from "@/lib/queries/leads";
+import { useChangeLeadStage } from "@/lib/leads/use-change-stage";
+import { InlineCell } from "@/components/features/leads/inline-cell";
+import { LossReasonsCard } from "@/components/features/leads/loss-reasons-card";
+import { parseRupeeInput, parsePriority, parseFollowUpDate, PRIORITIES, type Priority } from "@/lib/leads/inline-edit";
 import { looksLikeJunk } from "@/lib/leads/junk";
 import { useLeadActivities, useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { LeadsBulkBar } from "@/components/features/leads/leads-bulk-bar";
@@ -113,7 +117,10 @@ function LeadsPageInner() {
   const focusLeadId  = searchParams.get("lead");
 
   const { data: leads, isLoading, error, refetch } = useLeads();
-  const updateStage = useUpdateLeadStage();
+  // Every stage change on this page goes through changeStage — it owns the
+  // "why was this lost?" prompt so the seven call sites don't each grow their
+  // own version. See lib/leads/use-change-stage.ts.
+  const { changeStage } = useChangeLeadStage();
   const { data: currentUser } = useCurrentUser();
   // Sales role gets a simplified UI — no Kanban / campaign / trial buttons.
   const isSales = currentUser?.role === "sales";
@@ -436,13 +443,17 @@ function LeadsPageInner() {
     allQualifiedDeals.length > 0 ? Math.round((wonCount / allQualifiedDeals.length) * 100) : 0;
 
   // Drag handlers
-  const handleDrop = (toStage: Lead["stage"]) => {
+  const handleDrop = async (toStage: Lead["stage"]) => {
     if (dragId) {
       const lead = filtered.find((l) => l.id === dragId);
       if (lead && lead.stage !== toStage) {
-        updateStage.mutate({ id: dragId, stage: toStage });
-        const stageLabel = LEAD_STAGES.find((s) => s.id === toStage)?.label;
-        toast.success(`${lead.company} → ${stageLabel}`);
+        // Dropping onto Lost opens the reason prompt first; if it's dismissed
+        // changeStage returns false and the card stays where it was.
+        const moved = await changeStage(lead, toStage);
+        if (moved) {
+          const stageLabel = LEAD_STAGES.find((s) => s.id === toStage)?.label;
+          toast.success(`${lead.company} → ${stageLabel}`);
+        }
       }
     }
     setDragId(null);
@@ -1010,6 +1021,15 @@ function LeadsPageInner() {
         />
       )}
 
+      {/* Loss analytics — owner-level "why are we losing?", in money. Deals tab
+          only: the raw-inquiry tab has no stage flow, so losses aren't its story.
+          The card handles its own empty state and hides nothing. */}
+      {!isLoading && !error && isDealsPage && workspaceLeads.length > 0 && (
+        <div className="mb-3">
+          <LossReasonsCard leads={workspaceLeads} />
+        </div>
+      )}
+
       {/* Kanban — only shows on Deals tab (raw leads in the Leads tab have
           no meaningful stage flow, so we force list view there).
           flex-1 + min-h-0 lets the grid stretch to fill remaining viewport
@@ -1340,7 +1360,7 @@ function LeadDetailSheet({
   onEdit: (lead: Lead) => void;
 }) {
   const router      = useRouter();
-  const updateStage = useUpdateLeadStage();
+  const { changeStage } = useChangeLeadStage();
   const deleteLead  = useDeleteLead();
   const confirm     = useConfirm();
   const { data: currentUser } = useCurrentUser();
@@ -1452,7 +1472,7 @@ function LeadDetailSheet({
   };
 
   const handleArchive = () => {
-    updateStage.mutate({ id: lead.id, stage: "lost" });
+    void changeStage(lead, "lost");
     toast.success(`${lead.company} archived`);
     onClose();
   };
@@ -2078,7 +2098,7 @@ function LeadDetailSheet({
                       key={s.id}
                       onClick={() => {
                         if (s.id !== lead.stage) {
-                          updateStage.mutate({ id: lead.id, stage: s.id });
+                          void changeStage(lead, s.id);
                           toast.success(`${lead.company} → ${s.label}`);
                           onClose();
                         }
@@ -2445,9 +2465,14 @@ function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 }
 
-const LEADLIST_COL_ORDER = ["select", "company", "stage", "contact", "plan", "value", "lastupdate", "actions"];
+// Spreadsheet mode: Stage / Value / Priority / Follow-up are all editable in
+// place, so the four fields a rep changes most never need the drawer. Widths
+// still sum to 100% — Contact and Plan gave up room for the two new columns
+// rather than introducing a horizontal scrollbar.
+const LEADLIST_COL_ORDER = ["select", "company", "stage", "contact", "plan", "value", "priority", "followup", "lastupdate", "actions"];
 const LEADLIST_COL_WIDTHS: Record<string, string> = {
-  select: "4%", company: "20%", stage: "11%", contact: "19%", plan: "14%", value: "10%", lastupdate: "9%", actions: "13%",
+  select: "3%", company: "18%", stage: "10%", contact: "14%", plan: "11%",
+  value: "9%", priority: "8%", followup: "9%", lastupdate: "8%", actions: "10%",
 };
 
 function LeadListView({
@@ -2486,7 +2511,10 @@ function LeadListView({
   // Stage-mutation hook for quick-change chips on cards. Tapping the stage
   // badge on a mobile card opens a dropdown to flip the stage without
   // needing to open the full detail drawer.
-  const updateStage = useUpdateLeadStage();
+  const { changeStage, changeStageBulk } = useChangeLeadStage();
+  // quiet: the saved value is visible in the cell itself, so a toast per edit
+  // would just be noise while working down a 50-row list.
+  const updateLead = useUpdateLead({ quiet: true });
   const deleteLead  = useDeleteLead();
   const setJunkBulk = useSetLeadJunk();
 
@@ -2523,13 +2551,14 @@ function LeadListView({
   };
   const clearSelection = () => setSelectedIds(new Set());
 
-  /** Bulk-mutate stage on all selected leads. Promise.all parallel because
-   *  these are independent row updates. */
+  /** Bulk-mutate stage on all selected leads. Routed through changeStageBulk so
+   *  a bulk move to Lost asks for the reason ONCE, not once per row. */
   const bulkChangeStage = async (stage: Lead["stage"]) => {
-    const ids = Array.from(selectedIds);
+    const picked = sorted.filter((l) => selectedIds.has(l.id));
     try {
-      await Promise.all(ids.map((id) => updateStage.mutateAsync({ id, stage })));
-      toast.success(`Moved ${ids.length} lead${ids.length === 1 ? "" : "s"} to ${STAGE_LABEL[stage]}`);
+      const moved = await changeStageBulk(picked, stage);
+      if (moved === 0) return;                      // dismissed, or nothing to do
+      toast.success(`Moved ${moved} lead${moved === 1 ? "" : "s"} to ${STAGE_LABEL[stage]}`);
     } catch {
       toast.error("Some leads failed to update");
     }
@@ -2609,15 +2638,16 @@ function LeadListView({
     {/* Adaptive card list — viewports < 1280px */}
     <ul className="xl:hidden space-y-3 pb-2">
       {sorted.map((lead) => {
-        const stale = daysSince(lead.updated_at) > 14 && lead.stage !== "won" && lead.stage !== "lost";
+        // `stale` used to be computed here on a >14-day rule and passed in. The
+        // card now derives it from lib/leads/heat itself, so phone and desktop
+        // can't disagree — see SwipeLeadCard.
         return (
           <SwipeLeadCard
             key={lead.id}
             lead={lead}
-            stale={stale}
             task={openTaskByLead.get(lead.id)}
             onTap={onRowClick}
-            onChangeStage={(s) => updateStage.mutate({ id: lead.id, stage: s })}
+            onChangeStage={(s) => void changeStage(lead, s)}
             onSendQuote={onSendQuote}
           />
         );
@@ -2661,6 +2691,8 @@ function LeadListView({
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Contact</th>
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Plan</th>
             <SortHeader col="value" label="Value" align="right" />
+            <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Priority</th>
+            <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Follow-up</th>
             <SortHeader col="age" label="Last update" />
             {/* Actions column — quick action icons on row hover. */}
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-right">
@@ -2670,7 +2702,6 @@ function LeadListView({
         </thead>
         <tbody>
           {sorted.map((lead) => {
-            const stale       = daysSince(lead.updated_at) > 14 && lead.stage !== "won" && lead.stage !== "lost";
             const age         = daysSince(lead.updated_at);
             const isSelected  = selectedIds.has(lead.id);
             // Heat → visual hierarchy. High-value (big money) wins the emerald
@@ -2726,15 +2757,13 @@ function LeadListView({
                 </td>
                 <td className="p-3">
                   <div className="flex items-center gap-2">
+                    {/* The stale signal now rides as a labelled badge next to the
+                        company name (with the day count), so this second, unlabelled
+                        rose dot on its own >14-day rule is gone. */}
                     {isHighValue ? (
                       <span className="shrink-0 inline-flex" title="High-value lead (≥ ₹1L)">
                         <Icon name="star" size={13} className="text-emerald" />
                       </span>
-                    ) : stale ? (
-                      <span
-                        className="w-2 h-2 rounded-full bg-rose shrink-0"
-                        title={`Stale — no activity for ${age} days`}
-                      />
                     ) : null}
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
@@ -2803,7 +2832,7 @@ function LeadListView({
                       value={lead.stage}
                       onChange={(e) => {
                         const stage = e.target.value as Lead["stage"];
-                        updateStage.mutate({ id: lead.id, stage });
+                        void changeStage(lead, stage);
                         if (!isDealsPage && stage === "lost") {
                           toast.success(`${lead.company} marked Lost`);
                         }
@@ -2840,16 +2869,77 @@ function LeadListView({
                     <span className="text-[11px] text-ink-3"><span className="font-semibold text-ink-2 tabular-nums">{lead.seats}</span> seats</span>
                   )}
                 </td>
-                {/* Value — the money, given visual precedence (serif, bold). */}
-                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
-                  {lead.value
-                    ? <span className={cn("font-serif text-[15px] font-semibold", isHighValue ? "text-emerald" : "text-ink")}>{rupee(lead.value)}</span>
-                    : <span className="text-ink-3">—</span>}
+                {/* Value — the money, given visual precedence (serif, bold), and
+                    editable in place. Parsing lives in lib/leads/inline-edit.ts:
+                    this figure feeds the Open Pipeline KPI, so an unparseable
+                    entry is refused rather than coerced. */}
+                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                  <InlineCell<number | null>
+                    value={lead.value ?? null}
+                    ariaLabel={`Deal value for ${lead.company}`}
+                    className="text-right"
+                    toInput={(v) => (v == null ? "" : String(v))}
+                    parse={parseRupeeInput}
+                    onSave={(v) => updateLead.mutate({ id: lead.id, patch: { value: v } })}
+                    display={
+                      lead.value
+                        ? <span className={cn("font-serif text-[15px] font-semibold", isHighValue ? "text-emerald" : "text-ink")}>{rupee(lead.value)}</span>
+                        : <span className="text-ink-3">—</span>
+                    }
+                  />
+                </td>
+                {/* Priority — inline select. */}
+                <td className="px-3 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
+                  <InlineCell<Priority>
+                    value={(lead.priority ?? "medium") as Priority}
+                    ariaLabel={`Priority for ${lead.company}`}
+                    toInput={(v) => v}
+                    parse={parsePriority}
+                    options={PRIORITIES.map((p) => ({ value: p, label: p[0].toUpperCase() + p.slice(1) }))}
+                    onSave={(v) => updateLead.mutate({ id: lead.id, patch: { priority: v } })}
+                    display={
+                      <span className={cn(
+                        "inline-flex items-center gap-1 text-xs",
+                        lead.priority === "high" ? "text-rose font-semibold"
+                        : lead.priority === "low" ? "text-ink-3"
+                        : "text-ink-2",
+                      )}>
+                        <span className={cn(
+                          "w-1.5 h-1.5 rounded-full",
+                          lead.priority === "high" ? "bg-rose" : lead.priority === "low" ? "bg-slate" : "bg-amber",
+                        )} />
+                        {(lead.priority ?? "medium").replace(/^./, (c) => c.toUpperCase())}
+                      </span>
+                    }
+                  />
+                </td>
+                {/* Follow-up date — inline date picker. Overdue reads rose so the
+                    column doubles as a "who needs chasing today" scan. */}
+                <td className="px-3 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
+                  <InlineCell<string | null>
+                    value={lead.follow_up_date ?? null}
+                    ariaLabel={`Follow-up date for ${lead.company}`}
+                    inputType="date"
+                    toInput={(v) => v ?? ""}
+                    parse={parseFollowUpDate}
+                    onSave={(v) => updateLead.mutate({ id: lead.id, patch: { follow_up_date: v } })}
+                    display={
+                      lead.follow_up_date
+                        ? <span className={cn(
+                            "text-xs tabular-nums",
+                            daysSince(lead.follow_up_date) > 0 ? "text-rose font-medium" : "text-ink-2",
+                          )}>
+                            {formatDate(lead.follow_up_date)}
+                          </span>
+                        : <span className="text-ink-4 text-xs">—</span>
+                    }
+                  />
                 </td>
                 <td className="px-3 py-2 text-sm">
                   <span className={cn(
                     "tabular-nums block",
-                    stale ? "text-rose font-medium" : "text-ink-3",
+                    // Same threshold as the badge (heat.ts), not a local >14 rule.
+                    stale7 ? "text-rose font-medium" : "text-ink-3",
                   )}>
                     {age === 0 ? "today" : age === 1 ? "1d ago" : `${age}d ago`}
                   </span>

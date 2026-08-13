@@ -57,11 +57,22 @@ export function useUpdateLeadStage() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, stage }: { id: string; stage: Lead["stage"] }) => {
+    mutationFn: async (
+      { id, stage, lostReason, lostNote }:
+      { id: string; stage: Lead["stage"]; lostReason?: string | null; lostNote?: string | null },
+    ) => {
       const supabase = createClient();
+      // Loss capture rides along with the stage change so the two can't diverge —
+      // a lead is never "lost" in one write and "explained" in another that might
+      // fail. Moving OUT of lost clears the fields, otherwise a revived deal keeps
+      // a stale reason and quietly poisons the loss analytics.
+      const loss = stage === "lost"
+        ? { lost_reason: lostReason ?? null, lost_note: lostNote ?? null, lost_at: new Date().toISOString() }
+        : { lost_reason: null, lost_note: null, lost_at: null };
+      const patch: LeadUpdate = { stage, ...loss };
       const { data, error } = await supabase
         .from("leads")
-        .update({ stage })
+        .update(patch)
         .eq("id", id)
         .select()
         .single();
@@ -216,7 +227,12 @@ export function useCreateLead() {
 // ============================================================
 // Update — edit any lead field (company, contact, plan, seats, value, notes, …)
 // ============================================================
-export function useUpdateLead() {
+/**
+ * @param opts.quiet suppress the success toast — for inline cell edits, where
+ *   the saved value is visible in the cell itself and a toast per keystroke-ish
+ *   edit is just noise. Errors still surface.
+ */
+export function useUpdateLead(opts: { quiet?: boolean } = {}) {
   const qc = useQueryClient();
 
   return useMutation({
@@ -231,12 +247,25 @@ export function useUpdateLead() {
       if (error) throw error;
       return data;
     },
+    // Optimistic — an inline cell must feel instant, and the row is right there
+    // to show the rollback if the write fails.
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: ["leads"] });
+      const previous = qc.getQueryData<Lead[]>(["leads"]);
+      qc.setQueryData<Lead[]>(["leads"], (old) =>
+        old?.map((l) => (l.id === id ? { ...l, ...(patch as Partial<Lead>) } : l)),
+      );
+      return { previous };
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
-      toast.success("Lead updated");
+      if (!opts.quiet) toast.success("Lead updated");
     },
-    onError: (err) => toastError(err),
+    onError: (err, _vars, ctx) => {
+      qc.setQueryData(["leads"], ctx?.previous);
+      toastError(err, { description: "The cell was put back to its previous value — nothing was saved." });
+    },
   });
 }
 

@@ -7,6 +7,7 @@
 import { ThemeProvider } from "./theme-provider";
 import { QueryProvider } from "./query-provider";
 import { ConfirmProvider } from "./confirm-provider";
+import { LossReasonProvider } from "./loss-reason-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -14,7 +15,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider>
       <QueryProvider>
         <ConfirmProvider>
-          <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+          <LossReasonProvider>
+            <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+          </LossReasonProvider>
         </ConfirmProvider>
       </QueryProvider>
     </ThemeProvider>
