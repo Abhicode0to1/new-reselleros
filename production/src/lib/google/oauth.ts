@@ -56,7 +56,14 @@ export function googleOAuthCreds(): { clientId: string; clientSecret: string } |
 export function originFromRequest(request: NextRequest): string {
   const h = request.headers;
   const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? "https";
+  // Localhost has no x-forwarded-proto, so the https default produced
+  // `https://localhost:3000/...` and Google answered redirect_uri_mismatch —
+  // the registered URI is http. Invisible on Cloud Run, which always sets the
+  // header, so this only ever surfaces the first time someone runs the OAuth
+  // flow locally. Google permits http ONLY for localhost, so the exception is
+  // exactly as narrow as the rule it is working around.
+  const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(host ?? "");
+  const proto = h.get("x-forwarded-proto") ?? (isLocal ? "http" : "https");
   if (host) return `${proto}://${host}`;
   const env = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
   if (env) return env;
