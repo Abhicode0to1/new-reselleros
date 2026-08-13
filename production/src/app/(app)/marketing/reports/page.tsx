@@ -146,14 +146,14 @@ function Metric({ label, value, sub, withheld }: {
 }) {
   return (
     <Card className="p-4">
-      <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1.5">{label}</p>
+      <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-1.5">{label}</p>
       <p
         className={cn("font-serif text-2xl leading-none", withheld ? "text-ink-3" : "text-ink")}
         title={withheld ? sub : undefined}
       >
         {withheld ? "—" : value}
       </p>
-      {sub && <p className="text-[11px] text-ink-3 mt-1.5 leading-snug">{sub}</p>}
+      {sub && <p className="text-xs text-ink-2 mt-2 leading-relaxed">{sub}</p>}
     </Card>
   );
 }
@@ -212,25 +212,41 @@ function SpendVsRevenue({ monthly }: { monthly: { month: string; spend: number; 
     );
   }
 
+  // With no spend anywhere in the range, Recharts auto-scales the spend axis to
+  // 0-4 and renders a ₹0/₹1/₹2/₹3/₹4 ladder beside invisible bars. That reads as
+  // a broken chart. An axis for data that does not exist is worse than no axis,
+  // so the spend series is dropped entirely and the reason is stated.
+  const hasSpend = monthly.some((m) => m.spend > 0);
+
   return (
     <Card className="p-4">
-      <div className="flex items-baseline justify-between gap-3 mb-3">
-        <p className="text-sm font-semibold text-ink">Monthly ad spend vs revenue collected</p>
+      <div className="flex items-baseline justify-between gap-3 mb-1">
+        <p className="text-sm font-semibold text-ink">
+          {hasSpend ? "Monthly ad spend vs revenue collected" : "Monthly revenue collected"}
+        </p>
         {monthly.length < 2 && (
           <Badge kind="muted" size="sm">One month — no trend yet</Badge>
         )}
       </div>
+      <p className="text-xs text-ink-2 mb-3 leading-relaxed">
+        {hasSpend
+          ? "Two axes: spend and revenue differ by orders of magnitude, so one shared scale would flatten the bars to a line."
+          : "No ad spend is tagged to a channel in this range, so there is nothing to plot against revenue — the spend axis is left out rather than drawn empty."}
+      </p>
       <div className="h-72 -ml-2">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={monthly}>
             <CartesianGrid stroke="var(--hairline)" vertical={false} />
             <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)" />
-            {/* Two axes on purpose: spend and revenue differ by orders of
-                magnitude here (₹4,000 against ₹69,55,963), so one shared scale
-                would flatten the spend bars to an invisible line. */}
-            <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)"
-                   tickFormatter={(v: number) => rupee(v, { compact: true })} />
-            <YAxis yAxisId="rev" orientation="right" tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)"
+            {/* Two axes only when there IS spend: the two series differ by orders
+                of magnitude (₹4,000 against ₹69,55,963), so one shared scale
+                would flatten the bars to an invisible line. */}
+            {hasSpend && (
+              <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)"
+                     tickFormatter={(v: number) => rupee(v, { compact: true })} />
+            )}
+            <YAxis yAxisId="rev" orientation={hasSpend ? "right" : "left"}
+                   tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)"
                    tickFormatter={(v: number) => rupee(v, { compact: true })} />
             <Tooltip
               formatter={(v: number, name: string) => [rupee(v), name]}
@@ -239,7 +255,9 @@ function SpendVsRevenue({ monthly }: { monthly: { month: string; spend: number; 
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Area yAxisId="rev" type="monotone" dataKey="revenue" name="Revenue collected"
                   stroke="var(--emerald)" fill="var(--emerald-soft)" strokeWidth={2} />
-            <Bar yAxisId="spend" dataKey="spend" name="Ad spend" fill="var(--amber)" radius={[4, 4, 0, 0]} maxBarSize={48} />
+            {hasSpend && (
+              <Bar yAxisId="spend" dataKey="spend" name="Ad spend" fill="var(--amber)" radius={[4, 4, 0, 0]} maxBarSize={48} />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -260,10 +278,14 @@ function ChannelRow({ c }: { c: ChannelStat }) {
     <tr className="border-b border-hairline last:border-0">
       <td className="px-3 py-2.5 align-top">
         <div className="font-medium text-sm text-ink">{c.channel}</div>
+        {/* 12px, not 10px. These notes are the most important content in the
+            table — they are the reason a figure is a dash instead of a number —
+            and a first pass set them SMALLER than everything around them. The
+            design system reserves 10px for uppercase micro-labels, not prose. */}
         {c.notes.length > 0 && (
-          <ul className="mt-1 space-y-0.5">
+          <ul className="mt-1 space-y-1">
             {c.notes.map((n, i) => (
-              <li key={i} className="text-[10px] text-ink-3 leading-snug max-w-[26rem]">{n}</li>
+              <li key={i} className="text-xs text-ink-2 leading-relaxed max-w-[30rem]">{n}</li>
             ))}
           </ul>
         )}
