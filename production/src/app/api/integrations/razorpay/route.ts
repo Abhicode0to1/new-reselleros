@@ -15,6 +15,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { razorpayReadiness, razorpayMode } from "@/lib/payments/razorpay-readiness";
+import { sealTenantSecrets } from "@/lib/crypto/tenant-secrets";
+import { maskSecret } from "@/lib/crypto/vault";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -27,11 +29,12 @@ const saveSchema = z.object({
   webhook_secret: z.string().trim().max(200).optional(),
 });
 
+/**
+ * Preview for the UI. Delegates to the vault so a SEALED value reads "encrypted"
+ * rather than a slice of envelope bytes, which would look like a corrupt key.
+ */
 function mask(s: string | null | undefined): string | null {
-  if (!s) return null;
-  const t = s.trim();
-  if (t.length <= 8) return "•".repeat(t.length);
-  return `${t.slice(0, 4)}••••${t.slice(-4)}`;
+  return s ? maskSecret(s) : null;
 }
 
 async function resolveTenantAndOwnership() {
@@ -111,20 +114,34 @@ export async function POST(req: NextRequest) {
   // Mode is inferred from the key_id prefix — single source of truth.
   const mode = v.key_id.startsWith("rzp_live_") ? "live" : "test";
 
+  // Seal the credentials before they touch the database. key_id is NOT a secret
+  // (it ships to the browser for Checkout) so it stays readable; the key secret
+  // and webhook secret are wrapped.
+  const sealed = sealTenantSecrets({
+    razorpay_key_secret:     v.key_secret,
+    razorpay_webhook_secret: v.webhook_secret ?? null,
+  });
+
   const admin = createAdminClient();
   const { error } = await admin
     .from("tenant_secrets")
     .upsert({
-      tenant_id:               r.tenantId,
-      razorpay_mode:           mode,
-      razorpay_key_id:         v.key_id,
-      razorpay_key_secret:     v.key_secret,
-      razorpay_webhook_secret: v.webhook_secret ?? null,
+      tenant_id:       r.tenantId,
+      razorpay_mode:   mode,
+      razorpay_key_id: v.key_id,
+      ...sealed.row,
     }, { onConflict: "tenant_id" });
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, mode });
+  // Say so when a secret had to be stored in the clear. Silence here would let
+  // an operator believe their credentials are encrypted when they are not.
+  if (sealed.storedInClear.length > 0) {
+    console.warn(
+      `[integrations/razorpay] stored in PLAINTEXT (${sealed.storedInClear.join(", ")}) — SECRETS_MASTER_KEY is not configured`,
+    );
+  }
+  return NextResponse.json({ ok: true, mode, encrypted: sealed.storedInClear.length === 0 });
 }
 
 export async function DELETE() {

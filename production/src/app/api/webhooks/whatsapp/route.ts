@@ -26,6 +26,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyMetaSignature, signatureRefusalReason } from "@/lib/crypto/webhook-signature";
+import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
   const verdict = verifyMetaSignature(
     rawBody,
     req.headers.get("x-hub-signature-256"),
-    secrets?.whatsapp_app_secret,
+    decryptTenantSecrets(secrets)?.whatsapp_app_secret,
   );
   if (!verdict.ok) {
     console.warn(

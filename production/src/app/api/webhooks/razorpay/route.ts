@@ -23,6 +23,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
+import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
@@ -100,7 +101,10 @@ export async function POST(request: NextRequest) {
       .select("razorpay_webhook_secret")
       .eq("tenant_id", tenantParam)
       .maybeSingle();
-    if (ts?.razorpay_webhook_secret) signingSecret = ts.razorpay_webhook_secret;
+    // Decrypt before use — an envelope string would never match the HMAC and the
+    // failure would look like Razorpay sending bad signatures.
+    const tsPlain = decryptTenantSecrets(ts);
+    if (tsPlain?.razorpay_webhook_secret) signingSecret = tsPlain.razorpay_webhook_secret;
   }
 
   if (!verifySignature(rawBody, signature, signingSecret)) {

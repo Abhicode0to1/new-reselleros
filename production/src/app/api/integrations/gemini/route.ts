@@ -13,6 +13,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { sealTenantSecrets } from "@/lib/crypto/tenant-secrets";
+import { maskSecret } from "@/lib/crypto/vault";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -25,13 +27,6 @@ const saveSchema = z
     model:   z.string().trim().max(60).optional(),
   })
   .refine((d) => d.api_key || d.model, { message: "Nothing to save" });
-
-function mask(s: string | null | undefined): string | null {
-  if (!s) return null;
-  const t = s.trim();
-  if (t.length <= 8) return "•".repeat(t.length);
-  return `${t.slice(0, 4)}••••${t.slice(-4)}`;
-}
 
 async function resolveTenantAndOwnership() {
   const supabase = createClient();
@@ -66,7 +61,7 @@ export async function GET() {
     ok:           true,
     configured:   Boolean(data?.gemini_api_key),
     env_fallback: envFallback,
-    key_mask:     mask(data?.gemini_api_key),
+    key_mask:     maskSecret(data?.gemini_api_key),
     model:        data?.gemini_model ?? DEFAULT_MODEL,
     updated_at:   data?.updated_at ?? null,
   });
@@ -92,11 +87,21 @@ export async function POST(req: NextRequest) {
   if (parsed.data.api_key) patch.gemini_api_key = parsed.data.api_key;
   if (parsed.data.model)   patch.gemini_model   = parsed.data.model.trim();
 
+  // Seal the API key before it is stored. gemini_model is configuration, not a
+  // credential, and is left readable.
+  const sealed = sealTenantSecrets(patch);
+
   const admin = createAdminClient();
   const { error } = await admin
     .from("tenant_secrets")
-    .upsert(patch, { onConflict: "tenant_id" });
+    .upsert(sealed.row, { onConflict: "tenant_id" });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (sealed.storedInClear.length > 0) {
+    // Never silent: an operator must not believe a key is encrypted when it is not.
+    console.warn(
+      `[integrations/gemini] stored in PLAINTEXT (${sealed.storedInClear.join(", ")}) — SECRETS_MASTER_KEY is not configured`,
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }

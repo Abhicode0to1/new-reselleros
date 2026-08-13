@@ -14,6 +14,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
+import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 
 export interface GeminiConfig {
   /** Usable API key, or null when neither tenant nor env has a valid one. */
@@ -52,7 +53,8 @@ export async function resolveGeminiConfig(
         .select("gemini_api_key, gemini_model")
         .eq("tenant_id", tenantId)
         .maybeSingle();
-      const tenantKey = valid(data?.gemini_api_key);
+      // Stored encrypted since the vault landed; plaintext rows pass through.
+      const tenantKey = valid(decryptTenantSecrets(data)?.gemini_api_key);
       if (tenantKey) key = tenantKey;           // tenant key wins over env
       if (data?.gemini_model?.trim()) model = data.gemini_model.trim();
     } catch {
