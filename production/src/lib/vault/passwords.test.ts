@@ -24,22 +24,34 @@ describe("generatePassword — the crypto correctness that eyeballs cannot check
   });
 
   it("is free of MODULO BIAS across the alphabet", () => {
-    // The bug this guards: `byte % 62` makes the first 8 characters of the
-    // alphabet come up ~4% more often than the rest. It looks perfectly random to
-    // any human reading a few samples, and it is not. Rejection sampling fixes it,
-    // and this is the only way to notice either way.
+    // The bug this guards: `byte % 70` makes some characters come up ~33% more
+    // often than others, because 256 is not a multiple of 70. It looks perfectly
+    // random to any human reading samples, and it is not.
+    //
+    // CHI-SQUARED, not a per-character tolerance. The first version of this test
+    // asserted every character stayed within 10% of the mean, which at this sample
+    // size is about 3 sigma — across ~70 characters that fails roughly one run in
+    // five. It duly failed once, passed on re-run, and a flaky test in a suite of
+    // 940 is worse than no test: it teaches people to re-run and move on.
+    //
+    // Chi-squared separates the two cases sharply instead. For ~69 degrees of
+    // freedom a uniform generator lands near 69 and essentially never above 200,
+    // while modulo bias at this N produces well over 1,000.
     const counts = new Map<string, number>();
-    const N = 60_000;
+    const N = 100_000;
     for (const ch of generatePassword({ length: N })) {
       counts.set(ch, (counts.get(ch) ?? 0) + 1);
     }
-    const freqs = [...counts.values()];
-    const expected = N / counts.size;
-    // With uniform sampling every character lands within a few percent of the
-    // mean at this sample size; a modulo-biased generator blows well past 10%.
-    for (const f of freqs) {
-      expect(Math.abs(f - expected) / expected).toBeLessThan(0.10);
+
+    const k = counts.size;
+    const expected = N / k;
+    let chiSquared = 0;
+    for (const observed of counts.values()) {
+      chiSquared += ((observed - expected) ** 2) / expected;
     }
+
+    expect(k).toBeGreaterThan(60);          // the alphabet is actually being used
+    expect(chiSquared).toBeLessThan(200);   // ~p < 1e-9 for a uniform generator
   });
 
   it("omits glyphs that get misread when a password is read aloud", () => {

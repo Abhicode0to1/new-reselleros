@@ -20,7 +20,15 @@
  * at resend.com and add RESEND_API_KEY=re_... to .env.local.
  *
  * Server-only — never import from client code. Resend keys are secret.
+ *
+ * Since migration 0235 a message may carry `route: { tenantId }`, and the tenant
+ * may have chosen to send through their own Gmail instead. Callers that omit
+ * `route` are unaffected and still go through Resend.
  */
+import type { NotificationClass } from "@/lib/mastery/quiet-hours";
+import { resolveEmailProvider } from "./provider";
+import { sendViaGmail } from "./gmail-transport";
+import { createAdminClient } from "@/lib/supabase/server";
 
 export interface EmailAttachment {
   /** Filename as it should appear in the recipient's inbox. */
@@ -45,6 +53,21 @@ export interface EmailMessage {
   from?:       string;
   replyTo?:    string;
   attachments?: EmailAttachment[];
+  /**
+   * Routing context (migration 0235). OPTIONAL on purpose.
+   *
+   * Every existing caller keeps working unchanged and keeps going through
+   * Resend — introducing a per-tenant transport must not quietly change where
+   * twenty-odd existing call sites send from. Pass it and the tenant's choice
+   * applies; omit it and this behaves exactly as it did before.
+   */
+  route?: EmailRoute;
+}
+
+export interface EmailRoute {
+  tenantId: string;
+  /** Drives only the bounce caution, never the routing decision itself. */
+  messageClass?: NotificationClass;
 }
 
 export type EmailSendStatus = "sent" | "stubbed" | "failed";
@@ -69,6 +92,47 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
   // today; UNSET it the moment the real domain is verified to revert to per-tenant
   // From. Reply-To stays the tenant's address, so customer replies still route right.
   const fromOverride = process.env.RESEND_FROM_OVERRIDE?.trim();
+
+  // ── Per-tenant routing (migration 0235) ───────────────────────────
+  // Only when the caller supplied `route`. Without it nothing below runs and the
+  // behaviour is byte-for-byte what it was, which is what keeps twenty-odd
+  // existing call sites safe.
+  if (msg.route?.tenantId) {
+    const decision = await routeForTenant(msg.route, Boolean(apiKey));
+
+    if (decision.blocked) {
+      return { status: "failed", providerId: null, errorMessage: decision.blocked };
+    }
+    // A fallback is never silent: the tenant asked for Gmail and did not get it,
+    // and the only way anyone finds out otherwise is by noticing the From address.
+    if (decision.fellBack) {
+      console.warn(`[email/send] tenant ${msg.route.tenantId}: ${decision.reason} — sent via Resend instead.`);
+    }
+    if (decision.caution) {
+      console.warn(`[email/send] tenant ${msg.route.tenantId}: ${decision.caution}`);
+    }
+
+    if (decision.provider === "gmail" && decision.gmail) {
+      const r = await sendViaGmail({
+        to: msg.to,
+        from: msg.from || decision.gmail.senderEmail || fromDefault,
+        subject: msg.subject,
+        text: msg.text,
+        html: msg.html,
+        replyTo: msg.replyTo,
+        attachments: msg.attachments,
+        accessToken: decision.gmail.accessToken,
+        refreshToken: decision.gmail.refreshToken,
+      });
+      if (r.ok) return { status: "sent", providerId: r.messageId || null, errorMessage: null };
+      return {
+        status: "failed",
+        providerId: null,
+        errorMessage: `Gmail ${r.failure}: ${r.detail}`,
+      };
+    }
+    // Anything else falls through to the Resend path below.
+  }
 
   // ── Stub mode ─────────────────────────────────────────────────────
   if (!apiKey) {
@@ -147,4 +211,84 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
 /** True if Resend is configured and real sends will happen. */
 export function isEmailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY?.trim());
+}
+
+/**
+ * Load the tenant's routing choice and the sending account's tokens.
+ *
+ * Separate from `sendEmail` because it is the only part that touches the
+ * database, and because a failure to READ the setting must never become a failure
+ * to send: any error here resolves to Resend with a stated reason rather than
+ * throwing. A transport that stops working because a settings lookup hiccupped
+ * would be a worse bug than the one this feature fixes.
+ */
+/** The fields the Gmail transport needs from the sending account. */
+interface SenderToken {
+  access_token:  string | null;
+  refresh_token: string | null;
+  scopes:        string | null;
+  google_email:  string | null;
+}
+
+async function routeForTenant(
+  route: EmailRoute,
+  resendConfigured: boolean,
+): Promise<ReturnType<typeof resolveEmailProvider> & {
+  gmail?: { accessToken: string | null; refreshToken: string | null; senderEmail: string | null };
+}> {
+  try {
+    const admin = createAdminClient();
+
+    const { data: tenant } = await admin
+      .from("tenants")
+      .select("email_provider, gmail_sender_user_id")
+      .eq("id", route.tenantId)
+      .maybeSingle();
+
+    const senderId = tenant?.gmail_sender_user_id ?? null;
+
+    let tok: SenderToken | null = null;
+    if (senderId) {
+      const { data } = await admin
+        .from("user_google_tokens")
+        .select("access_token, refresh_token, scopes, google_email")
+        .eq("user_id", senderId)
+        .maybeSingle();
+      // Cast through unknown: the typed client narrows a partial select on this
+      // table to `never`, and fighting that generic here buys nothing — the shape
+      // is pinned by the local annotation above.
+      // Cast through unknown: the typed client narrows a partial select on this
+      // table to `never`. `typeof tok` cannot be used here — after `= null` it
+      // narrows to `null`, which silently turns every later field access into an
+      // error on `never`. A named type is the fix.
+      tok = (data as unknown as SenderToken) ?? null;
+    }
+
+    const decision = resolveEmailProvider({
+      requested: tenant?.email_provider,
+      senderUserId: senderId,
+      senderRefreshToken: tok?.refresh_token,
+      senderScopes: tok?.scopes,
+      resendConfigured,
+      messageClass: route.messageClass,
+    });
+
+    if (decision.provider !== "gmail") return decision;
+    return {
+      ...decision,
+      gmail: {
+        accessToken: tok?.access_token ?? null,
+        refreshToken: tok?.refresh_token ?? null,
+        senderEmail: tok?.google_email ?? null,
+      },
+    };
+  } catch (e) {
+    return {
+      provider: "resend",
+      fellBack: true,
+      reason: `Could not read the tenant's email settings (${(e as Error).message})`,
+      caution: null,
+      blocked: null,
+    };
+  }
 }

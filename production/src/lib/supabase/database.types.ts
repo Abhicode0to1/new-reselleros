@@ -77,6 +77,14 @@ type TenantRow = {
   parent_tenant_id: string | null;
   tier: TenantTier;
   attendance_ingest_key: string | null;   // migration 0215 — biometric bridge key
+  /** Migration 0235 — which transport outbound mail uses. Defaults to resend
+   *  because Gmail reports no bounces: a dead address fails silently and the
+   *  app would record "sent". */
+  email_provider: "resend" | "gmail";
+  /** Whose connected Google account sends for this tenant. Required when
+   *  email_provider = gmail, because Gmail sends AS somebody and a cron has no
+   *  session. */
+  gmail_sender_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
