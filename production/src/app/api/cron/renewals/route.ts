@@ -32,7 +32,7 @@
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { decideCadence } from "@/lib/renewals/cadence";
+import { decideCadence, CADENCE_TRIGGERS } from "@/lib/renewals/cadence";
 import { renderTemplate } from "@/lib/renewals/templates";
 import { createOrGetRenewalQuote } from "@/lib/renewals/create-renewal-quote";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
   return handle(req);
 }
 
-async function handle(req: Request): Promise<NextResponse<CronResult | { error: string }>> {
+async function handle(req: Request): Promise<NextResponse<CronResult | DryRunResult | { error: string }>> {
   // ── Auth check — FAIL CLOSED (SEC-3) ─────────────────────────────
   // This job lapses/suspends subscriptions and sends emails under the
   // service-role client, so it must never run unauthenticated. If the secret
@@ -83,6 +83,35 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
   }
 
   const supabase = createAdminClient();  // service role — bypasses RLS for the cron
+
+  // ── Dry run ────────────────────────────────────────────────────────────
+  // WHY THIS EXISTS. Production's earliest renewal is 2027-07-22, and the
+  // cadence opens at T-15 — so the first real email is ~11 months out. Until
+  // then this job runs daily and does nothing, which is correct but proves
+  // nothing: an empty renewal_email_log looks identical whether the engine is
+  // healthy or completely broken. Without a dry run its first proof of life
+  // would be the day it emails real customers, and a wrong template or a
+  // missed address would be discovered by the customer.
+  //
+  // `?on=YYYY-MM-DD` time-travels the decision so the whole 11-month schedule
+  // can be rehearsed in seconds. It is accepted ONLY on a dry run: a live pass
+  // for a pretend date would suspend and email against a calendar that isn't
+  // real.
+  //
+  // This returns BEFORE any mutation rather than threading an `if (!dry)`
+  // through the ~300 lines below. Guards get missed when code is added later;
+  // an early return cannot be.
+  const url    = new URL(req.url);
+  const isDry  = url.searchParams.get("dry") === "1" || url.searchParams.get("dryRun") === "1";
+  const onParam = url.searchParams.get("on");
+  if (onParam && !isDry) {
+    return NextResponse.json(
+      { error: "`on` is only allowed with dry=1 — a live run must use today's date" },
+      { status: 400 },
+    );
+  }
+  if (isDry) return NextResponse.json(await planOnly(supabase, onParam));
+
   const result: CronResult = {
     ran_at:        new Date().toISOString(),
     email_mode:    isEmailConfigured() ? "real" : "stub",
@@ -402,4 +431,149 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
   }
 
   return NextResponse.json(result);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dry run — read-only rehearsal of the cadence.
+//
+// Nothing in here writes, sends, or creates. It answers one question: if the
+// cron ran on this date, what would it actually do, and to whom?
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface PlannedAction {
+  subscription_id: string;
+  customer:        string;
+  renewal_date:    string;
+  days_until:      number;
+  step:            string;
+  tone:            string | null;
+  action:          "email" | "suspend";
+  /** Where the email would land — or why it would go nowhere. */
+  recipient:       string;
+  /** True when the action is planned but cannot actually be delivered. */
+  blocked:         boolean;
+}
+
+interface DryRunResult {
+  dry_run:            true;
+  evaluated_for:      string;
+  email_mode:         "real" | "stub";
+  subscriptions_seen: number;
+  /** Active + auto_renew + has a renewal date — what the cron would look at. */
+  eligible:           number;
+  would_email:        number;
+  would_suspend:      number;
+  /** Planned sends with no usable customer email — these fail silently in a real run. */
+  blocked_no_email:   number;
+  next_action_on:     string | null;
+  actions:            PlannedAction[];
+  notes:              string[];
+}
+
+async function planOnly(
+  supabase: ReturnType<typeof createAdminClient>,
+  onParam: string | null,
+): Promise<DryRunResult | { error: string }> {
+  let asOf = new Date();
+  if (onParam) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(onParam)) {
+      return { error: "`on` must be YYYY-MM-DD" };
+    }
+    // Midday IST — far enough from either midnight that the date can't slip.
+    asOf = new Date(`${onParam}T12:00:00+05:30`);
+    if (Number.isNaN(asOf.getTime())) return { error: "`on` is not a real date" };
+  }
+
+  const { data: allSubs } = await supabase
+    .from("subscriptions")
+    .select("id, tenant_id, customer_id, customer_name, renewal_date, status, renewal_state, auto_renew");
+  const subs = allSubs ?? [];
+
+  const eligible = subs.filter(
+    (s) => s.status === "active" && s.auto_renew === true && s.renewal_date,
+  );
+
+  const { data: tenants } = await supabase.from("tenants").select("id, grace_period_days");
+  const graceByTenant = new Map((tenants ?? []).map((t) => [t.id, t.grace_period_days ?? 0]));
+
+  // One fetch for every customer involved, rather than per-subscription — a dry
+  // run should be cheap enough that nobody hesitates to use it.
+  const customerIds = [...new Set(eligible.map((s) => s.customer_id).filter(Boolean))] as string[];
+  const { data: customers } = customerIds.length
+    ? await supabase.from("customers").select("id, contact_email").in("id", customerIds)
+    : { data: [] };
+  const emailByCustomer = new Map(
+    (customers ?? []).map((c) => [c.id, (c as { contact_email?: string | null }).contact_email ?? null]),
+  );
+
+  const actions: PlannedAction[] = [];
+  let blockedNoEmail = 0;
+  let nextActionOn: string | null = null;
+
+  for (const sub of eligible) {
+    const decision = decideCadence({
+      renewalDate:  sub.renewal_date!,
+      graceDays:    graceByTenant.get(sub.tenant_id) ?? 0,
+      currentState: (sub.renewal_state ?? "pending") as never,
+      today:        asOf,
+    });
+
+    if (!decision.shouldSendEmail && !decision.shouldSuspend) {
+      // Track when this subscription NEXT wakes up, so a quiet run still tells
+      // the operator the engine is alive and when it will speak.
+      const firstTrigger = CADENCE_TRIGGERS[0].daysOut;
+      if (decision.daysUntilRenewal > firstTrigger) {
+        const wakes = new Date(sub.renewal_date!);
+        wakes.setDate(wakes.getDate() - firstTrigger);
+        const iso = wakes.toISOString().slice(0, 10);
+        if (!nextActionOn || iso < nextActionOn) nextActionOn = iso;
+      }
+      continue;
+    }
+
+    const email   = sub.customer_id ? emailByCustomer.get(sub.customer_id) ?? null : null;
+    const blocked = decision.shouldSendEmail && !email;
+    if (blocked) blockedNoEmail += 1;
+
+    actions.push({
+      subscription_id: sub.id,
+      customer:        sub.customer_name ?? "(unnamed)",
+      renewal_date:    sub.renewal_date!,
+      days_until:      decision.daysUntilRenewal,
+      step:            decision.targetState,
+      tone:            decision.tone,
+      action:          decision.shouldSuspend ? "suspend" : "email",
+      recipient:       email ?? "— no customer email on file —",
+      blocked,
+    });
+  }
+
+  const notes: string[] = [];
+  if (!isEmailConfigured()) {
+    notes.push("Email is in STUB mode — a real run would log to renewal_email_log without delivering anything.");
+  }
+  if (blockedNoEmail > 0) {
+    notes.push(`${blockedNoEmail} planned reminder(s) have no customer email address and would go nowhere.`);
+  }
+  if (actions.length === 0) {
+    notes.push(
+      nextActionOn
+        ? `Nothing due. The first reminder falls on ${nextActionOn} — re-run with ?dry=1&on=${nextActionOn} to rehearse it.`
+        : "Nothing due, and no upcoming reminder could be dated from the current subscriptions.",
+    );
+  }
+
+  return {
+    dry_run:            true,
+    evaluated_for:      asOf.toISOString().slice(0, 10),
+    email_mode:         isEmailConfigured() ? "real" : "stub",
+    subscriptions_seen: subs.length,
+    eligible:           eligible.length,
+    would_email:        actions.filter((a) => a.action === "email").length,
+    would_suspend:      actions.filter((a) => a.action === "suspend").length,
+    blocked_no_email:   blockedNoEmail,
+    next_action_on:     nextActionOn,
+    actions,
+    notes,
+  };
 }
