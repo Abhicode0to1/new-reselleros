@@ -67,10 +67,14 @@ const vendorBarData = [
 function RupeeTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-hairline bg-paper px-3 py-2 shadow-md text-xs">
+    // Glass tooltip: translucent + blurred so the series under the cursor stays
+    // readable through it, instead of a solid panel hiding the very point being
+    // inspected. Figures use <Money> so they don't reflow as the cursor moves
+    // across the chart.
+    <div className="rounded-lg border border-hairline bg-paper/90 backdrop-blur-md px-3 py-2 shadow-md text-xs">
       <p className="mb-1 font-semibold text-ink">{label}</p>
       {payload.map((p: any) => (
-        <p key={p.dataKey} style={{ color: p.color }}>
+        <p key={p.dataKey} style={{ color: p.color }} className="tabular-nums tracking-tight">
           {p.name}: {rupee(p.value, { compact: true })}
         </p>
       ))}
