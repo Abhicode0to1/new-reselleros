@@ -5,6 +5,80 @@
 
 ## Active
 
+### ✅ SECURITY: cross-tenant read in `bank_account_current_balance` — FIXED & VERIFIED IN PROD (0226)
+
+Found by auditing all **110 SECURITY DEFINER functions** in prod (read-only MCP).
+
+**The audit's good news first:** every one of the 110 sets `search_path` — **zero** missing. That part of an enterprise hardening checklist is already 100% done, and `0145`'s deny-by-default EXECUTE posture is holding (`record_payment` is not anon-callable).
+
+**The one real hole:** `bank_account_current_balance(p_account_id uuid)` is `SECURITY DEFINER` — so **RLS does not apply inside it** — and it took an arbitrary account UUID with **no ownership check at all**. EXECUTE is granted to `authenticated`, so any signed-in user of any tenant holding or guessing a `bank_accounts.id` could read another tenant's balance. The only protection was UUID secrecy: obscurity, not isolation.
+
+**Impact today is nil** — exactly one tenant has bank accounts (2 rows). It is a **latent** hole that goes live the moment a second tenant adds one, and prod already hosts other real tenants (Delfos). `0226_bank_balance_tenant_guard.sql` scopes **both** halves (account row *and* its transactions — filtering only the account row would still leak, because a foreign id would then sum ITS transactions). Grants stay `authenticated`-only; **not** granted to service_role, since `current_tenant_id()` is null there and it would return a silent 0 — a wrong number is worse than a missing one. Both callers are authenticated client reads, so no app change is needed.
+
+**Also worth a look, not fixed:** `accept_project_quote(uuid)` has no tenant scoping. Its sibling functions (`create_project_quote`, `raise_project_milestone_invoice`) both scope by `current_tenant_id()`, and in the normal flow it only ever receives a project id created moments earlier in the same transaction — but called directly with a foreign id it would accept another tenant's quote. Worth an explicit guard.
+
+**⚠️ Correction to the brief:** it specifies tenant checks via `auth.jwt() ->> 'tenant_id'`. **That would break every policy in this database.** `tenant_id` is not in the JWT here — isolation runs through `public.current_tenant_id()`, which reads `public.users`, and **150 live policies** depend on it. `0226` uses `current_tenant_id()` accordingly.
+
+### 🟡 Pipeline features (Pardeep's 5) — #1 already existed · #3 + #5 DONE · #2 + #4 pending
+
+**#1 WhatsApp 1-click — already built, nothing to do.** Kanban card has a WhatsApp button (`getLeadWhatsAppUrl`), list rows have the icon, and the mobile card has a left-swipe → WhatsApp gesture with a pre-filled message. **46 buttons live** on /deals.
+
+**#3 Hot/Warm/Cold + #5 Stale warnings — DONE, on all three surfaces.** The features themselves were small; the actual work was that **four conflicting definitions of "hot"/"stale" already existed**:
+
+| Where | Old rule |
+|---|---|
+| `lib/leads/heat.ts` | `priority==='high' \|\| stage in demo/trial/quote` |
+| `lead-card.tsx` (kanban) | `(quote\|trial \|\| ≥₹1L) **&&** priority==='high'` — stricter, so a lead read Hot in the list and plain on the board |
+| `lead-card.tsx` stale | `created_at` + 7d — measured the lead's **AGE, not neglect**: a lead created 30 days ago but worked on yesterday showed "30d" |
+| `leads/page.tsx` ×2 + `swipe-lead-card` | `updated_at > 14d` |
+
+All four now route through `lib/leads/heat.ts`. Added there: `daysSinceTouch` · `intentTier` · `intentMeta` · `staleWarning`, with **19 tests** (suite 234 → **253**).
+
+Two decisions worth keeping:
+- **Cold outranks Hot.** A ₹2L deal untouched for 3 weeks is *at risk*, not on fire — calling it Hot is how it keeps getting ignored.
+- **Stale fires at 7d, Cold at 10d** — deliberately different, so the nudge arrives while there is still a window to save the deal. A test asserts `STALE_DAYS < COLD_DAYS`.
+
+`daysSinceTouch` returns **null** (not "stale") when there's no usable timestamp, so a freshly imported lead isn't scolded on day one. It prefers a real `lead_activities` timestamp when the caller has one, else `updated_at`.
+
+**Browser-verified** on /deals: 48 leads, every row carries exactly one intent badge (13 Hot / 35 Warm in the table). **Cold + stale render 0 today because every lead in prod has a recent `updated_at`** — those paths are covered by unit tests, not by eye. typecheck clean, lint 0 errors.
+
+**#4 Loss reason — code DONE, ⚠️ BLOCKED on the migration (Pardeep must apply it).**
+
+- **`0225_lead_loss_reason.sql`** (written, **not applied** — read-only MCP): `lost_reason` (CHECK-constrained to 6 codes, matching how this schema already does small value sets) · `lost_note` · `lost_at`. `lost_at` is separate from `updated_at` because any later edit moves `updated_at`, so "lost in the last 90 days" would be unanswerable. **No backfill** — deals already sitting in `lost` genuinely have no reason, and inventing one would fabricate the very analytics this exists to make trustworthy; they report as "Not recorded".
+- **`lib/leads/loss-reasons.ts`** — the 6 codes + `lossBreakdown()` rollup, **12 tests**. A test asserts the code list matches the migration's CHECK exactly, so the dialog can't offer something the DB rejects.
+- **`LossReasonProvider`** (mounted globally, modelled on `ConfirmProvider`) — one tap saves; "Other" waits for a note; **dismissing cancels the move** rather than recording an unexplained loss.
+- **`useChangeLeadStage()`** — the chokepoint. Stage was changed from **7 call sites across 3 components**; all now route through this hook, so the prompt exists in one place. Bulk moves ask **once** for the whole selection, not once per row.
+- Moving a lead OUT of `lost` clears the fields, or a revived deal keeps a stale reason and quietly poisons the analytics.
+
+Suite 253 → **265 green**, typecheck clean, lint 0 errors.
+
+**#4 analytics surface — DONE.** `LossReasonsCard` on the Deals tab: reasons ranked by **value lost, not count** (one ₹5L competitor loss outranks five ₹10k price losses — count-sorting buries exactly that), with 90-day / 1-year / all-time windows. Un-recorded losses are shown, never dropped, and when they're the majority the card says *"not yet a reliable picture"* rather than letting the owner read a conclusion out of missing data. **7 component tests** (32 files / **300 tests** green).
+
+✅ **Migration 0225 APPLIED & VERIFIED IN PROD (2026-08-13)** — `lost_reason, lost_note, lost_at` present (lead columns 29 → 32), CHECK constraint live with the 6 codes matching `loss-reasons.ts` exactly, partial index created. 7 lost deals now able to carry a reason.
+
+**Why it took four attempts, recorded so it doesn't repeat:** the Supabase SQL editor runs a pasted script as **one transaction** — if any later statement fails, *everything* rolls back, including the `ALTER` that succeeded. Repeated "apply kar diya" reports were genuine; nothing survived. Running the statements in **small separate batches** worked first time. (My own diagnostic was also wrong once: I suggested `current_database()` to tell projects apart, but it returns `postgres` for every Supabase project — the project ref in the dashboard URL is the real discriminator.)
+
+`database.types.ts` updated **by hand**, not regenerated: the file's own header says *"hand-maintained"* and it carries **112 hand-added convenience types** (`LeadPriority`, `LineCommitment`, …) that `supabase gen types` would wipe. The `as unknown as LeadUpdate` cast is gone. ⚠️ **Also not browser-verified:** the dev server came up on a new port, and Supabase keeps its session in `localStorage` (per-origin, port included), so the app was logged out. I won't enter credentials. No render errors on mount — only 401s from the missing session.
+
+**After applying 0225:** regenerate `database.types.ts` and drop the one `as unknown as LeadUpdate` cast in `useUpdateLeadStage` (commented in place).
+
+**#2 Inline-edit spreadsheet view — DONE.** Stage · Deal Value · Priority · Follow-up date are all editable in the row; the four fields a rep changes most no longer need the drawer. Two new columns added (Priority, Follow-up) with widths rebalanced so they still sum to 100% — no horizontal scrollbar.
+
+**Deal Value feeds the Open Pipeline KPI, so the parsing is where the care went** (`lib/leads/inline-edit.ts`, **19 tests**):
+- Accepts what a reseller actually types: `50,000` · `₹1,50,000` · `1.5L` · `2 Cr`
+- **Rejects rather than guesses** — `abc`, `50k`, `-5000` fail with a reason and nothing is written. No silent coercion to 0/NaN.
+- **Empty = cleared (null), not ₹0** — an unpriced deal must not count as a zero-value one in the pipeline total.
+- Refuses anything over ₹100 Cr: an extra zero is far likelier than a real order, and it would visibly distort the KPI.
+- Follow-up dates are stored verbatim as `YYYY-MM-DD` — converting to UTC is how "tomorrow" becomes "today" for an IST user. `2026-02-31` is rejected, not rolled forward.
+
+**Interaction contract** (`InlineCell`, **9 component tests**): click/Enter/F2 to edit · Enter or blur saves · **Esc cancels and beats the blur that fires with it** (the classic bug where cancelling still saves) · invalid input keeps the cell open with the reason · **an unchanged value writes nothing at all**. Optimistic with rollback, and `useUpdateLead({ quiet: true })` so working down 50 rows doesn't fire 50 toasts.
+
+Component tests run under a per-file `@vitest-environment jsdom` directive — the global config stays `node` so the rest of the suite keeps its speed.
+
+Suite 265 → **293 green**, typecheck clean, lint 0 errors.
+
+⚠️ **Not browser-verified.** Each dev-server restart lands on a new port, and Supabase keeps its session in `localStorage` (per-origin, port included), so the app was logged out and I won't enter credentials. The interaction is covered by the 9 component tests instead, which is repeatable in a way a manual click isn't — but a human should still click through it once.
+
 ### 🔴 UX / behaviour audit — "prevention is engineered, recovery is not". → [docs/UX-AUDIT.md](docs/UX-AUDIT.md)
 
 Not a repeat of the layout rounds below (those were padding/max-width/mobile-cards). This asks what happens to a *person*: defaults, attention, and what they see when something breaks.
