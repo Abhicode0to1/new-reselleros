@@ -35,6 +35,8 @@ import { useInvoices } from "@/lib/queries/invoices";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { usePayments } from "@/lib/queries/payments";
 import { formatDate } from "@/lib/utils";
+import AddSeatsDialog from "@/components/features/subscriptions/add-seats-dialog";
+import type { Subscription } from "@/lib/supabase/database.types";
 
 // ============================================================
 // Hook to manage open state + register ⌘K shortcut
@@ -113,8 +115,26 @@ export function CommandPalette({
     router.push(href as Route);
   };
 
+  // Controlled so the Add-seats group can stay hidden until the operator has
+  // typed something (see that group for why), and so the query does not persist
+  // into the next open — reopening onto a stale search reads as a stuck palette.
+  const [query, setQuery] = React.useState("");
+  React.useEffect(() => { if (!open) setQuery(""); }, [open]);
+
+  // Seats can only be added to something currently running. A paused or expired
+  // subscription needs reviving first, and offering the action on one would send
+  // the operator into a dialog that cannot succeed.
+  const activeSubs = React.useMemo(
+    () => (subscriptions ?? []).filter((s) => s.status === "active"),
+    [subscriptions],
+  );
+
+  // Which subscription the seats dialog is open for, if any.
+  const [addSeatsSub, setAddSeatsSub] = React.useState<Subscription | null>(null);
+
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
         <DialogOverlay />
@@ -134,6 +154,8 @@ export function CommandPalette({
             <div className="flex items-center gap-3 px-4 py-3 border-b border-hairline">
               <Icon name="search" size={18} className="text-ink-3" />
               <Command.Input
+                value={query}
+                onValueChange={setQuery}
                 placeholder="Search customers, leads, quotes, invoices, or run an action…"
                 className="flex-1 bg-transparent border-0 outline-none text-base text-ink placeholder:text-ink-4 font-sans"
               />
@@ -300,6 +322,37 @@ export function CommandPalette({
                 </Command.Group>
               )}
 
+              {/* Add seats — the on-call emergency path.
+                  A customer rings asking for five more seats. This turns that into
+                  Ctrl+K → type their name → Enter, with no page load in between,
+                  and the pro-rata figure computed by add-seats-dialog.
+
+                  SHOWN ONLY ONCE SOMETHING IS TYPED. One item per active
+                  subscription would otherwise add ~38 rows to a palette that opens
+                  cold, pushing navigation and quick actions off the first screen to
+                  offer an action most opens don't want. Two characters is enough to
+                  mean "I am looking for a particular customer". */}
+              {activeSubs.length > 0 && query.trim().length >= 2 && (
+                <Command.Group heading="Add seats">
+                  {activeSubs.slice(0, MAX_PER_GROUP).map((s) => (
+                    <PaletteItem
+                      key={`seats-${s.id}`}
+                      icon="plus"
+                      label={`Add seats — ${s.customer_name}`}
+                      meta={[s.plan, s.seats ? `${s.seats} seats now` : null, s.renewal_date ? `renews ${formatDate(s.renewal_date)}` : null]
+                        .filter(Boolean).join(" · ")}
+                      onSelect={() => {
+                        // Close the palette FIRST, then open the dialog on the next
+                        // tick. Two Radix dialogs mounted at once fight over the
+                        // focus trap and the seats input never receives focus.
+                        onOpenChange(false);
+                        setTimeout(() => setAddSeatsSub(s), 0);
+                      }}
+                    />
+                  ))}
+                </Command.Group>
+              )}
+
               {/* Subscriptions — real, tenant-scoped */}
               {subscriptions && subscriptions.length > 0 && (
                 <Command.Group heading={`Subscriptions · ${subscriptions.length}`}>
@@ -360,6 +413,18 @@ export function CommandPalette({
         </DialogContent>
       </DialogPortal>
     </Dialog>
+
+    {/* Rendered as a SIBLING of the palette, not inside it. Nesting it under the
+        palette's DialogContent would unmount the seats dialog the moment the
+        palette closes — which is exactly when it needs to appear. */}
+    {addSeatsSub && (
+      <AddSeatsDialog
+        sub={addSeatsSub}
+        open={!!addSeatsSub}
+        onOpenChange={(v) => { if (!v) setAddSeatsSub(null); }}
+      />
+    )}
+    </>
   );
 }
 
