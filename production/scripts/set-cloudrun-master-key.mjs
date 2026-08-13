@@ -12,9 +12,35 @@
  *   2. A freshly generated master key was printed to a terminal, and that terminal
  *      appeared in a screenshot — burning the key before it was ever used.
  *
- * So the value is read from `.env.local`, passed to gcloud as an argv element
- * (never interpolated into a shell string, so it does not reach shell history),
- * and never printed. There is no placeholder to get wrong.
+ * So the value is read from `.env.local` and never printed. There is no
+ * placeholder to get wrong.
+ *
+ * ─── CORRECTION, FOUND WHEN THIS FIRST RAN ───────────────────────────────────
+ * An earlier version of this comment claimed the value "never reaches a shell
+ * string, so it does not reach shell history". Node itself proved that wrong on
+ * the first real run:
+ *
+ *   DEP0190: Passing args to a child process with shell option true can lead to
+ *   security vulnerabilities, as the arguments are not escaped, only concatenated.
+ *
+ * With `shell: true` the argv array IS concatenated into a command string, so the
+ * value does pass through the shell. `shell: true` is unavoidable on Windows,
+ * where `gcloud` is a `.cmd` wrapper.
+ *
+ * What that does and does not mean, stated honestly:
+ *   • No injection risk. base64 is [A-Za-z0-9+/=] — none of those are shell
+ *     metacharacters, so a key cannot break out of the command.
+ *   • It is NOT written to shell history here: this runs non-interactively, and
+ *     non-interactive shells do not append to history.
+ *   • It IS briefly visible in a process listing (Task Manager, `ps`) while gcloud
+ *     runs. On a personal machine that is a small window; on a shared or
+ *     multi-user box it is a real exposure.
+ *
+ * THE PROPER FIX, when this matters more: keep the key in Google Secret Manager
+ * and have Cloud Run reference it (`--set-secrets`), so the value never appears in
+ * any command line at all. Not done here because it is a different setup task with
+ * its own IAM, and shipping a half-configured secret reference would be worse than
+ * this.
  *
  * Written in Node rather than bash because this machine drives cmd.exe, and an
  * earlier bash-only instruction (`VAR=1 ./script.sh`) simply failed there. `node`
@@ -92,9 +118,11 @@ if (DRY) {
   process.exit(0);
 }
 
-// shell: true is required on Windows to resolve gcloud.cmd, but the value travels
-// as its own argv element rather than inside a command string, so it is not
-// re-parsed by the shell and does not land in shell history.
+// shell: true is required on Windows, where gcloud is a .cmd wrapper. Node warns
+// (DEP0190) that this concatenates args into a command string rather than passing
+// them separately — see the CORRECTION block at the top of this file for what that
+// does and does not expose. Kept because there is no portable alternative here, and
+// documented rather than glossed over.
 const res = spawnSync("gcloud", args, { encoding: "utf8", shell: true });
 
 const scrub = (s) => (s ?? "").split(value).join("<masked>");
