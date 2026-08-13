@@ -23,6 +23,24 @@ export const GOOGLE_CONTACTS_SCOPES = [
   "https://www.googleapis.com/auth/contacts",
 ].join(" ");
 
+/**
+ * Sending scope, kept SEPARATE from the contacts scopes on purpose.
+ *
+ * gmail.send is send-only: it cannot read, list or delete a single message. That
+ * is the whole reason to prefer it over an SMTP App Password, which grants full
+ * mailbox access — storing one of those per tenant would be materially worse than
+ * storing a send-only API key.
+ *
+ * Separate because the consent screen lists what it is asking for, and bundling
+ * "send email as you" into a button labelled "Connect Google Contacts" is the
+ * kind of thing that makes people click Deny — rightly.
+ */
+export const GMAIL_SEND_SCOPES = [
+  "openid",
+  "email",
+  "https://www.googleapis.com/auth/gmail.send",
+].join(" ");
+
 export function googleOAuthCreds(): { clientId: string; clientSecret: string } | null {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
