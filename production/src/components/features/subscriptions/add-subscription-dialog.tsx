@@ -229,6 +229,12 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
         },
       ];
 
+      /* `amount`, NOT `total` — `quotes` has no `total` column (it has amount,
+         subtotal and total_cost; amount is the canonical ₹, see quote-builder.tsx).
+         The old key silently failed the insert, and because the failure was only
+         console.warn'ed the code carried on and stamped quote_id onto the
+         subscription, which then died on subscriptions_quote_id_fkey. The user saw
+         "Failed creating subscription" — two steps downstream of the real cause. */
       const { error: quoteErr } = await supabase.from("quotes").insert({
         id: quoteId,
         tenant_id: tenantId,
@@ -237,14 +243,17 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
         domain: cleanDomain,
         status: "accepted",
         payment_status: isPaid ? "received" : "awaiting",
-        total: totalAnnualAmount,
+        amount: totalAnnualAmount,
+        subtotal: totalAnnualAmount,
+        seats,
+        plan,
         notes: `Auto-generated from Subscription Onboarding (${plan}) · ${isPaid ? "Paid Upfront" : "Credit Terms / Postpaid"}`,
-        line_items: lineItems as any,
-        created_at: new Date().toISOString(),
-      } as any);
-      if (quoteErr) {
-        console.warn("Quote auto-creation warning (proceeding with sub):", quoteErr);
-      }
+        line_items: lineItems as unknown as QuoteLineItem[],
+      });
+      /* THROW, do not warn. The subscription references this quote by foreign key,
+         so "proceed without it" was never an option — it just moved the failure
+         somewhere it could not be explained. */
+      if (quoteErr) throw quoteErr;
 
       // ── Step 3: Insert Active Subscription ──────────────────────────────
       const { error: subErr } = await supabase.from("subscriptions").insert({
@@ -280,8 +289,17 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
       onSuccess?.();
       onOpenChange(false);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed creating subscription";
-      toast.error(msg);
+      /* Supabase errors are PLAIN OBJECTS, not Error instances. `err instanceof
+         Error` was therefore false for every database failure here, so the real
+         message was thrown away and replaced with "Failed creating subscription" —
+         a sentence that tells the operator nothing and cost this bug a debugging
+         session. Read the shape Supabase actually returns, and show its code.  */
+      const e = err as { message?: string; details?: string; hint?: string; code?: string } | null;
+      const detail = e?.message || e?.details || (err instanceof Error ? err.message : "");
+      toast.error(detail || "Failed creating subscription", {
+        description: [e?.code && `code ${e.code}`, e?.hint].filter(Boolean).join(" · ") || undefined,
+      });
+      console.error("[add-subscription] failed:", err);
     } finally {
       setSubmitting(false);
     }
