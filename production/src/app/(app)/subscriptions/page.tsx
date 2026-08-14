@@ -14,6 +14,7 @@ import { EditSubscriptionDialog } from "@/components/features/subscriptions/edit
 import { ImportSubscriptionsDialog } from "@/components/features/subscriptions/import-subscriptions-dialog";
 import { ReconcileGoogleDialog } from "@/components/features/subscriptions/reconcile-google-dialog";
 import { ImportGoogleSubsDialog } from "@/components/features/subscriptions/import-google-subs-dialog";
+import { MarginAlertsCard } from "@/components/features/subscriptions/margin-alerts-card";
 import Link from "next/link";
 import { toast } from "sonner";
 import { GeminiCard } from "@/components/shared/gemini-card";
@@ -293,6 +294,11 @@ export default function SubscriptionsPage() {
           )}
         </div>
       )}
+
+      {/* Margin at risk — losses / thin margins at today's vendor cost, plus the
+          subscriptions whose cost we cannot look up at all. Self-hiding when there
+          is nothing to say, so it costs no vertical space on a good day. */}
+      {!isLoading && <MarginAlertsCard />}
 
       {/* Trials in progress — virtual subs */}
       {!isLoading && trials && trials.length > 0 && tab !== "trials" && (
