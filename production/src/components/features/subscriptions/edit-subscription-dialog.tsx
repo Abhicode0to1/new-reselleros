@@ -22,6 +22,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { useUpdateSubscription } from "@/lib/queries/subscriptions";
 import type { Subscription } from "@/lib/supabase/database.types";
+import { checkNceLock, lockWarning } from "@/lib/subscriptions/nce-lock";
+import { Icon } from "@/components/ui/icon";
+import { toast } from "sonner";
 
 const VENDORS: Subscription["vendor"][] = ["google", "microsoft", "zoho", "other"];
 const STATUSES: Subscription["status"][] = ["active", "paused", "expired", "cancelled"];
@@ -50,7 +53,36 @@ export function EditSubscriptionDialog({
     setStatus(sub.status);
   }, [sub]);
 
+  /* Microsoft NCE: seats cannot be reduced and the subscription cannot be
+     cancelled more than 7 days after the term starts. Checked against the values
+     being SAVED, not the ones on the record, and re-evaluated as the operator
+     types so the refusal appears before they press the button rather than after. */
+  const nextSeats = Math.max(0, Math.round(Number(seats) || 0));
+  const nceCheck = checkNceLock({
+    vendor,
+    startDate:    startDate || sub.start_date,
+    today:        new Date().toISOString().slice(0, 10),
+    currentSeats: sub.seats,
+    nextSeats,
+    nextStatus:   status,
+  });
+  const nceHeadsUp = lockWarning({
+    vendor,
+    startDate:    startDate || sub.start_date,
+    today:        new Date().toISOString().slice(0, 10),
+    currentSeats: sub.seats,
+    nextSeats:    sub.seats,
+    nextStatus:   "active",
+  });
+
   const save = async () => {
+    /* Refuse here as well as disabling the button. A disabled button is a hint;
+       this is the actual guard, and it survives a stale render or an operator who
+       reaches the handler another way. */
+    if (nceCheck.locked) {
+      toast.error("Microsoft NCE lock", { description: nceCheck.reason });
+      return;
+    }
     try {
       await update.mutateAsync({
         id: sub.id,
@@ -122,9 +154,33 @@ export function EditSubscriptionDialog({
           </div>
         </div>
 
+        {/* The refusal, in full, where the decision is being made — not as a toast
+            that disappears. It names the two things the operator CAN do (§24). */}
+        {nceCheck.locked && (
+          <div className="flex items-start gap-2 rounded-md border border-rose/50 bg-rose-soft/40 p-3">
+            <Icon name="lock" size={15} className="mt-0.5 flex-shrink-0 text-rose" />
+            <p className="text-xs leading-relaxed text-ink-2">{nceCheck.reason}</p>
+          </div>
+        )}
+
+        {/* The heads-up, while it is still allowed. A wall on day 7 with silence on
+            day 5 is a bad trade for someone who never knew a deadline existed. */}
+        {!nceCheck.locked && nceHeadsUp && (
+          <div className="flex items-start gap-2 rounded-md border border-amber/50 bg-amber-soft/40 p-3">
+            <Icon name="clock" size={15} className="mt-0.5 flex-shrink-0 text-amber-ink" />
+            <p className="text-xs leading-relaxed text-amber-ink">{nceHeadsUp}</p>
+          </div>
+        )}
+
         <DialogFooter>
           <Button type="button" variant="default" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="button" variant="primary" loading={update.isPending} onClick={save}>Save changes</Button>
+          <Button
+            type="button" variant="primary" loading={update.isPending}
+            disabled={nceCheck.locked}
+            onClick={save}
+          >
+            {nceCheck.locked ? "Blocked by NCE policy" : "Save changes"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
