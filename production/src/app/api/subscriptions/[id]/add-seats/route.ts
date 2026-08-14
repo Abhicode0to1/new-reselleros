@@ -17,6 +17,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { addSeats } from "@/lib/subscriptions/add-seats";
+import { daysBetweenDates } from "@/lib/subscriptions/proration";
+import { isExportSupply } from "@/lib/gst/place-of-supply";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -54,7 +56,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { data: sub, error: subErr } = await supabase
     .from("subscriptions")
     .select(
-      `id, tenant_id, customer_id, customer_name, plan, vendor, domain, seats, mrr, renewal_date, status`
+      // start_date is new here: without it the term length is unknowable and
+      // add-seats fell back to assuming a year for every subscription.
+      `id, tenant_id, customer_id, customer_name, plan, vendor, domain, seats, mrr, start_date, renewal_date, status`
     )
     .eq("id", params.id)
     .single();
@@ -80,6 +84,29 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     .eq("id", sub.tenant_id)
     .single();
 
+  /* ── The customer's GST treatment ────────────────────────────────────────
+     add-seats used to multiply by a hardcoded 1.18, so an export customer was
+     billed GST on a zero-rated sale. isExportSupply() is conservative: an unknown
+     country counts as domestic, so a missing country over-charges rather than
+     under-charges, and it is never silently zero-rated. */
+  let taxRatePct = 18;
+  if (sub.customer_id) {
+    const { data: cust } = await supabase
+      .from("customers")
+      .select("country")
+      .eq("id", sub.customer_id)
+      .maybeSingle();
+    if (isExportSupply(cust?.country)) taxRatePct = 0;
+  }
+
+  /* ── The length of THIS term, not an assumed year ────────────────────────
+     A two-year deal with 400 days left used to bill as a full year. Derived from
+     the subscription's own dates; when start_date is missing we fall back to 365
+     and say so, because guessing 730 would over-charge. */
+  const termDays = sub.start_date
+    ? Math.max(1, daysBetweenDates(sub.start_date, sub.renewal_date))
+    : 365;
+
   const result = await addSeats({
     supabase,
     subscriptionId:  sub.id,
@@ -94,6 +121,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     additionalSeats: parsed.data.additional_seats,
     renewalDate:     sub.renewal_date,
     graceDays:       tenant?.grace_period_days ?? 7,
+    taxRatePct,
+    termDays,
   });
 
   if (!result.ok) {
