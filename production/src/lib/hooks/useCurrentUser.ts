@@ -86,6 +86,33 @@ export function useIdentity(): { status: IdentityStatus; email: string | null } 
   return { status: "anonymous", email: null };
 }
 
+/**
+ * The identity query's select list. Exported ONLY so a test can assert the one
+ * thing about it that is easy to get wrong and impossible to notice.
+ *
+ * ─── `tenants!users_tenant_id_fkey`, NOT `tenants` ───────────────────────────
+ * TWO foreign keys connect these tables, so a bare `tenants(…)` embed is
+ * ambiguous and PostgREST answers HTTP 300 / PGRST201 instead of choosing:
+ *
+ *   users_tenant_id_fkey               users.tenant_id -> tenants.id      ← this one
+ *   tenants_gmail_sender_user_id_fkey  tenants.gmail_sender_user_id -> users.id
+ *
+ * The second arrived with 0235 (per-tenant Gmail sender). Adding one column to
+ * `tenants` silently broke identity for EVERY user: this query started failing,
+ * the hook returned null, and the sidebar showed "Loading… / Workspace" forever —
+ * which reads as a slow network, not as a broken query, so it went unnoticed and
+ * contributed to the app "looking empty".
+ *
+ * Naming the constraint pins the meaning, and a third foreign key between these
+ * tables cannot re-break it. Verified live by
+ * `node scripts/check-embed-ambiguity.mjs`.
+ */
+/* One unbroken literal with `as const`, deliberately — supabase-js infers the row
+ * shape from the select STRING at the type level, so splitting it across
+ * concatenated pieces widens it to `string` and the whole result collapses to
+ * GenericStringError. Long line, correct types. */
+export const USER_WITH_TENANT_SELECT = "id, tenant_id, full_name, initials, color, role, can_view_deals, tenants!users_tenant_id_fkey(name, logo_url, gstin, email, phone, address, pin_code, contact_name, state, state_code, lut_number, lut_valid_upto, upi_vpa, upi_payee_name, grace_period_days, setup_completed_at, gstin_verified_at, gstin_verification)" as const;
+
 export function useCurrentUser() {
   return useQuery({
     queryKey: ["current-user"],
@@ -97,7 +124,7 @@ export function useCurrentUser() {
 
       const { data: me, error } = await supabase
         .from("users")
-        .select("id, tenant_id, full_name, initials, color, role, can_view_deals, tenants(name, logo_url, gstin, email, phone, address, pin_code, contact_name, state, state_code, lut_number, lut_valid_upto, upi_vpa, upi_payee_name, grace_period_days, setup_completed_at, gstin_verified_at, gstin_verification)")
+        .select(USER_WITH_TENANT_SELECT)
         .eq("id", authData.user.id)
         .single();
 
