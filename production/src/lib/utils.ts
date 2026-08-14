@@ -40,9 +40,17 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Format a number as Indian Rupees.
- * Internally we store paise (integer) but most UI calls pass rupees.
- * Use `rupeeFromPaise()` if you have paise.
+ * Format a number as Indian Rupees. **Takes RUPEES.**
+ *
+ * This used to say "internally we store paise (integer) but most UI calls pass rupees" —
+ * which contradicts itself in one sentence, and the first half is wrong. Storage is whole
+ * rupees: the `items` row for Google Workspace Business Starter holds msrp 270 and
+ * wholesale 110, i.e. ₹270 and ₹110 per seat per month. As paise those would be ₹2.70 and
+ * ₹1.10. Corrected 14 Aug 2026 after checking the live DB; see CLAUDE.md §13.
+ *
+ * `rupeeFromPaise()` below is still correct for a genuinely-paise number — proration and
+ * margin maths converts to integer paise so a division rounds once instead of drifting.
+ * But that is a unit used INSIDE a calculation; it is not how anything is stored.
  *
  * @example
  * rupee(490644)             // "₹4,90,644"
