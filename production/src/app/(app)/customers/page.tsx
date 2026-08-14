@@ -17,8 +17,6 @@ import { useRouter } from "next/navigation";
 import { useCustomers, useOpenCreditsByCustomer } from "@/lib/queries/customers";
 import { useProjectReceivablesByCustomer } from "@/lib/queries/projects";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
-import { useOutstandingReceivables } from "@/lib/queries/payments";
-import { FAB } from "@/components/ui/fab";
 import { ImportCustomersDialog } from "@/components/features/customers/import-customers-dialog";
 import { ImportDomainsDialog } from "@/components/features/customers/import-domains-dialog";
 import { CustomerPanel } from "@/components/features/customers/customer-panel";
