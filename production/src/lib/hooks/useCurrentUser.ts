@@ -66,10 +66,10 @@ export interface CurrentUserInfo {
  * Kept as its own hook so `useCurrentUser`'s return type is unchanged and no
  * existing caller has to be touched.
  */
-export type IdentityStatus = "loading" | "anonymous" | "stranded" | "member";
+export type IdentityStatus = "loading" | "anonymous" | "stranded" | "member" | "error";
 
 export function useIdentity(): { status: IdentityStatus; email: string | null } {
-  const { data, isLoading } = useCurrentUser();
+  const { data, isLoading, isError } = useCurrentUser();
   const auth = useQuery({
     queryKey: ["current-user", "auth-only"],
     queryFn: async (): Promise<{ email: string | null } | null> => {
@@ -81,6 +81,10 @@ export function useIdentity(): { status: IdentityStatus; email: string | null } 
 
   if (isLoading || auth.isLoading) return { status: "loading", email: null };
   if (data) return { status: "member", email: data.authEmail };
+  /* A failed query is NOT "you have no workspace". Telling a signed-in owner they
+   * are stranded because a request errored is precisely the lie that made the
+   * PGRST201 bug so hard to see — it blamed the account instead of the request. */
+  if (isError) return { status: "error", email: auth.data?.email ?? null };
   // Authenticated, but `useCurrentUser` found no profile → stranded, not anonymous.
   if (auth.data) return { status: "stranded", email: auth.data.email };
   return { status: "anonymous", email: null };
@@ -126,9 +130,27 @@ export function useCurrentUser() {
         .from("users")
         .select(USER_WITH_TENANT_SELECT)
         .eq("id", authData.user.id)
-        .single();
+        .maybeSingle();
 
-      if (error || !me) return null;
+      /* THROW on a query error. Do not return null.
+       *
+       * `if (error || !me) return null` is what let the PGRST201 embed break every
+       * user's identity in silence: a BROKEN QUERY and a MISSING ROW are not the
+       * same fact, and collapsing them into null made the app say "you have no
+       * workspace" when the truth was "this request failed". React Query surfaces
+       * a thrown error as `isError`, retries it, and it reaches Sentry — none of
+       * which happens for a quietly-returned null.
+       *
+       * PGRST116 ("no rows") is deliberately NOT an error here: `.maybeSingle()`
+       * already reports that as `data: null`, which is the genuinely stranded
+       * case — an authenticated account with no profile. That one must stay null,
+       * because useIdentity() reads it to say "No workspace yet" instead of
+       * pretending to load forever. */
+      if (error) {
+        console.error("[useCurrentUser] identity query failed:", error.code, error.message);
+        throw error;
+      }
+      if (!me) return null;   // authenticated, but no profile → stranded
 
       const tenant = Array.isArray(me.tenants) ? me.tenants[0] : me.tenants;
 

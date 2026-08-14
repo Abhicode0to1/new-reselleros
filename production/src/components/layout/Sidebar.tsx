@@ -317,7 +317,9 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                         ? "No workspace yet"
                         : identity.status === "anonymous"
                           ? "Not signed in"
-                          : "Loading…"}
+                          : identity.status === "error"
+                            ? "Couldn't load your account"
+                            : "Loading…"}
                   </div>
                   <div
                     className={cn(
@@ -332,7 +334,9 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                         ? `${identity.email} · ask an owner to add you`
                         : identity.status === "anonymous"
                           ? "Sign in to see your workspace"
-                          : "…"}
+                          : identity.status === "error"
+                            ? "Reload the page — this is a fault, not your account"
+                            : "…"}
                   </div>
                 </div>
                 <Icon name="chevron_up" size={13} className="text-ink-3" />
