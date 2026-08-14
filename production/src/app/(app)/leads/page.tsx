@@ -215,6 +215,21 @@ function LeadsPageInner() {
   const runOutcome = useLeadOutcome();
   const queueLog   = useLogLeadActivity();
 
+  /* Counts for the "Today's Follow-Ups" pill, from the UNFILTERED lead set rather than
+     from `searched`: the badge answers "how much work is there today", not "how much of
+     it survives my current search". A count that shrinks while you type is a count
+     nobody can trust. */
+  const [dueTodayCount, overdueNowCount] = React.useMemo(() => {
+    const today = localDateISO(new Date());
+    let due = 0, late = 0;
+    for (const l of leads ?? []) {
+      if (l.is_junk || l.stage === "won" || l.stage === "lost") continue;
+      if (!l.follow_up_date || l.follow_up_date > today) continue;
+      due++;
+      if (l.follow_up_date < today) late++;
+    }
+    return [due, late] as const;
+  }, [leads]);
 
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null);
   // Row "Follow-up" quick action → opens AddTaskDialog scoped to this lead.
