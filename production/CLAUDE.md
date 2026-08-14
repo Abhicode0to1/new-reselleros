@@ -37,11 +37,18 @@ Each "tenant" is a reseller business; each tenant manages many of their own cust
   This is tenant `fbb976f1-9090-4f10-9726-0901bd144e42`, `tier = 'distributor'`. **Every other
   tenant is a tenant company under it** — see §4a.
   ⚠️ Corrected 2026-08-14. This entry previously said "Excel Technologies Pvt Ltd ·
-  pardeep@exceltechnologies.in", which is why `doc_code` on the main tenant is still `ET`
-  (set by `0054_tenant_scoped_document_ids.sql:23`) and why the dev-login demo list in
-  `(auth)/login/page.tsx:27-31` still names Excel Technologies. Excel Technologies is
-  historical: the same tenant row was created by `pardeep@exceltechnologies.in` on 26 May 2026
-  and later renamed.
+  pardeep@exceltechnologies.in". Excel Technologies is historical: the same tenant row was
+  created by `pardeep@exceltechnologies.in` on 26 May 2026 and later renamed. Two traces of
+  that identity were left in the code:
+  - `doc_code` was `ET` (set by `0054_tenant_scoped_document_ids.sql:23`) — **now `ADPL`**,
+    changed 14 Aug 2026. It was free to change because this tenant had issued **zero**
+    documents (every `document_series.last_number` was 0 and there were no invoices, quotes,
+    POs, or credit/debit notes). After the first document it would have split the GST series
+    under CGST Rule 46 and become a compliance decision, not a rename — which is why
+    `scripts/set-doc-code.mjs` refuses once anything has been issued. Next invoice:
+    `INV-ADPL-2026-27-0001`.
+  - The dev-login demo list in `(auth)/login/page.tsx:27-31` still names Excel Technologies.
+    Dev-only and harmless, but it is why the wrong name keeps resurfacing.
 - **First customer**: ANUTECH DIGITAL PVT LTD itself
 - **Target customers**: Other Indian cloud resellers (B2B SaaS)
 - **Reference prototype**: `../prototype/` — Babel-in-browser React 18 prototype with 32 screens, fully designed UX
