@@ -79,6 +79,34 @@ export const INVITABLE_ROLES = USER_ROLES.filter((r) => r !== "partner_agent") a
 export type InvitableRole = Exclude<UserRole, "partner_agent">;
 
 /**
+ * What each role is CALLED on screen.
+ *
+ * Here rather than in a page, for the reason this file already exists: role
+ * vocabulary that lives in more than one place drifts. The /team page had its
+ * own copy, so the Claim-a-colleague card next to it offered "sales_senior" and
+ * "billing" while the table underneath said "Sales Senior" and "Billing /
+ * Accounts" — one screen, two vocabularies, and only one of them is a word.
+ *
+ * A role added to USER_ROLES without an entry here fails the type check.
+ */
+export const ROLE_LABEL: Record<UserRole, string> = {
+  owner:         "Owner",
+  manager:       "Manager",
+  sales_senior:  "Sales Senior",
+  sales:         "Sales",
+  billing:       "Billing / Accounts",
+  delivery:      "Delivery (Projects)",
+  accountant:    "Accountant / CA",
+  support:       "Support",
+  partner_agent: "Partner Agent",
+};
+
+/** Label for a role that may not be a known one (a stale row, a new enum value). */
+export function roleLabel(role: string | null | undefined): string {
+  return ROLE_LABEL[(role ?? "") as UserRole] ?? (role || "Member");
+}
+
+/**
  * External actors that are NOT `users.role` values, recorded so the next reader
  * does not "fix" their absence.
  */

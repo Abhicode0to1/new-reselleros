@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { INVITABLE_ROLES } from "@/lib/auth/roles";
+import { INVITABLE_ROLES, ROLE_LABEL } from "@/lib/auth/roles";
 import {
   describeMergeOutcome,
   mergeChangedSomething,
@@ -128,7 +128,7 @@ export function ClaimColleagueCard({ isOwner }: { isOwner: boolean }) {
             onChange={(e) => setRole(e.target.value)}
             className="h-10 rounded-md border border-hairline bg-paper px-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
           >
-            {INVITABLE_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            {INVITABLE_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
           </select>
         </div>
 

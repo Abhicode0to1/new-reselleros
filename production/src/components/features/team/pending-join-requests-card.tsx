@@ -25,7 +25,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { INVITABLE_ROLES } from "@/lib/auth/roles";
+import { INVITABLE_ROLES, ROLE_LABEL } from "@/lib/auth/roles";
 import type { JoinRequestRow } from "@/lib/supabase/database.types";
 
 type PendingRow = Pick<
@@ -135,7 +135,7 @@ export function PendingJoinRequestsCard({ isOwner }: { isOwner: boolean }) {
                   className="h-9 rounded-md border border-hairline bg-paper px-2 text-xs text-ink"
                 >
                   {INVITABLE_ROLES.map((role) => (
-                    <option key={role} value={role}>{role}</option>
+                    <option key={role} value={role}>{ROLE_LABEL[role]}</option>
                   ))}
                 </select>
                 <Button

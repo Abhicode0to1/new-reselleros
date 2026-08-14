@@ -31,13 +31,16 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { PendingJoinRequestsCard } from "@/components/features/team/pending-join-requests-card";
 import { ClaimColleagueCard } from "@/components/features/team/claim-colleague-card";
+import { INVITABLE_ROLES, ROLE_LABEL, type InvitableRole } from "@/lib/auth/roles";
 
-type Role = "owner" | "manager" | "sales" | "sales_senior" | "billing" | "accountant" | "delivery" | "support";
-const ROLES: Role[] = ["owner", "manager", "sales_senior", "sales", "billing", "accountant", "delivery", "support"];
-const ROLE_LABEL: Record<Role, string> = {
-  owner: "Owner", manager: "Manager", sales: "Sales", sales_senior: "Sales Senior",
-  billing: "Billing / Accounts", accountant: "Accountant / CA", delivery: "Delivery (Projects)", support: "Support",
-};
+/* Role vocabulary comes from roles.ts, not from here. This file used to carry its
+   own ROLES list and ROLE_LABEL map — a fourth description of roles alongside the
+   union, the nav gates and the permission matrix. The visible cost was on this very
+   page: the Claim-a-colleague card offered "sales_senior" while the table below it
+   said "Sales Senior". roles.ts already exists because two disagreeing role unions
+   caused a bug once; this is the same mistake in a smaller font. */
+type Role = InvitableRole;
+const ROLES: readonly Role[] = INVITABLE_ROLES;
 const ROLE_TONE: Record<Role, "success" | "info" | "muted" | "warning"> = {
   owner: "info", manager: "info", sales: "success", sales_senior: "info",
   billing: "success", accountant: "warning", delivery: "info", support: "muted",
@@ -102,6 +105,20 @@ export default function TeamPage() {
 
   const owners = members.filter((m) => m.role === "owner").length;
 
+  /* An invite is only marked accepted when the OAuth callback itself performs the
+     join. A users row created any other way — a hand-edited row, a claim through
+     the RPC — leaves the invite open forever, so the same person shows up twice:
+     once as an active member and once as "not joined yet", with the KPI counting
+     them as still pending.
+     Measured on this workspace: ranjeet@anutech.in is a member AND a pending
+     invite, so "Pending invites 4" was really 3. Split the list so the stale ones
+     are visibly stale and can be cleared, instead of quietly inflating a number. */
+  const memberEmails = new Set(
+    members.map((m) => (m.email ?? "").trim().toLowerCase()).filter(Boolean),
+  );
+  const staleInvites  = invites.filter((i) => memberEmails.has(i.email.trim().toLowerCase()));
+  const openInvites   = invites.filter((i) => !memberEmails.has(i.email.trim().toLowerCase()));
+
   return (
     <div className="mx-auto max-w-[1500px] px-4 pb-20 pt-6 md:px-6 md:pt-7 lg:px-8">
       <div className="mb-6 flex items-end justify-between gap-3 flex-wrap">
@@ -117,7 +134,8 @@ export default function TeamPage() {
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <KPI label="Members" value={members.length} icon="users" />
-        <KPI label="Pending invites" value={invites.length} icon="mail" />
+        {/* openInvites, not invites — someone already inside is not pending. */}
+        <KPI label="Pending invites" value={openInvites.length} icon="mail" />
         <KPI label="Owners" value={owners} icon="award" />
         <KPI label="Active" value={members.filter((m) => m.is_active !== false).length} icon="check_circle" />
       </div>
@@ -186,13 +204,17 @@ export default function TeamPage() {
                 </tr>
               ))}
 
-              {/* Pending invites (owner only) */}
-              {invites.map((inv) => (
+              {/* Pending invites (owner only). Stale ones last, and labelled —
+                  an invite for somebody already in the list is not "pending",
+                  it is leftover, and the fix is to delete it. */}
+              {[...openInvites, ...staleInvites].map((inv) => (
                 <tr key={inv.id} className="border-b border-hairline last:border-0 bg-amber-soft/20">
                   <td className="p-3">
                     <div className="flex items-center gap-3">
                       <div className="flex h-7 w-7 items-center justify-center rounded-full bg-paper-2 text-ink-3"><Icon name="mail" size={13} /></div>
-                      <p className="text-ink-2 italic">Invited</p>
+                      <p className="text-ink-2 italic">
+                        {memberEmails.has(inv.email.trim().toLowerCase()) ? "Already joined" : "Invited"}
+                      </p>
                     </div>
                   </td>
                   <td className="p-3 font-mono text-xs text-ink-2">{inv.email}</td>
@@ -200,7 +222,9 @@ export default function TeamPage() {
                   {isOwner && <td className="p-3 text-[11px] text-ink-3">—</td>}
                   <td className="p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <Badge kind="warning" dot>Pending</Badge>
+                      {memberEmails.has(inv.email.trim().toLowerCase())
+                        ? <Badge kind="muted" dot>Stale — safe to delete</Badge>
+                        : <Badge kind="warning" dot>Pending</Badge>}
                       <IconButton icon="trash" variant="ghost" size="sm" aria-label="Remove invite"
                         onClick={() => removeInvite.mutate(inv.id)} />
                     </div>
@@ -264,7 +288,7 @@ export default function TeamPage() {
       {/* Mobile — pending invites (owner only), visually distinct from members */}
       {isOwner && invites.length > 0 && (
         <ul className="md:hidden mt-2.5 space-y-2.5">
-          {invites.map((inv) => (
+          {[...openInvites, ...staleInvites].map((inv) => (
             <li key={inv.id}>
               <Card className="border-amber/40 bg-amber-soft/20 p-4">
                 <div className="flex items-start gap-3">
@@ -273,9 +297,15 @@ export default function TeamPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-mono text-[11px] text-ink-2 truncate">{inv.email}</p>
-                    <p className="text-[11px] italic text-ink-3">Invited · not joined yet</p>
+                    <p className="text-[11px] italic text-ink-3">
+                      {memberEmails.has(inv.email.trim().toLowerCase())
+                        ? "Already a member — this invite is leftover"
+                        : "Invited · not joined yet"}
+                    </p>
                   </div>
-                  <Badge kind="warning" dot>Pending</Badge>
+                  {memberEmails.has(inv.email.trim().toLowerCase())
+                    ? <Badge kind="muted" dot>Stale</Badge>
+                    : <Badge kind="warning" dot>Pending</Badge>}
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <Badge kind={ROLE_TONE[inv.role] ?? "muted"}>{ROLE_LABEL[inv.role] ?? inv.role}</Badge>
