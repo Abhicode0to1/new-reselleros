@@ -509,8 +509,8 @@ export default function CustomersPage() {
                   </div>
                   <div className="flex items-center justify-between gap-3 pt-2 mt-2 border-t border-hairline/60 text-xs">
                     <span className="text-ink-3">
-                      Owes <b className={receivable > 0 ? "text-rose" : "text-ink-2"}>{rupee(receivable)}</b>
-                      {receivable > 0 && days > 0 && <span className={days > 45 ? "text-rose" : "text-ink-3"}> · {days}d</span>}
+                      To collect <b className={receivable > 0 ? "text-rose" : "text-ink-2"}>{rupee(receivable)}</b>
+                      {receivable > 0 && days > 0 && <span className={days > 45 ? "text-rose" : "text-ink-3"}> · {days}d overdue</span>}
                     </span>
                     <div className="flex items-center gap-2">
                       {c.contact_phone && (
