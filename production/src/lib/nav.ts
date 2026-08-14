@@ -263,6 +263,13 @@ export const APP_NAV: NavSection[] = [
       // owner/manager only — these are customers' admin console passwords, and
       // "billing" has no reason to reach a Google Admin login.
       { id: "vault",     href: "/vault",                label: "Password Vault",   icon: "lock", roles: ["owner", "manager"] },
+      /* Third page found with no nav entry, after Marketing and Backup. /team
+         had a breadcrumb — so the app knew its NAME — and exactly one link in
+         the whole codebase, buried in the Add Task dialog's help text. It is
+         where teammates are invited, where a stranded colleague is claimed, and
+         where join requests are approved; none of that was reachable by
+         clicking. */
+      { id: "team",      href: "/team",                 label: "Team",             icon: "users", roles: ["owner", "manager"] },
       /* Owner-only, and it had NO nav entry at all — the page existed, the
          breadcrumb below knew its name, and nothing anywhere linked to it. So the
          restore points and the data reset were reachable only by typing the URL.
