@@ -6,16 +6,11 @@
  *      The card is now 3 visual rows: header (co + ₹ + seats), contact line,
  *      meta+actions line (stage chip · follow-up · inline action icons).
  *   2. **Swipe gestures (the "power" layer)** —
- *        • Drag right ≥ 80px  →  Contacted (stage → contact, pre-quote only)
- *        • Drag left  ≥ 80px  →  Snooze to tomorrow
- *        • Drag up    ≥ 80px  →  WhatsApp (wa.me with pre-filled msg)
+ *        • Drag right ≥ 80px  →  Call (tel:)
+ *        • Drag left  ≥ 80px  →  WhatsApp (wa.me with pre-filled msg)
  *      Action labels reveal behind the card as the user drags. Drag
  *      threshold under 80px = no action, card snaps back. Tap (no drag)
  *      = opens the detail drawer as before.
- *
- *      Was right = Call, left = WhatsApp. The right swipe now WRITES instead of
- *      opening the dialler, which changes what a mis-swipe costs — see the long note
- *      on handleDragEnd below.
  *   3. **Stage quick-change** — small chip on the card opens a dropdown
  *      to flip stage without entering the drawer (preserved from v1).
  *
@@ -77,16 +72,11 @@ interface SwipeLeadCardProps {
   onChangeStage: (stage: Lead["stage"]) => void;
   /** Direct "Send quote" — carries lead context into the quote builder. */
   onSendQuote?: (lead: Lead) => void;
-  /**
-   * Runs a call-outcome (lib/leads/outcomes.ts). Used by the left swipe and the
-   * outcome chip row, so a gesture and a tap do exactly the same thing.
-   */
-  onOutcome?: (outcome: LeadOutcome, lead: Lead) => void;
   /** Earliest open follow-up task on this lead, if any (shows a chip). */
   task?: { due: string; overdue: boolean; count: number };
 }
 
-export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutcome, task }: SwipeLeadCardProps) {
+export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, task }: SwipeLeadCardProps) {
   // Derived here rather than passed in, so the card is the single place that
   // decides how a lead looks on mobile — callers can't hand it a stale rule
   // that disagrees with the desktop table.
@@ -117,70 +107,40 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
   const followUp  = followUpLabel(lead.follow_up_date);
   const prio      = priorityDot(lead.priority);
 
-  /* ── Drag state ─────────────────────────────────────────────────────────────
-     THREE gestures now: right = contacted, left = snooze to tomorrow, up = WhatsApp.
-     The previous mapping was right = dial, left = WhatsApp.
-
-     TWO THINGS THAT MADE THAT REMAP MORE THAN A RELABEL:
-
-     1. The old gestures only OPENED things. A mis-swipe while scrolling opened the
-        dialler, and the rep hung up — no harm done. Right-swipe now WRITES a stage
-        change, so an accidental swipe alters the pipeline. Every writing gesture
-        therefore toasts with Undo (handled by the caller's onOutcome / the stage
-        mutation's own optimistic rollback). A gesture that writes silently on a
-        misfire would be a worse trade than the speed it buys.
-
-     2. Adding a vertical gesture inside a vertically-scrolling list means the card
-        and the page fight over the same drag. `dragDirectionLock` resolves it: Framer
-        locks to whichever axis the gesture starts on, so a scroll stays a scroll and
-        only a deliberate upward pull on a mostly-still card counts. */
+  // ── Drag state ─────────────────────────────────────────────
   const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const contactedOpacity = useTransform(x, [0, SWIPE_TRIGGER_PX], [0, 1]);
-  const snoozeOpacity    = useTransform(x, [-SWIPE_TRIGGER_PX, 0], [1, 0]);
-  const whatsAppOpacity  = useTransform(y, [-SWIPE_TRIGGER_PX, 0], [1, 0]);
+  // Action backgrounds: emerald on right (call), indigo on left (WhatsApp).
+  // Use absolute x so both reveals work regardless of direction.
+  const callOpacity     = useTransform(x, [0, SWIPE_TRIGGER_PX], [0, 1]);
+  const whatsAppOpacity = useTransform(x, [-SWIPE_TRIGGER_PX, 0], [1, 0]);
 
   // Track whether the gesture qualified as a drag — used to suppress the
   // tap-open on dragEnd (without this, a swipe also opens the drawer).
   const wasDragRef = React.useRef(false);
 
   const handleDragEnd = (_e: unknown, info: PanInfo) => {
-    const dx = info.offset.x, dy = info.offset.y;
-    const vx = info.velocity.x, vy = info.velocity.y;
-    // Dominant axis decides which gesture this was — never both.
-    const vertical = Math.abs(dy) > Math.abs(dx);
-    const distance = vertical ? dy : dx;
-    const velocity = vertical ? vy : vx;
+    const distance = info.offset.x;
+    const velocity = info.velocity.x;
     const triggered =
       Math.abs(distance) >= SWIPE_TRIGGER_PX ||
       Math.abs(velocity) >= SWIPE_VELOCITY;
 
     if (triggered) {
       wasDragRef.current = true;
-
-      if (vertical) {
-        // Up → WhatsApp. Down does nothing: there is no fourth action, and inventing
-        // one for a gesture people make by accident while scrolling is a bad idea.
-        if (distance < 0 && hasPhone) {
-          window.open(
-            `https://wa.me/${waNumber}?text=${encodeURIComponent(waMessage)}`,
-            "_blank",
-            "noopener,noreferrer",
-          );
-        }
-      } else if (distance > 0) {
-        /* Right → Contacted. Only from a pre-quote stage: a lead already at
-           demo/trial/quote has been contacted by definition, and moving it BACK to
-           `contact` would undo real funnel progress on a stray swipe. */
-        if (isPreQuote && lead.stage !== "contact") onChangeStage("contact");
-      } else {
-        // Left → snooze to tomorrow, via the same rule the chips use.
-        onOutcome?.("call_tomorrow", lead);
+      if (distance > 0 && hasPhone) {
+        // Right swipe → Call
+        window.location.href = `tel:${lead.contact_phone}`;
+      } else if (distance < 0 && hasPhone) {
+        // Left swipe → WhatsApp
+        window.open(
+          `https://wa.me/${waNumber}?text=${encodeURIComponent(waMessage)}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
       }
-
       // Clear the drag flag shortly so subsequent taps register.
       setTimeout(() => { wasDragRef.current = false; }, 250);
-    } else if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+    } else if (Math.abs(distance) > 6) {
       // Movement happened but didn't reach threshold — still suppress tap.
       wasDragRef.current = true;
       setTimeout(() => { wasDragRef.current = false; }, 150);
