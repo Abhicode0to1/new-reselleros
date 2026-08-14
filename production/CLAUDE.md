@@ -401,7 +401,10 @@ export function LeadForm({ onSubmit }: { onSubmit: (data: FormData) => Promise<v
 - ❌ Don't push without `npm run lint && typecheck`
 - ❌ **Don't generate document numbers in JS** (`Math.random()`, `Date.now()`, or `count(*) + 1`). Always call the `next_document_number(doc_type)` RPC. See §17a below.
 - ❌ **Don't apply DB changes via Studio/MCP without a versioned migration file in `supabase/migrations/`** — schema drift between git + prod broke us once already.
-- ❌ **Don't assume admin-client reads are fresh in route handlers.** Next.js App Router caches GET `fetch()` calls, including the ones Supabase makes. `createAdminClient()` now pins `cache: "no-store"` for this reason (fixed 14 Jul 2026 — without it `/api/v1` served STALE billing status and let revoked API keys authenticate). If you add another server client for trusted reads, force no-store the same way.
+- ❌ **Don't assume Supabase reads are fresh — on EITHER side.** Both clients now pin `cache: "no-store"`, for two different reasons, and any new client you add must do the same.
+  - **Server** (`createAdminClient()`, fixed 14 Jul 2026): Next.js App Router caches GET `fetch()` calls, including the ones Supabase makes. Without no-store `/api/v1` served STALE billing status and let revoked API keys authenticate.
+  - **Browser** (`createClient()`, fixed 14 Aug 2026): Supabase REST sends **no `Cache-Control`** and **no `Vary: Origin`**, and it **echoes the request Origin** into `Access-Control-Allow-Origin`. So (a) the browser may heuristically cache a balance or payment status and serve it instead of the DB, and (b) — the one that will waste your afternoon — a response cached while on `http://localhost:3000` is replayed to the deployed origin still carrying `Access-Control-Allow-Origin: http://localhost:3000`, so **every** client-side query fails CORS and the page dies in the error boundary. The build is fine; the cache is poisoned. Only a machine that visits both origins can reach it, which is why it never shows up in monitoring and always looks like "the deploy is broken".
+  - **Debugging tip when a deployed page dies but the build is clean:** in the page console, `fetch(sameUrl, {cache:'default'})` vs `{cache:'reload'}`. If only `reload` succeeds, it is the cache, not your code.
 
 ---
 
