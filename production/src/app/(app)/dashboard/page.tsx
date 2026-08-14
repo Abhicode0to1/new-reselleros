@@ -14,6 +14,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PortalDock } from "@/components/shared/portal-dock";
 import { Reorder, useDragControls } from "framer-motion";
 
 import { useLeads } from "@/lib/queries/leads";
@@ -645,6 +646,10 @@ export default function DashboardPage() {
         <DashColumn ids={rightIds} widgets={widgets}
           onReorder={(o) => { setRightOrder(o); persistOrder(LS_RIGHT, o); }} />
       </div>
+
+      {/* Below the fold on purpose: these are launchers for work that happens
+          somewhere else, not information about this business. */}
+      <PortalDock className="mt-4" />
     </div>
   );
 }
