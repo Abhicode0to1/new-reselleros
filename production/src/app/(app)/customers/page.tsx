@@ -263,16 +263,16 @@ export default function CustomersPage() {
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
       {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+      <div className="flex items-center justify-between gap-3 mb-4">
         <div>
-          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Sales</p>
-          <h1 className="font-serif text-3xl md:text-4xl leading-tight">Customers</h1>
-          <p className="text-sm text-ink-3 mt-1">Your book of business — recurring revenue, money owed, and who to grow.</p>
+          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Sales</p>
+          <h1 className="font-serif text-2xl sm:text-3xl md:text-4xl leading-tight">Customers</h1>
+          <p className="text-xs sm:text-sm text-ink-3 mt-0.5 hidden sm:block">Your book of business — recurring revenue, money owed, and who to grow.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button icon="more_h">More</Button>
+              <Button icon="more_h" size="sm">More</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[12rem]">
               <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={handleExport}>
@@ -286,7 +286,9 @@ export default function CustomersPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="primary" icon="plus" onClick={goAdd}>Add customer</Button>
+          <Button variant="primary" size="sm" icon="plus" onClick={goAdd} className="whitespace-nowrap font-semibold shadow-xs">
+            Add customer
+          </Button>
         </div>
       </div>
 
@@ -393,6 +395,9 @@ export default function CustomersPage() {
                 <span className="rounded-full bg-paper-2 px-1.5 tabular-nums text-[11px] text-ink-3">{archivedCount}</span>
               </button>
             )}
+            <Button variant="primary" size="sm" icon="plus" onClick={goAdd} className="shrink-0 font-semibold shadow-xs hidden sm:inline-flex">
+              Add customer
+            </Button>
           </div>
           {/* Quick Sort Bar */}
           <div className="flex items-center gap-2 pt-1 border-t border-hairline/60 text-xs text-ink-3 overflow-x-auto [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
