@@ -29,6 +29,7 @@ import { isValidGstin, validateGstin, GST_STATE_BY_CODE } from "@/lib/utils";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import { COUNTRIES } from "@/lib/gst/countries";
 import { useCustomerForm } from "./use-customer-form";
+import { ScanCardPanel } from "./scan-card-panel";
 import type { Customer } from "@/lib/supabase/database.types";
 
 interface AddCustomerFormProps {
@@ -74,6 +75,30 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
 
         <form onSubmit={submit} className="flex flex-col flex-1 min-h-0 min-w-0 w-full">
           <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+          {/* Only when ADDING. On an edit the fields are already right, and a
+              scan would overwrite a corrected record with a fresh guess. */}
+          {!isEdit && (
+            <ScanCardPanel
+              onFields={(f) => {
+                /* Only write what was actually read — a null must not wipe a
+                   field the operator has already typed. Note what is absent:
+                   state, state_code and country. Those decide the GST split and
+                   come from the verified GSTIN, never from a card. */
+                if (f.name)           setValue("name",           f.name);
+                if (f.contact_name)   setValue("contact_name",   f.contact_name);
+                if (f.contact_title)  setValue("contact_title",  f.contact_title);
+                if (f.contact_email)  setValue("contact_email",  f.contact_email);
+                if (f.contact_phone)  setValue("contact_phone",  f.contact_phone);
+                if (f.contact_mobile) setValue("contact_mobile", f.contact_mobile);
+                if (f.address)        setValue("address",        f.address);
+                if (f.city)           setValue("city",           f.city);
+                if (f.pin_code)       setValue("pin_code",       f.pin_code);
+                if (f.domain)         setValue("domain",         f.domain);
+                // Checksum-validated upstream; the form still verifies it with GSTN.
+                if (f.gstin)          setValue("gstin",          f.gstin);
+              }}
+            />
+          )}
           {/* Country FIRST — it decides the whole form: India = GST flow (GSTIN,
               state code, 6-digit PIN); anything else = export flow (no GST). */}
           <FormField label="Country" htmlFor="country">
