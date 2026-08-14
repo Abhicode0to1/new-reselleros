@@ -211,8 +211,7 @@ function LeadsPageInner() {
   const [waLead, setWaLead] = React.useState<Lead | null>(null);
   // Merge-duplicates dialog — holds the cluster (a lead + its matches) to fold.
   const [mergeCluster, setMergeCluster] = React.useState<Lead[] | null>(null);
-  // "Follow-ups due today" banner — click to expand the list of due leads.
-  const [dueListOpen, setDueListOpen] = React.useState(false);
+
   // Kanban is great for stage flow; list view is needed once you have 50+ leads
   // and want to scan by value/age/owner. Persisted in localStorage so the user's
   // preferred view sticks across sessions.
