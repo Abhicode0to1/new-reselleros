@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { APP_NAV, filterNavForRole, type UserRole, type NavItem } from "@/lib/nav";
 import { useNavBadges } from "@/lib/hooks/useNavBadges";
-import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useCurrentUser, useIdentity } from "@/lib/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 
 // ============================================================
@@ -35,6 +35,7 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
   const pathname    = usePathname();
   const navBadges   = useNavBadges();
   const { data: me } = useCurrentUser();
+  const identity = useIdentity();
   // Which accordion parents (items with children) are expanded. Defaults to
   // open when the current route is the parent or one of its children.
   const [openMenus, setOpenMenus] = React.useState<Record<string, boolean>>({});
@@ -66,8 +67,22 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
         {!collapsed && (
           <div className="min-w-0">
             <div className="text-sm font-semibold leading-tight">ResellerOS</div>
-            <div className="text-[11px] text-ink-3 truncate" title={me?.tenantName ?? "Workspace"}>
-              {me?.tenantName ?? "Workspace"}
+            {/* The COMPANY you are inside. A generic "Workspace" here is what let a
+                colleague work for two days in a private tenant without noticing —
+                so when there is no company to name, say that instead of a word that
+                looks like one. */}
+            <div
+              className={cn(
+                "text-[11px] truncate",
+                identity.status === "member" ? "text-ink-3" : "text-amber-ink",
+              )}
+              title={me?.tenantName ?? "No workspace"}
+            >
+              {identity.status === "member"
+                ? me?.tenantName
+                : identity.status === "loading"
+                  ? "…"
+                  : "No workspace"}
             </div>
           </div>
         )}
@@ -289,20 +304,35 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
             />
             {!collapsed && (
               <>
+                {/* Identity, stated plainly. The second line is the EMAIL, not the
+                    role — "which account am I in?" is the question this corner has
+                    to answer, and it used to require opening the dropdown.
+                    "Loading…" now means loading and nothing else: not-signed-in and
+                    signed-in-with-no-workspace each say so, and say what to do. */}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">
-                    {me?.fullName ?? me?.authEmail ?? "Loading…"}
+                    {identity.status === "member"
+                      ? (me?.fullName ?? me?.authEmail ?? "You")
+                      : identity.status === "stranded"
+                        ? "No workspace yet"
+                        : identity.status === "anonymous"
+                          ? "Not signed in"
+                          : "Loading…"}
                   </div>
-                  <div className="text-[11px] text-ink-3 truncate">
-                    {me ? (
-                      <>
-                        <span className="capitalize">{me.role ?? "Member"}</span>
-                        {" · "}
-                        <span>{me.tenantName}</span>
-                      </>
-                    ) : (
-                      "Workspace"
+                  <div
+                    className={cn(
+                      "text-[11px] truncate",
+                      identity.status === "member" ? "text-ink-3 font-mono" : "text-amber-ink",
                     )}
+                    title={identity.email ?? undefined}
+                  >
+                    {identity.status === "member"
+                      ? me?.authEmail
+                      : identity.status === "stranded"
+                        ? `${identity.email} · ask an owner to add you`
+                        : identity.status === "anonymous"
+                          ? "Sign in to see your workspace"
+                          : "…"}
                   </div>
                 </div>
                 <Icon name="chevron_up" size={13} className="text-ink-3" />

@@ -48,6 +48,44 @@ export interface CurrentUserInfo {
   tenantGstinVerification: GstinVerification | null;
 }
 
+/**
+ * Who is at the keyboard — and, when nobody useful is, WHY.
+ *
+ * ─── WHY THIS EXISTS SEPARATELY FROM useCurrentUser ──────────────────────────
+ * `useCurrentUser` returns `null` for three completely different situations: no
+ * session, a session whose account has no `public.users` row, and a failed query.
+ * Every consumer then renders the same `?? "Loading…"` fallback, so all three look
+ * identical and look temporary — a spinner that never resolves.
+ *
+ * The second case is not hypothetical. On 14 Aug 2026 twelve auth accounts could
+ * sign in and had no profile. Every one of them would land in the app, see
+ * "Loading… / Workspace" forever, and have no way to learn that the fix is for an
+ * owner to claim them on /team. An app that cannot say "I don't know who you are"
+ * cannot tell you what to do about it.
+ *
+ * Kept as its own hook so `useCurrentUser`'s return type is unchanged and no
+ * existing caller has to be touched.
+ */
+export type IdentityStatus = "loading" | "anonymous" | "stranded" | "member";
+
+export function useIdentity(): { status: IdentityStatus; email: string | null } {
+  const { data, isLoading } = useCurrentUser();
+  const auth = useQuery({
+    queryKey: ["current-user", "auth-only"],
+    queryFn: async (): Promise<{ email: string | null } | null> => {
+      const { data: authData } = await createClient().auth.getUser();
+      return authData?.user ? { email: authData.user.email ?? null } : null;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  if (isLoading || auth.isLoading) return { status: "loading", email: null };
+  if (data) return { status: "member", email: data.authEmail };
+  // Authenticated, but `useCurrentUser` found no profile → stranded, not anonymous.
+  if (auth.data) return { status: "stranded", email: auth.data.email };
+  return { status: "anonymous", email: null };
+}
+
 export function useCurrentUser() {
   return useQuery({
     queryKey: ["current-user"],
