@@ -30,6 +30,8 @@ type FormData = z.infer<typeof schema>;
 export default function SignupPage() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [gstLoading, setGstLoading] = React.useState(false);
+  /** Set when the signup matched an existing workspace's verified domain. */
+  const [pending, setPending] = React.useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -77,10 +79,23 @@ export default function SignupPage() {
       }),
     });
 
-    const json = await res.json() as { success?: boolean; error?: string };
+    const json = await res.json() as {
+      success?: boolean;
+      error?: string;
+      status?: "joined" | "pending_approval" | "created";
+      tenantName?: string;
+    };
 
     if (!res.ok || json.error) {
       toast.error(json.error ?? "Signup failed. Please try again.");
+      return;
+    }
+
+    // Their email domain belongs to a workspace that already exists. They have
+    // NO access yet and signing them in would drop them into an app with no
+    // tenant — the stranded state. Show the wait instead; it is not a failure.
+    if (json.status === "pending_approval") {
+      setPending(json.tenantName ?? "your company's workspace");
       return;
     }
 
@@ -101,6 +116,39 @@ export default function SignupPage() {
     // Hard navigation — guarantees fresh auth cookies reach the next request
     // (see comment in login/page.tsx for the Firebase Hosting proxy reason).
     window.location.href = "/dashboard";
+  }
+
+  // Waiting on an owner. Deliberately a full replacement of the form rather than
+  // a toast: the single most useful thing here is that nothing is broken and no
+  // second account is needed, and a toast that disappears cannot say that.
+  if (pending) {
+    return (
+      <Card>
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-soft">
+            <Icon name="clock" size={22} className="text-amber-ink" />
+          </div>
+          <h1 className="font-serif text-2xl mb-2">Almost there</h1>
+          <p className="text-sm text-ink-2 leading-relaxed">
+            Your email domain belongs to <b className="text-ink">{pending}</b>, which is already
+            on ResellerOS. We&apos;ve asked its owner to add you to that workspace.
+          </p>
+          <div className="mt-4 rounded-md border border-hairline bg-paper-2 p-3 text-left text-xs text-ink-3 leading-relaxed">
+            We did <b>not</b> create a separate company for you — that is on purpose. Joining the
+            existing workspace is what lets you see your team&apos;s customers, quotes and invoices.
+          </div>
+          <p className="mt-4 text-xs text-ink-3">
+            You&apos;ll be able to sign in as soon as they approve. Nothing else is needed from you.
+          </p>
+          <Link
+            href="/login"
+            className="mt-5 inline-block text-sm text-amber font-medium hover:underline"
+          >
+            Back to sign in
+          </Link>
+        </div>
+      </Card>
+    );
   }
 
   return (

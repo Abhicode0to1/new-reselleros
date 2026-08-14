@@ -40,6 +40,7 @@ import { TrialsExpiringCard } from "@/components/features/trials/trials-expiring
 import { GettingStartedCard } from "@/components/features/dashboard/getting-started-card";
 import { MoneyHealthCard } from "@/components/features/dashboard/money-health-card";
 import { PriorityActionHub } from "@/components/features/dashboard/priority-action-hub";
+import { PendingJoinRequestsCard } from "@/components/features/team/pending-join-requests-card";
 import { Badge } from "@/components/ui/badge";
 
 // ============================================================
@@ -562,6 +563,12 @@ export default function DashboardPage() {
           being collected and never recorded outranks every other thing on this
           page. Renders nothing for non-owners. */}
       <MoneyHealthCard />
+
+      {/* People waiting to be let in. Above onboarding on purpose: every hour this
+          sits unanswered is an hour a colleague is locked out, and their obvious
+          workaround is to sign up again and get a private workspace — the exact
+          failure the request exists to prevent. Silent when nothing is pending. */}
+      <PendingJoinRequestsCard isOwner={currentUser?.role === "owner"} />
 
       {/* First-run onboarding — guides a new reseller to their first quote, then
           retires itself once they're set up (all steps derived from real data). */}

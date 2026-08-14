@@ -48,6 +48,13 @@ const PROTECTED_PREFIXES = [
   "/partners",
   "/mobile",
   "/lead-gen",
+  /* Onboarding fork for a signed-in person who has no workspace yet. It is
+     PROTECTED (you must be authenticated to see it) but deliberately NOT in
+     AUTH_PREFIXES below — those bounce a signed-in user to their role home,
+     and this page exists precisely for people who do not have one yet. The
+     role guard further down is skipped for them too, because `role` is null
+     until a users row exists. */
+  "/welcome",
 ];
 
 // Routes that should redirect to /dashboard if user is logged in

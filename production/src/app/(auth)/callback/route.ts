@@ -3,21 +3,40 @@
  *
  *  1. Exchanges the auth code for a session (sets the cookie).
  *  2. Looks up a public.users row for the new auth.uid.
- *  3. If MISSING (first-time Google sign-in), provisions:
- *       - tenant (name derived from email domain — "john@acme.in" → "Acme")
- *       - public.users row (role='owner', initials from full_name)
- *     and redirects to /setup so the user can polish company name / GSTIN.
+ *  3. If MISSING (first-time Google sign-in), decides where they BELONG:
+ *       invite matches their exact address → join that tenant
+ *       verified domain matches           → join_requests, owner alerted, no access
+ *       neither                           → /welcome, and they choose
  *  4. If EXISTING user, redirects to ?next= (defaults to /dashboard).
  *
  * Before this fix, Google OAuth would create the auth user but skip the
  * public.users + tenant rows that email/password signup creates via
  * /api/auth/signup — leaving the user logged-in but stranded in a broken
  * state with no tenant_id (every RLS-scoped query failed).
+ *
+ * ─── AND THEN THE FIX FOR THAT CAUSED THIS ONE (corrected 14 Aug 2026) ───────
+ * Auto-provisioning a tenant did cure the stranding, and introduced a quieter
+ * failure in its place: a person who should have joined an existing workspace got
+ * a private one instead, named after their own email domain — so it looked exactly
+ * like the workspace they expected. Four of the five tenants in this database were
+ * created on this line, one of them holding two days of real customer work and a
+ * ₹21,240 payment.
+ *
+ * The lesson is narrow and worth keeping: "create something so the user is not
+ * stuck" is only safe when the thing created is the thing they wanted. When that
+ * is unknowable — and at first sign-in it genuinely is — the correct move is to
+ * ask, not to guess well. Step 3 no longer creates anything it was not told to.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { initials } from "@/lib/utils";
-import { decideMembership, normalizeEmail, type InviteMatch } from "@/lib/auth/membership";
+import { normalizeEmail, type InviteMatch } from "@/lib/auth/membership";
+import { decideOnboarding } from "@/lib/auth/domain";
+import {
+  findVerifiedDomainTenant,
+  openJoinRequest,
+  notifyOwnerOfJoinRequest,
+} from "@/lib/auth/tenant-match";
 
 /** Derive a sensible default tenant name from the user's email domain. */
 function tenantNameFromEmail(email: string | undefined): string {
@@ -90,10 +109,16 @@ export async function GET(request: NextRequest) {
     "New user";
 
   // Check if a pre-existing user record exists with this email address in public.users
+  //
+  // `.eq`, not `.ilike`. Both `_` and `%` are ILIKE wildcards AND legal characters
+  // in an email local part, so an address containing one matched patterns rather
+  // than itself — in the one branch that then REBINDS that row to a different auth
+  // uid. Emails are stored lower-cased, and the input is normalised, so an exact
+  // comparison is both correct and the only one that cannot match a stranger.
   const { data: preExistingUser } = await admin
     .from("users")
     .select("id, tenant_id, role")
-    .ilike("email", normalizeEmail(email))
+    .eq("email", normalizeEmail(email))
     .maybeSingle();
 
   if (preExistingUser) {
@@ -111,16 +136,25 @@ export async function GET(request: NextRequest) {
   }
 
   // Was this email invited to an existing tenant by its owner? If so, JOIN that
-  // tenant instead of creating a new one. Matched case-insensitively; the unique
-  // index on lower(email) guarantees at most one match (no ambiguity).
+  // tenant. Exact match — see the note on `.eq` above; the unique index on
+  // lower(email) guarantees at most one row, and invites are stored lower-cased.
   const { data: inviteRow } = await admin
     .from("team_invites")
     .select("tenant_id, role")
-    .ilike("email", normalizeEmail(email))
+    .eq("email", normalizeEmail(email))
     .is("accepted_at", null)
     .maybeSingle();
 
-  const decision = decideMembership((inviteRow as InviteMatch | null) ?? null);
+  // No invite? Before assuming this is a new company, look at the domain — the
+  // signal that was always available and never read. See domain.ts for why a
+  // match can never do more than ask.
+  const domainMatch = await findVerifiedDomainTenant(email);
+
+  const decision = decideOnboarding({
+    invite: (inviteRow as InviteMatch | null) ?? null,
+    domainMatch,
+  });
+
   if (decision.mode === "join") {
     const { error: joinErr } = await admin.from("users").insert({
       id:        authUser.id,
@@ -142,40 +176,46 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}${next}`);
   }
 
-  // ─── No invite → provision a brand-new tenant + owner users row ──────────
-  const companyName = tenantNameFromEmail(authUser.email);
-  const tenantId = crypto.randomUUID();
+  // ─── Domain matched a verified tenant → park them, alert the owner ────────
+  // No users row, no tenant, no access. Just a request and a person who knows
+  // what is happening.
+  if (decision.mode === "request_approval") {
+    const parked = await openJoinRequest({
+      tenantId:   decision.tenantId,
+      email:      normalizeEmail(email),
+      fullName,
+      authUserId: authUser.id,
+      matchedBy:  "domain",
+    });
 
-  const { error: tenantErr } = await admin.from("tenants").insert({
-    id:    tenantId,
-    name:  companyName,
-    email: authUser.email ?? "",
-    tier:  "reseller",
-  });
+    if (parked.ok) {
+      await notifyOwnerOfJoinRequest({
+        tenantId:   decision.tenantId,
+        tenantName: decision.tenantName,
+        email:      normalizeEmail(email),
+        fullName,
+        appUrl:     origin,
+      });
+      return NextResponse.redirect(
+        `${origin}/welcome?pending=${encodeURIComponent(decision.tenantName)}`,
+      );
+    }
 
-  if (tenantErr) {
-    console.error("[oauth/callback] tenant creation failed:", tenantErr);
-    return NextResponse.redirect(`${origin}/login?error=provision_failed`);
+    // Could not record the request. Fall through to the fork rather than
+    // stranding them — /welcome can still create a workspace or ask again.
+    console.error("[oauth/callback] could not open join request; falling through to /welcome");
   }
 
-  const { error: userErr } = await admin.from("users").insert({
-    id:        authUser.id,
-    tenant_id: tenantId,
-    email:     authUser.email ?? "",
-    full_name: fullName,
-    initials:  initials(fullName),
-    role:      "owner",
-    color:     "amber",
-  });
-
-  if (userErr) {
-    // Roll back the tenant so we don't leave orphans.
-    await admin.from("tenants").delete().eq("id", tenantId);
-    console.error("[oauth/callback] user row creation failed:", userErr);
-    return NextResponse.redirect(`${origin}/login?error=provision_failed`);
-  }
-
-  // New user — send to setup wizard to fill GSTIN / state / address.
-  // They can refine the auto-generated company name there too.
-  return NextResponse.redirect(`${origin}/setup?welcome=1`);
+  // ─── Nobody recognised them → ASK. Do not manufacture a company. ─────────
+  //
+  // This is the line that used to create a tenant, and creating one here is what
+  // produced four of the five tenants in this database. The suggested name is
+  // still derived from the domain, but it is now a prefill on a screen someone
+  // has to look at, not a decision made on their behalf while they wait for a
+  // redirect. The person is authenticated and has no users row; /welcome is built
+  // for exactly that state and is reachable in it (middleware.ts).
+  const suggested = tenantNameFromEmail(authUser.email);
+  return NextResponse.redirect(
+    `${origin}/welcome?suggested=${encodeURIComponent(suggested)}&next=${encodeURIComponent(next)}`,
+  );
 }

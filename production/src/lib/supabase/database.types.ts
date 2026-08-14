@@ -203,6 +203,68 @@ type TeamInviteInsert = {
 type TeamInviteUpdate = Partial<TeamInviteInsert>;
 
 // ============================================================
+// tenant_domains — which email domain belongs to which tenant (migration 0242)
+//
+// `verified_at` is the gate, not the row's existence: an unverified claim routes
+// nobody. See the migration header for why (exceltechnologies.in is currently
+// claimed by two accidentally-created tenants).
+// ============================================================
+export type TenantDomainRow = {
+  id:          string;
+  tenant_id:   string;
+  domain:      string;
+  verified_at: string | null;
+  created_by:  string | null;
+  created_at:  string;
+};
+type TenantDomainInsert = {
+  id?:          string;
+  tenant_id:    string;
+  domain:       string;
+  verified_at?: string | null;
+  created_by?:  string | null;
+  created_at?:  string;
+};
+type TenantDomainUpdate = Partial<TenantDomainInsert>;
+
+// ============================================================
+// join_requests — someone waiting for an owner to let them in (migration 0242)
+//
+// Holds NO access of its own. Approving it is what creates the users row.
+// ============================================================
+export type JoinRequestStatus = "pending_approval" | "approved" | "rejected";
+export type JoinRequestMatchedBy = "domain" | "manual";
+export type JoinRequestRow = {
+  id:             string;
+  tenant_id:      string;
+  auth_user_id:   string | null;
+  email:          string;
+  full_name:      string | null;
+  requested_role: TeamInviteRole;
+  status:         JoinRequestStatus;
+  matched_by:     JoinRequestMatchedBy;
+  note:           string | null;
+  created_at:     string;
+  decided_at:     string | null;
+  decided_by:     string | null;
+};
+type JoinRequestInsert = {
+  id?:             string;
+  tenant_id:       string;
+  auth_user_id?:   string | null;
+  email:           string;
+  full_name?:      string | null;
+  requested_role?: TeamInviteRole;
+  status?:         JoinRequestStatus;
+  matched_by:      JoinRequestMatchedBy;
+  note?:           string | null;
+  created_at?:     string;
+  decided_at?:     string | null;
+  decided_by?:     string | null;
+};
+type JoinRequestUpdate = Partial<JoinRequestInsert>;
+
+// ============================================================
 // customer_domains — a customer can own many domains (migration 0074)
 // ============================================================
 export type CustomerDomainRow = {
@@ -3081,6 +3143,8 @@ export type Database = {
       site_promos:        { Row: SitePromoRow;         Insert: SitePromoInsert;         Update: SitePromoUpdate;         Relationships: [] };
       tenant_secrets:     { Row: TenantSecretsRow;     Insert: TenantSecretsInsert;     Update: TenantSecretsUpdate;     Relationships: [] };
       team_invites:       { Row: TeamInviteRow;        Insert: TeamInviteInsert;        Update: TeamInviteUpdate;        Relationships: [] };
+      tenant_domains:     { Row: TenantDomainRow;      Insert: TenantDomainInsert;      Update: TenantDomainUpdate;      Relationships: [] };
+      join_requests:      { Row: JoinRequestRow;       Insert: JoinRequestInsert;       Update: JoinRequestUpdate;       Relationships: [] };
       customer_domains:   { Row: CustomerDomainRow;     Insert: CustomerDomainInsert;    Update: CustomerDomainUpdate;    Relationships: [] };
       whatsapp_messages:  { Row: WhatsAppMessageRow;   Insert: WhatsAppMessageInsert;   Update: WhatsAppMessageUpdate;   Relationships: [] };
       bank_accounts:        { Row: BankAccountRow;       Insert: BankAccountInsert;       Update: BankAccountUpdate;       Relationships: [] };
@@ -3096,6 +3160,32 @@ export type Database = {
       v_tenant_with_parent: { Row: TenantWithParent; Relationships: [] };
     };
     Functions: {
+      /**
+       * Owner-only (migration 0243). Attaches an auth account to the caller's tenant and
+       * deletes the workspace it came from ONLY when that workspace is empty of business
+       * data. Raises — it does not partially apply — when the old workspace holds records
+       * or holds other people, so the caller must surface the error text verbatim: those
+       * messages carry the next step (CLAUDE.md §24).
+       */
+      merge_stranded_user_into_tenant: {
+        Args: { p_email: string; p_tenant_id: string; p_role?: string };
+        Returns: {
+          action: "attached" | "moved" | "already_member" | "role_updated";
+          email: string;
+          full_name: string | null;
+          auth_user_id: string;
+          role: string;
+          tenant_id: string;
+          tenant_name: string | null;
+          old_tenant_name: string | null;
+          old_tenant_deleted: boolean;
+        };
+      };
+      /** Owner-only (migration 0243). Auth accounts with no public.users row — people who can sign in and land nowhere. */
+      list_stranded_auth_users: {
+        Args: Record<string, never>;
+        Returns: { email: string; full_name: string | null; created_at: string; last_sign_in_at: string | null }[];
+      };
       /** Consume part of a prepaid advance → books an expense (with optional GST + bill) + reduces balance (migrations 0205/0206). */
       consume_prepaid_advance: {
         Args: { p_advance_id: string; p_amount: number; p_date?: string; p_note?: string | null; p_gst?: number; p_attachment?: string | null };
