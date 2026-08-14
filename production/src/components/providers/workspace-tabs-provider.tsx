@@ -62,6 +62,11 @@ interface WorkspaceTabsApi {
   rename: (id: string, title: string) => void;
   /** Values previously stashed for a tab, for a form to restore from. */
   draftFor: (id: string) => Record<string, unknown> | undefined;
+  /** True while a tab switch is still resolving. Exists because without it a
+   *  slow route makes a working tab strip look broken: the highlight moves
+   *  instantly and the page arrives seconds later, so the user concludes
+   *  nothing happened and clicks again. */
+  isNavigating: boolean;
 }
 
 const Ctx = React.createContext<WorkspaceTabsApi | null>(null);
@@ -112,6 +117,9 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
   const router = useRouter();
   const pathname = usePathname();
   const confirm = useConfirm();
+  // startTransition keeps the click responsive AND gives us isNavigating,
+  // which is the only way the strip can admit it is still working.
+  const [isNavigating, startNavigation] = React.useTransition();
 
   const [state, setState] = React.useState<TabsState>(emptyTabs);
   const [histories, setHistories] = React.useState<Record<string, TabHistory>>({});
@@ -186,7 +194,9 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
     // the URL and the highlighted tab both changed while the page underneath
     // stayed exactly where it was. Every tab switch was cosmetic.
     if (historyOpFor("tab_switch") === "replace") {
-      router.replace(target as never);
+      startNavigation(() => {
+        router.replace(target as never);
+      });
     }
   }, [state.activeId, state.tabs, router]);
 
@@ -344,6 +354,7 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
     },
     close: (id) => dispatch({ type: "close", id }),
     closeOthers: (id) => dispatch({ type: "closeOthers", id }),
+    isNavigating,
     setDraft: (id, isDraft, formState) => dispatch({ type: "setDraft", id, isDraft, formState }),
     rename: (id, title) => dispatch({ type: "rename", id, title }),
     draftFor: (id) => stateRef.current.tabs.find((t) => t.id === id)?.formState,

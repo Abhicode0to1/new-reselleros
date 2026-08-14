@@ -18,7 +18,7 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 export function WorkspaceTabBar() {
-  const { tabs, activeId, activate, close } = useWorkspaceTabs();
+  const { tabs, activeId, activate, close, isNavigating } = useWorkspaceTabs();
 
   if (tabs.length < 2) return null;
 
@@ -26,8 +26,19 @@ export function WorkspaceTabBar() {
     <div
       role="tablist"
       aria-label="Open workspace tabs"
-      className="flex items-stretch gap-1 px-2 h-9 bg-paper-2/60 border-b border-hairline overflow-x-auto shrink-0"
+      className="relative flex items-stretch gap-1 px-2 h-9 bg-paper-2/60 border-b border-hairline overflow-x-auto shrink-0"
     >
+      {/* A route can take seconds to arrive — badly so in dev, where it is
+          compiled on first visit. Without this the highlight jumps instantly,
+          the page does not, and a working tab strip reads as broken; that is
+          exactly what happened during testing. A 1px bar is enough to say
+          "still working" without becoming a spinner nobody asked for. */}
+      {isNavigating && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-amber/70 animate-pulse"
+        />
+      )}
       {tabs.map((t, i) => {
         const isActive = t.id === activeId;
         return (
