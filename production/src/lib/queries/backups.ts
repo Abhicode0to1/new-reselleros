@@ -12,6 +12,21 @@ import { createClient } from "@/lib/supabase/client";
 
 const KEY = ["tenant_backups"] as const;
 
+/**
+ * How many snapshots are kept per tenant. Must match the `limit` in
+ * `backup._take` (migration 0244).
+ *
+ * Exported because this page previously stated the number twice, in two places,
+ * and got it wrong both times: one paragraph promised "last 15", another "last
+ * 20", and the function actually kept 20. Three numbers for one fact is how a
+ * user learns not to trust the screen. One constant, used everywhere it is
+ * claimed.
+ *
+ * 30 is affordable here: a snapshot of this database measures ~83 kB, so a full
+ * shelf costs about 2.5 MB per tenant.
+ */
+export const SNAPSHOT_RETENTION = 30;
+
 export type BackupRow = { id: string; created_at: string; label: string | null; kind: string; table_count: number; bytes: number };
 
 export function useBackups() {

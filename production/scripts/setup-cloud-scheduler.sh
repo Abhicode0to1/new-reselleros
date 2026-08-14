@@ -58,6 +58,10 @@ JOBS=(
   "resellersos-birthday-greetings|1 21 * * *|/api/cron/birthday-greetings|Birthday and anniversary greetings"
   "resellersos-google-contacts-sync|0 */6 * * *|/api/cron/google-contacts-sync|Two-way Google Contacts sync"
   "resellersos-attendance-retention|0 2 * * *|/api/cron/attendance-retention|Erase attendance face images past retention"
+  # Midnight IST, before the other jobs touch anything — a restore point of the
+  # day that just ended, not of a day already half-modified by the 09:00 renewal
+  # cron. Keeps the newest 30 per tenant (0244).
+  "resellersos-backup|0 0 * * *|/api/cron/backup|Nightly restore point for every tenant"
 )
 
 echo "Region:  $REGION"

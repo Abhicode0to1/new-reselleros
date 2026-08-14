@@ -15,8 +15,10 @@ import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { toast } from "sonner";
-import { useBackups, useCreateBackup, useDeleteBackup, useRestoreBackup, downloadBackup, autoBackupIfStale } from "@/lib/queries/backups";
+import { useBackups, useCreateBackup, useDeleteBackup, useRestoreBackup, downloadBackup, autoBackupIfStale, SNAPSHOT_RETENTION } from "@/lib/queries/backups";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { ResetDataCard } from "@/components/features/settings/reset-data-card";
 
 function humanSize(b: number): string {
   if (b < 1024) return `${b} B`;
@@ -35,6 +37,7 @@ export default function BackupPage() {
   const restore = useRestoreBackup();
   const confirm = useConfirm();
   const qc = useQueryClient();
+  const { data: me } = useCurrentUser();
   const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
   const autoRan = React.useRef(false);
 
@@ -77,7 +80,7 @@ export default function BackupPage() {
           <p className="text-sm text-ink-2 mt-1 max-w-2xl">
             Har restore point tumhare poore data ka ek copy hai — customers, leads, quotes, invoices,
             payments, expenses, sab kuch. Galat direction me chale gaye to kisi bhi purane point par
-            <b> wapas jaa sakte ho</b>. Restore points <b>apne aap roz</b> bhi bante hain (last 15 rakhe jaate hain).
+            <b> wapas jaa sakte ho</b>. Restore points <b>apne aap roz</b> bhi bante hain (last {SNAPSHOT_RETENTION} rakhe jaate hain).
           </p>
         </div>
         <Button variant="primary" icon="download" loading={create.isPending || downloadingId != null} onClick={takeBackup} className="shrink-0">
@@ -90,7 +93,7 @@ export default function BackupPage() {
         <div className="flex items-start gap-2 text-[12px] text-ink-2">
           <Icon name="info" size={14} className="text-indigo mt-0.5 shrink-0" />
           <div className="space-y-1">
-            <p><b>Backup lene par:</b> tumhare tenant ka saara data ek JSON file me download ho jaata hai (tumhare computer par). App ke andar bhi last 20 backups save rehte hain — jab chaaho dobara download kar lo.</p>
+            <p><b>Backup lene par:</b> tumhare tenant ka saara data ek JSON file me download ho jaata hai (tumhare computer par). App ke andar bhi last {SNAPSHOT_RETENTION} backups save rehte hain — jab chaaho dobara download kar lo.</p>
             <p className="text-ink-3">Note: ye tumhare apne data ka copy hai (kisi aur tenant ka nahi). Restore ke liye ye file surakshit rakho — zarurat padne par isi se data wapas laaya ja sakta hai.</p>
           </div>
         </div>
@@ -147,6 +150,13 @@ export default function BackupPage() {
           ))}
         </ul>
       )}
+
+      {/* Reset lives BELOW the restore points, deliberately: an owner reads what
+          can be undone before they read what can be deleted. Owner-only, and it
+          renders nothing for anyone else rather than showing a button that 403s. */}
+      <div className="mt-6">
+        <ResetDataCard isOwner={me?.role === "owner"} />
+      </div>
     </div>
   );
 }

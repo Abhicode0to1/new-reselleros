@@ -3161,6 +3161,40 @@ export type Database = {
     };
     Functions: {
       /**
+       * service_role ONLY (migration 0244). Nightly sweep — one snapshot per tenant.
+       * The single backup function not scoped to the caller's own tenant, which is why
+       * `authenticated` has no EXECUTE on it. A per-tenant failure is recorded in
+       * `results` and the sweep continues.
+       */
+      backup_all_tenants: {
+        Args: { p_label?: string | null };
+        Returns: {
+          label:       string;
+          ok:          number;
+          failed:      number;
+          total_bytes: number;
+          results:     Array<{ tenant: string; ok: boolean; bytes?: number; tables?: number; error?: string }>;
+        };
+      };
+      /**
+       * Owner-only (migration 0241). Takes a pre-reset snapshot and clears the selected
+       * sections IN ONE TRANSACTION — either both happen or neither.
+       *
+       * `p_confirm_statutory` is NOT optional in spirit: invoices and attendance are records
+       * the business must keep (GST series must have no gaps; attendance backs payroll), and
+       * the function refuses them unless this is passed true deliberately. Do not drop it
+       * from a caller "to simplify the signature" — that turns "reset my demo data" into
+       * "delete this year's invoices".
+       */
+      reset_tenant_selected_tables: {
+        Args: { p_tables: string[]; p_label: string; p_confirm_statutory?: boolean };
+        Returns: {
+          backup_id: string;
+          backup_bytes: number;
+          deleted: Record<string, number>;
+        };
+      };
+      /**
        * Owner-only (migration 0243). Attaches an auth account to the caller's tenant and
        * deletes the workspace it came from ONLY when that workspace is empty of business
        * data. Raises — it does not partially apply — when the old workspace holds records
