@@ -229,7 +229,6 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
           tenant_id: tenantId,
           name: cleanCustomerName,
           domain: cleanDomain,
-          status: "active",
           created_at: new Date().toISOString(),
         } as any);
         if (custErr) throw custErr;
