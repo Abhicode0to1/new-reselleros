@@ -380,21 +380,20 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               </span>
             </div>
 
-            {/* Inline action icons. Send-quote first (the funnel's key move —
-                parity with the desktop row action), then Phone / WhatsApp /
-                Email. ~32px tap targets meet Apple HIG minimum. */}
+            {/* Inline CONTACT icons — Phone / WhatsApp / Email. ~32px tap targets, Apple
+                HIG minimum.
+
+                The 📄 Send-quote icon that used to lead this row is GONE — the outcome
+                chip below does the same thing with a readable label, and two controls
+                with aria-label "Send quote" on one card meant a screen reader announced
+                it twice.
+
+                Call / WhatsApp / Email STAY. They are contact actions, not outcomes, and
+                they are the only ones of their kind on the card: right-swipe used to dial
+                and now marks contacted, so removing this row would leave a call-first
+                sales tool with no way to place a call from a lead card. The priority
+                queue's big Call button only covers the three leads due today. */}
             <div className="flex items-center gap-1 shrink-0">
-              {onSendQuote && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onSendQuote(lead); }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-md text-amber hover:bg-amber-soft/40 active:bg-amber-soft/60"
-                  aria-label="Send quote"
-                >
-                  <Icon name="file" size={15} />
-                </button>
-              )}
               {hasPhone && (
                 <a
                   href={`tel:${lead.contact_phone}`}
@@ -447,7 +446,15 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
             <OutcomeChips
               className="mt-2 border-t border-hairline pt-2"
               hasPhone={hasPhone}
-              onPick={(o) => onOutcome(o, lead)}
+              /* "Send quote" prefers the caller's own handler when it has one. The page's
+                 goSendQuote carries contact name, email and phone into the quote builder
+                 as well as the plan and seats — more than the generic navigation in
+                 use-outcome.ts. Routing through it keeps the chip and the desktop row's
+                 icon doing exactly the same thing. */
+              onPick={(o) => {
+                if (o === "send_quote" && onSendQuote) { onSendQuote(lead); return; }
+                onOutcome(o, lead);
+              }}
             />
           )}
 
