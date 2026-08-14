@@ -222,6 +222,28 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsResult {
 
     // ── setDraft ────────────────────────────────────────────────────────
     case "setDraft": {
+      // Bail out when this changes nothing, returning the SAME state object.
+      //
+      // This is not a micro-optimisation, it is the exit condition of a render
+      // loop. useDraftGuard calls setDraft from an effect whose deps include
+      // `setDraft` itself; the provider rebuilds that function whenever
+      // `state.tabs` changes identity. Without this check a no-op setDraft still
+      // produced a fresh tabs array -> a fresh setDraft -> the effect fired
+      // again, forever. React caps it at 50 nested updates and throws
+      // "Maximum update depth exceeded" (#185), which on /leads escaped the app
+      // error boundary and took the whole shell down to global-error.
+      //
+      // A reducer that returns a new object for a write that changed nothing is
+      // the bug; every consumer keying off identity is downstream of it.
+      const current = state.tabs.find((t) => t.id === action.id);
+      if (!current) return { state };
+      const nextFormState = action.isDraft
+        ? (action.formState ?? current.formState)
+        : undefined;
+      if (current.isDraft === action.isDraft && current.formState === nextFormState) {
+        return { state };
+      }
+
       return {
         state: {
           ...state,

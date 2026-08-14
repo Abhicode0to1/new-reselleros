@@ -339,26 +339,52 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
     return () => window.removeEventListener("keydown", onKey);
   }, [dispatch]);
 
+  // ── Stable callbacks ──────────────────────────────────────────────────────
+  // These close over `dispatch` (itself stable) and refs only — never over
+  // `state` — so each keeps ONE identity for the provider's whole life.
+  //
+  // They used to be defined inline in the `api` useMemo below, which rebuilt
+  // every one of them whenever `state.tabs` changed identity. Any consumer with
+  // an effect keyed on one of them therefore re-ran on every unrelated tab
+  // change, and `useDraftGuard` — whose effect both depends on `setDraft` AND
+  // calls it — turned that into an unbounded render loop (#185, "Maximum update
+  // depth exceeded"). The reducer's no-op bailout now breaks that cycle too;
+  // this half stops the whole class rather than the one instance, because the
+  // next hook to depend on an api callback would have rediscovered it.
+  const open = React.useCallback<WorkspaceTabsApi["open"]>((url, title, icon) => {
+    dispatch({ type: "open", url, title, icon, at: Date.now() });
+    router.push(url as never);
+  }, [dispatch, router]);
+
+  const activate = React.useCallback<WorkspaceTabsApi["activate"]>((id) => {
+    dispatch({ type: "activate", id, at: Date.now() });
+    const h = historiesRef.current[id];
+    const url = h?.stack[h.cursor] ?? stateRef.current.tabs.find((t) => t.id === id)?.url;
+    if (url) router.push(url as never);
+  }, [dispatch, router]);
+
+  const close = React.useCallback<WorkspaceTabsApi["close"]>(
+    (id) => dispatch({ type: "close", id }), [dispatch]);
+  const closeOthers = React.useCallback<WorkspaceTabsApi["closeOthers"]>(
+    (id) => dispatch({ type: "closeOthers", id }), [dispatch]);
+  const setDraft = React.useCallback<WorkspaceTabsApi["setDraft"]>(
+    (id, isDraft, formState) => dispatch({ type: "setDraft", id, isDraft, formState }), [dispatch]);
+  const rename = React.useCallback<WorkspaceTabsApi["rename"]>(
+    (id, title) => dispatch({ type: "rename", id, title }), [dispatch]);
+  const draftFor = React.useCallback<WorkspaceTabsApi["draftFor"]>(
+    (id) => stateRef.current.tabs.find((t) => t.id === id)?.formState, []);
+
   const api: WorkspaceTabsApi = React.useMemo(() => ({
     tabs: state.tabs,
     activeId: state.activeId,
-    open: (url, title, icon) => {
-      dispatch({ type: "open", url, title, icon, at: Date.now() });
-      router.push(url as never);
-    },
-    activate: (id) => {
-      dispatch({ type: "activate", id, at: Date.now() });
-      const h = historiesRef.current[id];
-      const url = h?.stack[h.cursor] ?? stateRef.current.tabs.find((t) => t.id === id)?.url;
-      if (url) router.push(url as never);
-    },
-    close: (id) => dispatch({ type: "close", id }),
-    closeOthers: (id) => dispatch({ type: "closeOthers", id }),
     isNavigating,
-    setDraft: (id, isDraft, formState) => dispatch({ type: "setDraft", id, isDraft, formState }),
-    rename: (id, title) => dispatch({ type: "rename", id, title }),
-    draftFor: (id) => stateRef.current.tabs.find((t) => t.id === id)?.formState,
-  }), [state.tabs, state.activeId, dispatch, router]);
+    open, activate, close, closeOthers, setDraft, rename, draftFor,
+    // `isNavigating` MUST stay in this list. It was read here but missing from
+    // the deps, so the value handed to consumers was whatever it had been when
+    // tabs last changed — i.e. the "still working" bar on the tab strip was
+    // driven by a stale flag and could simply never appear.
+  }), [state.tabs, state.activeId, isNavigating,
+       open, activate, close, closeOthers, setDraft, rename, draftFor]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }

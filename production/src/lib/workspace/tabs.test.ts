@@ -197,6 +197,56 @@ describe("draft state", () => {
     expect(r.state.tabs[0].formState).toEqual({ seats: 25 });
   });
 
+  // ── The identity contract. This is a render-loop guard, not a nicety. ──────
+  //
+  // useDraftGuard calls setDraft from an effect whose deps include `setDraft`,
+  // and the provider rebuilds that function whenever `state.tabs` changes
+  // identity. So a no-op setDraft that still returned a fresh tabs array fed
+  // itself: new array -> new setDraft -> effect fires -> new array. React caps
+  // that at 50 nested updates and throws #185 "Maximum update depth exceeded",
+  // which on /leads escaped the app error boundary and took the shell down to
+  // global-error. Returning the SAME object for a write that changed nothing is
+  // what stops it, so it is asserted by reference.
+  describe("a setDraft that changes nothing returns the SAME state", () => {
+    it("bails out when the flag is already what was asked for", () => {
+      const s = state([{ id: "/q", isDraft: true }], "/q");
+      expect(tabsReducer(s, { type: "setDraft", id: "/q", isDraft: true }).state).toBe(s);
+    });
+
+    it("bails out when clearing an already-clean tab", () => {
+      const s = state([{ id: "/q", isDraft: false }], "/q");
+      expect(tabsReducer(s, { type: "setDraft", id: "/q", isDraft: false }).state).toBe(s);
+    });
+
+    it("bails out repeatedly — the loop needs EVERY call to be stable, not just the second", () => {
+      const s = state([{ id: "/q", isDraft: true, formState: { seats: 25 } }], "/q");
+      let cur = s;
+      for (let i = 0; i < 10; i++) {
+        cur = tabsReducer(cur, { type: "setDraft", id: "/q", isDraft: true }).state;
+      }
+      expect(cur).toBe(s);
+    });
+
+    it("bails out for an id that is not open, rather than rebuilding the list", () => {
+      const s = state([{ id: "/q" }], "/q");
+      expect(tabsReducer(s, { type: "setDraft", id: "/gone", isDraft: true }).state).toBe(s);
+    });
+
+    it("still returns a NEW state when something genuinely changes", () => {
+      const s = state([{ id: "/q", isDraft: false }], "/q");
+      const r = tabsReducer(s, { type: "setDraft", id: "/q", isDraft: true });
+      expect(r.state).not.toBe(s);
+      expect(r.state.tabs[0].isDraft).toBe(true);
+    });
+
+    it("still returns a NEW state when only the stashed values change", () => {
+      const s = state([{ id: "/q", isDraft: true, formState: { seats: 25 } }], "/q");
+      const r = tabsReducer(s, { type: "setDraft", id: "/q", isDraft: true, formState: { seats: 30 } });
+      expect(r.state).not.toBe(s);
+      expect(r.state.tabs[0].formState).toEqual({ seats: 30 });
+    });
+  });
+
   it("lists the tabs that would lose work", () => {
     const s = state([{ id: "/a" }, { id: "/b", isDraft: true }, { id: "/c", isDraft: true }]);
     expect(draftTabs(s).map((t) => t.id)).toEqual(["/b", "/c"]);
