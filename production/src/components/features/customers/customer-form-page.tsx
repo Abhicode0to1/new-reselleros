@@ -36,6 +36,7 @@ import { isValidGstin, validateGstin, GST_STATE_BY_CODE, cn } from "@/lib/utils"
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import { COUNTRIES } from "@/lib/gst/countries";
 import { useCustomerForm } from "./use-customer-form";
+import { ScanCardPanel } from "./scan-card-panel";
 import { GroupFormDialog } from "./group-form-dialog";
 import { useCustomerGroups } from "@/lib/queries/customer-groups";
 import type { Customer } from "@/lib/supabase/database.types";
@@ -198,6 +199,34 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
             {saveButton}
           </div>
         </div>
+
+        {/* Scan a card / paste a signature. Create mode only — on an edit the
+            record is already correct and a fresh scan would overwrite a
+            corrected field with a guess. Fills nothing that decides tax: state,
+            state_code and country come from the verified GSTIN below. */}
+        {!isEdit && (
+          <div className="mb-5">
+            <ScanCardPanel
+              onFields={(f) => {
+                const opts = { shouldDirty: true } as const;
+                // Only write what was actually read — a null must never wipe a
+                // field the operator has already typed.
+                if (f.name)           setValue("name",           f.name, opts);
+                if (f.contact_name)   setValue("contact_name",   f.contact_name, opts);
+                if (f.contact_title)  setValue("contact_title",  f.contact_title, opts);
+                if (f.contact_email)  setValue("contact_email",  f.contact_email, opts);
+                if (f.contact_phone)  setValue("contact_phone",  f.contact_phone, opts);
+                if (f.contact_mobile) setValue("contact_mobile", f.contact_mobile, opts);
+                if (f.address)        setValue("address",        f.address, opts);
+                if (f.city)           setValue("city",           f.city, opts);
+                if (f.pin_code)       setValue("pin_code",       f.pin_code, opts);
+                if (f.domain)         setValue("domain",         f.domain, opts);
+                // Checksum-validated already; the form still verifies with GSTN.
+                if (f.gstin)          setValue("gstin",          f.gstin, opts);
+              }}
+            />
+          </div>
+        )}
 
         {/* ── Country-first + live tax-treatment banner (better-than-Zoho) ── */}
         <div className="rounded-xl border border-hairline bg-paper-2/40 p-4 md:p-5 mb-5">
