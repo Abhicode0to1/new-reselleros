@@ -2544,6 +2544,11 @@ function LeadListView({
   const updateLead = useUpdateLead({ quiet: true });
   const deleteLead  = useDeleteLead();
   const setJunkBulk = useSetLeadJunk();
+  /* Same entry point the call queue uses, so the mobile card's chips and swipes behave
+     identically to the queue's. Declared here rather than threaded down as a prop — the
+     rules live in lib/leads/outcomes.ts, so there is nothing for two call sites to
+     disagree about. */
+  const runOutcome  = useLeadOutcome();
 
   // Open follow-up tasks per lead — surfaced as a chip on the row so the rep
   // sees at a glance which leads have a pending task (earliest/most-overdue).
@@ -2676,6 +2681,7 @@ function LeadListView({
             onTap={onRowClick}
             onChangeStage={(s) => void changeStage(lead, s)}
             onSendQuote={onSendQuote}
+            onOutcome={(o, l) => { void runOutcome(o, l); }}
           />
         );
       })}
