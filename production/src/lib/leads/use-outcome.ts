@@ -24,7 +24,11 @@ import { applyOutcome, type LeadOutcome } from "./outcomes";
 import type { Lead } from "@/lib/supabase/database.types";
 
 type OutcomeTarget = Pick<
-  Lead, "id" | "company" | "contact_phone" | "follow_up_date" | "plan" | "seats" | "value"
+  Lead,
+  | "id" | "company" | "contact_phone" | "follow_up_date" | "plan" | "seats" | "value"
+  // Needed only by the quote-builder prefill, but required here rather than optional:
+  // a caller passing a narrower object would silently prefill less.
+  | "contact_name" | "contact_email"
 >;
 
 export function useLeadOutcome() {
@@ -38,11 +42,20 @@ export function useLeadOutcome() {
       const eff = applyOutcome(outcome, lead);
 
       if (eff.navigate === "quote") {
-        /* Carries the lead's context into the builder. The stage stays where it is
-           until a quote row actually exists — see outcomes.ts. */
+        /* Carries the lead's context into the builder. The stage stays where it is until
+           a quote row actually exists — see outcomes.ts.
+
+           These params match goSendQuote in (app)/leads/page.tsx exactly, including
+           contact / email / phone. An earlier version here passed only leadId, company,
+           plan and seats, so the same chip prefilled LESS depending on which surface it
+           was tapped from — the sort of difference nobody reports and everybody
+           re-types. */
         const q = new URLSearchParams({ leadId: lead.id, company: lead.company });
-        if (lead.plan)  q.set("plan", lead.plan);
-        if (lead.seats) q.set("seats", String(lead.seats));
+        if (lead.plan)          q.set("plan", lead.plan);
+        if (lead.seats != null) q.set("seats", String(lead.seats));
+        if (lead.contact_name)  q.set("contact", lead.contact_name);
+        if (lead.contact_email) q.set("email", lead.contact_email);
+        if (lead.contact_phone) q.set("phone", lead.contact_phone);
         router.push(`/quotes/new?${q.toString()}`);
         return;
       }
