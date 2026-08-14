@@ -263,6 +263,12 @@ export const APP_NAV: NavSection[] = [
       // owner/manager only — these are customers' admin console passwords, and
       // "billing" has no reason to reach a Google Admin login.
       { id: "vault",     href: "/vault",                label: "Password Vault",   icon: "lock", roles: ["owner", "manager"] },
+      /* Owner-only, and it had NO nav entry at all — the page existed, the
+         breadcrumb below knew its name, and nothing anywhere linked to it. So the
+         restore points and the data reset were reachable only by typing the URL.
+         A safety feature nobody can find is not a safety feature; this is the
+         same failure the Marketing group had. */
+      { id: "backup",    href: "/settings/backup",      label: "Backup & Restore", icon: "database", roles: ["owner"] },
       { id: "help",      href: "/help",                 label: "Help & Tutorial",  icon: "question" },
     ],
   },
