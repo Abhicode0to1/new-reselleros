@@ -42,6 +42,7 @@ import {
 } from "@/lib/queries/vendor-bills";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { AddVendorBillDialog } from "@/components/features/accounting/add-vendor-bill-dialog";
+import { InboundBillsQueue } from "@/components/features/accounting/inbound-bills-queue";
 import { BillDetailDialog } from "@/components/features/accounting/bill-detail-dialog";
 import { DocViewerDialog } from "@/components/features/documents/doc-viewer-dialog";
 import { useConfirm } from "@/components/providers/confirm-provider";
@@ -104,6 +105,12 @@ export default function VendorBillsPage() {
           Add Bill
         </Button>
       </div>
+
+      {/* Bills that arrived at billing@ and have not been posted yet. Above the
+          KPIs deliberately: the numbers below do NOT include these, and an
+          operator reading "outstanding" should see what is still waiting to be
+          counted before they trust the figure. Renders nothing when empty. */}
+      <InboundBillsQueue />
 
       {/* ── KPI strip ───────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 mb-6">

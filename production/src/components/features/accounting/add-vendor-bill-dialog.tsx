@@ -60,7 +60,44 @@ const VENDOR_PRESETS = [
   { name: "Zoho Corporation",         gstin: "", category: "COGS-Zoho" },
 ];
 
-export function AddVendorBillDialog({ onClose }: { onClose: () => void }) {
+/**
+ * Fields an extraction can seed. Same shape `sanitizeExtractedBill` returns, so
+ * the billing@ review queue can hand over exactly what Gemini read without a
+ * second mapping in between.
+ */
+export interface VendorBillPrefill {
+  vendor_name?:  string | null;
+  vendor_gstin?: string | null;
+  bill_no?:      string | null;
+  bill_date?:    string | null;
+  currency?:     string | null;
+  subtotal?:     number | null;
+  cgst?:         number | null;
+  sgst?:         number | null;
+  igst?:         number | null;
+  total?:        number | null;
+  category_guess?: string | null;
+  line_items?:   Array<{ description?: string; qty?: number | null; unit_price?: number | null; amount?: number | null }>;
+}
+
+/**
+ * @param prefill   values read from a bill that arrived by email. Seeds the SAME
+ *                  fields the in-dialog AI upload seeds — including forcing the
+ *                  FX rate blank for a foreign bill, so an emailed invoice can
+ *                  never be saved at a rate nobody chose.
+ * @param onCreated the new bill's id, so a caller can link its own record to it.
+ *
+ * Both optional: every existing caller is unchanged.
+ */
+export function AddVendorBillDialog({
+  onClose,
+  prefill,
+  onCreated,
+}: {
+  onClose: () => void;
+  prefill?: VendorBillPrefill;
+  onCreated?: (billId: string) => void;
+}) {
   const create = useCreateVendorBill();
   const today  = new Date().toISOString().slice(0, 10);
 
@@ -172,6 +209,43 @@ export function AddVendorBillDialog({ onClose }: { onClose: () => void }) {
     },
   });
 
+  /* Seed from an extraction that arrived by email. Mirrors handleBillFile above
+     rather than sharing it, because that one also holds the File for upload and
+     an emailed bill is already stored — but the RULES are the same, deliberately:
+     only overwrite what was actually read, and blank the FX rate on a foreign
+     bill so nobody can save at a rate they did not choose. */
+  const seeded = React.useRef(false);
+  React.useEffect(() => {
+    if (!prefill || seeded.current) return;
+    seeded.current = true;
+
+    if (prefill.vendor_name)  setValue("vendor_name",  String(prefill.vendor_name));
+    if (prefill.vendor_gstin) setValue("vendor_gstin", String(prefill.vendor_gstin));
+    if (prefill.bill_no)      setValue("bill_no",      String(prefill.bill_no));
+    if (prefill.bill_date)    setValue("bill_date",    String(prefill.bill_date));
+    if (prefill.subtotal != null) setValue("subtotal", Number(prefill.subtotal));
+    setValue("cgst", Number(prefill.cgst ?? 0));
+    setValue("sgst", Number(prefill.sgst ?? 0));
+    setValue("igst", Number(prefill.igst ?? 0));
+    if (prefill.total != null) setValue("total", Number(prefill.total));
+    if (prefill.category_guess && (VENDOR_BILL_CATEGORIES as readonly string[]).includes(String(prefill.category_guess))) {
+      setValue("category", String(prefill.category_guess));
+    }
+
+    const cur = String(prefill.currency ?? "INR") || "INR";
+    setCurrency(cur);
+    if (cur !== "INR") setFxRate("");   // force the operator to enter today's rate
+
+    if (Array.isArray(prefill.line_items)) {
+      setLines(prefill.line_items.map((it) => ({
+        description: String(it.description ?? ""),
+        qty:         it.qty        != null ? String(it.qty)        : "",
+        unit_price:  it.unit_price != null ? String(it.unit_price) : "",
+        amount:      it.amount     != null ? String(it.amount)     : "",
+      })));
+    }
+  }, [prefill, setValue]);
+
   const subtotal = Number(watch("subtotal") || 0);
   const cgst     = Number(watch("cgst")     || 0);
   const sgst     = Number(watch("sgst")     || 0);
@@ -240,7 +314,7 @@ export function AddVendorBillDialog({ onClose }: { onClose: () => void }) {
       try { attachment_url = await uploadBillAttachment(attachFile); }
       catch { /* keep saving the bill even if the file upload hiccups */ }
     }
-    await create.mutateAsync({
+    const saved = await create.mutateAsync({
       vendor_id:    vId,
       attachment_url,
       vendor_name:  values.vendor_name,
@@ -260,6 +334,9 @@ export function AddVendorBillDialog({ onClose }: { onClose: () => void }) {
       status:       "unpaid",
       line_items,
     });
+    // Told AFTER the write succeeded, so a caller linking its own record to this
+    // bill can never point at one that was never saved.
+    if (saved?.id) onCreated?.(saved.id);
     onClose();
   }
 
