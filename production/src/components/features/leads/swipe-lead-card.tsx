@@ -6,11 +6,16 @@
  *      The card is now 3 visual rows: header (co + ₹ + seats), contact line,
  *      meta+actions line (stage chip · follow-up · inline action icons).
  *   2. **Swipe gestures (the "power" layer)** —
- *        • Drag right ≥ 80px  →  Call (tel:)
- *        • Drag left  ≥ 80px  →  WhatsApp (wa.me with pre-filled msg)
+ *        • Drag right ≥ 80px  →  Contacted (stage → contact, pre-quote only)
+ *        • Drag left  ≥ 80px  →  Snooze to tomorrow
+ *        • Drag up    ≥ 80px  →  WhatsApp (wa.me with pre-filled msg)
  *      Action labels reveal behind the card as the user drags. Drag
  *      threshold under 80px = no action, card snaps back. Tap (no drag)
  *      = opens the detail drawer as before.
+ *
+ *      Was right = Call, left = WhatsApp. The right swipe now WRITES instead of
+ *      opening the dialler, which changes what a mis-swipe costs — see the long note
+ *      on handleDragEnd below.
  *   3. **Stage quick-change** — small chip on the card opens a dropdown
  *      to flip stage without entering the drawer (preserved from v1).
  *
