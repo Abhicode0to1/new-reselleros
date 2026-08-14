@@ -75,12 +75,11 @@ function AlertRow({ a }: { a: MarginAlert }) {
   );
 }
 
-export function MarginAlertsCard() {
-  const { data, isLoading, error } = useMarginAlerts();
-
-  // Silent while loading. A skeleton for a card that is usually absent is noise.
-  if (isLoading || error || !data) return null;
-
+/**
+ * The card itself, taking data as a prop so what the operator READS can be tested
+ * without a Supabase mock. `MarginAlertsCard` below is the hook wrapper.
+ */
+export function MarginAlertsView({ alerts: data }: { alerts: MarginAlert[] }) {
   const bleeding  = data.filter((a) => a.needsRepricing);
   const unpriced  = data.filter((a) => a.unmatched);
   if (bleeding.length === 0 && unpriced.length === 0) return null;
@@ -140,4 +139,11 @@ export function MarginAlertsCard() {
       )}
     </Card>
   );
+}
+
+export function MarginAlertsCard() {
+  const { data, isLoading, error } = useMarginAlerts();
+  // Silent while loading. A skeleton for a card that is usually absent is noise.
+  if (isLoading || error || !data) return null;
+  return <MarginAlertsView alerts={data} />;
 }

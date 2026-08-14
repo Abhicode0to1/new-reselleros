@@ -26,8 +26,89 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, QuoteLineItem } from "@/lib/supabase/database.types";
 import { prorate, rupeesToPaise, paiseToRupees } from "./proration";
+import { buildPlanIndex, matchPlan, type PlanIndex, type CatalogRow } from "./plan-match";
 
 type SupabaseAdmin = SupabaseClient<Database>;
+
+/**
+ * Where the vendor cost on the quote line and the draft PO came from.
+ *
+ * This is carried, not thrown away, because the PO goes to a distributor. A PO whose
+ * cost was invented has to SAY it was invented — the note records the source, so
+ * nobody reconciles a guess against a real invoice and concludes the invoice is wrong.
+ */
+export type CostSource = "catalog" | "heuristic";
+
+export interface SeatCost {
+  /** ₹/seat/month. */
+  costPerSeatMonth: number;
+  source:           CostSource;
+}
+
+/**
+ * The 17% that used to be the only answer. Kept ONLY as a last resort, and now it
+ * announces itself instead of passing for a measurement.
+ *
+ * How wrong it is, measured against this tenant's real catalog (₹/seat/month):
+ *     Business Starter    guess 224   real  110   — 104% too high
+ *     Business Standard   guess 717   real  620   —  16% too high
+ *     Business Plus       guess 1145  real 1150   —   0%
+ *     M365 Premium        guess 1577  real 1620   —   3% too low
+ * It happens to be close on the products whose real margin is near 17%, and doubles
+ * the cost on Starter. That is the shape of a guess: right where you don't need it.
+ */
+const HEURISTIC_MARGIN = 0.83;
+
+/**
+ * Vendor cost per seat per month for a plan, from the catalog when it can be found
+ * and from the old heuristic when it cannot.
+ *
+ * Pure on purpose — the DB read happens in the caller — so the resolution rule is
+ * testable without a Supabase mock, which is why the old rule never had a test.
+ */
+export function resolveSeatCost(args: {
+  index:         PlanIndex;
+  vendor:        string;
+  plan:          string;
+  /** ₹/seat/year the customer pays, for the fallback only. */
+  annualPerSeat: number;
+}): SeatCost {
+  const hit = matchPlan(args.index, args.vendor, args.plan);
+  /* A catalog cost of 0 is accepted as real. For hosting/support/own services it IS
+     zero, and substituting the heuristic there would invent a cost for work that has
+     none — inflating the PO and understating the margin on the most profitable lines. */
+  if (hit.matched) return { costPerSeatMonth: hit.costPerSeatMonth, source: "catalog" };
+
+  return {
+    costPerSeatMonth: Math.round((args.annualPerSeat * HEURISTIC_MARGIN) / 12),
+    source:           "heuristic",
+  };
+}
+
+/**
+ * Read the tenant's catalog for ONE vendor and index it.
+ *
+ * The vendor filter is not cosmetic. The query this replaces was
+ * `.ilike("name", plan).limit(1)` with no vendor condition, so a subscription whose
+ * plan is literally "Standard" — the import dialog accepts any text — could match the
+ * hosting row's ₹0 and produce a PO for ₹0 on a Google seat.
+ */
+async function loadCatalogIndex(
+  supabase: SupabaseAdmin, tenantId: string, vendor: string,
+): Promise<PlanIndex> {
+  const { data } = await supabase
+    .from("items")
+    .select("name, vendor, prices, wholesale")
+    .eq("tenant_id", tenantId)
+    .eq("vendor", vendor as Database["public"]["Tables"]["items"]["Row"]["vendor"]);
+
+  const rows: CatalogRow[] = (data ?? []).map((it) => {
+    const annual = (it.prices as { annual?: { wholesale?: number } } | null)?.annual?.wholesale;
+    const cost = typeof annual === "number" && annual > 0 ? annual : (it.wholesale ?? 0);
+    return { name: it.name, vendor: String(it.vendor), costPerSeatMonth: cost };
+  });
+  return buildPlanIndex(rows);
+}
 
 export interface AddSeatsInput {
   supabase:           SupabaseAdmin;
@@ -131,14 +212,21 @@ export async function addSeats(input: AddSeatsInput): Promise<AddSeatsResult | A
   // from it. That multiplication is exactly the bug this replaced.
   const proRataPerSeat = paiseToRupees(charge.perSeatPaise);
 
-  /* ⚠️ STILL AN ASSUMPTION, and not one this change fixes: 0.83 is a hardcoded
-     17% margin, not the real vendor cost. It feeds the draft PO and therefore
-     every margin figure downstream. Left as-is deliberately — replacing it needs
-     the vendor price list, which is its own piece of work — but it is a guess
-     wearing the clothes of a measurement. */
+  /* The real vendor cost, resolved ONCE and used by both the quote line and the draft
+     PO below. Those two used to disagree: the quote line was always `× 0.83` while the
+     PO did its own lookup, so the same seat expansion could carry two different costs
+     in two records of the same transaction. */
+  const catalogIndex = await loadCatalogIndex(input.supabase, input.tenantId, input.vendor);
+  const seatCost = resolveSeatCost({
+    index: catalogIndex, vendor: input.vendor, plan: input.plan, annualPerSeat,
+  });
+
+  /* Pro-rata the cost over the same remaining days as the charge, so the quote line's
+     cost and rate cover the same period. Cost is ₹/seat/MONTH, so × 12 for the year
+     before pro-rating — getting this wrong is a silent 12× on every margin. */
   const wholesalePerSeat = paiseToRupees(
     prorate({
-      annualPerSeatPaise: rupeesToPaise(Math.round(annualPerSeat * 0.83)),
+      annualPerSeatPaise: rupeesToPaise(seatCost.costPerSeatMonth * 12),
       seats:              1,
       remainingDays:      days,
       termDays:           input.termDays,
@@ -213,28 +301,14 @@ export async function addSeats(input: AddSeatsInput): Promise<AddSeatsResult | A
   }
 
   // ── Auto-create draft Purchase Order for the additional seats ─────
-  // Same wholesale resolution as record_payment (catalog match → heuristic).
   // term_months ≈ days remaining / 30 — gives pro-rata months for Google.
   let poId: string | null = null;
   try {
-    // Catalog match for wholesale ₹/seat/month
-    const { data: item } = await input.supabase
-      .from("items")
-      .select("prices, wholesale")
-      .eq("tenant_id", input.tenantId)
-      .ilike("name", input.plan)
-      .limit(1)
-      .maybeSingle();
-
-    const annualWholesale =
-      (item?.prices as { annual?: { wholesale?: number } } | null)?.annual?.wholesale ?? 0;
-    const fallbackWholesale = item?.wholesale ?? 0;
-    const heuristicMonthly  = Math.round(annualPerSeat * 0.83 / 12);
-
-    const unitCostPm =
-      annualWholesale > 0   ? annualWholesale :
-      fallbackWholesale > 0 ? fallbackWholesale :
-                              heuristicMonthly;
+    /* Uses the SAME resolved cost as the quote line above. It used to run its own
+       lookup — `.ilike("name", plan).limit(1)` with no vendor filter, so a plan named
+       just "Standard" could take the hosting row's ₹0 and write a ₹0 PO for a Google
+       seat. One resolution, one number, both records. */
+    const unitCostPm = seatCost.costPerSeatMonth;
 
     const termMonths     = Math.max(1, Math.round(days / 30));
     const totalCost      = unitCostPm * input.additionalSeats * termMonths;
@@ -259,7 +333,15 @@ export async function addSeats(input: AddSeatsInput): Promise<AddSeatsResult | A
         unit_cost_pm:     unitCostPm,
         total_cost:       totalCost,
         status:           "draft",
-        notes:            `Auto-created for +${input.additionalSeats} seats added mid-term (pro-rata ${days} days). Quote ${newQuoteId}.`,
+        /* The note says where the cost came from. This PO goes to a distributor; if
+           the figure was estimated rather than read from the catalog, the person
+           reconciling it against the real invoice needs to know that before they
+           conclude the invoice is wrong. */
+        notes:            `Auto-created for +${input.additionalSeats} seats added mid-term (pro-rata ${days} days). Quote ${newQuoteId}. Unit cost ₹${unitCostPm}/seat/mo ${
+          seatCost.source === "catalog"
+            ? "from catalog."
+            : `ESTIMATED at ${Math.round((1 - HEURISTIC_MARGIN) * 100)}% margin — no catalog price for "${input.plan}", verify before sending.`
+        }`,
       });
       if (!poErr) poId = newPoId;
     }
