@@ -83,10 +83,20 @@ export interface EmailSendResult {
   status:       EmailSendStatus;
   providerId:   string | null;
   errorMessage: string | null;
-  /** Which transport actually carried it. Recorded per message because a
-   *  tenant can switch provider between two sends and the log must stay
-   *  truthful about which one each went through. */
-  provider?:    "resend" | "gmail" | "stub";
+  /**
+   * Which transport this result is about. Recorded per message because a tenant
+   * can switch provider between two sends and the log must stay truthful about
+   * which one each went through.
+   *
+   * REQUIRED, not optional — and that is the whole point. It used to be optional
+   * with a `?? "resend"` default at the log call, which meant a return statement
+   * that forgot it did not fail to compile, it quietly claimed Resend. That is
+   * exactly what happened on the Gmail failure path: the log recorded
+   * `provider=resend` for a message Resend never touched. Making it required
+   * moves that from "somebody must remember" to "it does not compile" — the same
+   * reasoning that put the log write inside sendEmail() in the first place.
+   */
+  provider:     "resend" | "gmail" | "stub";
 }
 
 /**
@@ -108,7 +118,7 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
     recipient: msg.to,
     subject: msg.subject,
     kind: msg.kind ?? null,
-    provider: result.provider ?? (result.status === "stubbed" ? "stub" : "resend"),
+    provider: result.provider,
   }, result);
   return result;
 }
@@ -132,7 +142,17 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
     const decision = await routeForTenant(msg.route, Boolean(apiKey));
 
     if (decision.blocked) {
-      return { status: "failed", providerId: null, errorMessage: decision.blocked, provider: "resend" };
+      // `decision.requested`, NOT `decision.provider`. Blocked means no transport
+      // ran at all, so "which one carried it" has no answer and "which one the
+      // resolver last considered" is a lie about a send that never happened. The
+      // tenant's own choice is the only true thing left, and it is also the one
+      // an operator searches by when a tenant reports mail not going out.
+      return {
+        status: "failed",
+        providerId: null,
+        errorMessage: decision.blocked,
+        provider: decision.requested,
+      };
     }
     // A fallback is never silent: the tenant asked for Gmail and did not get it,
     // and the only way anyone finds out otherwise is by noticing the From address.
@@ -156,10 +176,15 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
         refreshToken: decision.gmail.refreshToken,
       });
       if (r.ok) return { status: "sent", providerId: r.messageId || null, errorMessage: null, provider: "gmail" };
+      // THE BUG THIS FILE WAS OPENED FOR. Gmail was chosen, Gmail was attempted,
+      // Gmail failed — and this return omitted `provider`, so the log defaulted to
+      // "resend" for a message Resend never saw. Note the send stops here: there is
+      // no fallback after a failed Gmail attempt, so the row is the only trace.
       return {
         status: "failed",
         providerId: null,
         errorMessage: `Gmail ${r.failure}: ${r.detail}`,
+        provider: "gmail",
       };
     }
     // Anything else falls through to the Resend path below.
@@ -221,6 +246,7 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
         status:       "failed",
         providerId:   null,
         errorMessage: `Resend ${res.status}: ${errText.slice(0, 200)}`,
+        provider:     "resend",
       };
     }
 
@@ -229,12 +255,14 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
       status:       "sent",
       providerId:   json.id ?? null,
       errorMessage: null,
+      provider:     "resend",
     };
   } catch (err) {
     return {
       status:       "failed",
       providerId:   null,
       errorMessage: (err as Error).message,
+      provider:     "resend",
     };
   }
 }
@@ -316,6 +344,10 @@ async function routeForTenant(
   } catch (e) {
     return {
       provider: "resend",
+      // The settings read is what failed, so the tenant's choice is genuinely
+      // unknown here. "resend" is what we are about to do, not a claim about what
+      // they picked — and `reason` says so.
+      requested: "resend",
       fellBack: true,
       reason: `Could not read the tenant's email settings (${(e as Error).message})`,
       caution: null,

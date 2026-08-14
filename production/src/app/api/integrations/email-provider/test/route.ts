@@ -61,7 +61,7 @@ export async function POST() {
   return NextResponse.json({
     ok: result.status === "sent",
     status: result.status,
-    provider: result.provider ?? null,
+    provider: result.provider,
     sentTo: user.email,
     providerId: result.providerId,
     error: result.errorMessage,

@@ -54,6 +54,16 @@ export interface ProviderInput {
 
 export interface ProviderDecision {
   provider: EmailProvider;
+  /**
+   * What the tenant CHOSE, before any fallback.
+   *
+   * Exists because `provider` alone cannot describe a blocked send: when nothing
+   * can send, no transport was attempted, so the only truthful thing to name is
+   * the one the tenant configured. Recording the fallback there instead reports a
+   * Gmail problem as a Resend problem, and `where provider='gmail'` — the query
+   * anyone runs to ask "is this tenant's Gmail working" — silently misses it.
+   */
+  requested: EmailProvider;
   /** True when the tenant asked for gmail and it could not be used. */
   fellBack: boolean;
   /** Why this provider, in one sentence. */
@@ -75,13 +85,14 @@ export function canSendWithScopes(scopes: string | null | undefined): boolean {
 
 export function resolveEmailProvider(input: ProviderInput): ProviderDecision {
   const wantsGmail = (input.requested ?? "resend").toLowerCase() === "gmail";
+  const requested: EmailProvider = wantsGmail ? "gmail" : "resend";
 
   const resendOr = (reason: string, fellBack: boolean): ProviderDecision => {
     if (input.resendConfigured) {
-      return { provider: "resend", fellBack, reason, caution: null, blocked: null };
+      return { provider: "resend", requested, fellBack, reason, caution: null, blocked: null };
     }
     return {
-      provider: "resend", fellBack, reason,
+      provider: "resend", requested, fellBack, reason,
       caution: null,
       blocked: fellBack
         ? `${reason} and no Resend key is configured either, so this message cannot be sent at all.`
@@ -114,6 +125,7 @@ export function resolveEmailProvider(input: ProviderInput): ProviderDecision {
 
   return {
     provider: "gmail",
+    requested,
     fellBack: false,
     reason: "Tenant sends through their own Gmail account.",
     caution,
