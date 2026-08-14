@@ -7,9 +7,10 @@
  * 3. Create the page at src/app/(app)/[id]/page.tsx
  */
 
-export type UserRole =
-  | "owner" | "manager" | "sales" | "sales_senior" | "accountant"
-  | "support" | "billing" | "delivery";
+// Roles live in one place now — see src/lib/auth/roles.ts for why. Re-exported
+// so the many `import { UserRole } from "@/lib/nav"` call sites keep working.
+import type { UserRole } from "@/lib/auth/roles";
+export type { UserRole };
 
 export interface NavItem {
   id: string;
@@ -93,6 +94,11 @@ export const ROLE_HOME: Record<UserRole, string> = {
   support:      "/support",
   billing:      "/invoices",
   delivery:     "/projects",
+  // MUST have a matching APP_NAV entry that admits this role (see the Admin &
+  // Control section). ROLE_HOME and allowedRoutesForRole are two halves of one
+  // rule: a home the role is not allowed to visit makes middleware redirect to
+  // it, disallow it, and redirect again — a login that ends in a loop.
+  partner_agent: "/partners",
 };
 
 // ============================================================
@@ -139,6 +145,13 @@ export const APP_NAV: NavSection[] = [
     roles: ["owner", "manager", "sales", "billing"],
     items: [
       { id: "leads",           href: "/leads",            label: "Sales & Pipeline", icon: "target", roles: ["owner", "manager", "sales"] },
+      // /deals was referenced by ROLE_HOME.sales_senior and by the canViewDeals
+      // special case in filterNavForRole, but the ITEM never existed here. So
+      // allowedRoutesForRole could not return it, middleware bounced every
+      // sales_senior to /deals, found /deals disallowed, and bounced again —
+      // ERR_TOO_MANY_REDIRECTS on login, for that whole role. The id must stay
+      // "deals": the canViewDeals gate above matches on it.
+      { id: "deals",           href: "/deals",            label: "Deal Pipeline",    icon: "chart",  roles: ["owner", "manager", "sales"] },
       { id: "enquiries",       href: "/enquiries",        label: "Enquiries",     icon: "mail",   roles: ["owner", "manager", "sales"] },
       { id: "tasks",           href: "/tasks",            label: "Tasks",         icon: "clock",  roles: ["owner", "manager", "sales"] },
       // Same destination as the Home entry above, deliberately listed twice for
@@ -241,9 +254,12 @@ export const APP_NAV: NavSection[] = [
   {
     section: "Admin & Control",
     icon: "settings",
-    roles: ["owner", "manager", "billing"],
+    roles: ["owner", "manager", "billing", "partner_agent"],
     items: [
-      { id: "settings",  href: "/settings",             label: "Settings",         icon: "settings" },
+      { id: "settings",  href: "/settings",             label: "Settings",         icon: "settings", roles: ["owner", "manager", "billing"] },
+      // The ONLY entry partner_agent can see. It is also ROLE_HOME for that
+      // role, so this line is what keeps their login from looping.
+      { id: "partners",  href: "/partners",             label: "Partners",         icon: "award", roles: ["owner", "manager", "partner_agent"] },
       // owner/manager only — these are customers' admin console passwords, and
       // "billing" has no reason to reach a Google Admin login.
       { id: "vault",     href: "/vault",                label: "Password Vault",   icon: "lock", roles: ["owner", "manager"] },

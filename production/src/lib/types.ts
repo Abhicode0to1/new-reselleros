@@ -43,7 +43,11 @@ export type Vendor = "google" | "microsoft" | "zoho";
 
 export type TierTone = "success" | "warning" | "danger" | "info" | "muted";
 
-export type UserRole = "owner" | "sales" | "accountant" | "support";
+// Was a SECOND, disagreeing definition ("owner" | "sales" | "accountant" |
+// "support") that nothing imported — which is the only reason it never caused a
+// wrong answer. Re-exported from the one source of truth so it cannot drift
+// again, and so an accidental import from here is still correct.
+export type { UserRole } from "@/lib/auth/roles";
 
 // ============================================================
 // UI helpers
