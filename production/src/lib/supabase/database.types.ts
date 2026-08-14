@@ -286,15 +286,24 @@ type CustomerDomainUpdate = Partial<CustomerDomainInsert>;
 // ============================================================
 // inbound_emails — inbound-email → lead audit + idempotency (migration 0069)
 // ============================================================
+/** What the router decided for a message (migration 0246). 'unknown' is only
+ *  ever on rows that predate routing — the code never writes it. */
+export type InboundEmailRoute = "sales" | "support" | "billing" | "ignored" | "unknown";
+
 export type InboundEmailRow = {
   id:         string;
   tenant_id:  string;
   message_id: string;
   from_email: string | null;
   from_name:  string | null;
+  /** The address it was sent TO — what routing keys on (0246). */
+  to_email:   string | null;
+  route:      InboundEmailRoute;
   subject:    string | null;
   status:     string;
   lead_id:    string | null;
+  /** Support ticket opened from this message — the twin of lead_id (0246). */
+  ticket_id:  string | null;
   body_text:  string | null;
   body_html:  string | null;
   created_at: string;
@@ -305,9 +314,12 @@ type InboundEmailInsert = {
   message_id:  string;
   from_email?: string | null;
   from_name?:  string | null;
+  to_email?:   string | null;
+  route?:      InboundEmailRoute;
   subject?:    string | null;
   status?:     string;
   lead_id?:    string | null;
+  ticket_id?:  string | null;
   body_text?:  string | null;
   body_html?:  string | null;
   created_at?: string;

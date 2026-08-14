@@ -23,6 +23,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolveGeminiConfig } from "@/lib/ai/gemini";
 import { sendEmail } from "@/lib/email/send";
 import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
+import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const INBOUND_SECRET = process.env.INBOUND_EMAIL_SECRET?.trim() || "";
@@ -177,6 +178,10 @@ export async function POST(request: NextRequest) {
   const rawHeaders = extractHeaders();
 
   const rawFrom   = str("from", "sender", "From", "from_email");
+  /* The recipient. Every provider names it differently, and it was not being
+     read at all — which is why every message became a Lead regardless of whether
+     it was sent to sales@, support@ or billing@. */
+  const rawTo     = str("to", "To", "recipient", "recipients", "envelope_to", "OriginalRecipient");
   const { name: parsedName, email: fromEmail } = parseFrom(rawFrom);
   const fromName  = str("fromName", "from_name", "sender_name") || parsedName;
   const subject   = str("subject", "Subject");
@@ -192,12 +197,20 @@ export async function POST(request: NextRequest) {
   const admin    = createAdminClient();
   const tenantId = INBOUND_TENANT_ID;
 
+  // ── 2b. Route on WHO IT WAS SENT TO, before anything is created ─────────
+  // The address the sender chose is a fact and it is their own statement of
+  // intent; the model is used inside the branch, not to pick the branch.
+  const routing = decideInboundRoute(rawTo, rawFrom);
+  console.log(`[inbound-email] route=${routing.route} — ${routing.reason}`);
+
   // ── 3. Idempotency claim — insert the message_id; UNIQUE blocks replays ─
   const { error: claimErr } = await admin.from("inbound_emails").insert({
     tenant_id:  tenantId,
     message_id: messageId,
     from_email: fromEmail,
     from_name:  fromName || null,
+    to_email:   rawTo || null,
+    route:      routing.route,
     subject:    subject || null,
     body_text:  text || null,
     body_html:  html || null,
@@ -211,9 +224,73 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Could not record email" }, { status: 500 });
   }
 
-  const finalize = (status: string, leadId: string | null) =>
-    admin.from("inbound_emails").update({ status, lead_id: leadId })
+  const finalize = (status: string, leadId: string | null, ticketId?: string | null) =>
+    admin.from("inbound_emails").update({
+      status,
+      lead_id: leadId,
+      ...(ticketId !== undefined ? { ticket_id: ticketId } : {}),
+    })
       .eq("tenant_id", tenantId).eq("message_id", messageId);
+
+  // ── 3b. Branch on the route ────────────────────────────────────────────
+  //
+  // Each branch returns; only `sales` falls through to the Gemini + lead path
+  // below, which is exactly what this endpoint did for EVERY message before.
+
+  if (routing.route === "ignored") {
+    // Bounce notices and auto-replies. Recorded, deliberately: "we ignored this
+    // on purpose" and "we never received it" must not look the same later.
+    await finalize("ignored", null);
+    return NextResponse.json({ received: true, route: "ignored", reason: routing.reason });
+  }
+
+  if (routing.route === "support") {
+    const ticketId = newTicketId();
+    // customer_id stays null — the sender may not be a known customer, and
+    // guessing one would attach a stranger's ticket to a real account. The
+    // support page shows raised_by_email, so nothing is lost by not guessing.
+    const { error: tErr } = await admin.from("support_tickets").insert({
+      id:              ticketId,
+      tenant_id:       tenantId,
+      customer_id:     null,
+      customer_name:   fromName || fromEmail,
+      raised_by_email: fromEmail,
+      raised_by_user:  null,
+      category:        "other",
+      // "normal", not "medium" — the enum is low|normal|high|urgent. An email
+      // nobody has triaged has no claim to being urgent.
+      priority:        "normal",
+      subject:         subject || "(no subject)",
+      body:            text || html || "(no body)",
+      status:          "open",
+    });
+    if (tErr) {
+      console.error("[inbound-email] ticket insert failed:", tErr.message);
+      await finalize("error", null, null);
+      // 500 so the provider retries — a support request must not be lost
+      // because one insert failed.
+      return NextResponse.json({ error: "Could not open a ticket" }, { status: 500 });
+    }
+    await finalize("ticket_created", null, ticketId);
+    return NextResponse.json({ received: true, route: "support", ticketId });
+  }
+
+  if (routing.route === "billing") {
+    /* Recorded and parked, NOT parsed. The brief asks for Gemini OCR of vendor
+     * invoice PDFs, and that cannot be honestly claimed yet: this webhook does
+     * not receive attachments at all — the payload normaliser above reads text
+     * and html only, and no provider attachment field is wired. Inventing a
+     * bill from the message body would create vendor bills that quietly
+     * disagree with the PDF nobody parsed, which is worse than not having the
+     * feature. The mail is captured under route='billing' so it is visible and
+     * nothing is lost while the attachment path is built. */
+    await finalize("billing_received", null, null);
+    return NextResponse.json({
+      received: true,
+      route: "billing",
+      note: "Recorded. Attachment parsing is not wired yet — no vendor bill was created.",
+    });
+  }
 
   /**
    * Create a follow-up task for an email that earns one.
