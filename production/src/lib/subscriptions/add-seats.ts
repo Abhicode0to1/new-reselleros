@@ -134,7 +134,7 @@ export interface AddSeatsInput {
   customerId:         string | null;
   customerName:       string;
   plan:               string;
-  vendor:             "google" | "microsoft" | "zoho" | "other";
+  vendor:             "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
   /**
    * The subscription's stored catalog link (migration 0248). When set it decides the
    * cost outright — the plan-text match is only for rows written before the column

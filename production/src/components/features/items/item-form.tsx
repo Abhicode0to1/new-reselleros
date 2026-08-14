@@ -35,17 +35,26 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type { Item, ItemPrices, ItemPriceTier, TenantWithParent } from "@/lib/supabase/database.types";
 
+/* All seven values of the DB's `vendor` enum. This list held four, so an operator
+   could not create a hosting, support or domain item through the UI at all — yet 7 of
+   this tenant's 17 subscription items are hosting/support rows, which must have been
+   inserted by hand. The form was narrower than the data it edits, so opening one of
+   those rows for editing would have silently offered to change its vendor to
+   something else. */
 const VENDORS = [
   { value: "google",    label: "Google" },
   { value: "microsoft", label: "Microsoft" },
   { value: "zoho",      label: "Zoho" },
+  { value: "hosting",   label: "Hosting" },
+  { value: "support",   label: "Support plan" },
+  { value: "domain",    label: "Domain" },
   { value: "other",     label: "Other" },
 ] as const;
 
 const schema = z.object({
   id:        z.string().min(2, "Item ID required").max(50).regex(/^[A-Za-z0-9_-]+$/, "Only A-Z, 0-9, _ and - allowed"),
   name:      z.string().min(2, "Name required"),
-  vendor:    z.enum(["google", "microsoft", "zoho", "other"]),
+  vendor:    z.enum(["google", "microsoft", "zoho", "other", "domain", "hosting", "support"]),
   kind:      z.enum(["main", "addon"]),
   hsn:       z.string().optional(),
 });

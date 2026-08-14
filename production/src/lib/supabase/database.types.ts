@@ -726,7 +726,7 @@ type ItemRow = {
   id: string;
   tenant_id: string;
   name: string;
-  vendor: "google" | "microsoft" | "zoho" | "other";
+  vendor: "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
   /** "main" = core plan offered standalone · "addon" = upsell paired with a main plan */
   kind: "main" | "addon";
   /** "subscription" = recurring per-seat/mo · "one_time" = one-off product/service */
@@ -752,7 +752,7 @@ type ItemInsert = {
   id: string;
   tenant_id: string;
   name: string;
-  vendor: "google" | "microsoft" | "zoho" | "other";
+  vendor: "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
   kind?: "main" | "addon";
   item_type?: "subscription" | "one_time";
   hsn?: string | null;
@@ -786,7 +786,7 @@ export type PartnerCatalogRow = {
   id: string;
   tenant_id: string;
   name: string;
-  vendor: "google" | "microsoft" | "zoho" | "other";
+  vendor: "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
   kind: "main" | "addon";
   hsn: string | null;
   msrp: number;
@@ -1173,7 +1173,7 @@ type SubscriptionRow = {
   customer_name: string;
   domain: string | null;
   plan: string;
-  vendor: "google" | "microsoft" | "zoho" | "other";
+  vendor: "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
   seats: number;
   used: number;
   mrr: number;
@@ -1218,7 +1218,7 @@ type SubscriptionInsert = {
   customer_name: string;
   domain?: string | null;
   plan: string;
-  vendor: "google" | "microsoft" | "zoho" | "other";
+  vendor: "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
   seats: number;
   used?: number;
   mrr: number;
@@ -2546,7 +2546,7 @@ export type PurchaseOrderRow = {
   customer_id:      string | null;
   customer_name:    string;
   domain:           string | null;     // e.g. acme.in
-  vendor:           "google" | "microsoft" | "zoho" | "other";
+  vendor:           "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
   vendor_order_id:  string | null;     // Google CSP order ID etc.
   plan:             string;
   seats:            number;
@@ -2569,7 +2569,7 @@ type PurchaseOrderInsert = {
   customer_id?:     string | null;
   customer_name:    string;
   domain?:          string | null;
-  vendor:           "google" | "microsoft" | "zoho" | "other";
+  vendor:           "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
   vendor_order_id?: string | null;
   plan:             string;
   seats:            number;
@@ -4099,7 +4099,7 @@ export type Database = {
     };
     Enums: {
       user_role: "owner" | "manager" | "sales" | "sales_senior" | "billing" | "accountant" | "delivery" | "support";
-      vendor: "google" | "microsoft" | "zoho" | "other";
+      vendor: "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
       lead_stage: "new" | "contact" | "demo" | "trial" | "quote" | "won" | "lost";
       quote_status: "draft" | "sent" | "viewed" | "accepted" | "rejected" | "expired";
       invoice_status: "draft" | "pending" | "paid" | "overdue" | "void";

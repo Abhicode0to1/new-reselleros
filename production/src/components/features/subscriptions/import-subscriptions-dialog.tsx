@@ -42,7 +42,7 @@ interface ParsedSub {
   customer_id?: string;
   customer_name?: string;
   plan: string;
-  vendor: "google" | "microsoft" | "zoho" | "other";
+  vendor: "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
   seats: number;
   mrr: number;
   periodMonths: number;

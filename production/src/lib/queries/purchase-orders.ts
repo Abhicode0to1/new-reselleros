@@ -31,7 +31,7 @@ export interface PurchaseOrderSummary {
   subscription_id:   string | null;
   customer_id:       string | null;
   customer_name:     string;
-  vendor:            "google" | "microsoft" | "zoho" | "other";
+  vendor:            "google" | "microsoft" | "zoho" | "other" | "domain" | "hosting" | "support";
   plan:              string;
   seats:             number;
   term_months:       number;

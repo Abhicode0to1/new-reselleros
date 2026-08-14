@@ -20,56 +20,47 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Icon } from "@/components/ui/icon";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useItems } from "@/lib/queries/items";
+import {
+  subscriptionProducts, catalogVendors, productsForVendor, findProduct, judgePrice,
+  type CatalogProduct,
+} from "@/lib/subscriptions/catalog-options";
+import type { Item } from "@/lib/supabase/database.types";
+
+/** Display names for the vendor enum. All seven — the DB has always allowed them. */
+const VENDOR_LABEL: Record<Item["vendor"], string> = {
+  google:    "🌐 Google Cloud / Workspace",
+  microsoft: "🪟 Microsoft 365 / Azure",
+  zoho:      "💼 Zoho Suite",
+  hosting:   "🖥️ Hosting",
+  support:   "🛠️ Support plan",
+  domain:    "🔗 Domain",
+  other:     "📦 Other Cloud Vendor",
+};
 import { useQueryClient } from "@tanstack/react-query";
 import { rupee } from "@/lib/utils";
 
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
 
-interface ProductItem {
-  id: string;
-  name: string;
-  defaultPrice: number;
-}
-
-const PRODUCTS_BY_VENDOR: Record<"google" | "microsoft" | "zoho" | "other", ProductItem[]> = {
-  google: [
-    { id: "gw-starter", name: "Google Workspace Business Starter", defaultPrice: 2160 },
-    { id: "gw-standard", name: "Google Workspace Business Standard", defaultPrice: 10080 },
-    { id: "gw-plus", name: "Google Workspace Business Plus", defaultPrice: 15120 },
-    { id: "gw-ent-starter", name: "Google Workspace Enterprise Starter", defaultPrice: 14400 },
-    { id: "gw-ent-standard", name: "Google Workspace Enterprise Standard", defaultPrice: 21600 },
-    { id: "gw-ent-plus", name: "Google Workspace Enterprise Plus", defaultPrice: 32400 },
-    { id: "gw-ind", name: "Google Workspace Individual", defaultPrice: 7200 },
-    { id: "gw-vault", name: "Google Vault Add-on", defaultPrice: 3600 },
-    { id: "gcp-credits", name: "Google Cloud Platform (GCP) Credits", defaultPrice: 12000 },
-  ],
-  microsoft: [
-    { id: "m365-basic", name: "Microsoft 365 Business Basic", defaultPrice: 1800 },
-    { id: "m365-standard", name: "Microsoft 365 Business Standard", defaultPrice: 7920 },
-    { id: "m365-premium", name: "Microsoft 365 Business Premium", defaultPrice: 18000 },
-    { id: "m365-apps", name: "Microsoft 365 Apps for Business", defaultPrice: 5400 },
-    { id: "o365-e1", name: "Office 365 E1", defaultPrice: 7200 },
-    { id: "o365-e3", name: "Office 365 E3", defaultPrice: 18000 },
-    { id: "o365-e5", name: "Office 365 E5", defaultPrice: 32000 },
-    { id: "teams-essentials", name: "Microsoft Teams Essentials", defaultPrice: 1800 },
-    { id: "exchange-p1", name: "Exchange Online Plan 1", defaultPrice: 2880 },
-    { id: "azure-sub", name: "Microsoft Azure Cloud Subscription", defaultPrice: 15000 },
-  ],
-  zoho: [
-    { id: "zoho-wp-std", name: "Zoho Workplace Standard", defaultPrice: 1188 },
-    { id: "zoho-wp-pro", name: "Zoho Workplace Professional", defaultPrice: 2388 },
-    { id: "zoho-one", name: "Zoho One (All-in-One)", defaultPrice: 21600 },
-    { id: "zoho-mail-lite", name: "Zoho Mail Lite", defaultPrice: 708 },
-    { id: "zoho-crm-pro", name: "Zoho CRM Professional", defaultPrice: 16800 },
-    { id: "zoho-books-pro", name: "Zoho Books Professional", defaultPrice: 15000 },
-  ],
-  other: [
-    { id: "custom-saas", name: "Custom Cloud SaaS Solution", defaultPrice: 3000 },
-    { id: "domain-reg", name: "Domain Registration & DNS", defaultPrice: 850 },
-    { id: "ssl-cert", name: "SSL Certificate (Wildcard)", defaultPrice: 3500 },
-    { id: "tally-gold", name: "Tally Prime Gold License", defaultPrice: 18000 },
-  ],
-};
+/*
+ * The hardcoded PRODUCTS_BY_VENDOR list that used to live here is GONE.
+ *
+ * It held 29 products with their own ids ("gw-starter") and their own prices. Two
+ * things were wrong with that, and both cost money:
+ *
+ *  1. Its ids matched nothing in the catalog ("GW-STR-fbb"), so this dialog could not
+ *     supply subscriptions.item_id and a DB trigger had to infer the link from the
+ *     plan text — which only worked because a normaliser papers over the fact that the
+ *     two lists disagreed on names ("Business Standard" vs "Standard").
+ *  2. Its PRICES had drifted BELOW the tenant’s own vendor cost on four of the eight
+ *     overlapping products. M365 Business Standard pre-filled ₹7,920/seat/year against
+ *     a ₹9,840 cost — a guaranteed ₹1,920 loss per seat per year, suggested by the app,
+ *     with nothing on screen to mark it. See lib/subscriptions/catalog-options.ts for
+ *     the full measured table.
+ *
+ * Products, prices and the vendor list now all come from the catalog the operator
+ * maintains at /items. There is nothing left here to drift.
+ */
 
 interface Props {
   open: boolean;
@@ -84,11 +75,13 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
   const [customerName, setCustomerName] = React.useState("");
   const [customerEmail, setCustomerEmail] = React.useState("");
   const [domain, setDomain] = React.useState("");
-  const [vendor, setVendor] = React.useState<"google" | "microsoft" | "zoho" | "other">("google");
-  const [plan, setPlan] = React.useState("Google Workspace Business Starter");
+  const [vendor, setVendor] = React.useState<Item["vendor"]>("google");
+  const [plan, setPlan] = React.useState("");
   const [isCustomPlan, setIsCustomPlan] = React.useState(false);
   const [seats, setSeats] = React.useState(10);
-  const [pricePerSeatYear, setPricePerSeatYear] = React.useState(2160);
+  const [pricePerSeatYear, setPricePerSeatYear] = React.useState(0);
+  /** The catalog row being sold → subscriptions.item_id. Null on a custom plan. */
+  const [itemId, setItemId] = React.useState<string | null>(null);
   const [paymentTerms, setPaymentTerms] = React.useState<"paid" | "credit">("credit");
   const [startDate, setStartDate] = React.useState(() => new Date().toISOString().split("T")[0]);
   const [renewalDate, setRenewalDate] = React.useState(() => {
@@ -111,33 +104,62 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
     })();
   }, [open]);
 
-  // Handle vendor change — select default product of vendor
-  const handleVendorChange = (v: "google" | "microsoft" | "zoho" | "other") => {
+  /* ── The catalog, which is now the only source of products and prices ────────
+     Loaded from /items. `subscriptionProducts` drops one-time items and converts
+     ₹/seat/month to the ₹/seat/year this dialog charges in — once, in one place. */
+  const { data: items, isLoading: catalogLoading } = useItems();
+  const products   = React.useMemo(() => subscriptionProducts(items ?? []), [items]);
+  const vendors    = React.useMemo(() => catalogVendors(products), [products]);
+  const forVendor  = React.useMemo(() => productsForVendor(products, vendor), [products, vendor]);
+  const selected   = itemId ? findProduct(products, itemId) : undefined;
+
+  /* Live check on whatever price is in the field. Every loss-making default this
+     replaced was on screen for months with nothing to mark it; a margin that only
+     shows up in a report arrives after the quote has gone out. */
+  const verdict = judgePrice(pricePerSeatYear, selected?.annualCostPerSeat ?? null);
+
+  /* Seed from the catalog once it arrives. Deliberately does NOT reset a choice the
+     operator has already made — refetches would otherwise wipe their work. */
+  React.useEffect(() => {
+    if (itemId || isCustomPlan || products.length === 0) return;
+    const first = productsForVendor(products, vendor)[0] ?? products[0];
+    if (!first) return;
+    setVendor(first.vendor);
+    setItemId(first.id);
+    setPlan(first.name);
+    setPricePerSeatYear(first.annualSellPerSeat);
+  }, [products, vendor, itemId, isCustomPlan]);
+
+  const applyProduct = (p: CatalogProduct) => {
+    setIsCustomPlan(false);
+    setItemId(p.id);
+    setPlan(p.name);
+    setPricePerSeatYear(p.annualSellPerSeat);
+  };
+
+  const handleVendorChange = (v: Item["vendor"]) => {
     setVendor(v);
     setIsCustomPlan(false);
-    const firstProduct = PRODUCTS_BY_VENDOR[v][0];
-    if (firstProduct) {
-      setPlan(firstProduct.name);
-      setPricePerSeatYear(firstProduct.defaultPrice);
+    const first = productsForVendor(products, v)[0];
+    if (first) applyProduct(first);
+    else {
+      /* A vendor with no catalog rows leaves the fields alone rather than clearing
+         them — but item_id must go, or the subscription would be linked to a product
+         from the vendor they just navigated away from. */
+      setItemId(null);
     }
   };
 
-  // Handle plan product select change
+  /** Values are item IDs now, not names — two catalog rows may share a name. */
   const handlePlanSelect = (val: string) => {
     if (val === "CUSTOM_PLAN") {
       setIsCustomPlan(true);
+      setItemId(null);      // nothing in the catalog to point at
       setPlan("");
       return;
     }
-    setIsCustomPlan(false);
-    const catalog = PRODUCTS_BY_VENDOR[vendor];
-    const found = catalog.find((p) => p.name === val || p.id === val);
-    if (found) {
-      setPlan(found.name);
-      setPricePerSeatYear(found.defaultPrice);
-    } else {
-      setPlan(val);
-    }
+    const found = findProduct(products, val);
+    if (found) applyProduct(found);
   };
 
   const handleSelectExistingCustomer = (val: string) => {
@@ -224,7 +246,10 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
           name: `${plan} (${seats} seats)`,
           qty: seats,
           rate: pricePerSeatYear,
-          cost: Math.round(pricePerSeatYear * 0.83),
+          /* The real catalog cost when we have it. `× 0.83` — a flat 17% — survives
+             only for a custom plan that has no catalog row, and it is the last of the
+             three places that guess used to live. */
+          cost: selected?.annualCostPerSeat ?? Math.round(pricePerSeatYear * 0.83),
           commitment: "annual_yearly",
         },
       ];
@@ -270,6 +295,10 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
         status: "active",
         domain: cleanDomain,
         quote_id: quoteId,
+        /* The catalog link, supplied directly now instead of being inferred from the
+           plan text by trg_subscriptions_resolve_item (migration 0248). The trigger
+           stays as the safety net for the other five write paths. */
+        item_id: itemId,
         outstanding_amount: isPaid ? 0 : totalAnnualAmount,
         auto_renew: true,
       });
@@ -390,31 +419,60 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                 <SelectTrigger id="vendor">
                   <SelectValue />
                 </SelectTrigger>
+                {/* Vendors the tenant ACTUALLY sells, from the catalog. The old
+                    hardcoded four hid `hosting`, `support` and `domain` — which the
+                    DB enum has always allowed and which are 7 of this tenant's 17
+                    subscription products. `other` is always offered as the home for
+                    a custom plan. */}
                 <SelectContent>
-                  <SelectItem value="google">🌐 Google Cloud / Workspace</SelectItem>
-                  <SelectItem value="microsoft">🪟 Microsoft 365 / Azure</SelectItem>
-                  <SelectItem value="zoho">💼 Zoho Suite</SelectItem>
-                  <SelectItem value="other">📦 Other Cloud Vendor</SelectItem>
+                  {(vendors.length ? vendors : (["other"] as Item["vendor"][])).map((v) => (
+                    <SelectItem key={v} value={v}>{VENDOR_LABEL[v] ?? v}</SelectItem>
+                  ))}
+                  {!vendors.includes("other") && (
+                    <SelectItem value="other">{VENDOR_LABEL.other}</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </FormField>
 
             <FormField label="Plan / SKU Product *" required htmlFor="planSelect">
               {!isCustomPlan ? (
-                <Select value={plan} onValueChange={handlePlanSelect}>
+                <Select value={itemId ?? ""} onValueChange={handlePlanSelect}>
                   <SelectTrigger id="planSelect">
-                    <SelectValue placeholder="-- Select Vendor Product / SKU --" />
+                    <SelectValue placeholder={
+                      catalogLoading ? "Loading catalogue…"
+                      : forVendor.length === 0 ? "No products for this vendor"
+                      : "-- Select Vendor Product / SKU --"
+                    } />
                   </SelectTrigger>
+                  {/* Values are item IDs, not names: two catalog rows can share a name
+                      (this tenant has "Standard" under both hosting and support), and
+                      the id is what gets stored on the subscription. */}
                   <SelectContent>
-                    {PRODUCTS_BY_VENDOR[vendor].map((p) => (
-                      <SelectItem key={p.id} value={p.name}>
-                        {p.name} ({rupee(p.defaultPrice)}/yr)
+                    {forVendor.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} ({rupee(p.annualSellPerSeat)}/yr)
                       </SelectItem>
                     ))}
                     <SelectItem value="CUSTOM_PLAN">✍️ Custom Product Name / Other SKU...</SelectItem>
                   </SelectContent>
                 </Select>
-              ) : (
+              ) : null}
+
+              {/* An empty catalogue used to be impossible because the list was baked in.
+                  Now it is possible, so it has to say what to do — and NOT block: the
+                  custom-plan path still works, it just cannot check the margin. */}
+              {!catalogLoading && products.length === 0 && !isCustomPlan && (
+                <p className="mt-1 text-[11px] leading-snug text-ink-3">
+                  Your catalogue is empty. Add products in{" "}
+                  <a href="/items" className="font-semibold text-primary hover:underline">
+                    Catalog &amp; Products
+                  </a>{" "}
+                  to get prices and margin checks, or use a custom product name.
+                </p>
+              )}
+
+              {isCustomPlan && (
                 <div className="space-y-1.5">
                   <Input
                     id="planName"
@@ -427,11 +485,8 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                     type="button"
                     onClick={() => {
                       setIsCustomPlan(false);
-                      const first = PRODUCTS_BY_VENDOR[vendor][0];
-                      if (first) {
-                        setPlan(first.name);
-                        setPricePerSeatYear(first.defaultPrice);
-                      }
+                      const first = productsForVendor(products, vendor)[0] ?? products[0];
+                      if (first) applyProduct(first);
                     }}
                     className="text-[11px] font-bold text-amber-ink hover:underline flex items-center gap-1 cursor-pointer"
                   >
@@ -465,6 +520,34 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                 onChange={(e) => setPricePerSeatYear(parseFloat(e.target.value) || 0)}
                 required
               />
+              {/* The margin, live, next to the number being typed. The defaults this
+                  replaced sat below vendor cost for months with nothing on screen to
+                  say so — on M365 Business Standard, ₹7,920 against a ₹9,840 cost. */}
+              {verdict.kind === "loss" && (
+                <p className="mt-1 flex items-start gap-1 text-[11px] font-semibold leading-snug text-rose">
+                  <Icon name="alert" size={12} className="mt-px flex-shrink-0" />
+                  <span>
+                    Below cost — the vendor charges {rupee(selected!.annualCostPerSeat!)}/yr.
+                    Losing {rupee(verdict.shortfallPerSeatYear)} per seat per year.
+                  </span>
+                </p>
+              )}
+              {verdict.kind === "thin" && (
+                <p className="mt-1 text-[11px] font-semibold leading-snug text-amber-ink">
+                  Only {verdict.marginPct.toFixed(1)}% margin — cost is{" "}
+                  {rupee(selected!.annualCostPerSeat!)}/yr.
+                </p>
+              )}
+              {verdict.kind === "ok" && (
+                <p className="mt-1 text-[11px] leading-snug text-ink-3">
+                  {verdict.marginPct.toFixed(1)}% margin over {rupee(selected!.annualCostPerSeat!)}/yr cost.
+                </p>
+              )}
+              {verdict.kind === "unknown" && selected && (
+                <p className="mt-1 text-[11px] leading-snug text-ink-3">
+                  No vendor cost in the catalogue — margin unknown, not zero.
+                </p>
+              )}
             </FormField>
 
             <FormField label="Monthly MRR (Auto)">
