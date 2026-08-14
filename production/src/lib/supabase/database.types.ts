@@ -304,6 +304,14 @@ export type InboundEmailRow = {
   lead_id:    string | null;
   /** Support ticket opened from this message — the twin of lead_id (0246). */
   ticket_id:  string | null;
+  /** The attached bill, kept so the extraction can be checked (0247). */
+  attachment_path: string | null;
+  attachment_name: string | null;
+  attachment_mime: string | null;
+  /** What Gemini read. A SUGGESTION — never posted to the books on its own. */
+  extracted_bill:  Json | null;
+  /** Set only once a human reviewed the extraction and created the bill. */
+  bill_id:    string | null;
   body_text:  string | null;
   body_html:  string | null;
   created_at: string;
@@ -320,6 +328,11 @@ type InboundEmailInsert = {
   status?:     string;
   lead_id?:    string | null;
   ticket_id?:  string | null;
+  attachment_path?: string | null;
+  attachment_name?: string | null;
+  attachment_mime?: string | null;
+  extracted_bill?:  Json | null;
+  bill_id?:    string | null;
   body_text?:  string | null;
   body_html?:  string | null;
   created_at?: string;

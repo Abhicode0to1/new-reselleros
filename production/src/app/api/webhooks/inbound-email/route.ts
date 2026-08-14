@@ -24,6 +24,9 @@ import { resolveGeminiConfig } from "@/lib/ai/gemini";
 import { sendEmail } from "@/lib/email/send";
 import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
 import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
+import { extractAttachments, pickBillAttachment } from "@/lib/inbound/attachments";
+import { readBillWithGemini } from "@/lib/ai/read-bill";
+import { sanitizeExtractedBill } from "@/app/api/ai/extract-bill/sanitize";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const INBOUND_SECRET = process.env.INBOUND_EMAIL_SECRET?.trim() || "";
@@ -276,19 +279,80 @@ export async function POST(request: NextRequest) {
   }
 
   if (routing.route === "billing") {
-    /* Recorded and parked, NOT parsed. The brief asks for Gemini OCR of vendor
-     * invoice PDFs, and that cannot be honestly claimed yet: this webhook does
-     * not receive attachments at all — the payload normaliser above reads text
-     * and html only, and no provider attachment field is wired. Inventing a
-     * bill from the message body would create vendor bills that quietly
-     * disagree with the PDF nobody parsed, which is worse than not having the
-     * feature. The mail is captured under route='billing' so it is visible and
-     * nothing is lost while the attachment path is built. */
-    await finalize("billing_received", null, null);
+    /* Read the bill, store the original, post NOTHING to the books.
+     *
+     * /api/ai/extract-bill has always refused to write money from an extraction
+     * — "AI can misread amounts, and this feeds GST input credit + P&L, so a
+     * human must confirm". That rule matters MORE here, not less: an emailed
+     * bill is less trustworthy than an uploaded one, because nobody was looking
+     * when it arrived, and anyone who learns the ingest address could otherwise
+     * post entries into the books. So `extracted_bill` is a suggestion and
+     * `bill_id` stays null until a person reviews it. */
+    const attachment = pickBillAttachment(extractAttachments(body));
+
+    if (!attachment) {
+      await finalize("billing_no_attachment", null, null);
+      return NextResponse.json({
+        received: true, route: "billing",
+        note: "Recorded. No readable PDF or image was attached, so there was nothing to read.",
+      });
+    }
+
+    // Mailgun sends a URL instead of bytes. Fetching it needs that provider's
+    // credentials, which are not configured — say so plainly rather than
+    // recording a success that read nothing.
+    if (!attachment.base64) {
+      await finalize("billing_attachment_url_only", null, null);
+      return NextResponse.json({
+        received: true, route: "billing", attachment: attachment.filename,
+        note: "Recorded. The provider sent a link instead of the file, and fetching it is not wired.",
+      });
+    }
+
+    // Keep the original. Without it the extraction cannot be checked, and an
+    // audit asks for the invoice — not for what a model thought it said.
+    let storedPath: string | null = null;
+    try {
+      const path = `${tenantId}/inbound-bills/${messageId.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80)}-${attachment.filename}`;
+      const { error: upErr } = await admin.storage
+        .from("documents")
+        .upload(path, Buffer.from(attachment.base64, "base64"), {
+          contentType: attachment.mimeType, upsert: true,
+        });
+      if (upErr) console.error("[inbound-email] attachment upload failed:", upErr.message);
+      else storedPath = path;
+    } catch (e) {
+      console.error("[inbound-email] attachment upload crashed:", (e as Error).message);
+    }
+
+    const gem = await resolveGeminiConfig(admin, tenantId);
+    let extracted: unknown = null;
+    if (gem.apiKey) {
+      const ai = await readBillWithGemini({
+        apiKey: gem.apiKey, model: gem.model,
+        mimeType: attachment.mimeType, base64: attachment.base64,
+      });
+      if (ai) extracted = sanitizeExtractedBill(ai);
+    }
+
+    await admin.from("inbound_emails").update({
+      status:          extracted ? "bill_extracted" : "billing_unread",
+      attachment_path: storedPath,
+      attachment_name: attachment.filename,
+      attachment_mime: attachment.mimeType,
+      extracted_bill:  (extracted as never) ?? null,
+    }).eq("tenant_id", tenantId).eq("message_id", messageId);
+
     return NextResponse.json({
-      received: true,
-      route: "billing",
-      note: "Recorded. Attachment parsing is not wired yet — no vendor bill was created.",
+      received: true, route: "billing",
+      attachment: attachment.filename,
+      stored: Boolean(storedPath),
+      extracted: Boolean(extracted),
+      note: extracted
+        ? "Read and saved as a suggestion. No vendor bill was created — a person must review the figures first."
+        : gem.apiKey
+          ? "Attachment stored, but the bill could not be read. Review it by hand."
+          : "Attachment stored. No Gemini key is configured, so nothing was read.",
     });
   }
 
