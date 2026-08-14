@@ -39,6 +39,11 @@ import { LeadCard } from "@/components/features/leads/lead-card";
 import { AddLeadForm } from "@/components/features/leads/add-lead-form";
 import { QuickAddLeadForm } from "@/components/features/leads/quick-add-lead-form";
 import { LeadsSmartViews, type SmartView } from "@/components/features/leads/leads-smart-views";
+import { PriorityCallQueue } from "@/components/features/leads/priority-call-queue";
+import { OutcomeChips } from "@/components/features/leads/outcome-chips";
+import { useLeadOutcome } from "@/lib/leads/use-outcome";
+import { localDateISO } from "@/lib/leads/outcomes";
+import { heatScore, heatBadge } from "@/lib/leads/heat-score";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
 import { isHotLead, isHighValueLead, intentMeta, staleWarning } from "@/lib/leads/heat";
@@ -205,6 +210,28 @@ function LeadsPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
   const [selected, setSelected] = React.useState<Lead | null>(null);
+
+  /* The call queue's two dependencies. runOutcome performs whatever
+     lib/leads/outcomes.ts says a chip does — one entry point, so the chips on the
+     queue, the list row and the mobile card cannot drift apart. */
+  const runOutcome = useLeadOutcome();
+  const queueLog   = useLogLeadActivity();
+
+  /* Counts for the "Today's Follow-Ups" pill. Computed from the UNFILTERED workspace,
+     not from `searched`, so the badge answers "how much work is there today" rather
+     than "how much of it survives my current search" — a count that shrinks when you
+     type in the search box is a count nobody can trust. */
+  const [dueTodayCount, overdueNowCount] = React.useMemo(() => {
+    const today = localDateISO(new Date());
+    let due = 0, late = 0;
+    for (const l of leads ?? []) {
+      if (l.is_junk || l.stage === "won" || l.stage === "lost") continue;
+      if (!l.follow_up_date || l.follow_up_date > today) continue;
+      due++;
+      if (l.follow_up_date < today) late++;
+    }
+    return [due, late] as const;
+  }, [leads]);
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null);
   // Row "Follow-up" quick action → opens AddTaskDialog scoped to this lead.
   const [followUpLead, setFollowUpLead] = React.useState<Lead | null>(null);
@@ -345,7 +372,11 @@ function LeadsPageInner() {
     //    there's no overlap/duplication (the old separate due-bucket KPI row is
     //    gone). Sits on top of search + stage + priority.
     if (smartView !== "all") {
-      const todayStr = new Date().toISOString().slice(0, 10);
+      /* localDateISO, not toISOString(). IST is UTC+5:30, so before 05:30 the ISO
+         string is YESTERDAY's date — which meant "arrived today" showed nothing and
+         "overdue" quietly included leads due today, for anyone working early. See
+         lib/leads/outcomes.ts for the same trap in the follow-up writes. */
+      const todayStr = localDateISO(new Date());
       const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
       if (smartView === "mine") {
         list = list.filter((l) => currentUser && l.owner_id === currentUser.userId);
@@ -365,8 +396,21 @@ function LeadsPageInner() {
         list = list.filter((l) => dup.flagged.has(l.id));
       }
     }
+
+    /* The "Today's follow-ups" pill. A TAB cut, not a smart view, so it composes with
+       whichever smart view is active instead of replacing it.
+       `<= today` on purpose: overdue leads are more urgent than due-today ones, and a
+       pill that showed only exactly-today would hide the promises broken last week. */
+    if (salesTab === "due") {
+      const todayStr = localDateISO(new Date());
+      list = list.filter((l) =>
+        l.follow_up_date && l.follow_up_date <= todayStr &&
+        l.stage !== "won" && l.stage !== "lost");
+    }
     return list;
-  }, [workspaceLeads, search, stageFilter, priorityFilter, smartView, currentUser, dup]);
+    // salesTab is a dependency now that the "due" pill filters here. Leaving it out
+    // would have shown a stale list until some other input changed.
+  }, [workspaceLeads, search, stageFilter, priorityFilter, smartView, salesTab, currentUser, dup]);
   const activeFilterCount = stageFilter.length + priorityFilter.length;
 
   // A lead is "raw" (Leads inbox) only while it's early — New or Contacted with
@@ -387,6 +431,9 @@ function LeadsPageInner() {
     ? rawLeads
     : salesTab === "deals"
     ? qualifiedDeals
+    /* "due" is already cut in `searched` and deliberately spans raw AND qualified — a
+       follow-up promised on a ₹5L quote matters at least as much as one on a new
+       enquiry, so this pill must not be scoped to either side of the funnel. */
     : searched;
 
   // Tab-scoped UNFILTERED subset for the insight band, Smart Views chips,
@@ -527,7 +574,7 @@ function LeadsPageInner() {
             )}
           >
             <Icon name="inbox" size={13} className={salesTab === "raw" ? "text-amber-ink" : "text-ink-3"} />
-            <span>📥 Raw Inquiries</span>
+            <span>📥 Inbox</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
               {rawLeads.length}
             </span>
@@ -544,27 +591,45 @@ function LeadsPageInner() {
             )}
           >
             <Icon name="target" size={13} className={salesTab === "deals" ? "text-amber-ink" : "text-ink-3"} />
-            <span>📊 Deal Pipeline</span>
+            <span>🏆 Qualified Deals</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
               {allQualifiedDeals.length}
             </span>
           </button>
 
+          {/* Replaces the old "📋 All Records" pill. That pill was a dumping ground —
+              everything, in no order, which is not a job anybody does. This one is the
+              rep's actual morning: follow-ups due today OR earlier, across raw leads AND
+              qualified deals. Nothing became unreachable: "Qualified Deals" already
+              includes won and lost (anything past new/contact), and the Smart Views menu
+              still holds All / Mine / Hot / New / Overdue. */}
           <button
             type="button"
-            onClick={() => { setSalesTab("all"); setSmartView("all"); }}
+            onClick={() => { setSalesTab("due"); setSmartView("all"); }}
+            title="Follow-ups due today or already overdue — across leads and deals"
             className={cn(
               "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
-              salesTab === "all"
+              salesTab === "due"
                 ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
                 : "text-ink-2 hover:text-ink hover:bg-paper/50"
             )}
           >
-            <Icon name="list" size={13} className={salesTab === "all" ? "text-amber-ink" : "text-ink-3"} />
-            <span>📋 All Records</span>
+            <Icon name="clock" size={13} className={salesTab === "due" ? "text-amber-ink" : "text-ink-3"} />
+            <span>🔥 Today&apos;s Follow-Ups</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
-              {workspaceLeads.filter((l) => !l.is_junk).length}
+              {dueTodayCount}
             </span>
+            {/* The overdue count kept as its own red sub-badge. Folding "Overdue" into
+                "Today" is the one thing that could have been LOST by going to three
+                pills — being 9 days late is a different problem from being due at 4pm. */}
+            {overdueNowCount > 0 && (
+              <span
+                title={`${overdueNowCount} already overdue`}
+                className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-soft text-rose font-mono tabular-nums font-bold"
+              >
+                {overdueNowCount} late
+              </span>
+            )}
           </button>
         </div>
 
@@ -892,7 +957,16 @@ function LeadsPageInner() {
           It also self-hides, states how many due leads it is NOT showing, and names the
           ones with no phone number — see priority-call-queue.tsx for why each of those
           matters more than it sounds. */}
-
+      {!isLoading && leads && leads.length > 0 && search.trim() === "" && (
+        <PriorityCallQueue
+          leads={workspaceLeads}
+          tenantName={currentUser?.tenantName}
+          onOutcome={(o, l) => { void runOutcome(o, l); }}
+          onOpen={(l) => setSelected(l)}
+          onLogCall={(l) => queueLog.mutate({ leadId: l.id, kind: "call", detail: `Called ${l.contact_phone ?? ""}` })}
+          onLogWhatsApp={(l) => queueLog.mutate({ leadId: l.id, kind: "whatsapp", detail: `WhatsApp to ${l.contact_phone ?? ""}` })}
+        />
+      )}
 
       {/* Error */}
       {error && (

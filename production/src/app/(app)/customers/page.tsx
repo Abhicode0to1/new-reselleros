@@ -394,6 +394,9 @@ export default function CustomersPage() {
                 <span className="rounded-full bg-paper-2 px-1.5 tabular-nums text-[11px] text-ink-3">{archivedCount}</span>
               </button>
             )}
+            <Button variant="primary" size="sm" icon="plus" onClick={goAdd} className="shrink-0 font-semibold shadow-xs">
+              Add customer
+            </Button>
           </div>
           {/* Quick Sort Bar */}
           <div className="flex items-center gap-2 pt-1 border-t border-hairline/60 text-xs text-ink-3 overflow-x-auto scrollbar-none">
@@ -743,8 +746,6 @@ export default function CustomersPage() {
         mode="invoice"
         prefillCustomerId={projInvoiceForCustomer ?? undefined}
       />
-
-      <FAB icon="plus" label="Add customer" onClick={goAdd} />
     </div>
   );
 }

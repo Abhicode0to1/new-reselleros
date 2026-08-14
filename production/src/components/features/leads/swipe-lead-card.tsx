@@ -72,6 +72,11 @@ interface SwipeLeadCardProps {
   onChangeStage: (stage: Lead["stage"]) => void;
   /** Direct "Send quote" — carries lead context into the quote builder. */
   onSendQuote?: (lead: Lead) => void;
+  /**
+   * Runs a call-outcome (lib/leads/outcomes.ts). Used by the left swipe and the
+   * outcome chip row, so a gesture and a tap do exactly the same thing.
+   */
+  onOutcome?: (outcome: LeadOutcome, lead: Lead) => void;
   /** Earliest open follow-up task on this lead, if any (shows a chip). */
   task?: { due: string; overdue: boolean; count: number };
 }
