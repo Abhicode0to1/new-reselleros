@@ -285,7 +285,7 @@ function LeadsPageInner() {
   // Tab is purely URL-derived now — no internal state, no setter. /leads
   // gives the raw inbox, /deals gives the qualified pipeline. The legacy
   // tab-bar UI is removed; navigation between the two is via sidebar.
-  const [salesTab, setSalesTab] = React.useState<"raw" | "deals" | "all">(
+  const [salesTab, setSalesTab] = React.useState<"raw" | "deals" | "all" | "due">(
     isDealsPage ? "deals" : "raw"
   );
   const tab: "leads" | "deals" = salesTab === "deals" ? "deals" : "leads";
@@ -346,7 +346,10 @@ function LeadsPageInner() {
     //    there's no overlap/duplication (the old separate due-bucket KPI row is
     //    gone). Sits on top of search + stage + priority.
     if (smartView !== "all") {
-      const todayStr = new Date().toISOString().slice(0, 10);
+      /* localDateISO, not toISOString(): IST is UTC+5:30, so before 05:30 the ISO
+         string is YESTERDAY and both "arrived today" and "overdue" were computed
+         against the wrong day. See lib/leads/outcomes.ts. */
+      const todayStr = localDateISO(new Date());
       const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
       if (smartView === "mine") {
         list = list.filter((l) => currentUser && l.owner_id === currentUser.userId);
@@ -884,93 +887,25 @@ function LeadsPageInner() {
           the two views is now via sidebar entries. The single-page tab UI
           confused sales reps and added a click for owner/manager too. */}
 
-      {/* Today's follow-ups widget — sales rep ki morning worklist.
-          Counts leads where follow_up_date is today OR earlier (overdue too).
-          Click the header to expand the actual list of due leads; tap any
-          row to open that lead's detail drawer. Hidden if no leads have
-          follow_up_date set or none are due. */}
-      {(() => {
-        if (!leads || leads.length === 0 || search.trim() !== "") return null;
-        const today      = new Date().toISOString().slice(0, 10);  // YYYY-MM-DD
-        const dueToday   = leads.filter((l) => l.follow_up_date && l.follow_up_date <= today &&
-                                                l.stage !== "won" && l.stage !== "lost");
-        if (dueToday.length === 0) return null;
-        const overdueCount = dueToday.filter((l) => (l.follow_up_date ?? "") < today).length;
-        const totalValue   = dueToday.reduce((s, l) => s + (l.value ?? 0), 0);
-        // Most-overdue first (earliest follow_up_date), today's last.
-        const sortedDue = [...dueToday].sort(
-          (a, b) => (a.follow_up_date ?? "").localeCompare(b.follow_up_date ?? ""),
-        );
-        return (
-          <div className="rounded-lg border border-amber/30 bg-amber-soft/40 mb-3 md:mb-4 overflow-hidden min-w-0">
-            {/* Header — click to expand/collapse the list */}
-            <button
-              type="button"
-              onClick={() => setDueListOpen((o) => !o)}
-              aria-expanded={dueListOpen}
-              className="w-full flex items-center gap-2 md:gap-3 px-3 py-2 md:p-3 text-left hover:bg-amber-soft/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset"
-            >
-              <Icon name="clock" size={13} className="text-amber-ink flex-shrink-0" />
-              <p className="text-[12px] md:text-sm text-ink truncate min-w-0 flex-1">
-                <b className="text-amber-ink">{dueToday.length}</b>
-                <span className="text-ink-2"> follow-up{dueToday.length === 1 ? "" : "s"} due today</span>
-                {overdueCount > 0 && (
-                  <span className="text-rose text-[11px] md:text-xs ml-1.5">({overdueCount} overdue)</span>
-                )}
-                {/* Desktop-only preview line (companies + total value) */}
-                <span className="hidden md:inline text-[11px] text-ink-3 ml-2">
-                  · {dueToday.slice(0, 3).map((l) => l.company).join(" · ")}
-                  {dueToday.length > 3 && ` · +${dueToday.length - 3} more`}
-                  {totalValue > 0 && ` · ${rupee(totalValue, { compact: true })} value`}
-                </span>
-              </p>
-              <span className="text-[11px] text-amber-ink font-semibold hidden sm:inline flex-shrink-0">
-                {dueListOpen ? "Hide" : "View list"}
-              </span>
-              <Icon
-                name="chevron_down"
-                size={16}
-                className={cn("text-amber-ink flex-shrink-0 transition-transform", dueListOpen && "rotate-180")}
-              />
-            </button>
+      {/* 🔥 Today's priority call queue — replaces the read-only "Today's follow-ups"
+          widget that used to sit here. Same source data (follow_up_date <= today, with
+          overdue included), but each row now dials, WhatsApps and records the outcome
+          without leaving the bar. The old widget could only tell a rep WHO to call and
+          then made them go and find the lead to do anything about it.
 
-            {/* Expanded list — one tappable row per due lead */}
-            {dueListOpen && (
-              <div className="border-t border-amber/20 bg-paper/70 max-h-[320px] overflow-y-auto">
-                {sortedDue.map((l) => {
-                  const od = (l.follow_up_date ?? "") < today;
-                  const sub = [
-                    l.contact_name || l.contact_phone,
-                    l.plan,
-                    l.value ? rupee(l.value, { compact: true }) : null,
-                  ].filter(Boolean).join(" · ");
-                  return (
-                    <button
-                      key={l.id}
-                      type="button"
-                      onClick={() => setSelected(l)}
-                      className="w-full flex items-center gap-3 px-3 py-2 text-left border-b border-hairline/60 last:border-b-0 hover:bg-amber-soft/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset"
-                    >
-                      <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", od ? "bg-rose" : "bg-amber")} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm text-ink font-medium truncate">{l.company}</span>
-                        <span className="block text-[11px] text-ink-3 truncate">{sub || "—"}</span>
-                      </span>
-                      <span className="flex-shrink-0 text-right">
-                        <span className={cn("block text-[11px] font-semibold", od ? "text-rose" : "text-amber-ink")}>
-                          {od ? "Overdue" : "Due today"}
-                        </span>
-                        <span className="block text-[10px] text-ink-3">{formatDate(l.follow_up_date!)}</span>
-                      </span>
-                      <Icon name="chevron_right" size={14} className="text-ink-3 flex-shrink-0" />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })()}
+          It also self-hides, states how many due leads it is NOT showing, and names the
+          ones with no phone number — see priority-call-queue.tsx for why each of those
+          matters more than it sounds. */}
+      {!isLoading && leads && leads.length > 0 && search.trim() === "" && (
+        <PriorityCallQueue
+          leads={workspaceLeads}
+          tenantName={currentUser?.tenantName}
+          onOutcome={(o, l) => { void runOutcome(o, l); }}
+          onOpen={(l) => setDrawerLead(l)}
+          onLogCall={(l) => queueLog.mutate({ leadId: l.id, kind: "call", detail: `Called ${l.contact_phone}` })}
+          onLogWhatsApp={(l) => queueLog.mutate({ leadId: l.id, kind: "whatsapp", detail: `WhatsApp to ${l.contact_phone}` })}
+        />
+      )}
 
       {/* Error */}
       {error && (

@@ -33,6 +33,10 @@
  * this codebase — worth a sweep, but not silently changed from here.)
  */
 import type { Lead } from "@/lib/supabase/database.types";
+/* The activity kind is imported rather than typed as a loose string, so a chip cannot
+   invent a kind the log_lead_activity RPC will reject at runtime. An `as any` at the
+   call site would have made that a production error instead of a compile one. */
+import type { LeadActivityKind } from "@/lib/queries/lead-activities";
 
 export type LeadOutcome = "no_answer" | "call_tomorrow" | "send_quote" | "mark_junk";
 
@@ -54,7 +58,7 @@ export interface OutcomeEffect {
   /** Columns to write on the lead. Null when the chip writes nothing. */
   patch: Partial<Pick<Lead, "follow_up_date" | "is_junk">> | null;
   /** An activity row to log, so the attempt is on the record. */
-  activity: { kind: string; detail: string } | null;
+  activity: { kind: LeadActivityKind; detail: string } | null;
   /** The chip opens a screen instead of (or as well as) writing. */
   navigate: "quote" | null;
   /** Confirmation text. Says what happened, including the new date. */

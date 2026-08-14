@@ -395,6 +395,40 @@ export default function CustomersPage() {
               </button>
             )}
           </div>
+          {/* Quick Sort Bar */}
+          <div className="flex items-center gap-2 pt-1 border-t border-hairline/60 text-xs text-ink-3 overflow-x-auto scrollbar-none">
+            <span className="font-semibold text-ink-2 shrink-0">Quick Sort:</span>
+            <button
+              type="button"
+              onClick={() => toggleSort("mrr")}
+              className={cn(
+                "px-2.5 py-1 rounded border text-[11px] font-medium transition-colors cursor-pointer shrink-0",
+                sort.key === "mrr" ? "bg-amber-soft border-amber text-amber-ink" : "border-hairline hover:bg-paper-2 text-ink-2",
+              )}
+            >
+              💰 Highest Revenue {sort.key === "mrr" ? (sort.dir === "desc" ? "↓" : "↑") : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleSort("receivables")}
+              className={cn(
+                "px-2.5 py-1 rounded border text-[11px] font-medium transition-colors cursor-pointer shrink-0",
+                sort.key === "receivables" ? "bg-rose-soft border-rose text-rose" : "border-hairline hover:bg-paper-2 text-ink-2",
+              )}
+            >
+              🚨 Highest Debtors {sort.key === "receivables" ? (sort.dir === "desc" ? "↓" : "↑") : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleSort("name")}
+              className={cn(
+                "px-2.5 py-1 rounded border text-[11px] font-medium transition-colors cursor-pointer shrink-0",
+                sort.key === "name" ? "bg-amber-soft border-amber text-amber-ink" : "border-hairline hover:bg-paper-2 text-ink-2",
+              )}
+            >
+              🔤 Name A-Z {sort.key === "name" ? (sort.dir === "asc" ? "↓" : "↑") : ""}
+            </button>
+          </div>
         </div>
       )}
 

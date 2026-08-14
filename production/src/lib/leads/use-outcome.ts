@@ -74,7 +74,7 @@ export function useLeadOutcome() {
 
       if (eff.activity) {
         // Fire-and-forget: a failed log must not undo a visible follow-up change.
-        logActivity.mutate({ leadId: lead.id, kind: eff.activity.kind as any, detail: eff.activity.detail });
+        logActivity.mutate({ leadId: lead.id, kind: eff.activity.kind, detail: eff.activity.detail });
       }
     },
     [updateLead, setJunk, logActivity, router],
