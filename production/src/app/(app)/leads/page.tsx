@@ -215,21 +215,7 @@ function LeadsPageInner() {
   const runOutcome = useLeadOutcome();
   const queueLog   = useLogLeadActivity();
 
-  /* Counts for the "Today's Follow-Ups" pill, from the UNFILTERED workspace rather than
-     from `searched`: the badge answers "how much work is there today", not "how much of
-     it survives my current search". A count that shrinks while you type is a count
-     nobody can trust. */
-  const [dueTodayCount, overdueNowCount] = React.useMemo(() => {
-    const today = localDateISO(new Date());
-    let due = 0, late = 0;
-    for (const l of leads ?? []) {
-      if (l.is_junk || l.stage === "won" || l.stage === "lost") continue;
-      if (!l.follow_up_date || l.follow_up_date > today) continue;
-      due++;
-      if (l.follow_up_date < today) late++;
-    }
-    return [due, late] as const;
-  }, [leads]);
+
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null);
   // Row "Follow-up" quick action → opens AddTaskDialog scoped to this lead.
   const [followUpLead, setFollowUpLead] = React.useState<Lead | null>(null);
@@ -592,20 +578,38 @@ function LeadsPageInner() {
             </span>
           </button>
 
+          {/* Replaces "📋 All Records". That pill was a dumping ground — everything, in
+              no order, which is not a job anyone actually does. This is the rep's actual
+              morning: follow-ups due today OR earlier, spanning raw leads AND qualified
+              deals. Nothing became unreachable — "Qualified Deals" already covers won and
+              lost (anything past new/contact), and the Smart Views menu still holds
+              All / Mine / Hot / New / Overdue / Duplicates / Junk. */}
           <button
             type="button"
-            onClick={() => { setSalesTab("all"); setSmartView("all"); }}
+            onClick={() => { setSalesTab("due"); setSmartView("all"); }}
+            title="Follow-ups due today or already overdue — across leads and deals"
             className={cn(
               "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
-              salesTab === "all"
+              salesTab === "due"
                 ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
                 : "text-ink-2 hover:text-ink hover:bg-paper/50"
             )}
           >
-            <Icon name="list" size={13} className={salesTab === "all" ? "text-amber-ink" : "text-ink-3"} />
-            <span>📋 All Records</span>
+            <Icon name="clock" size={13} className={salesTab === "due" ? "text-amber-ink" : "text-ink-3"} />
+            <span>🔥 Today&apos;s Follow-Ups</span>
+            {/* The overdue count keeps its own red sub-badge. Folding "Overdue" into
+                "Today" is the one signal that could have been LOST by collapsing to three
+                pills — nine days late is a different problem from due at 4pm. */}
+            {overdueNowCount > 0 && (
+              <span
+                title={`${overdueNowCount} already overdue`}
+                className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-soft text-rose font-mono tabular-nums font-bold"
+              >
+                {overdueNowCount} late
+              </span>
+            )}
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
-              {workspaceLeads.filter((l) => !l.is_junk).length}
+              {dueTodayCount}
             </span>
           </button>
         </div>
