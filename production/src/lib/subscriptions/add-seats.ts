@@ -72,7 +72,16 @@ export function resolveSeatCost(args: {
   plan:          string;
   /** ₹/seat/year the customer pays, for the fallback only. */
   annualPerSeat: number;
+  /** The subscription's stored catalog link, and the cost of every catalog row by id. */
+  itemId?:       string | null;
+  costsById?:    ReadonlyMap<string, number>;
 }): SeatCost {
+  /* The stored link wins. It is exact, it survives a catalog rename, and the FK
+     guarantees the row belongs to this tenant (0248 is composite on tenant_id). */
+  if (args.itemId && args.costsById?.has(args.itemId)) {
+    return { costPerSeatMonth: args.costsById.get(args.itemId)!, source: "catalog" };
+  }
+
   const hit = matchPlan(args.index, args.vendor, args.plan);
   /* A catalog cost of 0 is accepted as real. For hosting/support/own services it IS
      zero, and substituting the heuristic there would invent a cost for work that has
@@ -86,28 +95,36 @@ export function resolveSeatCost(args: {
 }
 
 /**
- * Read the tenant's catalog for ONE vendor and index it.
+ * Read the tenant's catalog once and index it two ways: by id, for the stored link,
+ * and by normalised name + vendor, for rows that predate the link.
  *
- * The vendor filter is not cosmetic. The query this replaces was
- * `.ilike("name", plan).limit(1)` with no vendor condition, so a subscription whose
- * plan is literally "Standard" — the import dialog accepts any text — could match the
- * hosting row's ₹0 and produce a PO for ₹0 on a Google seat.
+ * Scoped to the tenant and NOT to the vendor. The cross-vendor bug this replaces —
+ * `.ilike("name", plan).limit(1)`, where a plan named just "Standard" could take the
+ * hosting row's ₹0 and write a ₹0 PO for a Google seat — is closed by vendor being
+ * part of the match KEY, not by filtering the query. Loading every vendor keeps the
+ * by-id map complete, which a vendor filter would silently hole if a subscription's
+ * stored item_id ever pointed outside its own vendor.
  */
-async function loadCatalogIndex(
-  supabase: SupabaseAdmin, tenantId: string, vendor: string,
-): Promise<PlanIndex> {
+async function loadCatalog(
+  supabase: SupabaseAdmin, tenantId: string,
+): Promise<{ index: PlanIndex; costsById: Map<string, number> }> {
   const { data } = await supabase
     .from("items")
-    .select("name, vendor, prices, wholesale")
-    .eq("tenant_id", tenantId)
-    .eq("vendor", vendor as Database["public"]["Tables"]["items"]["Row"]["vendor"]);
+    .select("id, name, vendor, prices, wholesale")
+    .eq("tenant_id", tenantId);
 
-  const rows: CatalogRow[] = (data ?? []).map((it) => {
+  const costOf = (it: { prices: unknown; wholesale: number | null }) => {
     const annual = (it.prices as { annual?: { wholesale?: number } } | null)?.annual?.wholesale;
-    const cost = typeof annual === "number" && annual > 0 ? annual : (it.wholesale ?? 0);
-    return { name: it.name, vendor: String(it.vendor), costPerSeatMonth: cost };
-  });
-  return buildPlanIndex(rows);
+    return typeof annual === "number" && annual > 0 ? annual : (it.wholesale ?? 0);
+  };
+
+  const rows: CatalogRow[] = (data ?? []).map((it) => ({
+    name: it.name, vendor: String(it.vendor), costPerSeatMonth: costOf(it),
+  }));
+  return {
+    index:     buildPlanIndex(rows),
+    costsById: new Map((data ?? []).map((it) => [it.id, costOf(it)])),
+  };
 }
 
 export interface AddSeatsInput {
@@ -118,6 +135,12 @@ export interface AddSeatsInput {
   customerName:       string;
   plan:               string;
   vendor:             "google" | "microsoft" | "zoho" | "other";
+  /**
+   * The subscription's stored catalog link (migration 0248). When set it decides the
+   * cost outright — the plan-text match is only for rows written before the column
+   * existed, and a stored id cannot be broken by renaming a catalog row.
+   */
+  itemId?:            string | null;
   domain:             string | null;
   currentSeats:       number;
   currentMrr:         number;     // ₹/month per existing sub
@@ -216,9 +239,10 @@ export async function addSeats(input: AddSeatsInput): Promise<AddSeatsResult | A
      PO below. Those two used to disagree: the quote line was always `× 0.83` while the
      PO did its own lookup, so the same seat expansion could carry two different costs
      in two records of the same transaction. */
-  const catalogIndex = await loadCatalogIndex(input.supabase, input.tenantId, input.vendor);
+  const catalog = await loadCatalog(input.supabase, input.tenantId);
   const seatCost = resolveSeatCost({
-    index: catalogIndex, vendor: input.vendor, plan: input.plan, annualPerSeat,
+    index: catalog.index, costsById: catalog.costsById, itemId: input.itemId,
+    vendor: input.vendor, plan: input.plan, annualPerSeat,
   });
 
   /* Pro-rata the cost over the same remaining days as the charge, so the quote line's

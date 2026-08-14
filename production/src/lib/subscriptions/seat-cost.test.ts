@@ -106,6 +106,52 @@ describe("resolveSeatCost — a real zero cost is not a missing one", () => {
   });
 });
 
+describe("resolveSeatCost — the stored item_id (migration 0248)", () => {
+  const costsById = new Map([["GW-STD-fbb", 620], ["GW-STR-fbb", 110]]);
+
+  it("uses the stored link and ignores the plan text entirely", () => {
+    /* The point of storing the id: renaming a catalog row, or a plan text that never
+       matched anything, cannot break the cost. */
+    expect(resolveSeatCost({
+      index: googleIndex, costsById, itemId: "GW-STD-fbb",
+      vendor: "google", plan: "whatever the operator typed", annualPerSeat: 10_368,
+    })).toEqual({ costPerSeatMonth: 620, source: "catalog" });
+  });
+
+  it("beats the name match when the two would disagree", () => {
+    // Name says Starter (₹110), stored id says Standard (₹620). The id wins.
+    expect(resolveSeatCost({
+      index: googleIndex, costsById, itemId: "GW-STD-fbb",
+      vendor: "google", plan: "Google Workspace Business Starter", annualPerSeat: 3_240,
+    }).costPerSeatMonth).toBe(620);
+  });
+
+  it("keeps a stored cost of ₹0 instead of falling through to a guess", () => {
+    // hosting/support rows are genuinely ₹0. Treating 0 as "not found" is defect #4.
+    expect(resolveSeatCost({
+      index: googleIndex, costsById: new Map([["HOST-1", 0]]), itemId: "HOST-1",
+      vendor: "hosting", plan: "Standard", annualPerSeat: 12_000,
+    })).toEqual({ costPerSeatMonth: 0, source: "catalog" });
+  });
+
+  it("falls back to the name match when there is no stored link", () => {
+    expect(resolveSeatCost({
+      index: googleIndex, costsById, itemId: null,
+      vendor: "google", plan: "Google Workspace Business Standard", annualPerSeat: 10_368,
+    })).toEqual({ costPerSeatMonth: 620, source: "catalog" });
+  });
+
+  it("falls back rather than trusting an id that is not in the catalog", () => {
+    // A dangling id (direct DB edit — the FK's ON DELETE SET NULL prevents the rest).
+    // Better to match by name than to price the seat at nothing.
+    const got = resolveSeatCost({
+      index: googleIndex, costsById, itemId: "GONE-1",
+      vendor: "google", plan: "Google Workspace Business Standard", annualPerSeat: 10_368,
+    });
+    expect(got).toEqual({ costPerSeatMonth: 620, source: "catalog" });
+  });
+});
+
 describe("resolveSeatCost — vendor isolation", () => {
   it("never prices a Google seat from the hosting catalog", () => {
     /* The bug the vendor filter closes. `.ilike("name", "Standard")` with no vendor

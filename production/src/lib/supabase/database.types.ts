@@ -1202,6 +1202,12 @@ type SubscriptionRow = {
   suspended_at:     string | null;
   /** Customer-controlled (migration 0017). When false, no renewal quote auto-generated. */
   auto_renew:       boolean;
+  /**
+   * Catalog row this subscription sells (migration 0248). NULL when the plan has no
+   * catalog row — normal, not an error. Auto-filled on write by
+   * trg_subscriptions_resolve_item; an explicit value always wins.
+   */
+  item_id:          string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1231,6 +1237,8 @@ type SubscriptionInsert = {
   quote_id?:         string | null;
   suspended_at?:     string | null;
   auto_renew?:       boolean;
+  /** migration 0248 — usually left to the trigger. */
+  item_id?:          string | null;
 }
 type SubscriptionUpdate = Partial<SubscriptionInsert>;
 

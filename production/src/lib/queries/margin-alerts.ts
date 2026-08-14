@@ -2,11 +2,15 @@
  * Subscriptions whose margin has gone thin or negative — the repricing queue.
  *
  * ─── HOW A SUBSCRIPTION IS MATCHED TO ITS CATALOG COST ──────────────────────
- * There is no foreign key from `subscriptions` to `items`; the link is the plan NAME
- * plus the vendor, and the two are written from different vocabularies. See
- * lib/subscriptions/plan-match.ts — an EXACT name match covers only 6 of the 29
- * products the add-subscription dialog can write, missing the two highest-volume
- * Google plans, so this uses `planKey` on both sides.
+ * `item_id` first (migration 0248, a tenant-safe composite FK to items). Name matching
+ * second, for rows written before that column existed.
+ *
+ * The name path is kept rather than deleted because the two are written from different
+ * vocabularies: see lib/subscriptions/plan-match.ts — an EXACT name match covers only
+ * 6 of the 29 products the add-subscription dialog can write, missing the two
+ * highest-volume Google plans, so it uses `planKey` on both sides. A DB trigger now
+ * fills item_id on write from the same rule, so the name path should go quiet over
+ * time; when it stops finding anything it can be removed.
  *
  * An unmatched subscription is REPORTED as unmatched, never dropped. 21 of those 29
  * products have no catalog row at all; hiding them would make an app with no cost
@@ -68,9 +72,9 @@ export function useMarginAlerts(thinBelowBps: number = THIN_MARGIN_BPS) {
       const [{ data: subs, error: sErr }, { data: items, error: iErr }] = await Promise.all([
         supabase
           .from("subscriptions")
-          .select("id, customer_name, plan, vendor, seats, mrr, quote_id, status")
+          .select("id, customer_name, plan, vendor, seats, mrr, item_id, status")
           .eq("status", "active"),
-        supabase.from("items").select("name, vendor, wholesale, prices"),
+        supabase.from("items").select("id, name, vendor, wholesale, prices"),
       ]);
       if (sErr) throw sErr;
       if (iErr) throw iErr;
@@ -82,6 +86,11 @@ export function useMarginAlerts(thinBelowBps: number = THIN_MARGIN_BPS) {
           costPerSeatMonth: catalogCostPerSeatMonth(it),
         })),
       );
+      /* The direct path. No normalising, no vendor guard needed — the FK already
+         guarantees the row belongs to this tenant (0248: composite on tenant_id). */
+      const byId = new Map<string, number>(
+        (items ?? []).map((it) => [it.id, catalogCostPerSeatMonth(it)]),
+      );
 
       const alerts: MarginAlert[] = [];
       for (const s of subs ?? []) {
@@ -91,7 +100,17 @@ export function useMarginAlerts(thinBelowBps: number = THIN_MARGIN_BPS) {
         // mrr is ₹/month for the WHOLE subscription (add-seats.ts states this).
         const sellPerSeatMonthPaise = rupeesToPaise((s.mrr ?? 0) / seats);
 
-        const hit = matchPlan(index, String(s.vendor), s.plan);
+        /* item_id first. Falling back on a name match when the id is set but the row
+           is gone would substitute a DIFFERENT product's cost for a link the operator
+           can see is broken, so a dangling id resolves to unmatched. In practice the
+           FK's ON DELETE SET NULL means it cannot dangle — this is the belt for a
+           direct DB edit. */
+        const direct = s.item_id ? byId.get(s.item_id) : undefined;
+        const hit = s.item_id
+          ? (direct !== undefined
+              ? { matched: true as const, costPerSeatMonth: direct }
+              : { matched: false as const, reason: "no_such_plan" as const })
+          : matchPlan(index, String(s.vendor), s.plan);
 
         const common = {
           subscriptionId: s.id,

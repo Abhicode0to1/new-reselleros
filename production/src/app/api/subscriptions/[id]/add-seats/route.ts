@@ -58,7 +58,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     .select(
       // start_date is new here: without it the term length is unknowable and
       // add-seats fell back to assuming a year for every subscription.
-      `id, tenant_id, customer_id, customer_name, plan, vendor, domain, seats, mrr, start_date, renewal_date, status`
+      `id, tenant_id, customer_id, customer_name, plan, vendor, domain, seats, mrr, item_id, start_date, renewal_date, status`
     )
     .eq("id", params.id)
     .single();
@@ -115,6 +115,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     customerName:    sub.customer_name,
     plan:            sub.plan,
     vendor:          sub.vendor,
+    // 0248: the stored catalog link. Beats matching the plan text every time.
+    itemId:          sub.item_id,
     domain:          sub.domain,
     currentSeats:    sub.seats,
     currentMrr:      sub.mrr,
