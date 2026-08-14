@@ -5,7 +5,14 @@
  * email) or gets a fresh tenant of their own. No invite → never joins someone
  * else's tenant (tenant-leak guard, CLAUDE.md §4).
  */
-export type UserRole = "owner" | "sales" | "accountant" | "support";
+// Was a THIRD copy of the role union ("owner" | "sales" | "accountant" |
+// "support"), and the worst-placed one: this types the role an invite hands a
+// brand-new user. It could not express manager, billing, delivery, sales_senior
+// or partner_agent, so an invite carrying any of those was assigned a role this
+// file said was impossible — in the one branch the header calls security
+// critical. One source of truth now; see roles.ts.
+import type { UserRole, InvitableRole } from "./roles";
+export type { UserRole };
 
 export function normalizeEmail(email: string | undefined | null): string {
   return (email ?? "").trim().toLowerCase();
@@ -13,11 +20,11 @@ export function normalizeEmail(email: string | undefined | null): string {
 
 export interface InviteMatch {
   tenant_id: string;
-  role: UserRole;
+  role: InvitableRole;
 }
 
 export type MembershipDecision =
-  | { mode: "join"; tenantId: string; role: UserRole }
+  | { mode: "join"; tenantId: string; role: InvitableRole }
   | { mode: "new" };
 
 /**

@@ -54,10 +54,29 @@ export const USER_ROLES = [
 
 export type UserRole = (typeof USER_ROLES)[number];
 
-/** Runtime guard — `users.role` is free text in Postgres, so it can be anything. */
+/**
+ * Runtime guard. `users.role` IS constrained in Postgres (enum
+ * `public.user_role`, extended by 0111 and 0223) — but a stale session, a
+ * hand-edited row, or a value added to the enum ahead of this file can all
+ * still arrive here, so the check stays.
+ */
 export function isUserRole(value: unknown): value is UserRole {
   return typeof value === "string" && (USER_ROLES as readonly string[]).includes(value);
 }
+
+/**
+ * Roles an INVITE may assign today — i.e. what the `public.user_role` enum
+ * actually accepts.
+ *
+ * `partner_agent` is deliberately absent. It exists in USER_ROLES because nav,
+ * ROLE_HOME and PERMISSIONS all need to describe it, but the database enum does
+ * not have the value yet (migration 0240 adds it). Typing invites against the
+ * full union would let the OAuth callback insert a role Postgres rejects, and
+ * the person would land on /login?error=provision_failed with no clue why.
+ * Narrow it here and the compiler says so instead.
+ */
+export const INVITABLE_ROLES = USER_ROLES.filter((r) => r !== "partner_agent") as readonly Exclude<UserRole, "partner_agent">[];
+export type InvitableRole = Exclude<UserRole, "partner_agent">;
 
 /**
  * External actors that are NOT `users.role` values, recorded so the next reader

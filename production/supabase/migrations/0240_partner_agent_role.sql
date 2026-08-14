@@ -1,0 +1,34 @@
+-- 0240 — add 'partner_agent' to the user_role enum
+--
+-- WHY
+-- ---
+-- The 8-role access matrix needs an external-facing internal role that can see
+-- /partners (referred leads, commissions from 0156, payouts) and nothing else.
+-- roles.ts already describes it — nav entry, ROLE_HOME, and a PERMISSIONS row
+-- where every flag is false — but `users.role` is the enum public.user_role, and
+-- the enum does not have the value. Until it does, assigning the role fails at
+-- INSERT and the person lands on /login?error=provision_failed.
+--
+-- Until this runs, roles.ts deliberately excludes partner_agent from
+-- INVITABLE_ROLES so the compiler refuses the assignment rather than letting
+-- Postgres refuse it at runtime. AFTER this is applied, that exclusion can be
+-- dropped — and the generated database.types.ts must be regenerated, or the
+-- typed client will keep rejecting the value it now accepts.
+--
+-- Follows the same pattern as 0111 (sales_senior) and 0223 (billing, delivery).
+--
+-- ⚠️  ALTER TYPE ... ADD VALUE cannot be used by other statements in the SAME
+-- transaction that adds it. Run this ALONE, commit, and only then reference the
+-- new value. Verify in a SEPARATE run (§25.6).
+
+alter type public.user_role add value if not exists 'partner_agent';
+
+-- ── VERIFY — run this SEPARATELY, after the statement above ─────────────────
+--
+-- select enumlabel
+-- from pg_enum e join pg_type t on t.oid = e.enumtypid
+-- where t.typname = 'user_role'
+-- order by e.enumsortorder;
+--
+-- Expected to include: owner, sales, accountant, support, sales_senior,
+--                      manager, billing, delivery, partner_agent
