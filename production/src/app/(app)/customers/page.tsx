@@ -350,7 +350,7 @@ export default function CustomersPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-0.5 min-w-0 flex-1">
               {VIEW_DEFS.map((v) => {
                 const active = view === v.id;
                 const isDebt = v.id === "unpaid";
@@ -393,13 +393,10 @@ export default function CustomersPage() {
                 <span className="rounded-full bg-paper-2 px-1.5 tabular-nums text-[11px] text-ink-3">{archivedCount}</span>
               </button>
             )}
-            <Button variant="primary" size="sm" icon="plus" onClick={goAdd} className="shrink-0 font-semibold shadow-xs">
-              Add customer
-            </Button>
           </div>
           {/* Quick Sort Bar */}
-          <div className="flex items-center gap-2 pt-1 border-t border-hairline/60 text-xs text-ink-3 overflow-x-auto scrollbar-none">
-            <span className="font-semibold text-ink-2 shrink-0">Quick Sort:</span>
+          <div className="flex items-center gap-2 pt-1 border-t border-hairline/60 text-xs text-ink-3 overflow-x-auto [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="font-semibold text-ink-2 shrink-0">Sort:</span>
             <button
               type="button"
               onClick={() => toggleSort("mrr")}
