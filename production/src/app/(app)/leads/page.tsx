@@ -346,10 +346,7 @@ function LeadsPageInner() {
     //    there's no overlap/duplication (the old separate due-bucket KPI row is
     //    gone). Sits on top of search + stage + priority.
     if (smartView !== "all") {
-      /* localDateISO, not toISOString(): IST is UTC+5:30, so before 05:30 the ISO
-         string is YESTERDAY and both "arrived today" and "overdue" were computed
-         against the wrong day. See lib/leads/outcomes.ts. */
-      const todayStr = localDateISO(new Date());
+      const todayStr = new Date().toISOString().slice(0, 10);
       const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
       if (smartView === "mine") {
         list = list.filter((l) => currentUser && l.owner_id === currentUser.userId);
@@ -896,16 +893,7 @@ function LeadsPageInner() {
           It also self-hides, states how many due leads it is NOT showing, and names the
           ones with no phone number — see priority-call-queue.tsx for why each of those
           matters more than it sounds. */}
-      {!isLoading && leads && leads.length > 0 && search.trim() === "" && (
-        <PriorityCallQueue
-          leads={workspaceLeads}
-          tenantName={currentUser?.tenantName}
-          onOutcome={(o, l) => { void runOutcome(o, l); }}
-          onOpen={(l) => setDrawerLead(l)}
-          onLogCall={(l) => queueLog.mutate({ leadId: l.id, kind: "call", detail: `Called ${l.contact_phone}` })}
-          onLogWhatsApp={(l) => queueLog.mutate({ leadId: l.id, kind: "whatsapp", detail: `WhatsApp to ${l.contact_phone}` })}
-        />
-      )}
+
 
       {/* Error */}
       {error && (
