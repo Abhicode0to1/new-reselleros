@@ -29,6 +29,8 @@ import {
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { PendingJoinRequestsCard } from "@/components/features/team/pending-join-requests-card";
+import { ClaimColleagueCard } from "@/components/features/team/claim-colleague-card";
 
 type Role = "owner" | "manager" | "sales" | "sales_senior" | "billing" | "accountant" | "delivery" | "support";
 const ROLES: Role[] = ["owner", "manager", "sales_senior", "sales", "billing", "accountant", "delivery", "support"];
@@ -119,6 +121,12 @@ export default function TeamPage() {
         <KPI label="Owners" value={owners} icon="award" />
         <KPI label="Active" value={members.filter((m) => m.is_active !== false).length} icon="check_circle" />
       </div>
+
+      {/* People waiting on a decision, and people who fell outside the workspace
+          entirely. Both are above the member table because both are states where
+          somebody is currently locked out — the member list can wait. */}
+      <PendingJoinRequestsCard isOwner={isOwner} />
+      <ClaimColleagueCard isOwner={isOwner} />
 
       {/* Desktop / tablet — table (unchanged) */}
       <Card flush className="hidden md:block">
