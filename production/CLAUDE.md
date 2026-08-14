@@ -32,8 +32,17 @@ This file is read by Claude Code on every session. It contains all conventions, 
 **ResellerOS** — a multi-tenant SaaS for Indian cloud resellers (Google Workspace, Microsoft 365, Zoho).
 Each "tenant" is a reseller business; each tenant manages many of their own customers.
 
-- **Owner**: Pardeep A (Excel Technologies Pvt Ltd · pardeep@exceltechnologies.in)
-- **First customer**: Excel Technologies itself
+- **Owner / platform company**: **ANUTECH DIGITAL PVT LTD** · primary email `pardeep@anutech.in` ·
+  GSTIN `07ABDCA0298H1ZP` (Delhi, 07) · directors **Pardeep Sharma** and **Deepak Sharma**.
+  This is tenant `fbb976f1-9090-4f10-9726-0901bd144e42`, `tier = 'distributor'`. **Every other
+  tenant is a tenant company under it** — see §4a.
+  ⚠️ Corrected 2026-08-14. This entry previously said "Excel Technologies Pvt Ltd ·
+  pardeep@exceltechnologies.in", which is why `doc_code` on the main tenant is still `ET`
+  (set by `0054_tenant_scoped_document_ids.sql:23`) and why the dev-login demo list in
+  `(auth)/login/page.tsx:27-31` still names Excel Technologies. Excel Technologies is
+  historical: the same tenant row was created by `pardeep@exceltechnologies.in` on 26 May 2026
+  and later renamed.
+- **First customer**: ANUTECH DIGITAL PVT LTD itself
 - **Target customers**: Other Indian cloud resellers (B2B SaaS)
 - **Reference prototype**: `../prototype/` — Babel-in-browser React 18 prototype with 32 screens, fully designed UX
 
@@ -136,6 +145,24 @@ This SaaS is multi-tenant. Every reseller = one tenant.
 
 ### Test rules
 - Every PR adding a new query → MUST have a Playwright test verifying it can't read another tenant's data.
+
+---
+
+## 4a. Who owns which tenant (added 2026-08-14)
+
+**ANUTECH DIGITAL PVT LTD** (`fbb976f1…`, `tier='distributor'`) is the platform company.
+Every other tenant is a tenant company under it. The hierarchy columns already exist —
+`tenants.parent_tenant_id` + `tenants.tier` from `0040_reseller_hierarchy.sql` — but as of
+14 Aug 2026 **no child tenant actually has `parent_tenant_id` set**. Setting it is a
+commercial statement ("this tenant buys wholesale from that distributor",
+`0040_reseller_hierarchy.sql:12`), so it is Pardeep's call, not a cleanup.
+
+**Never assume a tenant's name tells you whose it is.** New tenants are auto-named from the
+signer-in's email domain (`(auth)/callback/route.ts:23`), so a wrongly-created tenant is
+named *exactly* like the company it should have joined. On 11 Aug 2026 that produced a
+private "Excel Technologies" tenant holding 3 real customers and a ₹21,240 payment, and
+nobody noticed for two days because the sidebar showed the expected company name. When
+diagnosing "the app looks empty", check `tenant_id`, never the tenant name.
 
 ---
 
