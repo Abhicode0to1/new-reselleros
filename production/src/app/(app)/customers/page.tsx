@@ -302,14 +302,7 @@ export default function CustomersPage() {
             <div className="flex items-center gap-2 flex-wrap text-xs">
               <Icon name="bar_chart" size={15} className="text-amber-ink" />
               <span className="font-semibold text-ink">Customer Portfolio &amp; Receivables</span>
-              <span className="text-ink-3">·</span>
-              <span className="text-ink-2 font-mono font-medium">Customers: <b className="text-ink">{total}</b></span>
-              <span className="text-ink-3 font-mono">·</span>
-              <span className="text-ink-2 font-mono font-medium">Monthly Revenue: <b className="text-amber-ink">{rupee(totalMRR, { compact: true })}</b></span>
-              <span className="text-ink-3 font-mono">·</span>
-              <span className="text-ink-2 font-mono font-medium">Yearly Revenue: <b className="text-emerald">{rupee(totalARR, { compact: true })}</b></span>
-              <span className="text-ink-3 font-mono">·</span>
-              <span className="text-ink-2 font-mono font-medium">To Collect: <b className="text-rose-600">{rupee(totalReceivables, { compact: true })}</b></span>
+              <Badge kind="info" size="sm" className="ml-1">{total} Accounts</Badge>
             </div>
             <div className="flex items-center gap-1 text-xs font-semibold text-amber-ink shrink-0 ml-2">
               <span>{kpiOpen ? "Collapse" : "Expand"}</span>
@@ -348,9 +341,17 @@ export default function CustomersPage() {
 
       {/* Sticky Segment chips + search */}
       {!isLoading && customers && customers.length > 0 && !selectedId && (
-        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
-          <div className="flex justify-between items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 py-0.5 min-w-0">
+        <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-2.5">
+          <div className="flex justify-between items-center gap-3 flex-wrap sm:flex-nowrap">
+            <div className="w-full sm:w-64 shrink-0">
+              <Input
+                prefix={<Icon name="search" size={14} />}
+                placeholder="Search customer, phone or domain…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 min-w-0 flex-1">
               {VIEW_DEFS.map((v) => {
                 const active = view === v.id;
                 const isDebt = v.id === "unpaid";
@@ -360,7 +361,7 @@ export default function CustomersPage() {
                     type="button"
                     onClick={() => setView(v.id)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer",
+                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer shrink-0",
                       active
                         ? "border-amber bg-amber-soft text-amber-ink"
                         : "border-hairline text-ink-2 hover:bg-paper-2",
@@ -377,32 +378,22 @@ export default function CustomersPage() {
                 );
               })}
             </div>
-            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-              {(archivedCount > 0 || showArchived) && (
-                <button
-                  type="button"
-                  onClick={() => { setShowArchived((v) => !v); setSelectedId(null); }}
-                  aria-pressed={showArchived}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer",
-                    showArchived ? "border-amber bg-amber-soft text-amber-ink" : "border-hairline text-ink-3 hover:text-ink hover:bg-paper-2",
-                  )}
-                  title={showArchived ? "Back to active customers" : "Show archived customers"}
-                >
-                  <Icon name="inbox" size={13} />
-                  {showArchived ? "Active" : "Archived"}
-                  <span className="rounded-full bg-paper-2 px-1.5 tabular-nums text-[11px] text-ink-3">{archivedCount}</span>
-                </button>
-              )}
-              <div className="w-full sm:w-56">
-                <Input
-                  prefix={<Icon name="search" size={14} />}
-                  placeholder="Customer or domain…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-            </div>
+            {(archivedCount > 0 || showArchived) && (
+              <button
+                type="button"
+                onClick={() => { setShowArchived((v) => !v); setSelectedId(null); }}
+                aria-pressed={showArchived}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer shrink-0",
+                  showArchived ? "border-amber bg-amber-soft text-amber-ink" : "border-hairline text-ink-3 hover:text-ink hover:bg-paper-2",
+                )}
+                title={showArchived ? "Back to active customers" : "Show archived customers"}
+              >
+                <Icon name="inbox" size={13} />
+                {showArchived ? "Active" : "Archived"}
+                <span className="rounded-full bg-paper-2 px-1.5 tabular-nums text-[11px] text-ink-3">{archivedCount}</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -483,9 +474,22 @@ export default function CustomersPage() {
                       Owes <b className={receivable > 0 ? "text-rose" : "text-ink-2"}>{rupee(receivable)}</b>
                       {receivable > 0 && days > 0 && <span className={days > 45 ? "text-rose" : "text-ink-3"}> · {days}d</span>}
                     </span>
-                    <span className="text-ink-3">
-                      Credit <b className={credit > 0 ? "text-emerald" : "text-ink-2"}>{rupee(credit)}</b>
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {c.contact_phone && (
+                        <a
+                          href={`https://wa.me/${c.contact_phone.replace(/\D/g, "")}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-emerald-soft text-emerald font-medium hover:bg-emerald hover:text-white transition-colors"
+                        >
+                          <Icon name="message_square" size={12} /> WhatsApp
+                        </a>
+                      )}
+                      <span className="text-ink-3">
+                        Credit <b className={credit > 0 ? "text-emerald" : "text-ink-2"}>{rupee(credit)}</b>
+                      </span>
+                    </div>
                   </div>
                 </Link>
               </li>

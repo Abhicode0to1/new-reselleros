@@ -116,12 +116,30 @@ export function useSetLeadJunk() {
       const { error } = await supabase.from("leads").update({ is_junk: isJunk }).in("id", ids);
       if (error) throw error;
     },
+    /* Optimistic, like the stage and inline-cell mutations above. This one was NOT,
+       and it is the mutation behind a 1-tap "Junk" chip in a triage queue: the rep
+       taps, the row sits there until the server replies, and they tap again. Marking
+       junk removes the row from every working view, so the optimistic write IS the
+       feedback — there is no cell left on screen to animate. */
+    onMutate: async ({ ids, isJunk }) => {
+      await qc.cancelQueries({ queryKey: ["leads"] });
+      const previous = qc.getQueryData<Lead[]>(["leads"]);
+      const idSet = new Set(ids);
+      qc.setQueryData<Lead[]>(["leads"], (old) =>
+        old?.map((l) => (idSet.has(l.id) ? { ...l, is_junk: isJunk } : l)),
+      );
+      return { previous };
+    },
     onSuccess: (_r, { ids, isJunk }) => {
       qc.invalidateQueries({ queryKey: ["leads"] });
       qc.invalidateQueries({ queryKey: ["nav-badges"] });
       toast.success(isJunk ? `${ids.length} lead${ids.length > 1 ? "s" : ""} marked junk` : "Restored from junk");
     },
-    onError: (err) => toastError(err),
+    onError: (err, _vars, ctx) => {
+      // Put the rows back, or the rep believes leads were hidden that were not.
+      qc.setQueryData(["leads"], ctx?.previous);
+      toastError(err, { description: "The leads were put back — nothing was changed." });
+    },
   });
 }
 
