@@ -6,46 +6,70 @@ The complete operating system for Indian cloud resellers.
 
 ---
 
-## 🚀 Quick start (operator setup)
+## 🚀 Quick start for a new developer
 
-### One-time setup (~10 minutes)
+### What you need first
+
+| | Why |
+|---|---|
+| **Node.js 20+** | [nodejs.org](https://nodejs.org/) — LTS version |
+| **Docker Desktop** | [docker.com](https://docker.com/products/docker-desktop) — your database runs inside it. On Windows, run `wsl --install` in an **Administrator** Command Prompt first, then restart. |
+
+Docker must be **running** — open Docker Desktop and wait for it to say *Engine running*.
+
+### Then two commands
 
 ```bash
-# 1. Make sure Node.js 20+ is installed
-node --version    # should be v20.x or higher
-# If not: download from https://nodejs.org/ (LTS version)
-
-# 2. Navigate to the production folder
 cd production/
-
-# 3. Install dependencies (first time only, ~3-5 min)
 npm install
-
-# 4. Create your local environment file
-cp .env.example .env.local
-# Open .env.local in any text editor and fill in real values
-# For Week 1, only NEXT_PUBLIC_APP_URL is required (others come later)
+npm run setup
 ```
 
-### Daily workflow
+`npm run setup` checks your prerequisites, starts a **local database on your own
+machine**, and loads the real production schema into it — 87 tables, 133 functions, 286
+policies, and no customer data. If something is missing it stops and tells you what,
+rather than failing later with a Postgres error.
+
+Your database is yours alone. Nothing you do touches production or anyone else's work.
+
+### Daily
 
 ```bash
-# Start the dev server (auto-reloads on changes)
-npm run dev
-# → opens http://localhost:3000
-# → component showcase at http://localhost:3000/dev/components
+npm run dev          # the app          → http://localhost:3000
+npm run db:studio    # browse your DB   → http://localhost:54323
+npm run db:stop      # stop the DB      (it keeps running otherwise)
 ```
 
-That's it. Make changes to files in `src/`, save, browser auto-refreshes.
-
-### Before pushing code
+### Before pushing
 
 ```bash
-npm run lint        # check code style
-npm run typecheck   # check TypeScript types
-npm run test        # run unit tests
-# All three pass? Commit + push.
+npm run typecheck && npm run test && npm run lint
 ```
+
+Lint **warnings** are fine; lint **errors** are not. Baseline: **1492 tests passing**.
+
+Then open a pull request into `main`. You cannot push to `main` directly — it is
+protected, and CI must be green before anything merges. That is deliberate: on a feature
+branch CI does not run at all, which is how four unit tests once sat broken for months.
+
+### Database changes
+
+```bash
+npm run migration:new -- add_customer_credit_limit
+```
+
+Timestamp-named, so two people writing a migration on the same day cannot collide.
+
+⚠️ **Do not build a database from `supabase/migrations-archive/`.** Those 218 files are
+the real history of production, but they cannot build a database from empty — several
+tables were created directly in prod and only captured in git under a *higher* number
+than the migration that uses them. The full story is in that folder's README. A fresh
+database comes from `supabase/baseline.sql`, which `npm run setup` handles for you.
+
+📖 **Read [`AGENTS.md`](../AGENTS.md) before your first change.** It is short, and every
+rule in it is there because it cost somebody something — starting with the fact that
+**money is stored in whole rupees, not paise**, which the docs claimed the opposite of
+until 14 Aug 2026.
 
 ---
 
