@@ -2,6 +2,21 @@
 
 This file is read by Claude Code on every session. It contains all conventions, decisions, and rules. **Follow these without exception.**
 
+> ### ⚠️ There is a second rulebook: [`../AGENTS.md`](../AGENTS.md)
+>
+> Two agents work in this repo — **Claude Code** reads this file, **Antigravity** reads
+> `AGENTS.md` at the repo root. `AGENTS.md` holds the short list of rules that cost real
+> money if got wrong, and it is written to be read by both.
+>
+> **Where the two disagree, `AGENTS.md` wins.** Not because it is more important, but
+> because it is newer and was written after this file was found to contain a false rule:
+> §13 claimed money is stored in paise when the database stores whole rupees (corrected
+> 14 Aug 2026, verified against live data).
+>
+> **If you change a rule here, change it there too.** Two rulebooks that drift apart are
+> worse than one that is merely long — the second agent will follow the stale copy and
+> nobody will see it happen.
+
 ---
 
 ## 0. How we work together (operating agreement)
