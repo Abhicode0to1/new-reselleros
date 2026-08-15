@@ -2,6 +2,21 @@
 
 This file is read by Claude Code on every session. It contains all conventions, decisions, and rules. **Follow these without exception.**
 
+> ### ⚠️ There is a second rulebook: [`../AGENTS.md`](../AGENTS.md)
+>
+> Two agents work in this repo — **Claude Code** reads this file, **Antigravity** reads
+> `AGENTS.md` at the repo root. `AGENTS.md` holds the short list of rules that cost real
+> money if got wrong, and it is written to be read by both.
+>
+> **Where the two disagree, `AGENTS.md` wins.** Not because it is more important, but
+> because it is newer and was written after this file was found to contain a false rule:
+> §13 claimed money is stored in paise when the database stores whole rupees (corrected
+> 14 Aug 2026, verified against live data).
+>
+> **If you change a rule here, change it there too.** Two rulebooks that drift apart are
+> worse than one that is merely long — the second agent will follow the stale copy and
+> nobody will see it happen.
+
 ---
 
 ## 0. How we work together (operating agreement)
@@ -293,7 +308,21 @@ Never use `fetch()` directly in components. Always go through Supabase or a type
 
 ## 13. Indian market specifics
 
-- **All money in paise (integers) internally.** Display as ₹ using `rupee()` helper.
+- **⚠️ MONEY IS STORED IN WHOLE RUPEES (integers), NOT paise.** Corrected 14 Aug 2026 —
+  this line previously said "All money in paise", which is false and is the most
+  dangerous kind of false: acting on it puts a `× 100` or `÷ 100` into money code.
+  **Verified against the live DB**, not inferred: `items` row "Google Workspace Business
+  Starter" holds `msrp = 270`, `wholesale = 110`. Those are ₹270 and ₹110 per seat per
+  month. As paise they would be ₹2.70 and ₹1.10, which is not a real price for anything.
+  - `rupee(490644)` → `"₹4,90,644"` — it takes **rupees**. Its own docstring in
+    `utils.ts:42` still claims "internally we store paise", and contradicts itself in the
+    next clause ("but most UI calls pass rupees"). Treat the docstring as wrong too.
+  - `rupeeFromPaise()` exists and is correct for genuinely-paise values — but almost
+    nothing in this schema is paise. Check the column before reaching for it.
+  - **Paise DO appear inside calculations**, deliberately: `lib/subscriptions/proration.ts`
+    and `margin.ts` convert to integer paise so a division rounds once instead of drifting,
+    then convert back. That is a local unit for arithmetic, not the storage unit.
+  - Rule of thumb: if it came out of the database or is going into it, it is rupees.
 - **Number format**: Indian lakh/crore (e.g., ₹4,90,644 not $490,644)
 - **Date format**: `DD MMM YYYY` (e.g., 15 May 2026), IST timezone
 - **Phone format**: `+91 98765 43210` with space groupings
