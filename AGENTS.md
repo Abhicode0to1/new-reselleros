@@ -94,6 +94,37 @@ component cannot be computed, the UI must say so — see §7.
 
 ---
 
+## 4a. Getting a database to work against
+
+**Never develop against production.** It holds real customers, real invoices, real money.
+
+There is a staging project — `resellerosv3-staging` (`ixgvlbgmvgaihvudtbwt`, Mumbai). Its
+schema is an exact copy of production: 87 tables, 133 functions, 286 policies, 48
+triggers, 305 indexes, 1335 columns, 234 foreign keys — verified object-by-object, not
+assumed.
+
+To rebuild it, or to build any fresh project:
+
+```bash
+cd production
+node scripts/rebuild-db.mjs <project-ref>      # refuses to run against production
+node scripts/db-compare.mjs ontpnqjoysjgrlsukecm <project-ref>   # must be a clean match
+```
+
+**Do not build a database by running the 218 files in supabase/migrations/.** They do not
+work from empty — see the header of `scripts/rebuild-db.mjs` for exactly why and which
+tables break. That is a known, documented defect, not something to rediscover.
+
+A fresh database comes from `supabase/baseline.sql` + `supabase/baseline-storage.sql`.
+Both are committed. The storage file is separate because `supabase db dump --schema
+public` silently omits the storage schema, and without it file upload and download fail
+while every other check passes.
+
+**The database is SHARED between everyone using staging.** A worktree separates files,
+not data. Only one person runs a migration or a data reset at a time, and says so first.
+
+---
+
 ## 5. Database changes
 
 - **Never apply a DB change without a versioned migration file** in
