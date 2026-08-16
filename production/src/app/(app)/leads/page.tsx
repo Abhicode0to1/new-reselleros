@@ -46,6 +46,7 @@ import { buildForecast, stageProbability } from "@/lib/leads/forecast";
 import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
 import { stageAge, staleDeals } from "@/lib/leads/velocity";
 import { buildTimeline, timelineMeta } from "@/lib/leads/timeline";
+import { PIPELINES, pipelineCounts, type Pipeline } from "@/lib/leads/pipelines";
 import { useItems } from "@/lib/queries/items";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
@@ -219,6 +220,18 @@ function LeadsPageInner() {
      cannot drift apart (the same reason use-change-stage.ts exists). */
   const runOutcome = useLeadOutcome();
   const queueLog   = useLogLeadActivity();
+
+  /* Which sales motion is being worked. `null` = all of them, which is the default:
+     opening the page to a filtered subset would hide deals from someone who does not
+     know the filter exists. */
+  const [pipelineFilter, setPipelineFilter] = React.useState<Pipeline | null>(null);
+
+  /* Counts from the UNFILTERED set. A badge that shrinks as you filter answers a
+     question nobody asked — it should say how much work exists in each motion. */
+  const motionCounts = React.useMemo(
+    () => pipelineCounts((leads ?? []).filter((l) => !l.is_junk)),
+    [leads],
+  );
 
   /* Counts for the "Today's Follow-Ups" pill, from the UNFILTERED lead set rather than
      from `searched`: the badge answers "how much work is there today", not "how much of
@@ -421,6 +434,12 @@ function LeadsPageInner() {
        view is active instead of replacing it.
        `<= today` deliberately: overdue is MORE urgent than due-today, and a pill showing
        only exactly-today would hide the promises broken last week. */
+    /* Sales-motion cut. Applies to Kanban and list alike, because they read the same
+       `filtered` array — one filter, not two implementations that drift. */
+    if (pipelineFilter) {
+      list = list.filter((l) => (l.pipeline ?? "new_logo") === pipelineFilter);
+    }
+
     if (salesTab === "due") {
       const todayStr = localDateISO(new Date());
       list = list.filter((l) =>
@@ -430,7 +449,9 @@ function LeadsPageInner() {
     return list;
     // salesTab is a dependency now that the "due" pill filters here. Omitting it would
     // have left a stale list on screen until some other input happened to change.
-  }, [workspaceLeads, search, stageFilter, priorityFilter, smartView, salesTab, currentUser, dup]);
+    // pipelineFilter joins the deps — without it the list keeps the previous motion's
+    // rows until some other input happens to change.
+  }, [workspaceLeads, search, stageFilter, priorityFilter, smartView, salesTab, pipelineFilter, currentUser, dup]);
   const activeFilterCount = stageFilter.length + priorityFilter.length;
 
   // A lead is "raw" (Leads inbox) only while it's early — New or Contacted with
@@ -694,6 +715,34 @@ function LeadsPageInner() {
             <span className="font-mono">Raw Leads: <b className="text-ink">{rawLeads.length}</b></span>
             <span className="text-ink-3 font-mono">·</span>
             <span className="font-mono">Win Rate: <b className="text-emerald">{conversion}%</b></span>
+          </div>
+
+          {/* Sales-motion switcher. "All" is first and is the default — opening the page
+              already filtered would hide deals from anyone who does not know the filter
+              exists. Counts come from the UNFILTERED set so they answer "how much is
+              there", not "how much survives what I already picked". */}
+          <div className="ml-3 flex shrink-0 items-center gap-1">
+            {([null, ...PIPELINES.map((p) => p.id)] as (Pipeline | null)[]).map((id) => {
+              const def = id ? PIPELINES.find((p) => p.id === id)! : null;
+              const n = id ? motionCounts[id] : workspaceLeads.filter((l) => !l.is_junk).length;
+              const active = pipelineFilter === id;
+              return (
+                <button
+                  key={id ?? "all"}
+                  type="button"
+                  onClick={() => setPipelineFilter(id)}
+                  title={def?.hint ?? "Every sales motion"}
+                  className={cn(
+                    "rounded-md px-2 py-0.5 text-[11px] font-semibold transition-colors",
+                    active ? "bg-paper text-ink shadow-xs border border-hairline"
+                           : "text-ink-2 hover:bg-paper/60",
+                  )}
+                >
+                  {def?.label ?? "All motions"}
+                  <span className="ml-1 font-mono tabular-nums text-ink-3">{n}</span>
+                </button>
+              );
+            })}
           </div>
           <button
             type="button"

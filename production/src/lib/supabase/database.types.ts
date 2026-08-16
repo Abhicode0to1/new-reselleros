@@ -854,6 +854,14 @@ type LeadRow = {
    * as one day old the moment somebody corrects its phone number.
    */
   stage_changed_at: string | null;
+  /**
+   * Which sales motion this deal belongs to (migration 20260816101730).
+   *
+   * Seeded from `subscription_type` — fresh becomes new_logo, switch becomes migration —
+   * so the two do not start life disagreeing. They may diverge afterwards.
+   * 'renewal' is never inferred: nothing in `leads` identifies one.
+   */
+  pipeline: "new_logo" | "migration" | "renewal";
   /** Triage signal: 'low' / 'medium' / 'high'. Default 'medium'. */
   priority: LeadPriority;
   /** B2B GSTIN captured at lead time (auto-fills legal name + address on conversion). */
@@ -921,6 +929,7 @@ type LeadInsert = {
   expected_close_date?: string | null;
   /** Set by trg_leads_stage_changed_at — never write it by hand. */
   stage_changed_at?: string | null;
+  pipeline?: "new_logo" | "migration" | "renewal";
   priority?:           LeadPriority;
   gstin?:              string | null;
   state_code?:         string | null;
