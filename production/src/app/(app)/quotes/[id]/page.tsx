@@ -38,6 +38,12 @@ import { ReceiptVoucherDialog } from "@/components/features/quotes/receipt-vouch
 import { SendQuoteDialog } from "@/components/features/quotes/send-quote-dialog";
 import SendWhatsAppDialog from "@/components/features/whatsapp/send-whatsapp-dialog";
 import { ApprovalDrawer } from "@/components/features/quotes/approval-drawer";
+import { LifecycleStepper } from "@/components/features/quotes/lifecycle-stepper";
+import { ProvisioningCard } from "@/components/features/quotes/provisioning-card";
+import { quoteLifecycle } from "@/lib/quotes/lifecycle";
+import { overallProvisionStatus, type ProvisionStatus } from "@/lib/provisioning/plan";
+import { useProvisioning } from "@/lib/queries/provisioning";
+import { useQuoteSignature } from "@/lib/queries/quote-signatures";
 import { requiredApproval, canSend, canApprove, approvalBadge } from "@/lib/quotes/approval";
 import { quoteEconomics, quoteApprovalRecord } from "@/lib/quotes/approval-economics";
 import { useRequestApproval } from "@/lib/queries/quotes";
@@ -142,6 +148,23 @@ export default function QuoteDetailPage() {
   const viewerCanApprove  = approvalNeed && approvalRec && me
     ? canApprove({ id: me.userId, role: me.role }, approvalRec, approvalNeed).allowed
     : false;
+
+  /* Lifecycle bar. Every step reads a fact that either exists or does not — see
+     lib/quotes/lifecycle.ts on why a skipped step must never render as a tick. */
+  const { data: provisioningTasks = [] } = useProvisioning(params.id);
+  const { data: signature } = useQuoteSignature(params.id);
+  const lifecycle = quote
+    ? quoteLifecycle({
+        status: quote.status,
+        paymentStatus: quote.payment_status,
+        invoiceId: quote.invoice_id,
+        hasSignature: Boolean(signature),
+        provisionStatus: overallProvisionStatus(
+          provisioningTasks.map((t) => t.status as ProvisionStatus),
+        ),
+        signerName: signature?.signer_name ?? null,
+      })
+    : null;
 
   const totalReceivedSoFar = sumReceived(paymentHistory ?? []);
   // Records that keep this quote un-deletable (must be voided/refunded first).
@@ -582,6 +605,13 @@ export default function QuoteDetailPage() {
         </div>
       </div>
 
+      {/* Quote-to-cash lifecycle */}
+      {lifecycle && (
+        <Card>
+          <LifecycleStepper steps={lifecycle.steps} dead={lifecycle.dead} />
+        </Card>
+      )}
+
       {/* Status-aware action bar */}
       <Card>
         {quote.status === "draft" && (
@@ -899,6 +929,16 @@ export default function QuoteDetailPage() {
           </div>
         </Card>
       </div>
+
+      {/* What still has to be created at the vendor */}
+      <ProvisioningCard
+        tasks={provisioningTasks}
+        quoteId={quote.id}
+        tenantId={quote.tenant_id}
+        lines={items}
+        quoteDomain={quote.domain}
+        userId={me?.userId}
+      />
 
       {/* Notes */}
       {quote.notes && (

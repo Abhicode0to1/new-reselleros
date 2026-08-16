@@ -1229,6 +1229,48 @@ type InvoiceDunningLogInsert = {
   sent_at?: string;
 };
 
+/**
+ * Seats to be created at a vendor once a quote is paid.
+ *
+ * Raised by trg_quotes_raise_provisioning as ONE unresolved row per paid quote (vendor
+ * / plan / seats all null); the app expands it per line with lib/provisioning/plan.ts.
+ * No vendor API is connected on this project, so every task is mode='manual'.
+ */
+type ProvisioningTaskRow = {
+  id: string;
+  tenant_id: string;
+  quote_id: string;
+  vendor: string | null;
+  plan: string | null;
+  seats: number | null;
+  domain: string | null;
+  /** 'api' the day a vendor client exists; 'manual' until then. */
+  mode: string;
+  /** pending | in_progress | done | failed | not_required. "not_required" is a real
+   *  outcome (a services-only quote), NOT a silent success. */
+  status: string;
+  error_message: string | null;
+  completed_by: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type ProvisioningTaskInsert = {
+  id?: string;
+  tenant_id: string;
+  quote_id: string;
+  vendor?: string | null;
+  plan?: string | null;
+  seats?: number | null;
+  domain?: string | null;
+  mode?: string;
+  status?: string;
+  error_message?: string | null;
+  completed_by?: string | null;
+  completed_at?: string | null;
+  updated_at?: string;
+};
+
 type QuoteSignatureInsert = {
   id?: string;
   tenant_id: string;
@@ -3270,6 +3312,7 @@ export type Database = {
       quotes:        { Row: QuoteRow;        Insert: QuoteInsert;        Update: QuoteUpdate;        Relationships: [] };
       quote_signatures: { Row: QuoteSignatureRow; Insert: QuoteSignatureInsert; Update: Partial<QuoteSignatureInsert>; Relationships: [] };
       invoice_dunning_log: { Row: InvoiceDunningLogRow; Insert: InvoiceDunningLogInsert; Update: Partial<InvoiceDunningLogInsert>; Relationships: [] };
+      provisioning_tasks: { Row: ProvisioningTaskRow; Insert: ProvisioningTaskInsert; Update: Partial<ProvisioningTaskInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
       payments:           { Row: PaymentRow;           Insert: PaymentInsert;           Update: PaymentUpdate;           Relationships: [] };
@@ -4282,6 +4325,7 @@ export type Item         = ItemRow;
 export type Lead         = LeadRow;
 export type Quote        = QuoteRow;
 export type QuoteSignature = QuoteSignatureRow;
+export type ProvisioningTask = ProvisioningTaskRow;
 export type Invoice      = InvoiceRow;
 export type Subscription = SubscriptionRow;
 export type Payment      = PaymentRow;
