@@ -79,23 +79,39 @@ if [[ -z "$REMOTE_SECRET" ]]; then
   [[ "${SKIP_SECRET_CHECK:-0}" == "1" ]] || exit 3
   echo "  SKIP_SECRET_CHECK=1 set — continuing on your say-so."
 elif [[ "$(fingerprint "$LOCAL_SECRET")" != "$(fingerprint "$REMOTE_SECRET")" ]]; then
-  cat >&2 <<MISMATCH
-✗ CRON_SECRET does not match.
+  # NOT a failure — a fact, and the deployed value wins.
+  #
+  # The jobs have to present whatever the SERVICE checks against. That is the Cloud
+  # Run value by definition, and the jobs already running prove it works. Using the
+  # local one because it is the one a developer happens to have would create jobs
+  # that 401 for ever, and "fix your .env.local first" would be asking someone to
+  # edit the wrong file to solve a problem that is not theirs.
+  #
+  # The local value is still worth reporting: it means this machine cannot call the
+  # deployed cron endpoints by hand, which is a real thing to know before debugging
+  # one at 9am.
+  cat <<STALE
+⚠ .env.local's CRON_SECRET is not the deployed one.
 
   .env.local fingerprint : $(fingerprint "$LOCAL_SECRET")
   Cloud Run fingerprint  : $(fingerprint "$REMOTE_SECRET")
 
-Nothing has been created. Creating jobs now would give every one of them a 401
-for ever — scheduled, green in the console, and doing nothing.
+  Using the DEPLOYED value — that is what the service checks against, and what the
+  jobs already running present. Nothing on the service is changed.
 
-Fix the mismatch first: either update .env.local to the deployed value, or
-redeploy the service with the local one.
-MISMATCH
-  exit 4
+  Local dev is unaffected (it uses .env.local at both ends), but curling a
+  PRODUCTION cron endpoint from this machine will 401 until you copy the deployed
+  value across.
+
+STALE
+  EFFECTIVE_SECRET="$REMOTE_SECRET"
 else
   echo "✓ CRON_SECRET matches the live service (fingerprint $(fingerprint "$LOCAL_SECRET"))."
+  EFFECTIVE_SECRET="$LOCAL_SECRET"
 fi
+
+EFFECTIVE_SECRET="${EFFECTIVE_SECRET:-$LOCAL_SECRET}"
 
 # ── 4. Create the missing jobs ───────────────────────────────────────────────
 echo
-CRON_SECRET="$LOCAL_SECRET" bash "$HERE/setup-cloud-scheduler.sh"
+CRON_SECRET="$EFFECTIVE_SECRET" bash "$HERE/setup-cloud-scheduler.sh"

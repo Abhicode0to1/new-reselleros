@@ -100,17 +100,35 @@ for row in "${JOBS[@]}"; do
     ACTION="create"
   fi
 
+  # `create` takes --headers; `update` takes --update-headers. They are not
+  # interchangeable, and this script used --update-headers for BOTH — so it could
+  # never create a job. Every "create" line it printed was followed by
+  # "unrecognized arguments", which is why the six jobs in production were made by
+  # hand. The same failure this file was written to fix, one level up: a setup
+  # script that looks like it works and has never once created anything.
+  if [[ "$ACTION" == "create" ]]; then
+    HEADER_FLAG="--headers"
+  else
+    HEADER_FLAG="--update-headers"
+  fi
+
   echo "==> ${ACTION}: $NAME  ($SCHEDULE $TZ_NAME)  $PATH_"
-  gcloud scheduler jobs "$ACTION" http "$NAME" \
+  # 2>&1 through a filter: gcloud echoes the FULL argument list on an argument
+  # error, which put the live CRON_SECRET into a terminal once already. Any line
+  # carrying the secret is replaced rather than printed.
+  if ! gcloud scheduler jobs "$ACTION" http "$NAME" \
     --location="$REGION" \
     --schedule="$SCHEDULE" \
     --time-zone="$TZ_NAME" \
     --uri="${SERVICE_URL}${PATH_}" \
     --http-method=GET \
-    --update-headers="Authorization=Bearer ${CRON_SECRET}" \
+    "$HEADER_FLAG"="Authorization=Bearer ${CRON_SECRET}" \
     --attempt-deadline=540s \
     --description="$DESC" \
-    --quiet
+    --quiet 2>&1 | sed "s|${CRON_SECRET}|<redacted>|g"
+  then
+    echo "    ^ failed — see the message above (secret redacted)." >&2
+  fi
 done
 
 cat <<'DONE'
