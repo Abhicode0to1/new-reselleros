@@ -45,6 +45,9 @@ import { localDateISO } from "@/lib/leads/outcomes";
 import { buildForecast, stageProbability } from "@/lib/leads/forecast";
 import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
 import { stageAge, staleDeals } from "@/lib/leads/velocity";
+import { dealHealth } from "@/lib/leads/deal-health";
+import { DealHealthCard } from "@/components/features/leads/deal-health-card";
+import { BattlecardDrawer } from "@/components/features/leads/battlecard-drawer";
 import { buildTimeline, timelineMeta } from "@/lib/leads/timeline";
 import { PIPELINES, pipelineCounts, type Pipeline } from "@/lib/leads/pipelines";
 import { useItems } from "@/lib/queries/items";
@@ -1545,6 +1548,23 @@ function LeadDetailSheet({
   const deleteTask   = useDeleteTask();
   const [addTaskOpen, setAddTaskOpen] = React.useState(false);
   const [whatsOpen,   setWhatsOpen]   = React.useState(false);
+  const [cardsOpen,   setCardsOpen]   = React.useState(false);
+
+  /* Deal health. Built from what this drawer already loads — activities give both the
+     last touch and whether the customer ever replied, so no extra query. `email_in` is
+     the only inbound kind today; a reply logged any other way is invisible here, which
+     under-scores the deal rather than over-scoring it. That direction is deliberate: a
+     health score that flatters a neglected deal is worse than one that nags. */
+  const health = React.useMemo(() => {
+    if (!lead) return null;
+    const sorted = [...activities].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+    return dealHealth({
+      lead,
+      lastActivityAt: sorted[0]?.created_at ?? null,
+      customerResponded: activities.some((a) => a.kind === "email_in"),
+      today: localDateISO(new Date()),
+    });
+  }, [lead, activities]);
 
   if (!lead) return null;
   const hasQuotes = quotesForLead.length > 0;
@@ -2001,6 +2021,29 @@ function LeadDetailSheet({
 
           {drawerTab === "details" && (
           <>
+          {/* Is this deal being WORKED well? Sits above the facts because the facts
+              describe the customer and this describes what the rep has (not) done —
+              and only the second one is actionable this minute. */}
+          {health && <DealHealthCard health={health} onBookFollowUp={() => setAddTaskOpen(true)} />}
+
+          {/* Objection handling. Next to health rather than buried in a menu: the moment
+              a rep needs these words is the moment they are looking at this drawer with
+              the customer still on the line. */}
+          <button
+            type="button"
+            onClick={() => setCardsOpen(true)}
+            className="flex w-full items-center gap-2.5 rounded-lg border border-hairline bg-paper-2/40 px-3 py-2.5 text-left hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+          >
+            <Icon name="shield" size={15} className="shrink-0 text-ink-3" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-ink">Objection battlecards</span>
+              <span className="block text-[11px] text-ink-3">
+                &ldquo;Microsoft is cheaper&rdquo;, &ldquo;nobody has heard of Zoho&rdquo; — what to say.
+              </span>
+            </span>
+            <Icon name="chevron-right" size={14} className="shrink-0 text-ink-3" />
+          </button>
+
           {/* Grid of facts */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <Fact label="Plan" value={lead.plan} />
@@ -2552,6 +2595,9 @@ function LeadDetailSheet({
           related={{ leadId: lead.id }}
         />
       )}
+
+      {/* Battlecards — sibling of the Sheet for the same stacking reason. */}
+      <BattlecardDrawer open={cardsOpen} onClose={() => setCardsOpen(false)} plan={lead.plan} />
     </Sheet>
   );
 }
