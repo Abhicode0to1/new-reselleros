@@ -58,6 +58,10 @@ JOBS=(
   # to be recorded, and a customer chased for an invoice they already paid stops
   # reading these emails entirely.
   "resellersos-invoice-dunning|15 9 * * *|/api/cron/invoice-dunning|Overdue-invoice dunning: day 1/3/7/14 from due date"
+  # 1st of the month, 00:30 IST — after the midnight backup and before the day's
+  # jobs touch anything, so the snapshot describes the month that just ended rather
+  # than one already half-modified by a renewal run.
+  "resellersos-mrr-snapshot|30 0 1 * *|/api/cron/mrr-snapshot|Monthly MRR per customer — the history NRR is computed from"
   "resellersos-compliance-reminders|30 9 * * *|/api/cron/compliance-reminders|Statutory reminders T-15/T-7/T-3 to owner + CA"
   "resellersos-trial-expiry|0 10 * * *|/api/cron/trial-expiry|Expire trials that have run out"
   "resellersos-birthday-greetings|1 21 * * *|/api/cron/birthday-greetings|Birthday and anniversary greetings"

@@ -16,7 +16,9 @@ import { useItems } from "@/lib/queries/items";
 import { subscriptionCogs, cogsBadge, cogsTotals } from "@/lib/vendor/cogs";
 import { LicenseLeakageCard } from "@/components/features/subscriptions/license-leakage-card";
 import { SeatRequestsCard } from "@/components/features/subscriptions/seat-requests-card";
-import { useSeatRequests } from "@/lib/queries/seat-requests";
+import { useSeatRequests, useMrrSnapshots } from "@/lib/queries/seat-requests";
+import { RetentionCard } from "@/components/features/subscriptions/retention-card";
+import { assessUtilisation } from "@/lib/subscriptions/utilisation";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { ImportSubscriptionsDialog } from "@/components/features/subscriptions/import-subscriptions-dialog";
@@ -96,6 +98,8 @@ export default function SubscriptionsPage() {
   const catalog = React.useMemo(() => catalogItems ?? [], [catalogItems]);
   const { data: seatRequestRows, refetch: refetchRequests } = useSeatRequests({ pendingOnly: true });
   const seatRequests = React.useMemo(() => seatRequestRows ?? [], [seatRequestRows]);
+  const { data: snapshotRows } = useMrrSnapshots();
+  const mrrSnapshots = React.useMemo(() => snapshotRows ?? [], [snapshotRows]);
   const { data: trials } = useActiveTrials();
   const [tab, setTab] = React.useState("all");
   const [vendor, setVendor] = React.useState("all");
@@ -346,6 +350,10 @@ export default function SubscriptionsPage() {
         />
       )}
 
+      {/* How much of last month's revenue survived. Says so honestly until the
+          monthly snapshot has run twice. */}
+      {!isLoading && <RetentionCard snapshots={mrrSnapshots} />}
+
       {/* Seats the vendor bills us for vs seats we bill the customer. */}
       {!isLoading && subsByWorkspace.length > 0 && (
         <LicenseLeakageCard
@@ -590,6 +598,7 @@ export default function SubscriptionsPage() {
                 {shown.map((s) => {
                   const cogs = subscriptionCogs(s, catalog);
                   const mb = cogsBadge(cogs);
+                  const util = assessUtilisation({ seats: s.seats, used: s.used, usedSyncedAt: s.used_synced_at });
                   const dl = daysUntil(s.renewal_date);
                   const t  = term(s.start_date, s.renewal_date);
                   const isUrgent = dl !== null && dl >= 0 && dl <= 30;
@@ -623,9 +632,24 @@ export default function SubscriptionsPage() {
                       </td>
                       {/* Seats — used / licensed; flag low utilisation (unused
                           licences = churn risk at renewal OR a missed upsell). */}
-                      <td className="px-3 py-2.5 text-right tabular-nums text-sm align-top" title={`${s.used} in use of ${s.seats} licensed`}>
-                        <span className={cn(s.seats > 0 && s.used / s.seats < 0.5 ? "text-amber-ink font-medium" : "text-ink")}>{s.used}</span>
+                      {/* `used` is 0 on every row in this database and nothing writes
+                          it, so colouring the count as "low usage" asserts idle
+                          licences that are almost certainly in use. assessUtilisation()
+                          treats an unsynced zero as UNKNOWN and says so in the tooltip
+                          — see lib/subscriptions/utilisation.ts. */}
+                      <td className="px-3 py-2.5 text-right tabular-nums text-sm align-top" title={util.message}>
+                        <span className={cn(
+                          util.level === "idle" ? "text-rose font-medium"
+                            : util.level === "low" ? "text-amber-ink font-medium"
+                            : util.level === "unknown" ? "text-ink-3"
+                            : "text-ink",
+                        )}>
+                          {util.level === "unknown" ? "—" : s.used}
+                        </span>
                         <span className="text-ink-3"> / {s.seats}</span>
+                        {util.level === "unknown" && (
+                          <span className="block text-[9px] uppercase tracking-wider text-ink-3">not tracked</span>
+                        )}
                       </td>
                       {/* MRR — the money, given weight. */}
                       <td className="px-3 py-2.5 text-right tabular-nums align-top">

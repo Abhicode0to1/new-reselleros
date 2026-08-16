@@ -1281,6 +1281,30 @@ type SeatRequestRow = {
   created_at: string;
   updated_at: string;
 };
+/**
+ * One customer's MRR for one month. The history NRR is computed from — nothing else
+ * in this schema records what MRR WAS. Grain is the CUSTOMER, so a plan swap is not
+ * a churn plus a new customer. See migration 20260816160000.
+ */
+type MrrSnapshotRow = {
+  id: string;
+  tenant_id: string;
+  customer_id: string;
+  /** First day of the month described. */
+  period: string;
+  mrr: number;
+  subscription_count: number;
+  created_at: string;
+};
+type MrrSnapshotInsert = {
+  id?: string;
+  tenant_id: string;
+  customer_id: string;
+  period: string;
+  mrr: number;
+  subscription_count?: number;
+};
+
 type SeatRequestInsert = {
   id?: string;
   tenant_id: string;
@@ -1471,6 +1495,10 @@ type SubscriptionRow = {
   vendor_cost_per_seat_month: number | null;
   /** When those were last confirmed. A count from four months ago is not a fact. */
   vendor_synced_at: string | null;
+  /** When the assigned-user count was last confirmed. NULL means `used` has never
+   *  been measured — 0-because-unmeasured is a blind spot, 0-because-measured is a
+   *  churn alarm. Nothing writes `used` today, so this is NULL everywhere. */
+  used_synced_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1508,6 +1536,7 @@ type SubscriptionInsert = {
   vendor_seats?: number | null;
   vendor_cost_per_seat_month?: number | null;
   vendor_synced_at?: string | null;
+  used_synced_at?: string | null;
 }
 type SubscriptionUpdate = Partial<SubscriptionInsert>;
 
@@ -3384,6 +3413,7 @@ export type Database = {
       invoice_dunning_log: { Row: InvoiceDunningLogRow; Insert: InvoiceDunningLogInsert; Update: Partial<InvoiceDunningLogInsert>; Relationships: [] };
       provisioning_tasks: { Row: ProvisioningTaskRow; Insert: ProvisioningTaskInsert; Update: Partial<ProvisioningTaskInsert>; Relationships: [] };
       seat_requests: { Row: SeatRequestRow; Insert: SeatRequestInsert; Update: Partial<SeatRequestInsert>; Relationships: [] };
+      mrr_snapshots: { Row: MrrSnapshotRow; Insert: MrrSnapshotInsert; Update: Partial<MrrSnapshotInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
       payments:           { Row: PaymentRow;           Insert: PaymentInsert;           Update: PaymentUpdate;           Relationships: [] };
@@ -4398,6 +4428,7 @@ export type Quote        = QuoteRow;
 export type QuoteSignature = QuoteSignatureRow;
 export type ProvisioningTask = ProvisioningTaskRow;
 export type SeatRequest = SeatRequestRow;
+export type MrrSnapshot = MrrSnapshotRow;
 export type Invoice      = InvoiceRow;
 export type Subscription = SubscriptionRow;
 export type Payment      = PaymentRow;

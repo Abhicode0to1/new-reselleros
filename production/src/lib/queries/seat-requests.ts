@@ -10,7 +10,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import type { SeatRequest } from "@/lib/supabase/database.types";
+import type { SeatRequest, MrrSnapshot } from "@/lib/supabase/database.types";
 
 export function useSeatRequests(opts?: { pendingOnly?: boolean }) {
   return useQuery({
@@ -26,5 +26,30 @@ export function useSeatRequests(opts?: { pendingOnly?: boolean }) {
     /* Short, because this is a queue somebody is working through and a decided row
        should stop showing up promptly. */
     staleTime: 30_000,
+  });
+}
+
+/**
+ * Monthly MRR snapshots — the history retention is computed from.
+ *
+ * Read-only. Written by /api/cron/mrr-snapshot under the service role; a
+ * client-writable history table is a history anyone can rewrite.
+ */
+export function useMrrSnapshots(months = 6) {
+  return useQuery({
+    queryKey: ["mrr-snapshots", months],
+    queryFn: async (): Promise<MrrSnapshot[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("mrr_snapshots")
+        .select("*")
+        .order("period", { ascending: false })
+        /* Generous: `months` bounds PERIODS, but a period holds one row per
+           customer, so the row cap has to allow for a fleet of them. */
+        .limit(months * 500);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 5 * 60 * 1000,
   });
 }
