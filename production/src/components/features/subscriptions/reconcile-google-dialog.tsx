@@ -24,6 +24,7 @@ import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useItems } from "@/lib/queries/items";
+import { createClient } from "@/lib/supabase/client";
 import { rupee, cn } from "@/lib/utils";
 
 type Bucket = "only_google" | "matched" | "only_app" | "suspended";
@@ -36,6 +37,11 @@ interface Row {
   renewal: string;
   estMrr?: number;  // only_google
   appSeats?: number; // matched (for diff)
+  /** Set only when the domain has exactly ONE active app subscription, so the
+   *  vendor seat count can be written back without splitting an aggregate. */
+  appSubId?: string;
+  /** How many active app subscriptions share this domain. */
+  appSubCount?: number;
 }
 
 interface Report {
@@ -117,6 +123,49 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
 
   const rows = report?.buckets[bucket] ?? [];
   const shown = rows.slice(0, visible);
+
+  /* Matched domains that can be written back without splitting an aggregate. A
+     domain carrying several app subscriptions is deliberately excluded — see the
+     comment where appSubId is set. */
+  const savableRows = React.useMemo(
+    () => (report?.buckets.matched ?? []).filter((r) => r.appSubId),
+    [report],
+  );
+  const [savingSeats, setSavingSeats] = React.useState(false);
+
+  const saveVendorSeats = async () => {
+    if (savableRows.length === 0) return;
+    setSavingSeats(true);
+    try {
+      const supabase = createClient();
+      const now = new Date().toISOString();
+      /* One update per subscription rather than an upsert: an upsert on this table
+         would need every NOT NULL column and could resurrect a deleted row. */
+      const results = await Promise.all(
+        savableRows.map((r) =>
+          supabase
+            .from("subscriptions")
+            .update({ vendor_seats: r.seats, vendor_synced_at: now })
+            .eq("id", r.appSubId!),
+        ),
+      );
+      const failed = results.filter((x) => x.error);
+      if (failed.length > 0) throw new Error(failed[0].error!.message);
+
+      const skipped = (report?.buckets.matched ?? []).length - savableRows.length;
+      toast.success(`Saved vendor seat counts for ${savableRows.length} subscription${savableRows.length === 1 ? "" : "s"}.`, {
+        description: skipped > 0
+          ? `${skipped} domain${skipped === 1 ? "" : "s"} skipped — more than one app subscription shares them, so Google's per-domain total cannot be split without guessing.`
+          : "License leakage on the subscriptions page will now show a real figure instead of “never reconciled”.",
+        duration: 9000,
+      });
+      onOpenChange(false);
+    } catch (e) {
+      toast.error("Could not save the seat counts.", { description: (e as Error).message });
+    } finally {
+      setSavingSeats(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -249,6 +298,23 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
               <Button type="button" variant="default" icon="download" onClick={downloadBucket} disabled={rows.length === 0}>
                 Download {BUCKET_META.find((b) => b.id === bucket)?.label} ({rows.length})
               </Button>
+              {/* The one write this dialog does, and it writes only what Google
+                  reported: the vendor's seat count and the date. It never touches
+                  `seats` (what we bill) — changing what a customer is charged from a
+                  CSV import would be a billing change nobody approved. */}
+              <Button
+                type="button"
+                variant="default"
+                icon="save"
+                loading={savingSeats}
+                disabled={savableRows.length === 0}
+                title={savableRows.length === 0
+                  ? "Nothing to save — matched domains need exactly one active app subscription each."
+                  : undefined}
+                onClick={saveVendorSeats}
+              >
+                Save vendor seat counts ({savableRows.length})
+              </Button>
               {onAddMissing && (
                 <Button type="button" variant="primary" icon="plus"
                   onClick={() => { onOpenChange(false); onAddMissing(); }}>
@@ -278,7 +344,12 @@ function normDomain(d: string): string {
   return (d || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
 }
 
-function buildReport(text: string, subs: { domain: string | null; status: string }[], priceMap: Map<string, number>): Report {
+function buildReport(
+  text: string,
+  // `id` and `seats` are needed to write vendor_seats back and to show the seat diff.
+  subs: { id: string; domain: string | null; status: string; seats: number }[],
+  priceMap: Map<string, number>,
+): Report {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
   const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
   if (lines.length < 2) throw new Error("CSV needs a header + data rows.");
@@ -303,12 +374,21 @@ function buildReport(text: string, subs: { domain: string | null; status: string
   const appAnyDomains = new Set<string>();
   const appActiveByDomain = new Map<string, number>();
   const appCountByDomain = new Map<string, number>();
+  /* Seats and ids per domain, for the seat DIFF and for writing vendor_seats back.
+     `appSeats` was declared on Row from the start and never assigned, so the seat
+     gap it was meant to show has never once rendered. */
+  const appSeatsByDomain = new Map<string, number>();
+  const appActiveIdsByDomain = new Map<string, string[]>();
   for (const s of subs) {
     if (!s.domain) continue;
     const d = normDomain(s.domain);
     appAnyDomains.add(d);
     appCountByDomain.set(d, (appCountByDomain.get(d) ?? 0) + 1);
-    if (s.status === "active") appActiveByDomain.set(d, (appActiveByDomain.get(d) ?? 0) + 1);
+    if (s.status === "active") {
+      appActiveByDomain.set(d, (appActiveByDomain.get(d) ?? 0) + 1);
+      appSeatsByDomain.set(d, (appSeatsByDomain.get(d) ?? 0) + (s.seats ?? 0));
+      appActiveIdsByDomain.set(d, [...(appActiveIdsByDomain.get(d) ?? []), s.id]);
+    }
   }
 
   const buckets: Record<Bucket, Row[]> = { only_google: [], matched: [], only_app: [], suspended: [] };
@@ -351,10 +431,19 @@ function buildReport(text: string, subs: { domain: string | null; status: string
 
   // Matched = one row per DOMAIN in both (so matched ≤ app subs; numbers reconcile).
   for (const [domain, agg] of googleAggByDomain) {
+    const ids = appActiveIdsByDomain.get(domain) ?? [];
     buckets.matched.push({
       domain,
       sku: `${agg.subs} Google · ${appCountByDomain.get(domain) ?? 0} app`,
       seats: agg.seats,
+      appSeats: appSeatsByDomain.get(domain),
+      /* Google's seat count is aggregated per domain. Writing it back is only
+         unambiguous when the domain has exactly ONE active app subscription —
+         splitting an aggregate across several would be a guess about which product
+         holds which seats, and this file's own header says the export carries no
+         price to disambiguate with. */
+      appSubId: ids.length === 1 ? ids[0] : undefined,
+      appSubCount: ids.length,
       status: "matched",
       renewal: "",
     });

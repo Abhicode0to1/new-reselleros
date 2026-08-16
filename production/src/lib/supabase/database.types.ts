@@ -1417,6 +1417,15 @@ type SubscriptionRow = {
   /** The main plan this add-on is co-termed to. A relationship, not a copied
    *  anniversary — a copied date drifts the moment the parent's renewal moves. */
   parent_subscription_id: string | null;
+  // Vendor COGS (migration 20260816140000) ──────────────────────────────────
+  /** Seats the VENDOR provisions and bills us for. NOT `used` (assigned) and NOT
+   *  `seats` (what we bill). NULL = never reconciled, which is not the same as 0. */
+  vendor_seats: number | null;
+  /** ₹/seat/month the vendor actually charges. Distinct from items.wholesale, which
+   *  is the price list — the gap between them is the thing worth seeing. */
+  vendor_cost_per_seat_month: number | null;
+  /** When those were last confirmed. A count from four months ago is not a fact. */
+  vendor_synced_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1451,6 +1460,9 @@ type SubscriptionInsert = {
   billing_cycle?:    BillingCycle;
   term_months?:      number;
   parent_subscription_id?: string | null;
+  vendor_seats?: number | null;
+  vendor_cost_per_seat_month?: number | null;
+  vendor_synced_at?: string | null;
 }
 type SubscriptionUpdate = Partial<SubscriptionInsert>;
 

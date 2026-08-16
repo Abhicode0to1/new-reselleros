@@ -12,6 +12,9 @@ import AddSeatsDialog            from "@/components/features/subscriptions/add-s
 import { AddSubscriptionDialog } from "@/components/features/subscriptions/add-subscription-dialog";
 import { EditSubscriptionDialog } from "@/components/features/subscriptions/edit-subscription-dialog";
 import { BillingScheduleCard } from "@/components/features/subscriptions/billing-schedule-card";
+import { useItems } from "@/lib/queries/items";
+import { subscriptionCogs, cogsBadge, cogsTotals } from "@/lib/vendor/cogs";
+import { LicenseLeakageCard } from "@/components/features/subscriptions/license-leakage-card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { ImportSubscriptionsDialog } from "@/components/features/subscriptions/import-subscriptions-dialog";
@@ -50,12 +53,12 @@ function vendorMeta(v: string): { label: string; kind: "info" | "success" | "mut
   return { label: v ? v.charAt(0).toUpperCase() + v.slice(1) : "—", kind: "muted" };
 }
 
-// Margin estimate per subscription (until items linked)
-function estimateMargin(s: Subscription) {
-  // Heuristic: ~17% margin on typical reseller subs
-  const cost = Math.round(s.mrr * 0.83);
-  return { margin: s.mrr - cost, marginPct: Math.round(((s.mrr - cost) / s.mrr) * 100), cost };
-}
+/* The margin heuristic that used to live here — `cost = mrr × 0.83`, commented
+   "Heuristic: ~17% margin on typical reseller subs" — is gone. It returned 17% for
+   every subscription in the app, not because they earned 17% but because the number
+   was defined to be 17%, and it sorted a column, coloured a badge and fed a KPI tile.
+   Cost now comes from lib/vendor/cogs.ts: the vendor's own bill where one has been
+   recorded, the catalogue otherwise, and "Unknown" when neither exists. */
 
 /**
  * The facts about a subscription that stay invisible until they matter —
@@ -84,6 +87,11 @@ function SubExceptions({ sub, size = "sm" }: { sub: Subscription; size?: "sm" | 
 export default function SubscriptionsPage() {
   const router = useRouter();
   const { data: subs, isLoading, error, refetch } = useSubscriptions();
+  /* The catalogue is what makes a margin real rather than a multiplier — see
+     lib/vendor/cogs.ts. Empty while it loads, which resolves to "Unknown" rather
+     than to a wrong number. */
+  const { data: catalogItems } = useItems();
+  const catalog = React.useMemo(() => catalogItems ?? [], [catalogItems]);
   const { data: trials } = useActiveTrials();
   const [tab, setTab] = React.useState("all");
   const [vendor, setVendor] = React.useState("all");
@@ -191,11 +199,20 @@ export default function SubscriptionsPage() {
   const activeARR = activeMRR * 12;
   const totalSeats = activeSubs.reduce((s, x) => s + x.seats, 0);
   const usedSeats = activeSubs.reduce((s, x) => s + x.used, 0);
-  const monthlyMargin = activeSubs.reduce((acc, s) => acc + estimateMargin(s).margin, 0);
+  /* Margin from real cost. Subscriptions whose cost is unknown are EXCLUDED from the
+     total rather than counted as free — including them would inflate the margin by
+     exactly the amount nobody has measured. `marginUnknownCount` puts that on screen
+     so the tile is not read as covering everything. */
+  const cogsRows = activeSubs.map((s) => subscriptionCogs(s, catalog));
+  const cogsRollup = cogsTotals(cogsRows);
+  const monthlyMargin = cogsRollup.marginMonthly;
   const annualMargin = monthlyMargin * 12;
-  const avgMarginPct = activeSubs.length > 0
-    ? Math.round(activeSubs.reduce((a, s) => a + estimateMargin(s).marginPct, 0) / activeSubs.length)
-    : 0;
+  const marginUnknownCount = cogsRollup.unknownCount;
+  const marginEstimatedCount = cogsRollup.estimatedCount;
+  /* Weighted by revenue, not a mean of percentages: averaging percentages lets a
+     ₹500 subscription move the figure as much as a ₹5,00,000 one. */
+  const knownMrr = cogsRows.reduce((a, c, i) => a + (c.monthlyCost == null ? 0 : activeSubs[i].mrr), 0);
+  const avgMarginPct = knownMrr > 0 ? Math.round((monthlyMargin / knownMrr) * 100) : 0;
   const atRiskCount = subsByWorkspace.filter((s) => {
     const dl = daysUntil(s.renewal_date);
     return s.status === "active" && dl !== null && dl >= 0 && dl <= 30;
@@ -266,6 +283,18 @@ export default function SubscriptionsPage() {
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                   <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Margin (ARR)</p>
                   <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(annualMargin, { compact: true })} <span className="text-xs text-ink-3 font-normal">({avgMarginPct}%)</span></p>
+                  {/* A total that silently drops the unmeasured rows reads as covering
+                      everything. Both counts are stated so it cannot. */}
+                  {marginUnknownCount > 0 && (
+                    <p className="mt-0.5 text-[10px] leading-snug text-amber-ink">
+                      {marginUnknownCount} excluded — no cost
+                    </p>
+                  )}
+                  {marginEstimatedCount > 0 && (
+                    <p className="mt-0.5 text-[10px] leading-snug text-ink-3">
+                      {marginEstimatedCount} from catalogue, not vendor bills
+                    </p>
+                  )}
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                   <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Total Subscriptions</p>
@@ -303,6 +332,15 @@ export default function SubscriptionsPage() {
           subscriptions whose cost we cannot look up at all. Self-hiding when there
           is nothing to say, so it costs no vertical space on a good day. */}
       {!isLoading && <MarginAlertsCard />}
+
+      {/* Seats the vendor bills us for vs seats we bill the customer. */}
+      {!isLoading && subsByWorkspace.length > 0 && (
+        <LicenseLeakageCard
+          subscriptions={subsByWorkspace}
+          catalog={catalog}
+          onReconcile={() => setReconcileOpen(true)}
+        />
+      )}
 
       {/* Trials in progress — virtual subs */}
       {!isLoading && trials && trials.length > 0 && tab !== "trials" && (
@@ -537,7 +575,8 @@ export default function SubscriptionsPage() {
               </thead>
               <tbody>
                 {shown.map((s) => {
-                  const m = estimateMargin(s);
+                  const cogs = subscriptionCogs(s, catalog);
+                  const mb = cogsBadge(cogs);
                   const dl = daysUntil(s.renewal_date);
                   const t  = term(s.start_date, s.renewal_date);
                   const isUrgent = dl !== null && dl >= 0 && dl <= 30;
@@ -582,10 +621,16 @@ export default function SubscriptionsPage() {
                       {/* Margin — colour-coded badge. */}
                       <td className="px-3 py-2.5 text-right align-top">
                         <div className="flex flex-col items-end gap-0.5">
-                          <Badge kind={m.marginPct >= 18 ? "success" : m.marginPct >= 14 ? "warning" : "danger"} size="sm">
-                            {m.marginPct}%
-                          </Badge>
-                          <span className="text-[10px] text-ink-2 tabular-nums font-medium">{rupee(m.margin)}</span>
+                          {/* The tooltip carries the SOURCE. A catalogue estimate and a
+                              vendor-billed figure look identical on screen and are not
+                              equally trustworthy. */}
+                          <Badge kind={mb.kind} size="sm" title={mb.title}>{mb.label}</Badge>
+                          {cogs.marginMonthly != null && (
+                            <span className="text-[10px] text-ink-2 tabular-nums font-medium">{rupee(cogs.marginMonthly)}</span>
+                          )}
+                          {cogs.source === "catalog" && (
+                            <span className="text-[9px] uppercase tracking-wider text-ink-3">est.</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-sm text-ink-2 align-top whitespace-nowrap">{s.start_date ? formatDate(s.start_date) : "—"}</td>
