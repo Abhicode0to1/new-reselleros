@@ -16,7 +16,8 @@ import { useItems } from "@/lib/queries/items";
 import { subscriptionCogs, cogsBadge, cogsTotals } from "@/lib/vendor/cogs";
 import { LicenseLeakageCard } from "@/components/features/subscriptions/license-leakage-card";
 import { SeatRequestsCard } from "@/components/features/subscriptions/seat-requests-card";
-import { useSeatRequests, useMrrSnapshots } from "@/lib/queries/seat-requests";
+import { useSeatRequests, useMrrSnapshots, useAmendments } from "@/lib/queries/seat-requests";
+import { AmendmentHistory } from "@/components/features/subscriptions/amendment-history";
 import { RetentionCard } from "@/components/features/subscriptions/retention-card";
 import { assessUtilisation } from "@/lib/subscriptions/utilisation";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -931,6 +932,10 @@ export default function SubscriptionsPage() {
               </SheetDescription>
             </SheetHeader>
             <BillingScheduleCard subscription={scheduleSub} todayISO={localDateISO(new Date())} />
+            {/* The contract's own history, next to its schedule — the two questions a
+                rep opens this drawer with are "what will they be billed?" and "what
+                changed?". */}
+            <AmendmentHistorySection subscription={scheduleSub} />
           </SheetContent>
         </Sheet>
       )}
@@ -1096,4 +1101,15 @@ function DomainCell({ sub, compact = false }: { sub: Subscription; compact?: boo
       />
     </div>
   );
+}
+
+/**
+ * The amendment ledger for one subscription.
+ *
+ * Its own component so the query is scoped to whichever subscription the drawer has
+ * open, rather than fetching every subscription's history to render one.
+ */
+function AmendmentHistorySection({ subscription }: { subscription: Subscription }) {
+  const { data: amendments } = useAmendments(subscription.id);
+  return <AmendmentHistory amendments={amendments ?? []} currentSeats={subscription.seats} />;
 }

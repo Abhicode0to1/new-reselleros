@@ -10,7 +10,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import type { SeatRequest, MrrSnapshot } from "@/lib/supabase/database.types";
+import type { SeatRequest, MrrSnapshot, ContractAmendment } from "@/lib/supabase/database.types";
 
 export function useSeatRequests(opts?: { pendingOnly?: boolean }) {
   return useQuery({
@@ -51,5 +51,29 @@ export function useMrrSnapshots(months = 6) {
       return data ?? [];
     },
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * The contract amendment ledger for one subscription.
+ *
+ * Read-only in the strongest sense available: the rows are written by a Postgres
+ * trigger and the table refuses UPDATE outright, so there is no mutation hook here
+ * to write.
+ */
+export function useAmendments(subscriptionId: string | undefined) {
+  return useQuery({
+    queryKey: ["contract-amendments", subscriptionId],
+    enabled: Boolean(subscriptionId),
+    queryFn: async (): Promise<ContractAmendment[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("contract_amendments")
+        .select("*")
+        .eq("subscription_id", subscriptionId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 }

@@ -1296,6 +1296,34 @@ type MrrSnapshotRow = {
   subscription_count: number;
   created_at: string;
 };
+/**
+ * An append-only record of a change to a subscription's commercial terms.
+ *
+ * `Insert` and `Update` are `never` on purpose: rows arrive only from
+ * trg_subscriptions_record_amendment, and the table refuses edits outright. Typing
+ * them as writable would offer the app a door Postgres has already bricked up.
+ * See migration 20260816170000.
+ */
+type ContractAmendmentRow = {
+  id: string;
+  tenant_id: string;
+  subscription_id: string;
+  customer_name: string | null;
+  /** One or more joined with "+", e.g. "seats_added+price_changed". */
+  kind: string;
+  /** {field: {from, to}} for every commercial field that moved. */
+  changes: Record<string, { from: unknown; to: unknown }>;
+  seats_from: number | null;
+  seats_to: number | null;
+  mrr_from: number | null;
+  mrr_to: number | null;
+  changed_by: string | null;
+  /** "user" when a person did it, "system" for crons and service-role routes. */
+  source: string;
+  note: string | null;
+  created_at: string;
+};
+
 type MrrSnapshotInsert = {
   id?: string;
   tenant_id: string;
@@ -3414,6 +3442,7 @@ export type Database = {
       provisioning_tasks: { Row: ProvisioningTaskRow; Insert: ProvisioningTaskInsert; Update: Partial<ProvisioningTaskInsert>; Relationships: [] };
       seat_requests: { Row: SeatRequestRow; Insert: SeatRequestInsert; Update: Partial<SeatRequestInsert>; Relationships: [] };
       mrr_snapshots: { Row: MrrSnapshotRow; Insert: MrrSnapshotInsert; Update: Partial<MrrSnapshotInsert>; Relationships: [] };
+      contract_amendments: { Row: ContractAmendmentRow; Insert: never; Update: never; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
       payments:           { Row: PaymentRow;           Insert: PaymentInsert;           Update: PaymentUpdate;           Relationships: [] };
@@ -4429,6 +4458,7 @@ export type QuoteSignature = QuoteSignatureRow;
 export type ProvisioningTask = ProvisioningTaskRow;
 export type SeatRequest = SeatRequestRow;
 export type MrrSnapshot = MrrSnapshotRow;
+export type ContractAmendment = ContractAmendmentRow;
 export type Invoice      = InvoiceRow;
 export type Subscription = SubscriptionRow;
 export type Payment      = PaymentRow;
