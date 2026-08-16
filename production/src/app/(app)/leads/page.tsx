@@ -45,6 +45,7 @@ import { localDateISO } from "@/lib/leads/outcomes";
 import { buildForecast, stageProbability } from "@/lib/leads/forecast";
 import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
 import { stageAge, staleDeals } from "@/lib/leads/velocity";
+import { buildTimeline, timelineMeta } from "@/lib/leads/timeline";
 import { useItems } from "@/lib/queries/items";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
@@ -1478,6 +1479,18 @@ function LeadDetailSheet({
 
   // Follow-up tasks linked to this lead — drives the "Follow-ups" drawer section
   const { data: tasksForLead = [] } = useTasksForLead(lead?.id);
+
+  /* The unified stream. Built from sources this drawer already loads — merging is a
+     view concern, so no new fetch. Payments are not passed yet: they link to a lead
+     only through a quote, and buildTimeline accepts them the day that query exists
+     rather than pretending the gap is not there. */
+  /** Inline note composer state. Local to the drawer — a note is not worth a dialog. */
+  const [noteDraft, setNoteDraft] = React.useState("");
+
+  const timeline = React.useMemo(
+    () => buildTimeline({ activities, quotes: quotesForLead, tasks: tasksForLead }),
+    [activities, quotesForLead, tasksForLead],
+  );
   const completeTask = useCompleteTask();
   const snoozeTask   = useSnoozeTask();
   const deleteTask   = useDeleteTask();
@@ -1769,6 +1782,63 @@ function LeadDetailSheet({
                 )}
               </div>
 
+              {/* Second action row — recording what happened, as opposed to the row above
+                  which starts a conversation. Both matter: a call that is made and never
+                  logged is invisible to the timeline, the stage-age badge and every
+                  forecast built on them. */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    logActivity.mutate({ leadId: lead.id, kind: "call",
+                      detail: `Call logged${lead.contact_phone ? ` · ${lead.contact_phone}` : ""}` });
+                    toast.success("Call logged");
+                  }}
+                  title="Record a call you made elsewhere — from your phone, or before this lead existed here"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-md border border-hairline bg-paper py-2 text-xs font-semibold text-ink-2 transition-colors hover:bg-paper-2"
+                >
+                  <Icon name="mobile" size={13} /> Log call
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendQuote}
+                  title="Open the quote builder with this lead's details. The stage moves when the quote actually exists."
+                  className="inline-flex items-center justify-center gap-1.5 rounded-md border border-amber/50 bg-amber-soft/40 py-2 text-xs font-semibold text-amber-ink transition-colors hover:bg-amber-soft/70"
+                >
+                  <Icon name="send" size={13} /> Generate quote
+                </button>
+              </div>
+
+              {/* Note composer, inline rather than behind a dialog — a note nobody can
+                  write in two seconds is a note nobody writes. */}
+              <div className="flex items-start gap-2">
+                <textarea
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  rows={2}
+                  placeholder="Add a note — what was said, what they asked for…"
+                  aria-label={`Add a note about ${lead.company}`}
+                  className="min-w-0 flex-1 resize-y rounded-md border border-hairline bg-paper px-2 py-1.5 text-xs text-ink placeholder:text-ink-4 focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber"
+                />
+                <button
+                  type="button"
+                  disabled={!noteDraft.trim()}
+                  onClick={() => {
+                    logActivity.mutate({ leadId: lead.id, kind: "note", detail: noteDraft.trim() });
+                    setNoteDraft("");
+                    toast.success("Note added");
+                  }}
+                  className={cn(
+                    "shrink-0 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors",
+                    noteDraft.trim()
+                      ? "border-hairline-strong bg-paper text-ink-2 hover:bg-paper-2"
+                      : "cursor-not-allowed border-hairline text-ink-4",
+                  )}
+                >
+                  Save
+                </button>
+              </div>
+
               {/* AI draft — the "what do I say?" moat. One tap = a Gemini-drafted
                   WhatsApp/email follow-up tailored to THIS lead (plan, seats,
                   stage, notes). Human-in-the-loop: the draft is editable and never
@@ -1992,30 +2062,59 @@ function LeadDetailSheet({
           {/* Activity timeline — outbound touches + inbound emails — its own tab */}
           {drawerTab === "activity" && (
           <div>
-            <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Activity</div>
-            {activities.length === 0 ? (
+            <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">
+              Everything that has happened
+            </div>
+            {/* One stream, not three lists. The drawer already loaded activities, quotes
+                and tasks; showing them separately made the rep do the interleaving in
+                their head, and get it wrong — each list sorts alone, so a quote sent on
+                the 3rd rendered above a call made on the 5th. */}
+            {timeline.entries.length === 0 ? (
               <div className="text-sm text-ink-3 italic p-3 bg-paper-2 rounded-md">
-                No activity yet. Emailing, calling or WhatsApp-ing from here gets logged automatically.
+                Nothing recorded yet. Calls, WhatsApps, quotes, tasks and payments all
+                appear here once they happen.
               </div>
             ) : (
               <ul className="space-y-2">
-                {activities.map((a) => {
-                  const meta = ACTIVITY_META[a.kind] ?? { icon: "clock" as const, label: a.kind };
+                {timeline.entries.map((e) => {
+                  const meta = timelineMeta(e);
                   return (
-                    <li key={a.id} className="flex items-start gap-2.5">
-                      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-paper-2 text-ink-3">
+                    <li key={e.id} className="flex items-start gap-2.5">
+                      <div className={cn(
+                        "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-paper-2",
+                        meta.tone,
+                      )}>
                         <Icon name={meta.icon} size={12} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm text-ink">{a.detail || meta.label}</div>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-sm text-ink">{e.title}</span>
+                          {typeof e.amount === "number" && e.amount > 0 && (
+                            <span className="shrink-0 font-mono text-xs font-semibold text-ink-2">
+                              {rupee(e.amount)}
+                            </span>
+                          )}
+                        </div>
+                        {e.detail && <div className="truncate text-xs text-ink-2">{e.detail}</div>}
                         <div className="text-[11px] text-ink-3">
-                          {meta.label} · {formatDate(a.created_at)} {fmtActTime(a.created_at)}
+                          {formatDate(e.at)} {fmtActTime(e.at)}
                         </div>
                       </div>
                     </li>
                   );
                 })}
               </ul>
+            )}
+            {/* The gap, stated. An entry with no usable date is dropped rather than
+                placed at a guessed position — a wrongly-ordered event invents a history
+                that never happened. */}
+            {timeline.undated > 0 && (
+              <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
+                {timeline.undated} record{timeline.undated === 1 ? " has" : "s have"} no
+                usable date and {timeline.undated === 1 ? "is" : "are"} not shown — placing
+                {timeline.undated === 1 ? " it" : " them"} anywhere in this list would
+                invent an order that never happened.
+              </p>
             )}
           </div>
           )}
