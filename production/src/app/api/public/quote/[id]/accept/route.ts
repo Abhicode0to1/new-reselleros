@@ -11,6 +11,41 @@ import { isQuoteExpired, rupee } from "@/lib/utils";
 import { quoteTokenMatches } from "@/lib/quotes/accept-token";
 import { sendEmail } from "@/lib/email/send";
 import { buildSalesAcknowledgementHtml } from "@/lib/email/quote-template";
+import { configureQuote, describeChanges, type LineChoice } from "@/lib/quotes/configure";
+import { grossAmount } from "@/lib/quotes/amounts";
+import type { QuoteLineItem, Item } from "@/lib/supabase/database.types";
+
+/** Accepts only the three fields a choice may carry — anything else is dropped. */
+function parseChoices(raw: unknown): LineChoice[] {
+  if (!Array.isArray(raw)) return [];
+  const out: LineChoice[] = [];
+  for (const entry of raw.slice(0, 100)) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    if (typeof e.lineId !== "string") continue;
+    out.push({
+      lineId: e.lineId,
+      seats: typeof e.seats === "number" ? e.seats : undefined,
+      included: typeof e.included === "boolean" ? e.included : undefined,
+    });
+  }
+  return out;
+}
+
+/**
+ * The address the request came from.
+ *
+ * Read from x-forwarded-for because Vercel terminates TLS upstream. The FIRST entry is
+ * the client; the rest are proxies. It is trivially spoofable by the client and that is
+ * fine — it is recorded as evidence of what arrived, not asserted as proof of origin,
+ * which is why the migration's comment says the same thing.
+ */
+function clientIp(request: NextRequest): string | null {
+  const fwd = request.headers.get("x-forwarded-for");
+  const first = fwd?.split(",")[0]?.trim();
+  if (first) return first;
+  return request.headers.get("x-real-ip");
+}
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createAdminClient();
@@ -18,7 +53,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   // 1. Fetch the quote to validate state + authorize the caller by token
   const { data: quote, error: qErr } = await supabase
     .from("quotes")
-    .select("id, status, payment_status, expires_date, customer_name, tenant_id, public_token, amount")
+    .select("id, status, payment_status, expires_date, customer_name, tenant_id, public_token, amount, line_items, tax_rate, subtotal")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -47,6 +82,110 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   // through all of 30 Jun in India, not lapse at 05:30 IST (UTC midnight). (#20)
   if (isQuoteExpired(quote.expires_date)) {
     return NextResponse.json({ error: "This quote has expired — please ask the reseller for a fresh one" }, { status: 400 });
+  }
+
+  // 2b. The customer's configuration, re-priced HERE. The body carries a shape
+  //     ({lineId, seats, included}) and a signature — never a price. See
+  //     lib/quotes/configure.ts.
+  let body: Record<string, unknown> = {};
+  try { body = (await request.json()) as Record<string, unknown>; } catch { /* no body is fine */ }
+
+  const choices = parseChoices(body.choices);
+  const { data: catalogRows } = await supabase
+    .from("items").select("*").eq("tenant_id", quote.tenant_id).eq("is_active", true);
+
+  const configured = configureQuote(
+    (quote.line_items ?? []) as QuoteLineItem[],
+    choices,
+    (catalogRows ?? []) as Item[],
+  );
+
+  /* A customer must not be able to self-accept into a deal the reseller's own approval
+     rules would have stopped. When their change needs sign-off, this is a CHANGE
+     REQUEST: nothing is accepted, the quote is untouched, and the reseller is told what
+     was asked for. Returning 200 with accepted:false rather than an error, because the
+     customer did nothing wrong — the answer is "we will come back to you". */
+  if (configured.changed && !configured.selfAcceptable) {
+    const changes = describeChanges(configured);
+    try {
+      const { data: tenant } = await supabase
+        .from("tenants").select("name, email").eq("id", quote.tenant_id).single();
+      if (tenant?.email) {
+        await sendEmail({
+          to: tenant.email,
+          subject: `Change requested on quote ${params.id} by ${quote.customer_name}`,
+          text:
+            `${quote.customer_name} reconfigured quote ${params.id} on the online quote page.\n\n` +
+            `${changes.join("\n")}\n\n` +
+            `New total would be ${rupee(grossAmount(configured.subtotal, quote.tax_rate ?? 18))}.\n\n` +
+            `It was NOT accepted — the new pricing needs ${configured.approval.tier === "owner" ? "owner" : "manager"} approval:\n` +
+            `${configured.approval.reasons.join("\n")}\n\n` +
+            `Open the quote to approve the new figures or call the customer.`,
+        });
+      }
+    } catch (mailErr) {
+      console.error(`[quote-accept] change-request email failed for ${params.id}:`, mailErr);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      accepted: false,
+      changeRequested: true,
+      message: "Your changes have been sent to the reseller — they will confirm the new pricing with you.",
+    });
+  }
+
+  /* An acceptable change is written to the quote BEFORE accepting, so accept_quote and
+     everything downstream (subscription seats, invoice amount) see what the customer
+     actually agreed to rather than the original shape. */
+  if (configured.changed) {
+    const newLines: QuoteLineItem[] = configured.lines
+      .filter((l) => l.included)
+      .map((l) => ({ ...l.line, qty: l.qty, rate: l.rate, cost: l.cost }));
+    const newSubtotal = configured.subtotal;
+    const { error: reshapeErr } = await supabase
+      .from("quotes")
+      .update({
+        line_items: newLines,
+        subtotal: newSubtotal,
+        total_cost: configured.economics.totalCost,
+        amount: grossAmount(newSubtotal, quote.tax_rate ?? 18),
+        seats: newLines.reduce((s, l) => s + l.qty, 0),
+      })
+      .eq("id", params.id);
+    if (reshapeErr) {
+      return NextResponse.json({ error: reshapeErr.message }, { status: 500 });
+    }
+  }
+
+  // 2c. The click-to-sign acknowledgement, when the page collected one.
+  //     Recorded BEFORE accept_quote so a signature is never lost to a later failure —
+  //     an unmatched signature is recoverable, an accepted quote with no record of who
+  //     agreed is not.
+  const signerName = typeof body.signerName === "string" ? body.signerName.trim().slice(0, 200) : "";
+  if (signerName) {
+    const total = grossAmount(configured.subtotal, quote.tax_rate ?? 18);
+    const { error: sigErr } = await supabase.from("quote_signatures").insert({
+      tenant_id: quote.tenant_id,
+      quote_id: params.id,
+      signer_name: signerName,
+      signer_email: typeof body.signerEmail === "string" ? body.signerEmail.trim().slice(0, 320) : null,
+      signer_title: typeof body.signerTitle === "string" ? body.signerTitle.trim().slice(0, 200) : null,
+      signer_ip: clientIp(request),
+      user_agent: request.headers.get("user-agent")?.slice(0, 1000) ?? null,
+      /* The figures AS SHOWN. A signature pointing at a mutable row proves nothing. */
+      signed_snapshot: {
+        subtotal: configured.subtotal,
+        total,
+        changed: configured.changed,
+        lines: configured.lines
+          .filter((l) => l.included)
+          .map((l) => ({ name: l.line.name, qty: l.qty, rate: l.rate })),
+      },
+    });
+    if (sigErr) {
+      console.error(`[quote-accept] signature insert failed for ${params.id}:`, sigErr);
+    }
   }
 
   // 3. Accept + convert the linked lead → customer atomically via accept_quote
@@ -94,5 +233,5 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   console.info(`[quote-accept] ${params.id} accepted by ${quote.customer_name} (tenant ${quote.tenant_id})`);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, accepted: true, signed: Boolean(signerName) });
 }

@@ -9,7 +9,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { rupee, formatDate } from "@/lib/utils";
+import { rupee, formatDate, cn } from "@/lib/utils";
 import { isForeignCurrency, formatForeign } from "@/lib/currency";
 import { loadRazorpayCheckout } from "@/lib/razorpay/checkout-client";
 import type { LineCommitment, BillingCycle } from "@/lib/supabase/database.types";
@@ -40,6 +40,14 @@ export type PublicLine = {
   qty: number;
   rate: number;
   commitment?: LineCommitment;
+  /* What the RESELLER decided the customer may change. Still only a hint to the UI —
+     the server re-checks every one of these before it prices anything, because the
+     public page has no session and everything it posts is attacker-controlled. */
+  optional?: boolean;
+  included_by_default?: boolean;
+  seats_adjustable?: boolean;
+  min_seats?: number;
+  max_seats?: number;
 };
 
 function scheduleLabel(commitment: LineCommitment | undefined, cycle: BillingCycle): string {
@@ -113,13 +121,82 @@ export function QuoteAcceptView({
   const fmtInv = (annual: number) =>
     perInvoice ? `${fmtC(dRound(annual / billingN))}${billingUnit}` : fmtC(annual);
 
+  /* ─── Customer-adjustable configuration ──────────────────────────────────
+     Deliberately DOMESTIC-ONLY. Mixing customer re-pricing with FX conversion means
+     two independent sources of rounding on the same number, and this file already
+     carries a careful comment about not rebuilding a ₹ total from rounded foreign
+     lines. A foreign quote stays fixed; the reseller changes it by hand.
+
+     The browser holds only the SHAPE. Every price on screen once something moves
+     comes back from /configure — nothing here multiplies a rate by a seat count. */
+  const adjustable = !isForeign && lineItems.some((l) => l.optional || l.seats_adjustable);
+  const [choices, setChoices] = React.useState<Record<string, { seats?: number; included?: boolean }>>({});
+  const [liveConfig, setLiveConfig] = React.useState<{
+    subtotal: number; total: number; changed: boolean; selfAcceptable: boolean;
+    lines: Array<{ lineId: string; qty: number; included: boolean; rate: number; amount: number; bandLabel: string | null; rePriced: boolean }>;
+  } | null>(null);
+  const [pricing, setPricing] = React.useState(false);
+  const [signerName, setSignerName] = React.useState("");
+  const [signerTitle, setSignerTitle] = React.useState("");
+  const [signerEmail, setSignerEmail] = React.useState("");
+  const [changeRequested, setChangeRequested] = React.useState(false);
+
+  const choiceList = React.useMemo(
+    () => Object.entries(choices).map(([lineId, v]) => ({ lineId, ...v })),
+    [choices],
+  );
+
+  React.useEffect(() => {
+    if (!adjustable || choiceList.length === 0) { setLiveConfig(null); return; }
+    let cancelled = false;
+    setPricing(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/public/quote/${quote.id}/configure?t=${encodeURIComponent(token)}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ choices: choiceList }),
+        });
+        const json = await res.json();
+        if (!cancelled && res.ok) setLiveConfig(json);
+      } catch {
+        /* Leaving the previous figures on screen is wrong — they may no longer match
+           what the customer has selected. Clear, and the original total shows again. */
+        if (!cancelled) setLiveConfig(null);
+      } finally {
+        if (!cancelled) setPricing(false);
+      }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [choiceList, adjustable, quote.id, token]);
+
+  /** The number the customer is agreeing to — the server's, whenever there is one. */
+  const payableTotal = liveConfig ? liveConfig.total : dTotal;
+
   const handleAccept = async () => {
     setAccepting(true);
     try {
-      const res = await fetch(`/api/public/quote/${quote.id}/accept?t=${encodeURIComponent(token)}`, { method: "POST" });
+      const res = await fetch(`/api/public/quote/${quote.id}/accept?t=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          choices: choiceList,
+          signerName: signerName.trim() || undefined,
+          signerTitle: signerTitle.trim() || undefined,
+          signerEmail: signerEmail.trim() || undefined,
+        }),
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Could not accept");
       setConfirmOpen(false);
+      /* The server may answer "not accepted, we have told the reseller" when the
+         customer's changes need sign-off. That is a success, not an error — they did
+         nothing wrong and the answer is "we will come back to you". */
+      if (json.changeRequested) {
+        setChangeRequested(true);
+        toast.success("Sent to the reseller", { description: json.message, duration: 8000 });
+        return;
+      }
       setAccepted(true);
       toast.success("Quote accepted · the reseller has been notified");
     } catch (e) {
@@ -199,6 +276,32 @@ export function QuoteAcceptView({
       setPaying(false);
     }
   };
+
+  /* ──────────── Change requested ────────────
+     A distinct screen from "accepted", because the customer must not walk away
+     believing the deal is done. Nothing was accepted and nothing will be charged. */
+  if (changeRequested) {
+    return (
+      <div className="min-h-screen bg-paper-2/30 flex items-start justify-center py-10 px-4">
+        <div className="max-w-2xl w-full bg-paper rounded-xl shadow-sm border border-hairline p-8 md:p-12 text-center">
+          <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-amber/15 grid place-items-center">
+            <Icon name="mail" size={32} className="text-amber-ink" />
+          </div>
+          <h1 className="font-serif text-3xl text-ink mb-2">Sent to {tenantName}</h1>
+          <p className="text-sm text-ink-3">
+            Your changes to quote <span className="font-mono text-ink">{quote.id}</span> have been sent.
+            <b className="text-ink"> Nothing has been accepted and nothing will be charged</b> — {tenantName} will
+            confirm the final figure with you first.
+          </p>
+          {tenantPhone && (
+            <p className="mt-4 text-sm text-ink-2">
+              Need it sooner? Call {tenantName} on <a className="font-medium text-ink underline" href={`tel:${tenantPhone}`}>{tenantPhone}</a>.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ──────────── Thank-you screen (accepted OR paid) ────────────
   if (accepted || paid) {
@@ -357,33 +460,111 @@ export function QuoteAcceptView({
               </tr>
             </thead>
             <tbody>
-              {dispLines.map(({ line, unit, amount }) => (
-                <tr key={line.id} className="border-b border-hairline">
-                  <td className="py-3 text-sm">
-                    <p className="font-medium">{line.name}</p>
-                    {line.commitment && (
-                      <p className="text-[11px] text-ink-3 mt-0.5">
-                        {scheduleLabel(line.commitment, effectiveCycle)}
-                      </p>
-                    )}
-                  </td>
-                  <td className="py-3 text-right text-sm tabular-nums">{line.qty}</td>
-                  <td className="py-3 text-right text-sm tabular-nums">{fmtInv(unit)}</td>
-                  <td className="py-3 text-right text-sm tabular-nums font-medium">{fmtInv(amount)}</td>
-                </tr>
-              ))}
+              {dispLines.map(({ line, unit, amount }) => {
+                /* Once anything is adjusted, EVERY figure on this row comes from the
+                   server's answer. Nothing here multiplies a rate by a seat count —
+                   a number the browser computed is a number the customer chose. */
+                const live      = liveConfig?.lines.find((l) => l.lineId === line.id);
+                const qty       = live?.qty ?? line.qty;
+                const rowUnit   = live ? live.rate : unit;
+                const rowAmount = live ? live.amount : amount;
+                const included  = live ? live.included : (!line.optional || (line.included_by_default ?? false));
+                const bounds    = line.seats_adjustable
+                  ? {
+                      min: Math.max(1, line.min_seats ?? Math.max(1, Math.floor(line.qty / 2))),
+                      max: line.max_seats ?? Math.max(line.qty * 3, line.qty + 50),
+                    }
+                  : null;
+
+                return (
+                  <tr key={line.id} className={cn("border-b border-hairline", !included && "opacity-45")}>
+                    <td className="py-3 text-sm">
+                      <div className="flex items-start gap-2">
+                        {adjustable && line.optional && (
+                          <input
+                            type="checkbox"
+                            checked={included}
+                            aria-label={`Include ${line.name}`}
+                            onChange={(e) => setChoices((c) => ({ ...c, [line.id]: { ...c[line.id], included: e.target.checked } }))}
+                            className="mt-1 h-4 w-4 shrink-0 accent-amber"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-medium">
+                            {line.name}
+                            {line.optional && <span className="ml-1.5 text-[10px] uppercase tracking-wider text-ink-3">optional</span>}
+                          </p>
+                          {line.commitment && (
+                            <p className="text-[11px] text-ink-3 mt-0.5">
+                              {scheduleLabel(line.commitment, effectiveCycle)}
+                            </p>
+                          )}
+                          {live?.rePriced && live.bandLabel && (
+                            <p className="mt-0.5 text-[11px] font-medium text-emerald">
+                              {qty} seats reaches the {live.bandLabel} price
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 text-right text-sm tabular-nums">
+                      {adjustable && bounds && included ? (
+                        <input
+                          type="number"
+                          min={bounds.min}
+                          max={bounds.max}
+                          value={qty}
+                          aria-label={`Seats for ${line.name}`}
+                          onChange={(e) => {
+                            const n = parseInt(e.target.value, 10);
+                            if (Number.isFinite(n)) setChoices((c) => ({ ...c, [line.id]: { ...c[line.id], seats: n } }));
+                          }}
+                          className="w-16 rounded border border-hairline bg-paper px-1.5 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-amber"
+                        />
+                      ) : qty}
+                    </td>
+                    <td className="py-3 text-right text-sm tabular-nums">{included ? fmtInv(rowUnit) : "—"}</td>
+                    <td className="py-3 text-right text-sm tabular-nums font-medium">{included ? fmtInv(rowAmount) : "—"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+
+          {adjustable && (
+            <p className="-mt-4 mb-6 text-[11px] leading-snug text-ink-3">
+              You can change the seat count and pick the optional items above — the price updates
+              from {tenantName}&apos;s own price list, not from this page.
+              {pricing && <span className="ml-1 text-amber-ink">Updating…</span>}
+            </p>
+          )}
+
+          {liveConfig?.changed && !liveConfig.selfAcceptable && (
+            <div className="mb-6 rounded-lg border border-amber/60 bg-amber-soft p-3.5">
+              <p className="text-sm font-semibold text-amber-ink">
+                {tenantName} needs to confirm this combination.
+              </p>
+              <p className="mt-0.5 text-[12px] leading-snug text-ink-2">
+                Your changes fall outside the pricing they can approve automatically. Confirming below
+                sends it to them — they will come back to you with the final figure rather than
+                charging you this amount.
+              </p>
+            </div>
+          )}
 
           {/* Totals */}
           <div className="flex justify-end mb-6">
             <div className="w-full max-w-xs space-y-2 text-sm">
-              <Row label="Subtotal" value={fmtInv(dSubtotal)} />
-              {quote.discount_pct > 0 && (
+              {/* When the customer has changed something, every figure here is the
+                  server's — including the tax, derived as (total − subtotal) rather
+                  than recomputed locally, so the rounding matches the one number that
+                  will actually be charged. */}
+              <Row label="Subtotal" value={fmtInv(liveConfig ? liveConfig.subtotal : dSubtotal)} />
+              {quote.discount_pct > 0 && !liveConfig && (
                 <Row label={`Discount (${quote.discount_pct}%)`} value={`−${fmtInv(dDiscount)}`} accent />
               )}
-              <Row label="Taxable" value={fmtInv(dTaxable)} />
-              <Row label={`GST (${quote.tax_rate}%)`} value={fmtInv(dTax)} />
+              <Row label="Taxable" value={fmtInv(liveConfig ? liveConfig.subtotal : dTaxable)} />
+              <Row label={`GST (${quote.tax_rate}%)`} value={fmtInv(liveConfig ? liveConfig.total - liveConfig.subtotal : dTax)} />
               <div className="border-t-2 border-ink pt-2 mt-2">
                 <div className="flex justify-between items-baseline">
                   <span className="text-[11px] uppercase tracking-widest font-semibold">
@@ -393,14 +574,14 @@ export function QuoteAcceptView({
                   </span>
                   <span className="font-serif text-2xl tabular-nums">
                     {perInvoice
-                      ? `${fmtC(dRound(dTotal / billingN))}${billingUnit}`
-                      : fmtC(dTotal)}
+                      ? `${fmtC(dRound(payableTotal / billingN))}${billingUnit}`
+                      : fmtC(payableTotal)}
                   </span>
                 </div>
                 {perInvoice && (
                   <div className="flex justify-between items-baseline mt-1.5 text-ink-3">
                     <span className="text-[11px]">Annual contract value</span>
-                    <span className="text-sm tabular-nums">{fmtC(dTotal)}/yr</span>
+                    <span className="text-sm tabular-nums">{fmtC(payableTotal)}/yr</span>
                   </div>
                 )}
                 {!perInvoice && billingN === 1 && (
@@ -422,7 +603,12 @@ export function QuoteAcceptView({
 
           {/* Action zone — hidden in print */}
           <div className="pt-6 mt-6 border-t border-hairline print:hidden space-y-3">
-            {payOnline && (
+            {/* Pay-online is switched OFF the moment the customer changes the shape.
+                The payment order is built server-side from the SAVED quote, so paying
+                now would charge the original total for a configuration nobody has
+                agreed to — the customer would pay the wrong amount and both sides
+                would think it was settled. Accept first, then pay. */}
+            {payOnline && !liveConfig?.changed && (
               <Button
                 variant="primary"
                 size="lg"
@@ -434,8 +620,14 @@ export function QuoteAcceptView({
                 Pay online now · {fmtC(dTotal)}
               </Button>
             )}
+            {payOnline && liveConfig?.changed && (
+              <p className="rounded-md border border-hairline bg-paper-2/60 px-3 py-2 text-[12px] leading-snug text-ink-2">
+                Paying online is available once {tenantName} confirms your changes — the payment
+                link still carries the original figure.
+              </p>
+            )}
             <Button
-              variant={payOnline ? "default" : "primary"}
+              variant={payOnline && !liveConfig?.changed ? "default" : "primary"}
               size="lg"
               icon="check_circle"
               loading={accepting}
@@ -443,7 +635,11 @@ export function QuoteAcceptView({
               onClick={() => setConfirmOpen(true)}
               className="w-full justify-center"
             >
-              {payOnline ? "Accept & pay later" : `Accept this quote · ${fmtC(dTotal)}`}
+              {payOnline && !liveConfig?.changed
+                ? "Accept & pay later"
+                : liveConfig?.changed && !liveConfig.selfAcceptable
+                  ? `Send changes to ${tenantName}`
+                  : `Accept this quote · ${fmtC(payableTotal)}`}
             </Button>
             <Button
               variant="default"
@@ -569,11 +765,68 @@ export function QuoteAcceptView({
             </div>
             <p className="text-sm text-ink-2 leading-relaxed">
               You&apos;re accepting quote <span className="font-mono text-ink">{quote.id}</span> for{" "}
-              <span className="font-semibold text-ink">{fmtC(dTotal)}</span>.
+              <span className="font-semibold text-ink">{fmtC(payableTotal)}</span>.
             </p>
             <p className="text-[13px] text-ink-3 leading-relaxed mt-2">
-              {tenantName} will be notified and will share payment instructions. No payment is taken now.
+              {liveConfig?.changed && !liveConfig.selfAcceptable
+                ? `${tenantName} will confirm the new figure with you before anything is charged.`
+                : `${tenantName} will be notified and will share payment instructions. No payment is taken now.`}
             </p>
+
+            {/* Click-to-sign. Named honestly: this records WHO confirmed, from where and
+                when. It is not a digital signature under the IT Act — that needs a DSC
+                from a licensed CA — and saying otherwise would put a legal claim on a
+                text box. The name is required because an anonymous confirmation is the
+                one thing this block exists to prevent. */}
+            <div className="mt-4 space-y-3 border-t border-hairline pt-4">
+              <div>
+                <label htmlFor="signer-name" className="block text-xs font-semibold text-ink-2 mb-1">
+                  Your full name <span className="text-rose">*</span>
+                </label>
+                <input
+                  id="signer-name"
+                  type="text"
+                  value={signerName}
+                  onChange={(e) => setSignerName(e.target.value)}
+                  placeholder="Name of the person confirming"
+                  className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="signer-title" className="block text-xs font-semibold text-ink-2 mb-1">
+                    Designation
+                  </label>
+                  <input
+                    id="signer-title"
+                    type="text"
+                    value={signerTitle}
+                    onChange={(e) => setSignerTitle(e.target.value)}
+                    placeholder="e.g. Director"
+                    className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="signer-email" className="block text-xs font-semibold text-ink-2 mb-1">
+                    Email
+                  </label>
+                  <input
+                    id="signer-email"
+                    type="email"
+                    value={signerEmail}
+                    onChange={(e) => setSignerEmail(e.target.value)}
+                    placeholder="you@company.in"
+                    className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink"
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] leading-snug text-ink-3">
+                Confirming records your name, the date and time, and the network address this was
+                sent from, together with the figures shown above. This is a record of your
+                confirmation — it is not a digital signature certificate.
+              </p>
+            </div>
+
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
               <Button
                 variant="ghost"
@@ -587,10 +840,12 @@ export function QuoteAcceptView({
                 variant="primary"
                 icon="check_circle"
                 loading={accepting}
+                disabled={!signerName.trim()}
+                title={!signerName.trim() ? "Type your name to confirm" : undefined}
                 onClick={handleAccept}
                 className="sm:w-auto justify-center"
               >
-                Confirm &amp; accept
+                {liveConfig?.changed && !liveConfig.selfAcceptable ? "Send to reseller" : "Confirm & accept"}
               </Button>
             </div>
           </div>

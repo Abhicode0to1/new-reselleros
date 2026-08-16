@@ -1022,6 +1022,16 @@ export type QuoteLineItem = {
   /** Optional domain this subscription is provisioned against (Google Workspace /
    *  M365 / Zoho). Per-line because a quote can hold products for different domains. */
   domain?: string | null;
+  // Customer-adjustable quote (lib/quotes/configure.ts) ─────────────────────
+  /** The customer may tick this line on or off on the public quote page. */
+  optional?: boolean;
+  /** For an optional line: is it ticked when the page first loads? */
+  included_by_default?: boolean;
+  /** The customer may change the seat count on the public quote page. */
+  seats_adjustable?: boolean;
+  /** Bounds for that change. Absent → a sensible default around the quoted qty. */
+  min_seats?: number;
+  max_seats?: number;
 };
 
 type QuoteRow = {
@@ -1149,6 +1159,46 @@ type QuoteInsert = {
   approval_rejection_reason?: string | null;
 }
 type QuoteUpdate = Partial<QuoteInsert>;
+
+/**
+ * A click-to-sign acknowledgement on the public quote page.
+ *
+ * Evidence of assent — NOT a digital signature under the IT Act 2000, which needs a
+ * DSC from a licensed CA. See migration 20260816113000 for why that distinction is
+ * written down rather than assumed.
+ */
+type QuoteSignatureRow = {
+  id: string;
+  tenant_id: string;
+  quote_id: string;
+  signer_name: string;
+  signer_email: string | null;
+  signer_title: string | null;
+  signer_ip: string | null;
+  user_agent: string | null;
+  /** The lines and total AS SHOWN at signing — a signature pointing at a mutable row
+   *  proves nothing. */
+  signed_snapshot: {
+    subtotal?: number;
+    total?: number;
+    lines?: Array<{ name: string; qty: number; rate: number }>;
+    changed?: boolean;
+  };
+  signed_at: string;
+  created_at: string;
+};
+type QuoteSignatureInsert = {
+  id?: string;
+  tenant_id: string;
+  quote_id: string;
+  signer_name: string;
+  signer_email?: string | null;
+  signer_title?: string | null;
+  signer_ip?: string | null;
+  user_agent?: string | null;
+  signed_snapshot?: QuoteSignatureRow["signed_snapshot"];
+  signed_at?: string;
+};
 
 /**
  * Single entry in the adjusted_advances jsonb array on an invoice.
@@ -3176,6 +3226,7 @@ export type Database = {
       items:         { Row: ItemRow;         Insert: ItemInsert;         Update: ItemUpdate;         Relationships: [] };
       leads:         { Row: LeadRow;         Insert: LeadInsert;         Update: LeadUpdate;         Relationships: [] };
       quotes:        { Row: QuoteRow;        Insert: QuoteInsert;        Update: QuoteUpdate;        Relationships: [] };
+      quote_signatures: { Row: QuoteSignatureRow; Insert: QuoteSignatureInsert; Update: Partial<QuoteSignatureInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
       payments:           { Row: PaymentRow;           Insert: PaymentInsert;           Update: PaymentUpdate;           Relationships: [] };
@@ -4187,6 +4238,7 @@ export type CustomerGroup = CustomerGroupRow;
 export type Item         = ItemRow;
 export type Lead         = LeadRow;
 export type Quote        = QuoteRow;
+export type QuoteSignature = QuoteSignatureRow;
 export type Invoice      = InvoiceRow;
 export type Subscription = SubscriptionRow;
 export type Payment      = PaymentRow;

@@ -657,6 +657,10 @@ export function QuoteBuilder() {
   const updateDomain = (id: string, d: string) => {
     setLineItems((s) => s.map((l) => (l.id === id ? { ...l, domain: d || null } : l)));
   };
+  /** What the customer may change on the public page. See LineAdjustControls. */
+  const updateAdjustable = (id: string, patch: Partial<QuoteLineItem>) => {
+    setLineItems((s) => s.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  };
   const updateCommitment = (id: string, commitment: LineCommitment) => {
     setLineItems((s) =>
       s.map((l) => {
@@ -1528,6 +1532,7 @@ export function QuoteBuilder() {
                     </span>
                   </div>
                   <LineBandNote line={line} catalog={catalog} />
+                  <LineAdjustControls line={line} onChange={(p) => updateAdjustable(line.id, p)} />
                   <div className="flex items-center justify-between border-t border-hairline pt-2">
                     <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Amount</span>
                     <span className="font-medium text-sm tabular-nums">{fmtDispC(dispAmt(line.rate, line.qty, line.discount_pct ?? 0))}{billingN > 1 ? " /yr" : ""}</span>
@@ -1610,6 +1615,7 @@ export function QuoteBuilder() {
                         </span>
                       </div>
                       <LineBandNote line={line} catalog={catalog} />
+                  <LineAdjustControls line={line} onChange={(p) => updateAdjustable(line.id, p)} />
                       {/* Discounting is quote-level only (see totals sidebar). Any
                           per-line discount stored on legacy/imported quotes is still
                           honoured in the totals below, but there is no per-line editor. */}
@@ -2028,6 +2034,59 @@ export function QuoteBuilder() {
         notes={notes}
         isProspect={isLeadMode}
       />
+    </div>
+  );
+}
+
+// ============================================================
+// LineAdjustControls — what the CUSTOMER may change on the public quote page.
+//
+// Off by default, and that default is the point: a quote where the buyer can edit
+// anything is an order form the seller has not seen. The reseller opts each line in,
+// and the server re-checks these flags before it prices anything, because the public
+// page has no session. See lib/quotes/configure.ts.
+// ============================================================
+function LineAdjustControls({ line, onChange }: {
+  line: QuoteLineItem;
+  onChange: (patch: Partial<QuoteLineItem>) => void;
+}) {
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+      <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Customer can</span>
+      <label className="inline-flex items-center gap-1 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!line.seats_adjustable}
+          onChange={(e) => onChange({ seats_adjustable: e.target.checked || undefined })}
+          className="h-3.5 w-3.5 accent-amber"
+        />
+        <span className="text-ink-2">change seats</span>
+      </label>
+      <label className="inline-flex items-center gap-1 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!line.optional}
+          onChange={(e) => onChange({
+            optional: e.target.checked || undefined,
+            // Un-ticking "optional" must clear the default too, or a line that is no
+            // longer optional keeps a flag that only means something for optional lines.
+            included_by_default: e.target.checked ? (line.included_by_default ?? false) : undefined,
+          })}
+          className="h-3.5 w-3.5 accent-amber"
+        />
+        <span className="text-ink-2">add / remove this</span>
+      </label>
+      {line.optional && (
+        <label className="inline-flex items-center gap-1 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!line.included_by_default}
+            onChange={(e) => onChange({ included_by_default: e.target.checked || undefined })}
+            className="h-3.5 w-3.5 accent-amber"
+          />
+          <span className="text-ink-3">ticked to start</span>
+        </label>
+      )}
     </div>
   );
 }

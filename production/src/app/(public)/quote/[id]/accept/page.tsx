@@ -98,6 +98,9 @@ export default async function QuoteAcceptPage({ params, searchParams }: Props) {
   };
   const lineItems: PublicLine[] = ((quote.line_items ?? []) as QuoteLineItem[]).map((l) => ({
     id: l.id, name: l.name, qty: l.qty, rate: l.rate, commitment: l.commitment,
+    // What the reseller marked adjustable. Cost and margin are still dropped.
+    optional: l.optional, included_by_default: l.included_by_default,
+    seats_adjustable: l.seats_adjustable, min_seats: l.min_seats, max_seats: l.max_seats,
   }));
 
   // Offer "Pay online" only when the reseller has Razorpay wired AND the quote
