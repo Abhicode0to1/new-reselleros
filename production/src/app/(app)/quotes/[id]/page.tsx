@@ -37,6 +37,10 @@ import { QuotePreviewDialog } from "@/components/features/quotes/quote-preview-d
 import { ReceiptVoucherDialog } from "@/components/features/quotes/receipt-voucher-dialog";
 import { SendQuoteDialog } from "@/components/features/quotes/send-quote-dialog";
 import SendWhatsAppDialog from "@/components/features/whatsapp/send-whatsapp-dialog";
+import { ApprovalDrawer } from "@/components/features/quotes/approval-drawer";
+import { requiredApproval, canSend, canApprove, approvalBadge } from "@/lib/quotes/approval";
+import { quoteEconomics, quoteApprovalRecord } from "@/lib/quotes/approval-economics";
+import { useRequestApproval } from "@/lib/queries/quotes";
 import { usePaymentsByQuote, totalReceived as sumReceived } from "@/lib/queries/payments";
 import { useCustomer } from "@/lib/queries/customers";
 import { useLead } from "@/lib/queries/leads";
@@ -96,6 +100,8 @@ export default function QuoteDetailPage() {
   const [whatsOpen,   setWhatsOpen]   = React.useState(false);
   // "Can't delete" → show WHICH related records block it (invoice + payments).
   const [blockedOpen, setBlockedOpen] = React.useState(false);
+  const [approvalOpen, setApprovalOpen] = React.useState(false);
+  const requestApproval = useRequestApproval();
   // In-app confirm dialog — native window.confirm() is suppressed in some
   // embeds/webviews and silently returns false, which made destructive actions
   // (Reopen, Delete) look dead. See tasks/page.tsx for the same fix.
@@ -123,6 +129,19 @@ export default function QuoteDetailPage() {
       router.replace(`/quotes/${quote.id}` as never);
     }
   }, [sendIntent, quote, router]);
+
+  /* Approval state. Derived from the quote's own lines every render rather than read
+     from a stored flag — the flag records a DECISION, the lines are the facts, and if
+     they disagree it is because someone edited the quote after sign-off. That
+     disagreement is exactly what `canSend` is for. */
+  const approvalEconomics = React.useMemo(() => quote ? quoteEconomics(quote) : null, [quote]);
+  const approvalNeed      = React.useMemo(() => approvalEconomics ? requiredApproval(approvalEconomics) : null, [approvalEconomics]);
+  const approvalRec       = React.useMemo(() => quote ? quoteApprovalRecord(quote) : null, [quote]);
+  const sendGate          = approvalNeed && approvalRec ? canSend(approvalRec, approvalNeed) : null;
+  const approvalPill      = approvalNeed && approvalRec ? approvalBadge(approvalRec, approvalNeed) : null;
+  const viewerCanApprove  = approvalNeed && approvalRec && me
+    ? canApprove({ id: me.userId, role: me.role }, approvalRec, approvalNeed).allowed
+    : false;
 
   const totalReceivedSoFar = sumReceived(paymentHistory ?? []);
   // Records that keep this quote un-deletable (must be voided/refunded first).
@@ -270,7 +289,15 @@ export default function QuoteDetailPage() {
   const taxable = quote.subtotal - discount;
   const tax = Math.round(taxable * (quote.tax_rate / 100));
   const total = quote.amount ?? taxable + tax;
-  const margin = computeMargin(quote.total_cost, taxable);
+  /* Margin comes from the LINE ITEMS, not from quotes.total_cost.
+     The column is an aggregate written at save time and at least one writer forgot
+     it: Q-2026-9778 stores total_cost = 0 while its single line carries ₹19,800, so
+     this page reported "100% est. margin" on a 17.5% deal. The lines are the facts
+     and there is one of them per product, so they are what both this page and the
+     approval matrix read — one source, and they cannot disagree. */
+  const lineCostTotal = items.reduce((s, l) => s + l.qty * l.cost, 0);
+  const marginKnown   = !items.some((l) => l.cost <= 0 && l.rate > 0);
+  const margin = computeMargin(lineCostTotal, taxable);
 
   const acceptUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/quote/${quote.id}/accept?t=${encodeURIComponent(quote.public_token)}`;
 
@@ -424,6 +451,21 @@ export default function QuoteDetailPage() {
               </span>
               <span>·</span>
               <Badge kind={status.kind} dot>{status.label}</Badge>
+              {approvalPill && (
+                <>
+                  <span>·</span>
+                  <button
+                    type="button"
+                    onClick={() => setApprovalOpen(true)}
+                    title={approvalPill.title}
+                    className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                  >
+                    <Badge kind={approvalPill.kind === "muted" ? "muted" : approvalPill.kind === "success" ? "success" : approvalPill.kind === "danger" ? "danger" : "warning"}>
+                      {approvalPill.label}
+                    </Badge>
+                  </button>
+                </>
+              )}
               {quote.is_extension ? (
                 <>
                   <span>·</span>
@@ -543,15 +585,69 @@ export default function QuoteDetailPage() {
       {/* Status-aware action bar */}
       <Card>
         {quote.status === "draft" && (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-sm text-ink-3">This is a draft. Send it to the customer when ready.</div>
-            <div className="flex gap-2">
-              <Button asChild variant="default" icon="edit">
-                <Link href={`/quotes/${quote.id}/edit` as any}>Edit</Link>
-              </Button>
-              <Button variant="primary" icon="send" loading={sendQuote.isPending} onClick={() => sendQuote.mutate()}>
-                Mark as sent
-              </Button>
+          <div className="space-y-3">
+            {/* Approval gate. §24 — the refusal names what happened, why, and the one
+                button that moves it forward. A disabled Send with no explanation is
+                the dead end this rule exists to prevent. */}
+            {sendGate && !sendGate.allowed && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-amber/60 bg-amber-soft p-3.5">
+                <Icon name="alert" size={18} className="mt-px shrink-0 text-amber-ink" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-amber-ink">{sendGate.reason}</p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-ink-2">{sendGate.nextStep}</p>
+                  {approvalNeed && approvalNeed.reasons.length > 0 && approvalRec?.status === "not_required" && (
+                    <ul className="mt-1.5 space-y-0.5">
+                      {approvalNeed.reasons.map((r) => (
+                        <li key={r} className="text-[11px] leading-snug text-ink-3">· {r}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {approvalRec?.status !== "pending" && (
+                      <Button
+                        size="sm"
+                        loading={requestApproval.isPending}
+                        onClick={() => {
+                          if (!me || !approvalNeed || approvalNeed.tier === "none") return;
+                          requestApproval.mutate(
+                            { id: quote.id, tier: approvalNeed.tier, userId: me.userId },
+                            { onSuccess: () => toast.success(`Sent to ${approvalNeed.tier === "owner" ? "the owner" : "a manager"} for approval.`) },
+                          );
+                        }}
+                      >
+                        Request approval
+                      </Button>
+                    )}
+                    {viewerCanApprove && (
+                      <Button size="sm" variant="default" onClick={() => setApprovalOpen(true)}>
+                        Review &amp; decide
+                      </Button>
+                    )}
+                    <Button size="sm" variant="default" asChild>
+                      <Link href={`/quotes/${quote.id}/edit` as any}>Change the pricing</Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-sm text-ink-3">This is a draft. Send it to the customer when ready.</div>
+              <div className="flex gap-2">
+                <Button asChild variant="default" icon="edit">
+                  <Link href={`/quotes/${quote.id}/edit` as any}>Edit</Link>
+                </Button>
+                <Button
+                  variant="primary"
+                  icon="send"
+                  loading={sendQuote.isPending}
+                  disabled={!!sendGate && !sendGate.allowed}
+                  title={sendGate && !sendGate.allowed ? sendGate.reason : undefined}
+                  onClick={() => sendQuote.mutate()}
+                >
+                  Mark as sent
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -768,21 +864,38 @@ export default function QuoteDetailPage() {
           </div>
         </Card>
 
-        <Card title="Est. margin" sub="Post-discount · assumed cost">
+        <Card title="Est. margin" sub="Post-discount · from line costs">
           <div className="text-center py-3">
-            <div className={cn(
-              "font-serif text-5xl leading-none mb-2",
-              margin.marginPct >= 18 ? "text-emerald" :
-              margin.marginPct >= 14 ? "text-amber-ink" :
-              "text-rose"
-            )}>
-              {rupee(margin.margin, { compact: true })}
-            </div>
-            <div className="text-sm text-ink-3 mb-3 tabular-nums">{margin.marginPct}% est. margin</div>
-            <MarginPill margin={margin} period="one-time" estimated />
-            <div className="text-[11px] text-ink-3 mt-3 tabular-nums">
-              Cost: {rupee(margin.cost)} · Price: {rupee(margin.price)}
-            </div>
+            {/* A line with no cost makes the whole figure meaningless, so it says so
+                rather than rendering the 100% that a ₹0 cost arithmetically produces. */}
+            {!marginKnown ? (
+              <>
+                <div className="font-serif text-4xl leading-none mb-2 text-amber-ink">Unknown</div>
+                <div className="text-[12px] leading-snug text-ink-2 px-2">
+                  At least one line has no vendor cost, so the margin on this quote cannot be
+                  worked out. Add those plans to the catalogue, or type the cost on the line.
+                </div>
+                <Button size="sm" variant="default" className="mt-3" asChild>
+                  <Link href={"/items" as any}>Open catalogue</Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className={cn(
+                  "font-serif text-5xl leading-none mb-2",
+                  margin.marginPct >= 18 ? "text-emerald" :
+                  margin.marginPct >= 14 ? "text-amber-ink" :
+                  "text-rose"
+                )}>
+                  {rupee(margin.margin, { compact: true })}
+                </div>
+                <div className="text-sm text-ink-3 mb-3 tabular-nums">{margin.marginPct}% est. margin</div>
+                <MarginPill margin={margin} period="one-time" estimated />
+                <div className="text-[11px] text-ink-3 mt-3 tabular-nums">
+                  Cost: {rupee(margin.cost)} · Price: {rupee(margin.price)}
+                </div>
+              </>
+            )}
           </div>
         </Card>
       </div>
@@ -945,6 +1058,20 @@ export default function QuoteDetailPage() {
         defaultRecipient={customer?.contact_email ?? null}
         alreadySent={quote.status === "sent" || quote.status === "viewed"}
       />
+
+      {/* Approve / reject drawer */}
+      {approvalEconomics && approvalNeed && approvalRec && me && (
+        <ApprovalDrawer
+          open={approvalOpen}
+          onOpenChange={setApprovalOpen}
+          quoteId={quote.id}
+          quoteLabel={quote.id}
+          economics={approvalEconomics}
+          requirement={approvalNeed}
+          record={approvalRec}
+          viewer={{ id: me.userId, role: me.role }}
+        />
+      )}
 
       {/* Send-via-WhatsApp dialog — pre-fills the customer's contact phone
           (or leaves blank for lead-mode quotes — user can type it in)

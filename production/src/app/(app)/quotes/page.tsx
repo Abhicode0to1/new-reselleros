@@ -48,15 +48,34 @@ function quoteMoney(q: { amount: number | null; currency?: string | null; exchan
   return rupee(q.amount);
 }
 
-// Heuristic margin estimate per quote (until we have line items always populated)
-function estimateMarginForQuote(q: Quote) {
-  if (q.subtotal && q.total_cost) {
-    const taxable = q.subtotal - Math.round(q.subtotal * (q.discount_pct / 100));
-    return computeMargin(q.total_cost, taxable);
-  }
-  if (!q.amount || !q.seats) return computeMargin(0, 0);
-  const cost = Math.round(q.amount * 0.83);
-  return computeMargin(cost, q.amount);
+/**
+ * A quote's margin, from its LINE ITEMS.
+ *
+ * Two things this used to do and no longer does:
+ *
+ * • It read `quotes.total_cost`, an aggregate column that at least one writer forgot
+ *   to set. Q-2026-9778 stores 0 there while its line carries ₹19,800, so this list
+ *   showed "Pipeline margin ₹0" on a quote making 17.5%.
+ *
+ * • When that column was empty it guessed `amount × 0.83` — a flat 17% invented out
+ *   of nothing and then summed into a KPI tile that read like a measurement. That was
+ *   the fourth copy of the same guess in this codebase.
+ *
+ * `known: false` means the margin genuinely cannot be worked out, and callers must
+ * show that rather than a number. Returning 0 would be indistinguishable from a
+ * break-even deal.
+ */
+function estimateMarginForQuote(q: Quote): ReturnType<typeof computeMargin> & { known: boolean } {
+  const lines = Array.isArray(q.line_items) ? q.line_items : [];
+  const taxable = q.subtotal
+    ? q.subtotal - Math.round(q.subtotal * (q.discount_pct / 100))
+    : (q.amount ?? 0);
+
+  if (lines.length === 0) return { ...computeMargin(0, 0), known: false };
+
+  const cost = lines.reduce((s, l) => s + l.qty * l.cost, 0);
+  const known = !lines.some((l) => l.cost <= 0 && l.rate > 0);
+  return { ...computeMargin(cost, taxable), known };
 }
 
 type QuoteBadgeKind = "muted" | "success" | "warning" | "danger" | "info";
@@ -215,9 +234,14 @@ export default function QuotesPage() {
   const sentValue = quotesByWorkspace
     .filter((q) => q.status === "sent" || q.status === "viewed")
     .reduce((s, q) => s + (q.amount ?? 0), 0);
-  const pipelineMargin = quotesByWorkspace
+  /* Only quotes whose margin is actually KNOWN are summed, and how many were left
+     out is carried alongside — a total that silently drops the unknown ones reads as
+     a complete measurement of the pipeline when it is a partial one. */
+  const marginablePipeline = quotesByWorkspace
     .filter((q) => q.status === "sent" || q.status === "viewed")
-    .reduce((s, q) => s + estimateMarginForQuote(q).margin, 0);
+    .map((q) => estimateMarginForQuote(q));
+  const pipelineMargin = marginablePipeline.filter((m) => m.known).reduce((s, m) => s + m.margin, 0);
+  const pipelineMarginUnknownCount = marginablePipeline.filter((m) => !m.known).length;
   const acceptedCount = counts.accepted ?? 0;
   const sentishCount = (counts.sent ?? 0) + (counts.viewed ?? 0);
   const expiringCount = sentishCount;
@@ -446,6 +470,13 @@ export default function QuotesPage() {
                     <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                       <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Pipeline Margin</p>
                       <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(pipelineMargin, { compact: true })}</p>
+                      {/* A total that silently drops the unknowns reads as a complete
+                          measurement of the pipeline when it is a partial one. */}
+                      {pipelineMarginUnknownCount > 0 && (
+                        <p className="mt-0.5 text-[10px] leading-snug text-amber-ink">
+                          {pipelineMarginUnknownCount} quote{pipelineMarginUnknownCount === 1 ? "" : "s"} excluded — no cost
+                        </p>
+                      )}
                     </div>
                     <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                       <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
@@ -701,7 +732,16 @@ export default function QuotesPage() {
                       {/* Margin — colour-coded badge: green = healthy, amber =
                           thin, rose = risky. ₹ amount below for reference. */}
                       <td className="px-3 py-2.5 text-right align-top">
-                        {q.amount ? (
+                        {!q.amount ? (
+                          <span className="text-ink-3">—</span>
+                        ) : !margin.known ? (
+                          /* "Unknown" rather than the 100% a ₹0 cost arithmetically
+                              produces — a green 100% badge is the most misleading
+                              thing this column could show. */
+                          <Badge kind="warning" size="sm" title="A line on this quote has no vendor cost.">
+                            Unknown
+                          </Badge>
+                        ) : (
                           <div className="flex flex-col items-end gap-0.5">
                             <Badge
                               kind={margin.marginPct >= 18 ? "success" : margin.marginPct >= 14 ? "warning" : "danger"}
@@ -711,8 +751,6 @@ export default function QuotesPage() {
                             </Badge>
                             <span className="text-[10px] text-ink-3 tabular-nums">{rupee(margin.margin)}</span>
                           </div>
-                        ) : (
-                          <span className="text-ink-3">—</span>
                         )}
                       </td>
                       <td className="px-3 py-2.5 align-top">

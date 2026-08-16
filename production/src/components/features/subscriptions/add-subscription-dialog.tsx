@@ -269,6 +269,12 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
         payment_status: isPaid ? "received" : "awaiting",
         amount: totalAnnualAmount,
         subtotal: totalAnnualAmount,
+        /* total_cost was omitted here, so it defaulted to 0 while the line items
+           carried the real cost — and every margin read off the column reported 100%
+           on a 17.5% deal (Q-2026-9778: column 0, lines ₹19,800). The displays now
+           derive margin from the lines, which is the durable fix; writing the column
+           too keeps the stored row honest for anything that reads it later. */
+        total_cost: lineItems.reduce((s, l) => s + l.qty * l.cost, 0),
         seats,
         plan,
         notes: `Auto-generated from Subscription Onboarding (${plan}) · ${isPaid ? "Paid Upfront" : "Credit Terms / Postpaid"}`,

@@ -214,3 +214,92 @@ export function useUpdateQuoteStatus() {
     onError: (err) => toastError(err),
   });
 }
+
+// ============================================================
+// Discount / margin approval
+//
+// The matrix itself is in lib/quotes/approval.ts and is NOT duplicated here —
+// these hooks only record decisions. The signed-off discount and margin are
+// written alongside the status so a later edit cannot leave a stale approval
+// silently covering numbers nobody agreed to.
+// ============================================================
+
+/** Push a quote into the approvals queue. */
+export function useRequestApproval() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, tier, userId }: { id: string; tier: "manager" | "owner"; userId: string }) => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("quotes")
+        .update({
+          approval_status: "pending",
+          approval_tier: tier,
+          approval_requested_by: userId,
+          approval_requested_at: new Date().toISOString(),
+          // A fresh request clears any previous verdict — otherwise a rejected
+          // quote resubmitted still carries the old rejection reason on screen.
+          approved_by: null,
+          approved_at: null,
+          approved_discount_bps: null,
+          approved_margin_bps: null,
+          approval_rejection_reason: null,
+        })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quotes"] }),
+    onError: (err) => toastError(err),
+  });
+}
+
+/**
+ * Record an approval or a rejection.
+ *
+ * `discountBps` / `marginBps` are the numbers being signed off — the caller reads
+ * them from the quote as it stands right now, so what is stored is what was seen.
+ */
+export function useDecideApproval() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id: string;
+      decision: "approved" | "rejected";
+      userId: string;
+      discountBps: number | null;
+      marginBps: number | null;
+      rejectionReason?: string;
+    }) => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("quotes")
+        .update(
+          input.decision === "approved"
+            ? {
+                approval_status: "approved",
+                approved_by: input.userId,
+                approved_at: new Date().toISOString(),
+                approved_discount_bps: input.discountBps,
+                approved_margin_bps: input.marginBps,
+                approval_rejection_reason: null,
+              }
+            : {
+                approval_status: "rejected",
+                approved_by: input.userId,
+                approved_at: new Date().toISOString(),
+                approval_rejection_reason: input.rejectionReason ?? null,
+              },
+        )
+        .eq("id", input.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["quotes"] }),
+    onError: (err) => toastError(err),
+  });
+}

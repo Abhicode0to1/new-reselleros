@@ -1077,6 +1077,23 @@ type QuoteRow = {
   prospect_state_code: string | null;
   prospect_state: string | null;
   prospect_country: string | null;
+  // Discount / margin approval (migration 20260816110500) ──────────────────
+  /** Where this quote sits in the approval matrix. See lib/quotes/approval.ts. */
+  approval_status: "not_required" | "pending" | "approved" | "rejected";
+  /** Which sign-off is needed. Null when none is. */
+  approval_tier: "manager" | "owner" | null;
+  /** Who pushed it into the queue. The self-approval rule keys on THIS, not owner_id. */
+  approval_requested_by: string | null;
+  approval_requested_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  /** The discount that was ACTUALLY signed off, in basis points (1500 = 15%). Compared
+   *  against the quote's current discount so an edit after approval cannot stay approved. */
+  approved_discount_bps: number | null;
+  /** The margin that was ACTUALLY signed off, in basis points. Null also means it was
+   *  unknown at approval time. */
+  approved_margin_bps: number | null;
+  approval_rejection_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1121,6 +1138,15 @@ type QuoteInsert = {
   prospect_state_code?: string | null;
   prospect_state?: string | null;
   prospect_country?: string | null;
+  approval_status?: "not_required" | "pending" | "approved" | "rejected";
+  approval_tier?: "manager" | "owner" | null;
+  approval_requested_by?: string | null;
+  approval_requested_at?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  approved_discount_bps?: number | null;
+  approved_margin_bps?: number | null;
+  approval_rejection_reason?: string | null;
 }
 type QuoteUpdate = Partial<QuoteInsert>;
 
