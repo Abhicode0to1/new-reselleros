@@ -41,9 +41,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { isHotLead } from "@/lib/leads/heat";
+import { localDateISO } from "@/lib/leads/outcomes";
 import type { Lead } from "@/lib/supabase/database.types";
 
-export type SmartView = "all" | "mine" | "today" | "overdue" | "hot" | "new" | "won-mtd" | "duplicates" | "junk";
+export type SmartView = "all" | "mine" | "today" | "overdue" | "hot" | "new" | "closing" | "won-mtd" | "duplicates" | "junk";
 
 interface LeadsSmartViewsProps {
   leads: Lead[];
@@ -91,6 +92,17 @@ export function LeadsSmartViews({
   // use, so the count always matches the number of Hot-tagged rows.
   const hot      = working.filter(isHotLead).length;
   const newCt    = working.filter((l) => l.stage === "new").length;
+  /* Month end via localDateISO, not a local copy of the same formatting. toISOString()
+     before 05:30 IST returns the previous day, which at a month boundary silently drops
+     a whole month of deals — and a second implementation is a second place for that bug
+     to come back. */
+  const monthEnd = (() => {
+    const d = new Date();
+    return localDateISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  })();
+  const closingCt = working.filter((l) =>
+    l.expected_close_date && l.expected_close_date <= monthEnd &&
+    l.stage !== "won" && l.stage !== "lost").length;
 
   const views: ViewDef[] = [
     { id: "all",   label: "All",     count: all,      tone: "default", hint: "Everything except junk" },
@@ -101,6 +113,11 @@ export function LeadsSmartViews({
     { id: "overdue", label: "Overdue", count: overdue, tone: "rose",   hint: "Follow-up date has passed" },
     { id: "hot",   label: "Hot",     count: hot,      tone: "default", hint: "High priority or late-stage" },
     { id: "new",   label: "New",     count: newCt,    tone: "default", hint: "Not contacted yet" },
+    /* Closing this month — the forecast cut. Deliberately EXCLUDES deals with no
+       expected close date: "closing this month" is a claim, and a deal nobody has dated
+       has not made it. Those show up as "undated" in the KPI strip instead. */
+    { id: "closing", label: "Closing this month", count: closingCt, tone: "amber",
+      hint: "Expected to close on or before month end — undated deals are not counted" },
   ];
 
   // Cleanup views — present only when there is something to clean, so the menu

@@ -835,6 +835,17 @@ type LeadRow = {
   // Migration 0046 — sales workflow fields
   /** Next planned contact (call/email/meeting). Drives the daily "who do I call today" worklist. */
   follow_up_date: string | null;     // YYYY-MM-DD
+  /**
+   * When the rep expects this deal to CLOSE (migration 20260816094848). YYYY-MM-DD.
+   *
+   * Distinct from `follow_up_date`, which is the next touch. A deal can be followed up
+   * weekly for two months and still be expected to close in March; conflating the two
+   * makes both useless.
+   *
+   * NULL means nobody has committed to a date. buildForecast() reports those separately
+   * rather than guessing — see lib/leads/forecast.ts.
+   */
+  expected_close_date: string | null;
   /** Triage signal: 'low' / 'medium' / 'high'. Default 'medium'. */
   priority: LeadPriority;
   /** B2B GSTIN captured at lead time (auto-fills legal name + address on conversion). */
@@ -899,6 +910,7 @@ type LeadInsert = {
   trial_converted_at?: string | null;
   trial_expired_at?:   string | null;
   follow_up_date?:     string | null;
+  expected_close_date?: string | null;
   priority?:           LeadPriority;
   gstin?:              string | null;
   state_code?:         string | null;

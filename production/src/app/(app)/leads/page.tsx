@@ -42,6 +42,7 @@ import { LeadsSmartViews, type SmartView } from "@/components/features/leads/lea
 import { PriorityCallQueue } from "@/components/features/leads/priority-call-queue";
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { localDateISO } from "@/lib/leads/outcomes";
+import { buildForecast, stageProbability } from "@/lib/leads/forecast";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
 import { isHotLead, isHighValueLead, intentMeta, staleWarning } from "@/lib/leads/heat";
@@ -391,6 +392,16 @@ function LeadsPageInner() {
         list = list.filter((l) => l.stage === "new");
       } else if (smartView === "won-mtd") {
         list = list.filter((l) => l.stage === "won" && l.created_at && new Date(l.created_at) >= monthStart);
+      } else if (smartView === "closing") {
+        /* Same rule as closingBy() in lib/leads/forecast.ts: open, dated, on or before
+           month end. Undated deals are excluded — a deal nobody has put a date on has
+           not claimed this month. The KPI strip reports how many those are. */
+        const d = new Date();
+        const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        const monthEnd = localDateISO(last);
+        list = list.filter((l) =>
+          l.expected_close_date && l.expected_close_date <= monthEnd &&
+          l.stage !== "won" && l.stage !== "lost");
       } else if (smartView === "duplicates") {
         list = list.filter((l) => dup.flagged.has(l.id));
       }
@@ -476,6 +487,11 @@ function LeadsPageInner() {
     () => openDeals.reduce((s, l) => s + (l.value ?? 0), 0),
     [openDeals]
   );
+  /* Weighted forecast — the same open deals, each multiplied by what its stage has
+     earned. Built from allQualifiedDeals rather than openDeals so buildForecast applies
+     its own open/closed rule in one place; feeding it a pre-filtered list would mean two
+     definitions of "open" that can drift. */
+  const forecast = React.useMemo(() => buildForecast(allQualifiedDeals), [allQualifiedDeals]);
   const wonCount = React.useMemo(
     () => allQualifiedDeals.filter((l) => l.stage === "won").length,
     [allQualifiedDeals]
@@ -640,6 +656,28 @@ function LeadsPageInner() {
               <span>Pipeline Intelligence:</span>
             </span>
             <span className="font-mono">Open Pipeline: <b className="text-amber-ink">{rupee(totalValue, { compact: true })}</b></span>
+            <span className="text-ink-3 font-mono">·</span>
+            {/* Weighted sits next to Open on purpose. Open Pipeline answers "how much is
+                in play"; on its own it flatters, because a ₹5L deal at `new` counts the
+                same as a ₹5L deal at `quote`. Weighted is what those stages have earned.
+                The tooltip carries the undated count — a forecast missing dates is still
+                a forecast, but the reader should know how much of it has no timing. */}
+            <span
+              className="font-mono"
+              title={
+                `Each open deal × its stage's win probability (new 10% → quote 80%).\n` +
+                `Won and lost are excluded — a forecast is what is still to come.` +
+                (forecast.confidencePct !== null ? `\nConfidence: ${forecast.confidencePct}% of open pipeline.` : "") +
+                (forecast.undatedCount > 0
+                  ? `\n\n${forecast.undatedCount} open deal${forecast.undatedCount === 1 ? "" : "s"} (${rupee(forecast.undatedValue, { compact: true })}) have no expected close date, so they cannot be placed in a month.`
+                  : "")
+              }
+            >
+              Weighted: <b className="text-emerald">{rupee(forecast.weighted, { compact: true })}</b>
+              {forecast.undatedCount > 0 && (
+                <span className="text-ink-3"> ({forecast.undatedCount} undated)</span>
+              )}
+            </span>
             <span className="text-ink-3 font-mono">·</span>
             <span className="font-mono">Active Deals: <b className="text-ink">{openDeals.length}</b></span>
             <span className="text-ink-3 font-mono">·</span>
@@ -2496,10 +2534,10 @@ function daysSince(iso: string): number {
 // place, so the four fields a rep changes most never need the drawer. Widths
 // still sum to 100% — Contact and Plan gave up room for the two new columns
 // rather than introducing a horizontal scrollbar.
-const LEADLIST_COL_ORDER = ["select", "company", "stage", "contact", "plan", "value", "priority", "followup", "lastupdate", "actions"];
+const LEADLIST_COL_ORDER = ["select", "company", "stage", "contact", "plan", "value", "priority", "followup", "closedate", "lastupdate", "actions"];
 const LEADLIST_COL_WIDTHS: Record<string, string> = {
   select: "3%", company: "18%", stage: "10%", contact: "14%", plan: "11%",
-  value: "9%", priority: "8%", followup: "9%", lastupdate: "8%", actions: "10%",
+  value: "9%", priority: "7%", followup: "8%", closedate: "9%", lastupdate: "7%", actions: "9%",
 };
 
 function LeadListView({
@@ -2726,6 +2764,15 @@ function LeadListView({
             <SortHeader col="value" label="Value" align="right" />
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Priority</th>
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Follow-up</th>
+            {/* Close date is a SEPARATE column from Follow-up, not a rename of it. A deal
+                can be followed up weekly for two months and still be expected to close in
+                March; one column for both makes both unreadable. */}
+            <th
+              className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left"
+              title="When the rep expects this deal to close. Drives the weighted forecast."
+            >
+              Close date
+            </th>
             <SortHeader col="age" label="Last update" />
             {/* Actions column — quick action icons on row hover. */}
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-right">
@@ -2965,6 +3012,27 @@ function LeadListView({
                             {formatDate(lead.follow_up_date)}
                           </span>
                         : <span className="text-ink-4 text-xs">—</span>
+                    }
+                  />
+                </td>
+                {/* Expected close date. An empty one is not styled as an error — most
+                    leads legitimately have none — but the forecast counts it as undated
+                    and says so, so the gap is visible somewhere rather than nowhere. */}
+                <td className="px-3 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
+                  <InlineCell<string | null>
+                    value={lead.expected_close_date ?? null}
+                    ariaLabel={`Expected close date for ${lead.company}`}
+                    inputType="date"
+                    toInput={(v) => v ?? ""}
+                    parse={parseFollowUpDate}
+                    onSave={(v) => updateLead.mutate({ id: lead.id, patch: { expected_close_date: v } })}
+                    display={
+                      lead.expected_close_date
+                        ? <span className="text-xs tabular-nums text-ink-2">
+                            {formatDate(lead.expected_close_date)}
+                            <span className="ml-1 text-ink-4">· {stageProbability(lead.stage)}%</span>
+                          </span>
+                        : <span className="text-ink-4 text-xs" title="No date set — counted as undated in the forecast">—</span>
                     }
                   />
                 </td>
