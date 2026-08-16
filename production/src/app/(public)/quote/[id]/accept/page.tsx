@@ -11,6 +11,8 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { Quote, QuoteLineItem, LineCommitment } from "@/lib/supabase/database.types";
 import { quoteTokenMatches } from "@/lib/quotes/accept-token";
+import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
+import { quoteAmountDue } from "@/lib/payments/amount-due";
 import { QuoteAcceptView, type PublicQuote, type PublicLine } from "./quote-accept-view";
 
 export const dynamic = "force-dynamic"; // never cache — quotes change state
@@ -47,7 +49,10 @@ export default async function QuoteAcceptPage({ params, searchParams }: Props) {
   // prop passed to the client view is serialized into the HTML payload.
   const { data: quote, error } = await supabase
     .from("quotes")
-    .select("id, status, tenant_id, public_token, customer_name, subtotal, discount_pct, tax_rate, amount, expires_date, notes, line_items, billing_cycle, currency, exchange_rate")
+    // payment_status / payment_amount / invoice_id are here for quoteAmountDue, which
+    // refuses to build a UPI QR for money already settled or already asked for on an
+    // invoice — two documents collecting the same amount is how a customer pays twice.
+    .select("id, status, tenant_id, public_token, customer_name, subtotal, discount_pct, tax_rate, amount, expires_date, notes, line_items, billing_cycle, currency, exchange_rate, payment_status, payment_amount, invoice_id")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -71,7 +76,7 @@ export default async function QuoteAcceptPage({ params, searchParams }: Props) {
   // calls happen on the visible phone number).
   const { data: tenant } = await supabase
     .from("tenants")
-    .select("name, gstin, email, phone, address")
+    .select("name, gstin, email, phone, address, upi_vpa, upi_payee_name")
     .eq("id", quote.tenant_id)
     .maybeSingle();
 
@@ -120,6 +125,18 @@ export default async function QuoteAcceptPage({ params, searchParams }: Props) {
   const quoteIsForeign = !!quote.currency && quote.currency.toUpperCase() !== "INR";
   const payOnline = rzConfigured && !quoteIsForeign;
 
+  /* UPI straight to the reseller's own VPA — built server-side because the QR needs
+     the `qrcode` package, which has no business in a customer's bundle.
+     `buildQuoteUpiQr` returns null for a non-₹ quote, a malformed VPA, or an
+     already-invoiced quote (two documents asking for the same money is how a
+     customer pays twice). Null simply means the block does not render. */
+  const upi = await buildQuoteUpiQr({
+    vpa:        tenant?.upi_vpa,
+    payeeName:  tenant?.upi_payee_name || tenant?.name,
+    quoteId:    quote.id,
+    amountDue:  quoteAmountDue(quote),
+  });
+
   return (
     <QuoteAcceptView
       quote={publicQuote}
@@ -131,6 +148,7 @@ export default async function QuoteAcceptPage({ params, searchParams }: Props) {
       tenantEmail={tenant?.email ?? null}
       tenantPhone={tenant?.phone ?? null}
       tenantAddress={tenant?.address ?? null}
+      upiQr={upi}
     />
   );
 }

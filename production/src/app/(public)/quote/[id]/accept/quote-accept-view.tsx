@@ -66,10 +66,13 @@ interface Props {
   tenantEmail:   string | null;
   tenantPhone?:  string | null;
   tenantAddress?: string | null;
+  /** UPI QR built server-side (`qrcode` never reaches the customer's bundle). */
+  upiQr?: { dataUrl: string; vpa: string } | null;
 }
 
 export function QuoteAcceptView({
   quote, lineItems, token, payOnline = false, tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress,
+  upiQr = null,
 }: Props) {
   const [accepting, setAccepting] = React.useState(false);
   const [accepted, setAccepted] = React.useState(quote.status === "accepted");
@@ -172,6 +175,37 @@ export function QuoteAcceptView({
 
   /** The number the customer is agreeing to — the server's, whenever there is one. */
   const payableTotal = liveConfig ? liveConfig.total : dTotal;
+
+  const [notifying, setNotifying] = React.useState(false);
+  /**
+   * "I've sent the payment" — tells the reseller to go and look.
+   *
+   * It records NOTHING about the payment. A direct UPI transfer has no webhook, so
+   * the only thing this page knows is that the customer says they paid. Turning that
+   * into a payment record would put an unverified amount into the reseller's books.
+   */
+  const handleUpiPaid = async () => {
+    setNotifying(true);
+    try {
+      const res = await fetch(`/api/public/quote/${quote.id}/upi-notify?t=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ signerName: signerName.trim() || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Could not send the message");
+      toast.success(`${tenantName} has been told to check for your payment.`, {
+        description: "They will confirm it and send your GST invoice.",
+        duration: 8000,
+      });
+    } catch (e) {
+      toast.error((e as Error).message, {
+        description: tenantPhone ? `You can also call them on ${tenantPhone}.` : undefined,
+      });
+    } finally {
+      setNotifying(false);
+    }
+  };
 
   const handleAccept = async () => {
     setAccepting(true);
@@ -626,6 +660,54 @@ export function QuoteAcceptView({
                 link still carries the original figure.
               </p>
             )}
+            {/* ─── UPI straight to the reseller's bank ──────────────────────
+                For an Indian SME this is the path that actually gets used, and it
+                needs no gateway — the money lands in the reseller's account directly.
+
+                Which is exactly why the button below says "I've sent the payment" and
+                NOT "mark as paid". There is no webhook on a direct UPI transfer, so
+                nothing here can confirm the money arrived. Marking a quote paid on the
+                customer's word would put an unverified payment into the books; telling
+                the reseller to go and check is the honest version.
+
+                Hidden once the customer reconfigures, for the same reason pay-online
+                is: the QR carries the ORIGINAL amount. */}
+            {upiQr && !liveConfig?.changed && (
+              <div className="rounded-lg border border-hairline bg-paper-2/40 p-4">
+                <p className="text-sm font-semibold text-ink">Pay by UPI</p>
+                <p className="mt-0.5 text-[12px] leading-snug text-ink-3">
+                  Scan with GPay, PhonePe, Paytm or any UPI app — the amount is already filled in.
+                </p>
+                <div className="mt-3 flex items-center gap-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={upiQr.dataUrl}
+                    alt={`UPI QR code to pay ${tenantName} ${fmtC(dTotal)}`}
+                    className="h-32 w-32 shrink-0 rounded border border-hairline bg-white"
+                  />
+                  <div className="min-w-0 text-[12px] leading-snug">
+                    <p className="text-ink-3">UPI ID</p>
+                    <p className="font-mono font-medium text-ink break-all">{upiQr.vpa}</p>
+                    <p className="mt-2 text-ink-3">Amount</p>
+                    <p className="font-medium text-ink tabular-nums">{fmtC(dTotal)}</p>
+                  </div>
+                </div>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="mt-3 w-full justify-center"
+                  loading={notifying}
+                  onClick={handleUpiPaid}
+                >
+                  I&apos;ve sent the payment
+                </Button>
+                <p className="mt-1.5 text-[11px] leading-snug text-ink-3">
+                  This tells {tenantName} to check their account. It does not confirm the payment —
+                  they will verify it and send your GST invoice.
+                </p>
+              </div>
+            )}
+
             <Button
               variant={payOnline && !liveConfig?.changed ? "default" : "primary"}
               size="lg"
