@@ -731,8 +731,19 @@ Working around a stale doc leaves the trap armed for the next reader.
 
 **2. What "green" means here.**
 ```bash
-npm run typecheck && npm run test && npm run lint   # lint warnings OK, errors not
+npm run typecheck && npm run test && npm run lint && npm run build   # lint warnings OK, errors not
 ```
+⚠️ **`npm run build` is in that list because the other three DO NOT CATCH IT.**
+Corrected 16 Aug 2026, after a deploy attempt found the build had been broken for
+some time while all three passed. `next.config` sets `experimental.typedRoutes`,
+and Next generates the route types **at build time** — so `tsc --noEmit` type-checks
+against types that do not exist yet and happily passes a `<Link href="/leads?view=all">`
+that the build rejects. Vitest never renders it and ESLint does not type-check.
+
+The cost of leaving it out is not a red tick, it is a deploy that cannot happen:
+production could not be released at all, and nothing in the gate said so. `build`
+is slow (~2 min) — run it before a deploy and before calling a branch done, not
+after every turn.
 ⚠️ **CI does not gate feature branches.** `.github/workflows/ci.yml` triggers only on
 pushes to `master` / `v3-dev` and on PRs — so on a long-lived session branch **the
 local gate is the only gate.** This is exactly how 4 unit tests sat broken for months:

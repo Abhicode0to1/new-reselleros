@@ -29,6 +29,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import type { Route } from "next";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -199,7 +200,9 @@ export function PriorityCallQueue({
           {queue.dueWithoutPhone.slice(0, 3).map((l) => cleanDisplayName(l.company)).join(", ")}
           {queue.dueWithoutPhone.length > 3 ? ` +${queue.dueWithoutPhone.length - 3} more` : ""}.
           They cannot be called until someone adds one.{" "}
-          <Link href="/leads?view=all" className="font-semibold text-primary hover:underline">
+          {/* `as Route` because typedRoutes cannot know a query string is valid —
+              the codebase's existing idiom, and NOT `as any` (CLAUDE.md §17). */}
+          <Link href={"/leads?view=all" as Route} className="font-semibold text-primary hover:underline">
             Open the inbox
           </Link>{" "}
           to fill them in.
