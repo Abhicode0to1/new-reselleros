@@ -43,6 +43,8 @@ import { PriorityCallQueue } from "@/components/features/leads/priority-call-que
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { buildForecast, stageProbability } from "@/lib/leads/forecast";
+import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
+import { useItems } from "@/lib/queries/items";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
 import { isHotLead, isHighValueLead, intentMeta, staleWarning } from "@/lib/leads/heat";
@@ -1430,6 +1432,10 @@ function LeadDetailSheet({
   const confirm     = useConfirm();
   const { data: currentUser } = useCurrentUser();
   const logActivity = useLogLeadActivity();
+  /* Catalog costs for this drawer's margin figure. Same index the list builds — one
+     source, so the pill on the row and the number in the drawer can never disagree. */
+  const { data: drawerCatalog } = useItems();
+  const drawerPlanCosts = React.useMemo(() => buildPlanCostIndex(drawerCatalog ?? []), [drawerCatalog]);
   const { data: activities = [] } = useLeadActivities(lead?.id);
   const [drawerTab, setDrawerTab] = React.useState<"details" | "followups" | "activity">("details");
   React.useEffect(() => { setDrawerTab("details"); }, [lead?.id]);
@@ -1874,6 +1880,44 @@ function LeadDetailSheet({
             <Fact label="Plan" value={lead.plan} />
             <Fact label="Seats" value={lead.seats?.toString()} mono />
             <Fact label="Deal value" value={lead.value ? rupee(lead.value) : "—"} big />
+            {/* Gross margin, from the catalogue's real vendor cost. Shown even when it
+                cannot be worked out, with the REASON — "unknown" is a fact the rep can
+                act on ("this plan has no catalogue row"), whereas a hidden field is a
+                question nobody knows to ask. */}
+            {(() => {
+              const m = dealMargin(lead, drawerPlanCosts);
+              const b = marginBadge(m);
+              return (
+                <div>
+                  <p className="text-[11px] uppercase tracking-wider text-ink-3">Gross margin</p>
+                  <p
+                    title={b.title}
+                    className={cn(
+                      "mt-0.5 font-serif text-[17px] font-semibold",
+                      b.kind === "danger"  && "text-rose",
+                      b.kind === "warning" && "text-amber-ink",
+                      b.kind === "success" && "text-emerald",
+                      b.kind === "muted"   && "text-ink-3",
+                    )}
+                  >
+                    {b.label}
+                    {m.grossAnnual !== null && (
+                      <span className="ml-1.5 font-sans text-xs font-normal text-ink-3">
+                        {rupee(m.grossAnnual)}/yr
+                      </span>
+                    )}
+                  </p>
+                  {m.band === "loss" && (
+                    <p className="mt-0.5 text-[11px] font-semibold leading-snug text-rose">
+                      Below the vendor&apos;s own cost — reprice before quoting.
+                    </p>
+                  )}
+                  {m.band === "unknown" && (
+                    <p className="mt-0.5 text-[11px] leading-snug text-ink-3">{b.title}</p>
+                  )}
+                </div>
+              );
+            })()}
             <Fact label="Source" value={lead.source} mono />
             <Fact label="New / switching" value={lead.subscription_type === "fresh" ? "Fresh subscription" : lead.subscription_type === "switch" ? "Switching vendor" : "—"} />
             <Fact label="Contact name" value={lead.contact_name} />
@@ -2588,6 +2632,15 @@ function LeadListView({
      disagree about. */
   const runOutcome  = useLeadOutcome();
 
+  /* Catalog costs for the margin pill. Built once per render of the whole list rather
+     than per row — the index is a Map over ~19 products, and rebuilding it 200 times
+     would be the kind of quiet waste nobody profiles until the list is long. */
+  const { data: catalogItems } = useItems();
+  const planCosts = React.useMemo(
+    () => buildPlanCostIndex(catalogItems ?? []),
+    [catalogItems],
+  );
+
   // Open follow-up tasks per lead — surfaced as a chip on the row so the rep
   // sees at a glance which leads have a pending task (earliest/most-overdue).
   const { data: allTasks = [] } = useTasks("all");
@@ -2963,7 +3016,32 @@ function LeadListView({
                     onSave={(v) => updateLead.mutate({ id: lead.id, patch: { value: v } })}
                     display={
                       lead.value
-                        ? <span className={cn("font-serif text-[15px] font-semibold", isHighValue ? "text-emerald" : "text-ink")}>{rupee(lead.value)}</span>
+                        ? <span className="inline-flex items-baseline gap-1.5">
+                            <span className={cn("font-serif text-[15px] font-semibold", isHighValue ? "text-emerald" : "text-ink")}>{rupee(lead.value)}</span>
+                            {/* Gross margin, right beside the value it is a margin ON.
+                                A separate column would let a rep read the deal size
+                                without ever meeting the number that says whether it is
+                                worth having. Cost comes from the catalogue — never a
+                                percentage assumed off the sell price. */}
+                            {(() => {
+                              const m = dealMargin(lead, planCosts);
+                              const b = marginBadge(m);
+                              if (m.band === "unknown") return null;
+                              return (
+                                <span
+                                  title={b.title}
+                                  className={cn(
+                                    "shrink-0 rounded px-1 py-px text-[10px] font-semibold tabular-nums leading-none",
+                                    b.kind === "danger"  && "bg-rose-soft text-rose",
+                                    b.kind === "warning" && "bg-amber-soft text-amber-ink",
+                                    b.kind === "success" && "bg-paper-2 text-ink-3",
+                                  )}
+                                >
+                                  {b.label}
+                                </span>
+                              );
+                            })()}
+                          </span>
                         : <span className="text-ink-3">—</span>
                     }
                   />
