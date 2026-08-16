@@ -43,10 +43,12 @@ import { BILLING_CURRENCIES, isForeignCurrency, formatForeign } from "@/lib/curr
 import { addOrMergeLine } from "@/lib/quotes/line-items";
 import { rupee, formatDate, GST_STATE_BY_CODE } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import type { QuoteLineItem, LineCommitment, BillingCycle } from "@/lib/supabase/database.types";
+import type { QuoteLineItem, LineCommitment, BillingCycle, Item } from "@/lib/supabase/database.types";
 import {
   BILLING_CYCLE_OPTIONS, cycleInvoicesPerYear, cycleUnitLabel,
 } from "@/lib/quotes/billing";
+import { slabPricing, nextSlabUpsell } from "@/lib/quotes/volume-tiers";
+import { SolutionPackagePicker } from "@/components/features/quotes/solution-package-picker";
 
 // Quote IDs are allocated at SAVE time via the central document-numbering RPC
 // (see migration 0004_document_series.sql) — this guarantees sequential per-tenant
@@ -282,6 +284,7 @@ export function QuoteBuilder() {
   const [addOpen, setAddOpen] = React.useState(false);
   const [addCustomerOpen, setAddCustomerOpen] = React.useState(false);
   const [bulkOpen, setBulkOpen] = React.useState(false);
+  const [packageOpen, setPackageOpen] = React.useState(false);
   const [viewDomains, setViewDomains] = React.useState<{ name: string; domains: Array<{ domain: string; seats: number }> } | null>(null);
   const [previewOpen, setPreviewOpen] = React.useState(false);
   // Quote ID is allocated at SAVE time via the central numbering RPC.
@@ -339,23 +342,22 @@ export function QuoteBuilder() {
     let rate = 0;
     let cost = 0;
     let source: "catalog" | "fallback" | "" = "";
+    let bandLabel: string | null = null;
 
     if (catalogItem) {
-      // Use the actual catalog pricing — annual tier × 12 = ₹/seat/yr
-      const annualPerMonth = catalogItem.prices?.annual ?? catalogItem.prices?.monthly;
-      if (annualPerMonth && annualPerMonth.msrp > 0) {
-        rate   = annualPerMonth.msrp * 12;
-        cost   = annualPerMonth.wholesale * 12;
-        source = "catalog";
-      } else if (catalogItem.msrp > 0) {
-        // Legacy: use msrp/wholesale columns directly (assumed ₹/seat/month)
-        rate   = catalogItem.msrp * 12;
-        cost   = catalogItem.wholesale * 12;
-        source = "catalog";
+      /* Seat-slab volume pricing when the item has a band table, flat pricing when
+         it does not — slabPricing() decides and reports which. VOLUME, not
+         graduated: every seat bills at the band's rate. See lib/quotes/volume-tiers.ts. */
+      const priced = slabPricing(catalogItem, seatsNum);
+      if (priced.msrpPerSeatMonth > 0) {
+        rate      = Math.round(priced.msrpPerSeatMonth * 12);
+        cost      = Math.round(priced.wholesalePerSeatMonth * 12);
+        source    = "catalog";
+        bandLabel = priced.label;
       }
     }
 
-    // 2. Fallback to hardcoded plan map — tries exact then substring match too.
+    // 2. Fallback to the hardcoded plan map — tries exact then substring match too.
     if (!rate && leadPlan) {
       const lpLower = leadPlan.toLowerCase();
       let monthlyPPS = PLAN_PRICE_PER_SEAT_PM[leadPlan];
@@ -368,8 +370,15 @@ export function QuoteBuilder() {
         if (key) monthlyPPS = PLAN_PRICE_PER_SEAT_PM[key];
       }
       if (monthlyPPS) {
-        rate   = monthlyPPS * 12;
-        cost   = Math.round(rate * 0.7);
+        rate = monthlyPPS * 12;
+        /* Cost stays 0 — DELIBERATELY, and this is the important line in the block.
+           It used to be `Math.round(rate * 0.7)`, a guess that manufactured a 30%
+           margin out of nothing and displayed it in the same pill as a real one. A
+           rep discounting against that number was negotiating against fiction.
+           There is no catalogue row here, so the vendor cost is genuinely unknown;
+           0 makes the quote's margin visibly wrong (100%) instead of plausibly
+           wrong, and `costMissing` below turns that into a banner naming the fix. */
+        cost   = 0;
         source = "fallback";
       }
     }
@@ -389,11 +398,21 @@ export function QuoteBuilder() {
           start_date: todayISO,
         },
       ]);
-      toast.success(
-        source === "catalog"
-          ? `Pre-filled from catalog: ${seatsNum} × ${leadPlan} @ ₹${rate}/seat/yr`
-          : `Pre-filled (catalog item missing — using fallback): ${seatsNum} × ${leadPlan} @ ₹${rate}/seat/yr`,
-      );
+      if (source === "catalog") {
+        toast.success(
+          `Pre-filled from catalog: ${seatsNum} × ${leadPlan} @ ₹${rate}/seat/yr`,
+          bandLabel ? { description: `Volume band applied: ${bandLabel}.` } : undefined,
+        );
+      } else {
+        /* §24 — say what happened, why, and where to fix it. The old copy said
+           "using fallback", which reads as "handled" rather than "your margin is
+           not real". */
+        toast.warning(`${leadPlan} is not in your catalogue — cost is unknown`, {
+          description: `Priced at the standard ₹${rate}/seat/yr, but margin cannot be worked out until this plan has a catalogue row. Add it, or type the cost on the line.`,
+          action: { label: "Open catalogue", onClick: () => router.push("/items" as any) },
+          duration: 10_000,
+        });
+      }
     } else {
       toast.info(`Add line items for ${leadCompany}'s quote`);
     }
@@ -478,6 +497,10 @@ export function QuoteBuilder() {
   const lineDiscountTotal = lineItems.reduce((s, it) => s + Math.round(it.qty * it.rate * ((it.discount_pct ?? 0) / 100)), 0);
   const subtotal          = grossSubtotal - lineDiscountTotal;
   const totalCost         = lineItems.reduce((s, it) => s + it.qty * it.cost, 0);
+  /* Lines that are actually being SOLD but whose cost nobody knows. A ₹0 line is
+     excluded — a free line legitimately costs nothing, and flagging it would train
+     people to dismiss the banner. */
+  const costlessLines     = lineItems.filter((it) => it.cost <= 0 && it.rate > 0);
   // Customer discount is DERIVED, not applied: it's the gap between the LIST
   // price (list_rate) and what we're actually charging (rate). The rate is
   // already the discounted price, so taxable = subtotal (no further deduction —
@@ -578,8 +601,49 @@ export function QuoteBuilder() {
         : `Added ${line.name}`,
     );
   };
+  /** Add several lines at once (solution package), reusing the merge rule per line. */
+  const addLines = (incoming: QuoteLineItem[]) => {
+    setLineItems((current) =>
+      incoming.reduce((acc, line) => {
+        const withList: QuoteLineItem = { ...line, list_rate: line.list_rate ?? line.rate, start_date: line.start_date ?? todayISO };
+        return addOrMergeLine(acc, withList).lines;
+      }, current),
+    );
+  };
+
   const updateQty = (id: string, qty: number) => {
-    setLineItems((s) => s.map((l) => (l.id === id ? { ...l, qty: Math.max(1, qty) } : l)));
+    const nextQty = Math.max(1, qty);
+    setLineItems((s) => s.map((l) => {
+      if (l.id !== id) return l;
+
+      /* Volume bands: crossing from 10 seats to 11 changes the price of EVERY seat,
+         so the rate has to follow the quantity or the quote quietly bills the old
+         band. Only lines still sitting on their catalogue price are re-priced — if
+         the rep has typed a negotiated rate, that is the deal, and overwriting it
+         because they added a seat would undo a decision they made on a call. */
+      const item = l.item_id ? catalog.find((c) => c.id === l.item_id) : undefined;
+      if (!item) return { ...l, qty: nextQty };
+
+      const atOldQty = slabPricing(item, l.qty);
+      const untouched = Math.round(atOldQty.msrpPerSeatMonth * 12) === l.rate;
+      if (!untouched) return { ...l, qty: nextQty };
+
+      const atNewQty = slabPricing(item, nextQty);
+      const newRate = Math.round(atNewQty.msrpPerSeatMonth * 12);
+      if (newRate === l.rate) return { ...l, qty: nextQty };
+
+      toast.info(
+        `${l.name}: ${nextQty} seats moves into the ${atNewQty.label ?? "standard"} band`,
+        { description: `₹${l.rate}/seat/yr → ₹${newRate}/seat/yr, on every seat.` },
+      );
+      return {
+        ...l,
+        qty: nextQty,
+        rate: newRate,
+        list_rate: newRate,
+        cost: Math.round(atNewQty.wholesalePerSeatMonth * 12),
+      };
+    }));
   };
   const updateRate = (id: string, rate: number) => {
     setLineItems((s) => s.map((l) => (l.id === id ? { ...l, rate: Math.max(0, rate) } : l)));
@@ -818,6 +882,35 @@ export function QuoteBuilder() {
         {/* Actions live in the sticky bottom bar (always visible) — no
             duplicate button row up here. */}
       </div>
+
+      {/* Cost-unknown guardrail. Ranks ABOVE the loss and margin warnings on purpose:
+          both of those are statements about the margin number, and if a line has no
+          cost then that number is not a margin at all. Telling a rep "margin 100%,
+          healthy" on a line whose cost nobody knows is exactly the failure this
+          codebase keeps finding — a gap rendered as a confident value. */}
+      {costlessLines.length > 0 && (
+        <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-amber/60 bg-amber-soft p-3.5 text-xs shadow-sm">
+          <Icon name="alert" size={18} className="shrink-0 text-amber-ink" />
+          <div className="min-w-0 flex-1">
+            <b className="text-amber-ink">
+              {costlessLines.length === 1
+                ? `"${costlessLines[0].name}" has no cost, so the margin below is not real.`
+                : `${costlessLines.length} lines have no cost, so the margin below is not real.`}
+            </b>
+            <p className="mt-0.5 text-ink-2">
+              These plans have no catalogue row, so what the vendor charges is unknown — the quote is
+              showing 100% margin on them. Add them to the catalogue, or type the cost on each line.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push("/items" as any)}
+              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+            >
+              Open catalogue
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Loss-making quote guardrail */}
       {lineItems.length > 0 && margin.margin < 0 && (
@@ -1306,6 +1399,9 @@ export function QuoteBuilder() {
             <div className="text-xs text-ink-3 mt-0.5">{lineItems.length} item{lineItems.length === 1 ? "" : "s"}</div>
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="default" icon="package" onClick={() => setPackageOpen(true)}>
+              Package
+            </Button>
             <Button size="sm" variant="default" icon="layers" onClick={() => setBulkOpen(true)}>
               Bulk / many domains
             </Button>
@@ -1422,8 +1518,16 @@ export function QuoteBuilder() {
                       onChange={(e) => { const v = parseFloat(e.target.value) || 0; updateCost(line.id, (isUsdBill ? Math.round(v * fxRate) : Math.round(v)) * billingN); }}
                       className="w-14 px-1 py-0.5 text-[11px] text-right tabular-nums border border-hairline rounded bg-paper focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
                     />
-                    <span>/seat{unitLabel} · Margin {lineMargin.marginPct}%</span>
+                    {/* "Margin unknown" beats "Margin 100%" when cost is 0 — see the
+                        cost-unknown banner above for why. */}
+                    <span>
+                      /seat{unitLabel} ·{" "}
+                      {line.cost <= 0 && line.rate > 0
+                        ? <span className="font-semibold text-amber-ink">Margin unknown</span>
+                        : <>Margin {lineMargin.marginPct}%</>}
+                    </span>
                   </div>
+                  <LineBandNote line={line} catalog={catalog} />
                   <div className="flex items-center justify-between border-t border-hairline pt-2">
                     <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Amount</span>
                     <span className="font-medium text-sm tabular-nums">{fmtDispC(dispAmt(line.rate, line.qty, line.discount_pct ?? 0))}{billingN > 1 ? " /yr" : ""}</span>
@@ -1498,8 +1602,14 @@ export function QuoteBuilder() {
                           }}
                           className="w-16 px-1 py-0.5 text-[11px] text-right tabular-nums border border-hairline rounded bg-paper focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
                         />
-                        <span>/seat{unitLabel} · Margin {lineMargin.marginPct}%</span>
+                        <span>
+                          /seat{unitLabel} ·{" "}
+                          {line.cost <= 0 && line.rate > 0
+                            ? <span className="font-semibold text-amber-ink">Margin unknown</span>
+                            : <>Margin {lineMargin.marginPct}%</>}
+                        </span>
                       </div>
+                      <LineBandNote line={line} catalog={catalog} />
                       {/* Discounting is quote-level only (see totals sidebar). Any
                           per-line discount stored on legacy/imported quotes is still
                           honoured in the totals below, but there is no per-line editor. */}
@@ -1862,6 +1972,16 @@ export function QuoteBuilder() {
 
       {/* Add item modal */}
       <AddLineItemDialog open={addOpen} onOpenChange={setAddOpen} onAdd={addLine} currency={currency} exchangeRate={exchangeRate} pricingBasis={usdPricingBasis} />
+
+      {/* Solution packages — several catalogue products in one click */}
+      <SolutionPackagePicker
+        open={packageOpen}
+        onOpenChange={setPackageOpen}
+        catalog={catalog}
+        seats={lineItems[0]?.qty ?? (leadSeats ? parseInt(leadSeats, 10) : 10)}
+        onAdd={addLines}
+        startDate={todayISO}
+      />
       {/* "New customer" from the picker — auto-selects the created customer. */}
       <AddCustomerForm
         open={addCustomerOpen}
@@ -1908,6 +2028,44 @@ export function QuoteBuilder() {
         notes={notes}
         isProspect={isLeadMode}
       />
+    </div>
+  );
+}
+
+// ============================================================
+// LineBandNote — which volume band a line landed in, and the next one up.
+//
+// Two facts a rep cannot get anywhere else on this screen: WHY this seat count is
+// priced the way it is, and the exact ask that would make it cheaper ("3 more seats
+// and every seat drops to ₹250"). The upsell only renders when a genuinely cheaper
+// band exists — an empty nudge is worse than none, and it is suppressed on a
+// hand-edited rate because the negotiated price is the deal, not the band.
+// ============================================================
+function LineBandNote({ line, catalog }: { line: QuoteLineItem; catalog: Item[] }) {
+  const item = line.item_id ? catalog.find((c) => c.id === line.item_id) : undefined;
+  const slabs = item?.prices?.slabs;
+  if (!item || !slabs || slabs.length === 0) return null;
+
+  const priced = slabPricing(item, line.qty);
+  if (priced.source !== "slab") return null;
+
+  const onBandRate = Math.round(priced.msrpPerSeatMonth * 12) === line.rate;
+  const upsell = onBandRate ? nextSlabUpsell(slabs, line.qty) : null;
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+      <span className="rounded bg-paper-2 px-1.5 py-px font-medium text-ink-3">
+        Volume band: {priced.label}
+      </span>
+      {!onBandRate && (
+        <span className="text-ink-3">rate edited by hand</span>
+      )}
+      {upsell && (
+        <span className="text-emerald">
+          +{upsell.seatsToAdd} {upsell.seatsToAdd === 1 ? "seat" : "seats"} → ₹{upsell.newRatePerSeatMonth}/seat/mo
+          on every seat, saving {rupee(upsell.annualSaving)}/yr
+        </span>
+      )}
     </div>
   );
 }

@@ -720,6 +720,14 @@ export type ItemPrices = Partial<Record<ItemPriceTier, { msrp: number; wholesale
    * invoices use it; otherwise they fall back to converting the ₹ price.
    */
   usd?: { msrp: number; wholesale: number };
+  /**
+   * Seat-slab volume pricing — "1-10 seats ₹270, 11-50 ₹250, 51+ ₹230".
+   * ₹/seat/MONTH like the tiers above. VOLUME pricing (one rate for all seats),
+   * deliberately not graduated — see lib/quotes/volume-tiers.ts for why that
+   * distinction is a money decision and not a detail.
+   * Absent on most rows; `slabPricing()` falls back to the flat tiers.
+   */
+  slabs?: Array<{ minSeats: number; maxSeats: number | null; msrp: number; wholesale: number }>;
 };
 
 type ItemRow = {
