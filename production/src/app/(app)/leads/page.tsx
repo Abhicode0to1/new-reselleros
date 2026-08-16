@@ -2032,6 +2032,9 @@ function LeadDetailSheet({
           <button
             type="button"
             onClick={() => setCardsOpen(true)}
+            /* Explicit name: the label is two nested spans, and a screen reader that
+               concatenates them reads the example objections as the button's own words. */
+            aria-label="Open objection battlecards"
             className="flex w-full items-center gap-2.5 rounded-lg border border-hairline bg-paper-2/40 px-3 py-2.5 text-left hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
           >
             <Icon name="shield" size={15} className="shrink-0 text-ink-3" />
