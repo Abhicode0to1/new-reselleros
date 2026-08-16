@@ -60,11 +60,15 @@ fi
 
 # ── 3. What does the LIVE service run with? ──────────────────────────────────
 echo "Reading CRON_SECRET from the live Cloud Run service ($SERVICE, $REGION)…"
+# gcloud renders an extracted list value as ['…'] — the brackets AND the single
+# quotes are formatting, not part of the secret. Stripping only the brackets left a
+# 66-character string where the secret is 64, so the fingerprint was computed over a
+# quoted value and never matched anything. Both quote styles are removed here.
 REMOTE_SECRET="$(
   gcloud run services describe "$SERVICE" \
     --region="$REGION" --project="$PROJECT" \
     --format='value(spec.template.spec.containers[0].env.filter("name:CRON_SECRET").extract("value"))' \
-    2>/dev/null | tr -d '\r[]' | head -1
+    2>/dev/null | tr -d "\r[]\"'" | head -1
 )"
 
 fingerprint() { printf '%s' "$1" | sha256sum | cut -c1-12; }
