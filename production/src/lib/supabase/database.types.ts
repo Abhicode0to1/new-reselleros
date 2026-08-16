@@ -1407,6 +1407,16 @@ type SubscriptionRow = {
    * trg_subscriptions_resolve_item; an explicit value always wins.
    */
   item_id:          string | null;
+  // Billing terms (migration 20260816130000) ────────────────────────────────
+  /** How often this subscription is INVOICED — distinct from a quote line's
+   *  commitment, which is the price tier. */
+  billing_cycle:    BillingCycle;
+  /** Length of the committed term. 12 = annual, 36 = a three-year deal.
+   *  renewal_date says when the term ENDS; this says how long it is. */
+  term_months:      number;
+  /** The main plan this add-on is co-termed to. A relationship, not a copied
+   *  anniversary — a copied date drifts the moment the parent's renewal moves. */
+  parent_subscription_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1438,6 +1448,9 @@ type SubscriptionInsert = {
   auto_renew?:       boolean;
   /** migration 0248 — usually left to the trigger. */
   item_id?:          string | null;
+  billing_cycle?:    BillingCycle;
+  term_months?:      number;
+  parent_subscription_id?: string | null;
 }
 type SubscriptionUpdate = Partial<SubscriptionInsert>;
 

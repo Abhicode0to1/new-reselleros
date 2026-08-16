@@ -11,6 +11,9 @@ import ExtendSubscriptionDialog from "@/components/features/subscriptions/extend
 import AddSeatsDialog            from "@/components/features/subscriptions/add-seats-dialog";
 import { AddSubscriptionDialog } from "@/components/features/subscriptions/add-subscription-dialog";
 import { EditSubscriptionDialog } from "@/components/features/subscriptions/edit-subscription-dialog";
+import { BillingScheduleCard } from "@/components/features/subscriptions/billing-schedule-card";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { localDateISO } from "@/lib/leads/outcomes";
 import { ImportSubscriptionsDialog } from "@/components/features/subscriptions/import-subscriptions-dialog";
 import { ReconcileGoogleDialog } from "@/components/features/subscriptions/reconcile-google-dialog";
 import { ImportGoogleSubsDialog } from "@/components/features/subscriptions/import-google-subs-dialog";
@@ -86,6 +89,7 @@ export default function SubscriptionsPage() {
   const [vendor, setVendor] = React.useState("all");
   const [search, setSearch] = React.useState("");
   const [extendSub,   setExtendSub]   = React.useState<Subscription | null>(null);
+  const [scheduleSub, setScheduleSub] = React.useState<Subscription | null>(null);
   const [addSeatsSub, setAddSeatsSub] = React.useState<Subscription | null>(null);
   const [editSub,     setEditSub]     = React.useState<Subscription | null>(null);
   const delSub = useDeleteSubscription();
@@ -633,6 +637,9 @@ export default function SubscriptionsPage() {
                               <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setExtendSub(s)}>
                                 <Icon name="clock" size={16} /> Extend term
                               </DropdownMenuItem>
+                              <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setScheduleSub(s)}>
+                                <Icon name="calendar" size={16} /> Billing schedule
+                              </DropdownMenuItem>
                               {s.customer_id && (
                                 <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => router.push(`/customers/${s.customer_id}` as never)}>
                                   <Icon name="receipt" size={16} /> View invoices
@@ -829,6 +836,21 @@ export default function SubscriptionsPage() {
           open={!!addSeatsSub}
           onOpenChange={(v) => { if (!v) setAddSeatsSub(null); }}
         />
+      )}
+
+      {/* Billing schedule — a forecast, not documents. See the card's header. */}
+      {scheduleSub && (
+        <Sheet open={!!scheduleSub} onOpenChange={(v) => { if (!v) setScheduleSub(null); }}>
+          <SheetContent side="right" className="w-full sm:w-[30rem] sm:max-w-[95vw] overflow-y-auto">
+            <SheetHeader className="mb-4">
+              <SheetTitle>{scheduleSub.customer_name}</SheetTitle>
+              <SheetDescription>
+                {scheduleSub.plan}{scheduleSub.domain ? ` · ${scheduleSub.domain}` : ""}
+              </SheetDescription>
+            </SheetHeader>
+            <BillingScheduleCard subscription={scheduleSub} todayISO={localDateISO(new Date())} />
+          </SheetContent>
+        </Sheet>
       )}
 
       {/* Correct subscription details */}
