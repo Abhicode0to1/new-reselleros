@@ -846,6 +846,14 @@ type LeadRow = {
    * rather than guessing — see lib/leads/forecast.ts.
    */
   expected_close_date: string | null;
+  /**
+   * When this lead last entered its current stage (migration 20260816100506).
+   *
+   * NULL means unknown, and must be rendered as unknown. `updated_at` is NOT a
+   * substitute — it bumps on any edit, so a deal stuck in `quote` for three weeks reads
+   * as one day old the moment somebody corrects its phone number.
+   */
+  stage_changed_at: string | null;
   /** Triage signal: 'low' / 'medium' / 'high'. Default 'medium'. */
   priority: LeadPriority;
   /** B2B GSTIN captured at lead time (auto-fills legal name + address on conversion). */
@@ -911,6 +919,8 @@ type LeadInsert = {
   trial_expired_at?:   string | null;
   follow_up_date?:     string | null;
   expected_close_date?: string | null;
+  /** Set by trg_leads_stage_changed_at — never write it by hand. */
+  stage_changed_at?: string | null;
   priority?:           LeadPriority;
   gstin?:              string | null;
   state_code?:         string | null;

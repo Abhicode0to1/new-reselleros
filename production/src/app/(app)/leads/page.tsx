@@ -44,6 +44,7 @@ import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { buildForecast, stageProbability } from "@/lib/leads/forecast";
 import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
+import { stageAge, staleDeals } from "@/lib/leads/velocity";
 import { useItems } from "@/lib/queries/items";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
@@ -404,6 +405,12 @@ function LeadsPageInner() {
         list = list.filter((l) =>
           l.expected_close_date && l.expected_close_date <= monthEnd &&
           l.stage !== "won" && l.stage !== "lost");
+      } else if (smartView === "stalled") {
+        /* Past the SLA with no stage movement. staleDeals() already excludes closed
+           deals and any whose age is unknown — it will not call a deal stale when it
+           cannot say how long it has been sitting. */
+        const stalledIds = new Set(staleDeals(list).map((l) => l.id));
+        list = list.filter((l) => stalledIds.has(l.id));
       } else if (smartView === "duplicates") {
         list = list.filter((l) => dup.flagged.has(l.id));
       }
@@ -2978,6 +2985,25 @@ function LeadListView({
                         <option key={s} value={s}>{STAGE_LABEL[s]}</option>
                       ))}
                     </select>
+                    {/* How long it has sat here. Beside the stage, because "Quote Sent"
+                        and "Quote Sent for 20 days" are different facts and only the
+                        second one asks for action. Unknown ages render as nothing at all
+                        rather than as "0d" — see lib/leads/velocity.ts. */}
+                    {(() => {
+                      const a = stageAge(lead);
+                      if (a.days === null) return null;
+                      return (
+                        <span
+                          title={a.title}
+                          className={cn(
+                            "shrink-0 rounded px-1 py-px text-[10px] font-semibold tabular-nums leading-none",
+                            a.stale ? "bg-rose-soft text-rose" : "text-ink-4",
+                          )}
+                        >
+                          {a.days}d
+                        </span>
+                      );
+                    })()}
                   </div>
                 </td>
                 {/* Email is kept off the row to keep it tight — it shows on hover

@@ -42,9 +42,10 @@ import {
 import { cn } from "@/lib/utils";
 import { isHotLead } from "@/lib/leads/heat";
 import { localDateISO } from "@/lib/leads/outcomes";
+import { staleDeals, STAGE_SLA_DAYS } from "@/lib/leads/velocity";
 import type { Lead } from "@/lib/supabase/database.types";
 
-export type SmartView = "all" | "mine" | "today" | "overdue" | "hot" | "new" | "closing" | "won-mtd" | "duplicates" | "junk";
+export type SmartView = "all" | "mine" | "today" | "overdue" | "hot" | "new" | "closing" | "stalled" | "won-mtd" | "duplicates" | "junk";
 
 interface LeadsSmartViewsProps {
   leads: Lead[];
@@ -100,6 +101,10 @@ export function LeadsSmartViews({
     const d = new Date();
     return localDateISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
   })();
+  /* Stalled = open and sitting in the same stage past the SLA. Deals with no recorded
+     stage-change date are NOT counted — the code cannot claim they are stale without
+     knowing when they last moved, and updated_at will not do (it bumps on any edit). */
+  const stalledCt = staleDeals(working).length;
   const closingCt = working.filter((l) =>
     l.expected_close_date && l.expected_close_date <= monthEnd &&
     l.stage !== "won" && l.stage !== "lost").length;
@@ -116,6 +121,8 @@ export function LeadsSmartViews({
     /* Closing this month — the forecast cut. Deliberately EXCLUDES deals with no
        expected close date: "closing this month" is a claim, and a deal nobody has dated
        has not made it. Those show up as "undated" in the KPI strip instead. */
+    { id: "stalled", label: "Stalled", count: stalledCt, tone: "rose",
+      hint: `No stage movement for ${STAGE_SLA_DAYS}+ days — needs a nudge` },
     { id: "closing", label: "Closing this month", count: closingCt, tone: "amber",
       hint: "Expected to close on or before month end — undated deals are not counted" },
   ];
