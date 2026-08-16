@@ -71,6 +71,11 @@ type TenantRow = {
   upi_vpa: string | null;
   upi_payee_name: string | null;
   grace_period_days: number;
+  /** Opt-in: pause a subscription automatically when its invoice is 14 days overdue.
+   *  FALSE by default on purpose — suspension means a customer cannot read email, and
+   *  driving it from an INVOICE clock can cut off a subscription over an unrelated
+   *  one-off bill. See migration 20260816114500. */
+  auto_suspend_on_overdue: boolean;
   setup_completed_at: string | null;
   gstin_verified_at: string | null;
   gstin_verification: GstinVerification | null;
@@ -104,6 +109,7 @@ type TenantInsert = {
   lut_valid_upto?: string | null;
   upi_vpa?: string | null;          // migration 0227
   upi_payee_name?: string | null;
+  auto_suspend_on_overdue?: boolean;
   grace_period_days?: number;
   setup_completed_at?: string | null;
   gstin_verified_at?: string | null;
@@ -1187,6 +1193,42 @@ type QuoteSignatureRow = {
   signed_at: string;
   created_at: string;
 };
+/**
+ * One dunning message per overdue invoice.
+ *
+ * Separate from renewal_email_log on purpose: that counts DOWN to a renewal, this
+ * counts UP from a due date, and a customer can be current on one and late on the
+ * other. See migration 20260816114500.
+ */
+type InvoiceDunningLogRow = {
+  id: string;
+  tenant_id: string;
+  invoice_id: string;
+  /** 'reminder' | 'retry' | 'grace_warning' | 'final' — see lib/invoices/dunning.ts. */
+  dunning_step: string;
+  days_overdue: number;
+  /** What was DONE, which is not always what the step implies. */
+  action_taken: string;
+  recipient_email: string | null;
+  subject: string | null;
+  status: string;
+  error_message: string | null;
+  sent_at: string;
+};
+type InvoiceDunningLogInsert = {
+  id?: string;
+  tenant_id: string;
+  invoice_id: string;
+  dunning_step: string;
+  days_overdue: number;
+  action_taken?: string;
+  recipient_email?: string | null;
+  subject?: string | null;
+  status?: string;
+  error_message?: string | null;
+  sent_at?: string;
+};
+
 type QuoteSignatureInsert = {
   id?: string;
   tenant_id: string;
@@ -3227,6 +3269,7 @@ export type Database = {
       leads:         { Row: LeadRow;         Insert: LeadInsert;         Update: LeadUpdate;         Relationships: [] };
       quotes:        { Row: QuoteRow;        Insert: QuoteInsert;        Update: QuoteUpdate;        Relationships: [] };
       quote_signatures: { Row: QuoteSignatureRow; Insert: QuoteSignatureInsert; Update: Partial<QuoteSignatureInsert>; Relationships: [] };
+      invoice_dunning_log: { Row: InvoiceDunningLogRow; Insert: InvoiceDunningLogInsert; Update: Partial<InvoiceDunningLogInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
       payments:           { Row: PaymentRow;           Insert: PaymentInsert;           Update: PaymentUpdate;           Relationships: [] };

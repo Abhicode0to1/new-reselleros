@@ -53,6 +53,11 @@ fi
 # name | schedule (IST) | path | description
 JOBS=(
   "resellersos-renewals|0 9 * * *|/api/cron/renewals|Renewal cadence: T-30/15/12/9/6/3/0, grace, auto-suspend"
+  # 09:15 IST — AFTER the renewal cron, deliberately. Renewals can settle a payment
+  # and mark an invoice paid; dunning running first would chase money that was about
+  # to be recorded, and a customer chased for an invoice they already paid stops
+  # reading these emails entirely.
+  "resellersos-invoice-dunning|15 9 * * *|/api/cron/invoice-dunning|Overdue-invoice dunning: day 1/3/7/14 from due date"
   "resellersos-compliance-reminders|30 9 * * *|/api/cron/compliance-reminders|Statutory reminders T-15/T-7/T-3 to owner + CA"
   "resellersos-trial-expiry|0 10 * * *|/api/cron/trial-expiry|Expire trials that have run out"
   "resellersos-birthday-greetings|1 21 * * *|/api/cron/birthday-greetings|Birthday and anniversary greetings"
