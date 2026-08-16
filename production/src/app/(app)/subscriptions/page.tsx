@@ -15,6 +15,8 @@ import { BillingScheduleCard } from "@/components/features/subscriptions/billing
 import { useItems } from "@/lib/queries/items";
 import { subscriptionCogs, cogsBadge, cogsTotals } from "@/lib/vendor/cogs";
 import { LicenseLeakageCard } from "@/components/features/subscriptions/license-leakage-card";
+import { SeatRequestsCard } from "@/components/features/subscriptions/seat-requests-card";
+import { useSeatRequests } from "@/lib/queries/seat-requests";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { ImportSubscriptionsDialog } from "@/components/features/subscriptions/import-subscriptions-dialog";
@@ -92,6 +94,8 @@ export default function SubscriptionsPage() {
      than to a wrong number. */
   const { data: catalogItems } = useItems();
   const catalog = React.useMemo(() => catalogItems ?? [], [catalogItems]);
+  const { data: seatRequestRows, refetch: refetchRequests } = useSeatRequests({ pendingOnly: true });
+  const seatRequests = React.useMemo(() => seatRequestRows ?? [], [seatRequestRows]);
   const { data: trials } = useActiveTrials();
   const [tab, setTab] = React.useState("all");
   const [vendor, setVendor] = React.useState("all");
@@ -332,6 +336,15 @@ export default function SubscriptionsPage() {
           subscriptions whose cost we cannot look up at all. Self-hiding when there
           is nothing to say, so it costs no vertical space on a good day. */}
       {!isLoading && <MarginAlertsCard />}
+
+      {/* Customers asking for seats. Approving applies them and raises the quote. */}
+      {!isLoading && (
+        <SeatRequestsCard
+          requests={seatRequests}
+          subscriptions={subsByWorkspace}
+          onDecided={() => { void refetchRequests(); void refetch(); }}
+        />
+      )}
 
       {/* Seats the vendor bills us for vs seats we bill the customer. */}
       {!isLoading && subsByWorkspace.length > 0 && (

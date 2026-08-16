@@ -52,11 +52,10 @@ const changeSchema = z.object({
 });
 type ChangeData = z.infer<typeof changeSchema>;
 
-function newTicketId(): string {
-  const stamp = Date.now().toString(36).toUpperCase();
-  const rand  = Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase();
-  return `TKT-${stamp}-${rand}`;
-}
+/* newTicketId() lived here to mint a support-ticket id for seat changes. Seat
+   changes are structured rows now (seat_requests) whose id Postgres generates, so
+   the helper is gone rather than left as dead code someone reuses later — its
+   Date.now()+random scheme is not the id format anything else here uses. */
 
 export default function PortalSubscriptionPage() {
   const [subs, setSubs]               = React.useState<Sub[] | null>(null);
@@ -238,41 +237,53 @@ function SeatChangeForm({ sub, onClose }: { sub: Sub; onClose: () => void }) {
     defaultValues: { newSeats: sub.seats, effectiveOn: today },
   });
 
+  /**
+   * Raise the request as STRUCTURED DATA.
+   *
+   * This used to write a support_tickets row whose body said "Requested: 30 users
+   * (+20)" in English. Every number a rep needed was in there as prose, so acting on
+   * it meant re-reading it and re-keying the seat count into the Add Seats dialog —
+   * and nothing linked the request to the quote that eventually came out of it. It
+   * now goes to `seat_requests`, where approval is one click and the quote id is
+   * written back. See migration 20260816150000.
+   *
+   * Through the server: the portal session has no `users` row, so the table has no
+   * anon insert policy, and tenant/customer/current-seats are read from the
+   * subscription rather than trusted from here.
+   */
   async function onSubmit(values: ChangeData) {
-    const supabase = createClient();
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData?.user) {
-      toast.error("Session expired");
-      return;
+    try {
+      const res = await fetch("/api/portal/seat-request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          subscription_id: sub.id,
+          requested_seats: values.newSeats,
+          effective_on: values.effectiveOn,
+          note: values.note || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Could not raise the request");
+        return;
+      }
+      const delta = values.newSeats - sub.seats;
+      toast.success(
+        delta > 0
+          ? `Request sent — ${delta} more ${delta === 1 ? "seat" : "seats"}.`
+          : "Request sent.",
+        {
+          description: delta > 0
+            ? "We will confirm the pro-rata amount and add them. The price depends on how much of your term is left, so it is worked out when we approve."
+            : "Seat reductions are handled by a person — we will call you.",
+          duration: 8000,
+        },
+      );
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message);
     }
-    const delta = values.newSeats - sub.seats;
-    const body = [
-      `Request to change seats on subscription ${sub.id}:`,
-      `Current: ${sub.seats} users · ${sub.plan}`,
-      `Requested: ${values.newSeats} users (${delta > 0 ? "+" : ""}${delta})`,
-      `Effective from: ${values.effectiveOn}`,
-      values.note ? `Note: ${values.note}` : null,
-    ].filter(Boolean).join("\n");
-
-    const { error } = await supabase.from("support_tickets").insert({
-      id:              newTicketId(),
-      tenant_id:       sub.tenant_id,
-      customer_id:     sub.customer_id,
-      customer_name:   sub.customer_name,
-      raised_by_email: authData.user.email ?? "",
-      raised_by_user:  authData.user.id,
-      category:        "plan_change",
-      priority:        "normal",
-      subject:         `Change seats on ${sub.plan}: ${sub.seats} → ${values.newSeats}`,
-      body,
-      status:          "open",
-    });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success("Request raised · we'll get back to you with a revised quote");
-    onClose();
   }
 
   return (

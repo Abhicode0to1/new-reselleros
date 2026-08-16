@@ -16,9 +16,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { addSeats } from "@/lib/subscriptions/add-seats";
-import { daysBetweenDates } from "@/lib/subscriptions/proration";
-import { isExportSupply } from "@/lib/gst/place-of-supply";
+import { applySeatIncrease, SEAT_INCREASE_SELECT } from "@/lib/subscriptions/apply-seat-increase";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -55,11 +53,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const supabase = createAdminClient();
   const { data: sub, error: subErr } = await supabase
     .from("subscriptions")
-    .select(
-      // start_date is new here: without it the term length is unknowable and
-      // add-seats fell back to assuming a year for every subscription.
-      `id, tenant_id, customer_id, customer_name, plan, vendor, domain, seats, mrr, item_id, start_date, renewal_date, status`
-    )
+    // Shared column list, so both seat-adding routes select the same set. start_date
+    // is in it because without it the term length is unknowable and add-seats fell
+    // back to assuming a year for every subscription.
+    .select(SEAT_INCREASE_SELECT)
     .eq("id", params.id)
     .single();
   if (subErr || !sub) {
@@ -84,47 +81,17 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     .eq("id", sub.tenant_id)
     .single();
 
-  /* ── The customer's GST treatment ────────────────────────────────────────
-     add-seats used to multiply by a hardcoded 1.18, so an export customer was
-     billed GST on a zero-rated sale. isExportSupply() is conservative: an unknown
-     country counts as domestic, so a missing country over-charges rather than
-     under-charges, and it is never silently zero-rated. */
-  let taxRatePct = 18;
-  if (sub.customer_id) {
-    const { data: cust } = await supabase
-      .from("customers")
-      .select("country")
-      .eq("id", sub.customer_id)
-      .maybeSingle();
-    if (isExportSupply(cust?.country)) taxRatePct = 0;
-  }
-
-  /* ── The length of THIS term, not an assumed year ────────────────────────
-     A two-year deal with 400 days left used to bill as a full year. Derived from
-     the subscription's own dates; when start_date is missing we fall back to 365
-     and say so, because guessing 730 would over-charge. */
-  const termDays = sub.start_date
-    ? Math.max(1, daysBetweenDates(sub.start_date, sub.renewal_date))
-    : 365;
-
-  const result = await addSeats({
+  /* The GST treatment and the term length are derived in ONE place —
+     lib/subscriptions/apply-seat-increase.ts — because a second route now adds
+     seats too (approving a customer's request). Both derivations have already been
+     wrong once here: a hardcoded 1.18 billed GST on a zero-rated export, and a
+     hardcoded 365 billed a two-year term as a year. Copying the fixed versions into
+     the second caller is how those come back. */
+  const result = await applySeatIncrease({
     supabase,
-    subscriptionId:  sub.id,
-    tenantId:        sub.tenant_id,
-    customerId:      sub.customer_id,
-    customerName:    sub.customer_name,
-    plan:            sub.plan,
-    vendor:          sub.vendor,
-    // 0248: the stored catalog link. Beats matching the plan text every time.
-    itemId:          sub.item_id,
-    domain:          sub.domain,
-    currentSeats:    sub.seats,
-    currentMrr:      sub.mrr,
+    sub,
     additionalSeats: parsed.data.additional_seats,
-    renewalDate:     sub.renewal_date,
-    graceDays:       tenant?.grace_period_days ?? 7,
-    taxRatePct,
-    termDays,
+    graceDays: tenant?.grace_period_days ?? 7,
   });
 
   if (!result.ok) {

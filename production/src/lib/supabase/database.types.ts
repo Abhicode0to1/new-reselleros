@@ -1255,6 +1255,51 @@ type ProvisioningTaskRow = {
   created_at: string;
   updated_at: string;
 };
+/**
+ * A customer asking for a seat change, as data rather than as prose in a ticket.
+ * See migration 20260816150000 for why this is not a support_tickets row.
+ */
+type SeatRequestRow = {
+  id: string;
+  tenant_id: string;
+  subscription_id: string;
+  customer_id: string | null;
+  customer_name: string;
+  /** Seats at REQUEST time — the subscription can move underneath a pending row. */
+  current_seats: number;
+  requested_seats: number;
+  effective_on: string | null;
+  note: string | null;
+  requested_by_email: string | null;
+  status: "pending" | "approved" | "rejected" | "withdrawn";
+  /** The quote addSeats() produced on approval. Null until then. */
+  quote_id: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  /** Shown to the CUSTOMER, so it is written for them. */
+  decision_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type SeatRequestInsert = {
+  id?: string;
+  tenant_id: string;
+  subscription_id: string;
+  customer_id?: string | null;
+  customer_name: string;
+  current_seats: number;
+  requested_seats: number;
+  effective_on?: string | null;
+  note?: string | null;
+  requested_by_email?: string | null;
+  status?: "pending" | "approved" | "rejected" | "withdrawn";
+  quote_id?: string | null;
+  decided_by?: string | null;
+  decided_at?: string | null;
+  decision_note?: string | null;
+  updated_at?: string;
+};
+
 type ProvisioningTaskInsert = {
   id?: string;
   tenant_id: string;
@@ -3338,6 +3383,7 @@ export type Database = {
       quote_signatures: { Row: QuoteSignatureRow; Insert: QuoteSignatureInsert; Update: Partial<QuoteSignatureInsert>; Relationships: [] };
       invoice_dunning_log: { Row: InvoiceDunningLogRow; Insert: InvoiceDunningLogInsert; Update: Partial<InvoiceDunningLogInsert>; Relationships: [] };
       provisioning_tasks: { Row: ProvisioningTaskRow; Insert: ProvisioningTaskInsert; Update: Partial<ProvisioningTaskInsert>; Relationships: [] };
+      seat_requests: { Row: SeatRequestRow; Insert: SeatRequestInsert; Update: Partial<SeatRequestInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
       payments:           { Row: PaymentRow;           Insert: PaymentInsert;           Update: PaymentUpdate;           Relationships: [] };
@@ -4351,6 +4397,7 @@ export type Lead         = LeadRow;
 export type Quote        = QuoteRow;
 export type QuoteSignature = QuoteSignatureRow;
 export type ProvisioningTask = ProvisioningTaskRow;
+export type SeatRequest = SeatRequestRow;
 export type Invoice      = InvoiceRow;
 export type Subscription = SubscriptionRow;
 export type Payment      = PaymentRow;
