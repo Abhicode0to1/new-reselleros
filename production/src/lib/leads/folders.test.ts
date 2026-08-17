@@ -159,3 +159,66 @@ describe("isClosed", () => {
     expect(isClosed(lead())).toBe(false);
   });
 });
+
+/**
+ * ─── THE CHIP COUNTS DO NOT ADD UP, AND THAT IS CORRECT ─────────────────────
+ * Pardeep read the live band — "All open 8 · Inbox 7 · Hot Deals 2" — and asked how
+ * that could possibly be right. 7 + 2 is 9, and there are only 8 leads.
+ *
+ * It is right because these are LABELS, not buckets. A ₹1,65,600 lead nobody has
+ * called yet is in Inbox because it is untouched and in Hot Deals because of the
+ * money; both statements are true and the rep needs to see it in both places.
+ * Mutually-exclusive folders would force a choice between "new" and "worth chasing",
+ * and whichever lost would hide the most valuable lead on the page.
+ *
+ * This test is the real tenant's shape on 17 Aug 2026, so the arithmetic in the
+ * screenshot is pinned rather than re-argued the next time someone counts.
+ */
+describe("the counts overlap on purpose — the live band, reconciled", () => {
+  /* 7 new + 1 contact open, 2 won. Two carry ₹1,00,000 or more. */
+  const live: FolderLead[] = [
+    lead({ value: 0 }),
+    lead({ value: 16_320 }), lead({ value: 16_320 }),
+    lead({ value: 40_800 }), lead({ value: 11_424 }), lead({ value: 88_320 }),
+    lead({ value: 165_600 }),                            // new AND hot
+    lead({ stage: "contact", value: 220_800 }),          // contact AND hot
+    lead({ stage: "won", value: 439_994 }), lead({ stage: "won", value: 11_470 }),
+  ];
+  const open = live.filter((l) => !isClosed(l));
+  const counts = salesFolderCounts(open, TODAY);
+
+  it("has 8 open leads out of 10", () => {
+    expect(open).toHaveLength(8);
+  });
+
+  it("puts 7 in Inbox and 2 in Hot Deals — 9 placements across 8 leads", () => {
+    expect(counts.inbox).toBe(7);
+    expect(counts.hot).toBe(2);
+    expect(counts.inbox + counts.hot).toBeGreaterThan(open.length);
+  });
+
+  it("names the lead sitting in both, so the extra placement has an address", () => {
+    const both = open.filter(
+      (l) => inSalesFolder(l, "inbox", TODAY) && inSalesFolder(l, "hot", TODAY));
+    expect(both).toHaveLength(1);
+    expect(both[0]!.value).toBe(165_600);
+  });
+
+  it("shows the other hot lead is out of Inbox because somebody called it", () => {
+    const hotNotInbox = open.filter(
+      (l) => inSalesFolder(l, "hot", TODAY) && !inSalesFolder(l, "inbox", TODAY));
+    expect(hotNotInbox).toHaveLength(1);
+    expect(hotNotInbox[0]!.stage).toBe("contact");
+  });
+
+  it("counts a follow-up dated tomorrow as not yet due", () => {
+    const tomorrow = live.map((l) => lead({ ...l, follow_up_date: "2026-08-18" }));
+    expect(salesFolderCounts(tomorrow.filter((l) => !isClosed(l)), TODAY).followup).toBe(0);
+  });
+
+  it("totals the open pipeline the band should have been showing", () => {
+    /* The band read ₹0 here. Every rupee below belongs to a lead at `new` or
+       `contact` — the exact stages the old KPI filter threw away. */
+    expect(open.reduce((s, l) => s + (l.value ?? 0), 0)).toBe(559_584);
+  });
+});

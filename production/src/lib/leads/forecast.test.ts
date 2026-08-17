@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   STAGE_PROBABILITY, stageProbability, weightedValue, buildForecast, closingBy,
-  isOpenStage, probabilityLabel,
+  isOpenStage, probabilityLabel, winRate,
 } from "./forecast";
 import type { Lead } from "@/lib/supabase/database.types";
 
@@ -212,5 +212,52 @@ describe("isOpenStage / probabilityLabel", () => {
   it("renders a percent, and a dash when there is no stage", () => {
     expect(probabilityLabel("demo")).toBe("40%");
     expect(probabilityLabel(null)).toBe("—");
+  });
+});
+
+/**
+ * ─── WIN RATE ───────────────────────────────────────────────────────────────
+ * The band showed "Win Rate: 100%" beside "Active Deals: 0" while eight deals were
+ * open. The 100% was arithmetically honest and useless: the old sum divided by the
+ * deals it could see, and it could only see the two won ones.
+ *
+ * The rule that replaced it has one job — never let an undecided deal count as a loss.
+ */
+describe("winRate — undecided is not lost", () => {
+  const at = (stage: Lead["stage"]) => ({ stage });
+
+  it("divides by decided deals, not by every deal", () => {
+    /* 2 won, 1 lost, 8 open. Over decided: 2/3 = 67%. Over everything: 2/11 = 18%,
+       which reports a rep with a full pipeline as failing. */
+    const leads = [
+      at("won"), at("won"), at("lost"),
+      ...Array.from({ length: 8 }, () => at("new")),
+    ];
+    const r = winRate(leads);
+    expect(r.decided).toBe(3);
+    expect(r.pct).toBe(67);
+  });
+
+  it("does not move when a new open deal arrives", () => {
+    const closed = [at("won"), at("won"), at("lost")];
+    expect(winRate(closed).pct).toBe(winRate([...closed, at("quote")]).pct);
+  });
+
+  it("returns null — not 0 — when nothing has closed either way", () => {
+    const r = winRate([at("new"), at("contact"), at("quote")]);
+    expect(r.pct).toBeNull();
+    expect(r.decided).toBe(0);
+  });
+
+  it("reports the sample alongside the rate, so 100% cannot pose as a record", () => {
+    /* The live tenant: 2 won, 0 lost. 100% is true. "2 of 2" is what makes it readable
+       as a small sample rather than a claim about the business. */
+    const r = winRate([at("won"), at("won"), ...Array.from({ length: 8 }, () => at("new"))]);
+    expect(r.pct).toBe(100);
+    expect(`${r.won} of ${r.decided}`).toBe("2 of 2");
+  });
+
+  it("says 0% when deals really have been lost", () => {
+    expect(winRate([at("lost"), at("lost"), at("new")]).pct).toBe(0);
   });
 });

@@ -44,7 +44,7 @@ import { LeadsSmartViews, type SmartView } from "@/components/features/leads/lea
 import { PriorityCallQueue } from "@/components/features/leads/priority-call-queue";
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { localDateISO } from "@/lib/leads/outcomes";
-import { buildForecast, stageProbability } from "@/lib/leads/forecast";
+import { buildForecast, stageProbability, winRate } from "@/lib/leads/forecast";
 import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
 import { stageAge, staleDeals } from "@/lib/leads/velocity";
 import { dealHealth } from "@/lib/leads/deal-health";
@@ -504,12 +504,6 @@ function LeadsPageInner() {
     l.stage !== "won" && l.stage !== "lost" && !l.is_junk;
   const openLeads = React.useMemo(() => searched.filter(isOpenLead), [searched]);
 
-  /* The OLD inbox boundary, kept for one job only: the KPI band totals value, and
-     value is only entered once a lead is past first contact. It is no longer a page
-     boundary — nothing routes on it. Named for what it is rather than "raw", which
-     was the word that made the split sound like two kinds of record. */
-  const isPastInbox = (l: Lead) => l.stage !== "new" && l.stage !== "contact";
-
   /* ── The folder chips are the filter ──────────────────────────────────────
      "Inbox" and "Qualified Deals" used to switch between the two halves of the old
      /leads-vs-/deals split. After the merge both resolved to the same open set, so
@@ -564,32 +558,44 @@ function LeadsPageInner() {
      is exactly what the folder model cannot do and must not replace. */
   const effectiveView = isMobile ? "list" : view;
 
-  // Stats are based on Deals (where value lives — raw leads have no value yet).
-  // Derived directly from `workspaceLeads` so header KPIs always stay 100% accurate
-  // regardless of active smartView filters or chip selections.
-  const allQualifiedDeals = React.useMemo(
-    () => workspaceLeads.filter((l) => isPastInbox(l) && !l.is_junk),
+  /* ── EVERY NON-JUNK LEAD IS A DEAL ─────────────────────────────────────────
+     This set used to start at `isPastInbox` — stage past new/contact — a leftover from
+     when /deals was its own page. The stated reason was that value is only entered once
+     a lead is past first contact. The data says otherwise: six of this tenant's seven
+     `new` leads carry one, ₹16,320 through ₹1,65,600.
+
+     So the band read "Open Pipeline ₹0 · Active Deals: 0" three inches from
+     "Open leads: 8" — ₹5,59,584 of live pipeline reported as nothing, beside the count
+     that disproved it. A zero is not read as a missing number; it is read as a fact,
+     and this one said "you have no pipeline" to a rep who had eight deals.
+
+     Junk is the only exclusion now. A stage is no longer a reason to be left out of the
+     totals, for the same reason it is no longer a reason to be on a different page.
+
+     Derived from `workspaceLeads`, never from `searched`, so the totals answer "how much
+     is there" rather than "how much survives what I typed". */
+  const dealUniverse = React.useMemo(
+    () => workspaceLeads.filter((l) => !l.is_junk),
     [workspaceLeads]
   );
   const openDeals = React.useMemo(
-    () => allQualifiedDeals.filter((l) => l.stage !== "won" && l.stage !== "lost"),
-    [allQualifiedDeals]
+    () => dealUniverse.filter((l) => l.stage !== "won" && l.stage !== "lost"),
+    [dealUniverse]
   );
   const totalValue = React.useMemo(
     () => openDeals.reduce((s, l) => s + (l.value ?? 0), 0),
     [openDeals]
   );
   /* Weighted forecast — the same open deals, each multiplied by what its stage has
-     earned. Built from allQualifiedDeals rather than openDeals so buildForecast applies
-     its own open/closed rule in one place; feeding it a pre-filtered list would mean two
+     earned. Built from dealUniverse rather than openDeals so buildForecast applies its
+     own open/closed rule in one place; feeding it a pre-filtered list would mean two
      definitions of "open" that can drift. */
-  const forecast = React.useMemo(() => buildForecast(allQualifiedDeals), [allQualifiedDeals]);
-  const wonCount = React.useMemo(
-    () => allQualifiedDeals.filter((l) => l.stage === "won").length,
-    [allQualifiedDeals]
-  );
-  const conversion =
-    allQualifiedDeals.length > 0 ? Math.round((wonCount / allQualifiedDeals.length) * 100) : 0;
+  const forecast = React.useMemo(() => buildForecast(dealUniverse), [dealUniverse]);
+  /* Win rate over DECIDED deals only — won ÷ (won + lost). It used to divide by every
+     deal including the open ones, which counts "not finished yet" as "not won"; the rule
+     and the reasoning now live in lib/leads/forecast.ts with its tests. */
+  const rate = React.useMemo(() => winRate(dealUniverse), [dealUniverse]);
+  const { won: wonCount, lost: lostCount, decided: decidedCount, pct: conversion } = rate;
 
   // Drag handlers
   const handleDrop = async (toStage: Lead["stage"]) => {
@@ -810,11 +816,31 @@ function LeadsPageInner() {
               )}
             </span>
             <span className="text-ink-3 font-mono">·</span>
-            <span className="font-mono">Active Deals: <b className="text-ink">{openDeals.length}</b></span>
+            {/* ONE count, not two. "Active Deals" and "Open leads" used to sit side by
+                side; after the merge they describe the same thing, and two labels for
+                one number invite the reader to hunt for the difference. */}
+            <span
+              className="font-mono"
+              title="Every lead that is neither won, lost nor junk — whatever stage it reached."
+            >
+              Open deals: <b className="text-ink">{openDeals.length}</b>
+            </span>
             <span className="text-ink-3 font-mono">·</span>
-            <span className="font-mono">Open leads: <b className="text-ink">{openLeads.length}</b></span>
-            <span className="text-ink-3 font-mono">·</span>
-            <span className="font-mono">Win Rate: <b className="text-emerald">{conversion}%</b></span>
+            <span
+              className="font-mono"
+              title={
+                decidedCount > 0
+                  ? `${wonCount} won and ${lostCount} lost — ${wonCount} of ${decidedCount} decided.\n` +
+                    `${openDeals.length} still open and NOT counted: undecided is not lost.`
+                  : `Nothing has closed either way yet, so there is no rate to show.\n` +
+                    `${openDeals.length} deals are still open.`
+              }
+            >
+              Win Rate: <b className="text-emerald">{conversion === null ? "—" : `${conversion}%`}</b>
+              {decidedCount > 0 && (
+                <span className="text-ink-3"> ({wonCount}/{decidedCount})</span>
+              )}
+            </span>
           </div>
 
           {/* Sales-motion switcher. "All" is first and is the default — opening the page
@@ -863,16 +889,23 @@ function LeadsPageInner() {
               <p className="font-serif text-base font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalValue, { compact: true })}</p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Active Deals</p>
+              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Open deals</p>
               <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{openDeals.length}</p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Open leads</p>
-              <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{openLeads.length}</p>
+              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Won</p>
+              <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{wonCount}</p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
               <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
-              <p className="font-serif text-base font-bold text-emerald tabular-nums mt-0.5">{conversion}%</p>
+              <p className="font-serif text-base font-bold text-emerald tabular-nums mt-0.5">
+                {conversion === null ? "—" : `${conversion}%`}
+              </p>
+              {/* The sample, under the number. "100%" off two closed deals and "100%" off
+                  two hundred are the same three characters and not the same claim. */}
+              <p className="text-[10px] text-ink-3 tabular-nums">
+                {decidedCount > 0 ? `${wonCount} of ${decidedCount} decided` : "nothing closed yet"}
+              </p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
               <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">High Priority</p>

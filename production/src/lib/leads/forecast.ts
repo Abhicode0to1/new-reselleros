@@ -165,6 +165,40 @@ export function closingBy(
     isOpenStage(l.stage) && !!l.expected_close_date && l.expected_close_date <= isoDate);
 }
 
+export interface WinRate {
+  won: number;
+  lost: number;
+  /** won + lost. The denominator, named so a caller cannot mistake it for "all deals". */
+  decided: number;
+  /** Integer percent, or null when nothing has been decided yet. */
+  pct: Percent | null;
+}
+
+/**
+ * Win rate over DECIDED deals only — won ÷ (won + lost).
+ *
+ * ─── WHY NOT won ÷ every deal ───────────────────────────────────────────────
+ * That was the old sum, and it counts "not finished yet" as "not won". A rep who fills
+ * their pipeline watches their win rate fall for doing the one thing the job asks of
+ * them, and the number moves for a reason that has nothing to do with winning.
+ *
+ * ─── WHY null AND NOT 0 ─────────────────────────────────────────────────────
+ * With nothing closed either way there is no rate. `0%` in that slot is not a neutral
+ * placeholder — it states a losing record that has not happened. The caller renders
+ * null as an em dash.
+ *
+ * Junk is the caller's to filter, as everywhere else in this module.
+ */
+export function winRate(leads: readonly Pick<Lead, "stage">[]): WinRate {
+  let won = 0, lost = 0;
+  for (const l of leads) {
+    if (l.stage === "won") won++;
+    else if (l.stage === "lost") lost++;
+  }
+  const decided = won + lost;
+  return { won, lost, decided, pct: decided > 0 ? Math.round((won * 100) / decided) : null };
+}
+
 /** Label for a probability badge, e.g. "80% · Quote Sent". */
 export function probabilityLabel(stage: Lead["stage"] | null | undefined): string {
   if (!stage) return "—";
