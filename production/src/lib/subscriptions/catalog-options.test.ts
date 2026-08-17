@@ -125,6 +125,40 @@ describe("catalogVendors — the four-vendor list hid three", () => {
   });
 });
 
+describe("a plan priced as a YEAR, not as a monthly rate", () => {
+  /** Support Standard yearly: ₹9,990 for the year. ₹9,990 ÷ 12 is ₹832.50. */
+  const yearly = {
+    id: "SUP-STANDARD-YR", name: "Support Standard (Yearly)", vendor: "support",
+    msrp: 0, wholesale: 0, item_type: "subscription",
+    prices: { annual_total: { msrp: 9_990, wholesale: 0 } },
+  } as unknown as Item;
+
+  it("uses the annual total verbatim instead of multiplying by twelve", () => {
+    /* Without this the dialog would show ₹9,990 × 12 = ₹1,19,880/yr. */
+    const [p] = subscriptionProducts([yearly]);
+    expect(p.annualSellPerSeat).toBe(9_990);
+  });
+
+  it("does not round the price through a monthly rate", () => {
+    /* ₹9,990 ÷ 12 = ₹832.50 → ₹833 → ₹9,996 billed against ₹9,990 quoted. Six
+       rupees, and two numbers for one plan. */
+    const [p] = subscriptionProducts([yearly]);
+    expect(p.annualSellPerSeat).not.toBe(Math.round(9_990 / 12) * 12);
+  });
+
+  it("leaves every ordinary monthly-rate item exactly as it was", () => {
+    /* The whole catalogue is priced monthly. This must not disturb any of it. */
+    const before = subscriptionProducts(CATALOG);
+    expect(before.find((p) => p.id === "GW-STR-fbb")!.annualSellPerSeat).toBe(270 * 12);
+    expect(before.find((p) => p.id === "MS-BAS")!.annualCostPerSeat).toBe(165 * 12);
+  });
+
+  it("ignores a zero or missing annual total and falls back to the monthly rate", () => {
+    const noTotal = { ...yearly, msrp: 250, prices: { annual_total: { msrp: 0 } } } as unknown as Item;
+    expect(subscriptionProducts([noTotal])[0].annualSellPerSeat).toBe(250 * 12);
+  });
+});
+
 describe("vendorSelectOptions — the dropdown a reseller actually sees", () => {
   it("never lists the same vendor twice", () => {
     /* The bug this exists for, reported from the live app: the dialog built this

@@ -64,6 +64,35 @@ function monthlyCost(it: Item): number | null {
 }
 
 /**
+ * ₹/seat/year sell.
+ *
+ * ─── SOME PLANS ARE PRICED AS A YEAR, NOT AS A MONTHLY RATE ─────────────────
+ * Almost everything here is a monthly rate and the year is monthly × 12. Support
+ * plans are not: Standard is ₹999/mo or ₹9,990/yr, a real discount, and ₹9,990 ÷ 12
+ * is ₹832.50 — not a whole rupee (AGENTS.md §1). Forcing it through a monthly rate
+ * rounds to ₹833 and bills ₹9,996, so the customer is quoted one number and charged
+ * another.
+ *
+ * `prices.annual_total.msrp` therefore holds a TOTAL FOR THE YEAR and is used
+ * verbatim. It is a separate key from `prices.annual` on purpose: that one is a
+ * monthly rate under annual commitment, and overloading it would leave two meanings
+ * behind one name.
+ */
+function annualSell(it: Item): number {
+  const total = (it.prices as { annual_total?: { msrp?: number } } | null)?.annual_total?.msrp;
+  if (typeof total === "number" && total > 0) return total;
+  return monthlySell(it) * 12;
+}
+
+/** ₹/seat/year cost, or null. Same rule as annualSell. */
+function annualCost(it: Item): number | null {
+  const total = (it.prices as { annual_total?: { wholesale?: number } } | null)?.annual_total?.wholesale;
+  if (typeof total === "number" && total > 0) return total;
+  const monthly = monthlyCost(it);
+  return monthly === null ? null : monthly * 12;
+}
+
+/**
  * Subscription products from the catalog, grouped by vendor, cheapest first.
  *
  * One-time items are excluded: they are not something a subscription renews. Inactive
@@ -76,8 +105,8 @@ export function subscriptionProducts(items: readonly Item[]): CatalogProduct[] {
       id:     it.id,
       name:   it.name,
       vendor: it.vendor,
-      annualSellPerSeat: monthlySell(it) * 12,
-      annualCostPerSeat: monthlyCost(it) === null ? null : monthlyCost(it)! * 12,
+      annualSellPerSeat: annualSell(it),
+      annualCostPerSeat: annualCost(it),
     }))
     .sort((a, b) =>
       a.vendor === b.vendor
