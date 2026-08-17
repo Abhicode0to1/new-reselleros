@@ -16,6 +16,7 @@ import Razorpay from "razorpay";
 import { createAdminClient } from "@/lib/supabase/server";
 import { isQuoteExpired } from "@/lib/utils";
 import { quoteTokenMatches } from "@/lib/quotes/accept-token";
+import { quoteInstalments } from "@/lib/billing/instalments";
 
 const ENV_RAZORPAY_KEY_ID =
   process.env.RAZORPAY_KEY_ID?.trim() || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || "";
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   // ── 1. Load + token-authorize (identical secrecy model to the accept route) ──
   const { data: quote, error: qErr } = await admin
     .from("quotes")
-    .select("id, status, payment_status, expires_date, amount, currency, customer_name, tenant_id, public_token, invoice_id")
+    .select("id, status, payment_status, expires_date, amount, currency, customer_name, tenant_id, public_token, invoice_id, billing_cycle, subtotal, discount_pct, tax_rate, created_date")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -53,7 +54,41 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (isQuoteExpired(quote.expires_date)) {
     return NextResponse.json({ error: "This quote has expired — ask the reseller for a fresh one." }, { status: 400 });
   }
-  const amountInr = quote.amount ?? 0;
+  // ── 2a. Split billing — charge the FIRST INSTALMENT, not the term ────────
+  // A quarterly quote's own PDF prints "Per invoice (4/yr) ₹7,080/qtr" as its grand
+  // total. Charging ₹28,320 here would take the whole year from a customer who was
+  // shown a quarter, which is the difference between a billing cycle and a label.
+  //
+  // Derived from the same schedule engine the billing cron uses, so what is charged
+  // and what is later invoiced come out of one place. Returns null for yearly, and
+  // then everything below behaves exactly as it always has.
+  const taxRate  = quote.tax_rate ?? 18;
+  const subtotal = quote.subtotal ?? 0;
+  const instalments = quoteInstalments({
+    cycle:       quote.billing_cycle,
+    // Same taxable value generate_invoice computes — subtotal net of discount.
+    termTaxable: subtotal - Math.round(subtotal * (quote.discount_pct ?? 0) / 100),
+    termGross:   quote.amount ?? 0,
+    taxRate,
+  });
+
+  /* A split-billed quote is paid ONCE here — the first instalment. Everything after
+     it is collected against the instalment INVOICES the billing cron raises. Without
+     this the customer could come back to the same link and pay another instalment
+     against the quote, money that no invoice would ever be matched to. The guard
+     above only catches 'received'/'invoiced'; a split-billed quote sits at 'partial'
+     for the rest of its term. */
+  if (instalments && quote.payment_status === "partial") {
+    return NextResponse.json(
+      {
+        error: `The first ${instalments.cycle === "monthly" ? "month" : "instalment"} on this quote is already paid.`,
+        nextStep: "The rest is invoiced one period at a time — pay those from the invoice you receive on each billing date.",
+      },
+      { status: 409 },
+    );
+  }
+
+  const amountInr = instalments ? instalments.firstGross : (quote.amount ?? 0);
   if (amountInr <= 0) {
     return NextResponse.json({ error: "Nothing to pay on this quote." }, { status: 400 });
   }
@@ -112,13 +147,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       p_amount: amountInr,
       p_method: "razorpay",
       p_reference: simRef,
-      p_notes: `[SIMULATION] Quote online payment · ${quote.id}`,
+      p_notes: instalments
+        ? `[SIMULATION] Quote online payment · ${quote.id} · instalment 1 of ${instalments.count}`
+        : `[SIMULATION] Quote online payment · ${quote.id}`,
     });
     if (rpcErr) {
       console.error("[public/quote/pay] sim record_payment:", rpcErr.message);
       return NextResponse.json({ error: rpcErr.message }, { status: 500 });
     }
-    return NextResponse.json({ success: true, simulated: true, quoteId: quote.id, amountRupees: amountInr });
+    return NextResponse.json({
+      success: true, simulated: true, quoteId: quote.id, amountRupees: amountInr,
+      instalmentOf: instalments?.count ?? null,
+    });
   }
 
   // ── 3b. LIVE — create a Razorpay Order; the webhook records on capture ────
@@ -133,6 +173,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         quoteId: quote.id,
         tenantId: quote.tenant_id,
         customerName: quote.customer_name ?? "",
+        /* So a ₹2,360 capture against a ₹28,320 quote is self-explaining in the
+           gateway dashboard rather than looking like an underpayment. */
+        ...(instalments ? { instalment: `1 of ${instalments.count}`, cycle: instalments.cycle } : {}),
       },
     });
     return NextResponse.json({
@@ -144,6 +187,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       razorpayMode: rzMode,
       quoteId: quote.id,
       customerName: quote.customer_name ?? "",
+      instalmentOf: instalments?.count ?? null,
     });
   } catch (err) {
     const m = err instanceof Error ? err.message : "Unknown error";

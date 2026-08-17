@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   SPLIT_CYCLES, isSplitBilled, plannedInstalments, instalmentSkip, instalmentsDue,
+  quoteInstalments,
 } from "./instalments";
 import { scheduleTotal } from "./schedule";
+import { grossAmount } from "@/lib/quotes/amounts";
 import type { BillingCycle } from "@/lib/supabase/database.types";
 
 /** A ₹28,320-incl-GST yearly deal: ₹24,000 ex-GST over 12 months = ₹2,000 mrr. */
@@ -135,6 +137,60 @@ describe("instalmentSkip — when billing must NOT run", () => {
     expect(instalmentSkip({
       cycle: "monthly", quotePaid: 0, quoteAmount: 0, scheduleSize: 12,
     })).toBeNull();
+  });
+});
+
+describe("quoteInstalments — what a quote collects today", () => {
+  const q = (over: Partial<Parameters<typeof quoteInstalments>[0]> = {}) => quoteInstalments({
+    cycle: "monthly", termTaxable: 24_000, termGross: 28_320, taxRate: 18,
+    termMonths: 12, ...over,
+  });
+
+  it("charges one month of a ₹28,320 year, not the year", () => {
+    expect(q()).toEqual({
+      cycle: "monthly", count: 12, firstTaxable: 2_000, firstGross: 2_360, termGross: 28_320,
+    });
+  });
+
+  it("charges one quarter on a quarterly quote", () => {
+    const r = q({ cycle: "quarterly" });
+    expect(r?.count).toBe(4);
+    expect(r?.firstGross).toBe(7_080);
+  });
+
+  it("returns null for yearly — there is nothing to split", () => {
+    /* The pay route falls back to charging the quote total on null, so this is the
+       switch that keeps every existing quote behaving exactly as it does today. */
+    expect(q({ cycle: "yearly" })).toBeNull();
+    expect(q({ cycle: null })).toBeNull();
+  });
+
+  it("the instalments still add up to the quote total", () => {
+    /* A customer who pays 12 instalments must have paid the quote, not the quote
+       plus rounding. The schedule carries its remainder into the LAST instalment,
+       so only the first is checked here — schedule.test.ts asserts the sum. */
+    for (const taxable of [24_000, 24_001, 23_999, 100_000, 7]) {
+      const r = quoteInstalments({
+        cycle: "monthly", termTaxable: taxable, termGross: grossAmount(taxable, 18),
+        taxRate: 18, termMonths: 12,
+      });
+      if (r == null) continue;
+      expect(r.firstGross).toBe(grossAmount(r.firstTaxable, 18));
+      expect(r.firstTaxable).toBeLessThanOrEqual(taxable);
+    }
+  });
+
+  it("refuses a zero or nonsense term rather than charging ₹0", () => {
+    expect(q({ termTaxable: 0 })).toBeNull();
+    expect(q({ termGross: 0 })).toBeNull();
+    expect(q({ termTaxable: Number.NaN })).toBeNull();
+  });
+
+  it("returns null when the term is too short to split", () => {
+    /* A one-month term billed monthly is one invoice — charging "the first
+       instalment" of it is just charging the whole thing, and pretending otherwise
+       would show the customer a split that does not exist. */
+    expect(q({ termMonths: 1 })).toBeNull();
   });
 });
 

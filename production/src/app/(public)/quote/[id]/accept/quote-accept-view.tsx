@@ -16,6 +16,7 @@ import type { LineCommitment, BillingCycle } from "@/lib/supabase/database.types
 import {
   cycleInvoicesPerYear, cycleUnitLabel, cycleScheduleLabel, cycleFromLegacyCommitment,
 } from "@/lib/quotes/billing";
+import { quoteInstalments } from "@/lib/billing/instalments";
 
 /** Customer-SAFE quote shape — no cost/margin. Built server-side in page.tsx. */
 export type PublicQuote = {
@@ -175,6 +176,24 @@ export function QuoteAcceptView({
 
   /** The number the customer is agreeing to — the server's, whenever there is one. */
   const payableTotal = liveConfig ? liveConfig.total : dTotal;
+
+  /**
+   * On a split-billed quote, what is collected TODAY.
+   *
+   * The same helper /api/public/quote/[id]/pay charges from, deliberately. The
+   * totals box and the pay button used to derive this two different ways —
+   * payableTotal / billingN here, and nothing at all on the button, which showed the
+   * whole term. A customer reading "₹7,080/qtr" above a button saying
+   * "Pay online now · ₹28,320" has been shown two prices for one decision.
+   *
+   * Null for yearly, and then every line below behaves exactly as it always has.
+   */
+  const dueToday = React.useMemo(() => quoteInstalments({
+    cycle:       effectiveCycle,
+    termTaxable: (quote.subtotal ?? 0) - Math.round((quote.subtotal ?? 0) * (quote.discount_pct ?? 0) / 100),
+    termGross:   payableTotal,
+    taxRate:     quote.tax_rate ?? 18,
+  }), [effectiveCycle, quote.subtotal, quote.discount_pct, quote.tax_rate, payableTotal]);
 
   const [notifying, setNotifying] = React.useState(false);
   /**
@@ -607,8 +626,12 @@ export function QuoteAcceptView({
                     {perInvoice ? `Per invoice (${billingN}/yr)` : (billingN === 1 ? "Total payable now" : "Total")}
                   </span>
                   <span className="font-serif text-2xl tabular-nums">
+                    {/* dueToday when we have it — the schedule engine carries its
+                        remainder into the LAST instalment, so a term that does not
+                        divide gives a first instalment a rupee below the average.
+                        This is the figure the pay button charges. */}
                     {perInvoice
-                      ? `${fmtC(dRound(payableTotal / billingN))}${billingUnit}`
+                      ? `${fmtC(dueToday ? dueToday.firstGross : dRound(payableTotal / billingN))}${billingUnit}`
                       : fmtC(payableTotal)}
                   </span>
                 </div>
@@ -651,8 +674,20 @@ export function QuoteAcceptView({
                 onClick={handlePayOnline}
                 className="w-full justify-center"
               >
-                Pay online now · {fmtC(dTotal)}
+                {/* The whole term used to be charged here regardless of cycle. */}
+                {dueToday
+                  ? `Pay ${dueToday.cycle === "monthly" ? "this month" : "this instalment"} · ${fmtC(dueToday.firstGross)}`
+                  : `Pay online now · ${fmtC(dTotal)}`}
               </Button>
+            )}
+            {/* Said next to the button, because "why is this less than the total?"
+                is the question a customer asks with their card already out. */}
+            {payOnline && !liveConfig?.changed && dueToday && (
+              <p className="text-[12px] leading-snug text-ink-3">
+                This is instalment 1 of {dueToday.count}. The rest are invoiced one
+                period at a time on their own dates — you pay each from the invoice you
+                receive, never the whole {fmtC(dueToday.termGross)} at once.
+              </p>
             )}
             {payOnline && liveConfig?.changed && (
               <p className="rounded-md border border-hairline bg-paper-2/60 px-3 py-2 text-[12px] leading-snug text-ink-2">

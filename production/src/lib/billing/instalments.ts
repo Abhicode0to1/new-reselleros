@@ -14,6 +14,8 @@
  */
 import type { BillingCycle, Subscription } from "@/lib/supabase/database.types";
 import { subscriptionSchedule } from "./subscription-schedule";
+import { buildBillingSchedule } from "./schedule";
+import { grossAmount } from "@/lib/quotes/amounts";
 
 /** The cycles that produce more than one invoice per term. */
 export const SPLIT_CYCLES: readonly BillingCycle[] = ["monthly", "quarterly", "half_yearly"] as const;
@@ -112,6 +114,82 @@ export function instalmentSkip(args: {
     };
   }
   return null;
+}
+
+/**
+ * What a split-billed QUOTE collects today, before any subscription exists.
+ *
+ * ─── WHY THE QUOTE NEEDS ITS OWN VERSION OF THIS ────────────────────────────
+ * plannedInstalments() works off a subscription. At the moment a customer clicks
+ * "Pay", there is no subscription — record_payment creates it from the payment. So
+ * the amount to charge has to come from the quote, and it has to come out of the
+ * SAME schedule engine, or a customer is charged one figure and invoiced another.
+ *
+ * ─── THE TAXABLE AMOUNT IS SPLIT, NOT THE GROSS ─────────────────────────────
+ * Deliberately the same way round as the ledger, which stores taxable and grosses it
+ * when the invoice is raised. Splitting the gross instead would charge a figure the
+ * instalment invoice could not reproduce from its own taxable value, and a tax
+ * invoice that cannot reproduce what was charged is the one an auditor picks up.
+ *
+ * ─── IT WILL NOT MATCH THE INVOICE TO THE LAST RUPEE, AND THAT IS KNOWN ─────
+ * record_payment derives mrr as round(line_amount / 12) (baseline.sql:4580), so a
+ * term that does not divide by 12 already loses a rupee or two between the quote and
+ * the subscription — before any of this existed. The instalment invoice is raised
+ * from the SUBSCRIPTION, so it can differ from what was charged here by that much.
+ * raise_subscription_billing credits what was actually received rather than assuming
+ * the two agree, which is why the difference is harmless rather than a stuck balance.
+ */
+export interface QuoteInstalments {
+  cycle: BillingCycle;
+  /** How many invoices the term is split into. */
+  count: number;
+  /** ₹ ex-GST for the first period. */
+  firstTaxable: number;
+  /** ₹ INCLUDING GST — what the customer pays today. */
+  firstGross: number;
+  /** ₹ INCLUDING GST for the whole term — what the quote totals. */
+  termGross: number;
+}
+
+/**
+ * Any valid date. buildBillingSchedule divides the term into equal parts and carries
+ * the remainder into the last one — the AMOUNTS do not depend on when the term
+ * starts, only the dates do, and this function returns no dates. Taking a start date
+ * as a parameter would imply otherwise and invite a caller to hunt for one that its
+ * quote shape does not even carry.
+ */
+const AMOUNT_ONLY_ANCHOR = "2000-01-01";
+
+export function quoteInstalments(args: {
+  cycle: BillingCycle | null | undefined;
+  /** ₹ ex-GST for the term (quotes.subtotal, net of discount). */
+  termTaxable: number;
+  /** ₹ incl GST for the term (quotes.amount). */
+  termGross: number;
+  taxRate: number;
+  /** Whole months in the term. Committed sales are 12 — see record_payment. */
+  termMonths?: number;
+}): QuoteInstalments | null {
+  const { cycle, termTaxable, termGross, taxRate } = args;
+  if (!isSplitBilled(cycle)) return null;
+  if (!Number.isFinite(termTaxable) || termTaxable <= 0) return null;
+  if (!Number.isFinite(termGross)   || termGross   <= 0) return null;
+
+  const periods = buildBillingSchedule({
+    startDate:  AMOUNT_ONLY_ANCHOR,
+    termMonths: Math.max(1, args.termMonths ?? 12),
+    cycle:      cycle as BillingCycle,
+    termAmount: termTaxable,
+  });
+  if (periods.length <= 1) return null;   // nothing was actually split
+
+  return {
+    cycle:        cycle as BillingCycle,
+    count:        periods.length,
+    firstTaxable: periods[0].amount,
+    firstGross:   grossAmount(periods[0].amount, taxRate),
+    termGross,
+  };
 }
 
 /**
