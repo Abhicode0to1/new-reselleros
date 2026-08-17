@@ -180,6 +180,27 @@ export function QuoteBuilder() {
   const [custMode, setCustMode] = React.useState<"existing" | "prospect">("existing");
   // Prefill / duplicate / add-new set customerId → snap the toggle to "existing".
   React.useEffect(() => { if (customerId) setCustMode("existing"); }, [customerId]);
+
+  /* ── A prefilled company with no leadId must still be VISIBLE ──────────────
+     `?company=…` fills `leadCompany`, but that state is only rendered inside the
+     "Prospect Details" card, which only appears when isLeadMode is true — and
+     isLeadMode needs a leadId. So arriving from anywhere that prefills a company
+     WITHOUT a lead (the Enquiries "Send quote" button, the support upsell link)
+     put the name into state nothing renders: the operator saw an empty Customer
+     Details card and typed it again, or sent a quote addressed to "Prospect".
+
+     Seeding prospectName is the whole fix, because that field is already what gets
+     saved as customer_name for a non-customer quote (see handleSubmit). Runs once
+     via the ref so the operator can clear or change it afterwards. */
+  const seededProspectRef = React.useRef(false);
+  React.useEffect(() => {
+    if (seededProspectRef.current) return;
+    if (isLeadMode || customerId) return;          // those paths have their own field
+    if (!leadCompanyInit.trim()) return;
+    seededProspectRef.current = true;
+    setProspectName(leadCompanyInit.trim());
+    setCustMode("prospect");
+  }, [isLeadMode, customerId, leadCompanyInit]);
   // Typed-prospect country — lets a NEW international prospect (no lead, no
   // customer record) be detected as an export (zero-rated).
   const [prospectCountry, setProspectCountry] = React.useState<string>("India");
@@ -297,11 +318,18 @@ export function QuoteBuilder() {
   // render; not memoised on purpose so an overnight session stays correct.
   const todayISO = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  // ── Pre-fill from lead (runs once — waits for catalog so we use real prices) ──
+  // ── Pre-fill the line items (runs once — waits for catalog so we use real prices) ──
+  //
+  // Guarded on `leadCompany` ALONE, not on isLeadMode. The plan and seat count arrive
+  // in the same URL as the company (?plan=&seats=), and requiring a leadId meant every
+  // caller without one — the Enquiries "Send quote" button, the support upsell link —
+  // had its product and quantity silently dropped along with the company name.
+  // Whether the quote is linked to a lead is a separate question, answered by
+  // isLeadMode where it matters: on save.
   const prefilledRef = React.useRef(false);
   React.useEffect(() => {
     if (prefilledRef.current) return;
-    if (!isLeadMode || !leadCompany) return;
+    if (!leadCompany) return;
     // Wait for catalog to load — so we can use the tenant's actual prices,
     // not the hardcoded fallback map.
     if (!catalog) return;
