@@ -18,6 +18,12 @@ const NAV: Array<{ href: string; label: string }> = [
   { href: "/portal/subscription", label: "Subscription" },
   { href: "/portal/shop",         label: "Shop" },
   { href: "/portal/orders",       label: "Orders" },
+  /* Before Invoices on purpose: Billing looks FORWARD at what is coming, Invoices
+     back at what was issued, and a customer wondering "what will I be charged?"
+     reaches for the first of those. Adding the page without adding it here is how a
+     feature ships and nobody ever finds it — caught only because a screenshot of the
+     real nav had no Billing in it. */
+  { href: "/portal/billing",      label: "Billing" },
   { href: "/portal/invoices",     label: "Invoices" },
   { href: "/portal/support",      label: "Support" },
   { href: "/portal/profile",      label: "Profile" },

@@ -121,22 +121,79 @@ function PortalLoginInner() {
       toast.error("That code is wrong or expired. Check the email, or resend a new code.");
       return;
     }
-    // Session is set. Link auth user → customer (idempotent, service-role RPC).
-    const { data: linkResult, error: linkErr } = await supabase.rpc(
-      "portal_ensure_customer_link",
-    );
-    if (linkErr) {
-      toast.error(linkErr.message);
-      return;
-    }
-    if (linkResult === "no_customer" || linkResult === "no_auth") {
-      await supabase.auth.signOut();
-      setStep("email");
-      setPreNoCustomer(true);
-      return;
-    }
-    window.location.href = "/portal/dashboard";
+    /* Session is set — the code has now been CONSUMED. Everything below has to
+       succeed on this session, because pressing Verify again would fail: a
+       single-use code cannot be replayed.
+
+       That is exactly what stranded a real sign-in: verifyOtp succeeded
+       (auth.users.last_sign_in_at was stamped), the link RPC then failed on a
+       transient network error, the screen printed "Failed to fetch", and the
+       customer was left signed in, unlinked, staring at a login page — with a code
+       that could never be used again. */
+    await finishLink(supabase);
   }
+
+  /**
+   * Link auth user → customer, and go.
+   *
+   * Retries a transient failure rather than throwing the session away. A network
+   * blip here costs the customer their one-time code, so it is worth two more
+   * attempts before asking them to start over.
+   */
+  async function finishLink(supabase: ReturnType<typeof createClient>) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { data: linkResult, error: linkErr } = await supabase.rpc("portal_ensure_customer_link");
+
+      if (!linkErr) {
+        if (linkResult === "no_customer" || linkResult === "no_auth") {
+          await supabase.auth.signOut();
+          setStep("email");
+          setPreNoCustomer(true);
+          return;
+        }
+        window.location.href = "/portal/dashboard";
+        return;
+      }
+
+      const retryable = (linkErr as { name?: string; status?: number }).name === "AuthRetryableFetchError"
+        || (linkErr as { status?: number }).status === 0
+        || /fetch/i.test(linkErr.message ?? "");
+      if (!retryable) {
+        toast.error(linkErr.message);
+        return;
+      }
+      if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 800));
+    }
+
+    /* Still failing. The session is VALID — say so, because the instinct at this
+       point is to request another code, and that is the one thing that does not
+       help. Reloading re-runs the rescue below. */
+    toast.error("You are signed in, but we could not finish connecting your account.", {
+      description: "Your connection dropped at the last step. Reload this page — you will NOT need a new code.",
+      duration: 15_000,
+    });
+  }
+
+  /**
+   * Rescue a half-finished sign-in.
+   *
+   * If a session already exists but the link never got made, finish it on load
+   * instead of asking for a code that was already spent. Without this, the only way
+   * out of that state was a new code — and the user had just been told not to
+   * request one.
+   */
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session || cancelled) return;
+      await finishLink(supabase);
+    })();
+    return () => { cancelled = true; };
+    // Runs once on mount; finishLink is stable enough for this one-shot rescue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function resend() {
     setResending(true);

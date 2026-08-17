@@ -20,7 +20,7 @@ export default async function PortalDashboardPage() {
   // Active subscription (RLS gives us only ours)
   const { data: subs } = await supabase
     .from("subscriptions")
-    .select("id, plan, vendor, seats, used, mrr, start_date, renewal_date, status, outstanding_amount")
+    .select("id, plan, vendor, seats, used, used_synced_at, mrr, start_date, renewal_date, status, outstanding_amount")
     .eq("status", "active")
     .order("renewal_date", { ascending: true });
 
@@ -91,7 +91,7 @@ export default async function PortalDashboardPage() {
 
           {typeof primary.seats === "number" && primary.seats > 0 && (
             <div className="mt-5 pt-4 border-t border-hairline">
-              <SeatUsage used={primary.used ?? 0} seats={primary.seats} />
+              <SeatUsage used={primary.used} seats={primary.seats} usedSyncedAt={primary.used_synced_at} />
             </div>
           )}
         </Card>

@@ -36,7 +36,8 @@ interface Sub {
   plan:               string;
   vendor:             string;
   seats:              number;
-  used:               number;
+  used:               number | null;
+  used_synced_at:     string | null;
   mrr:                number;
   start_date:         string | null;
   renewal_date:       string | null;
@@ -68,7 +69,7 @@ export default function PortalSubscriptionPage() {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("subscriptions")
-        .select("id, tenant_id, customer_id, customer_name, plan, vendor, seats, used, mrr, start_date, renewal_date, status, outstanding_amount, auto_renew")
+        .select("id, tenant_id, customer_id, customer_name, plan, vendor, seats, used, used_synced_at, mrr, start_date, renewal_date, status, outstanding_amount, auto_renew")
         .order("renewal_date", { ascending: true });
       if (error) {
         toast.error(error.message);
@@ -184,7 +185,7 @@ export default function PortalSubscriptionPage() {
 
                 {sub.seats > 0 && (
                   <div className="mb-5">
-                    <SeatUsage used={sub.used ?? 0} seats={sub.seats} />
+                    <SeatUsage used={sub.used} seats={sub.seats} usedSyncedAt={sub.used_synced_at} />
                   </div>
                 )}
 
