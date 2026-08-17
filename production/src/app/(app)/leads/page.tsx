@@ -809,11 +809,16 @@ function LeadsPageInner() {
                   : "A filter, not a folder — these leads also sit in one of the folders on the left."}
                 className={cn(
                   "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border",
+                  /* Amber ONLY when selected. The first cut tinted unselected flags too,
+                     to say "different species" — and Pardeep read both as permanently
+                     highlighted, because a fill means "chosen" everywhere else on the
+                     page. The species distinction is already carried by the divider and
+                     the FILTER label; highlight keeps its one meaning. */
                   folder === f.id
                     ? "bg-amber-soft text-amber-ink shadow-xs border-amber/50 font-bold"
                     : count === 0
                     ? "text-ink-3 border-transparent hover:text-ink-2 hover:bg-paper/50"
-                    : "text-amber-ink border-amber/30 bg-amber-soft/40 hover:bg-amber-soft/70"
+                    : "text-ink-2 border-transparent hover:text-ink hover:bg-paper/50"
                 )}
               >
                 <span aria-hidden>{f.icon}</span>
