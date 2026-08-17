@@ -14,29 +14,37 @@ describe("the prices are whole rupees, and the year is a TOTAL", () => {
     }
   });
 
-  it("the annual price is NOT twelve monthlies — that is the whole point", () => {
+  it("the annual price is NOT twelve monthlies — that is the discount", () => {
     /* If these ever became equal, the yearly discount has been quietly deleted. */
     const std = supportTier("standard");
-    expect(std.annualTotal).toBe(9_990);
+    expect(std.annualTotal).toBe(9_996);
     expect(std.annualTotal).not.toBe(std.monthly * 12);
   });
 
-  it("the annual price cannot be reconstructed from a monthly rate", () => {
-    /* ₹9,990 ÷ 12 = ₹832.50. Rounding to ₹833 and multiplying back gives ₹9,996 —
-       the customer is quoted one number and billed another. This test exists so
-       nobody "simplifies" annualTotal into a monthly rate later. */
+  it("every yearly price divides into whole monthly rupees", () => {
+    /* This is why the year is ₹9,996 and not ₹9,990.
+
+       record_payment derives a subscription's mrr as round(line_amount / 12)
+       (baseline.sql:4580), so the term a subscription believes in is ALWAYS twelve
+       whole monthly rupees. A yearly price that does not divide comes back changed:
+
+         ₹9,990 ÷ 12 = ₹832.50 → mrr ₹833 → the subscription reads ₹9,996 against a
+         quote of ₹9,990. Six rupees, and two numbers for one plan on two screens.
+
+       Six rupees on the price removes the whole class of bug instead of documenting
+       it. Keep this test and the prices stay reconcilable. */
     for (const id of ["standard", "enterprise"] as SupportTierId[]) {
       const t = supportTier(id);
-      const asMonthlyRate = t.annualTotal / 12;
-      expect(Number.isInteger(asMonthlyRate)).toBe(false);
-      expect(Math.round(asMonthlyRate) * 12).not.toBe(t.annualTotal);
+      expect(Number.isInteger(t.annualTotal / 12)).toBe(true);
+      // What the subscription will actually believe the term is.
+      expect(Math.round(t.annualTotal / 12) * 12).toBe(t.annualTotal);
     }
   });
 
   it("charges the right figure for each cycle", () => {
     const std = supportTier("standard");
     expect(supportPrice(std, "monthly")).toBe(999);
-    expect(supportPrice(std, "yearly")).toBe(9_990);
+    expect(supportPrice(std, "yearly")).toBe(9_996);
   });
 
   it("free is genuinely ₹0, not a missing price", () => {
@@ -51,16 +59,28 @@ describe("annualSaving — computed, never written down", () => {
     /* "Save 17% · 2 Months Free". Derived — a hardcoded 17% becomes a lie the first
        time a price changes, and it is the kind of lie that prints on a quote. */
     const s = annualSaving(supportTier("standard"))!;
-    expect(s.rupees).toBe(1_998);        // 11,988 − 9,990
+    expect(s.rupees).toBe(1_992);        // 11,988 − 9,996
     expect(s.percent).toBe(17);
     expect(s.monthsFree).toBe(2);
   });
 
   it("gives Enterprise the same deal", () => {
     const s = annualSaving(supportTier("enterprise"))!;
-    expect(s.rupees).toBe(9_998);        // 59,988 − 49,990
+    expect(s.rupees).toBe(9_996);        // 59,988 − 49,992
     expect(s.percent).toBe(17);
     expect(s.monthsFree).toBe(2);
+  });
+
+  it("the badge survived rounding the prices to divide by twelve", () => {
+    /* The whole reason the saving is computed rather than written down: moving
+       Standard from ₹9,990 to ₹9,996 changed the rupees saved and did NOT change
+       what the customer is told. A hardcoded "17%" would have needed hand-editing,
+       and the day someone forgot is the day a quote lies. */
+    for (const id of ["standard", "enterprise"] as SupportTierId[]) {
+      const s = annualSaving(supportTier(id))!;
+      expect(s.percent).toBe(17);
+      expect(s.monthsFree).toBe(2);
+    }
   });
 
   it("shows no badge on a free plan rather than 'Save 0%'", () => {

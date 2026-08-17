@@ -4,17 +4,29 @@
  *
  * ─── WHY THE ANNUAL PRICE IS A TOTAL AND NOT A MONTHLY RATE ─────────────────
  * The rest of the catalogue prices per seat per MONTH and derives the year as
- * `monthly × 12` (lib/subscriptions/catalog-options.ts:79). That works for Workspace
- * and M365, where the annual commitment is a different monthly rate.
+ * `monthly × 12` (lib/subscriptions/catalog-options.ts). That works for Workspace and
+ * M365, where the annual commitment is simply a different monthly rate.
  *
- * It cannot express these plans. Standard is ₹999/mo or ₹9,990/yr — a genuine
- * discount, and ₹9,990 ÷ 12 is ₹832.50, which is not a whole rupee (AGENTS.md §1).
- * Forcing it through a monthly rate rounds to ₹833 and bills ₹9,996: the customer is
- * quoted one number and charged another, which is the exact failure this codebase
- * has already paid for repeatedly.
+ * A discounted year is not a different monthly rate — it is its own number, and
+ * deriving it from one loses the discount. So `annualTotal` is stored as the
+ * whole-rupee TOTAL it actually is, and nothing re-derives it. A test asserts it is
+ * NOT monthly × 12, so the discount cannot be quietly deleted.
  *
- * So `annualTotal` is stored as the whole-rupee TOTAL it actually is, and nothing is
- * allowed to re-derive it. A test asserts it is NOT monthly × 12.
+ * ─── AND WHY THE YEARLY PRICES DIVIDE BY TWELVE ─────────────────────────────
+ * ₹9,996, not ₹9,990. The difference is six rupees and it removes a whole class of
+ * bug: record_payment derives a subscription's mrr as round(line_amount / 12)
+ * (baseline.sql:4580), so the term a subscription believes in is always twelve whole
+ * monthly rupees.
+ *
+ *   ₹9,990 ÷ 12 = ₹832.50 → mrr ₹833 → the subscription reads ₹9,996 against a quote
+ *   of ₹9,990. Six rupees, and two numbers for one plan on two different screens.
+ *
+ *   ₹9,996 ÷ 12 = ₹833 exactly → the subscription reads ₹9,996. Same number
+ *   everywhere.
+ *
+ * The saving is unchanged at 17% and two months free, because the badge is computed
+ * from the prices rather than written down. Pardeep chose the six rupees over the
+ * discrepancy on 17 Aug 2026.
  *
  * ─── AND WHY THE SAVING IS COMPUTED, NOT WRITTEN DOWN ───────────────────────
  * The brief asks for a "Save 17% · 2 Months Free!" badge. Both figures are derived
@@ -64,7 +76,8 @@ export const SUPPORT_TIERS: readonly SupportTier[] = [
   },
   {
     id: "standard", label: "Standard", icon: "🥈",
-    monthly: 999, annualTotal: 9_990,
+    /* ₹833 × 12 exactly — see the header on why the year divides by twelve. */
+    monthly: 999, annualTotal: 9_996,
     slaHours: 4,
     alert: "warning",
     channels: { email: true, whatsapp: "business_hours", meetCallsPerMonth: 2 },
@@ -73,7 +86,8 @@ export const SUPPORT_TIERS: readonly SupportTier[] = [
   },
   {
     id: "enterprise", label: "Enterprise", icon: "🥇",
-    monthly: 4_999, annualTotal: 49_990,
+    /* ₹4,166 × 12 exactly. */
+    monthly: 4_999, annualTotal: 49_992,
     slaHours: 1,
     alert: "danger",
     channels: { email: true, whatsapp: "24x7", meetCallsPerMonth: null },

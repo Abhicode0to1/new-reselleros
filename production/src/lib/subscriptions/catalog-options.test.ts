@@ -126,7 +126,13 @@ describe("catalogVendors — the four-vendor list hid three", () => {
 });
 
 describe("a plan priced as a YEAR, not as a monthly rate", () => {
-  /** Support Standard yearly: ₹9,990 for the year. ₹9,990 ÷ 12 is ₹832.50. */
+  /**
+   * ₹9,990 is deliberately NOT one of the shipped support prices — those were moved
+   * to ₹9,996 and ₹49,992 so they divide by twelve (lib/support/tiers.ts). This uses
+   * an awkward figure on purpose: the MECHANISM has to carry any total verbatim, and
+   * a test that only used divisible numbers would pass even if the code quietly went
+   * back to monthly × 12.
+   */
   const yearly = {
     id: "SUP-STANDARD-YR", name: "Support Standard (Yearly)", vendor: "support",
     msrp: 0, wholesale: 0, item_type: "subscription",
