@@ -106,11 +106,27 @@ const LEAD_STAGES: { id: Lead["stage"]; label: string; dot: string }[] = [
   { id: "won",     label: "Won",          dot: "bg-emerald" },
 ];
 
-// Deal Pipeline Kanban columns — a deal only ENTERS the pipeline when a quote is
-// sent, so raw stages (New / Contacted) never hold deals here and would render as
-// permanently-empty columns (the confusing stray "+" at the board edge). Show
-// only the real deal stages, in funnel order: Quote Sent → Demo → Trial → Won.
-const DEAL_STAGES = (["quote", "demo", "trial", "won"] as const).map(
+/**
+ * Kanban columns — EVERY stage the page can show, in funnel order.
+ *
+ * ─── THIS WAS ["quote","demo","trial","won"] AND IT BROKE THE BOARD ─────────
+ * That column set was correct while the board only ever ran on /deals, where New and
+ * Contacted genuinely could not appear. When /leads gained the board (same commit
+ * that merged the two lists), those two stages became the bulk of the page and had
+ * no column to land in — so the board rendered four empty columns while its own
+ * footer read "9 total deals visible". Zero cards and a count of nine, on the same
+ * screen.
+ *
+ * The rule that stops it recurring: the board's columns must cover every stage the
+ * list can contain. A card with nowhere to go does not error, it silently disappears
+ * — and a disappeared deal is indistinguishable from no deal.
+ *
+ * `won` stays as the finish line. Won leads are filtered out of the working list, so
+ * the column is normally empty — but it has to exist as a DROP TARGET, because
+ * dragging a card there is how a rep marks a deal won. `lost` is not a column: it
+ * needs a reason, which the outcome dialog collects.
+ */
+const DEAL_STAGES = (["new", "contact", "quote", "demo", "trial", "won"] as const).map(
   (id) => LEAD_STAGES.find((s) => s.id === id)!,
 );
 
