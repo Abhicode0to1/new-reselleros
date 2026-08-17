@@ -2,10 +2,31 @@
 
 Read this before "fixing" a gap in the numbering. Every gap here is deliberate.
 
-## Current state (verified against prod 2026-08-12)
+## Current state (verified against prod 2026-08-17)
 
-Prod's last applied migration is **`0223_roles_billing_delivery`**, and git ends at `0223`.
-**git and prod are in sync.** Next new migration = `0224_…`.
+**The `0NNN_` numbering below is history.** Everything in this folder now uses a
+`YYYYMMDDHHMMSS_` timestamp, which is what `supabase migration new` generates and what
+the CLI orders by. The numbered files were folded into `../baseline.sql`; the rest of
+this README explains gaps in that old scheme and is kept because the gaps are still
+visible in git history.
+
+**Which database is prod.** Project ref **`ontpnqjoysjgrlsukecm`** (Supabase project
+name `resellersos`) — this is the one `.env.local` points at, so the local dev server
+talks to PRODUCTION. `ixgvlbgmvgaihvudtbwt` (`resellerosv3-staging`) is the separate
+staging project. Confirm which you are on before applying anything: prod holds tenant
+`fbb976f1-9090-4f10-9726-0901bd144e42` — "ANUTECH DIGITAL PVT LTD", `doc_code` `ADPL`,
+GSTIN `07ABDCA0298H1ZP` (CLAUDE.md §1). `current_database()` is `postgres` on every
+Supabase project and cannot tell them apart (CLAUDE.md §25.6).
+
+**Applied to prod as of 2026-08-17**, verified object-by-object rather than assumed:
+everything up to and including `20260817120100_instalment_invoice_credits_receipts`.
+The five split-billing migrations of 17 Aug were each applied and then verified in a
+SEPARATE run — `subscription_billings` (+RLS), `invoices.line_items`,
+`raise_subscription_billing` (including its receipt-crediting branch),
+`invoices_reject_full_term_when_split_billed` and `subscriptions_cycle_follows_quote`.
+
+Staging is not hand-migrated. It is rebuilt from `../baseline.sql` + this folder, so a
+committed migration reaches it on the next rebuild — see `npm run db:rebuild`.
 
 ## Gap: `0018`–`0039` — not missing files
 
