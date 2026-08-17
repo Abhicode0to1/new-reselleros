@@ -28,6 +28,7 @@ import { InlineCell } from "@/components/features/leads/inline-cell";
 import { LossReasonsCard } from "@/components/features/leads/loss-reasons-card";
 import { parseRupeeInput, parsePriority, parseFollowUpDate, PRIORITIES, type Priority } from "@/lib/leads/inline-edit";
 import { looksLikeJunk } from "@/lib/leads/junk";
+import { MarkJunkDialog } from "@/components/features/leads/mark-junk-dialog";
 import { useLeadActivities, useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { LeadsBulkBar } from "@/components/features/leads/leads-bulk-bar";
 import { useQuotesByLead } from "@/lib/queries/quotes";
@@ -2658,6 +2659,7 @@ function RowActions({
   const hasEmail = Boolean(lead.contact_email);
   const logActivity = useLogLeadActivity();
   const setJunk = useSetLeadJunk();
+  const [junkOpen, setJunkOpen] = React.useState(false);
 
   const itemCls = "gap-2.5 py-2 cursor-pointer";
   // Primary quick actions inline (Call · WhatsApp · Quote) — ALWAYS fully visible
@@ -2770,12 +2772,26 @@ function RowActions({
               <Icon name="check_circle" size={20} /> Restore from junk
             </DropdownMenuItem>
           ) : (
-            <DropdownMenuItem className={cn(itemCls, "text-rose")} onClick={() => setJunk.mutate({ ids: [lead.id], isJunk: true })}>
-              <Icon name="alert" size={20} /> Mark as junk
+            /* Opens the dialog instead of binning on the click. One tap is faster and
+               it throws away the only fact that makes the decision reversible — see
+               MarkJunkDialog. */
+            <DropdownMenuItem className={cn(itemCls, "text-rose")} onClick={() => setJunkOpen(true)}>
+              <Icon name="alert" size={20} /> Mark as junk…
             </DropdownMenuItem>
           )}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <MarkJunkDialog
+          open={junkOpen}
+          onOpenChange={setJunkOpen}
+          leadName={lead.company}
+          busy={setJunk.isPending}
+          onConfirm={({ reasonId, note }) => {
+            setJunk.mutate({ ids: [lead.id], isJunk: true, reason: reasonId, note });
+            setJunkOpen(false);
+          }}
+        />
       </div>
     </td>
   );

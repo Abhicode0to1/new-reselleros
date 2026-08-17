@@ -847,6 +847,13 @@ type LeadRow = {
   value: number | null;
   stage: "new" | "contact" | "demo" | "trial" | "quote" | "won" | "lost";
   is_junk: boolean;                 // migration 0187 — spam/fake; hidden from working views
+  /** WHY it was binned (migration 20260817200000). NULL on leads binned before
+   *  reasons existed — deliberately not backfilled. Matches JunkReasonId in
+   *  lib/leads/qualification.ts. Recoverability hangs off this: "fake_phone" is a
+   *  live enquiry again the moment a real number arrives, "not_commercial" never is. */
+  junk_reason: "fake_phone" | "spam_email" | "not_commercial" | "unresponsive" | "other" | null;
+  junk_note:   string | null;
+  junked_at:   string | null;
   /**
    * Migration 0225 — why a deal was lost, captured at the moment it's marked
    * lost. `lost_reason` is CHECK-constrained to the codes in
@@ -973,6 +980,9 @@ type LeadInsert = {
   country?:            string;
   subscription_type?:  "fresh" | "switch" | null;
   is_junk?:            boolean;
+  junk_reason?: "fake_phone" | "spam_email" | "not_commercial" | "unresponsive" | "other" | null;
+  junk_note?:   string | null;
+  junked_at?:   string | null;
   contact_id?:         string | null;
   lost_reason?:        string | null;   // migration 0225
   lost_note?:          string | null;

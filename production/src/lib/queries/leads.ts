@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
 import type { Lead, Database } from "@/lib/supabase/database.types";
+import type { JunkReasonId } from "@/lib/leads/qualification";
 
 // ============================================================
 // Read
@@ -111,9 +112,28 @@ export function useUpdateLeadStage() {
 export function useSetLeadJunk() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ ids, isJunk }: { ids: string[]; isJunk: boolean }) => {
+    mutationFn: async (
+      { ids, isJunk, reason, note }: {
+        ids: string[];
+        isJunk: boolean;
+        /** WHY. Required by the drawer dialog; see lib/leads/qualification.ts. */
+        reason?: JunkReasonId;
+        note?: string;
+      },
+    ) => {
       const supabase = createClient();
-      const { error } = await supabase.from("leads").update({ is_junk: isJunk }).in("id", ids);
+      /* Un-junking CLEARS the reason and the timestamp. Leaving a stale "fake_phone"
+         on a lead that is live again would put it back in the junk reports it just
+         escaped, and the next reader would trust it. */
+      const patch = isJunk
+        ? {
+            is_junk: true,
+            junk_reason: reason ?? null,
+            junk_note: note?.trim() ? note.trim() : null,
+            junked_at: new Date().toISOString(),
+          }
+        : { is_junk: false, junk_reason: null, junk_note: null, junked_at: null };
+      const { error } = await supabase.from("leads").update(patch).in("id", ids);
       if (error) throw error;
     },
     /* Optimistic, like the stage and inline-cell mutations above. This one was NOT,
