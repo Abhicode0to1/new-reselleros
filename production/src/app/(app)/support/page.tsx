@@ -19,6 +19,51 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/utils";
+import { supportTier, slaState, type SupportTierId } from "@/lib/support/tiers";
+
+/**
+ * What plan bought this ticket, and how the clock is doing.
+ *
+ * ─── IT READS THE ROW, IT DOES NOT RECOMPUTE ────────────────────────────────
+ * `tier` and `sla_due_at` are stamped on the ticket when it is raised
+ * (migration 20260817170100). Looking the customer's CURRENT plan up here instead
+ * would mean a downgrade three weeks later silently relaxes the SLA of a ticket
+ * already judged against the old one — and a ticket that breached at 65 minutes
+ * would start reading as comfortably met.
+ *
+ * A ticket raised before tiers existed has no tier, and shows nothing rather than
+ * being assigned one retrospectively. We never promised it anything.
+ */
+function SlaBadge({ tier, dueAt, respondedAt }: {
+  tier: SupportTierId | null;
+  dueAt: string | null;
+  respondedAt: string | null;
+}) {
+  if (!tier || !dueAt) return null;
+  const t = supportTier(tier);
+
+  /* The clock stops at the FIRST RESPONSE. These plans sell first response, not
+     resolution: answered in 40 minutes and closed a week later met a one-hour SLA. */
+  if (respondedAt) {
+    const met = respondedAt <= dueAt;
+    return (
+      <Badge kind={met ? "success" : "muted"} size="sm">
+        {t.icon} {t.label} · {met ? "answered in time" : "answered late"}
+      </Badge>
+    );
+  }
+
+  const s = slaState(dueAt, new Date().toISOString(), t);
+  const hours = Math.floor(Math.abs(s.minutesRemaining) / 60);
+  const mins  = Math.abs(s.minutesRemaining) % 60;
+  const left  = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+  return (
+    <Badge kind={s.breached ? "danger" : s.atRisk ? "warning" : t.alert} size="sm">
+      {t.icon} {t.label} · {s.breached ? `${left} over` : `${left} left`}
+    </Badge>
+  );
+}
 import type { SupportTicketRow, SupportTicketStatus } from "@/lib/supabase/database.types";
 
 export type ViewScope = "all" | "tenant_feedback" | "team_testing";
@@ -255,6 +300,10 @@ export default function SupportPage() {
                     <Badge kind={scope === "team_testing" ? "danger" : "info"} size="sm">
                       {scope === "team_testing" ? "BUG REPORT" : "TENANT FEEDBACK"}
                     </Badge>
+                    {/* The plan the customer was on WHEN THEY RAISED IT, and the
+                        clock that came with it. Both stamped on the row by a trigger,
+                        never recomputed — see migration 20260817170100. */}
+                    <SlaBadge tier={t.tier} dueAt={t.sla_due_at} respondedAt={t.first_responded_at} />
                     <span className="font-bold text-sm text-ink truncate">{t.subject}</span>
                   </div>
 

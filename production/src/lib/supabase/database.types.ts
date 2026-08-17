@@ -2954,6 +2954,17 @@ export type SupportTicketRow = {
   resolution_note:  string | null;
   created_at:       string;
   updated_at:       string;
+  // ── SLA (migration 20260817170000) ────────────────────────────────────────
+  /** The support plan the customer was on WHEN THEY RAISED IT. Stamped by a trigger
+   *  on insert and never recomputed — a later downgrade must not rewrite the SLA a
+   *  ticket was already judged against. Null on tickets raised before tiers existed. */
+  tier:               "free" | "standard" | "enterprise" | null;
+  /** When a FIRST RESPONSE is due. Stamped from the tier at raise time. */
+  sla_due_at:         string | null;
+  /** When a human first replied — stops the SLA clock. These plans sell first
+   *  response, not resolution: answered in 40 minutes and closed a week later still
+   *  met a one-hour SLA. */
+  first_responded_at: string | null;
 };
 type SupportTicketInsert = {
   id:               string;
@@ -2970,6 +2981,11 @@ type SupportTicketInsert = {
   resolved_at?:     string | null;
   resolved_by?:     string | null;
   resolution_note?: string | null;
+  /* Normally left OUT — the trigger stamps both. Present so a historic import can
+     carry its real tier, which the trigger then leaves alone. */
+  tier?:               "free" | "standard" | "enterprise" | null;
+  sla_due_at?:         string | null;
+  first_responded_at?: string | null;
 };
 type SupportTicketUpdate = Partial<SupportTicketInsert>;
 
