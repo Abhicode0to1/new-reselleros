@@ -54,6 +54,7 @@ import { useItems } from "@/lib/queries/items";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
 import { isHotLead, isHighValueLead, intentMeta, staleWarning } from "@/lib/leads/heat";
+import { SALES_FOLDERS, inSalesFolder, salesFolderCounts, type SalesFolder } from "@/lib/leads/folders";
 import { SwipeLeadCard } from "@/components/features/leads/swipe-lead-card";
 import { ImportCsvDialog } from "@/components/features/leads/import-csv-dialog";
 import { ShareFormSheet, ENQUIRY_SHARE } from "@/components/features/leads/share-form-sheet";
@@ -350,6 +351,10 @@ function LeadsPageInner() {
   const [salesTab, setSalesTab] = React.useState<"raw" | "deals" | "all" | "due">(
     isDealsPage ? "deals" : "raw"
   );
+
+  /* Which folder is showing. "all" by default — the page opens on "here is your
+     pipeline", not on one slice of it. */
+  const [folder, setFolder] = React.useState<SalesFolder | "all">("all");
   /* `tab` is gone. It existed to pick which HALF of the pipeline to show, and there
      are no halves any more — /leads and /deals resolve to the same open set. Every
      place that branched on it either disappeared with the cross-over hints or now
@@ -503,16 +508,25 @@ function LeadsPageInner() {
      was the word that made the split sound like two kinds of record. */
   const isPastInbox = (l: Lead) => l.stage !== "new" && l.stage !== "contact";
 
-  /* The Kanban / List views consume this.
-     `raw` and `deals` now resolve to the SAME open set — the two URLs no longer show
-     different halves of the pipeline. /deals is kept working (bookmarks, the
-     sales_senior landing that was there until today) but it is no longer a different
-     view of the data, and its nav entry is gone. */
+  /* ── The folder chips are the filter ──────────────────────────────────────
+     "Inbox" and "Qualified Deals" used to switch between the two halves of the old
+     /leads-vs-/deals split. After the merge both resolved to the same open set, so
+     clicking either changed nothing — and "Qualified Deals 1" sat above a list of 9.
+     A control that looks like a filter and filters nothing is worse than no control:
+     the rep believes the list in front of them has been narrowed.
+
+     The chip counts and the list BOTH call inSalesFolder() from lib/leads/folders.ts
+     (21 tests), so a chip can never advertise a number the list contradicts. */
+  const folderToday = React.useMemo(() => localDateISO(new Date()), []);
+  const folderCounts = React.useMemo(
+    () => salesFolderCounts(openLeads, folderToday),
+    [openLeads, folderToday],
+  );
   const filtered = smartView === "junk"
     ? searched
-    : salesTab === "raw" || salesTab === "deals"
+    : folder === "all"
     ? openLeads
-    : searched;
+    : openLeads.filter((l) => inSalesFolder(l, folder, folderToday));
 
   // Tab-scoped UNFILTERED subset for the insight band, Smart Views chips,
   // Today strip, and right rail. Derived from `workspaceLeads` so counts stay
@@ -651,39 +665,54 @@ function LeadsPageInner() {
         {/* Row 2 — 1-Click Segmented View Switcher. Scrolls sideways rather
             than wrapping, so it can never push the CTA out of the corner. */}
         <div className="flex items-center gap-1 bg-paper-2 p-1 rounded-lg border border-hairline w-fit max-w-full overflow-x-auto">
+          {/* "All open" plus one chip per folder. Every count comes from the same
+              inSalesFolder() the list filters with, so a chip can never advertise a
+              number the list then contradicts — which is exactly what the old
+              "Qualified Deals 1" did above a list of 9. Empty folders stay visible,
+              greyed: their absence would read as a missing feature, and "0 overdue"
+              is worth knowing. */}
           <button
             type="button"
-            onClick={() => { setSalesTab("raw"); setSmartView("all"); }}
+            onClick={() => { setFolder("all"); setSmartView("all"); }}
             className={cn(
-              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
-              salesTab === "raw"
+              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
+              folder === "all"
                 ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
                 : "text-ink-2 hover:text-ink hover:bg-paper/50"
             )}
           >
-            <Icon name="inbox" size={13} className={salesTab === "raw" ? "text-amber-ink" : "text-ink-3"} />
-            <span>📥 Inbox</span>
+            <Icon name="inbox" size={13} className={folder === "all" ? "text-amber-ink" : "text-ink-3"} />
+            <span>All open</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
               {openLeads.length}
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => { setSalesTab("deals"); setSmartView("all"); }}
-            className={cn(
-              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
-              salesTab === "deals"
-                ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
-                : "text-ink-2 hover:text-ink hover:bg-paper/50"
-            )}
-          >
-            <Icon name="target" size={13} className={salesTab === "deals" ? "text-amber-ink" : "text-ink-3"} />
-            <span>🏆 Qualified Deals</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
-              {allQualifiedDeals.length}
-            </span>
-          </button>
+          {SALES_FOLDERS.filter((f) => f.id !== "won" && f.id !== "archived").map((f) => {
+            const count = folderCounts[f.id];
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => { setFolder(f.id); setSmartView("all"); }}
+                title={count === 0 ? f.hint : undefined}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
+                  folder === f.id
+                    ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
+                    : count === 0
+                    ? "text-ink-3 hover:text-ink-2 hover:bg-paper/50"
+                    : "text-ink-2 hover:text-ink hover:bg-paper/50"
+                )}
+              >
+                <span aria-hidden>{f.icon}</span>
+                <span>{f.label}</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
 
           {/* Replaces "📋 All Records". That pill was a dumping ground — everything, in
               no order, which is not a job anyone actually does. This is the rep's actual
