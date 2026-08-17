@@ -24,6 +24,8 @@ import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
+import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
+import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
@@ -121,6 +123,15 @@ export async function POST(request: NextRequest) {
 
   const event = body.event;
   console.log("[webhooks/razorpay] event:", event);
+
+  /* ── Mandate lifecycle ────────────────────────────────────────────────────
+     Handled BEFORE the payment filter below, because this is the only place in the
+     whole system entitled to write `active` on a payment mandate. The signature has
+     already been verified against THIS tenant's secret above; nothing downstream of
+     that check can be forged. See lib/payments/mandate.ts. */
+  if (event.startsWith("subscription.")) {
+    return handleMandateEvent(admin, event, rawBody, tenantParam);
+  }
 
   // Only act on payment-success events — ignore failure / authorized / etc.
   // (We could log failed payments to a separate table for follow-up later.)
@@ -295,4 +306,100 @@ Open quote:  ${APP_URL}/quotes/${quote.id}`,
   });
 
   return NextResponse.json({ received: true, quoteId: quote.id, paid: paymentAmount });
+}
+
+/**
+ * A subscription.* event from Razorpay — the mandate lifecycle.
+ *
+ * ─── THIS FUNCTION IS THE ONLY WRITER OF `active` ───────────────────────────
+ * "Autopay is on" means a bank will move money without anyone touching it. The app
+ * has no path to that word; a signature-verified gateway event does. The signature
+ * was checked against this tenant's own secret before we got here.
+ *
+ * ─── OUT-OF-ORDER DELIVERY IS ASSUMED, NOT HOPED AGAINST ────────────────────
+ * Webhooks arrive late, twice, and in the wrong order. `applyGatewayEvent` refuses to
+ * resurrect a cancelled mandate from a stale `subscription.charged`, and returns null
+ * for a no-op so a duplicate delivery writes nothing at all.
+ *
+ * ─── AND IT RECORDS WHAT THE CUSTOMER APPROVED, NOT WHAT WE ASKED FOR ───────
+ * `max_amount` is filled from the gateway's figure. Those are two different facts and
+ * conflating them would hide a mandate approved for less than requested — which then
+ * fails on the first debit that exceeds it.
+ */
+async function handleMandateEvent(
+  admin: ReturnType<typeof createAdminClient>,
+  event: string,
+  rawBody: string,
+  tenantParam: string | null,
+): Promise<NextResponse> {
+  let entity: { id?: string; status?: string; end_at?: number; plan_id?: string } | undefined;
+  let planAmountPaise: number | undefined;
+  try {
+    const parsed = JSON.parse(rawBody) as {
+      payload?: {
+        subscription?: { entity?: typeof entity };
+        plan?: { entity?: { item?: { amount?: number } } };
+      };
+    };
+    entity = parsed.payload?.subscription?.entity;
+    planAmountPaise = parsed.payload?.plan?.entity?.item?.amount;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const gatewaySubId = entity?.id;
+  if (!gatewaySubId) {
+    return NextResponse.json({ received: true, ignored: `${event} (no subscription id)` });
+  }
+
+  const { data: mandate } = await admin
+    .from("payment_mandates")
+    .select("id, tenant_id, status, requested_amount, max_amount")
+    .eq("gateway_subscription_id", gatewaySubId)
+    .maybeSingle();
+
+  if (!mandate) {
+    /* Not ours, or created before this table existed. Acknowledged so Razorpay stops
+       retrying — a 4xx here would have it redeliver forever. */
+    return NextResponse.json({ received: true, ignored: `${event} (unknown mandate)` });
+  }
+
+  /* Same defence the payment path uses: a signature valid for tenant A must not act
+     on tenant B's mandate. */
+  if (tenantParam && mandate.tenant_id !== tenantParam) {
+    console.error("[webhooks/razorpay] mandate tenant mismatch", { tenantParam, mandateTenant: mandate.tenant_id });
+    return NextResponse.json({ error: "Tenant mismatch" }, { status: 403 });
+  }
+
+  const next = applyGatewayEvent(mandate.status as MandateStatus, event);
+  if (!next) {
+    return NextResponse.json({ received: true, noChange: true, status: mandate.status });
+  }
+
+  /* Typed against the table rather than Record<string, unknown> — a loose bag would
+     let a typo'd column name through the compiler and fail silently at runtime, on
+     the one write that decides whether a bank may take money. */
+  const patch: Partial<PaymentMandateInsert> = {
+    status: next,
+    status_note: `Razorpay ${event}`,
+    updated_at: new Date().toISOString(),
+  };
+  if (next === "active") {
+    patch.authorised_at = new Date().toISOString();
+    /* What the customer actually approved. Falls back to what we requested only when
+       the gateway did not send an amount — recorded either way so the headroom check
+       has something real to work with. */
+    patch.max_amount = planAmountPaise ? Math.round(planAmountPaise / 100) : mandate.max_amount ?? mandate.requested_amount;
+  }
+  if (next === "cancelled") patch.cancelled_at = new Date().toISOString();
+  if (entity?.end_at) patch.end_date = new Date(entity.end_at * 1000).toISOString().slice(0, 10);
+
+  const { error } = await admin.from("payment_mandates").update(patch).eq("id", mandate.id);
+  if (error) {
+    console.error("[webhooks/razorpay] mandate update failed:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  console.info(`[webhooks/razorpay] mandate ${mandate.id}: ${mandate.status} → ${next} (${event})`);
+  return NextResponse.json({ received: true, mandate: mandate.id, status: next });
 }

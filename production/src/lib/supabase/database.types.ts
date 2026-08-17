@@ -1324,6 +1324,60 @@ type ContractAmendmentRow = {
   created_at: string;
 };
 
+/**
+ * A customer's standing permission to be debited (UPI Autopay / e-NACH).
+ *
+ *  is written ONLY by the signature-verified Razorpay webhook.
+ * See migration 20260817090000 for why the app has no path to it.
+ */
+type PaymentMandateRow = {
+  id: string;
+  tenant_id: string;
+  customer_id: string;
+  subscription_id: string | null;
+  method: string;
+  status: "pending_authorisation" | "active" | "paused" | "cancelled" | "expired";
+  /** ₹ per debit the customer APPROVED. Null until the gateway confirms. */
+  max_amount: number | null;
+  /** ₹ we asked for — kept apart so a request/approval mismatch stays visible. */
+  requested_amount: number;
+  gateway: string;
+  gateway_plan_id: string | null;
+  gateway_subscription_id: string | null;
+  gateway_customer_id: string | null;
+  auth_link: string | null;
+  /** TRUE when created against test keys — on the row, so a key swap cannot make a
+   *  test mandate read as a live authorisation. */
+  test_mode: boolean;
+  authorised_at: string | null;
+  cancelled_at: string | null;
+  end_date: string | null;
+  status_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type PaymentMandateInsert = {
+  id?: string;
+  tenant_id: string;
+  customer_id: string;
+  subscription_id?: string | null;
+  method?: string;
+  status?: "pending_authorisation" | "active" | "paused" | "cancelled" | "expired";
+  max_amount?: number | null;
+  requested_amount: number;
+  gateway?: string;
+  gateway_plan_id?: string | null;
+  gateway_subscription_id?: string | null;
+  gateway_customer_id?: string | null;
+  auth_link?: string | null;
+  test_mode?: boolean;
+  authorised_at?: string | null;
+  cancelled_at?: string | null;
+  end_date?: string | null;
+  status_note?: string | null;
+  updated_at?: string;
+};
+
 type MrrSnapshotInsert = {
   id?: string;
   tenant_id: string;
@@ -3443,6 +3497,7 @@ export type Database = {
       seat_requests: { Row: SeatRequestRow; Insert: SeatRequestInsert; Update: Partial<SeatRequestInsert>; Relationships: [] };
       mrr_snapshots: { Row: MrrSnapshotRow; Insert: MrrSnapshotInsert; Update: Partial<MrrSnapshotInsert>; Relationships: [] };
       contract_amendments: { Row: ContractAmendmentRow; Insert: never; Update: never; Relationships: [] };
+      payment_mandates: { Row: PaymentMandateRow; Insert: PaymentMandateInsert; Update: Partial<PaymentMandateInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
       payments:           { Row: PaymentRow;           Insert: PaymentInsert;           Update: PaymentUpdate;           Relationships: [] };
@@ -4459,6 +4514,8 @@ export type ProvisioningTask = ProvisioningTaskRow;
 export type SeatRequest = SeatRequestRow;
 export type MrrSnapshot = MrrSnapshotRow;
 export type ContractAmendment = ContractAmendmentRow;
+export type PaymentMandate = PaymentMandateRow;
+export type PaymentMandateInsertT = PaymentMandateInsert;
 export type Invoice      = InvoiceRow;
 export type Subscription = SubscriptionRow;
 export type Payment      = PaymentRow;

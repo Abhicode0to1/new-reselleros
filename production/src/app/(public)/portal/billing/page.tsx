@@ -33,6 +33,9 @@ import { subscriptionSchedule, nextTermSchedule } from "@/lib/billing/subscripti
 import { scheduleTotal } from "@/lib/billing/schedule";
 import { cycleScheduleLabel } from "@/lib/quotes/billing";
 import { localDateISO } from "@/lib/leads/outcomes";
+import { grossAmount } from "@/lib/quotes/amounts";
+import { AutopayCard } from "./autopay-card";
+import type { MandateStatus } from "@/lib/payments/mandate";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +61,14 @@ export default async function PortalBillingPage() {
     .select("id, amount, status, invoice_date, due_date")
     .order("invoice_date", { ascending: false })
     .limit(5);
+
+  /* Autopay mandates. Only the live ones — a cancelled mandate from six months ago
+     is history, and showing it beside an active one invites reading the wrong row. */
+  const { data: mandates } = await supabase
+    .from("payment_mandates")
+    .select("subscription_id, status, max_amount, auth_link, test_mode")
+    .in("status", ["pending_authorisation", "active", "paused"]);
+  const mandateBySub = new Map((mandates ?? []).map((m) => [m.subscription_id, m]));
 
   const today = localDateISO(new Date());
   const active = subs ?? [];
@@ -140,6 +151,31 @@ export default async function PortalBillingPage() {
               </p>
             )}
           </Card>
+        );
+      })}
+
+      {/* Autopay, one card per subscription. Placed AFTER the schedule so the
+          customer has seen what would be debited before being asked to authorise
+          anything. */}
+      {active.map((sub) => {
+        const m = mandateBySub.get(sub.id);
+        const cycleMonths = { monthly: 1, quarterly: 3, half_yearly: 6, yearly: 12 }[sub.billing_cycle ?? "yearly"] ?? 12;
+        return (
+          <AutopayCard
+            key={`autopay-${sub.id}`}
+            view={{
+              subscriptionId: sub.id,
+              planName: sub.plan,
+              cycleAmount: grossAmount(Math.round((sub.mrr ?? 0) * cycleMonths), 18),
+              status: (m?.status ?? "none") as MandateStatus,
+              maxAmount: m?.max_amount ?? null,
+              authLink: m?.auth_link ?? null,
+              /* Defaults to TRUE when unknown. If we cannot tell whether this is real
+                 money, the safe thing to show is the loud test-mode warning — the
+                 opposite default would quietly present a rehearsal as live. */
+              testMode: m?.test_mode ?? true,
+            }}
+          />
         );
       })}
 
