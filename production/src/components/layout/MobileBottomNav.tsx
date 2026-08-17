@@ -49,7 +49,6 @@ interface BottomNavItem {
 // Tab templates. We pick a subset of these based on role + permissions.
 const TAB_HOME:      BottomNavItem = { id: "home",      href: "/dashboard",     label: "Home",      icon: "home"   };
 const TAB_LEADS:     BottomNavItem = { id: "leads",     href: "/leads",         label: "Leads",     icon: "inbox"  };
-const TAB_DEALS:     BottomNavItem = { id: "deals",     href: "/deals",         label: "Deals",     icon: "target" };
 const TAB_TASKS:     BottomNavItem = { id: "tasks",     href: "/tasks",         label: "Tasks",     icon: "clock"  };
 // Owner/manager money-first tabs
 const TAB_PAYMENTS:  BottomNavItem = { id: "payments",  href: "/payments",      label: "Payments",  icon: "rupee"  };
@@ -74,8 +73,10 @@ export function MobileBottomNav({ onMoreClick }: Props) {
   const tabs: BottomNavItem[] = [];
   if (me?.role === "sales" || me?.role === "sales_senior") {
     tabs.push(TAB_LEADS);
-    // Sales Senior always handles deals; plain sales only if granted.
-    if (me.role === "sales_senior" || me.canViewDeals) tabs.push(TAB_DEALS);
+    /* The Deals tab is gone (17 Aug 2026). /leads now carries every OPEN lead
+       whatever stage it reached, so a second tab showed the same rows — and on a
+       phone a wasted tab out of five is expensive. The route still resolves for
+       anyone with it bookmarked. */
     tabs.push(TAB_TASKS);
     tabs.push(TAB_MY_EXPENSES);
     tabs.push(TAB_MORE);

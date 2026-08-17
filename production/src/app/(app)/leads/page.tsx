@@ -334,7 +334,10 @@ function LeadsPageInner() {
   const [salesTab, setSalesTab] = React.useState<"raw" | "deals" | "all" | "due">(
     isDealsPage ? "deals" : "raw"
   );
-  const tab: "leads" | "deals" = salesTab === "deals" ? "deals" : "leads";
+  /* `tab` is gone. It existed to pick which HALF of the pipeline to show, and there
+     are no halves any more — /leads and /deals resolve to the same open set. Every
+     place that branched on it either disappeared with the cross-over hints or now
+     reads the same value both ways. */
 
   // Workspace keyword filter removed 2026-08-13. It classified rows by company-name
   // keywords ("excel", "vera") against hardcoded tenant UUIDs — one of which was
@@ -464,25 +467,43 @@ function LeadsPageInner() {
   // A lead stays in the Leads inbox until a quotation is sent. Sending a quote
   // moves its stage to 'quote' (and only then can it go to demo/trial/won) —
   // that's the single gate out of the inbox. So raw = still pre-quote (new/contact).
-  const isRaw = (l: Lead) => l.stage === "new" || l.stage === "contact";
-  const rawLeads      = React.useMemo(() => searched.filter(isRaw),       [searched]);
-  const qualifiedDeals = React.useMemo(() => searched.filter((l) => !isRaw(l)), [searched]);
+  /* ── ONE WORKING LIST: every OPEN lead, whatever stage it reached ───────────
+     This used to be `stage === "new" || stage === "contact"`, with everything
+     further along served only on /deals. The effect was that a lead VANISHED from
+     the list the moment somebody made progress on it: move it to `demo` and it left
+     /leads entirely. The rep did the right thing and lost sight of the deal as the
+     reward.
 
-  // The Kanban / List views consume this — points at whichever tab is active.
+     Won, lost and junk are still out — those are finished, not work. Folders
+     (lib/leads/folders.ts) are how the list gets narrowed now; a stage is no longer
+     a reason to be on a different page. */
+  const isOpenLead = (l: Lead) =>
+    l.stage !== "won" && l.stage !== "lost" && !l.is_junk;
+  const openLeads = React.useMemo(() => searched.filter(isOpenLead), [searched]);
+
+  /* The OLD inbox boundary, kept for one job only: the KPI band totals value, and
+     value is only entered once a lead is past first contact. It is no longer a page
+     boundary — nothing routes on it. Named for what it is rather than "raw", which
+     was the word that made the split sound like two kinds of record. */
+  const isPastInbox = (l: Lead) => l.stage !== "new" && l.stage !== "contact";
+
+  /* The Kanban / List views consume this.
+     `raw` and `deals` now resolve to the SAME open set — the two URLs no longer show
+     different halves of the pipeline. /deals is kept working (bookmarks, the
+     sales_senior landing that was there until today) but it is no longer a different
+     view of the data, and its nav entry is gone. */
   const filtered = smartView === "junk"
     ? searched
-    : salesTab === "raw"
-    ? rawLeads
-    : salesTab === "deals"
-    ? qualifiedDeals
+    : salesTab === "raw" || salesTab === "deals"
+    ? openLeads
     : searched;
 
   // Tab-scoped UNFILTERED subset for the insight band, Smart Views chips,
   // Today strip, and right rail. Derived from `workspaceLeads` so counts stay
   // accurate per active workspace while the user is searching / filtering.
   const leadsForTab = React.useMemo(
-    () => (tab === "leads" ? workspaceLeads.filter(isRaw) : workspaceLeads.filter((l) => !isRaw(l))),
-    [workspaceLeads, tab],
+    () => workspaceLeads.filter(isOpenLead),
+    [workspaceLeads],
   );
 
   // Per-tab duplicate count + merge opener (the `dup` index itself is computed
@@ -504,13 +525,18 @@ function LeadsPageInner() {
   // 'contacted', so 4 of 6 Kanban columns would always be empty).
   // Deals tab respects the user's saved preference, EXCEPT on mobile.
   const { isMobile } = useBreakpoint();
-  const effectiveView = isMobile ? "list" : (tab === "leads" ? "list" : view);
+  /* Board is now available on /leads too. It used to be forced to list because raw
+     leads only ever sat in `new` / `contact`, so four of the six Kanban columns were
+     always empty. Now that every open stage is on this page the board is the whole
+     pipeline again — and drag-drop between stages is how a rep advances a deal, which
+     is exactly what the folder model cannot do and must not replace. */
+  const effectiveView = isMobile ? "list" : view;
 
   // Stats are based on Deals (where value lives — raw leads have no value yet).
   // Derived directly from `workspaceLeads` so header KPIs always stay 100% accurate
   // regardless of active smartView filters or chip selections.
   const allQualifiedDeals = React.useMemo(
-    () => workspaceLeads.filter((l) => !isRaw(l) && !l.is_junk),
+    () => workspaceLeads.filter((l) => isPastInbox(l) && !l.is_junk),
     [workspaceLeads]
   );
   const openDeals = React.useMemo(
@@ -622,7 +648,7 @@ function LeadsPageInner() {
             <Icon name="inbox" size={13} className={salesTab === "raw" ? "text-amber-ink" : "text-ink-3"} />
             <span>📥 Inbox</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
-              {rawLeads.length}
+              {openLeads.length}
             </span>
           </button>
 
@@ -715,7 +741,7 @@ function LeadsPageInner() {
             <span className="text-ink-3 font-mono">·</span>
             <span className="font-mono">Active Deals: <b className="text-ink">{openDeals.length}</b></span>
             <span className="text-ink-3 font-mono">·</span>
-            <span className="font-mono">Raw Leads: <b className="text-ink">{rawLeads.length}</b></span>
+            <span className="font-mono">Open leads: <b className="text-ink">{openLeads.length}</b></span>
             <span className="text-ink-3 font-mono">·</span>
             <span className="font-mono">Win Rate: <b className="text-emerald">{conversion}%</b></span>
           </div>
@@ -770,8 +796,8 @@ function LeadsPageInner() {
               <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{openDeals.length}</p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Raw Inquiries</p>
-              <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{rawLeads.length}</p>
+              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Open leads</p>
+              <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{openLeads.length}</p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
               <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
@@ -1291,50 +1317,6 @@ function LeadsPageInner() {
               title="No leads match"
               body={`No results for "${search}". Try a different search term.`}
               action={<Button icon="x" onClick={() => setSearch("")}>Clear search</Button>}
-              compact
-            />
-          ) : tab === "leads" && qualifiedDeals.length > 0 ? (
-            (() => {
-              // Active count = qualified, NOT Won/Lost. Matches the sidebar
-              // badge logic so the two numbers reconcile (Pardeep dogfood:
-              // body said "18 qualified" while sidebar said "14" — that 4
-              // gap was Won + Lost. Show active count by default; mention
-              // closed only if meaningful (>0).
-              const activeDeals = qualifiedDeals.filter((l) => l.stage !== "won" && l.stage !== "lost").length;
-              const closedDeals = qualifiedDeals.length - activeDeals;
-              return (
-                <EmptyState
-                  icon="trending_up"
-                  title="All your leads have been qualified"
-                  body={
-                    closedDeals > 0
-                      ? `No raw inquiries pending qualification. You have ${activeDeals} active ${activeDeals === 1 ? "deal" : "deals"} in pipeline (+ ${closedDeals} closed). Drag them through stages on the Deals page.`
-                      : `No raw inquiries pending qualification. Your ${activeDeals} qualified ${activeDeals === 1 ? "deal is" : "deals are"} on the Deals page — drag them through stages there.`
-                  }
-                  action={
-                    <Button variant="primary" icon="arrow_right" onClick={() => router.push("/deals" as any)}>
-                      Go to Deals
-                    </Button>
-                  }
-                  secondary={
-                    <Button icon="plus" onClick={() => setAddOpen(true)}>
-                      Add a raw lead
-                    </Button>
-                  }
-                  compact
-                />
-              );
-            })()
-          ) : tab === "deals" && rawLeads.length > 0 ? (
-            <EmptyState
-              icon="inbox"
-              title="No qualified deals yet"
-              body={`You have ${rawLeads.length} raw ${rawLeads.length === 1 ? "lead" : "leads"} awaiting qualification on the Leads page. Pick a plan to qualify them into the pipeline.`}
-              action={
-                <Button variant="primary" icon="arrow_right" onClick={() => router.push("/leads" as any)}>
-                  Go to Leads
-                </Button>
-              }
               compact
             />
           ) : (

@@ -108,7 +108,12 @@ export const ROLE_HOME: Record<UserRole, string> = {
   owner:        "/dashboard",
   manager:      "/dashboard",
   sales:        "/leads",
-  sales_senior: "/deals",
+  /* Was "/deals". Repointed with the same commit that removed the Deal Pipeline nav
+     entry, and that ORDER matters: ROLE_HOME and allowedRoutesForRole are two halves
+     of one rule, and a home the role can no longer reach makes middleware redirect to
+     it, disallow it, and redirect again — the ERR_TOO_MANY_REDIRECTS login loop this
+     file already records once. */
+  sales_senior: "/leads",
   // The CA / accountant lands on the P&L — the headline figure for ITR.
   accountant:   "/accounting/pnl",
   support:      "/support",
@@ -171,7 +176,14 @@ export const APP_NAV: NavSection[] = [
       // sales_senior to /deals, found /deals disallowed, and bounced again —
       // ERR_TOO_MANY_REDIRECTS on login, for that whole role. The id must stay
       // "deals": the canViewDeals gate above matches on it.
-      { id: "deals",           href: "/deals",            label: "Deal Pipeline",    icon: "chart",  roles: ["owner", "manager", "sales"] },
+      /* "Deal Pipeline" removed 17 Aug 2026. /leads now shows every OPEN lead
+         whatever stage it reached, with the Board view for drag-drop, so there is
+         nothing left for a second entry to show. The ROUTE stays alive (bookmarks,
+         and it was the sales_senior landing until today) and resolves to the same
+         list — see deals/page.tsx.
+
+         The id must NOT be reused: nav.ts:71's old gate matched on it, and the
+         command palette flattens every item by id. */
       { id: "enquiries",       href: "/enquiries",        label: "Enquiries",     icon: "mail",   roles: ["owner", "manager", "sales"] },
       { id: "tasks",           href: "/tasks",            label: "Tasks",         icon: "clock",  roles: ["owner", "manager", "sales"] },
       // Same destination as the Home entry above, deliberately listed twice for
