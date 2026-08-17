@@ -143,7 +143,11 @@ export function planMandate(args: {
     return {
       allowed: false,
       reason: `This bill is ₹${cycleAmount.toLocaleString("en-IN")}, above the ₹${MAX_MANDATE_AMOUNT.toLocaleString("en-IN")} per-debit limit for autopay.`,
-      nextStep: "Collect this one by UPI or bank transfer each cycle, or split the billing into smaller instalments.",
+      /* Addressed to the PAYER. Both callers of this function are customer-facing —
+         /api/portal/mandate and the portal's autopay card — so the earlier wording
+         ("Collect this one…") told a customer to collect their own bill, which is the
+         reseller's side of the transaction, not theirs. */
+      nextStep: "Pay it by UPI or bank transfer each cycle instead, or ask for the billing to be split into smaller instalments.",
     };
   }
 

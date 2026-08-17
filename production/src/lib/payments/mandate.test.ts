@@ -65,6 +65,15 @@ describe("planMandate — the amount requested has headroom", () => {
     }
   });
 
+  it("tells the CUSTOMER to pay, not to collect", () => {
+    /* Both callers are customer-facing — /api/portal/mandate and the portal's autopay
+       card. "Collect this one by UPI" is the reseller's side of the transaction, and
+       reads as nonsense to the person who owes the money. */
+    const g = planMandate({ current: "none", cycleAmount: 28_320 });
+    expect(g.allowed).toBe(false);
+    if (!g.allowed) expect(g.nextStep.toLowerCase()).not.toContain("collect");
+  });
+
   it("refuses when autopay is already on, or already waiting", () => {
     expect(planMandate({ current: "active", cycleAmount: 2_360 }).allowed).toBe(false);
     expect(planMandate({ current: "pending_authorisation", cycleAmount: 2_360 }).allowed).toBe(false);

@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
-import { mandateBadge, mandateHeadroom, type MandateStatus } from "@/lib/payments/mandate";
+import { mandateBadge, mandateHeadroom, planMandate, type MandateStatus } from "@/lib/payments/mandate";
 
 export interface AutopayView {
   subscriptionId: string;
@@ -38,6 +38,22 @@ export function AutopayCard({ view }: { view: AutopayView }) {
   const [busy, setBusy] = React.useState(false);
   const badge = mandateBadge(view.status, view.testMode);
   const headroom = mandateHeadroom({ maxAmount: view.maxAmount, nextDebit: view.cycleAmount });
+
+  /* ─── THE SAME GATE THE ROUTE USES, ASKED BEFORE THE OFFER IS MADE ─────────
+     /api/portal/mandate refuses a bill above the per-debit ceiling. Without this
+     the card sold autopay — three bullet points and a button — for a bill that can
+     never be authorised, and the customer only found out by clicking. Being sold
+     something and then refused reads as a broken app, not as a limit.
+
+     planMandate is called rather than re-testing `cycleAmount > MAX_MANDATE_AMOUNT`
+     here. A second copy of the rule is a second thing to update, and the copy in the
+     quieter place is the one that goes stale — leaving the button hidden for bills
+     the server accepts, or shown for bills it rejects.
+
+     Only consulted in the branches that OFFER setup. "Already active" and "waiting
+     for approval" are also refusals from planMandate, but those states have their own
+     branches below with the right thing to do in each. */
+  const offer = planMandate({ current: view.status, cycleAmount: view.cycleAmount });
 
   const setUp = async () => {
     setBusy(true);
@@ -152,20 +168,24 @@ export function AutopayCard({ view }: { view: AutopayView }) {
       )}
 
       {(view.status === "none" || view.status === "cancelled" || view.status === "expired") && (
-        <>
-          <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
-            Let your bank pay this bill automatically each cycle, so a renewal never lapses
-            because an invoice was missed.
-          </p>
-          <ul className="mt-2 space-y-1 text-[12px] leading-snug text-ink-3">
-            <li>· You approve it once in your UPI app.</li>
-            <li>· You set an upper limit; nothing above it can ever be taken.</li>
-            <li>· You can turn it off from this page at any time.</li>
-          </ul>
-          <Button size="sm" className="mt-3" loading={busy} onClick={setUp}>
-            Set up autopay
-          </Button>
-        </>
+        offer.allowed ? (
+          <>
+            <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
+              Let your bank pay this bill automatically each cycle, so a renewal never lapses
+              because an invoice was missed.
+            </p>
+            <ul className="mt-2 space-y-1 text-[12px] leading-snug text-ink-3">
+              <li>· You approve it once in your UPI app.</li>
+              <li>· You set an upper limit; nothing above it can ever be taken.</li>
+              <li>· You can turn it off from this page at any time.</li>
+            </ul>
+            <Button size="sm" className="mt-3" loading={busy} onClick={setUp}>
+              Set up autopay
+            </Button>
+          </>
+        ) : (
+          <Unavailable reason={offer.reason} nextStep={offer.nextStep} />
+        )
       )}
 
       {view.status === "paused" && (
@@ -173,11 +193,33 @@ export function AutopayCard({ view }: { view: AutopayView }) {
           <p className="mt-3 text-[13px] leading-relaxed text-rose">
             Autopay stopped — your bank declined the last attempt. Nothing is being collected.
           </p>
-          <Button size="sm" className="mt-3" loading={busy} onClick={setUp}>
-            Set it up again
-          </Button>
+          {/* Same gate. A paused mandate on a bill that has since grown past the ceiling
+              cannot be set up again either, and "Set it up again" would fail every time. */}
+          {offer.allowed ? (
+            <Button size="sm" className="mt-3" loading={busy} onClick={setUp}>
+              Set it up again
+            </Button>
+          ) : (
+            <Unavailable reason={offer.reason} nextStep={offer.nextStep} />
+          )}
         </>
       )}
     </Card>
+  );
+}
+
+/**
+ * Autopay cannot be offered on this bill — why, and what to do instead.
+ *
+ * Stated where the button would have been, so the answer is in the place the customer
+ * was already looking. A limit explained up front is a limit; the same words after a
+ * click are a failure (§24 — a block always names its next step).
+ */
+function Unavailable({ reason, nextStep }: { reason: string; nextStep: string }) {
+  return (
+    <div className="mt-3 rounded-lg border border-hairline bg-paper-2 px-3 py-2.5">
+      <p className="text-[13px] font-medium leading-snug text-ink-2">{reason}</p>
+      <p className="mt-1 text-[12px] leading-snug text-ink-3">{nextStep}</p>
+    </div>
   );
 }
