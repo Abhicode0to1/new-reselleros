@@ -190,6 +190,7 @@ export default function AccountingOverviewPage() {
         <JumpCard href="/accounting/gst" icon="file" title="GST Reports" sub="Output − input + filing" />
         <JumpCard href="/accounting/profitability" icon="users" title="Customer Margin" sub="Profit per customer" />
         <JumpCard href="/accounting/aging" icon="clock" title="Customer Aging" sub="Who owes, how old" />
+        <JumpCard href="/accounting/ledger" icon="file" title="Ledger (Khata)" sub="One party · Dr/Cr statement" />
         <JumpCard href="/accounting/tds-receivable" icon="rupee" title="TDS Receivable" sub="TDS credits to claim" />
         <JumpCard href="/accounting/assets" icon="cart" title="Assets & EMIs" sub="Fixed assets + loans" />
         <JumpCard href="/accounting/business-loans" icon="rupee" title="Business Loans" sub="Borrowings + EMIs" />

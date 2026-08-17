@@ -153,6 +153,10 @@ export const APP_NAV: NavSection[] = [
       { id: "acc-tds",     href: "/accounting/tds-receivable", label: "TDS Receivable", icon: "rupee" },
       { id: "acc-esi",     href: "/accounting/esi-register",   label: "ESI Register",   icon: "file" },
       { id: "acc-aging",   href: "/accounting/aging",          label: "Customer Aging", icon: "clock" },
+      /* Beside Customer Aging on purpose: aging answers "who owes me, across everyone",
+         the ledger answers "send me MY statement" for one party. Different questions,
+         adjacent in the menu so nobody builds a third page for the second one. */
+      { id: "acc-ledger",  href: "/accounting/ledger",         label: "Ledger (Khata)", icon: "file" },
     ],
   },
   {
@@ -374,6 +378,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/reimbursements": ["Purchases", "Reimbursements"],
   "/accounting":               ["Accounting", "Overview"],
   "/accounting/saas-metrics":  ["Accounting", "SaaS Metrics"],
+  "/accounting/ledger":        ["Accounting", "Ledger"],
   "/accounting/banking":       ["Accounting", "Banking"],
   "/accounting/banking/[id]":  ["Accounting", "Banking", "Account"],
   "/accounting/business-loans": ["Accounting", "Business Loans"],
