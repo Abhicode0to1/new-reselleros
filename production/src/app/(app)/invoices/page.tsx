@@ -29,6 +29,7 @@ import { useCreditNotesByInvoice } from "@/lib/queries/credit-notes";
 import { useDebitNotesByInvoice } from "@/lib/queries/debit-notes";
 import { ReceiptVoucherDialog } from "@/components/features/quotes/receipt-voucher-dialog";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
+import { supplierIdentity, supplierIdentityMessage } from "@/lib/invoices/supplier-identity";
 import { Icon } from "@/components/ui/icon";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -46,6 +47,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
 import { getInvoiceWhatsAppUrl } from "@/lib/whatsapp";
+import { useWhatsAppSender } from "@/lib/hooks/useWhatsAppSender";
 import type { Invoice, Payment } from "@/lib/supabase/database.types";
 
 const INV_COL_ORDER = ["select", "invoice", "customer", "date", "due", "amount", "status", "action"];
@@ -58,6 +60,8 @@ const INV_COL_WIDTHS: Record<string, string> = {
 function InvoicesPageInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
+  /** Who the outbound WhatsApp reminders are from — see lib/hooks/useWhatsAppSender. */
+  const waSender     = useWhatsAppSender();
   /** Deep-link target: `?open=INV-XXX` auto-opens that invoice's dialog (set by
    *  the "Invoiced" button on the Quotes list). Consumed once + URL cleaned. */
   const openInvoiceId = searchParams.get("open");
@@ -573,7 +577,7 @@ function InvoicesPageInner() {
             onClick={() => {
               const selectedInvoices = rows.filter((r) => selected.has(r.id));
               const first = selectedInvoices[0];
-              if (first) window.open(getInvoiceWhatsAppUrl(first), "_blank");
+              if (first) window.open(getInvoiceWhatsAppUrl(first, null, waSender), "_blank");
             }}
           >
             Bulk WhatsApp
@@ -810,6 +814,7 @@ function InvoiceRow({
   isProject?: boolean;
 }) {
   const router = useRouter();
+  const waSender = useWhatsAppSender();
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const [delOpen, setDelOpen] = React.useState(false);
   const [payOpen, setPayOpen] = React.useState(false);
@@ -973,7 +978,7 @@ function InvoiceRow({
                   <DropdownMenuItem
                     className="gap-2.5 py-2 cursor-pointer font-medium text-emerald"
                     onClick={() => {
-                      const url = getInvoiceWhatsAppUrl(inv);
+                      const url = getInvoiceWhatsAppUrl(inv, null, waSender);
                       window.open(url, "_blank");
                     }}
                   >
@@ -1091,16 +1096,25 @@ function InvoicePreviewContainer({
   const { data: payments } = usePaymentsByQuote(quote?.id);
   const { data: customer } = useCustomer(invoice.customer_id ?? undefined);
   const { data: me } = useCurrentUser();
+  const waSender = useWhatsAppSender();
 
-  const meTenant = me || {
-    tenantName: "Excel Technologies Pvt Ltd",
-    tenantGstin: "27AABCE9876D1Z3",
-    tenantEmail: "pardeep@exceltechnologies.in",
-    tenantPhone: "+91 98765 00000",
-    tenantAddress: "Mumbai, Maharashtra 400001",
-    tenantState: "Maharashtra",
-    tenantStateCode: "27",
-  };
+  /* ── WHO IS SELLING THIS — resolved or refused, never invented ──────────────
+     This used to be `me || { tenantName: "Excel Technologies Pvt Ltd",
+     tenantGstin: "27AABCE9876D1Z3", tenantStateCode: "27", … }` — a fallback that
+     looked like a placeholder and behaved like a false declaration.
+
+     The costly part was `stateCode: "27"`. It feeds isInterStateSupply() four lines
+     below. ANUTECH is Delhi, **07**. So while `useCurrentUser` was still in flight —
+     a deep link into an invoice on a slow connection — a Delhi customer's INTRA-state
+     sale (CGST 9% + SGST 9%) was computed as **IGST 18%**. Same rupees, wrong tax
+     heads, wrong government paid, and the fix is a credit note plus a fresh invoice
+     rather than an edit. Invisible in testing; reproducible in front of a customer.
+
+     The rule now lives in lib/invoices/supplier-identity.ts with its own regression
+     test: there is no safe default for "who is selling this", so an unknown identity
+     is reported and the document is withheld. */
+  const identity = supplierIdentity(me);
+  const supplier = identity.ok ? identity.supplier : null;
 
   const lineItems = quote?.line_items ?? [];
   const subtotal  = quote?.subtotal ?? invoice.amount;
@@ -1110,7 +1124,14 @@ function InvoicePreviewContainer({
   const tax       = Math.round(taxable * (taxRate / 100));
   const total     = quote?.amount ?? invoice.amount;
 
-  const interState = isInterStateSupply(customer?.state_code, meTenant.tenantStateCode, { customerGstin: customer?.gstin, sellerGstin: meTenant.tenantGstin });
+  /* `supplier` is null until the identity is complete, so this cannot silently pick a
+     side. `undefined` makes isInterStateSupply say "I don't know" instead of guessing —
+     and the PDF button below is disabled while that is the case. */
+  const interState = isInterStateSupply(
+    customer?.state_code,
+    supplier?.stateCode,
+    { customerGstin: customer?.gstin, sellerGstin: supplier?.gstin },
+  );
   const receivedPayments = (payments ?? []).filter((p) => p.status === "received");
 
   return (
@@ -1147,15 +1168,31 @@ function InvoicePreviewContainer({
                 size="sm"
                 variant="primary"
                 icon="whatsapp"
-                onClick={() => window.open(getInvoiceWhatsAppUrl(invoice, customer?.contact_phone), "_blank")}
+                onClick={() => window.open(getInvoiceWhatsAppUrl(invoice, customer?.contact_phone, waSender), "_blank")}
               >
                 WhatsApp
               </Button>
+              {/* §24 — a block never dead-ends. The button stays visible and clickable so
+                  the operator learns WHY rather than wondering why nothing happens, and
+                  the toast carries the route to the fix. */}
               <Button
                 size="sm"
                 variant="ghost"
                 icon="file"
-                onClick={() => setPdfDialogOpen(true)}
+                onClick={() => {
+                  if (!supplier) {
+                    const msg = supplierIdentityMessage(identity)!;
+                    toast.error("Can't issue this Tax Invoice yet", {
+                      description: msg,
+                      action: identity.ok || !identity.hasSession ? undefined : {
+                        label: "Open Settings",
+                        onClick: () => router.push("/settings"),
+                      },
+                    });
+                    return;
+                  }
+                  setPdfDialogOpen(true);
+                }}
               >
                 PDF
               </Button>
@@ -1273,7 +1310,10 @@ function InvoicePreviewContainer({
         </SheetContent>
       </Sheet>
 
-      {pdfDialogOpen && (
+      {/* `supplier &&` is load-bearing, not defensive. Without a complete identity this
+          dialog would render a Tax Invoice headed by whatever was available — which is
+          how the fabricated GSTIN used to reach the page. No identity, no document. */}
+      {pdfDialogOpen && supplier && (
         <TaxInvoiceDialog
           open={pdfDialogOpen}
           onOpenChange={setPdfDialogOpen}
@@ -1295,12 +1335,12 @@ function InvoicePreviewContainer({
           customerCountry={customer?.country}
           currency={quote?.currency}
           exchangeRate={quote?.exchange_rate}
-          tenantName={meTenant.tenantName}
-          tenantGstin={meTenant.tenantGstin}
-          tenantEmail={meTenant.tenantEmail}
-          tenantPhone={meTenant.tenantPhone}
-          tenantAddress={meTenant.tenantAddress}
-          tenantState={meTenant.tenantState}
+          tenantName={supplier.name}
+          tenantGstin={supplier.gstin}
+          tenantEmail={supplier.email}
+          tenantPhone={supplier.phone}
+          tenantAddress={supplier.address}
+          tenantState={supplier.state}
         />
       )}
     </>

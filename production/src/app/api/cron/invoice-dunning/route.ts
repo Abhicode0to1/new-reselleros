@@ -25,7 +25,7 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { decideDunning, dunningMessage, type DunningStep } from "@/lib/invoices/dunning";
+import { decideDunning, dunningMessage, dunningRank, type DunningStep } from "@/lib/invoices/dunning";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { rupee, formatDate } from "@/lib/utils";
@@ -96,11 +96,17 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
     .from("invoice_dunning_log")
     .select("invoice_id, dunning_step")
     .in("invoice_id", (invoices ?? []).map((i) => i.id));
-  const RANK: Record<string, number> = { none: 0, reminder: 1, retry: 2, grace_warning: 3, final: 4 };
+  /* dunningRank() is IMPORTED, not redeclared. This block used to keep its own copy of
+     the ordering, and the copy is exactly how adding `pre_due` would have broken it:
+     an unknown key returns undefined, `undefined > 0` is false, so a nudge already in
+     the log looks unsent and goes out again every morning until the invoice falls due.
+     One definition, in the module that owns the ladder. */
   const lastStepByInvoice = new Map<string, DunningStep>();
   for (const l of logs ?? []) {
     const prev = lastStepByInvoice.get(l.invoice_id) ?? "none";
-    if (RANK[l.dunning_step] > RANK[prev]) lastStepByInvoice.set(l.invoice_id, l.dunning_step as DunningStep);
+    if (dunningRank(l.dunning_step) > dunningRank(prev)) {
+      lastStepByInvoice.set(l.invoice_id, l.dunning_step as DunningStep);
+    }
   }
 
   for (const inv of invoices ?? []) {
@@ -150,6 +156,10 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
         dueDate: formatDate(inv.due_date!),
         sellerName: tenant?.name ?? "your reseller",
         payLink: null,
+        /* The REAL days remaining, from the decision — not the nominal 3. A pre-due
+           nudge that fired late on day -1 must say "tomorrow"; "in 3 days" would be a
+           false statement about money. Negative daysOverdue is the pre-due case. */
+        daysUntilDue: decision.daysOverdue < 0 ? -decision.daysOverdue : null,
       });
 
       if (to && msg) {

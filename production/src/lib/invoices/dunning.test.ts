@@ -26,9 +26,17 @@ describe("the schedule the brief asked for", () => {
     expect(decideDunning(inv({ dueDate: dueDaysAgo(days) }), NOW).step).toBe(step);
   });
 
-  it("is quiet before the due date and on the day itself", () => {
+  it("is quiet until the invoice is within 3 days of being due", () => {
+    /* CONTRACT CHANGED 17 Aug 2026, deliberately. This used to assert silence right up
+       to the due date, so the first thing a customer ever heard was that they were
+       already late. The cheapest rupee to collect is the one that was never late, and a
+       nudge before the date reaches somebody who is not yet defensive.
+       Still silent 5 days out: a reminder that early is noise, and noise gets muted. */
     expect(decideDunning(inv({ dueDate: dueDaysAgo(-5) }), NOW).step).toBe("none");
-    expect(decideDunning(inv({ dueDate: dueDaysAgo(0) }), NOW).step).toBe("none");
+    expect(decideDunning(inv({ dueDate: dueDaysAgo(-4) }), NOW).step).toBe("none");
+    expect(decideDunning(inv({ dueDate: dueDaysAgo(-3) }), NOW).step).toBe("pre_due");
+    expect(decideDunning(inv({ dueDate: dueDaysAgo(-1) }), NOW).step).toBe("pre_due");
+    expect(decideDunning(inv({ dueDate: dueDaysAgo(0) }), NOW).step).toBe("due_today");
   });
 
   it("keeps its steps in ascending order — decideDunning walks them backwards", () => {
@@ -163,5 +171,109 @@ describe("dunningMessage", () => {
     const m = dunningMessage({ ...base, step: "reminder", payLink: null })!;
     expect(m.text).not.toContain("Pay here");
     expect(m.text).not.toContain("undefined");
+  });
+});
+
+/**
+ * ─── THE PRE-DUE NUDGE, AND WHY IT MUST NOT CATCH UP ────────────────────────
+ * The catch-up rule is right for overdue steps: "you are 9 days late" is still true if
+ * it fires on day 11. It is WRONG before the due date — "due in 3 days" sent on day +5
+ * is a false statement, and one false statement about money undoes a lot of correct ones.
+ */
+describe("pre-due — a heads-up, not a chase", () => {
+  it("fires anywhere inside the 3-day window", () => {
+    for (const d of [3, 2, 1]) {
+      expect(decideDunning(inv({ dueDate: dueDaysAgo(-d) }), NOW).step).toBe("pre_due");
+    }
+  });
+
+  it("logs the days as NEGATIVE, which is the honest number", () => {
+    /* -3 means three days of runway left. Storing 0 or 3 would both read as "late". */
+    expect(decideDunning(inv({ dueDate: dueDaysAgo(-3) }), NOW).daysOverdue).toBe(-3);
+  });
+
+  it("tells the truth about the date even when it fires late", () => {
+    /* Cron missed day -3 and runs on day -1. The message must say "tomorrow", not
+       "in 3 days" — so it is built from the decision's real number, never the nominal. */
+    const d = decideDunning(inv({ dueDate: dueDaysAgo(-1) }), NOW);
+    const m = dunningMessage({
+      step: d.step, invoiceId: "INV-1", customerName: "Ravi Kumar", amountDue: "₹24,000",
+      dueDate: "17 Aug 2026", sellerName: "ANUTECH DIGITAL PVT LTD",
+      daysUntilDue: -d.daysOverdue,
+    })!;
+    expect(m.text).toContain("tomorrow");
+    expect(m.text).not.toContain("in 3 days");
+  });
+
+  it("says nothing is late, and asks nothing of the customer's conscience", () => {
+    const m = dunningMessage({
+      step: "pre_due", invoiceId: "INV-1", customerName: "Ravi", amountDue: "₹24,000",
+      dueDate: "20 Aug 2026", sellerName: "ANUTECH DIGITAL PVT LTD", daysUntilDue: 3,
+    })!;
+    expect(m.text).toMatch(/nothing is late/i);
+    /* A heads-up that sounds like a warning trains people to dread the sender. */
+    expect(m.text).not.toMatch(/overdue|outstanding|we need to hear/i);
+  });
+
+  it("offers to fix a PO or a billing date — the real reason invoices sit unpaid", () => {
+    const m = dunningMessage({
+      step: "pre_due", invoiceId: "INV-1", customerName: "Ravi", amountDue: "₹24,000",
+      dueDate: "20 Aug 2026", sellerName: "ANUTECH DIGITAL PVT LTD", daysUntilDue: 3,
+    })!;
+    expect(m.text).toMatch(/PO number/i);
+  });
+
+  it("does NOT re-nudge once the heads-up has gone out", () => {
+    expect(decideDunning(inv({ dueDate: dueDaysAgo(-2), lastStepSent: "pre_due" }), NOW)
+      .shouldSend).toBe(false);
+  });
+
+  it("still escalates to the Day-1 reminder if the nudge did not work", () => {
+    /* The gentle step must not short-circuit the ladder — that would let a customer who
+       received one heads-up go un-chased forever. */
+    const d = decideDunning(inv({ dueDate: dueDaysAgo(1), lastStepSent: "pre_due" }), NOW);
+    expect(d.step).toBe("reminder");
+    expect(d.shouldSend).toBe(true);
+  });
+
+  it("never fires pre_due once the invoice is actually overdue", () => {
+    for (const days of [1, 5, 30]) {
+      expect(decideDunning(inv({ dueDate: dueDaysAgo(days) }), NOW).step).not.toBe("pre_due");
+    }
+  });
+});
+
+describe("due today — the last day nobody is late", () => {
+  it("fires only on the day itself", () => {
+    expect(decideDunning(inv({ dueDate: dueDaysAgo(0) }), NOW).step).toBe("due_today");
+    expect(decideDunning(inv({ dueDate: dueDaysAgo(-1) }), NOW).step).toBe("pre_due");
+    expect(decideDunning(inv({ dueDate: dueDaysAgo(1) }), NOW).step).toBe("reminder");
+  });
+
+  it("reports zero days overdue, not one", () => {
+    expect(decideDunning(inv({ dueDate: dueDaysAgo(0) }), NOW).daysOverdue).toBe(0);
+  });
+
+  it("asks what is holding it up instead of assuming bad faith", () => {
+    const m = dunningMessage({
+      step: "due_today", invoiceId: "INV-1", customerName: "Ravi", amountDue: "₹24,000",
+      dueDate: "16 Aug 2026", sellerName: "ANUTECH DIGITAL PVT LTD",
+    })!;
+    expect(m.subject).toMatch(/due today/i);
+    expect(m.text).toMatch(/rather know than chase/i);
+  });
+});
+
+describe("nothing before the due date is chased when there is nothing to chase", () => {
+  it.each(["paid", "void", "draft"] as const)("a %s invoice gets no pre-due nudge", (status) => {
+    expect(decideDunning(inv({ status, dueDate: dueDaysAgo(-2) }), NOW).step).toBe("none");
+  });
+
+  it("a fully-settled invoice gets none either", () => {
+    expect(decideDunning(inv({ amountDue: 0, dueDate: dueDaysAgo(-2) }), NOW).step).toBe("none");
+  });
+
+  it("an invoice with no due date still gets nothing — no invented deadline", () => {
+    expect(decideDunning(inv({ dueDate: null }), NOW).step).toBe("none");
   });
 });

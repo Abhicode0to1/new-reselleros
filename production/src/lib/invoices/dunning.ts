@@ -33,11 +33,38 @@
  * most urgent step that should ALREADY have fired, not only an exact-day match — so a
  * two-day gap does not silently skip the Day-3 chase. The caller checks its log before
  * sending, so re-running the same day sends nothing.
+ *
+ * ─── THE CHASE NOW STARTS BEFORE THE DUE DATE ───────────────────────────────
+ * Added 17 Aug 2026. The ladder used to begin at Day 1 OVERDUE, so the first thing a
+ * customer ever heard was that they were already late. Two things wrong with that:
+ *
+ *   The cheapest rupee to collect is the one that was never late. Most Indian SME
+ *   invoices go unpaid because they are sitting in somebody's inbox unactioned, not
+ *   because the money is not there. A nudge three days out reaches a person who is
+ *   not yet defensive, and it costs nothing to send.
+ *
+ *   Every message after the due date carries an accusation, however politely worded.
+ *   Spending the relationship on something a reminder would have fixed is a bad trade
+ *   for a reseller whose whole business is renewals.
+ *
+ * ─── AND THE PRE-DUE STEPS DELIBERATELY DO NOT CATCH UP ─────────────────────
+ * This is the subtle part. The catch-up rule is right for overdue steps: "you are 9
+ * days late" stays true if it fires on day 11. It is WRONG for a pre-due nudge —
+ * "due in 3 days" sent on day +5 is simply a false statement, and one false statement
+ * about money undoes a lot of correct ones.
+ *
+ * So `pre_due` fires only inside its window (3 days out to 1 day out), `due_today`
+ * only on the day itself, and the message is generated from the ACTUAL days remaining
+ * rather than from the step's nominal day — so even a late-fired nudge tells the truth.
  */
 
 export type DunningStep =
-  /** Not due yet, or paid. Nothing to do. */
+  /** Nothing to do — paid, void, or too far from the due date to speak. */
   | "none"
+  /** 3 to 1 days BEFORE due — a heads-up, no accusation. Windowed, never caught up. */
+  | "pre_due"
+  /** The due date itself — "this is due today". Fires only on the day. */
+  | "due_today"
   /** Day 1 — a light "this slipped past" note. */
   | "reminder"
   /** Day 3 — the payment link again, in case the first attempt failed. */
@@ -49,13 +76,30 @@ export type DunningStep =
 
 export type DunningAction = "none" | "email" | "escalate" | "suspend";
 
-/** MUST stay in ASCENDING daysOverdue order — decideDunning walks it backwards. */
+/**
+ * The OVERDUE ladder. MUST stay in ASCENDING daysOverdue order — decideDunning walks
+ * it backwards to find the most urgent step already reached.
+ *
+ * The pre-due steps are NOT in this array, on purpose: everything here is subject to
+ * the catch-up rule, and a pre-due nudge must never be caught up. Keeping them in
+ * separate structures makes that impossible to get wrong by editing a number.
+ */
 export const DUNNING_STEPS: { daysOverdue: number; step: DunningStep; tone: string }[] = [
   { daysOverdue: 1,  step: "reminder",      tone: "friendly" },
   { daysOverdue: 3,  step: "retry",         tone: "helpful"  },
   { daysOverdue: 7,  step: "grace_warning", tone: "firm"     },
   { daysOverdue: 14, step: "final",         tone: "final"    },
 ];
+
+/**
+ * How many days BEFORE the due date the heads-up may be sent.
+ *
+ * A window, not a day. Three days out is the target; if the cron missed that morning
+ * the nudge is still worth sending on day -2 or -1, and the message reads the real
+ * number so it stays true. At day 0 it becomes `due_today`, which is a different
+ * sentence.
+ */
+export const PRE_DUE_WINDOW_DAYS = 3;
 
 export interface DunningInput {
   /** Invoice due date, YYYY-MM-DD. Null = never chased; see the note in decideDunning. */
@@ -92,7 +136,33 @@ export function daysBetweenIST(from: Date, to: Date): number {
   return Math.floor((to.getTime() + istOffsetMs) / dayMs) - Math.floor((from.getTime() + istOffsetMs) / dayMs);
 }
 
-const RANK: Record<DunningStep, number> = { none: 0, reminder: 1, retry: 2, grace_warning: 3, final: 4 };
+/**
+ * Urgency order, used only to answer "has something at least this urgent already gone
+ * out?". The two pre-due steps sit at the bottom, so a customer who got the heads-up
+ * still gets the Day-1 reminder if they do not pay — the ladder is not short-circuited.
+ */
+const RANK: Record<DunningStep, number> = {
+  none: 0, pre_due: 1, due_today: 2, reminder: 3, retry: 4, grace_warning: 5, final: 6,
+};
+
+/**
+ * How urgent a logged step was. Exported because the cron needs the SAME ordering to
+ * collapse a history of log rows into "the most urgent step already sent".
+ *
+ * It used to keep its own copy of this map, and adding `pre_due` broke it silently:
+ * an unknown key returns `undefined`, `undefined > 0` is false, so a logged pre-due
+ * nudge looked like it had never been sent and went out again every single morning
+ * until the invoice fell due. A customer receiving the same "heads-up" four days
+ * running is worse than never being nudged.
+ *
+ * An unknown step ranks 0 — a value written by a future version is treated as "nothing
+ * sent" rather than crashing the pass. That is the safe direction: it may re-send one
+ * message; the alternative silently stops chasing every invoice.
+ */
+export function dunningRank(step: string | null | undefined): number {
+  if (!step) return 0;
+  return RANK[step as DunningStep] ?? 0;
+}
 
 /**
  * What should happen to this invoice today?
@@ -116,8 +186,36 @@ export function decideDunning(input: DunningInput, now: Date = new Date()): Dunn
   if (input.amountDue <= 0) {
     return { ...NOTHING, daysOverdue, reason: "Nothing outstanding." };
   }
+  /* ── BEFORE THE DUE DATE ──────────────────────────────────────────────────
+     Windowed, and NOT subject to the catch-up walk below. `daysOverdue` is negative
+     here, which is the honest value to log: -3 means three days of runway left. */
+  if (daysOverdue < 0) {
+    const daysUntil = -daysOverdue;
+    if (daysUntil > PRE_DUE_WINDOW_DAYS) {
+      return { ...NOTHING, daysOverdue, reason: `Due in ${daysUntil} days — too early to nudge.` };
+    }
+    const alreadyNudged = RANK[input.lastStepSent ?? "none"] >= RANK.pre_due;
+    return {
+      step: "pre_due",
+      action: "email",
+      daysOverdue,
+      shouldSend: !alreadyNudged,
+      reason: `Due in ${daysUntil} day${daysUntil === 1 ? "" : "s"} — a heads-up before it is late.`,
+    };
+  }
+
   if (daysOverdue < DUNNING_STEPS[0].daysOverdue) {
-    return { ...NOTHING, daysOverdue, reason: daysOverdue < 0 ? "Not due yet." : "Due today." };
+    /* Exactly the due date. Its own step rather than silence: "due today" is the last
+       moment a customer can pay without anybody being late, and it is the highest-yield
+       message in the whole ladder for that reason. */
+    const alreadySentToday = RANK[input.lastStepSent ?? "none"] >= RANK.due_today;
+    return {
+      step: "due_today",
+      action: "email",
+      daysOverdue: 0,
+      shouldSend: !alreadySentToday,
+      reason: "Due today — payable without anybody being late.",
+    };
   }
 
   /* Walk backwards for the most urgent step already reached. An exact-day match would
@@ -162,12 +260,35 @@ export function dunningMessage(args: {
   dueDate: string;
   sellerName: string;
   payLink?: string | null;
+  /**
+   * Days still to run, for `pre_due` only. Pass the REAL number from the decision
+   * (`-daysOverdue`), never the nominal 3 — a nudge that fired late on day -1 must say
+   * "tomorrow", because "in 3 days" would be false and this is a message about money.
+   */
+  daysUntilDue?: number | null;
 }): { subject: string; text: string } | null {
   const { step, invoiceId, customerName, amountDue, dueDate, sellerName, payLink } = args;
   const pay = payLink ? `\n\nPay here: ${payLink}` : "";
   const first = customerName.split(" ")[0] || "there";
 
   switch (step) {
+    case "pre_due": {
+      /* No apology, no chasing, no consequence — none of it is warranted yet, and a
+         heads-up that sounds like a warning trains people to dread the sender. */
+      const n = args.daysUntilDue ?? null;
+      const when = n === null ? `on ${dueDate}`
+        : n <= 1 ? "tomorrow"
+        : `in ${n} days, on ${dueDate}`;
+      return {
+        subject: `Invoice ${invoiceId} — due ${n !== null && n <= 1 ? "tomorrow" : `on ${dueDate}`}`,
+        text: `Hi ${first},\n\nJust a heads-up that invoice ${invoiceId} for ${amountDue} falls due ${when}. Nothing is late — this is only so it does not get lost in an inbox.${pay}\n\nIf you need a PO number, a different billing date, or anything changed on the invoice, tell us now and it is easy to sort.\n\n— ${sellerName}`,
+      };
+    }
+    case "due_today":
+      return {
+        subject: `Invoice ${invoiceId} — due today`,
+        text: `Hi ${first},\n\nInvoice ${invoiceId} for ${amountDue} is due today. Paying today keeps it clear of any late follow-ups.${pay}\n\nIf something is holding it up, just reply and tell us what — we would rather know than chase.\n\n— ${sellerName}`,
+      };
     case "reminder":
       return {
         subject: `Invoice ${invoiceId} — just slipped past its due date`,

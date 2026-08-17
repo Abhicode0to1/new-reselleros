@@ -1,7 +1,13 @@
+/* Explicit, now that this card reads the tenant identity through a hook. It was
+   already only ever imported from client trees, so this changes nothing at runtime —
+   it just stops the next reader wondering whether the hook is legal here. */
+"use client";
+
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icon";
 import { rupee, initials, formatDate } from "@/lib/utils";
 import { getLeadWhatsAppUrl } from "@/lib/whatsapp";
+import { useWhatsAppSender } from "@/lib/hooks/useWhatsAppSender";
 import { intentMeta, staleWarning, isHighValueLead } from "@/lib/leads/heat";
 import type { Lead } from "@/lib/supabase/database.types";
 import { cn } from "@/lib/utils";
@@ -19,6 +25,7 @@ interface LeadCardProps {
 
 
 export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: LeadCardProps) {
+  const waSender = useWhatsAppSender();
   const ownerInitials = lead.contact_name ? initials(lead.contact_name) : "—";
   const age = formatDate(lead.created_at, "relative");
   const isHighValue = isHighValueLead(lead);
@@ -33,7 +40,9 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
 
   const handleWhatsApp = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = getLeadWhatsAppUrl(lead);
+    /* Signed with THIS tenant. The message used to end "*Excel Technologies*" for
+       every reseller who ever used the app — see lib/whatsapp.ts. */
+    const url = getLeadWhatsAppUrl(lead, null, waSender);
     window.open(url, "_blank");
   };
 
