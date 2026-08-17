@@ -93,17 +93,26 @@ describe("Follow-Up Needed", () => {
   });
 });
 
-describe("Won and Archived", () => {
+describe("Won and Lost", () => {
   it("won holds only won", () => {
     expect(inSalesFolder(lead({ stage: "won" }), "won", TODAY)).toBe(true);
     expect(inSalesFolder(lead({ stage: "lost" }), "won", TODAY)).toBe(false);
   });
 
-  it("archived holds lost AND junk", () => {
-    /* Junk is filed rather than hidden — it is still a record someone may need to
-       find, and hiding it entirely is how a wrongly-junked lead is lost for good. */
-    expect(inSalesFolder(lead({ stage: "lost" }), "archived", TODAY)).toBe(true);
-    expect(inSalesFolder(lead({ is_junk: true }), "archived", TODAY)).toBe(true);
+  it("lost holds only lost — junk is NOT filed here", () => {
+    /* This folder used to be "Lost / Archived" and held `lost OR is_junk`, alongside a
+       Junk chip that held the same junk. Every binned lead was in two places under two
+       names, and neither chip could be explained in one sentence.
+       "We competed and lost" and "this was never a real enquiry" lead to different
+       actions — win/loss analysis versus a lead-source problem. */
+    expect(inSalesFolder(lead({ stage: "lost" }), "lost", TODAY)).toBe(true);
+    expect(inSalesFolder(lead({ is_junk: true }), "lost", TODAY)).toBe(false);
+  });
+
+  it("leaves junk out of EVERY folder, so the Junk view is its only home", () => {
+    const junk = lead({ is_junk: true, stage: "quote", value: 900_000, follow_up_date: "2026-01-01" });
+    const present = SALES_FOLDERS.map((f) => f.id).filter((f) => inSalesFolder(junk, f, TODAY));
+    expect(present).toEqual([]);
   });
 });
 
@@ -121,8 +130,8 @@ describe("counts and value", () => {
     lead({ stage: "quote", value: 300_000 }),                      // hot + quoted
     lead({ stage: "demo", follow_up_date: "2026-08-01" }),         // followup
     lead({ stage: "won", value: 250_000 }),                        // won
-    lead({ stage: "lost", value: 90_000 }),                        // archived
-    lead({ is_junk: true, value: 900_000 }),                       // archived
+    lead({ stage: "lost", value: 90_000 }),                        // lost
+    lead({ is_junk: true, value: 900_000 }),                       // no folder at all
   ];
 
   it("counts each folder independently", () => {
@@ -132,18 +141,27 @@ describe("counts and value", () => {
     expect(c.quoted).toBe(1);
     expect(c.followup).toBe(1);
     expect(c.won).toBe(1);
-    expect(c.archived).toBe(2);
+    expect(c.lost).toBe(1);
+  });
+
+  it("counts Won and Lost only if the caller kept closed leads in the base set", () => {
+    /* The page passes `searched` here, not the open-only list. Passing the open list —
+       which is what it used to do — makes these two chips read 0 forever, and a chip that
+       can only ever say zero is a chip nobody clicks twice. */
+    const openOnly = leads.filter((l) => !isClosed(l));
+    expect(salesFolderCounts(openOnly, TODAY).won).toBe(0);
+    expect(salesFolderCounts(leads, TODAY).won).toBe(1);
   });
 
   it("adds up the open pipeline in a folder", () => {
     expect(salesFolderValue(leads, "quoted", TODAY)).toBe(300_000);
   });
 
-  it("reports ZERO for won and archived", () => {
+  it("reports ZERO for won and lost", () => {
     /* A total beside a folder name reads as pipeline. Closed money in it inflates
        the number a rep reports upward. */
     expect(salesFolderValue(leads, "won", TODAY)).toBe(0);
-    expect(salesFolderValue(leads, "archived", TODAY)).toBe(0);
+    expect(salesFolderValue(leads, "lost", TODAY)).toBe(0);
   });
 
   it("treats a missing value as nothing, not as a guess", () => {

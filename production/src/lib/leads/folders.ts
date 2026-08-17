@@ -26,12 +26,21 @@
  * Both are kept out of every working folder. A junk lead in Hot Deals because someone
  * typed ₹5,00,000 into a spam enquiry is exactly the sort of thing that teaches a rep
  * to stop trusting the folder counts.
+ *
+ * ─── JUNK IS NOT A FOLDER AT ALL ────────────────────────────────────────────
+ * There used to be an "archived" folder holding `lost` OR `is_junk`, next to a Junk chip
+ * of its own — so every binned lead sat in two places under two names, and neither chip
+ * could be described in one sentence. "We competed and lost" and "this was never a real
+ * enquiry" are different facts that lead to different actions: one is win/loss analysis,
+ * the other is a lead-source problem.
+ *
+ * So `lost` means lost, junk belongs to the Junk view, and no lead is ever in both.
  */
 import type { Lead } from "@/lib/supabase/database.types";
 import { isHighValueLead } from "./heat";
 
 export type SalesFolder =
-  | "inbox" | "hot" | "quoted" | "followup" | "won" | "archived";
+  | "inbox" | "hot" | "quoted" | "followup" | "won" | "lost";
 
 export interface SalesFolderMeta {
   id:    SalesFolder;
@@ -47,7 +56,7 @@ export const SALES_FOLDERS: readonly SalesFolderMeta[] = [
   { id: "quoted",   label: "Quote Sent",      icon: "📄", hint: "No proposals waiting on a customer's answer." },
   { id: "followup", label: "Follow-Up Needed",icon: "⏰", hint: "Nothing overdue — every follow-up date is still ahead." },
   { id: "won",      label: "Won",             icon: "🏆", hint: "No deals closed yet — won leads collect here." },
-  { id: "archived", label: "Lost / Archived", icon: "📁", hint: "Nothing lost or marked junk." },
+  { id: "lost",     label: "Lost",            icon: "📁", hint: "No deals lost yet. Junk is separate — that is the 🚫 view." },
 ] as const;
 
 /** The fields the folder rules read. Structural so tests need no DB row. */
@@ -95,12 +104,14 @@ export function inSalesFolder(l: FolderLead, folder: SalesFolder, todayISO: stri
       return isFollowUpDue(l, todayISO);
 
     case "won":
+      /* Junk is NOT excluded by an `isClosed` check here, deliberately: a lead marked
+         both won and junk is a data contradiction, and it should show up in Won where
+         somebody will notice it rather than be filtered into silence. */
       return l.stage === "won";
 
-    case "archived":
-      /* Junk sits here rather than nowhere: it is still a record someone may need to
-         find, and hiding it entirely is how a wrongly-junked lead is lost. */
-      return l.stage === "lost" || l.is_junk === true;
+    case "lost":
+      /* Lost only. Junk has its own view — see the header. */
+      return l.stage === "lost";
   }
 }
 
@@ -108,7 +119,7 @@ export function salesFolderCounts(
   leads: readonly FolderLead[],
   todayISO: string,
 ): Record<SalesFolder, number> {
-  const counts = { inbox: 0, hot: 0, quoted: 0, followup: 0, won: 0, archived: 0 } as Record<SalesFolder, number>;
+  const counts = { inbox: 0, hot: 0, quoted: 0, followup: 0, won: 0, lost: 0 } as Record<SalesFolder, number>;
   for (const l of leads) {
     for (const f of SALES_FOLDERS) if (inSalesFolder(l, f.id, todayISO)) counts[f.id] += 1;
   }
@@ -118,16 +129,16 @@ export function salesFolderCounts(
 /**
  * ₹ of open pipeline in a folder.
  *
- * Won and archived are excluded even when the folder IS won or archived: a "total"
- * beside a folder name reads as pipeline, and putting closed money in it inflates
- * the number a rep reports upward.
+ * Won and lost return 0 even when the folder IS won or lost: a "total" beside a folder
+ * name reads as pipeline, and putting closed money in it inflates the number a rep
+ * reports upward.
  */
 export function salesFolderValue(
   leads: readonly FolderLead[],
   folder: SalesFolder,
   todayISO: string,
 ): number {
-  if (folder === "won" || folder === "archived") return 0;
+  if (folder === "won" || folder === "lost") return 0;
   return leads
     .filter((l) => inSalesFolder(l, folder, todayISO))
     .reduce((sum, l) => sum + (l.value ?? 0), 0);

@@ -45,6 +45,7 @@ import { PriorityCallQueue } from "@/components/features/leads/priority-call-que
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { buildForecast, stageProbability, winRate } from "@/lib/leads/forecast";
+import { rowStageOptions, isStageLocked } from "@/lib/leads/stage-options";
 import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
 import { stageAge, staleDeals } from "@/lib/leads/velocity";
 import { dealHealth } from "@/lib/leads/deal-health";
@@ -255,20 +256,18 @@ function LeadsPageInner() {
     [leads],
   );
 
-  /* Counts for the "Today's Follow-Ups" pill, from the UNFILTERED lead set rather than
-     from `searched`: the badge answers "how much work is there today", not "how much of
-     it survives my current search". A count that shrinks while you type is a count
-     nobody can trust. */
-  const [dueTodayCount, overdueNowCount] = React.useMemo(() => {
+  /* How many follow-ups are not merely due but LATE — the red sub-badge on the Follow-Up
+     Needed chip. The due count itself is no longer computed here: it is the `followup`
+     folder's own count, so the chip's two numbers cannot disagree.
+     `<` and not `<=`: due today is on time. */
+  const overdueNowCount = React.useMemo(() => {
     const today = localDateISO(new Date());
-    let due = 0, late = 0;
+    let late = 0;
     for (const l of leads ?? []) {
       if (l.is_junk || l.stage === "won" || l.stage === "lost") continue;
-      if (!l.follow_up_date || l.follow_up_date > today) continue;
-      due++;
-      if (l.follow_up_date < today) late++;
+      if (l.follow_up_date && l.follow_up_date < today) late++;
     }
-    return [due, late] as const;
+    return late;
   }, [leads]);
 
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null);
@@ -350,7 +349,10 @@ function LeadsPageInner() {
   // Tab is purely URL-derived now — no internal state, no setter. /leads
   // gives the raw inbox, /deals gives the qualified pipeline. The legacy
   // tab-bar UI is removed; navigation between the two is via sidebar.
-  const [salesTab, setSalesTab] = React.useState<"raw" | "deals" | "all" | "due">(
+  /* `"due"` is gone from this union. It was a fourth filter dimension that only the
+     removed "Today's Follow-Ups" chip could set, duplicating the `followup` folder.
+     What remains is purely which page we are on, and it only labels the Add button. */
+  const [salesTab] = React.useState<"raw" | "deals" | "all">(
     isDealsPage ? "deals" : "raw"
   );
 
@@ -469,18 +471,14 @@ function LeadsPageInner() {
       list = list.filter((l) => (l.pipeline ?? "new_logo") === pipelineFilter);
     }
 
-    if (salesTab === "due") {
-      const todayStr = localDateISO(new Date());
-      list = list.filter((l) =>
-        l.follow_up_date && l.follow_up_date <= todayStr &&
-        l.stage !== "won" && l.stage !== "lost");
-    }
+    /* No follow-up cut here any more — that is the `followup` FOLDER's job, applied once
+       where every other folder is applied. It used to be filtered in this memo as well,
+       so a follow-up chip and a folder chip could both be narrowing the same list from
+       two different places. */
     return list;
-    // salesTab is a dependency now that the "due" pill filters here. Omitting it would
-    // have left a stale list on screen until some other input happened to change.
     // pipelineFilter joins the deps — without it the list keeps the previous motion's
     // rows until some other input happens to change.
-  }, [workspaceLeads, search, stageFilter, priorityFilter, smartView, salesTab, pipelineFilter, currentUser, dup]);
+  }, [workspaceLeads, search, stageFilter, priorityFilter, smartView, pipelineFilter, currentUser, dup]);
   const activeFilterCount = stageFilter.length + priorityFilter.length;
 
   // A lead is "raw" (Leads inbox) only while it's early — New or Contacted with
@@ -514,15 +512,45 @@ function LeadsPageInner() {
      The chip counts and the list BOTH call inSalesFolder() from lib/leads/folders.ts
      (21 tests), so a chip can never advertise a number the list contradicts. */
   const folderToday = React.useMemo(() => localDateISO(new Date()), []);
+  /* Counted over `searched`, NOT over `openLeads`. Won and Lost are folders too, and a
+     base that had already dropped closed leads would have reported both as 0 forever —
+     a chip that can only ever say zero is a chip nobody clicks twice.
+     The working folders are unaffected: inSalesFolder() applies its own isClosed() cut. */
   const folderCounts = React.useMemo(
-    () => salesFolderCounts(openLeads, folderToday),
-    [openLeads, folderToday],
+    () => salesFolderCounts(searched, folderToday),
+    [searched, folderToday],
   );
   const filtered = smartView === "junk"
     ? searched
     : folder === "all"
     ? openLeads
-    : openLeads.filter((l) => inSalesFolder(l, folder, folderToday));
+    : searched.filter((l) => inSalesFolder(l, folder, folderToday));
+
+  /* ── ONE SELECTION AT A TIME ────────────────────────────────────────────────
+     The chip row drove THREE independent pieces of state — `folder`, `smartView` and
+     `salesTab` — and no chip cleared the others. Picking Hot Deals and then Junk left
+     both lit, over a list of junk; picking Today's Follow-Ups and then Inbox left the
+     follow-up cut silently applied underneath a chip that said Inbox. Two highlighted
+     chips is not a cosmetic problem: the rep believes the list has been narrowed one way
+     when it has been narrowed another.
+
+     Every chip now goes through one of these two, so a chip added later cannot forget a
+     dimension. */
+  const selectFolder = React.useCallback((f: SalesFolder | "all") => {
+    setFolder(f);
+    setSmartView("all");
+  }, []);
+  const selectJunk = React.useCallback(() => {
+    setSmartView("junk");
+    setFolder("all");
+  }, []);
+  /* The Smart Views dropdown is the OTHER filter surface, and it used to stack on top of
+     whatever chip was lit. Selecting from it now releases the folder, so exactly one of
+     the two is ever in force. */
+  const selectSmartView = React.useCallback((v: SmartView) => {
+    setSmartView(v);
+    setFolder("all");
+  }, []);
 
   // Tab-scoped UNFILTERED subset for the insight band, Smart Views chips,
   // Today strip, and right rail. Derived from `workspaceLeads` so counts stay
@@ -685,7 +713,7 @@ function LeadsPageInner() {
               folders filter WITHIN the open pipeline, and junk is outside it. */}
           <button
             type="button"
-            onClick={() => { setSmartView("junk"); setFolder("all"); }}
+            onClick={selectJunk}
             title="Binned as spam, fake or non-commercial — kept, never deleted"
             className={cn(
               "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
@@ -705,28 +733,44 @@ function LeadsPageInner() {
 
           <button
             type="button"
-            onClick={() => { setFolder("all"); setSmartView("all"); }}
+            onClick={() => selectFolder("all")}
             className={cn(
               "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
-              folder === "all"
+              /* `folder` alone is not enough: the Junk view leaves folder at "all", and
+                 checking only folder lit this chip AND Junk together — two highlighted
+                 chips over one list. Browser-caught, not reasoned. */
+              folder === "all" && smartView !== "junk"
                 ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
                 : "text-ink-2 hover:text-ink hover:bg-paper/50"
             )}
           >
-            <Icon name="inbox" size={13} className={folder === "all" ? "text-amber-ink" : "text-ink-3"} />
+            <Icon name="inbox" size={13} className={folder === "all" && smartView !== "junk" ? "text-amber-ink" : "text-ink-3"} />
             <span>All open</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
               {openLeads.length}
             </span>
           </button>
 
-          {SALES_FOLDERS.filter((f) => f.id !== "won" && f.id !== "archived").map((f) => {
+          {/* All six folders, Won and Lost included.
+              They used to be filtered out of this row, which left the two deals this
+              tenant has actually WON with nowhere to be seen: "All open" excludes them by
+              definition and no chip admitted them. That is the same bug the /deals merge
+              was meant to kill — do the right thing, lose sight of the deal as the reward
+              — quietly recreated for the one outcome the rep most wants to look at. */}
+          {SALES_FOLDERS.map((f) => {
             const count = folderCounts[f.id];
+            /* Only Follow-Up Needed carries a second badge, and only when something is
+                genuinely late. It absorbed the old "🔥 Today's Follow-Ups" chip, which ran
+                the identical rule (date <= today, still open) through a different piece of
+                state — two chips, one meaning, neither clearing the other. The overdue
+                split is the part of it worth keeping: nine days late is a different
+                problem from due at 4pm. */
+            const late = f.id === "followup" ? overdueNowCount : 0;
             return (
               <button
                 key={f.id}
                 type="button"
-                onClick={() => { setFolder(f.id); setSmartView("all"); }}
+                onClick={() => selectFolder(f.id)}
                 title={count === 0 ? f.hint : undefined}
                 className={cn(
                   "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
@@ -739,47 +783,20 @@ function LeadsPageInner() {
               >
                 <span aria-hidden>{f.icon}</span>
                 <span>{f.label}</span>
+                {late > 0 && (
+                  <span
+                    title={`${late} already overdue, not just due today`}
+                    className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-soft text-rose font-mono tabular-nums font-bold"
+                  >
+                    {late} late
+                  </span>
+                )}
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
                   {count}
                 </span>
               </button>
             );
           })}
-
-          {/* Replaces "📋 All Records". That pill was a dumping ground — everything, in
-              no order, which is not a job anyone actually does. This is the rep's actual
-              morning: follow-ups due today OR earlier, spanning raw leads AND qualified
-              deals. Nothing became unreachable — "Qualified Deals" already covers won and
-              lost (anything past new/contact), and the Smart Views menu still holds
-              All / Mine / Hot / New / Overdue / Duplicates / Junk. */}
-          <button
-            type="button"
-            onClick={() => { setSalesTab("due"); setSmartView("all"); }}
-            title="Follow-ups due today or already overdue — across leads and deals"
-            className={cn(
-              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer",
-              salesTab === "due"
-                ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
-                : "text-ink-2 hover:text-ink hover:bg-paper/50"
-            )}
-          >
-            <Icon name="clock" size={13} className={salesTab === "due" ? "text-amber-ink" : "text-ink-3"} />
-            <span>🔥 Today&apos;s Follow-Ups</span>
-            {/* The overdue count keeps its own red sub-badge. Folding "Overdue" into
-                "Today" is the one signal that could have been LOST by collapsing to three
-                pills — nine days late is a different problem from due at 4pm. */}
-            {overdueNowCount > 0 && (
-              <span
-                title={`${overdueNowCount} already overdue`}
-                className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-soft text-rose font-mono tabular-nums font-bold"
-              >
-                {overdueNowCount} late
-              </span>
-            )}
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
-              {dueTodayCount}
-            </span>
-          </button>
         </div>
 
       </div>
@@ -945,7 +962,7 @@ function LeadsPageInner() {
             junkCount={junkCount}
             junkSuspectCount={junkSuspectCount}
             active={smartView}
-            onChange={setSmartView}
+            onChange={selectSmartView}
           />
 
           <div className="flex items-center gap-2 shrink-0">
@@ -1402,7 +1419,6 @@ function LeadsPageInner() {
           onWhatsApp={(l) => setWaLead(l)}
           onMerge={openMergeFor}
           dupIds={dup.flagged}
-          isDealsPage={isDealsPage}
         />
       )}
 
@@ -2939,7 +2955,6 @@ function LeadListView({
   onWhatsApp,
   onMerge,
   dupIds,
-  isDealsPage,
 }: {
   leads: Lead[];
   sortBy: SortCol;
@@ -2951,16 +2966,12 @@ function LeadListView({
   onWhatsApp?: (l: Lead) => void;
   onMerge: (l: Lead) => void;
   dupIds: Set<string>;
-  isDealsPage: boolean;
 }) {
-  // Stage options in the inline dropdown, gated by the quote-first funnel:
-  //  • Leads inbox (pre-quote): only New / Contacted / Lost. Demo/Trial/Quote
-  //    are NOT offered — you must Send a quote (📄) to advance, which is what
-  //    moves the lead into Deals.
-  //  • Deals (post-quote): Quote Sent → Demo Done → Trial Active → Won / Lost.
-  const ROW_STAGE_OPTIONS: Lead["stage"][] = isDealsPage
-    ? ["quote", "demo", "trial", "won", "lost"]
-    : ["new", "contact", "lost"];
+  /* Stage options now come from the LEAD, not from the page — rowStageOptions() in
+     lib/leads/stage-options.ts (17 tests), which is where the quote-first gate and the
+     reason for it are written down. Choosing by page was correct while /leads and /deals
+     held two halves of the pipeline; after the merge it rendered a `won` deal inside a
+     select of new/contact/lost, and the browser showed the first option. */
   // Stage-mutation hook for quick-change chips on cards. Tapping the stage
   // badge on a mobile card opens a dropdown to flip the stage without
   // needing to open the full detail drawer.
@@ -3305,23 +3316,35 @@ function LeadListView({
                 <td className="p-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-1.5 flex-nowrap">
                     <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", STAGE_DOT[lead.stage])} />
-                    <select
-                      value={lead.stage}
-                      onChange={(e) => {
-                        const stage = e.target.value as Lead["stage"];
-                        void changeStage(lead, stage);
-                        if (!isDealsPage && stage === "lost") {
-                          toast.success(`${lead.company} marked Lost`);
-                        }
-                      }}
-                      title="Change stage"
-                      aria-label={`Stage for ${lead.company}`}
-                      className="text-xs bg-transparent -ml-1 px-1 py-0.5 rounded border border-transparent hover:border-hairline cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
-                    >
-                      {ROW_STAGE_OPTIONS.map((s) => (
-                        <option key={s} value={s}>{STAGE_LABEL[s]}</option>
-                      ))}
-                    </select>
+                    {isStageLocked(lead.stage) ? (
+                      /* Won renders as text, not a control. Un-winning a deal means money
+                         already recorded against it — that is a deliberate act with a
+                         confirmation, not a table cell one row from the scrollbar. */
+                      <span
+                        className="text-xs px-1 py-0.5 font-medium"
+                        title="Closed. Reopening a won deal touches recorded money, so it cannot be done from this cell."
+                      >
+                        {STAGE_LABEL[lead.stage]}
+                      </span>
+                    ) : (
+                      <select
+                        value={lead.stage}
+                        onChange={(e) => {
+                          const stage = e.target.value as Lead["stage"];
+                          void changeStage(lead, stage);
+                          if (stage === "lost") {
+                            toast.success(`${lead.company} marked Lost`);
+                          }
+                        }}
+                        title="Change stage"
+                        aria-label={`Stage for ${lead.company}`}
+                        className="text-xs bg-transparent -ml-1 px-1 py-0.5 rounded border border-transparent hover:border-hairline cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
+                      >
+                        {rowStageOptions(lead.stage).map((s) => (
+                          <option key={s} value={s}>{STAGE_LABEL[s]}</option>
+                        ))}
+                      </select>
+                    )}
                     {/* How long it has sat here. Beside the stage, because "Quote Sent"
                         and "Quote Sent for 20 days" are different facts and only the
                         second one asks for action. Unknown ages render as nothing at all
