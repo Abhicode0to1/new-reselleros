@@ -321,6 +321,17 @@ export type InboundEmailRow = {
   body_text:  string | null;
   body_html:  string | null;
   created_at: string;
+  // ── Mailbox state (migration 20260817140000) ───────────────────────────────
+  // What a PERSON did, kept apart from `status`, which is what the webhook did.
+  // They move independently: an email can be lead_created AND unread AND starred.
+  /** When a human first opened it. NULL = unread — what `is:unread` filters on. */
+  read_at:       string | null;
+  /** Flagged by a rep. Not a status value; a mail can be starred and converted. */
+  starred:       boolean;
+  /** Hidden from the Inbox until this instant, then it returns of its own accord. */
+  snoozed_until: string | null;
+  /** Marked done. Leaves the Inbox, stays searchable — nothing is ever deleted. */
+  archived_at:   string | null;
 };
 type InboundEmailInsert = {
   id?:         string;
@@ -342,6 +353,10 @@ type InboundEmailInsert = {
   body_text?:  string | null;
   body_html?:  string | null;
   created_at?: string;
+  read_at?:       string | null;
+  starred?:       boolean;
+  snoozed_until?: string | null;
+  archived_at?:   string | null;
 };
 type InboundEmailUpdate = Partial<Omit<InboundEmailInsert, "tenant_id" | "message_id">>;
 
