@@ -128,6 +128,43 @@ export function folderCounts(
 }
 
 /**
+ * When "snooze until tomorrow" actually means, in IST.
+ *
+ * ─── THE HOUR IS THE POINT ──────────────────────────────────────────────────
+ * "Tomorrow" has to mean tomorrow MORNING, not 00:01. A mail that reappears at
+ * midnight is back in the Inbox for a whole shift before anyone is at a desk, and
+ * the rep who snoozed it sees it again having gained nothing.
+ *
+ * India is UTC+5:30 with no daylight saving, so the offset is a constant — no
+ * timezone database, and the arithmetic is honest for the only market this serves.
+ */
+const IST_OFFSET_MIN = 5 * 60 + 30;
+/** 09:00 IST — the start of a working day. */
+const SNOOZE_HOUR_IST = 9;
+
+export interface SnoozePreset {
+  label: string;
+  /** ISO instant to hide it until. */
+  untilISO: string;
+}
+
+/** Next occurrence of 09:00 IST, `daysAhead` days from now. */
+function istMorning(now: Date, daysAhead: number): string {
+  const ist = new Date(now.getTime() + IST_OFFSET_MIN * 60_000);
+  ist.setUTCDate(ist.getUTCDate() + daysAhead);
+  ist.setUTCHours(SNOOZE_HOUR_IST, 0, 0, 0);
+  return new Date(ist.getTime() - IST_OFFSET_MIN * 60_000).toISOString();
+}
+
+export function snoozePresets(now: Date): SnoozePreset[] {
+  return [
+    { label: "Tomorrow morning",   untilISO: istMorning(now, 1) },
+    { label: "In 3 days",          untilISO: istMorning(now, 3) },
+    { label: "Next week",          untilISO: istMorning(now, 7) },
+  ];
+}
+
+/**
  * Unread count for the Inbox badge.
  *
  * Only the Inbox gets one. Gmail shows unread counts per folder, but a rep acting on

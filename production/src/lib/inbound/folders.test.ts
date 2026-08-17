@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  MAIL_FOLDERS, inFolder, isSnoozed, isSpam, folderCounts, inboxUnread,
+  MAIL_FOLDERS, inFolder, isSnoozed, isSpam, folderCounts, inboxUnread, snoozePresets,
   type FoldersRow, type MailFolder,
 } from "./folders";
 
@@ -110,6 +110,38 @@ describe("folders overlap on purpose", () => {
     const r = row({ starred: true, status: "lead_created", lead_id: "L-1" });
     const present = MAIL_FOLDERS.map((f) => f.id).filter((f) => inFolder(r, f, NOW));
     expect(present).toEqual(["inbox", "starred", "leads"] as MailFolder[]);
+  });
+});
+
+describe("snoozePresets — tomorrow means tomorrow MORNING", () => {
+  it("wakes at 09:00 IST, not midnight", () => {
+    /* A mail that reappears at 00:01 sits in the Inbox for a whole shift before
+       anyone is at a desk — the rep who snoozed it gained nothing. */
+    const [tomorrow] = snoozePresets(new Date("2026-08-17T12:00:00.000Z"));
+    // 09:00 IST == 03:30 UTC
+    expect(tomorrow.untilISO).toBe("2026-08-18T03:30:00.000Z");
+  });
+
+  it("still lands on the NEXT morning when snoozed late at night IST", () => {
+    /* 23:00 IST on the 17th is 17:30 UTC — the UTC date is still the 17th, so
+       arithmetic done in UTC would wake it the same IST evening. */
+    const [tomorrow] = snoozePresets(new Date("2026-08-17T17:30:00.000Z"));
+    expect(tomorrow.untilISO).toBe("2026-08-18T03:30:00.000Z");
+  });
+
+  it("is always in the future", () => {
+    const now = new Date("2026-08-17T02:00:00.000Z");
+    for (const p of snoozePresets(now)) {
+      expect(new Date(p.untilISO).getTime()).toBeGreaterThan(now.getTime());
+    }
+  });
+
+  it("a snoozed mail is hidden right up to its moment", () => {
+    const now = new Date("2026-08-17T12:00:00.000Z");
+    const [tomorrow] = snoozePresets(now);
+    const r = row({ snoozed_until: tomorrow.untilISO });
+    expect(isSnoozed(r, "2026-08-18T03:29:59.000Z")).toBe(true);
+    expect(isSnoozed(r, "2026-08-18T03:30:01.000Z")).toBe(false);
   });
 });
 
