@@ -95,6 +95,23 @@ export function supportSkuId(id: SupportTierId, cycle: "monthly" | "yearly"): st
   return `SUP-${id.toUpperCase()}-${cycle === "yearly" ? "YR" : "MO"}`;
 }
 
+/**
+ * Find a tenant's catalogue row for a tier and cycle.
+ *
+ * The seeded ids carry the tenant on the end (`SUP-STANDARD-YR-fbb976f1…`) so two
+ * tenants' rows never collide, which means the lookup is a prefix match rather than
+ * an equality one. Returns null when the SKU has not been seeded for this tenant —
+ * the caller shows that as "not in your catalogue", never as a ₹0 plan.
+ */
+export function findSupportSku<T extends { id: string }>(
+  items: readonly T[],
+  tier: SupportTierId,
+  cycle: "monthly" | "yearly",
+): T | null {
+  const prefix = supportSkuId(tier, cycle);
+  return items.find((i) => i.id === prefix || i.id.startsWith(`${prefix}-`)) ?? null;
+}
+
 /* ── The saving, derived ───────────────────────────────────────────────────── */
 
 export interface AnnualSaving {

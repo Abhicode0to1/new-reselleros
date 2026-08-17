@@ -49,6 +49,7 @@ import {
 } from "@/lib/quotes/billing";
 import { slabPricing, nextSlabUpsell } from "@/lib/quotes/volume-tiers";
 import { SolutionPackagePicker } from "@/components/features/quotes/solution-package-picker";
+import { SupportPlanPicker } from "@/components/features/quotes/support-plan-picker";
 
 // Quote IDs are allocated at SAVE time via the central document-numbering RPC
 // (see migration 0004_document_series.sql) — this guarantees sequential per-tenant
@@ -1975,6 +1976,13 @@ export function QuoteBuilder() {
           )}
         </div>
       )}
+
+      {/* Support plan — sold with the licences, on its own monthly/yearly price.
+          Inline rather than behind the Add-item modal because the yearly saving is
+          only persuasive when it is on screen while the quote is being built. */}
+      <Card className="mt-4">
+        <SupportPlanPicker items={catalog} onAdd={addLine} />
+      </Card>
 
       {/* Add item modal */}
       <AddLineItemDialog open={addOpen} onOpenChange={setAddOpen} onAdd={addLine} currency={currency} exchangeRate={exchangeRate} pricingBasis={usdPricingBasis} />

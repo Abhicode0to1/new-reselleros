@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  SUPPORT_TIERS, supportTier, supportSkuId, annualSaving, supportPrice,
+  SUPPORT_TIERS, supportTier, supportSkuId, findSupportSku, annualSaving, supportPrice,
   slaDueAt, slaState, tierFromPlanName, canRequestLiveCall, liveCallAllowance,
   type SupportTierId,
 } from "./tiers";
@@ -83,6 +83,30 @@ describe("SKU ids", () => {
   it("never collide across tiers or cycles", () => {
     const ids = SUPPORT_TIERS.flatMap((t) => [supportSkuId(t.id, "monthly"), supportSkuId(t.id, "yearly")]);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("findSupportSku", () => {
+  const catalogue = [
+    { id: "SUP-STANDARD-MO-fbb976f1", name: "Support Standard (Monthly)" },
+    { id: "SUP-STANDARD-YR-fbb976f1", name: "Support Standard (Yearly)" },
+    { id: "GW-STR-fbb976f1",          name: "Google Workspace Business Starter" },
+  ];
+
+  it("matches the tenant-suffixed id", () => {
+    expect(findSupportSku(catalogue, "standard", "yearly")!.id).toBe("SUP-STANDARD-YR-fbb976f1");
+    expect(findSupportSku(catalogue, "standard", "monthly")!.id).toBe("SUP-STANDARD-MO-fbb976f1");
+  });
+
+  it("does not confuse monthly with yearly", () => {
+    /* The prefixes differ only in the last two characters before the tenant id. A
+       sloppy `includes` would return whichever came first and quote the wrong price. */
+    expect(findSupportSku(catalogue, "standard", "yearly")!.id).not.toContain("-MO-");
+  });
+
+  it("returns null when the tier is not in this tenant's catalogue", () => {
+    /* The caller says "not in your catalogue" — never falls back to a ₹0 plan. */
+    expect(findSupportSku(catalogue, "enterprise", "monthly")).toBeNull();
   });
 });
 
