@@ -125,10 +125,17 @@ const LEAD_STAGES: { id: Lead["stage"]; label: string; dot: string }[] = [
  * list can contain. A card with nowhere to go does not error, it silently disappears
  * — and a disappeared deal is indistinguishable from no deal.
  *
- * `won` stays as the finish line. Won leads are filtered out of the working list, so
- * the column is normally empty — but it has to exist as a DROP TARGET, because
- * dragging a card there is how a rep marks a deal won. `lost` is not a column: it
- * needs a reason, which the outcome dialog collects.
+ * `won` is the finish line, and it HOLDS CARDS. It used to be an always-empty drop
+ * target, because the board rendered `filtered` — the open-only list — so the column
+ * showed "No deals in won" directly beneath a chip reading 🏆 Won 2. Same failure as
+ * the four empty columns above, one column further along.
+ *
+ * The board now renders `boardLeads`: every non-junk, non-lost lead. A rep who drags a
+ * deal to Won sees it land there, which is the only proof the gesture worked. Dragging
+ * one back OUT is refused — money is recorded against a won deal, and
+ * lib/leads/stage-options.ts locks the same edit in the list.
+ *
+ * `lost` is not a column: it needs a reason, which the outcome dialog collects.
  */
 const DEAL_STAGES = (["new", "contact", "quote", "demo", "trial", "won"] as const).map(
   (id) => LEAD_STAGES.find((s) => s.id === id)!,
@@ -526,6 +533,25 @@ function LeadsPageInner() {
     ? openLeads
     : searched.filter((l) => inSalesFolder(l, folder, folderToday));
 
+  /* ── THE BOARD MUST CONTAIN ITS OWN LAST COLUMN ─────────────────────────────
+     `filtered` is open-only when no folder is picked, and the board's stages end at
+     `won` — so the Won column read 0 cards and "No deals in won" three inches below a
+     chip saying 🏆 Won 2. Two numbers about the same two deals, disagreeing on screen.
+
+     Worse than the wrong count: Won is the board's DROP TARGET. Dragging a deal into an
+     empty column that never shows a result reads as "the drag did not work", and the rep
+     stops using the one gesture the board exists for.
+
+     So the board's base is every non-junk, non-lost lead. Lost is deliberately absent —
+     it is not a column here, and losing a deal goes through the reason prompt, not a
+     drag. Picking a folder hands control back to `filtered`, unchanged. */
+  const boardLeads = React.useMemo(
+    () => (folder === "all" && smartView !== "junk"
+      ? searched.filter((l) => isOpenLead(l) || l.stage === "won")
+      : filtered),
+    [folder, smartView, searched, filtered],
+  );
+
   /* ── ONE SELECTION AT A TIME ────────────────────────────────────────────────
      The chip row drove THREE independent pieces of state — `folder`, `smartView` and
      `salesTab` — and no chip cleared the others. Picking Hot Deals and then Junk left
@@ -628,7 +654,24 @@ function LeadsPageInner() {
   // Drag handlers
   const handleDrop = async (toStage: Lead["stage"]) => {
     if (dragId) {
-      const lead = filtered.find((l) => l.id === dragId);
+      const lead = boardLeads.find((l) => l.id === dragId);
+      /* A won deal cannot be dragged back out.
+         The inline stage dropdown already refuses this (lib/leads/stage-options.ts) because
+         un-winning means money already recorded — a payment, an invoice, a subscription.
+         Leaving the board as a second, unguarded route to the same write would make the
+         lock decorative: the rep would simply drag instead.
+         §24 — say what happened, why, and what to do instead, never a bare "not allowed". */
+      if (lead && lead.stage === "won" && toStage !== "won") {
+        toast.error(`${lead.company} is already won`, {
+          description:
+            "Money is recorded against it — a payment, an invoice and a subscription. " +
+            "Reopening it here would leave those behind. Raise a credit note on the invoice instead.",
+          action: { label: "Open invoices", onClick: () => router.push("/invoices") },
+        });
+        setDragId(null);
+        setOverStage(null);
+        return;
+      }
       if (lead && lead.stage !== toStage) {
         // Dropping onto Lost opens the reason prompt first; if it's dismissed
         // changeStage returns false and the card stays where it was.
@@ -1356,7 +1399,7 @@ function LeadsPageInner() {
           {/* Auto-fit Kanban grid stretching 100% of remaining viewport height */}
           <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-flow-col lg:auto-cols-[minmax(220px,1fr)] lg:grid-rows-1 gap-3 overflow-x-auto overflow-y-hidden pb-1">
             {DEAL_STAGES.map((stage) => {
-              const stageLeads = filtered.filter((l) => l.stage === stage.id);
+              const stageLeads = boardLeads.filter((l) => l.stage === stage.id);
               const stageValue = stageLeads.reduce((s, l) => s + (l.value ?? 0), 0);
               const isOver = overStage === stage.id;
 
@@ -1429,7 +1472,11 @@ function LeadsPageInner() {
             <span className="flex items-center gap-1">
               <Icon name="info" size={12} /> Drag cards across columns to update pipeline stage instantly
             </span>
-            <span className="font-mono">{filtered.length} total deal{filtered.length === 1 ? "" : "s"} visible</span>
+            {/* `boardLeads`, not `filtered`. This footer counted the LIST's set while the
+                columns render the BOARD's, and the moment the Won column started holding
+                cards the two disagreed on the same screen — 11 cards above "9 visible".
+                "Visible" must mean what is visible. */}
+            <span className="font-mono">{boardLeads.length} total deal{boardLeads.length === 1 ? "" : "s"} visible</span>
           </div>
         </div>
       )}
