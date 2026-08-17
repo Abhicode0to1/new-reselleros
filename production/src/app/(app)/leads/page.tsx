@@ -29,6 +29,7 @@ import { LossReasonsCard } from "@/components/features/leads/loss-reasons-card";
 import { parseRupeeInput, parsePriority, parseFollowUpDate, PRIORITIES, type Priority } from "@/lib/leads/inline-edit";
 import { looksLikeJunk } from "@/lib/leads/junk";
 import { MarkJunkDialog } from "@/components/features/leads/mark-junk-dialog";
+import { qualification } from "@/lib/leads/qualification";
 import { useLeadActivities, useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { LeadsBulkBar } from "@/components/features/leads/leads-bulk-bar";
 import { useQuotesByLead } from "@/lib/queries/quotes";
@@ -672,6 +673,30 @@ function LeadsPageInner() {
               "Qualified Deals 1" did above a list of 9. Empty folders stay visible,
               greyed: their absence would read as a missing feature, and "0 overdue"
               is worth knowing. */}
+          {/* Junk sits FIRST so the row reads the funnel in order: Junk → Inbox →
+              Hot → Quote Sent. It is a smart view rather than a folder because junk
+              is the one bucket deliberately excluded from every working list — the
+              folders filter WITHIN the open pipeline, and junk is outside it. */}
+          <button
+            type="button"
+            onClick={() => { setSmartView("junk"); setFolder("all"); }}
+            title="Binned as spam, fake or non-commercial — kept, never deleted"
+            className={cn(
+              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
+              smartView === "junk"
+                ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
+                : junkCount === 0
+                ? "text-ink-3 hover:text-ink-2 hover:bg-paper/50"
+                : "text-ink-2 hover:text-ink hover:bg-paper/50"
+            )}
+          >
+            <span aria-hidden>🚫</span>
+            <span>Junk</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
+              {junkCount}
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={() => { setFolder("all"); setSmartView("all"); }}
@@ -2456,6 +2481,43 @@ function LeadDetailSheet({
                     </button>
                   ))}
                 </div>
+                {isPreQuote && (() => {
+                  /* ── The three gates out of the raw inbox ──────────────────
+                     Placed HERE, immediately above the button that sends the
+                     quote, because that is the moment the answer matters. On a
+                     tab of its own it would be a report; here it is the thing
+                     the rep reads before deciding whether to spend an hour on
+                     a proposal.
+
+                     Derived from the row (lib/leads/qualification.ts, 19 tests),
+                     never ticked — a checkbox that disagreed with the data under
+                     it would be the one the rep believed. Nothing is BLOCKED: a
+                     rep who knows better than the data can still send. Refusing
+                     would just teach them to fake a phone number to get past it. */
+                  const q = qualification(lead);
+                  return (
+                    <div className={cn(
+                      "mt-3 rounded-md border px-3 py-2",
+                      q.qualified ? "border-emerald/40 bg-emerald-soft" : "border-hairline bg-paper-2/60",
+                    )}>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+                        Ready to quote · {q.passedCount} of 3
+                      </p>
+                      <ul className="mt-1 space-y-0.5">
+                        {q.checks.map((c) => (
+                          <li key={c.id} className="flex items-start gap-1.5 text-[11px] leading-snug">
+                            <span aria-hidden className={c.passed ? "text-emerald" : "text-ink-3"}>
+                              {c.passed ? "✓" : "○"}
+                            </span>
+                            <span className={c.passed ? "text-ink-2" : "text-ink-3"}>
+                              {c.passed ? c.label : c.missing}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
                 {isPreQuote && (
                   // Quote-first funnel: the only way forward from a pre-quote
                   // lead is to send a quote — that moves it into Deals and
