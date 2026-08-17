@@ -18,6 +18,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
+import { localDateISO } from "@/lib/leads/outcomes";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -339,6 +340,70 @@ export function useUnmatchedBankDebits() {
           txn_date: r.txn_date as string,
           description: (r.description ?? null) as string | null,
           debit: (r.debit ?? 0) as number,
+        };
+      });
+    },
+    staleTime: 15_000,
+  });
+}
+
+/** An unmatched CREDIT line — money that arrived and nothing in the books explains. */
+export type UnmatchedCredit = {
+  id: string;
+  bank_account_id: string;
+  account_name: string;
+  txn_date: string;
+  description: string | null;
+  credit: number;
+  /** Whole days since it landed. Drives "sitting unexplained for over a week". */
+  days_old: number;
+};
+
+/**
+ * All unreconciled money-IN (credit) lines across the tenant's accounts.
+ *
+ * ─── THE MIRROR OF useUnmatchedBankDebits, AND THE MORE URGENT HALF ─────────
+ * A debit nobody matched is an expense not yet filed — untidy. A CREDIT nobody matched
+ * is money in the bank that the books cannot account for, which is a different problem:
+ * the cash balance is correct and the ledger is wrong, so every report built on the
+ * ledger understates revenue while the bank statement says otherwise.
+ *
+ * It is also the ordinary case for an Indian reseller, not an edge case. Customers pay
+ * by UPI and NEFT straight into the account — increasingly because we now put a UPI link
+ * in the reminder — so the deposit routinely arrives BEFORE anybody records a payment.
+ *
+ * RLS scopes to the tenant. Newest first, matching the debit hook.
+ */
+export function useUnmatchedBankCredits() {
+  return useQuery({
+    queryKey: ["bank_transactions", "unmatched-credits"],
+    queryFn: async (): Promise<UnmatchedCredit[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("bank_transactions")
+        .select("id, bank_account_id, txn_date, description, credit, bank_accounts(name)")
+        .is("matched_to_id", null)
+        .gt("credit", 0)
+        .order("txn_date", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      /* Age computed once, here, against IST midnight — the same boundary every other
+         date rule in this codebase uses (localDateISO). Letting each caller subtract
+         Date.now() would give a different answer either side of midnight. */
+      const todayMs = Date.parse(`${localDateISO(new Date())}T00:00:00+05:30`);
+      return (data ?? []).map((r) => {
+        const acc = (r as { bank_accounts?: { name?: string } | { name?: string }[] }).bank_accounts;
+        const name = Array.isArray(acc) ? acc[0]?.name : acc?.name;
+        const txnDate = r.txn_date as string;
+        const txnMs = Date.parse(`${txnDate.slice(0, 10)}T00:00:00+05:30`);
+        return {
+          id: r.id as string,
+          bank_account_id: r.bank_account_id as string,
+          account_name: name ?? "Account",
+          txn_date: txnDate,
+          description: (r.description ?? null) as string | null,
+          credit: (r.credit ?? 0) as number,
+          days_old: Math.max(0, Math.round((todayMs - txnMs) / 86_400_000)),
         };
       });
     },

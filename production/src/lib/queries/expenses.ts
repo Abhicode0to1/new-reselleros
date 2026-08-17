@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { Database, ExpenseRow } from "@/lib/supabase/database.types";
+import { localDateISO } from "@/lib/leads/outcomes";
 
 type ExpenseInsert = Database["public"]["Tables"]["expenses"]["Insert"];
 type ExpenseUpdate = Database["public"]["Tables"]["expenses"]["Update"];
@@ -403,6 +404,59 @@ export function useOutstandingPayable() {
       for (const s of sal.data ?? [])  { const rem = (s.net ?? 0) - (s.paid_amount ?? 0); if (rem > 0) { amount += rem; count++; } }
       for (const r of stat.data ?? []) { amount += r.amount ?? 0; count++; }
       return { count, amount };
+    },
+    staleTime: 15_000,
+  });
+}
+
+/**
+ * Unpaid bills WITH their due dates — so "is anything actually late?" can be answered.
+ *
+ * ─── WHY NOT JUST REUSE useOutstandingPayable ───────────────────────────────
+ * That hook returns `{ count, amount }` and nothing else, which is right for a KPI tile
+ * and useless for urgency. Feeding the money inbox an aggregate would have meant passing
+ * `daysOverdue: 0` for every bill — and a folder that reports "not urgent" because it was
+ * handed a zero, rather than because nothing is late, is the failure this codebase keeps
+ * producing: an unknown converted into a confident answer.
+ *
+ * Salary and statutory payables are deliberately NOT included. They are in the KPI's
+ * total because they are money owed, but they are not "vendor bills due" — a salary run
+ * has its own screen, its own approvals, and putting it in a folder headed with Google
+ * and Microsoft would bury it.
+ *
+ * A bill with no due date is returned with `daysOverdue: null`, never 0. Nobody agreed a
+ * deadline, so it cannot be late — the same rule dunning.ts applies to invoices.
+ */
+export function useUnpaidBillsDue() {
+  return useQuery({
+    queryKey: ["expenses", "unpaid-with-dates"],
+    queryFn: async (): Promise<{
+      id: string; vendor: string | null; amount: number;
+      due_date: string | null; daysOverdue: number | null;
+    }[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("id, vendor_name, amount, due_date, expense_date")
+        .eq("paid", false)
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .limit(500);
+      if (error) throw error;
+
+      const today = localDateISO(new Date());
+      const todayMs = Date.parse(`${today}T00:00:00+05:30`);
+      return (data ?? []).map((r) => {
+        const due = (r.due_date ?? null) as string | null;
+        return {
+          id: r.id as string,
+          vendor: (r.vendor_name ?? null) as string | null,
+          amount: (r.amount ?? 0) as number,
+          due_date: due,
+          daysOverdue: due
+            ? Math.round((todayMs - Date.parse(`${due.slice(0, 10)}T00:00:00+05:30`)) / 86_400_000)
+            : null,
+        };
+      });
     },
     staleTime: 15_000,
   });

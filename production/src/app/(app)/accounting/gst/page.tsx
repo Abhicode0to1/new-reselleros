@@ -24,7 +24,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/components/ui/icon";
-import { rupee, formatDate } from "@/lib/utils";
+import { rupee, formatDate, GST_STATE_BY_CODE } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Term } from "@/components/shared/term";
 
@@ -285,18 +285,27 @@ const B2CL_THRESHOLD = 250000;                         // inter-state B2C "large
 const DEFAULT_HSN = "998313";                          // Online/SaaS services (adjust if you sell other HSN)
 const DEFAULT_HSN_DESC = "Information technology software services";
 
-// GST state codes → names (place of supply must be "code-Name" e.g. 27-Maharashtra).
-const GST_STATE_NAMES: Record<string, string> = {
-  "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
-  "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
-  "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
-  "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
-  "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
-  "25": "Daman and Diu", "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra",
-  "29": "Karnataka", "30": "Goa", "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu",
-  "34": "Puducherry", "35": "Andaman and Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh",
-  "38": "Ladakh", "97": "Other Territory",
-};
+/**
+ * GST state codes → names. Place of Supply must be "code-Name", e.g. `27-Maharashtra`.
+ *
+ * ─── THIS WAS A SECOND COPY, AND THE TWO HAD ALREADY DRIFTED ────────────────
+ * A 38-entry literal lived here while `GST_STATE_BY_CODE` in lib/utils.ts held the
+ * canonical 38. Same count, different membership — diffed on 17 Aug 2026:
+ *
+ *   25  this copy said "Daman and Diu"; canonical had dropped it, correctly. Code 25 was
+ *       merged into 26 in Jan 2020, so a POS of "25-Daman and Diu" is a state the portal
+ *       no longer recognises.
+ *   99  canonical has "Centre Jurisdiction"; this copy had NOTHING. A customer under
+ *       central jurisdiction therefore produced `GST_STATE_NAMES["99"] → undefined`, and
+ *       posFor() emitted **"99-"** — a malformed Place of Supply, in a CSV going to the
+ *       GST portal, in a filed return.
+ *
+ * Neither drift was introduced by a careless edit; they are what two copies of a
+ * regulatory table do over time. Importing the canonical one is the fix, and it is the
+ * same lesson as dunningRank(): the ordering (or the table) lives once, in the module
+ * that owns it.
+ */
+const GST_STATE_NAMES = GST_STATE_BY_CODE;
 
 // GST Offline Tool date format: DD-MMM-YYYY.
 function gstDate(isoStr: string): string {
