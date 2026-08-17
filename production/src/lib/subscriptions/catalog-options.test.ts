@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  subscriptionProducts, catalogVendors, productsForVendor, findProduct, judgePrice,
+  subscriptionProducts, catalogVendors, vendorSelectOptions, productsForVendor,
+  findProduct, judgePrice,
 } from "./catalog-options";
 import type { Item } from "@/lib/supabase/database.types";
 
@@ -121,6 +122,39 @@ describe("catalogVendors — the four-vendor list hid three", () => {
 
   it("is empty for an empty catalog — the dialog handles that, it does not invent one", () => {
     expect(catalogVendors(subscriptionProducts([]))).toEqual([]);
+  });
+});
+
+describe("vendorSelectOptions — the dropdown a reseller actually sees", () => {
+  it("never lists the same vendor twice", () => {
+    /* The bug this exists for, reported from the live app: the dialog built this
+       list in two places — a fallback substituting ["other"] on an empty catalogue,
+       and a guard appending "other" when the catalogue lacked it. On an empty
+       catalogue both fired and the dropdown showed "Other Cloud Vendor" TWICE. */
+    for (const set of [[], products, subscriptionProducts([CATALOG[0]])]) {
+      const opts = vendorSelectOptions(set);
+      expect(new Set(opts).size).toBe(opts.length);
+    }
+  });
+
+  it("offers `other` even when the catalogue is empty", () => {
+    /* A tenant who has not added any products still has to be able to onboard a
+       subscription under a custom plan name. */
+    expect(vendorSelectOptions([])).toEqual(["other"]);
+  });
+
+  it("does not add a second `other` when the catalogue already sells one", () => {
+    const withOther = subscriptionProducts([
+      ...CATALOG, item("OTH-1", "Some resold thing", "other", 500, 400, false),
+    ]);
+    const opts = vendorSelectOptions(withOther);
+    expect(opts.filter((v) => v === "other")).toHaveLength(1);
+  });
+
+  it("keeps every vendor the tenant sells, with `other` last", () => {
+    const opts = vendorSelectOptions(products);
+    for (const v of catalogVendors(products)) expect(opts).toContain(v);
+    expect(opts[opts.length - 1]).toBe("other");
   });
 });
 

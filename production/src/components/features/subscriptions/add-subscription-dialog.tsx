@@ -22,7 +22,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useItems } from "@/lib/queries/items";
 import {
-  subscriptionProducts, catalogVendors, productsForVendor, findProduct, judgePrice,
+  subscriptionProducts, vendorSelectOptions, productsForVendor, findProduct, judgePrice,
   type CatalogProduct,
 } from "@/lib/subscriptions/catalog-options";
 import type { Item } from "@/lib/supabase/database.types";
@@ -113,7 +113,10 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
      ₹/seat/month to the ₹/seat/year this dialog charges in — once, in one place. */
   const { data: items, isLoading: catalogLoading } = useItems();
   const products   = React.useMemo(() => subscriptionProducts(items ?? []), [items]);
-  const vendors    = React.useMemo(() => catalogVendors(products), [products]);
+  /* Built in one place (catalog-options.ts) because it used to be built in two:
+     a fallback for an empty catalogue AND a guard that appended `other`. On an empty
+     catalogue both fired and this dropdown showed "Other Cloud Vendor" twice. */
+  const vendorOptions = React.useMemo(() => vendorSelectOptions(products), [products]);
   const forVendor  = React.useMemo(() => productsForVendor(products, vendor), [products, vendor]);
   const selected   = itemId ? findProduct(products, itemId) : undefined;
 
@@ -447,12 +450,9 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                     subscription products. `other` is always offered as the home for
                     a custom plan. */}
                 <SelectContent>
-                  {(vendors.length ? vendors : (["other"] as Item["vendor"][])).map((v) => (
+                  {vendorOptions.map((v) => (
                     <SelectItem key={v} value={v}>{VENDOR_LABEL[v] ?? v}</SelectItem>
                   ))}
-                  {!vendors.includes("other") && (
-                    <SelectItem value="other">{VENDOR_LABEL.other}</SelectItem>
-                  )}
                 </SelectContent>
               </Select>
             </FormField>

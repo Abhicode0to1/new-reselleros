@@ -98,6 +98,26 @@ export function catalogVendors(products: readonly CatalogProduct[]): Item["vendo
   return seen;
 }
 
+/**
+ * The vendor dropdown's options: what the tenant sells, plus `other`.
+ *
+ * `other` is always offered because it is the home for a custom plan — a tenant with
+ * an empty catalogue still has to be able to add a subscription.
+ *
+ * ─── WHY THIS IS A FUNCTION AND NOT TWO LINES OF JSX ────────────────────────
+ * It was two lines of JSX: a fallback that substituted `["other"]` when the catalogue
+ * came back empty, and a separate guard that appended `other` whenever the catalogue
+ * did not already list it. Either alone is correct. Together, on an empty catalogue,
+ * BOTH fire and the dropdown shows "Other Cloud Vendor" twice — which is what a
+ * reseller reported from the live app.
+ *
+ * Two half-rules that have to agree are one rule written twice. This is that rule.
+ */
+export function vendorSelectOptions(products: readonly CatalogProduct[]): Item["vendor"][] {
+  const vendors = catalogVendors(products);
+  return vendors.includes("other") ? vendors : [...vendors, "other" as Item["vendor"]];
+}
+
 export function productsForVendor(
   products: readonly CatalogProduct[], vendor: Item["vendor"],
 ): CatalogProduct[] {
