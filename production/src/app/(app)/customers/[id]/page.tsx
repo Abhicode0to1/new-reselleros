@@ -17,6 +17,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCustomer, useDeleteCustomer, useSetCustomerActive, useCustomerOpenCredit, customerDeleteBlockReason } from "@/lib/queries/customers";
 import { useCustomerGroups } from "@/lib/queries/customer-groups";
 import { useCustomerSubscriptions } from "@/lib/queries/subscriptions";
+import { EntitlementCard } from "@/components/features/support/entitlement-card";
 import { useCustomerInvoices, useCustomerQuotes } from "@/lib/queries/invoices";
 import { usePayments, useDeletePayment } from "@/lib/queries/payments";
 import { useCustomerProjects, useCustomerProjectPayments } from "@/lib/queries/projects";
@@ -395,6 +396,11 @@ export default function CustomerDetailPage() {
 
         {/* RIGHT — subscriptions + activity */}
         <div className="space-y-4 min-w-0">
+          {/* Which of their licences the support plan actually covers. Above the
+              subscription list because "do they have support for this?" is the
+              question a rep opens this page with. */}
+          <EntitlementCard customerId={params.id} customerName={c.name} />
+
           <Card
             title="Subscriptions & projects"
             sub={svcView === "subscription"

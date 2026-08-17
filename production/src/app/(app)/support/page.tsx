@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/utils";
 import { supportTier, slaState, type SupportTierId } from "@/lib/support/tiers";
+import { EntitlementCard } from "@/components/features/support/entitlement-card";
 
 /**
  * What plan bought this ticket, and how the clock is doing.
@@ -513,6 +514,18 @@ export default function SupportPage() {
                 </div>
               );
             })()}
+
+            {/* What their support plan covers, and whether it covers THIS.
+                Same component as the customer profile — two implementations of "are
+                they covered?" would eventually disagree, and the disagreement would
+                surface as a rep promising something the profile denies. */}
+            <div className="pt-2">
+              <EntitlementCard
+                customerId={selected.customer_id}
+                customerName={selected.customer_name}
+                ticketText={`${selected.subject ?? ""}\n${selected.body ?? ""}`}
+              />
+            </div>
 
             {/* Resolution Note Input */}
             <div className="space-y-1.5 pt-2 border-t border-hairline">
