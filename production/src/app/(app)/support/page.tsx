@@ -118,6 +118,47 @@ export default function SupportPage() {
   const [scope, setScope] = React.useState<ViewScope>("tenant_feedback");
   const [statusFilter, setStatusFilter] = React.useState<"all" | SupportTicketStatus>("all");
   const [selected, setSelected] = React.useState<SupportTicketRow | null>(null);
+
+  /* ── Request a live 1-on-1 call ────────────────────────────────────────────
+     The plan check lives in /api/support/call-request, not here. This only asks
+     and shows the answer — including the refusal, which arrives with what
+     upgrading would buy (§24). */
+  const [callPending, setCallPending] = React.useState(false);
+  const requestLiveCall = async (ticket: SupportTicketRow) => {
+    if (!ticket.customer_id) {
+      toast.error("This ticket is not linked to a customer.", {
+        description: "A live call is booked against a customer's plan, so link it first.",
+      });
+      return;
+    }
+    setCallPending(true);
+    try {
+      const res = await fetch("/api/support/call-request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ customer_id: ticket.customer_id, ticket_id: ticket.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error ?? "Could not request a call", {
+          description: json.nextStep, duration: 10_000,
+        });
+        return;
+      }
+      /* Says plainly that the link is not automatic yet rather than implying one is
+         on its way in seconds — a Meet room can only be issued by Google. */
+      toast.success(json.message, {
+        description: json.remaining == null
+          ? "Unlimited calls on this plan."
+          : `${json.remaining} left this month.`,
+        duration: 10_000,
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setCallPending(false);
+    }
+  };
   const [previewImage, setPreviewImage] = React.useState<{ name: string; url: string } | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
 
@@ -376,6 +417,7 @@ export default function SupportPage() {
                   <Badge kind={selected.status === "open" ? "danger" : selected.status === "resolved" ? "success" : "warning"}>
                     {STATUS_LABEL[selected.status as SupportTicketStatus] ?? selected.status}
                   </Badge>
+                  <SlaBadge tier={selected.tier} dueAt={selected.sla_due_at} respondedAt={selected.first_responded_at} />
                   {selected.priority && (
                     <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded ${
                       selected.priority === "urgent" || selected.priority === "high" ? "bg-rose-soft text-rose" : "bg-amber-soft text-amber-ink"
@@ -508,6 +550,19 @@ export default function SupportPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Live call. Shown for every ticket — whether the plan allows it is
+                    the SERVER's answer, not this button's. A disabled button is a
+                    hint; the route is the rule, and it is where the tier and this
+                    month's allowance are checked. Refusals come back with what
+                    upgrading buys. */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  loading={callPending}
+                  onClick={() => requestLiveCall(selected)}
+                >
+                  📹 Request live call
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"
