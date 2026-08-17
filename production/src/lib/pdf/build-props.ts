@@ -84,7 +84,13 @@ export function buildInvoicePdfProps(args: {
 
   return {
     invoice,
-    lineItems:   quote?.line_items ?? [],
+    /* A quote-less invoice carries its OWN lines (migration 20260817110000).
+       Subscription instalments cannot link to their quote — build-props prefers the
+       quote for every amount above, so a ₹2,360 instalment linked to its ₹28,320
+       quote would print ₹28,320 — and an invoice with no description, HSN or
+       quantity does not satisfy CGST Rule 46. This also fills in the project
+       milestone invoices that used to print "No line items recorded". */
+    lineItems:   quote?.line_items ?? invoice.line_items ?? [],
     subtotal,
     discountPct: a.discountPct,
     discount:    a.discount,

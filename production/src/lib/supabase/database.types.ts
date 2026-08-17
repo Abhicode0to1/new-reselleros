@@ -1378,6 +1378,49 @@ type PaymentMandateInsert = {
   updated_at?: string;
 };
 
+/**
+ * One instalment of a subscription term (migration 20260817110000).
+ *
+ * `invoice_id` null means "due, not yet raised" — that IS the state machine. The
+ * unique key (subscription_id, term_start, period_index) is what stops the daily
+ * billing cron invoicing the same period twice.
+ */
+type SubscriptionBillingRow = {
+  id: string;
+  tenant_id: string;
+  subscription_id: string;
+  /** First day of the term these instalments belong to. In the unique key because
+   *  period_index restarts at 1 every term. */
+  term_start: string;
+  /** 1-based position within the term, matching BillingPeriod.index. */
+  period_index: number;
+  bill_on: string;
+  period_start: string;
+  period_end: string;
+  /** ₹ EX-GST. The gross is derived once, when the invoice is raised. */
+  taxable_amount: number;
+  tax_rate: number;
+  /** Null until raised. */
+  invoice_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type SubscriptionBillingInsert = {
+  id?: string;
+  tenant_id: string;
+  subscription_id: string;
+  term_start: string;
+  period_index: number;
+  bill_on: string;
+  period_start: string;
+  period_end: string;
+  taxable_amount: number;
+  tax_rate?: number;
+  invoice_id?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 type MrrSnapshotInsert = {
   id?: string;
   tenant_id: string;
@@ -1475,6 +1518,11 @@ type InvoiceRow = {
   tax_amount:        number | null;
   tax_rate:          number | null;
   inter_state:       boolean | null;       // true → IGST, false → CGST + SGST
+  /** Lines for an invoice with NO backing quote — subscription instalments, project
+   *  milestones (migration 20260817110000). When quote_id is set the quote's lines
+   *  are authoritative and this stays null; lib/pdf/build-props.ts prefers the quote
+   *  for everything it prints, which is why an instalment invoice carries no quote. */
+  line_items:        QuoteLineItem[] | null;
 }
 type InvoiceInsert = {
   id: string;
@@ -1498,6 +1546,7 @@ type InvoiceInsert = {
   tax_amount?:       number | null;
   tax_rate?:         number | null;
   inter_state?:      boolean | null;
+  line_items?:       QuoteLineItem[] | null;
 }
 type InvoiceUpdate = Partial<InvoiceInsert>;
 
@@ -3498,6 +3547,7 @@ export type Database = {
       mrr_snapshots: { Row: MrrSnapshotRow; Insert: MrrSnapshotInsert; Update: Partial<MrrSnapshotInsert>; Relationships: [] };
       contract_amendments: { Row: ContractAmendmentRow; Insert: never; Update: never; Relationships: [] };
       payment_mandates: { Row: PaymentMandateRow; Insert: PaymentMandateInsert; Update: Partial<PaymentMandateInsert>; Relationships: [] };
+      subscription_billings: { Row: SubscriptionBillingRow; Insert: SubscriptionBillingInsert; Update: Partial<SubscriptionBillingInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
       payments:           { Row: PaymentRow;           Insert: PaymentInsert;           Update: PaymentUpdate;           Relationships: [] };
@@ -3866,6 +3916,24 @@ export type Database = {
           invoice_id:      string;
           net_payable:     number;
           total_advances:  number;
+        }[];
+      };
+      /**
+       * Raises the tax invoice for ONE subscription instalment
+       * (migration 20260817110100).
+       *
+       * Idempotent by design: an instalment already billed comes back with
+       * `already_raised: true` and its existing invoice, rather than erroring. The
+       * daily billing cron retries, and code that has to swallow an error around
+       * invoice creation eventually swallows a real one.
+       */
+      raise_subscription_billing: {
+        Args: { p_billing_id: string };
+        Returns: {
+          invoice_id:     string;
+          /** ₹ including GST. */
+          gross:          number;
+          already_raised: boolean;
         }[];
       };
       /**
@@ -4516,6 +4584,8 @@ export type MrrSnapshot = MrrSnapshotRow;
 export type ContractAmendment = ContractAmendmentRow;
 export type PaymentMandate = PaymentMandateRow;
 export type PaymentMandateInsertT = PaymentMandateInsert;
+export type SubscriptionBilling = SubscriptionBillingRow;
+export type SubscriptionBillingInsertT = SubscriptionBillingInsert;
 export type Invoice      = InvoiceRow;
 export type Subscription = SubscriptionRow;
 export type Payment      = PaymentRow;
