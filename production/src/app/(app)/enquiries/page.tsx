@@ -42,6 +42,10 @@ import {
 import {
   parseSearch, matchesSearch, isEmptySearch, SUPPORTED_OPERATORS,
 } from "@/lib/inbound/search";
+import { groupIntoThreads, threadFor } from "@/lib/inbound/threads";
+import { extractEntities, foundCount, type ExtractedEntities } from "@/lib/inbound/extract";
+import { useItems } from "@/lib/queries/items";
+import { dialable } from "@/lib/leads/call-queue";
 import type { InboundEmailRow } from "@/lib/supabase/database.types";
 
 /* ── Small presentational helpers ──────────────────────────────────────────── */
@@ -72,6 +76,55 @@ function snippet(e: InboundEmailRow): string {
        place to find that out. */
     || (e.body_html ? e.body_html.replace(/<[^>]+>/g, " ") : "");
   return text.replace(/\s+/g, " ").slice(0, 140);
+}
+
+/**
+ * One extracted field.
+ *
+ * A missing value says "not found" rather than showing a blank — a blank row reads
+ * as a rendering bug, and the rep cannot tell it apart from a value that failed to
+ * load. The `source` under it is the text it was read from, so the rep who signs the
+ * quote can check it.
+ */
+function Detail({ label, e }: { label: string; e: { value: string | number | null; source: string | null } }) {
+  return (
+    <div>
+      <dt className="text-[10px] uppercase tracking-wider text-ink-3">{label}</dt>
+      {e.value == null ? (
+        <dd className="text-[12px] italic text-ink-3">not found</dd>
+      ) : (
+        <>
+          <dd className="break-words text-[13px] font-medium text-ink">{e.value}</dd>
+          {e.source && (
+            <dd className="mt-0.5 break-words text-[10px] leading-snug text-ink-3">
+              from “{e.source.length > 60 ? `${e.source.slice(0, 60)}…` : e.source}”
+            </dd>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Prefill link into the quote builder, from what the extractor actually FOUND.
+ *
+ * A field it could not find is left OUT of the URL rather than sent empty. The
+ * builder already reads company/plan/seats/contact/email/phone (quote-builder.tsx:97),
+ * and an empty `seats=` would land in the form as a value someone has to notice and
+ * clear — a guessed seat count becomes a price on a signed quote.
+ */
+function quoteHref(e: InboundEmailRow, ent: ExtractedEntities | null): string {
+  const p = new URLSearchParams();
+  const company = ent?.name.value ?? e.from_name ?? null;
+  if (company)              p.set("company", company);
+  if (ent?.product.value)   p.set("plan", ent.product.value.name);
+  if (ent?.seats.value)     p.set("seats", String(ent.seats.value));
+  if (ent?.name.value)      p.set("contact", ent.name.value);
+  if (ent?.email.value ?? e.from_email) p.set("email", (ent?.email.value ?? e.from_email)!);
+  if (ent?.phone.value)     p.set("phone", ent.phone.value);
+  const qs = p.toString();
+  return qs ? `/quotes/new?${qs}` : "/quotes/new";
 }
 
 /* ── Page ──────────────────────────────────────────────────────────────────── */
@@ -108,24 +161,65 @@ export default function EnquiriesPage() {
     return isEmptySearch(parsed) ? inThisFolder : inThisFolder.filter((r) => matchesSearch(r, parsed));
   }, [all, folder, nowISO, parsed]);
 
-  const selected = React.useMemo(
-    () => visible.find((r) => r.id === selectedId) ?? null,
-    [visible, selectedId],
+  /* One row per CONVERSATION. The grouping is a heuristic — inbound_emails has no
+     In-Reply-To or References header — and the reading pane says so. */
+  const threads = React.useMemo(() => groupIntoThreads(visible), [visible]);
+
+  const selectedThread = React.useMemo(
+    () => (selectedId ? threadFor(threads, selectedId) : null),
+    [threads, selectedId],
+  );
+  const selected = selectedThread?.latest ?? null;
+
+  /* The tenant's own catalogue, so the extractor matches real SKUs instead of
+     guessing a plan name out of the prose. */
+  const { data: items } = useItems();
+  const catalogue = React.useMemo(
+    () => (items ?? []).map((i) => ({ id: i.id, name: i.name })),
+    [items],
   );
 
-  /* Opening an email marks it read. Deliberately an effect on the SELECTED row
-     rather than part of the click handler, so it also fires when a row is reached
-     by keyboard or by the selection surviving a folder change. */
+  const entities: ExtractedEntities | null = React.useMemo(() => {
+    if (!selectedThread) return null;
+    /* Read across the WHOLE conversation, newest first — a seat count usually
+       arrives in a later reply, not the opening "can you send a quote". */
+    const newestFirst = [...selectedThread.messages].reverse();
+    const merged = extractEntities({
+      fromName:  newestFirst[0].from_name,
+      fromEmail: newestFirst[0].from_email,
+      subject:   newestFirst.map((m) => m.subject ?? "").join("\n"),
+      body:      newestFirst.map((m) => m.body_text ?? "").join("\n\n"),
+      catalogue,
+    });
+    return merged;
+  }, [selectedThread, catalogue]);
+
+  /* Opening a conversation marks its unread messages read — all of them, the way a
+     mail client does. An effect on the selection rather than the click handler, so
+     it also fires when the selection survives a list change. */
   React.useEffect(() => {
-    if (selected && selected.read_at == null) {
-      setState.mutate({ id: selected.id, read: true });
+    if (!selectedThread) return;
+    for (const m of selectedThread.messages) {
+      if (m.read_at == null) setState.mutate({ id: m.id, read: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id]);
+  }, [selectedThread?.key]);
 
   /* A folder change drops the selection: keeping it would leave the reading pane
      showing an email that is no longer in the list beside it. */
   React.useEffect(() => { setSelectedId(null); setSnoozeOpen(false); }, [folder]);
+
+  /* WhatsApp target. `dialable` is imported from lib/leads/call-queue rather than
+     rewritten — it already handles the Indian trunk-prefix case that makes wa.me
+     fail silently, and it has the test that found it. */
+  const waNumber = React.useMemo(() => dialable(entities?.phone.value), [entities]);
+  const waHref = waNumber && selected
+    ? `https://wa.me/${waNumber}?text=${encodeURIComponent(
+        `Hi${entities?.name.value ? ` ${entities.name.value}` : ""}, thanks for your enquiry${
+          selected.subject ? ` about ${selected.subject}` : ""
+        }. Happy to help — when is a good time to talk?`,
+      )}`
+    : null;
 
   const folderMeta = MAIL_FOLDERS.find((f) => f.id === folder)!;
 
@@ -234,7 +328,7 @@ export default function EnquiriesPage() {
             <div className="flex items-center justify-between border-b border-hairline px-3 py-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">
                 {folderMeta.icon} {folderMeta.label}
-                {visible.length > 0 && <span className="ml-1.5 tabular-nums">({visible.length})</span>}
+                {threads.length > 0 && <span className="ml-1.5 tabular-nums">({threads.length})</span>}
               </span>
               <Button variant="ghost" size="sm" onClick={() => refetch()} icon="refresh" aria-label="Refresh">
                 Refresh
@@ -254,7 +348,7 @@ export default function EnquiriesPage() {
                   action={<Button size="sm" onClick={() => refetch()}>Try again</Button>}
                 />
               </div>
-            ) : visible.length === 0 ? (
+            ) : threads.length === 0 ? (
               <div className="p-4">
                 <EmptyState
                   icon="inbox"
@@ -271,11 +365,14 @@ export default function EnquiriesPage() {
               </div>
             ) : (
               <ul className="divide-y divide-hairline max-h-[calc(100vh-260px)] overflow-y-auto">
-                {visible.map((e) => {
-                  const isUnread = e.read_at == null;
-                  const isSel = e.id === selectedId;
+                {threads.map((t) => {
+                  const e = t.latest;
+                  /* A conversation is unread if ANY message in it is — the badge has
+                     to survive a new reply landing on a thread you already opened. */
+                  const isUnread = t.messages.some((m) => m.read_at == null);
+                  const isSel = t.key === selectedThread?.key;
                   return (
-                    <li key={e.id}>
+                    <li key={t.key}>
                       <div className={cn(
                         "flex items-start gap-2 px-3 py-2.5",
                         isSel && "bg-paper-2",
@@ -314,6 +411,11 @@ export default function EnquiriesPage() {
                             isUnread ? "font-medium text-ink" : "text-ink-2",
                           )}>
                             {e.subject || "(no subject)"}
+                            {!t.isSingle && (
+                              <span className="ml-1.5 text-[11px] tabular-nums text-ink-3">
+                                ({t.messages.length})
+                              </span>
+                            )}
                           </p>
                           <p className="truncate text-[11px] text-ink-3">{snippet(e) || "—"}</p>
                         </button>
@@ -382,8 +484,55 @@ export default function EnquiriesPage() {
                 </div>
               </div>
 
-              {/* ── Actions ──────────────────────────────────────────────── */}
-              <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-paper-2/40 px-4 py-2">
+              {/* ── The four moves, above the email ──────────────────────── */}
+              <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-paper-2/40 px-4 py-2.5">
+                {canConvertToLead(selected) ? (
+                  <Button size="sm" loading={convert.isPending} onClick={() => convert.mutate(selected.id)}>
+                    🎯 Convert to lead
+                  </Button>
+                ) : selected.lead_id ? (
+                  <Button size="sm" variant="ghost" asChild>
+                    <Link href={`/leads?highlight=${selected.lead_id}` as Route}>🎯 Open the lead</Link>
+                  </Button>
+                ) : null}
+
+                {/* Pre-fills the builder from what the extractor actually FOUND.
+                    Fields it could not find are simply absent from the URL — a
+                    guessed seat count here becomes a price on a signed quote. */}
+                <Button size="sm" variant="ghost" asChild>
+                  <Link href={quoteHref(selected, entities) as Route}>📄 Send quote</Link>
+                </Button>
+
+                {/* No phone, no button that pretends. Opening wa.me with a blank
+                    number lands the rep in an empty WhatsApp and looks like the app
+                    lost the contact. */}
+                {waNumber ? (
+                  <Button size="sm" variant="ghost" asChild>
+                    <a href={waHref!} target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => toast.error("No phone number in this enquiry.", {
+                      description: "Nothing was found to message. Add a number on the lead, then WhatsApp from there.",
+                    })}
+                  >
+                    💬 WhatsApp
+                  </Button>
+                )}
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setState.mutate({ id: selected.id, archived: !selected.archived_at })}
+                >
+                  {selected.archived_at ? "↩ Move back to Inbox" : "✅ Mark done"}
+                </Button>
+              </div>
+
+              {/* ── Secondary: flag and defer ────────────────────────────── */}
+              <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-1.5">
                 <Button
                   size="sm"
                   variant={selected.starred ? "default" : "ghost"}
@@ -428,40 +577,82 @@ export default function EnquiriesPage() {
                   )}
                 </div>
 
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setState.mutate({ id: selected.id, archived: !selected.archived_at })}
-                >
-                  {selected.archived_at ? "↩ Move back to Inbox" : "✅ Mark done"}
-                </Button>
-
-                {canConvertToLead(selected) && (
-                  <Button
-                    size="sm"
-                    loading={convert.isPending}
-                    onClick={() => convert.mutate(selected.id)}
-                  >
-                    🎯 Convert to lead
-                  </Button>
-                )}
               </div>
 
-              {/* ── Body ─────────────────────────────────────────────────── */}
-              <div className="p-4">
-                {selected.attachment_name && (
-                  <div className="mb-3 inline-flex items-center gap-2 rounded-md border border-hairline bg-paper-2 px-2.5 py-1.5">
-                    <Icon name="paperclip" size={13} className="text-ink-3" />
-                    <span className="text-[12px] text-ink-2">{selected.attachment_name}</span>
-                  </div>
+              {/* ── The conversation, and what we read out of it ─────────── */}
+              <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[1fr_260px]">
+                <div className="min-w-0">
+                  {selectedThread && !selectedThread.isSingle && (
+                    <p className="mb-3 rounded-md border border-hairline bg-paper-2/60 px-2.5 py-1.5 text-[11px] leading-snug text-ink-3">
+                      {selectedThread.messages.length} messages, grouped by sender and subject.
+                      {" "}Email replies carry no thread header we can read, so this is a
+                      best guess — a colleague writing from a different address starts
+                      its own conversation. Your own replies are not shown; they are
+                      recorded in the email log without their text.
+                    </p>
+                  )}
+
+                  <ul className="space-y-3">
+                    {(selectedThread?.messages ?? []).map((m, i) => (
+                      <li key={m.id} className={cn(
+                        "rounded-lg border border-hairline p-3",
+                        i === (selectedThread?.messages.length ?? 1) - 1 ? "bg-paper" : "bg-paper-2/40",
+                      )}>
+                        <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                          <span className="truncate text-[12px] font-medium text-ink-2">
+                            {senderLabel(m)}
+                          </span>
+                          <span className="shrink-0 text-[11px] text-ink-3">
+                            {formatDate(m.created_at)}
+                          </span>
+                        </div>
+
+                        {m.attachment_name && (
+                          <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-hairline bg-paper px-2.5 py-1">
+                            <Icon name="paperclip" size={12} className="text-ink-3" />
+                            <span className="text-[11px] text-ink-2">{m.attachment_name}</span>
+                          </div>
+                        )}
+
+                        {/* TEXT, never HTML. An inbound email is untrusted input from
+                            anyone who can find the address. */}
+                        <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-ink-2">
+                          {m.body_text?.trim()
+                            || (m.body_html ? m.body_html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "")
+                            || "This email arrived with no readable body."}
+                        </pre>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* ── What we read out of the conversation ───────────────── */}
+                {entities && (
+                  <aside className="min-w-0">
+                    <div className="rounded-lg border border-hairline bg-paper-2/40 p-3">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+                        Details found · {foundCount(entities)} of 5
+                      </p>
+                      <dl className="space-y-2">
+                        <Detail label="Name"    e={entities.name} />
+                        <Detail label="Email"   e={entities.email} />
+                        <Detail label="Phone"   e={entities.phone} />
+                        <Detail label="Seats"   e={entities.seats} />
+                        <Detail label="Product" e={{
+                          value:  entities.product.value?.name ?? null,
+                          source: entities.product.source,
+                        }} />
+                      </dl>
+                      {/* Not a model. Read from the text by rules that can be pointed
+                          at — and left blank when nothing matched, because a guessed
+                          seat count becomes a price and a guessed number becomes a
+                          message to a stranger. */}
+                      <p className="mt-2.5 border-t border-hairline pt-2 text-[10px] leading-snug text-ink-3">
+                        Read from the email text. Anything blank was not found — nothing here is guessed.
+                      </p>
+                    </div>
+                  </aside>
                 )}
-                {/* Rendered as TEXT, never as HTML. An inbound email is untrusted
-                    input from anyone who can find the address. */}
-                <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-ink-2">
-                  {selected.body_text?.trim()
-                    || (selected.body_html ? selected.body_html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "")
-                    || "This email arrived with no readable body."}
-                </pre>
               </div>
             </Card>
           )}
