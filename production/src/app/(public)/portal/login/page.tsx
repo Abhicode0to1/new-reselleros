@@ -102,6 +102,22 @@ function PortalLoginInner() {
       type: "email",
     });
     if (vErr) {
+      /* A NETWORK failure is not a wrong code, and saying so sends a customer back
+         to retype a code that was perfectly correct — over and over, until they give
+         up and call. Seen for real: the tab's network was suspended, verifyOtp threw
+         AuthRetryableFetchError, and the screen said "wrong or expired".
+
+         Supabase marks these as retryable; anything else really is a bad or expired
+         code. */
+      const retryable = (vErr as { name?: string; status?: number }).name === "AuthRetryableFetchError"
+        || (vErr as { status?: number }).status === 0;
+      if (retryable) {
+        toast.error("We could not reach the sign-in service.", {
+          description: "Your code is probably fine — check your connection and press Verify again. Do not request a new code yet.",
+          duration: 10_000,
+        });
+        return;
+      }
       toast.error("That code is wrong or expired. Check the email, or resend a new code.");
       return;
     }
