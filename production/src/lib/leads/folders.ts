@@ -35,12 +35,40 @@
  * the other is a lead-source problem.
  *
  * So `lost` means lost, junk belongs to the Junk view, and no lead is ever in both.
+ *
+ * ─── FOLDERS PARTITION; FLAGS OVERLAP — AND THE UI SAYS WHICH IS WHICH ──────
+ * Redesigned 17 Aug 2026, on direct feedback. The row used to read
+ * "All open 8 · Inbox 7 · Hot Deals 2", and Pardeep did what any reader does with
+ * numbers sitting side by side: added them. 7 + 2 = 9 over 8 leads. The overlap was
+ * intentional and defensible — and it does not matter, because a design the owner
+ * himself has to ask three questions about is a design that failed. When the numbers
+ * confuse the person the page was built for, the numbers are wrong even when they
+ * are right.
+ *
+ * So the two kinds of chip are now two different TYPES:
+ *
+ *   FOLDERS answer "where is it?" — every open lead is in exactly ONE, cut by stage,
+ *   and they visibly add up: Inbox + In Talks + Quote Sent + Demo/Trial = All open.
+ *   The invariant is pinned by a test (`exactly one folder`), not by hope.
+ *
+ *   FLAGS answer "which of them matter right now?" — ⚡ Hot and ⏰ Due overlap the
+ *   folders on purpose (a hot lead is still IN Inbox; that is the point of a flag).
+ *   They render in their own group, after a divider, styled differently, so nobody
+ *   is invited to add them to anything.
+ *
+ * The old design used action-folders ("Hot Deals" as a place). The insight worth
+ * keeping from it lives on in the flags; the arithmetic honesty lives in the folders.
  */
 import type { Lead } from "@/lib/supabase/database.types";
 import { isHighValueLead } from "./heat";
 
-export type SalesFolder =
-  | "inbox" | "hot" | "quoted" | "followup" | "won" | "lost";
+/** Mutually exclusive — every open lead is in exactly one. */
+export type SalesStageFolder =
+  | "inbox" | "talks" | "quoted" | "proving" | "won" | "lost";
+/** Overlays — a lead keeps its folder AND may carry any number of flags. */
+export type SalesFlag = "hot" | "followup";
+/** Everything a chip can select. One union so the page holds one piece of state. */
+export type SalesFolder = SalesStageFolder | SalesFlag;
 
 export interface SalesFolderMeta {
   id:    SalesFolder;
@@ -50,14 +78,26 @@ export interface SalesFolderMeta {
   hint:  string;
 }
 
+/* The partition, in funnel order. Labels are the rep's words for each stop, and the
+   Kanban columns use the same cuts — chips, list and board can never disagree. */
 export const SALES_FOLDERS: readonly SalesFolderMeta[] = [
-  { id: "inbox",    label: "Inbox",           icon: "📥", hint: "New enquiries nobody has picked up yet." },
-  { id: "hot",      label: "Hot Deals",       icon: "⚡", hint: "Nothing marked high priority or worth ₹1,00,000 or more." },
-  { id: "quoted",   label: "Quote Sent",      icon: "📄", hint: "No proposals waiting on a customer's answer." },
-  { id: "followup", label: "Follow-Up Needed",icon: "⏰", hint: "Nothing overdue — every follow-up date is still ahead." },
-  { id: "won",      label: "Won",             icon: "🏆", hint: "No deals closed yet — won leads collect here." },
-  { id: "lost",     label: "Lost",            icon: "📁", hint: "No deals lost yet. Junk is separate — that is the 🚫 view." },
+  { id: "inbox",   label: "Inbox",       icon: "📥", hint: "New enquiries nobody has picked up yet." },
+  { id: "talks",   label: "In Talks",    icon: "📞", hint: "Nobody is in conversation right now — contacted leads sit here." },
+  { id: "quoted",  label: "Quote Sent",  icon: "📄", hint: "No proposals waiting on a customer's answer." },
+  { id: "proving", label: "Demo / Trial",icon: "🧪", hint: "No demos or trials running — post-quote deals being proven sit here." },
+  { id: "won",     label: "Won",         icon: "🏆", hint: "No deals closed yet — won leads collect here." },
+  { id: "lost",    label: "Lost",        icon: "📁", hint: "No deals lost yet. Junk is separate — that is the 🚫 view." },
 ] as const;
+
+/* The flags. Rendered after a divider, styled as filters, never summed with folders. */
+export const SALES_FLAGS: readonly SalesFolderMeta[] = [
+  { id: "hot",      label: "Hot",     icon: "⚡", hint: "Nothing marked high priority or worth ₹1,00,000 or more." },
+  { id: "followup", label: "Due",     icon: "⏰", hint: "Nothing overdue — every follow-up date is still ahead." },
+] as const;
+
+export function isSalesFlag(id: SalesFolder): id is SalesFlag {
+  return id === "hot" || id === "followup";
+}
 
 /** The fields the folder rules read. Structural so tests need no DB row. */
 export type FolderLead = Pick<Lead, "stage" | "value" | "priority"> & {
@@ -86,32 +126,42 @@ export function isFollowUpDue(l: FolderLead, todayISO: string): boolean {
 
 export function inSalesFolder(l: FolderLead, folder: SalesFolder, todayISO: string): boolean {
   switch (folder) {
+    /* ── THE PARTITION — cut by stage, so the counts visibly add up ─────────
+       Junk is in NO folder (the 🚫 view is its only home), which is what lets
+       "Inbox + In Talks + Quote Sent + Demo/Trial = All open" hold. */
     case "inbox":
       /* Untouched. Once someone has made contact it is no longer an inbox item, even
          if nothing has been agreed. */
-      return !isClosed(l) && l.stage === "new";
+      return l.is_junk !== true && l.stage === "new";
 
+    case "talks":
+      return l.is_junk !== true && l.stage === "contact";
+
+    case "quoted":
+      return l.is_junk !== true && l.stage === "quote";
+
+    case "proving":
+      return l.is_junk !== true && (l.stage === "demo" || l.stage === "trial");
+
+    case "won":
+      /* Junk is NOT excluded here, deliberately: a lead marked both won and junk is a
+         data contradiction, and it should show up in Won where somebody will notice it
+         rather than be filtered into silence. */
+      return l.stage === "won";
+
+    case "lost":
+      /* Lost only. Junk has its own view — see the header. */
+      return l.stage === "lost";
+
+    /* ── THE FLAGS — overlays that deliberately overlap the folders ─────────── */
     case "hot":
       /* Read as OR: a ₹4,00,000 deal nobody flagged is still the biggest thing on the
          page, and a flagged ₹20,000 deal is still what the rep said to chase.
          Deliberately NOT isHotLead — see the header. */
       return !isClosed(l) && (l.priority === "high" || isHighValueLead(l));
 
-    case "quoted":
-      return !isClosed(l) && l.stage === "quote";
-
     case "followup":
       return isFollowUpDue(l, todayISO);
-
-    case "won":
-      /* Junk is NOT excluded by an `isClosed` check here, deliberately: a lead marked
-         both won and junk is a data contradiction, and it should show up in Won where
-         somebody will notice it rather than be filtered into silence. */
-      return l.stage === "won";
-
-    case "lost":
-      /* Lost only. Junk has its own view — see the header. */
-      return l.stage === "lost";
   }
 }
 
@@ -119,9 +169,14 @@ export function salesFolderCounts(
   leads: readonly FolderLead[],
   todayISO: string,
 ): Record<SalesFolder, number> {
-  const counts = { inbox: 0, hot: 0, quoted: 0, followup: 0, won: 0, lost: 0 } as Record<SalesFolder, number>;
+  const counts = {
+    inbox: 0, talks: 0, quoted: 0, proving: 0, won: 0, lost: 0,
+    hot: 0, followup: 0,
+  } as Record<SalesFolder, number>;
   for (const l of leads) {
-    for (const f of SALES_FOLDERS) if (inSalesFolder(l, f.id, todayISO)) counts[f.id] += 1;
+    for (const f of [...SALES_FOLDERS, ...SALES_FLAGS]) {
+      if (inSalesFolder(l, f.id, todayISO)) counts[f.id] += 1;
+    }
   }
   return counts;
 }

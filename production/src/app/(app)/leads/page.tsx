@@ -57,7 +57,7 @@ import { useItems } from "@/lib/queries/items";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
 import { isHotLead, isHighValueLead, intentMeta, staleWarning } from "@/lib/leads/heat";
-import { SALES_FOLDERS, inSalesFolder, salesFolderCounts, type SalesFolder } from "@/lib/leads/folders";
+import { SALES_FOLDERS, SALES_FLAGS, inSalesFolder, salesFolderCounts, type SalesFolder } from "@/lib/leads/folders";
 import { SwipeLeadCard } from "@/components/features/leads/swipe-lead-card";
 import { ImportCsvDialog } from "@/components/features/leads/import-csv-dialog";
 import { ShareFormSheet, ENQUIRY_SHARE } from "@/components/features/leads/share-form-sheet";
@@ -734,6 +734,7 @@ function LeadsPageInner() {
           <button
             type="button"
             onClick={() => selectFolder("all")}
+            title="Inbox + In Talks + Quote Sent + Demo/Trial. Every open lead is in exactly one of those four."
             className={cn(
               "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
               /* `folder` alone is not enough: the Junk view leaves folder at "all", and
@@ -751,21 +752,14 @@ function LeadsPageInner() {
             </span>
           </button>
 
-          {/* All six folders, Won and Lost included.
-              They used to be filtered out of this row, which left the two deals this
-              tenant has actually WON with nowhere to be seen: "All open" excludes them by
-              definition and no chip admitted them. That is the same bug the /deals merge
-              was meant to kill — do the right thing, lose sight of the deal as the reward
-              — quietly recreated for the one outcome the rep most wants to look at. */}
+          {/* ── THE FOLDERS — every open lead in exactly ONE, so the numbers ADD UP ──
+              Redesigned 17 Aug 2026 after Pardeep read "All open 8 · Inbox 7 · Hot 2",
+              added 7+2, got 9, and asked how that could be right. The overlap was
+              defensible and it does not matter: numbers sitting side by side WILL be
+              added, and a row the owner has to ask three questions about has failed.
+              Inbox + In Talks + Quote Sent + Demo/Trial = All open, visibly. */}
           {SALES_FOLDERS.map((f) => {
             const count = folderCounts[f.id];
-            /* Only Follow-Up Needed carries a second badge, and only when something is
-                genuinely late. It absorbed the old "🔥 Today's Follow-Ups" chip, which ran
-                the identical rule (date <= today, still open) through a different piece of
-                state — two chips, one meaning, neither clearing the other. The overdue
-                split is the part of it worth keeping: nine days late is a different
-                problem from due at 4pm. */
-            const late = f.id === "followup" ? overdueNowCount : 0;
             return (
               <button
                 key={f.id}
@@ -779,6 +773,47 @@ function LeadsPageInner() {
                     : count === 0
                     ? "text-ink-3 hover:text-ink-2 hover:bg-paper/50"
                     : "text-ink-2 hover:text-ink hover:bg-paper/50"
+                )}
+              >
+                <span aria-hidden>{f.icon}</span>
+                <span>{f.label}</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* ── THE FLAGS — a different KIND of chip, and dressed as one ────────────
+              ⚡ Hot and ⏰ Due overlap the folders on purpose: a hot lead is still in
+              Inbox — that is the whole point of a flag. The divider, the "FILTER"
+              label and the amber tint all say the same thing three ways: these are
+              lenses over the folders above, not places beside them. Do not add them
+              to anything. */}
+          <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-hairline" />
+          <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-ink-4 select-none">
+            Filter
+          </span>
+          {SALES_FLAGS.map((f) => {
+            const count = folderCounts[f.id];
+            /* Only ⏰ Due carries a second badge, and only when something is genuinely
+               LATE — nine days late is a different problem from due at 4pm. */
+            const late = f.id === "followup" ? overdueNowCount : 0;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => selectFolder(f.id)}
+                title={count === 0
+                  ? f.hint
+                  : "A filter, not a folder — these leads also sit in one of the folders on the left."}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border",
+                  folder === f.id
+                    ? "bg-amber-soft text-amber-ink shadow-xs border-amber/50 font-bold"
+                    : count === 0
+                    ? "text-ink-3 border-transparent hover:text-ink-2 hover:bg-paper/50"
+                    : "text-amber-ink border-amber/30 bg-amber-soft/40 hover:bg-amber-soft/70"
                 )}
               >
                 <span aria-hidden>{f.icon}</span>
