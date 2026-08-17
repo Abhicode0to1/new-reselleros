@@ -2989,6 +2989,48 @@ type SupportTicketInsert = {
 };
 type SupportTicketUpdate = Partial<SupportTicketInsert>;
 
+/**
+ * A customer asking for a live 1-on-1 call (migration 20260817180000).
+ *
+ * `meet_url` is NULL until a REAL Google Meet link exists. A meeting code can only be
+ * issued by Google, through the Calendar API — one generated locally produces a link
+ * that looks right and is dead, and everybody believes the call is booked until the
+ * moment it fails, which is the moment of the call.
+ */
+export type SupportCallRequestRow = {
+  id:          string;
+  tenant_id:   string;
+  customer_id: string | null;
+  ticket_id:   string | null;
+  /** The plan they were on when they asked. Frozen — the monthly allowance is judged
+   *  against what they held at the time. */
+  tier:        "free" | "standard" | "enterprise";
+  requested_by_email: string;
+  note:        string | null;
+  /** Null until a genuine link exists. Never generated locally. */
+  meet_url:    string | null;
+  assigned_to: string | null;
+  scheduled_at: string | null;
+  status:      "requested" | "scheduled" | "completed" | "cancelled";
+  created_at:  string;
+  updated_at:  string;
+};
+type SupportCallRequestInsert = {
+  id?:          string;
+  tenant_id:    string;
+  customer_id?: string | null;
+  ticket_id?:   string | null;
+  tier:         "free" | "standard" | "enterprise";
+  requested_by_email: string;
+  note?:        string | null;
+  meet_url?:    string | null;
+  assigned_to?: string | null;
+  scheduled_at?: string | null;
+  status?:      "requested" | "scheduled" | "completed" | "cancelled";
+  created_at?:  string;
+  updated_at?:  string;
+};
+
 // ============================================================
 // Purchase Orders — procurement / buy-side (migration 0022)
 // ============================================================
@@ -3631,6 +3673,7 @@ export type Database = {
       tds_receivable:     { Row: TdsReceivableRow;     Insert: TdsReceivableInsert;     Update: TdsReceivableUpdate;     Relationships: [] };
       customer_users:     { Row: CustomerUserRow;      Insert: CustomerUserInsert;      Update: CustomerUserUpdate;      Relationships: [] };
       support_tickets:    { Row: SupportTicketRow;     Insert: SupportTicketInsert;     Update: SupportTicketUpdate;     Relationships: [] };
+      support_call_requests: { Row: SupportCallRequestRow; Insert: SupportCallRequestInsert; Update: Partial<SupportCallRequestInsert>; Relationships: [] };
       purchase_orders:    { Row: PurchaseOrderRow;     Insert: PurchaseOrderInsert;     Update: PurchaseOrderUpdate;     Relationships: [] };
       po_bill_allocations:{ Row: PoBillAllocationRow;  Insert: PoBillAllocationInsert;  Update: PoBillAllocationUpdate;  Relationships: [] };
       campaigns:          { Row: CampaignRow;          Insert: CampaignInsert;          Update: CampaignUpdate;          Relationships: [] };
