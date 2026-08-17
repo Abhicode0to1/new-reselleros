@@ -1277,10 +1277,12 @@ function LeadsPageInner() {
       )}
 
       {/* No results from search OR tab cross-over hint.
-          The /leads tab shows only raw inquiries (no plan picked); /deals
-          shows qualified opportunities (plan set). When tenant has plenty
-          of data but the current tab is empty, point the operator at the
-          right place instead of generic "no results". */}
+          The split is BY STAGE, not by plan — see isRaw() above. /leads is stage
+          `new` or `contact`; /deals is demo / trial / quote / won / lost. The old
+          wording here ("no plan picked" / "plan set") was wrong and misled a reader
+          into an inverted picture of where the pipeline actually sits.
+          When the tenant has plenty of data but the current tab is empty, point the
+          operator at the right place instead of a generic "no results". */}
       {!isLoading && !error && leads && leads.length > 0 && filtered.length === 0 && smartView === "all" && (
         <div className="mt-6">
           {search.trim() ? (

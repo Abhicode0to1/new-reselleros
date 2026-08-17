@@ -44,19 +44,43 @@ export interface NavSection {
 }
 
 /**
- * Filter nav sections + items by the caller's role + optional permission
- * flags (currently just `canViewDeals` for sales). Sections whose every
- * item is filtered out are dropped. Used by Sidebar to render a
- * role-appropriate menu.
+ * Filter nav sections + items by the caller's role. Sections whose every item is
+ * filtered out are dropped. Used by Sidebar to render a role-appropriate menu.
+ *
+ * ─── THE can_view_deals GATE IS GONE (17 Aug 2026) ──────────────────────────
+ * Removed because Pardeep confirmed the requirement is obsolete: everyone on the team
+ * should see the pipeline.
+ *
+ * BE CLEAR ABOUT WHAT THIS CHANGED, because it is more than a menu. This function
+ * feeds allowedRoutesForRole(), which middleware:105 uses to decide whether a request
+ * is permitted at all — a plain `sales` user without the flag typing /deals was
+ * redirected to their ROLE_HOME. So the gate had teeth in BOTH places: it hid the menu
+ * item AND blocked the route. Removing it opens the route to every sales user, which
+ * is the intended outcome and not a side effect.
+ *
+ * (An earlier note in deals/page.tsx claimed the gate lived in middleware's
+ * PROTECTED_PREFIXES. It did not — that list is the auth check. The real enforcement
+ * was this function, one call away. Worth knowing if a restriction is ever wanted
+ * again: this is where it goes.)
+ *
+ * The `can_view_deals` COLUMN is deliberately left in the database and on the /team
+ * screen. Dropping a permission column is not a one-step reversal, and if a real
+ * restriction is wanted later it should be re-applied here — or, better, as a
+ * server-side row filter, since hiding a page never hid the underlying data from the
+ * API.
  */
 export interface NavFilterOpts {
-  /** Sales-role extension: when true, the /deals entry stays visible. */
+  /** No longer used for gating. Accepted so existing callers keep compiling until
+   *  they are tidied; passing it changes nothing. */
   canViewDeals?: boolean;
 }
 export function filterNavForRole(
   nav: NavSection[],
   role: UserRole | undefined,
-  opts: NavFilterOpts = {},
+  /* Accepted and ignored — see NavFilterOpts. Kept in the signature so the three
+     existing call sites (Sidebar, MobileBottomNav, command palette) keep compiling
+     until they are tidied separately. */
+  _opts: NavFilterOpts = {},
 ): NavSection[] {
   if (!role) return nav;
   // "sales_senior" sees the same menu as "sales" (visibility), but is NEVER
@@ -66,11 +90,7 @@ export function filterNavForRole(
     .filter((s) => !s.roles || s.roles.includes(visRole))
     .map((s) => ({
       ...s,
-      items: s.items.filter((i) => {
-        // Deals gate applies ONLY to plain sales (sales_senior always sees it).
-        if (role === "sales" && i.id === "deals" && !opts.canViewDeals) return false;
-        return !i.roles || i.roles.includes(visRole);
-      }),
+      items: s.items.filter((i) => !i.roles || i.roles.includes(visRole)),
     }))
     .filter((s) => s.items.length > 0);
 }
