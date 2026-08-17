@@ -41,6 +41,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { rupee } from "@/lib/utils";
 
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
+import { grossAmount } from "@/lib/quotes/amounts";
+
+/** GST on SaaS in India — CGST 9% + SGST 9%, or IGST 18%. CLAUDE.md §13. */
+const TAX_RATE_PCT = 18;
 
 /*
  * The hardcoded PRODUCTS_BY_VENDOR list that used to live here is GONE.
@@ -267,8 +271,18 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
         domain: cleanDomain,
         status: "accepted",
         payment_status: isPaid ? "received" : "awaiting",
-        amount: totalAnnualAmount,
+        /* `amount` is the GST-INCLUSIVE figure — what the customer actually owes and
+           what record_payment treats as "expected". This used to be the ex-GST
+           total, so every subscription created here produced a quote whose own tax
+           line said "GST 18% ₹4,320" while its TOTAL said ₹24,000.
+
+           That was not a display bug. `amount` drives outstanding_amount, and the
+           public pay route charges exactly it — so Razorpay collected ₹24,000 on a
+           ₹28,320 debt and record_payment then settled the quote in full. Every
+           subscription onboarded this way under-collected the entire GST. */
+        amount: grossAmount(totalAnnualAmount, TAX_RATE_PCT),
         subtotal: totalAnnualAmount,
+        tax_rate: TAX_RATE_PCT,
         /* total_cost was omitted here, so it defaulted to 0 while the line items
            carried the real cost — and every margin read off the column reported 100%
            on a 17.5% deal (Q-2026-9778: column 0, lines ₹19,800). The displays now
@@ -304,7 +318,10 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
            plan text by trg_subscriptions_resolve_item (migration 0248). The trigger
            stays as the safety net for the other five write paths. */
         item_id: itemId,
-        outstanding_amount: isPaid ? 0 : totalAnnualAmount,
+        /* Also GST-inclusive: this is money owed, not revenue recognised. It has to
+           match the quote's `amount` or the subscription and the quote disagree
+           about the same debt. */
+        outstanding_amount: isPaid ? 0 : grossAmount(totalAnnualAmount, TAX_RATE_PCT),
         auto_renew: true,
       });
 
@@ -631,6 +648,12 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
             <div>
               <span className="text-ink-3">Total Annual Contract Value (ARR):</span>
               <div className="font-serif text-lg font-bold text-ink">{rupee(totalAnnualAmount)}</div>
+              {/* ARR is the ex-GST revenue figure; the customer is billed the
+                  GST-inclusive one. Showing only the first is what let a ₹4,320 gap
+                  between "what this says" and "what gets charged" go unnoticed. */}
+              <div className="text-[11px] text-ink-3">
+                Customer pays <b className="text-ink-2">{rupee(grossAmount(totalAnnualAmount, TAX_RATE_PCT))}</b> incl. {TAX_RATE_PCT}% GST
+              </div>
             </div>
             <div className="text-right">
               <span className="text-ink-3">Monthly Recurring Revenue (MRR):</span>

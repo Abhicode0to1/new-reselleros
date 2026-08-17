@@ -138,7 +138,14 @@ export default async function PortalBillingPage() {
                         covers {formatDate(p.periodStart)} – {formatDate(p.periodEnd)}
                       </p>
                     </div>
-                    <span className="shrink-0 text-sm font-medium tabular-nums text-ink">{rupee(p.amount)}</span>
+                    {/* GST-INCLUSIVE, because that is the number that leaves the
+                        customer's bank. The schedule engine works in ex-GST amounts —
+                        showing those here put "₹24,000" on the same page as autopay's
+                        "₹28,320 each cycle", and a customer reading both has no way to
+                        tell which one they owe. */}
+                    <span className="shrink-0 text-sm font-medium tabular-nums text-ink">
+                      {rupee(grossAmount(p.amount, 18))}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -146,7 +153,7 @@ export default async function PortalBillingPage() {
 
             {current.length > 0 && (
               <p className="mt-2 text-[11px] text-ink-3">
-                This term totals {rupee(scheduleTotal(current))} across{" "}
+                This term totals {rupee(grossAmount(scheduleTotal(current), 18))} including GST, across{" "}
                 {current.length} {current.length === 1 ? "invoice" : "invoices"}.
               </p>
             )}

@@ -83,8 +83,12 @@ function ScheduleTable({ rows, todayISO, label, muted }: {
     <div className={cn(muted && "opacity-75")}>
       <div className="mb-1.5 flex items-baseline justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">{label}</span>
+        {/* "ex-GST" is stated because the customer's own portal shows the
+            GST-inclusive figure for the same instalments, and two different numbers
+            for one bill with nothing distinguishing them is how a rep and a customer
+            end up arguing about which is right. */}
         <span className="text-[11px] text-ink-3">
-          {rows.length} {rows.length === 1 ? "invoice" : "invoices"} · {rupee(total)} total
+          {rows.length} {rows.length === 1 ? "invoice" : "invoices"} · {rupee(total)} ex-GST
         </span>
       </div>
       <ul className="divide-y divide-hairline">
