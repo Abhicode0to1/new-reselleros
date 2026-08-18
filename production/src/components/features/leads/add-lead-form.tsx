@@ -19,6 +19,12 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useForm } from "react-hook-form";
+import { FieldPill } from "@/components/ui/field-pill";
+import { SmartPaste } from "@/components/shared/smart-paste";
+import {
+  liveGstin, checkGstin, livePhone, commitPhone, checkPhone, liveEmail, checkEmail,
+  liveMoney, commitMoney, parseMoney, checkMoney,
+} from "@/lib/forms/poka-yoke";
 import { useDraftGuard } from "@/lib/hooks/useDraftGuard";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -48,7 +54,6 @@ import { useCreateLead, useUpdateLead, useLeads } from "@/lib/queries/leads";
 import { normPhone, normCompany } from "@/lib/leads/duplicates";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { createClient } from "@/lib/supabase/client";
-import { isValidGstin, validateGstin } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { Lead, LeadPriority } from "@/lib/supabase/database.types";
 
@@ -131,6 +136,15 @@ const optionalIntField = (max: number) =>
     (v) => {
       if (v === "" || v === null || v === undefined) return undefined;
       if (typeof v === "number" && Number.isNaN(v)) return undefined;
+      /* Commas, spaces and a rupee sign stripped before coercion. Two reasons, and the
+         second is the one that bites: a value pasted straight out of a spreadsheet reads
+         "₹1,76,640", and `z.coerce.number()` turns that into NaN and rejects a number the
+         operator can plainly see in the box. It also lets the field format itself with
+         Indian grouping on blur without the formatting breaking its own validation. */
+      if (typeof v === "string") {
+        const digits = v.replace(/[^0-9.-]/g, "");
+        return digits === "" ? undefined : digits;
+      }
       return v;
     },
     z.coerce.number().int().min(0).max(max).optional(),
@@ -258,6 +272,20 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
   useDraftGuard(isDirty && !isSubmitting);
 
   const watchedSeats = watch("seats");
+
+  /* The money box's DISPLAY string, kept apart from the form's numeric value — see the
+     comment on the field itself. Seeded from the form so an edit opens with the existing
+     amount already grouped, and re-seeded whenever the auto-calculation writes one. */
+  const watchedValue = watch("value");
+  const [valueText, setValueText] = React.useState("");
+  React.useEffect(() => {
+    setValueText((current) =>
+      /* Only when they disagree, so this never fights the operator mid-keystroke: while
+         typing "1766" the form already holds 1766 and the two agree. */
+      parseMoney(current) === (watchedValue ?? null) ? current
+        : watchedValue == null ? "" : commitMoney(String(watchedValue)),
+    );
+  }, [watchedValue]);
 
   // ── Duplicate warning ──────────────────────────────────────────────
   // As the operator types company / phone, surface any EXISTING lead that
@@ -414,6 +442,37 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
     }
   }, [open, editingLead, reset, me?.userId]);
 
+  /**
+   * ─── MISTAKE-PROOFING ONE REGISTERED FIELD ────────────────────────────────
+   * Returns `register()`'s props with the keystroke and blur rules layered on top:
+   * `live` cleans on every keystroke and may only ever REMOVE characters, `commit`
+   * formats on blur and is the only place a value may gain any. Doing it the other way
+   * round — formatting mid-type — moves the caret out from under the operator's finger
+   * and is how a "smart" field becomes a worse one. See lib/forms/poka-yoke.ts.
+   *
+   * `shouldDirty` is passed so a cleaned value still marks the form dirty; without it the
+   * unsaved-changes guard would let a paste-and-close lose the paste.
+   */
+  const smart = (
+    field: "contact_email" | "contact_phone" | "gstin",
+    rules: { live: (s: string) => string; commit?: (s: string) => string },
+  ) => {
+    const reg = register(field);
+    return {
+      ...reg,
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+        setValue(field, rules.live(e.target.value), { shouldDirty: true, shouldValidate: false });
+      },
+      onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+        if (rules.commit) {
+          const pretty = rules.commit(e.target.value);
+          if (pretty !== e.target.value) setValue(field, pretty, { shouldDirty: true });
+        }
+        return reg.onBlur(e);
+      },
+    };
+  };
+
   const onSubmit = async (data: FormData) => {
     try {
       // Normalize empties → null so the DB row honors "not qualified yet".
@@ -509,6 +568,31 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
           className="flex flex-col flex-1 min-h-0 min-w-0 w-full"
         >
           <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+          {/* ── Paste the WhatsApp message instead of retyping it ──────────────
+              Offered on a NEW lead only. On an edit it would overwrite fields the
+              operator opened this sheet to correct, which is the opposite of help.
+
+              It fills only what the extractor actually FOUND, and it shows the whole
+              list before filling anything — see components/shared/smart-paste.tsx. */}
+          {!isEditing && (
+            <SmartPaste
+              catalogue={PLANS.map((p) => ({ id: p, name: p }))}
+              onFill={(v) => {
+                if (v.name)  setValue("contact_name",  v.name,  { shouldDirty: true });
+                if (v.email) setValue("contact_email", liveEmail(v.email), { shouldDirty: true });
+                if (v.phone) setValue("contact_phone", commitPhone(v.phone), { shouldDirty: true });
+                if (v.seats) setValue("seats",         v.seats, { shouldDirty: true });
+                if (v.product) {
+                  setPlan(v.product.name);
+                  setValue("plan", v.product.name, { shouldDirty: true });
+                }
+                toast.success("Filled from the pasted text.", {
+                  description: "Check each field before saving — anything it could not read is still blank.",
+                });
+              }}
+            />
+          )}
+
           {/* Company name */}
           <FormField label="Company name" required htmlFor="company">
             <Input
@@ -579,47 +663,47 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 type="email"
                 placeholder="e.g. rajesh@acme.com"
                 error={errors.contact_email?.message}
-                {...register("contact_email")}
+                {...smart("contact_email", { live: liveEmail })}
               />
+              <FieldPill check={checkEmail(watch("contact_email") ?? "")} />
             </FormField>
             <FormField label="Phone" htmlFor="contact_phone">
               <Input
                 id="contact_phone"
+                inputMode="numeric"
                 placeholder="e.g. +91 98765 43210"
-                {...register("contact_phone")}
+                {...smart("contact_phone", { live: livePhone, commit: commitPhone })}
               />
+              {/* Catches the ten-digit landline, which looks perfect right up until
+                  somebody tries to WhatsApp it. */}
+              <FieldPill check={checkPhone(watch("contact_phone") ?? "")} />
             </FormField>
           </div>
 
           {/* GSTIN — optional. When set, the existing Sandbox.co.in verifier
               auto-fills legal name + registered address on conversion. */}
           <FormField label="GSTIN" htmlFor="gstin">
+            {/* Upper-cases and strips the spaces a PDF or WhatsApp paste brings, on every
+                keystroke. The `uppercase` class alone only changed how it LOOKED — the
+                stored value stayed lower-case, and a lower-case GSTIN fails the checksum
+                that decides the tax head. */}
             <Input
               id="gstin"
-              className="font-mono uppercase"
+              className="font-mono"
               placeholder="e.g. 27AABCE1234D1Z9"
               error={errors.gstin?.message}
-              {...register("gstin")}
+              {...smart("gstin", { live: liveGstin })}
             />
-            {(() => {
-              const v = (watch("gstin") ?? "").trim();
-              if (v.length === 0) return (
-                <p className="mt-1 text-[10px] text-ink-3">Optional. Helps auto-fill legal name + address on conversion.</p>
-              );
-              if (v.length < 15) return (
-                <p className="mt-1 text-[10px] text-ink-3">{15 - v.length} more characters needed (GSTIN is 15 chars).</p>
-              );
-              if (isValidGstin(v)) return (
-                <p className="mt-1 text-[10px] text-emerald inline-flex items-center gap-1">
-                  <Icon name="check_circle" size={11} /> Format + checksum match.
-                </p>
-              );
-              return (
-                <p className="mt-1 text-[10px] text-rose inline-flex items-center gap-1">
-                  <Icon name="alert" size={11} /> {validateGstin(v).ok ? "" : (validateGstin(v) as { message: string }).message}
-                </p>
-              );
-            })()}
+            {/* One shared, tested rule instead of the four hand-written branches that used
+                to live here — and it now names the STATE, which is the fact about to
+                decide IGST vs CGST+SGST. An operator who sees "Delhi" where they expected
+                Haryana has caught a wrong paste before it became a tax head. */}
+            <FieldPill check={checkGstin(watch("gstin") ?? "")} />
+            {!(watch("gstin") ?? "").trim() && (
+              <p className="text-[10px] text-ink-3">
+                Optional. Helps auto-fill legal name + address on conversion.
+              </p>
+            )}
           </FormField>
 
           {/* Plan — optional. If empty → lead lands in Inbox (raw, awaiting
@@ -663,15 +747,30 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 {...register("seats", { valueAsNumber: true, setValueAs: (v) => v === "" || v === null ? undefined : Number(v) })}
               />
             </FormField>
-            <FormField label="Deal value (₹)" htmlFor="value">
+            {/* "(whole rupees)" said in the label, not left to be discovered. This app
+                stores money as integers (CLAUDE.md §13) and a field that quietly rounds
+                1500.50 has decided something about somebody's money without telling them
+                — checkMoney reports that instead. */}
+            <FormField label="Deal value (₹ — whole rupees)" htmlFor="value">
               <Input
                 id="value"
                 type="text"
                 inputMode="numeric"
                 prefix="₹"
                 error={errors.value?.message}
-                {...register("value")}
+                /* The BOX holds a display string ("1,76,640"); the FORM holds a number.
+                   Keeping them apart is what lets the field group digits the Indian way
+                   without the grouping breaking its own validation — and it keeps the
+                   registered field typed as the number it actually is, with no cast. */
+                value={valueText}
+                onChange={(e) => {
+                  const next = liveMoney(e.target.value);
+                  setValueText(next);
+                  setValue("value", parseMoney(next) ?? undefined, { shouldDirty: true });
+                }}
+                onBlur={() => setValueText((t) => commitMoney(t))}
               />
+              <FieldPill check={checkMoney(valueText)} />
               {/* Auto-calc hint */}
               {PLAN_PRICE_PER_SEAT_PM[plan] && (watchedSeats ?? 0) >= 1 && (
                 <p className="mt-1 text-xs text-ink-3">
