@@ -1223,6 +1223,16 @@ export function QuoteBuilder() {
                     <p className="text-[11px] mt-2.5 pt-2.5 border-t border-hairline/70 flex items-center gap-1">
                       {isExport ? (
                         <span className="text-indigo-ink">🌍 Export ({customer?.country}) → zero-rated under LUT, no GST</span>
+                      ) : !buyerStateCode ? (
+                        /* A picked customer is not the same as a KNOWN state: 36 of 41
+                           customers carrying a GSTIN have no state_code on file. Without
+                           one, isInterStateSupply() falls back to intra-state as a safe
+                           default, and printing "✓ Intra-state" off that guess is how the
+                           wrong head reaches an invoice — invisibly, because the 18% total
+                           is identical and only GSTR-1 disagrees. */
+                        <span className="text-amber-ink">
+                          ⚠ No state on this customer — add one to fix the GST head. The {taxRate}% total is the same either way.
+                        </span>
                       ) : interState ? (
                         <span className="text-amber-ink">⚠ Inter-state → IGST {taxRate}% will apply</span>
                       ) : (
@@ -1266,6 +1276,16 @@ export function QuoteBuilder() {
                         <span className="text-indigo-ink">🌍 Export ({prospectCountry}) → zero-rated under LUT, no GST</span>
                       ) : !prospectStateCode ? (
                         <span className="text-ink-3">Pick the customer&apos;s state so GST (CGST+SGST vs IGST) is correct.</span>
+                      ) : !buyerStateCode ? (
+                        /* A picked customer is not the same as a KNOWN state: 36 of 41
+                           customers carrying a GSTIN have no state_code on file. Without
+                           one, isInterStateSupply() falls back to intra-state as a safe
+                           default, and printing "✓ Intra-state" off that guess is how the
+                           wrong head reaches an invoice — invisibly, because the 18% total
+                           is identical and only GSTR-1 disagrees. */
+                        <span className="text-amber-ink">
+                          ⚠ No state on this customer — add one to fix the GST head. The {taxRate}% total is the same either way.
+                        </span>
                       ) : interState ? (
                         <span className="text-amber-ink">⚠ Inter-state → IGST {taxRate}% will apply</span>
                       ) : (
@@ -1890,7 +1910,17 @@ export function QuoteBuilder() {
                     <circle cx="12" cy="12" r="10" />
                     <path d="M12 16v-4M12 8h.01" />
                   </svg>
-                  {interState ? `Different state → IGST applicable` : `Same state → CGST + SGST split`} @ {taxRate}%
+                  {/* "Same state" is only true if we KNOW the state. With none on file
+                      isInterStateSupply() answers intra-state as a conservative default,
+                      and this line was printing that guess as a fact — while the GST-rate
+                      helper a few fields up correctly said the head was still unknown.
+                      Two labels on one screen, one of them wrong, is worse than either
+                      alone: the operator believes the confident one. */}
+                  {!buyerStateCode
+                    ? `Pick the customer's state to fix the GST head — the ${taxRate}% total is the same either way`
+                    : interState
+                      ? `Different state → IGST applicable @ ${taxRate}%`
+                      : `Same state → CGST + SGST split @ ${taxRate}%`}
                 </div>
               )}
 

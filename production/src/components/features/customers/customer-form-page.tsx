@@ -37,7 +37,7 @@ import { FieldPill } from "@/components/ui/field-pill";
 import { SmartPaste } from "@/components/shared/smart-paste";
 import {
   liveGstin, checkGstin, livePhone, commitPhone, checkPhone,
-  liveEmail, checkEmail, liveDomain, checkDomain,
+  liveEmail, checkEmail, liveDomain, checkDomain, gstinState,
 } from "@/lib/forms/poka-yoke";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import { COUNTRIES } from "@/lib/gst/countries";
@@ -72,12 +72,36 @@ function Row({
   );
 }
 
+/**
+ * One line on the Review tab.
+ *
+ * An unset field SAYS "not set" rather than leaving a gap — a blank row reads as a
+ * rendering fault and an operator cannot tell it apart from a value that failed to load.
+ */
+function ReviewLine({ label, value, mono, note }: {
+  label: string; value?: string | null; mono?: boolean; note?: string;
+}) {
+  const v = (value ?? "").trim();
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] uppercase tracking-wider text-ink-3">{label}</dt>
+      {v ? (
+        <dd className={cn("break-words text-[13px] font-medium text-ink", mono && "font-mono")}>
+          {v}{note && <span className="ml-1 font-sans text-[11px] font-normal text-ink-3">· {note}</span>}
+        </dd>
+      ) : (
+        <dd className="text-[12px] italic text-ink-3">not set</dd>
+      )}
+    </div>
+  );
+}
+
 interface CustomerFormPageProps {
   /** Provided → edit mode. Omitted → create mode. */
   customer?: Customer | null;
 }
 
-type TabId = "other" | "address" | "contacts";
+type TabId = "other" | "address" | "contacts" | "review";
 
 export function CustomerFormPage({ customer }: CustomerFormPageProps) {
   const router = useRouter();
@@ -447,6 +471,8 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
             { id: "other",    label: "Other details" },
             { id: "address",  label: "Address", dot: addressHasError ? "rose" : undefined },
             { id: "contacts", label: "Contact persons",  count: contactPersonFields.length || undefined, dot: contactsHasError ? "rose" : undefined },
+            /* Last, because it is the one you read before pressing Save. */
+            { id: "review",   label: "Review & save" },
           ]}
           className="mb-2"
         />
@@ -653,6 +679,51 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
           >
             Add Contact Person
           </Button>
+        </section>
+
+        {/* ── Review & save ─────────────────────────────────────────────────────
+            The step this form was missing. Its three tabs already disclose
+            progressively — that part was never the problem — but there was nowhere
+            to see everything at once before saving, and a form whose fields are
+            spread across three panels is exactly the one where a wrong value hides.
+
+            Read-only on purpose. Anything wrong here is fixed by going back to the
+            tab that owns it, which is one click away above.
+
+            It states the GST-relevant facts first, because those are the ones that
+            end up on a document a tax officer reads. */}
+        <section className={cn(tab !== "review" && "hidden")}>
+          <div className="rounded-xl border border-hairline bg-paper-2/40 p-4 md:p-5">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+              About to be saved
+            </p>
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <ReviewLine label="Customer name" value={watch("name")} />
+              <ReviewLine label="Display name"  value={watch("display_name")} />
+              <ReviewLine
+                label="GSTIN" mono value={watchedGstin}
+                note={gstinState(watchedGstin ?? "")?.name}
+              />
+              <ReviewLine
+                label="Place of supply"
+                value={watch("state")}
+                /* Spelled out because it decides IGST vs CGST+SGST, and because a
+                   customer with a GSTIN but no state is the commonest shape in these
+                   books — 36 of 41 of them. */
+                note={watch("state_code") ? `code ${watch("state_code")}` : "no state code — GST head cannot be fixed"}
+              />
+              <ReviewLine label="Contact"  value={[watch("contact_first_name"), watch("contact_last_name")].filter(Boolean).join(" ")} />
+              <ReviewLine label="Email"    value={watch("contact_email")} />
+              <ReviewLine label="Phone"    value={watch("contact_phone")} />
+              <ReviewLine label="Website"  value={watch("domain")} />
+              <ReviewLine label="City"     value={watch("city")} />
+              <ReviewLine label="PIN"      value={watch("pin_code")} mono />
+            </dl>
+            <p className="mt-3 border-t border-hairline pt-2.5 text-[11px] leading-snug text-ink-3">
+              Anything marked “not set” saves empty. Go back to any tab above to fill it —
+              nothing is lost.
+            </p>
+          </div>
         </section>
 
         {/* ── Footer actions (always reachable; header also has them on ≥sm) ── */}
