@@ -14,6 +14,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { SAAS_HSN } from "@/lib/gst/hsn";
 import { useInvoices, useQuotesAwaitingInvoice, useGenerateInvoice, useDeleteProjectInvoice, useDeleteSubscriptionInvoice } from "@/lib/queries/invoices";
 import { useQuoteByInvoiceId } from "@/lib/queries/quotes";
 import { usePaymentsByQuote, totalReceived } from "@/lib/queries/payments";
@@ -1266,7 +1267,7 @@ function InvoicePreviewContainer({
                         {lineItems.map((item, idx) => (
                           <tr key={idx}>
                             <td className="py-2 font-medium text-ink">{item.name}</td>
-                            <td className="py-2 text-center text-ink-3 font-mono text-[11px]">998313</td>
+                            <td className="py-2 text-center text-ink-3 font-mono text-[11px]">{SAAS_HSN}</td>
                             <td className="py-2 text-right tabular-nums">{item.qty}</td>
                             <td className="py-2 text-right font-medium tabular-nums">{rupee((item.rate ?? 0) * (item.qty ?? 1))}</td>
                           </tr>
@@ -1274,7 +1275,7 @@ function InvoicePreviewContainer({
                       </tbody>
                     </table>
                   ) : (
-                    <p className="text-xs text-ink-3 italic p-2">Standard Subscription License Supply (HSN 998313)</p>
+                    <p className="text-xs text-ink-3 italic p-2">Standard Subscription License Supply (HSN {SAAS_HSN})</p>
                   )}
                 </div>
               )}

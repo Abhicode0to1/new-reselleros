@@ -40,6 +40,7 @@ import { useUpdateLead, useLeads } from "@/lib/queries/leads";
 import { useItems } from "@/lib/queries/items";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { isInterStateSupply, isExportSupply } from "@/lib/gst/place-of-supply";
+import { hsnSummary } from "@/lib/gst/hsn";
 import { COUNTRIES } from "@/lib/gst/countries";
 import { BILLING_CURRENCIES, isForeignCurrency, formatForeign } from "@/lib/currency";
 import { addOrMergeLine } from "@/lib/quotes/line-items";
@@ -1374,7 +1375,18 @@ export function QuoteBuilder() {
                 value={isExport ? 0 : taxRate}
                 onChange={(e) => setTaxRate(parseInt(e.target.value) || 18)}
                 disabled={isExport}
-                helper={isExport ? "Export → zero-rated under LUT · no GST" : "Default 18% for SaaS · HSN 998313"}
+                /* The smart default, SAID OUT LOUD. The rate and the SAC are filled in
+                   for the operator and always were — but nothing ever showed what would
+                   be printed on the document their customer's accountant reads, and a
+                   default nobody can see is indistinguishable from a missing one.
+
+                   `buyerStateCode` gates the head deliberately: with no state on file
+                   isInterStateSupply() answers "intra-state" as a safe DEFAULT, and
+                   printing "CGST + SGST" off the back of that would state a head nobody
+                   knows. hsnSummary(null) says so instead. */
+                helper={isExport
+                  ? "Export → zero-rated under LUT · no GST"
+                  : hsnSummary(buyerStateCode ? interState : null)}
                 className={isExport ? "bg-paper-2 cursor-not-allowed" : undefined}
               />
             </FormField>

@@ -32,7 +32,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { isValidGstin, validateGstin, GST_STATE_BY_CODE, cn } from "@/lib/utils";
+import { GST_STATE_BY_CODE, cn } from "@/lib/utils";
+import { FieldPill } from "@/components/ui/field-pill";
+import {
+  liveGstin, checkGstin, livePhone, commitPhone, checkPhone,
+  liveEmail, checkEmail, liveDomain, checkDomain,
+} from "@/lib/forms/poka-yoke";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import { COUNTRIES } from "@/lib/gst/countries";
 import { useCustomerForm } from "./use-customer-form";
@@ -287,27 +292,19 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
               <Input
                 id="gstin"
                 placeholder="e.g. 07ABDCA0298H1ZP"
-                className="font-mono uppercase"
+                /* The uppercase CLASS only changed how it looked; the stored value stayed
+                   lower-case, and a lower-case GSTIN fails the checksum that decides the
+                   tax head. liveGstin fixes the value itself, on every keystroke. */
+                className="font-mono"
                 error={errors.gstin?.message}
                 {...register("gstin")}
+                onChange={(e) => setValue("gstin", liveGstin(e.target.value), { shouldDirty: true })}
               />
-              {(() => {
-                const v = (watchedGstin ?? "").trim();
-                if (v.length >= 15 && isValidGstin(v)) return (
-                  <p className="mt-1 text-[11px] text-emerald inline-flex items-center gap-1">
-                    <Icon name="check_circle" size={11} /> Format + checksum match. Click Verify to confirm.
-                  </p>
-                );
-                if (v.length >= 15) {
-                  const r = validateGstin(v);
-                  return (
-                    <p className="mt-1 text-[11px] text-rose inline-flex items-center gap-1">
-                      <Icon name="alert" size={11} /> {r.ok ? "" : r.message}
-                    </p>
-                  );
-                }
-                return null;
-              })()}
+              {/* One shared, tested rule instead of two hand-written branches — and it
+                  names the STATE, which is the fact about to decide IGST vs CGST+SGST.
+                  Seeing "Delhi" where you expected Haryana catches a wrong paste before
+                  it becomes a tax head. */}
+              <FieldPill check={checkGstin(watchedGstin ?? "")} />
               <div className="mt-2">
                 <GstinVerifyCard
                   gstin={watchedGstin ?? ""}
@@ -385,12 +382,26 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
           </Row>
 
           <Row label="Email" htmlFor="contact_email">
-            <Input id="contact_email" type="email" placeholder="e.g. rajesh@acme.com" error={errors.contact_email?.message} {...register("contact_email")} />
+            <Input
+              id="contact_email" type="email" placeholder="e.g. rajesh@acme.com"
+              error={errors.contact_email?.message}
+              {...register("contact_email")}
+              onChange={(e) => setValue("contact_email", liveEmail(e.target.value), { shouldDirty: true })}
+            />
+            <FieldPill check={checkEmail(watch("contact_email") ?? "")} />
           </Row>
 
           <Row label="Phone" htmlFor="contact_phone">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <Input id="contact_phone" placeholder="Work phone" {...register("contact_phone")} />
+              <Input
+                id="contact_phone" inputMode="numeric" placeholder="Work phone"
+                {...register("contact_phone")}
+                onChange={(e) => setValue("contact_phone", livePhone(e.target.value), { shouldDirty: true })}
+                onBlur={(e) => setValue("contact_phone", commitPhone(e.target.value), { shouldDirty: true })}
+              />
+              {/* Catches the ten-digit landline, which looks perfect until somebody
+                  tries to WhatsApp it. */}
+              <FieldPill check={checkPhone(watch("contact_phone") ?? "")} />
               <Input placeholder="Mobile" {...register("contact_mobile")} />
             </div>
           </Row>
@@ -418,7 +429,14 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
           </Row>
 
           <Row label="Website" htmlFor="domain">
-            <Input id="domain" placeholder="e.g. acmecorp.com" {...register("domain")} />
+            <Input
+              id="domain" placeholder="e.g. acmecorp.com"
+              {...register("domain")}
+              /* A pasted URL becomes a host. A stored value carrying a scheme or a path
+                 never matches a customer_domains row, so the customer looks unlinked. */
+              onChange={(e) => setValue("domain", liveDomain(e.target.value), { shouldDirty: true })}
+            />
+            <FieldPill check={checkDomain(watch("domain") ?? "")} />
           </Row>
 
           <Row label="Parent account / group" htmlFor="group_id" hint="Link companies routed by one common reseller/coordinator. Each company still keeps its own GSTIN + invoices.">

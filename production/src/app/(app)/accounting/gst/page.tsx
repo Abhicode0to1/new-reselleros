@@ -16,6 +16,7 @@
 "use client";
 
 import * as React from "react";
+import { SAAS_HSN } from "@/lib/gst/hsn";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -282,7 +283,10 @@ function gstSplit(r: { gst: number; interState: boolean }): { cgst: number; sgst
 // JSON → upload on the portal → file with OTP (no re-typing, no credentials).
 
 const B2CL_THRESHOLD = 250000;                         // inter-state B2C "large" invoice-value cutoff (₹)
-const DEFAULT_HSN = "998313";                          // Online/SaaS services (adjust if you sell other HSN)
+/* One source for the SAC this business sells under — it used to be written out
+   here, in the invoice table and across the marketing pages, which is two copies too
+   many for a compliance value. See lib/gst/hsn.ts. */
+const DEFAULT_HSN = SAAS_HSN;
 const DEFAULT_HSN_DESC = "Information technology software services";
 
 /**

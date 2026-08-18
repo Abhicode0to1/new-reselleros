@@ -25,8 +25,13 @@ import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { isValidGstin, validateGstin, GST_STATE_BY_CODE } from "@/lib/utils";
+import { GST_STATE_BY_CODE } from "@/lib/utils";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
+import { FieldPill } from "@/components/ui/field-pill";
+import {
+  liveGstin, checkGstin, livePhone, commitPhone, checkPhone,
+  liveEmail, checkEmail, liveDomain, checkDomain,
+} from "@/lib/forms/poka-yoke";
 import { COUNTRIES } from "@/lib/gst/countries";
 import { useCustomerForm } from "./use-customer-form";
 import { ScanCardPanel } from "./scan-card-panel";
@@ -127,29 +132,22 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
             <Input
               id="gstin"
               placeholder="e.g. 07ABDCA0298H1ZP"
-              className="font-mono uppercase"
+              /*  only changed how it LOOKED — the stored value stayed
+                 lower-case, and a lower-case GSTIN fails the checksum that decides the
+                 tax head. liveGstin fixes the value itself, on every keystroke. */
+              className="font-mono"
               error={errors.gstin?.message}
               {...register("gstin")}
+              onChange={(e) => setValue("gstin", liveGstin(e.target.value), { shouldDirty: true })}
             />
-            {(() => {
-              const v = (watchedGstin ?? "").trim();
-              if (v.length < 15) return (
-                <p className="mt-1 text-[10px] text-ink-3">
-                  State + code auto-fill from the first 2 digits. Then click Verify with GSTN to confirm + auto-fill.
-                </p>
-              );
-              if (isValidGstin(v)) return (
-                <p className="mt-1 text-[10px] text-emerald inline-flex items-center gap-1">
-                  <Icon name="check_circle" size={11} /> Format + checksum match. Click Verify to confirm.
-                </p>
-              );
-              const r = validateGstin(v);
-              return (
-                <p className="mt-1 text-[10px] text-rose inline-flex items-center gap-1">
-                  <Icon name="alert" size={11} /> {r.ok ? "" : r.message}
-                </p>
-              );
-            })()}
+            {/* One shared, tested rule instead of three hand-written branches — and it
+                names the STATE, which is what decides IGST vs CGST+SGST. */}
+            <FieldPill check={checkGstin(watchedGstin ?? "")} />
+            {!(watchedGstin ?? "").trim() && (
+              <p className="text-[10px] text-ink-3">
+                State + code auto-fill from the first 2 digits. Then click Verify with GSTN to confirm.
+              </p>
+            )}
             <GstinVerifyCard
               gstin={watchedGstin ?? ""}
               cached={verification}
@@ -226,7 +224,16 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
           </FormField>
 
           <FormField label="Company website (optional)" htmlFor="domain">
-            <Input id="domain" placeholder="e.g. acmecorp.com" {...register("domain")} />
+            <Input
+              id="domain"
+              placeholder="e.g. acmecorp.com"
+              {...register("domain")}
+              /* A pasted URL becomes a host: https://www.acme.com/pricing -> acme.com.
+                 A stored value carrying a scheme or a path never matches a
+                 customer_domains row, so the customer looks unlinked. */
+              onChange={(e) => setValue("domain", liveDomain(e.target.value), { shouldDirty: true })}
+            />
+            <FieldPill check={checkDomain(watch("domain") ?? "")} />
           </FormField>
 
           <div className="h-px bg-hairline" />
@@ -260,13 +267,27 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
               <Input id="contact_title" placeholder="e.g. CTO" {...register("contact_title")} />
             </FormField>
             <FormField label="Email" htmlFor="contact_email">
-              <Input id="contact_email" type="email" placeholder="e.g. rajesh@acme.com" error={errors.contact_email?.message} {...register("contact_email")} />
+              <Input
+                id="contact_email" type="email" placeholder="e.g. rajesh@acme.com"
+                error={errors.contact_email?.message}
+                {...register("contact_email")}
+                onChange={(e) => setValue("contact_email", liveEmail(e.target.value), { shouldDirty: true })}
+              />
+              <FieldPill check={checkEmail(watch("contact_email") ?? "")} />
             </FormField>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <FormField label="Work phone" htmlFor="contact_phone">
-              <Input id="contact_phone" placeholder="e.g. +91 98765 43210" {...register("contact_phone")} />
+              <Input
+                id="contact_phone" inputMode="numeric" placeholder="e.g. +91 98765 43210"
+                {...register("contact_phone")}
+                onChange={(e) => setValue("contact_phone", livePhone(e.target.value), { shouldDirty: true })}
+                onBlur={(e) => setValue("contact_phone", commitPhone(e.target.value), { shouldDirty: true })}
+              />
+              {/* Catches the ten-digit landline, which looks perfect until somebody
+                  tries to WhatsApp it. */}
+              <FieldPill check={checkPhone(watch("contact_phone") ?? "")} />
             </FormField>
             <FormField label="Mobile" htmlFor="contact_mobile">
               <Input id="contact_mobile" placeholder="e.g. +91 98765 43210" {...register("contact_mobile")} />

@@ -25,6 +25,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/label";
+import { FieldPill } from "@/components/ui/field-pill";
+import { checkMoney } from "@/lib/forms/poka-yoke";
 import {
   Select,
   SelectContent,
@@ -749,7 +751,11 @@ export function RecordPaymentDialog({
             </div>
           )}
 
-          <FormField label={tdsDeducted ? "Amount received in bank (₹)" : "Amount received (₹)"} required htmlFor="amount">
+          {/* "whole rupees" said in the label rather than left to be discovered at submit.
+              This app stores money as integers (CLAUDE.md §13); a typed 1500.50 was
+              previously rejected by the zod .int() with a generic message and no clue
+              which field or why. */}
+          <FormField label={tdsDeducted ? "Amount received in bank (₹ — whole rupees)" : "Amount received (₹ — whole rupees)"} required htmlFor="amount">
             <Input
               id="amount"
               type="number"
@@ -765,6 +771,9 @@ export function RecordPaymentDialog({
               }
               {...register("amount", { valueAsNumber: true, onChange: () => setAmountEdited(true) })}
             />
+            {/* Reports a decimal BEFORE submit, and says what it would be saved as —
+                rounding somebody's money without telling them is not a kindness. */}
+            <FieldPill check={checkMoney(Number.isFinite(watchedAmount) ? String(watchedAmount) : "")} />
           </FormField>
 
           {/* ── Unified Payment Mode & Target Account Selector ────── */}
