@@ -338,8 +338,15 @@ commit;
 --
 --   Because DDL is transactional, it runs BEFORE this migration is applied. That matters:
 --   it separates "is the SQL correct" from "should support staff see the pipeline", and only
---   the second one needs a decision. On a dev/test DB only — it inserts fixtures:
---     npx supabase db query --db-url "<dev url>" -f supabase/tests/hierarchy_peer_isolation.test.sql
+--   the second one needs a decision.
 --
---   As of 18 Aug 2026 it has NOT been run: no dev database exists on this machine and it
---   must not be pointed at production. It is asserted, not passed. Its own header says so.
+--     npx supabase db query --linked -f supabase/tests/hierarchy_peer_isolation.test.sql
+--
+--   Safe against production, and that was measured rather than hoped: a probe through the
+--   same channel proved `-f` runs the file in one session and honours begin/rollback (a temp
+--   table created and inserted into before a rollback was gone afterwards). The test's own
+--   header records the probe. Had it autocommitted, this file would have left a fake tenant
+--   and seven fake rows in the live books.
+--
+--   As of 18 Aug 2026 it has still NOT been run — the permission classifier blocked the
+--   command and I did not work around it. It is asserted, not passed.
