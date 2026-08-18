@@ -65,16 +65,21 @@ export function scopeOf(me: TeamMember, all: readonly TeamMember[]): Scope {
  * built it and the query that used it, and "no restriction" is the honest representation
  * of no restriction.
  */
-export function visibleUserIds(me: TeamMember, all: readonly TeamMember[]): string[] | null {
-  if (scopeOf(me, all) === "all") return null;
-
-  /* Breadth-first down the tree, with a `seen` set.
-     The cycle guard is not paranoia: manager_id is a self-referencing column that an admin
-     edits by hand, so A→B→A is one mis-click away, and without this the walk never
-     returns — the page hangs with no error, which is far harder to diagnose than a wrong
-     list. */
-  const seen = new Set<string>([me.id]);
-  const queue = [me.id];
+/**
+ * `rootId` plus everybody at or below it in the reporting tree.
+ *
+ * Breadth-first with a `seen` set. The cycle guard is not paranoia: manager_id is a
+ * self-referencing column an admin edits by hand, so A→B→A is one mis-click away, and
+ * without this the walk never returns — the page hangs with no error, which is far harder
+ * to diagnose than a wrong list.
+ *
+ * Extracted because two callers need it for opposite reasons: visibility asks "whose rows
+ * may I see", and the manager picker asks "who must I NOT offer, because it would make a
+ * loop". Two copies of a cycle-guarded walk is two places for the guard to be dropped from.
+ */
+function subtreeIds(rootId: string, all: readonly TeamMember[]): Set<string> {
+  const seen = new Set<string>([rootId]);
+  const queue = [rootId];
   while (queue.length > 0) {
     const current = queue.shift()!;
     for (const u of all) {
@@ -84,7 +89,34 @@ export function visibleUserIds(me: TeamMember, all: readonly TeamMember[]): stri
       }
     }
   }
-  return [...seen];
+  return seen;
+}
+
+export function visibleUserIds(me: TeamMember, all: readonly TeamMember[]): string[] | null {
+  if (scopeOf(me, all) === "all") return null;
+  return [...subtreeIds(me.id, all)];
+}
+
+/**
+ * Who may be offered as `member`'s manager.
+ *
+ * Excludes the member themselves — the database has a CHECK for that
+ * (users_manager_not_self), but a dropdown that offers an option the save will reject is a
+ * worse experience than one that never offers it.
+ *
+ * Excludes everybody BELOW the member, which the database cannot check. "A reports to B"
+ * where B already reports to A is a cycle, and a cycle in this column is the one input that
+ * makes a naive recursive walk run for ever. Both the SQL function and `subtreeIds` above
+ * survive it, so the symptom would not be a hang — it would be a reporting line that is
+ * quietly nonsense, and nobody would notice until a manager wondered why they could see
+ * their own boss's pipeline.
+ */
+export function eligibleManagers(
+  member: TeamMember,
+  all: readonly TeamMember[],
+): TeamMember[] {
+  const below = subtreeIds(member.id, all);
+  return all.filter((u) => !below.has(u.id));
 }
 
 /**

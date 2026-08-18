@@ -28,6 +28,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
+import { eligibleManagers } from "@/lib/team/visibility";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { PendingJoinRequestsCard } from "@/components/features/team/pending-join-requests-card";
 import { ClaimColleagueCard } from "@/components/features/team/claim-colleague-card";
@@ -46,7 +47,7 @@ const ROLE_TONE: Record<Role, "success" | "info" | "muted" | "warning"> = {
   billing: "success", accountant: "warning", delivery: "info", support: "muted",
 };
 
-interface Member { id: string; full_name: string | null; email: string | null; role: Role; initials: string | null; color: string | null; is_active: boolean | null; can_view_deals: boolean | null; }
+interface Member { id: string; full_name: string | null; email: string | null; role: Role; initials: string | null; color: string | null; is_active: boolean | null; can_view_deals: boolean | null; manager_id: string | null; }
 interface Invite { id: string; email: string; role: Role; created_at: string; }
 
 export default function TeamPage() {
@@ -61,7 +62,10 @@ export default function TeamPage() {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("users")
-        .select("id, full_name, email, role, initials, color, is_active, can_view_deals")
+        /* manager_id is safe to name here: it is LIVE in production, verified 18 Aug 2026.
+           Naming a column that does not exist makes PostgREST reject the whole request
+           (PGRST201) — the failure that once left the sidebar reading "Loading…" for ever. */
+        .select("id, full_name, email, role, initials, color, is_active, can_view_deals, manager_id")
         .order("created_at", { ascending: true });
       if (error) throw error;
       return (data ?? []) as Member[];
@@ -94,7 +98,7 @@ export default function TeamPage() {
   });
 
   const updateMember = useMutation({
-    mutationFn: async (input: { id: string; patch: { role?: Role; can_view_deals?: boolean } }) => {
+    mutationFn: async (input: { id: string; patch: { role?: Role; can_view_deals?: boolean; manager_id?: string | null } }) => {
       const supabase = createClient();
       const { error } = await supabase.from("users").update(input.patch).eq("id", input.id);
       if (error) throw error;
@@ -104,6 +108,15 @@ export default function TeamPage() {
   });
 
   const owners = members.filter((m) => m.role === "owner").length;
+
+  /* The shape src/lib/team/visibility.ts reasons in. No useMemo: this list is a handful of
+     people, and a hook added below a conditional return is how the last rules-of-hooks
+     error got in. */
+  const tree = members.map((m) => ({ id: m.id, role: m.role, managerId: m.manager_id }));
+  const nameOf = (id: string) => {
+    const found = members.find((m) => m.id === id);
+    return found?.full_name ?? found?.email ?? "Unknown";
+  };
 
   /* An invite is only marked accepted when the OAuth callback itself performs the
      join. A users row created any other way — a hand-edited row, a claim through
@@ -147,6 +160,23 @@ export default function TeamPage() {
       <ClaimColleagueCard isOwner={isOwner} />
 
       {/* Desktop / tablet — table (unchanged) */}
+      {isOwner && (
+        /* Says what "Reports to" does and — the part that matters — what it does not do.
+           A reporting line that looks like a permission is how somebody concludes peer
+           isolation is finished. The database wall is a separate, deliberate switch. */
+        <p className="mb-3 text-[11px] leading-snug text-ink-3">
+          <span className="font-medium text-ink-2">Reports to</span> builds the reporting tree.
+          It decides who appears under <span className="font-medium">Team view</span> on Leads and
+          Quotes — a manager sees their reports, a rep sees only themselves.{" "}
+          {/* An explicit space, not just the span's ml-1: the margin is visual only, so a
+              screen reader would otherwise read "themselves.It filters". */}
+          <span className="text-amber-ink">
+            It filters what a screen shows; it does not yet stop a teammate reaching a record
+            directly.
+          </span>
+        </p>
+      )}
+
       <Card flush className="hidden md:block">
           <table className="w-full text-sm">
             <thead className="bg-paper-2 border-b border-hairline">
@@ -154,6 +184,7 @@ export default function TeamPage() {
                 <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Member</th>
                 <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Email</th>
                 <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Role</th>
+                {isOwner && <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Reports to</th>}
                 {isOwner && <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Deals access</th>}
                 <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Status</th>
               </tr>
@@ -181,6 +212,23 @@ export default function TeamPage() {
                       <Badge kind={ROLE_TONE[m.role] ?? "muted"}>{ROLE_LABEL[m.role] ?? m.role}</Badge>
                     )}
                   </td>
+                  {isOwner && (
+                    <td className="p-3">
+                      <select
+                        aria-label={`Who ${m.full_name ?? m.email ?? "this member"} reports to`}
+                        value={m.manager_id ?? ""}
+                        onChange={(e) => updateMember.mutate({ id: m.id, patch: { manager_id: e.target.value || null } })}
+                        className="rounded-md border border-hairline bg-paper px-2 py-1 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                      >
+                        {/* Empty is a real answer, not a missing one — somebody has to be at
+                            the top of the tree, and "Nobody" is what that looks like. */}
+                        <option value="">— Nobody (top of tree) —</option>
+                        {eligibleManagers({ id: m.id, role: m.role, managerId: m.manager_id }, tree).map((u) => (
+                          <option key={u.id} value={u.id}>{nameOf(u.id)}</option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
                   {isOwner && (
                     <td className="p-3">
                       {m.role === "sales" ? (
@@ -280,6 +328,21 @@ export default function TeamPage() {
                   <span className="text-[11px] text-emerald">Full deals access</span>
                 )}
               </div>
+              {isOwner && (
+                <label className="mt-3 flex items-center gap-2 text-xs text-ink-2">
+                  Reports to
+                  <select
+                    value={m.manager_id ?? ""}
+                    onChange={(e) => updateMember.mutate({ id: m.id, patch: { manager_id: e.target.value || null } })}
+                    className="min-h-[36px] flex-1 rounded-md border border-hairline bg-paper px-2 py-1 text-xs text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                  >
+                    <option value="">— Nobody (top of tree) —</option>
+                    {eligibleManagers({ id: m.id, role: m.role, managerId: m.manager_id }, tree).map((u) => (
+                      <option key={u.id} value={u.id}>{nameOf(u.id)}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </Card>
           </li>
         ))}

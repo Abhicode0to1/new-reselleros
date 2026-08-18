@@ -26,6 +26,7 @@ import {
 import { APP_NAV, filterNavForRole, type UserRole, type NavItem } from "@/lib/nav";
 import { useNavBadges } from "@/lib/hooks/useNavBadges";
 import { useCurrentUser, useIdentity } from "@/lib/hooks/useCurrentUser";
+import { roleLabel } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
 
 // ============================================================
@@ -290,7 +291,9 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
       <div className={cn("border-t border-hairline flex-shrink-0", collapsed ? "p-2" : "p-3")}>
         <DropdownMenu>
           <DropdownMenuTrigger
-            title={collapsed ? (me?.fullName ?? me?.authEmail ?? "Account") : undefined}
+            /* Collapsed hides both lines, so the tooltip is the only place the role can
+               appear — otherwise switching to the icon rail silently loses it. */
+            title={collapsed ? [me?.fullName ?? me?.authEmail ?? "Account", me?.role ? roleLabel(me.role) : null].filter(Boolean).join(" · ") : undefined}
             className={cn(
               "w-full flex items-center rounded-md hover:bg-paper-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2",
               collapsed ? "justify-center p-1.5" : "gap-2.5 p-2"
@@ -304,10 +307,13 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
             />
             {!collapsed && (
               <>
-                {/* Identity, stated plainly. The second line is the EMAIL, not the
-                    role — "which account am I in?" is the question this corner has
-                    to answer, and it used to require opening the dropdown.
-                    "Loading…" now means loading and nothing else: not-signed-in and
+                {/* Identity, stated plainly: name, then EMAIL, then role.
+                    The email stays second — "which account am I in?" is the question
+                    this corner has to answer, and it used to require opening the
+                    dropdown. The role is a third line rather than appended to the
+                    email, because both are truncated and appending would hide the
+                    role on exactly the long addresses where it matters.
+                    "Loading…" means loading and nothing else: not-signed-in and
                     signed-in-with-no-workspace each say so, and say what to do. */}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">
@@ -338,6 +344,14 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                             ? "Reload the page — this is a fault, not your account"
                             : "…"}
                   </div>
+                  {/* Only for a real member. A role beside "Not signed in" would be a
+                      claim about somebody we have not identified. roleLabel() handles a
+                      value the union does not know rather than rendering blank. */}
+                  {identity.status === "member" && me?.role && (
+                    <div className="text-[10px] uppercase tracking-wider text-ink-3 truncate">
+                      {roleLabel(me.role)}
+                    </div>
+                  )}
                 </div>
                 <Icon name="chevron_up" size={13} className="text-ink-3" />
               </>

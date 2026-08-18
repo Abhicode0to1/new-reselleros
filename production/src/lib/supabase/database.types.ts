@@ -556,6 +556,8 @@ type UserRow = {
   /** Migration 0045 — sales-role extension: when true, user also sees /deals. */
   can_view_deals: boolean;
   employee_id: string | null;   // migration 0216 — self check-in link
+  /** Who this user reports to. NULL at the top of the tree. Applied 18 Aug 2026. */
+  manager_id: string | null;
   created_at: string;
 }
 type UserInsert = {
@@ -570,6 +572,7 @@ type UserInsert = {
   is_active?: boolean;
   can_view_deals?: boolean;
   employee_id?: string | null;
+  manager_id?: string | null;
   created_at?: string;
 }
 type UserUpdate = Partial<UserInsert>;
