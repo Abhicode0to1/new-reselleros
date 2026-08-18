@@ -190,12 +190,31 @@ global ~/.claude.json → gw-pro, supabase-db
 ```
 
 `supabase` aur `supabase-db` **ek hi kaam** karte hain. Dono ke tools har turn me jagah
-khaate hain. Ek hata do — `supabase-db` (global wala), kyoki project wala `.mcp.json` me hai
-aur team ke saath chalta hai:
+khaate hain. Ek hatana hai — par **kaun sa, ye 19 Aug ko ulta nikla:**
 
-```bash
-claude mcp remove supabase-db
-```
+> ~~Ek hata do — `supabase-db` (global wala), kyoki project wala `.mcp.json` me hai aur team
+> ke saath chalta hai: `claude mcp remove supabase-db`~~
+>
+> **❌ Ye salah galat thi, aur ulti thi.** 19 Aug 2026 ko dono chala kar dekha:
+>
+> | server | kahan se | nateeja |
+> |---|---|---|
+> | `supabase` | project `.mcp.json` | **`Unauthorized`** — har call bekaar |
+> | `supabase-db` | user-scoped `~/.claude.json` | **chalta hai** |
+>
+> Wajah wahi hai jo §2 me likhi hai: `.mcp.json` me `"${SUPABASE_ACCESS_TOKEN}"` likha hai,
+> aur is machine par (a) `${VAR}` wahan resolve nahi hota, aur (b) us naam ka env var ek
+> galat value par set hai. To jo "team ke saath chalta hai" wala tha, wahi is machine par
+> **kabhi nahi chalta**. Us salah par amal karne se ek chalta hua server hatt jaata aur ek
+> tootta hua bach jaata.
+
+**Sahi kaam:** `.mcp.json` se `supabase` hatao (working `supabase-db` rehne do). Ek naye
+teammate ko Supabase MCP chahiye to wo apne user-scope me asli PAT ke saath jode — repo me
+token nahi jaana chahiye, aur `${VAR}` yahan chalta nahi.
+
+> **Ye toota hua server sirf jagah nahi khaata, wo jhoot bolta hai.** `Unauthorized` padh kar
+> ek session ye maan sakta hai ki "DB access hai hi nahi" aur schema ka andaza lagane lag
+> jaye — 14 Aug wali poori galti isi se shuru hui thi.
 
 > Maine pehle kaha tha "3 supabase server aur ~12 marketing/finance server configured hain".
 > **Wo galat tha.** Config me sirf 2 supabase hain. Marketing/finance/figma/canva wale

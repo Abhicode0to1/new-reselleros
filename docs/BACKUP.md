@@ -27,23 +27,43 @@ cd production && npm run backup:db
 
 Writes a timestamped JSON to **`C:/dev/resellersos-backups/`** — deliberately **outside the git repo**, because the dump contains customer PII (names, emails, phones, GSTINs) and must never be committed.
 
-Requires `SUPABASE_ACCESS_TOKEN` in the environment. It is already set in the gitignored `.claude/settings.local.json`; for a terminal outside Claude Code, export it or use `setx`.
+**Needs no token.** It runs through the **Supabase CLI**, which is already logged in (`npx supabase login`), and every query is a `select`.
 
-It runs through the **read-only** MCP server (`.mcp.json`), so a backup run can never write to production.
+> ### ⚠️ This script was silently broken from ~13 Aug to 19 Aug 2026. Read why before trusting any backup.
+>
+> It used to talk to the `@supabase/mcp-server-supabase` MCP server, which authenticates with a PAT from `SUPABASE_ACCESS_TOKEN`. On this machine that variable holds a **malformed value** (see [WORKING-ENVIRONMENT.md §2](WORKING-ENVIRONMENT.md)), so every run got `Unauthorized` — and the parser turned that into `rows(...).map is not a function`, a message that names nothing.
+>
+> **On the free plan there is no PITR and no automatic backup.** So for six days the entire safety net was one stale file from 13 Aug, and nothing said so. Two things changed on 19 Aug:
+>
+> 1. **Transport → the CLI**, which needs no token and is the path everything else in this repo already uses.
+> 2. **Every parse failure now throws.** The old code returned `[]` on anything it could not read, and its own comments record the result: a run that once wrote a "backup" with zero tables. An empty backup is indistinguishable from a real one on the day you need it.
+>
+> **Still check the counts after a run.** Loud failure covers a broken query; it cannot tell you a table was emptied by mistake.
 
-### What a run captures (verified 2026-08-13)
+### What a run captures (verified 2026-08-19)
 
 | | |
 |---|---|
-| Tables | 80 |
-| Rows | 1,210 |
-| Columns | 1,238 |
-| RLS policies | 253 |
-| Functions | 126 (full `pg_get_functiondef` source) |
-| Triggers | 46 (full `pg_get_triggerdef`) |
-| Indexes | 275 |
+| Tables | 96 |
+| Rows | 933 |
+| Columns | 1,488 |
+| RLS policies | 290 |
+| Functions | 144 (full `pg_get_functiondef` source) |
+| Triggers | 56 (full `pg_get_triggerdef`) |
+| Indexes | 346 |
+| Constraints | 534 |
 | Applied-migration ledger | 247 records |
-| File size | ~1.4 MB |
+
+> **Rows went DOWN, 1,210 → 933, and that is correct.** It looks exactly like a
+> half-captured backup, so it was checked rather than assumed: every table's count
+> was compared against a live `count(*)` through a *different* connection (the
+> read-only MCP user) — leads 18, customers 15, quotes 27, payments 24, tenants 2,
+> contacts 17, tasks 37, activity_log 378 — and all of them match to the row. The
+> drop is real deletion of test data between 13 and 18 Aug (3 test tenants, and the
+> whole `project_*` set). Table count rose 80 → 96 over the same period.
+>
+> Do this comparison whenever a dump shrinks. "Fewer rows" and "broken backup" look
+> identical in the output, and only one of them is safe to ignore.
 
 Schema definitions are captured **live from the database, not from git**, and that is deliberate — see the drift note below.
 

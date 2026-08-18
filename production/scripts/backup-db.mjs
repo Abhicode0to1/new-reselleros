@@ -11,86 +11,84 @@
  *
  * Usage: node dump.mjs <output-dir>
  */
-import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const OUT_DIR = process.argv[2];
 if (!OUT_DIR) { console.error("usage: node dump.mjs <output-dir>"); process.exit(1); }
 
-const child = spawn("npx",
-  ["-y", "@supabase/mcp-server-supabase@latest", "--read-only",
-   "--project-ref=ontpnqjoysjgrlsukecm", "--features=database,docs"],
-  { stdio: ["pipe", "pipe", "pipe"], shell: true });
+/* ─── Transport: the Supabase CLI, not the MCP server ─────────────────────────
+   This used to spawn @supabase/mcp-server-supabase and speak JSON-RPC to it.
+   That server authenticates with a PAT read from SUPABASE_ACCESS_TOKEN — and on
+   the machine this actually runs on, that variable holds a malformed value. So
+   every run returned {"error":{"message":"Unauthorized"}}, which the old parser
+   turned into "rows(...).map is not a function".
 
-let nextId = 10;
-const pending = new Map();
-let buf = "";
+   Measured 19 Aug 2026. The last good dump is 13 Aug, and this project is on the
+   Supabase free plan with no PITR and no automatic backups — so a backup script
+   that quietly stopped working IS the whole safety net gone. That is the reason
+   this file changed transport rather than being patched.
 
-child.stdout.on("data", (c) => {
-  buf += c.toString();
-  const lines = buf.split("\n");
-  buf = lines.pop() ?? "";
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    let j; try { j = JSON.parse(line); } catch { continue; }
-    const r = pending.get(j.id);
-    if (!r) continue;
-    pending.delete(j.id);
-    if (j.error) return r.reject(new Error(JSON.stringify(j.error)));
-    // Don't filter on c2.type — this server doesn't always tag it "text", and
-    // filtering silently produced an empty string (→ a 0-table "backup").
-    const text = (j.result?.content ?? []).map(c2 => c2?.text ?? "").join("");
-    r.resolve(text);
-  }
-});
-child.stderr.on("data", () => {});
+   The CLI needs no token: `npx supabase login` is already done, which is why
+   every other database task in this repo goes through it. `env -u` is required
+   for the same reason as everywhere else — the CLI reads that malformed variable
+   in preference to its own stored login. See docs/WORKING-ENVIRONMENT.md §2.
 
-const send = (o) => child.stdin.write(JSON.stringify(o) + "\n");
+   The query goes via a temp FILE, not the command line: these statements contain
+   quotes, semicolons and `*`, and this has to run through a shell on Windows to
+   reach npx at all. A path is the one argument that cannot be re-parsed. */
+const QDIR = mkdtempSync(join(tmpdir(), "resellersos-backup-"));
+let qn = 0;
 
 function sql(query) {
-  const id = nextId++;
-  return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
-    send({ jsonrpc: "2.0", id, method: "tools/call",
-           params: { name: "execute_sql", arguments: { query } } });
-  });
+  const qfile = join(QDIR, `q${qn++}.sql`);
+  writeFileSync(qfile, query, "utf8");
+
+  const env = { ...process.env };
+  delete env.SUPABASE_ACCESS_TOKEN;
+
+  const r = spawnSync(`npx supabase db query --linked -f "${qfile}"`,
+    { shell: true, env, encoding: "utf8", maxBuffer: 512 * 1024 * 1024 });
+
+  if (r.error) throw new Error(`supabase CLI could not start: ${r.error.message}`);
+  if (r.status !== 0) {
+    throw new Error(`supabase db query exited ${r.status}\n${(r.stderr || "").trim()}`);
+  }
+  return r.stdout;
 }
 
-/** The server wraps rows in an <untrusted-data-…> fence — pull the JSON out. */
-function rows(text) {
-  // The tool result is a JSON STRING that itself contains the fenced payload,
-  // so unwrap it first — otherwise the fence content is still backslash-escaped
-  // and JSON.parse silently yields nothing (which is how the first run wrote a
-  // 0-table "backup").
-  let s = text;
-  try { const o = JSON.parse(text); if (typeof o?.result === "string") s = o.result; } catch { /* already raw */ }
-
-  // The server's preamble NAMES the fence id inline ("…within the below
-  // <untrusted-data-UUID> boundaries") as a prompt-injection defence, so a naive
-  // /<untrusted-data-[^>]*>([\s\S]*?)<\/untrusted-data-/ matches that MENTION and
-  // captures the preamble instead of the rows. Anchor off the CLOSING tag and
-  // walk back to the last opening tag before it.
-  const close = s.lastIndexOf("</untrusted-data-");
-  if (close === -1) { try { return JSON.parse(s); } catch { return []; } }
-  const openStart = s.lastIndexOf("<untrusted-data-", close - 1);
-  if (openStart === -1) return [];
-  const openEnd = s.indexOf(">", openStart);
-  if (openEnd === -1) return [];
-  const inner = s.slice(openEnd + 1, close).trim();
-  try { return JSON.parse(inner); } catch { return []; }
+/**
+ * `supabase db query` prints one JSON object on stdout: { boundary, rows, warning }.
+ *
+ * ⚠️ EVERY FAILURE PATH HERE THROWS. It must. The previous version returned `[]`
+ * whenever it could not parse, and its own comments record what that bought: a run
+ * that wrote a "backup" containing zero tables, and later an Unauthorized error
+ * that fell through as a plain object and surfaced as "rows(...).map is not a
+ * function" — a message that says nothing about the actual cause.
+ *
+ * A backup is the one artefact where a quiet failure is worse than a loud one: it
+ * is not read until the day the database is gone, and by then the empty file is
+ * indistinguishable from a real one. Fail here, or do not fail at all.
+ */
+function rows(stdout) {
+  let o;
+  try {
+    o = JSON.parse(stdout);
+  } catch {
+    throw new Error(`supabase db query returned non-JSON:\n${stdout.slice(0, 400)}`);
+  }
+  if (o?.error) throw new Error(`query failed: ${JSON.stringify(o.error)}`);
+  if (!Array.isArray(o?.rows)) {
+    throw new Error(`no rows[] in CLI output — shape changed?\n${JSON.stringify(o).slice(0, 400)}`);
+  }
+  return o.rows;
 }
-
-send({ jsonrpc: "2.0", id: 1, method: "initialize",
-       params: { protocolVersion: "2024-11-05", capabilities: {},
-                 clientInfo: { name: "dump", version: "1" } } });
-send({ jsonrpc: "2.0", method: "notifications/initialized" });
 
 const CAP = 5000; // rows per table; the whole DB is ~1.2k rows today
 
 try {
-  await new Promise(r => setTimeout(r, 3000)); // let the server come up
-
   const tables = rows(await sql(
     "select tablename from pg_tables where schemaname='public' order by tablename"
   )).map(t => t.tablename);
