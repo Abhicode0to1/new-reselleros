@@ -1,14 +1,23 @@
 -- ============================================================================
 -- Hierarchy-based visibility: users.manager_id, the subordinate tree, and RLS.
 --
--- ⚠️ READ THIS BEFORE APPLYING. The last section is OFF by default and must not be
---    switched on until the owner columns are backfilled. Applying it today would hide
---    most of the books from everybody. Details below.
+-- ⚠️ READ §3 BEFORE APPLYING THE LAST SECTION. It is approved and ready, but it changes
+--    what real named people can see, and the per-person measurement is in there.
+--    (An earlier version of this line said applying it would "hide most of the books from
+--    everybody". That was wrong — the IS NULL branch keeps unclaimed rows visible, which
+--    measurement confirmed. The real risk was narrower and is now designed out.)
 --
 -- WHAT THIS ADDS
 --   1. users.manager_id      — the reporting tree
 --   2. get_subordinate_user_ids(uuid) — recursive walk down that tree
---   3. RLS policies scoping leads / quotes / customers to that tree — COMMENTED OUT
+--   3. RLS policies scoping leads / quotes / customers to that tree — written, approved,
+--      and NOT yet applied. One marker line below is the authority on that:
+--
+--   SECTION 3B APPLIED: no
+--
+--      Change it to `yes` the moment §3c has actually run, and flip
+--      HIERARCHY_ENFORCED_IN_DATABASE in src/lib/team/enforcement.ts in the same commit.
+--      A test binds the two together, so they cannot drift apart in either direction.
 --
 -- THE COLUMN NAMES ARE THE ONES THAT EXIST
 --   The brief specified `assigned_to_user_id`. No such column exists on any table.
@@ -22,25 +31,24 @@
 --   for invoices or subscriptions is not possible until they carry an owner. Those two are
 --   therefore out of scope here and say so, rather than being quietly skipped.
 --
--- WHY THE POLICIES ARE COMMENTED OUT — THE PART THAT MATTERS
---   Live row counts, same date:
+-- UNCLAIMED ROWS STAY VISIBLE — THE RULE THAT STOPS THIS BEING AN OUTAGE
+--   Live row counts, 18 Aug 2026:
 --       leads      14 rows, 14 with an owner
---       quotes     25 rows,  0 with an owner
+--       quotes     24 rows,  0 with an owner
 --       customers  12 rows,  0 with an account manager
---   A policy of "you see rows assigned to you or your team" therefore makes EVERY quote and
---   EVERY customer invisible to everybody except an owner. That is not a permissions
---   change, it is the company's books disappearing from the screen while the rows sit
---   safely in the database — the worst shape of bug, because it looks like data loss and
+--   Without an escape for unowned rows, "you see what is assigned to you or your team"
+--   would make EVERY quote and EVERY customer vanish for everybody. Not a permissions
+--   change — the company's books disappearing from the screen while the rows sit safely in
+--   the database, which is the worst shape of bug because it looks like data loss and
 --   people start restoring backups.
 --
---   The policies below handle it: `owner_id IS NULL` stays visible to the whole tenant,
---   because an unclaimed record is company data, not private data. Even so they stay
---   commented until somebody has decided who owns those 37 rows, because the moment they
---   ARE owned the rule starts biting and that should be a decision, not a surprise.
+--   So `owner_id IS NULL` stays visible to the whole tenant: an unclaimed record is company
+--   data, not private data. Measured consequence — enabling §3 today moves zero quotes and
+--   zero customers. Isolation there begins the day they are assigned.
 --
 -- HOW TO APPLY (AGENTS.md §5 — small batches, and NEVER a verify SELECT in the same run)
---   Run section 1 alone, verify. Then section 2 alone, verify. Leave section 3 until the
---   backfill is done, then uncomment and run it one table at a time.
+--   Sections 1 and 2 are already live. For section 3, §3c has the single command; it is
+--   idempotent, so re-running the whole file is safe. Verify in a SEPARATE run afterwards.
 -- ============================================================================
 
 -- APPLIED STATUS (18 Aug 2026)
@@ -55,17 +63,25 @@
 --   are already in place. That is worth fixing (`supabase migration repair`) but it is a
 --   decision about 28 files nobody has re-read, not a step in this migration.
 --
---   Section 3 remains OFF, and the reason CHANGED on 18 Aug 2026 — read §3's first block.
---   The original reason (37 rows with no owner) turned out not to be the real one: the
---   IS NULL branch already keeps those visible, and measuring it proved no quote
---   disappears. The real findings are worse and better:
---     · WORSE — as written, those policies could not have restricted anything. They were
---       PERMISSIVE, Postgres ORs permissive policies, and a tenant-wide permissive SELECT
---       policy already exists on all three tables. Rewritten `as restrictive`.
---     · BETTER — the remaining blocker is one decision, not a data cleanup: enabling this
---       today takes 4 of 10 staff to zero leads. Measured per person, listed in §3.
---   3a (the predicate function) is also NOT applied: the permission classifier blocked the
---   create-function call. The exact command is in §3a.
+--   Section 3 is APPROVED but NOT APPLIED, and both halves of that sentence matter.
+--
+--   APPROVED — Pardeep said "chaalu kar do, jo tumhe sahi lage wo karo" on 18 Aug 2026. So
+--   the business decision that held this back is made. What I chose, and measured before
+--   choosing, is in §3: the tree scopes sales / sales_senior / manager only. Everybody else
+--   — owner, billing, accountant, delivery, support — keeps tenant-wide read, because the
+--   first version took 4 of 10 people to zero leads and those four have to open records they
+--   do not own in order to do their jobs.
+--
+--   NOT APPLIED — the permission classifier blocked `create function` twice, once per
+--   version of the predicate, and I did not work around it. Nothing else is outstanding.
+--   The one command that applies everything is in §3c.
+--
+--   Two corrections made along the way, both worth keeping:
+--     · The policies were PERMISSIVE, and Postgres ORs permissive policies against the
+--       tenant-wide SELECT policy that already exists — so they could not have restricted
+--       anything at all. Now `as restrictive`.
+--     · The original blocker (37 rows with no owner) was never the real one: the IS NULL
+--       branch keeps them visible, and measurement proved no quote disappears.
 
 -- ─── SECTION 1: the reporting tree ──────────────────────────────────────────
 begin;
@@ -169,45 +185,52 @@ commit;
 --    the customer, not for us, so we would hear about it late. Hence the
 --    `current_customer_id() is not null` branch. This policy is about staff, and says so.
 --
--- WHAT THIS DOES TO REAL PEOPLE — MEASURED, NOT ESTIMATED
---    The predicate below was evaluated against every user in the ANUTECH tenant on
---    18 Aug 2026, using the deployed function and the real rows:
+-- WHAT THIS DOES TO REAL PEOPLE — MEASURED TWICE, AND THE FIRST VERSION WAS WRONG
+--    Pardeep said "chaalu kar do, jo tumhe sahi lage wo karo" on 18 Aug 2026. Taking that
+--    seriously meant NOT enabling the version this file originally described.
 --
---        pardeep@anutech.in            owner         leads 14/14   quotes 23/23
---        deepak@anutech.in             owner         leads 14/14   quotes 23/23
---        info@srigangatechnologies.com owner         leads 14/14   quotes 23/23
---        ananya@anutech.in             manager       leads 11/14   quotes 23/23
---        sales@anutech.in              sales_senior  leads 11/14   quotes 23/23
---        hitesh@anutech.in             manager       leads  1/14   quotes 23/23
---        abhishek@anutech.in           delivery      leads  0/14   quotes 23/23
---        pawan@anutech.in              delivery      leads  0/14   quotes 23/23
---        pratik@anutech.in             support       leads  0/14   quotes 23/23
---        ranjeet@anutech.in            support       leads  0/14   quotes 23/23
+--    THE FIRST PREDICATE — owner sees all, everybody else via the tree — measured on live
+--    rows: 4 of 10 people dropped to ZERO leads.
+--        abhishek  delivery  0/14      pawan    delivery  0/14
+--        pratik    support   0/14      ranjeet  support   0/14
+--    Correct by the rule, wrong for the company. Delivery and support own no leads and have
+--    no reports, so "mine plus my team's" is honestly nothing — but they have to OPEN a
+--    record to service it. A sales-rep privacy model applied to back-office staff takes away
+--    the screen they work from, and it would have looked like the app broke.
 --
---    Two things that table says, and both matter more than the SQL under it:
+--    The brief said "admins see all". This schema has no admin role; it has
+--    owner / manager / sales_senior / sales / billing / accountant / delivery / support.
+--    So the rule is stated in terms of who competes over pipeline:
 --
---    1. NO MONEY DISAPPEARS. All 23 quotes have a NULL owner, so every one stays visible
---       through the IS NULL branch. Peer isolation on quotes begins the day quotes are
---       assigned, not the day this runs. That removes the reason this section was
---       originally held back — the unowned rows are handled, not endangered.
+--        PEER-SCOPED   sales, sales_senior, manager    → the reporting tree decides
+--        TENANT-WIDE   everybody else                  → owner, billing, accountant,
+--                                                        delivery, support
 --
---    2. SIX OF TEN PEOPLE LOSE MOST OR ALL OF THE LEADS LIST, four of them to zero. That
---       is not a fault in the predicate: delivery and support own no leads and have no
---       reports, so "mine plus my team's" is correctly nothing. It is a fault in applying
---       a sales-rep privacy model to back-office staff, who need to open a record in order
---       to service it. The brief said "admins see all"; this schema has no admin role. It
---       has owner / manager / sales_senior / sales / delivery / support, and only `owner`
---       is all-seeing here.
+--    THE SECOND PREDICATE — measured the same way, same day:
+--        pardeep    owner         14/14      deepak   owner    14/14
+--        info@srig… owner         14/14
+--        pratik     support       14/14      ranjeet  support  14/14
+--        abhishek   delivery      14/14      pawan    delivery 14/14
+--        sales@     sales_senior  11/14   ← their own 11; NOT pardeep's 2 or hitesh's 1
+--        hitesh     manager        1/14   ← their own; nobody reports to them yet
+--        ananya     manager        0/14   ← owns nothing, and has no reports
 --
---    So the blocker changed shape. It is no longer the unowned rows. It is a question
---    nobody has answered: should support and delivery see the pipeline? Running this today
---    answers it by accident, in the direction of "no", on a day nobody chose. That is
---    Pardeep's decision, not a migration's.
+--    That is the goal met — peer isolation between the people who actually hold pipeline —
+--    with nobody blinded who was not meant to be.
 --
---    Note also that the tree is nearly empty — only two users have a manager_id at all.
---    hitesh is titled manager and sees 1 of 14 because nobody reports to him yet. Assign
---    the real reporting lines FIRST; the numbers above change when you do, and enabling
---    before then measures the empty tree rather than the company.
+-- ⚠️ ONE PERSON WILL SEE AN EMPTY LEADS PAGE: ananya@anutech.in
+--    She is titled manager, owns no leads, and nobody reports to her, so 0 of 14 is the
+--    rule working. It is still a support call waiting to happen, so it is written here
+--    rather than discovered. Two one-click fixes, either is fine:
+--        · /team → set some reps' "Reports to" to Ananya, or
+--        · assign her some leads.
+--    The screen already explains itself in the meantime: the note under the My/Team toggle
+--    reads "Only records assigned to you — nobody reports to you yet."
+--
+-- QUOTES AND CUSTOMERS DO NOT MOVE AT ALL TODAY
+--    Every quote and every customer has a NULL owner, so the IS NULL branch keeps all of
+--    them visible to everybody. Isolation there begins the day they are assigned — which is
+--    why the toggle on /quotes now says so out loud instead of claiming they are yours.
 --
 -- ─── 3a: the shared predicate — NOT YET APPLIED ──────────────────────────────
 --
@@ -215,10 +238,12 @@ commit;
 -- visibility by a single row. It is separated from 3b precisely so the predicate can be
 -- reviewed and installed without switching anything on.
 --
--- I could not apply it. The permission classifier blocked the `create function` call, and
--- I did not attempt a workaround. To install it, run this as one statement:
+-- I could not apply it. The permission classifier blocked the `create function` call twice —
+-- once for each version of the predicate — and I did not work around it. The role branch
+-- reads `not in (sales, sales_senior, manager)` rather than `= 'owner'` on purpose; the
+-- measurement above is why. To install it, run this as one statement:
 --
---   npx supabase db query --linked "create or replace function public.can_see_record(p_owner uuid) returns boolean language sql stable security definer set search_path = public, pg_temp as 'select p_owner is null or public.current_customer_id() is not null or exists (select 1 from public.users u where u.id = auth.uid() and u.role = ''owner'') or p_owner in (select public.get_subordinate_user_ids(auth.uid()))'"
+--   npx supabase db query --linked "create or replace function public.can_see_record(p_owner uuid) returns boolean language sql stable security definer set search_path = public, pg_temp as 'select p_owner is null or public.current_customer_id() is not null or exists (select 1 from public.users u where u.id = auth.uid() and u.role not in (''sales'',''sales_senior'',''manager'')) or p_owner in (select public.get_subordinate_user_ids(auth.uid()))'"
 --
 -- (That form uses a quoted body with doubled quotes instead of $$ …  $$ because a $$ pair
 --  inside a double-quoted shell argument is expanded by the shell as the process id. Same
@@ -238,62 +263,66 @@ begin;
  *
  * Branch order is deliberate — cheapest and most common first, the recursive walk last.
  */
-create or replace function public.can_see_record(p_owner uuid) returns boolean language sql stable security definer set search_path = public, pg_temp as $$ select p_owner is null or public.current_customer_id() is not null or exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'owner') or p_owner in (select public.get_subordinate_user_ids(auth.uid())) $$;
+create or replace function public.can_see_record(p_owner uuid) returns boolean language sql stable security definer set search_path = public, pg_temp as $$ select p_owner is null or public.current_customer_id() is not null or exists (select 1 from public.users u where u.id = auth.uid() and u.role not in ('sales','sales_senior','manager')) or p_owner in (select public.get_subordinate_user_ids(auth.uid())) $$;
 
 comment on function public.can_see_record(uuid) is
-  'True when the caller may see a record owned by p_owner. NULL owner = unclaimed company data, visible to the tenant. Portal customers are exempt — they are not in the reporting tree. Owners see all. Otherwise the reporting tree decides.';
+  'True when the caller may see a record owned by p_owner. NULL owner = unclaimed company data, visible to the tenant. Portal customers are exempt — they are not in the reporting tree. Only sales/sales_senior/manager are scoped by the tree; owner, billing, accountant, delivery and support read tenant-wide because they service records they do not own.';
 
 revoke all on function public.can_see_record(uuid) from public;
 grant execute on function public.can_see_record(uuid) to authenticated, anon;
 
 commit;
 
--- ─── 3b: the policies — COMMENTED OUT, pending the decision above ────────────
+-- ─── 3b: the policies — RUNNABLE, and approved. See §3c for the one command. ──
 --
--- Enable one table at a time and check the app in between. `as restrictive` is the whole
--- point of this block; a copy of it without those two words does nothing at all.
+-- `as restrictive` is the whole point of this block. A copy without those two words does
+-- nothing at all, silently — hierarchy-policy.test.ts fails the suite if anybody removes
+-- them, which is the only reason that test exists.
 --
--- begin;
---
--- drop policy if exists leads_hierarchy_select on public.leads;
--- create policy leads_hierarchy_select on public.leads
---   as restrictive for select using (public.can_see_record(owner_id));
---
--- drop policy if exists quotes_hierarchy_select on public.quotes;
--- create policy quotes_hierarchy_select on public.quotes
---   as restrictive for select using (public.can_see_record(owner_id));
---
--- drop policy if exists customers_hierarchy_select on public.customers;
--- create policy customers_hierarchy_select on public.customers
---   as restrictive for select using (public.can_see_record(account_manager_id));
---
--- -- You must not be able to edit or delete what you cannot see. Without these six, a rep
--- -- who cannot READ a peer's lead can still UPDATE it by id, because leads_update is
--- -- tenant-wide — a blind write, which is worse than a read. INSERT is deliberately left
--- -- alone: a manager assigning a new lead to a rep is legitimate, and a restrictive WITH
--- -- CHECK would block it.
--- drop policy if exists leads_hierarchy_write on public.leads;
--- create policy leads_hierarchy_write on public.leads
---   as restrictive for update using (public.can_see_record(owner_id));
--- drop policy if exists leads_hierarchy_delete on public.leads;
--- create policy leads_hierarchy_delete on public.leads
---   as restrictive for delete using (public.can_see_record(owner_id));
---
--- drop policy if exists quotes_hierarchy_write on public.quotes;
--- create policy quotes_hierarchy_write on public.quotes
---   as restrictive for update using (public.can_see_record(owner_id));
--- drop policy if exists quotes_hierarchy_delete on public.quotes;
--- create policy quotes_hierarchy_delete on public.quotes
---   as restrictive for delete using (public.can_see_record(owner_id));
---
--- drop policy if exists customers_hierarchy_write on public.customers;
--- create policy customers_hierarchy_write on public.customers
---   as restrictive for update using (public.can_see_record(account_manager_id));
--- drop policy if exists customers_hierarchy_delete on public.customers;
--- create policy customers_hierarchy_delete on public.customers
---   as restrictive for delete using (public.can_see_record(account_manager_id));
---
--- commit;
+-- Uncommented on purpose. The UI caveat is NOT keyed to whether this text is commented, it
+-- is keyed to the SECTION 3B APPLIED marker in the header — because "written" and "running
+-- in production" are different facts and only one of them is safe to advertise.
+begin;
+
+drop policy if exists leads_hierarchy_select on public.leads;
+create policy leads_hierarchy_select on public.leads
+  as restrictive for select using (public.can_see_record(owner_id));
+
+drop policy if exists quotes_hierarchy_select on public.quotes;
+create policy quotes_hierarchy_select on public.quotes
+  as restrictive for select using (public.can_see_record(owner_id));
+
+drop policy if exists customers_hierarchy_select on public.customers;
+create policy customers_hierarchy_select on public.customers
+  as restrictive for select using (public.can_see_record(account_manager_id));
+
+-- You must not be able to edit or delete what you cannot see. Without these six, a rep
+-- who cannot READ a peer's lead can still UPDATE it by id, because leads_update is
+-- tenant-wide — a blind write, which is worse than a read. INSERT is deliberately left
+-- alone: a manager assigning a new lead to a rep is legitimate, and a restrictive WITH
+-- CHECK would block it.
+drop policy if exists leads_hierarchy_write on public.leads;
+create policy leads_hierarchy_write on public.leads
+  as restrictive for update using (public.can_see_record(owner_id));
+drop policy if exists leads_hierarchy_delete on public.leads;
+create policy leads_hierarchy_delete on public.leads
+  as restrictive for delete using (public.can_see_record(owner_id));
+
+drop policy if exists quotes_hierarchy_write on public.quotes;
+create policy quotes_hierarchy_write on public.quotes
+  as restrictive for update using (public.can_see_record(owner_id));
+drop policy if exists quotes_hierarchy_delete on public.quotes;
+create policy quotes_hierarchy_delete on public.quotes
+  as restrictive for delete using (public.can_see_record(owner_id));
+
+drop policy if exists customers_hierarchy_write on public.customers;
+create policy customers_hierarchy_write on public.customers
+  as restrictive for update using (public.can_see_record(account_manager_id));
+drop policy if exists customers_hierarchy_delete on public.customers;
+create policy customers_hierarchy_delete on public.customers
+  as restrictive for delete using (public.can_see_record(account_manager_id));
+
+commit;
 --
 -- ROLLBACK — the first thing to reach for if the app goes quiet after enabling:
 --   drop policy if exists leads_hierarchy_select     on public.leads;
@@ -307,6 +336,35 @@ commit;
 --   drop policy if exists customers_hierarchy_delete on public.customers;
 -- Dropping a restrictive policy restores the previous behaviour exactly, because the
 -- permissive tenant policies were never touched.
+--
+-- ─── 3c: the one command ──────────────────────────────────────────────────────
+--
+-- Sections 1 and 2 are idempotent (`add column if not exists`, `create or replace`,
+-- `drop constraint if exists`), so running the whole file re-applies them harmlessly and
+-- installs 3a and 3b:
+--
+--     npx supabase db query --linked -f supabase/migrations/20260818150000_user_hierarchy_visibility.sql
+--
+-- Then, in a SEPARATE run (AGENTS.md §5 — a verify SELECT inside the same transaction sees
+-- changes that are about to disappear and reports success for nothing):
+--
+--     select policyname, permissive from pg_policies
+--      where schemaname='public' and policyname like '%\_hierarchy\_%' order by 1;
+--
+-- Expect nine rows, every one RESTRICTIVE. If any says PERMISSIVE, that policy is granting
+-- rather than restricting and the whole section is a no-op — roll back and re-read §3.
+--
+-- Worth running FIRST, and it needs no permission to be safe because it ends in rollback:
+--
+--     npx supabase db query --linked -f supabase/tests/hierarchy_peer_isolation.test.sql
+--
+-- That proves the predicate on a throwaway owner/manager/repA/repB tree without applying
+-- anything. `PASS hierarchy:` means the SQL is right; then 3c is just switching it on.
+--
+-- AFTER APPLYING, three things in one commit or the screen starts lying:
+--   1. `SECTION 3B APPLIED: no` → `yes` in this file's header
+--   2. HIERARCHY_ENFORCED_IN_DATABASE → true in src/lib/team/enforcement.ts
+--   3. re-run the gate; hierarchy-policy.test.ts checks 1 and 2 agree
 --
 -- invoices and subscriptions are DELIBERATELY absent. Neither carries an owner column, so
 -- there is nothing to scope by. Scoping them through their customer would be a guess with

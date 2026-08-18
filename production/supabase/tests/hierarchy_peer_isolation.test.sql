@@ -103,7 +103,11 @@ create or replace function public.can_see_record(p_owner uuid) returns boolean
 language sql stable security definer set search_path = public, pg_temp as $fn$
   select p_owner is null
       or public.current_customer_id() is not null
-      or exists (select 1 from public.users u where u.id = auth.uid() and u.role = 'owner')
+      -- Only the roles that compete over pipeline are scoped by the tree. Everybody else
+      -- reads tenant-wide, because they service records they do not own. See the migration.
+      or exists (select 1 from public.users u
+                  where u.id = auth.uid()
+                    and u.role not in ('sales','sales_senior','manager'))
       or p_owner in (select public.get_subordinate_user_ids(auth.uid()))
 $fn$;
 

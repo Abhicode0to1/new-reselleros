@@ -42,8 +42,27 @@ export interface TeamMember {
   role: string;
 }
 
-/** Roles that see everything, regardless of the tree. */
-const SEES_ALL: ReadonlySet<string> = new Set(["owner"]);
+/**
+ * The only roles the reporting tree scopes: the ones that compete over pipeline.
+ *
+ * ─── WHY THIS IS A LIST OF WHO IS *IN*, NOT WHO IS EXEMPT ────────────────────
+ * It was `SEES_ALL = {"owner"}` — everybody else scoped by the tree. Measured against the
+ * live workspace, that gave 0 of 14 leads to both support users and both delivery users,
+ * because they own no leads and have nobody reporting to them. Correct by the rule, and
+ * useless: they have to OPEN a record to service it. Four people would have found an empty
+ * page and reasonably concluded the app was broken.
+ *
+ * So the rule names the sales motion instead. Anybody outside it — owner, billing,
+ * accountant, delivery, support — reads the whole workspace, which is what they already had.
+ *
+ * ⚠️ This list MUST match the role branch of public.can_see_record() in
+ * 20260818150000_user_hierarchy_visibility.sql. If they disagree, the UI hides rows the API
+ * will happily serve (or worse, shows rows it will not) — and the mismatch has no symptom
+ * beyond a page that looks empty for no reason.
+ */
+export const PEER_SCOPED_ROLES = ["sales", "sales_senior", "manager"] as const;
+
+const PEER_SCOPED: ReadonlySet<string> = new Set<string>(PEER_SCOPED_ROLES);
 
 /**
  * What this person's scope is.
@@ -53,7 +72,7 @@ const SEES_ALL: ReadonlySet<string> = new Set(["owner"]);
  * about the shape of the organisation.
  */
 export function scopeOf(me: TeamMember, all: readonly TeamMember[]): Scope {
-  if (SEES_ALL.has(me.role)) return "all";
+  if (!PEER_SCOPED.has(me.role)) return "all";
   return all.some((u) => u.managerId === me.id) ? "team" : "own";
 }
 

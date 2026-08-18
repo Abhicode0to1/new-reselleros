@@ -24,6 +24,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { HIERARCHY_ENFORCED_IN_DATABASE } from "./enforcement";
+import { PEER_SCOPED_ROLES } from "./visibility";
 
 const MIGRATION = path.join(
   process.cwd(),
@@ -88,22 +89,26 @@ describe("hierarchy RLS policies", () => {
   });
 
   it("keeps the UI caveat in step with the policies that actually shipped", () => {
-    /* The dangerous drift is the flag going true while the policies are still commented
-       out: the "this only filters what you see" caveat disappears from /leads and /quotes,
-       and a filter starts reading as privacy. Tying the two together means enabling one
-       without the other fails here rather than on somebody's screen.
+    /* The dangerous drift is the flag going true while the policies are not actually
+       running: the "this only filters what you see" caveat disappears from /leads and
+       /quotes, and a filter starts reading as privacy.
 
-       Read RAW, not uncommented — an uncommented `create policy` at the start of a line is
-       exactly what distinguishes shipped from staged. */
+       Keyed on the APPLIED marker, not on whether the SQL is commented out. That was the
+       first design and it was wrong in a way worth remembering: it made "the text is
+       uncommented" mean "the database enforces it", so staging a ready-to-run migration
+       would have forced this flag true and put a false claim on screen. Written and running
+       are different facts. A human edits the marker when they have run it. */
     const raw = readFileSync(MIGRATION, "utf8");
-    const policiesShipped = /^[ \t]*create policy \w+_hierarchy_select/m.test(raw);
+    const marker = /SECTION 3B APPLIED:\s*(yes|no)\b/i.exec(raw);
+    expect(marker, "the SECTION 3B APPLIED marker is missing from the migration").toBeTruthy();
 
+    const applied = marker![1].toLowerCase() === "yes";
     expect(
       HIERARCHY_ENFORCED_IN_DATABASE,
-      policiesShipped
-        ? "Section 3b is uncommented but the UI still says visibility is not enforced"
-        : "the UI claims database enforcement while Section 3b is still commented out",
-    ).toBe(policiesShipped);
+      applied
+        ? "the migration says Section 3b is applied but the UI still says it is not enforced"
+        : "the UI claims database enforcement while the migration says Section 3b is NOT applied",
+    ).toBe(applied);
   });
 
   it("keeps the SQL regression test in step with the migration", () => {
@@ -131,6 +136,38 @@ describe("hierarchy RLS policies", () => {
     /* It must not be able to leave fixtures behind on whatever database it is pointed at. */
     expect(sqlTest.trimEnd().endsWith("rollback;"), "the SQL test does not end in rollback").toBe(true);
     expect(sqlTest).not.toMatch(/^\s*commit;/m);
+  });
+
+  it("scopes the same roles in TypeScript as in SQL", () => {
+    /* The screen filters with PEER_SCOPED_ROLES; the database filters with the role branch
+       of can_see_record(). If they disagree, the UI hides rows the API would serve — a page
+       that looks empty for no reason, with no error anywhere to explain it. That is how the
+       first version of this feature would have shown support staff zero leads. */
+    /* ⚠️ ANCHORED ON THE RUNNABLE STATEMENT, and the first version of this test was not.
+       It searched the whole file, matched the shell-pasteable copy in the §3a comment first,
+       and passed while the real `as $$ … $$` body said something different. Proven by
+       dropping `manager` from the real body: the test stayed green. A guard that validates
+       documentation instead of the SQL is worse than no guard, because it is trusted. */
+    const raw = readFileSync(MIGRATION, "utf8");
+    const runnable = /create or replace function public\.can_see_record\(p_owner uuid\)[\s\S]*?as \$\$([\s\S]*?)\$\$/
+      .exec(raw)?.[1];
+    expect(runnable, "the runnable can_see_record body is missing").toBeTruthy();
+
+    const rolesIn = (sql: string): string[] => {
+      const branch = /u\.role not in \(([^)]*)\)/.exec(sql);
+      expect(branch, "can_see_record has no role branch — did it revert to = 'owner'?").toBeTruthy();
+      return branch![1].split(",").map((r) => r.trim().replace(/'/g, "")).sort();
+    };
+
+    expect(rolesIn(runnable!), "the runnable SQL scopes different roles than the UI")
+      .toEqual([...PEER_SCOPED_ROLES].sort());
+
+    /* The copy-paste command in the header must agree too — it is what somebody will
+       actually run, and its quotes are doubled for the shell, hence the same stripping. */
+    const shellCopy = /npx supabase db query[^\n]*can_see_record[^\n]*/.exec(raw)?.[0];
+    expect(shellCopy, "the §3a shell command is missing").toBeTruthy();
+    expect(rolesIn(shellCopy!), "the pasteable command disagrees with the migration body")
+      .toEqual([...PEER_SCOPED_ROLES].sort());
   });
 
   it("exempts unclaimed rows and portal customers in the shared predicate", () => {
