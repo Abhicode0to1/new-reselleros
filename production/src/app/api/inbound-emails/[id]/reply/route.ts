@@ -15,18 +15,25 @@
  * verified domain — the single most abusable shape an endpoint like this can have. The
  * address comes off the enquiry row and nowhere else.
  *
- * ─── AND THE SEND IS ITS OWN RECORD ─────────────────────────────────────────
- * No row is written here. sendEmail() already writes email_log from inside itself
- * (lib/email/log.ts explains why the write lives there and not at the call site), and
- * `kind: "enquiry_reply"` plus the recipient is enough for the screen to derive "you have
- * already answered this" — the same derived-not-stored rule as lib/inbound/answered.ts.
- * A second bookkeeping write here could fail on its own and would then disagree with the
- * log about whether an email that has already left ever happened.
+ * ─── THE REPLY IS RECORDED TWICE, ON PURPOSE ───────────────────────────────
+ * sendEmail() writes `email_log` from inside itself (lib/email/log.ts says why the write
+ * lives there and not at the call site). That row is the DELIVERY record: who, when, which
+ * provider, and whether it actually left — including the attempts that did not.
+ *
+ * This route then writes a second row into `inbound_emails` carrying the TEXT, so the Sent
+ * folder can show what was actually said. My first version skipped it on the argument that
+ * two records can disagree, and that was wrong for a mail client: it left the screen able
+ * to say "you replied on 18 Aug" and nothing more, which is not the fact anyone needs.
+ *
+ * They cannot disagree in the way that matters, because they answer different questions and
+ * the delivery record is the one that decides. The text row is written only after a real
+ * send, and never retried — see the comment at the insert.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
+import { SENT_REPLY_STATUS } from "@/lib/inbound/sent";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,7 +70,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const admin = createAdminClient();
   const { data: enquiry } = await admin
     .from("inbound_emails")
-    .select("id, tenant_id, from_email, subject")
+    .select("id, tenant_id, from_email, subject, lead_id")
     .eq("id", params.id)
     .eq("tenant_id", me.tenant_id)
     .maybeSingle();
@@ -98,12 +105,46 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     );
   }
 
+  /* ─── AND THE REPLY IS KEPT, WITH ITS TEXT ───────────────────────────────────
+     email_log records that a reply went and to whom, but not a word of it. That made
+     the Sent folder a label over an empty room and left Pardeep asking "kaise pata
+     chalega ki KYA reply send kiya hai". Knowing that you replied is not the useful
+     fact; knowing what you said is.
+
+     Written AFTER the send and best-effort: the customer has the email whatever happens
+     next, so a failed insert must never turn into a second send. A missing row costs a
+     line in the Sent folder; a duplicate email costs the customer's trust.
+
+     Only a real send is filed. A stubbed attempt reached nobody, and a Sent folder that
+     lists mail nobody received is the same lie in a different place. */
+  let logged = false;
+  if (sent.status === "sent") {
+    const { error: logErr } = await admin.from("inbound_emails").insert({
+      tenant_id:  me.tenant_id,
+      /* The provider's own id keeps this idempotent against a retried request. */
+      message_id: `reply:${sent.providerId ?? enquiry.id}`,
+      /* No from_email: it left from the tenant's connected account, whose address is a
+         property of the tenant and not of this row. `status` carries the direction. */
+      from_email: null,
+      to_email:   enquiry.from_email,
+      subject:    parsed.subject,
+      body_text:  parsed.body,
+      status:     SENT_REPLY_STATUS,
+      route:      "sales",
+      lead_id:    enquiry.lead_id,
+    });
+    logged = !logErr;
+  }
+
   return NextResponse.json({
     ok: true,
     /* "stubbed" means no mail provider is configured and NOTHING actually left. Reported so
        the screen can say so instead of showing a tick for an email nobody received. */
     stub: sent.status === "stubbed",
     provider: sent.provider,
+    /* Reported rather than assumed, so the screen can say "sent, but not filed" instead of
+       implying both worked. */
+    logged,
   });
 }
 

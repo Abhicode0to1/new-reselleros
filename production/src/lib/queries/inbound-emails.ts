@@ -227,3 +227,21 @@ export class UnknownSendOutcome extends Error {
     this.name = "UnknownSendOutcome";
   }
 }
+
+/**
+ * Which address this workspace's mail actually leaves from.
+ *
+ * Cached for the session — it changes only when somebody reconnects an account in
+ * Settings, and asking on every render would be a request per enquiry click.
+ */
+export function useEmailSender() {
+  return useQuery({
+    queryKey: ["email-sender"],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<{ provider: string | null; address: string | null }> => {
+      const res = await fetch("/api/settings/email-sender");
+      if (!res.ok) return { provider: null, address: null };
+      return res.json();
+    },
+  });
+}

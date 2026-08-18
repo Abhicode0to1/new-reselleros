@@ -19,6 +19,7 @@
  * on every read rather than being flipped by a job that might not run.
  */
 import type { InboundEmailRow } from "@/lib/supabase/database.types";
+import { isSentReply } from "./sent";
 
 export type MailFolder =
   | "inbox" | "starred" | "snoozed" | "leads" | "sent" | "done" | "spam";
@@ -36,7 +37,7 @@ export const MAIL_FOLDERS: readonly FolderMeta[] = [
   { id: "starred", label: "Starred",         icon: "⭐", hint: "Nothing flagged yet — star an enquiry to keep it here." },
   { id: "snoozed", label: "Snoozed",         icon: "⏰", hint: "Nothing put off. Snoozed mail comes back to the Inbox on its own." },
   { id: "leads",   label: "Converted Leads", icon: "🎯", hint: "Enquiries that became a lead will collect here." },
-  { id: "sent",    label: "Sent",            icon: "📤", hint: "Replies you send from here will be listed." },
+  { id: "sent",    label: "Sent",            icon: "📤", hint: "Replies you send from an enquiry are kept here, with what you wrote." },
   { id: "done",    label: "Done",            icon: "✅", hint: "Nothing archived yet. Finished enquiries land here — nothing is ever deleted." },
   { id: "spam",    label: "Spam / System",   icon: "🚫", hint: "Automated and non-sales mail is filed here, out of the Inbox." },
 ] as const;
@@ -79,6 +80,11 @@ export function isSnoozed(row: FoldersRow, nowISO: string): boolean {
 export function inFolder(row: FoldersRow, folder: MailFolder, nowISO: string): boolean {
   const archived = row.archived_at != null;
 
+  /* A reply WE sent belongs in exactly one folder and no other. Without this it would
+     land in the Inbox as work owed to somebody, which is the opposite of what it is —
+     and every count on the rail would be inflated by our own outgoing mail. */
+  if (isSentReply(row)) return folder === "sent";
+
   switch (folder) {
     case "inbox":
       /* Everything a rep still owes an answer on. Archived, snoozed and system mail
@@ -103,10 +109,8 @@ export function inFolder(row: FoldersRow, folder: MailFolder, nowISO: string): b
       return isSpam(row);
 
     case "sent":
-      /* Sent mail is not in this table at all — it lives in `email_log`, which
-         records recipient, subject and delivery status but NO body. The page loads
-         that folder separately and says so; returning false here keeps the rule
-         honest instead of quietly showing an empty list of inbound mail. */
+      /* Reached only by rows that are NOT sent replies — the guard at the top already
+         answered for those. An inbound enquiry is never in Sent. */
       return false;
   }
 }

@@ -37,7 +37,7 @@ import { useQuotes } from "@/lib/queries/quotes";
 import { useLeads } from "@/lib/queries/leads";
 import { answeredState, answeredNote, quoteButtonLabel, answeredTone } from "@/lib/inbound/answered";
 import { matchQuotesToEnquiry, weakestBasis, basisCaveat } from "@/lib/inbound/quote-match";
-import { useInboundEmails, useConvertInboundToLead, useSetInboundState } from "@/lib/queries/inbound-emails";
+import { useInboundEmails, useConvertInboundToLead, useSetInboundState, useEmailSender } from "@/lib/queries/inbound-emails";
 import { inboundStatusMeta, canConvertToLead } from "@/lib/inbound/status";
 import {
   MAIL_FOLDERS, inFolder, folderCounts, inboxUnread, snoozePresets, isSnoozed,
@@ -47,6 +47,7 @@ import {
   parseSearch, matchesSearch, isEmptySearch, SUPPORTED_OPERATORS,
 } from "@/lib/inbound/search";
 import { groupIntoThreads, threadFor } from "@/lib/inbound/threads";
+import { isSentReply, sentFromNote } from "@/lib/inbound/sent";
 import { extractEntities, foundCount, type ExtractedEntities } from "@/lib/inbound/extract";
 import { useItems } from "@/lib/queries/items";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -57,6 +58,10 @@ import type { InboundEmailRow } from "@/lib/supabase/database.types";
 /* ── Small presentational helpers ──────────────────────────────────────────── */
 
 function senderLabel(e: InboundEmailRow): string {
+  /* A reply WE sent has no from_email — it left from the tenant's connected account. The
+     useful label there is who it went TO, not "Unknown sender", which is what a bare
+     from_email fallback produced and which reads as data loss. */
+  if (isSentReply(e)) return e.to_email ? `To ${e.to_email}` : "Reply you sent";
   return e.from_name?.trim() || e.from_email || "Unknown sender";
 }
 
@@ -303,6 +308,11 @@ export default function EnquiriesPage() {
       )}`
     : null;
 
+  /* A reply WE sent is not something to convert, quote or reply to — it is a record of
+     work already done, so the sales toolbar and the composer are hidden on it. */
+  const viewingSentReply = selected != null && isSentReply(selected);
+  const { data: emailSender } = useEmailSender();
+
   const folderMeta = MAIL_FOLDERS.find((f) => f.id === folder)!;
 
   return (
@@ -535,6 +545,15 @@ export default function EnquiriesPage() {
                       {selected.from_email && selected.from_name && ` · ${selected.from_email}`}
                       {" · "}{formatDate(selected.created_at)}
                     </p>
+                    {/* Where the copy actually is. Pardeep sent a reply and then hunted
+                        for it in sales@anutech.in, where it was never going: the connected
+                        account is a different address, and the reply itself went to the
+                        customer. See lib/inbound/sent.ts. */}
+                    {viewingSentReply && (
+                      <p className="mt-1 text-[11px] leading-snug text-ink-3">
+                        {sentFromNote(emailSender?.address)}
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -581,7 +600,7 @@ export default function EnquiriesPage() {
                   tick beside "you have already sent 2 quotes — check which one the customer
                   should keep" reads as reassurance for a sentence that is reporting a
                   mistake, and people scan the colour before they read the words. */}
-              {answeredNote(answered, rupee, answeredCaveat) && (
+              {!viewingSentReply && answeredNote(answered, rupee, answeredCaveat) && (
                 <div className={cn(
                   "flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-4 py-2",
                   answeredTone(answered) === "problem" ? "border-rose/50 bg-rose-soft/40"
@@ -611,7 +630,11 @@ export default function EnquiriesPage() {
                 </div>
               )}
 
-              {/* ── The four moves, above the email ──────────────────────── */}
+              {/* ── The four moves, above the email ────────────────────────
+                  Hidden on a reply WE sent. There is nothing to convert, quote or
+                  archive about our own outgoing mail, and a "Send quote" button sitting
+                  above a record of work already done is an invitation to do it twice. */}
+              {!viewingSentReply && (
               <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-paper-2/40 px-4 py-2.5">
                 {canConvertToLead(selected) ? (
                   <Button size="sm" loading={convert.isPending} onClick={() => convert.mutate(selected.id)}>
@@ -666,7 +689,10 @@ export default function EnquiriesPage() {
                 </Button>
               </div>
 
+              )}
+
               {/* ── Secondary: flag and defer ────────────────────────────── */}
+              {!viewingSentReply && (
               <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-1.5">
                 <Button
                   size="sm"
@@ -713,6 +739,7 @@ export default function EnquiriesPage() {
                 </div>
 
               </div>
+              )}
 
               {/* ── The conversation, and what we read out of it ─────────── */}
               <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[1fr_260px]">
@@ -795,6 +822,7 @@ export default function EnquiriesPage() {
                   width of a phone is one people write four-word replies in, and
                   the whole point is that the seat count and the product stay
                   visible above while it is typed. */}
+              {!viewingSentReply && (
               <div className="px-4 pb-4">
                 <ReplyComposer
                   enquiryId={selected.id}
@@ -814,18 +842,22 @@ export default function EnquiriesPage() {
                   }}
                 />
               </div>
+              )}
             </Card>
           )}
         </div>
       </div>
 
-      {/* Sent lives in a different table and has no body — said here rather than
-          rendering an empty list that looks like nothing was ever sent. */}
+      {/* Two facts a rep needs in this folder, and neither was here before: which
+          mailbox holds the real copy, and that anything sent before today has only a
+          delivery record. The previous version of this line said the text is never
+          stored, which stopped being true the moment replies started being filed. */}
       {folder === "sent" && (
         <p className="mt-3 px-1 text-[11px] leading-snug text-ink-3">
-          Replies are recorded in the email log with their recipient, subject and
-          delivery status — the message text itself is not stored, so it cannot be
-          reprinted here.
+          {sentFromNote(emailSender?.address)}{" "}
+          Replies sent before 18 Aug 2026 are not listed above — only their delivery was
+          recorded, not their text, so there is nothing here to reprint. Look in that
+          account&apos;s Sent folder for those.
         </p>
       )}
     </div>
