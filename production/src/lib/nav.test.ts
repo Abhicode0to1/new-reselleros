@@ -191,8 +191,44 @@ describe("a page in the wrong nav section is unreachable, not just hidden", () =
     if (!sales.includes("/accounting")) expect(sales).not.toContain("/accounting/ledger");
   });
 
-  it("guards the general rule: every /accounting/* page is reachable by some role", () => {
-    /* An orphaned accounting page is a page nobody can open. */
+  /**
+   * ─── "SOME ROLE" WAS TOO WEAK A RULE, AND IT LET THREE PAGES THROUGH ──────
+   * This assertion used to say every /accounting/* href is reachable by SOME role. It
+   * passed — because the accountant-only "Filing" section covered them — while the OWNER
+   * had no menu route to GST Reports, TDS Receivable or Customer Aging. Pardeep found
+   * that by looking at his own sidebar, one day after this file was supposed to have
+   * guarded it.
+   *
+   * The owner is exempt from the middleware gate (middleware.ts:103), so those pages were
+   * reachable by URL. Reachable is not findable: an owner who does not know the URL simply
+   * does not have the feature — and GST Reports is a monthly statutory deadline.
+   *
+   * So the rule is now stated against the OWNER, who sees the most of the app and is the
+   * person these screens are for.
+   */
+  it("puts EVERY /accounting page in the owner's own menu, not merely in someone's", () => {
+    const ownerHrefs = new Set(
+      filterNavForRole(APP_NAV, "owner").flatMap((s) => s.items.map((i) => i.href)),
+    );
+    const declared = new Set(
+      APP_NAV.flatMap((s) => s.items.map((i) => i.href))
+        .filter((h) => h.startsWith("/accounting")),
+    );
+    const missing = [...declared].filter((h) => !ownerHrefs.has(h));
+    expect(missing, `Not in the owner's menu: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("names the three that were missing, so a revert is loud", () => {
+    const ownerHrefs = new Set(
+      filterNavForRole(APP_NAV, "owner").flatMap((s) => s.items.map((i) => i.href)),
+    );
+    for (const href of ["/accounting/gst", "/accounting/tds-receivable", "/accounting/aging"]) {
+      expect(ownerHrefs, `${href} vanished from the owner menu again`).toContain(href);
+    }
+  });
+
+  it("still keeps every accounting page reachable for the roles that ARE gated", () => {
+    /* Owner and manager bypass the gate; billing and accountant do not. */
     const reachable = new Set(
       ACCOUNTING_ROLES.flatMap((r) => allowedRoutesForRole(r)),
     );

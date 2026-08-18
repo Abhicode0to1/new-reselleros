@@ -273,9 +273,18 @@ export const APP_NAV: NavSection[] = [
          Adding it only to "Filing" made it invisible to the owner, who is exactly the
          person a customer asks for a statement. */
       { id: "ledger",              href: "/accounting/ledger",        label: "Ledger (Khata)",      icon: "file" },
+      /* These three lived ONLY in the accountant-only "Filing" section, so the owner —
+         the person who actually files the GST return and chases the money — had no menu
+         route to any of them. They were reachable (middleware exempts owner and manager,
+         middleware.ts:103) and reachable is not the same as findable: an owner who does
+         not know the URL simply does not have the feature.
+         GST Reports is the sharpest of the three. It is a monthly statutory deadline. */
+      { id: "acc-aging-owner",     href: "/accounting/aging",         label: "Customer Aging",      icon: "clock" },
       { id: "pnl",                 href: "/accounting/pnl",           label: "P&L Report",          icon: "trending_up" },
       { id: "balance-sheet",       href: "/accounting/balance-sheet", label: "Balance Sheet",       icon: "layout" },
       { id: "cash-flow",           href: "/accounting/cash-flow",     label: "Cash Flow",           icon: "rupee" },
+      { id: "gst-owner",           href: "/accounting/gst",           label: "GST Reports",         icon: "file" },
+      { id: "tds-owner",           href: "/accounting/tds-receivable",label: "TDS Receivable",      icon: "rupee" },
       { id: "compliance-calendar", href: "/compliance",               label: "Compliance Calendar", icon: "calendar" },
     ],
   },
