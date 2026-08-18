@@ -29,6 +29,7 @@ import { downloadCSV } from "@/lib/csv";
 import { createClient } from "@/lib/supabase/client";
 import { PnLDrilldownDialog, type PnLDrillKind } from "@/components/features/accounting/pnl-drilldown-dialog";
 import { PnlWaterfall, HundredRupeeBar } from "@/components/features/accounting/pnl-waterfall";
+import { MoneyFlow } from "@/components/features/accounting/money-flow";
 import {
   buildPnl, vendorsFromSubscriptions, cogsBasisNote, compareFigures, isPartialPeriod,
   type PnlPeriod,
@@ -375,6 +376,8 @@ export default function PnLPage() {
   const partial = isPartialPeriod(range.to, today);
 
   const [vendorTab, setVendorTab] = React.useState<string | "all">("all");
+  /* The list is the default. See the note where MoneyFlow is rendered. */
+  const [flowView, setFlowView] = React.useState<"list" | "steps">("list");
 
   /* Profit contribution + the FY trend. The ratio comes from the headline so the chart
      and the number beside it cannot disagree. */
@@ -489,6 +492,23 @@ export default function PnLPage() {
                 {m.cogsBasis === "estimated" && (
                   <Badge kind="warning" size="sm">Licence cost estimated</Badge>
                 )}
+                {/* List / Steps. Two words, not icons — an icon toggle between a list and
+                    a chart is a guess the reader has to make before they can read. */}
+                <div className="inline-flex overflow-hidden rounded-md border border-hairline">
+                  {(["list", "steps"] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setFlowView(v)}
+                      className={cn(
+                        "px-2 py-0.5 text-[11px] font-medium transition-colors",
+                        flowView === v ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-paper-2",
+                      )}
+                    >
+                      {v === "list" ? "List" : "Steps"}
+                    </button>
+                  ))}
+                </div>
                 <button
                   type="button"
                   onClick={() => setCompare((c) => !c)}
@@ -516,14 +536,66 @@ export default function PnLPage() {
             })()}
 
             {steps ? (
-              <PnlWaterfall
-                steps={steps}
-                onSelect={(key) => {
-                  if (key === "revenue") setDrill("revenue");
-                  else if (key === "cogs") setDrill("cogs");
-                  else if (key === "opex") { setDrillExpenseCat(null); setDrill("expenses"); }
-                }}
-              />
+              /* ── LIST BY DEFAULT, WATERFALL ON REQUEST ──────────────────────
+                 Pardeep, after using the waterfall: "isko samjhane me dimag lagana pad
+                 raha hai", and Profit by Vendor was easier because it is a list of rows.
+                 So the list is the default and the waterfall is one click away — the brief
+                 asked for a waterfall and live use said it is hard, and the honest
+                 resolution is to let the reader pick rather than to argue with either. */
+              flowView === "list" ? (
+                <MoneyFlow
+                  scale={m.revenue}
+                  rows={[
+                    {
+                      key: "revenue", group: "in", label: "Revenue",
+                      amount: m.revenue,
+                      hint: `${data.revenueCount} invoice${data.revenueCount === 1 ? "" : "s"} issued`,
+                      onOpen: () => setDrill("revenue"),
+                    },
+                    {
+                      key: "cogs", group: "out", label: "Vendor licences",
+                      amount: m.cogs,
+                      hint: m.cogsBasis === "estimated"
+                        ? "from your wholesale rates"
+                        : `${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`,
+                      ofSalesPct: m.revenue > 0 ? Math.round((m.cogs / m.revenue) * 100) : null,
+                      estimated: m.cogsBasis === "estimated",
+                      onOpen: () => setDrill("cogs"),
+                    },
+                    {
+                      key: "opex", group: "out", label: "Running the business",
+                      amount: m.expenses,
+                      hint: `${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"} — salaries, hosting, office`,
+                      ofSalesPct: m.revenue > 0 ? Math.round((m.expenses / m.revenue) * 100) : null,
+                      onOpen: () => { setDrillExpenseCat(null); setDrill("expenses"); },
+                    },
+                    {
+                      key: "gross", group: "left", label: "Gross margin",
+                      amount: m.grossMargin ?? 0,
+                      hint: "what reselling earns, before running costs",
+                      ofSalesPct: m.grossMarginPct,
+                    },
+                    {
+                      key: "net", group: "left", label: "Net profit",
+                      amount: Math.abs(m.netProfit ?? 0),
+                      hint: (m.netProfit ?? 0) < 0
+                        ? "a LOSS — running costs exceeded the margin"
+                        : "what the business actually kept",
+                      ofSalesPct: m.netProfit !== null && m.revenue > 0
+                        ? Math.round((m.netProfit / m.revenue) * 100) : null,
+                    },
+                  ]}
+                />
+              ) : (
+                <PnlWaterfall
+                  steps={steps}
+                  onSelect={(key) => {
+                    if (key === "revenue") setDrill("revenue");
+                    else if (key === "cogs") setDrill("cogs");
+                    else if (key === "opex") { setDrillExpenseCat(null); setDrill("expenses"); }
+                  }}
+                />
+              )
             ) : (
               /* The chart REFUSES to draw when the cost of goods is unknown. A waterfall's
                  shape asserts that every step is known — drawing one over a missing COGS
