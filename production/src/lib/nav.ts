@@ -327,6 +327,10 @@ export const APP_NAV: NavSection[] = [
          A safety feature nobody can find is not a safety feature; this is the
          same failure the Marketing group had. */
       { id: "backup",    href: "/settings/backup",      label: "Backup & Restore", icon: "database", roles: ["owner"] },
+      /* The triage queue for bug reports the team files with Ctrl+Shift+B. Owner and
+         manager only: the reports name source files and quote whatever the reporter
+         typed, which regularly includes a customer's name and what went wrong for them. */
+      { id: "feedback",  href: "/admin/feedback",       label: "Feedback & AI Fixes", icon: "bug", roles: ["owner", "manager"] },
       { id: "help",      href: "/help",                 label: "Help & Tutorial",  icon: "question" },
     ],
   },
@@ -360,6 +364,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/leads":           ["Sales", "Leads"],
   "/my-expenses":     ["Me", "My Advance & Expenses"],
   "/vault":           ["Admin", "Password Vault"],
+  "/admin/feedback":  ["Admin", "Feedback & AI Fixes"],
   "/marketing/reports": ["Marketing", "ROAS & CAC"],
   "/enquiries":       ["Sales", "Enquiries"],
   "/deals":           ["Sales", "Deal Pipeline"],

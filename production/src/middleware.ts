@@ -48,6 +48,9 @@ const PROTECTED_PREFIXES = [
   "/partners",
   "/mobile",
   "/lead-gen",
+  /* Internal bug-report triage queue. The role gate is the nav-derived one further
+     down (owner + manager); this list is only the "must be signed in" half. */
+  "/admin",
   /* Onboarding fork for a signed-in person who has no workspace yet. It is
      PROTECTED (you must be authenticated to see it) but deliberately NOT in
      AUTH_PREFIXES below — those bounce a signed-in user to their role home,

@@ -4,15 +4,18 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
-import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { useSubmitFeedback } from "@/lib/queries/feedback";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 
-export type FeedbackType = "bug" | "feature" | "ui_improvement";
-export type FeedbackPriority = "low" | "medium" | "high" | "critical";
+/* Types live with the triage engine now — one definition, so the dialog cannot offer a
+   value the engine and the DB check constraint do not know about. */
+import type { FeedbackType, FeedbackSeverity } from "@/lib/feedback/triage";
+export type { FeedbackType };
+export type FeedbackPriority = FeedbackSeverity;
 
 interface FeedbackDialogProps {
   open: boolean;
@@ -34,7 +37,9 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const [promptText, setPromptText] = React.useState("");
   const [screenshots, setScreenshots] = React.useState<ScreenshotItem[]>([]);
   const [capturing, setCapturing] = React.useState(false);
-  const [submitting, setSubmitting] = React.useState(false);
+
+  const submit = useSubmitFeedback();
+  const submitting = submit.isPending;
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -133,6 +138,16 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     setScreenshots((prev) => prev.filter((s) => s.id !== id));
   };
 
+  /**
+   * Submit.
+   *
+   * ─── THE RULE THIS FUNCTION EXISTS TO ENFORCE ─────────────────────────────
+   * Nothing here says "thank you" until the row is actually in the database. The
+   * version this replaced logged a failed insert to the console and thanked the
+   * reporter regardless, with a comment about a "local feedback store" that did not
+   * exist. A reporter who is thanked stops mentioning the problem, so a swallowed
+   * report is not one lost message — it is a bug that nobody will ever raise again.
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanedPrompt = promptText.trim();
@@ -141,74 +156,51 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
       return;
     }
 
-    // Auto-extract Title (First Line) and Description (Full Text)
-    const lines = cleanedPrompt.split("\n").filter((l) => l.trim());
-    const extractedTitle = lines[0] ? lines[0].slice(0, 100) : "Testing Feedback Report";
-
-    setSubmitting(true);
     try {
-      const supabase = createClient();
-      const reporterName = currentUser?.fullName ?? "Team Member";
-      const reporterEmail = currentUser?.authEmail ?? "testing-team@anutech.in";
-      // Was defaulting to Anutech Digital's tenant id, which would file another
-      // tenant's bug report into Anutech's books. Removed 2026-08-13.
-      const tenantId = currentUser?.tenantId;
-      if (!tenantId) throw new Error("Your workspace is still loading — please try again in a moment.");
-
-      const formattedSubject = `[${type.toUpperCase()}] [${priority.toUpperCase()}] ${extractedTitle}`;
-
-      const screenshotsListText = screenshots
-        .map((s, idx) => `ATTACHMENT_${idx + 1}: ${s.name}\nDATA_URL_${idx + 1}: ${s.dataUrl}`)
-        .join("\n");
-
-      const fullBody = `
-REPORTER: ${reporterName} (${reporterEmail})
-PAGE URL: ${pathname}
-TYPE: ${type}
-PRIORITY: ${priority}
-ATTACHED SCREENSHOTS COUNT: ${screenshots.length}
-SUBMITTED AT: ${new Date().toLocaleString("en-IN")}
-
-DESCRIPTION:
-${cleanedPrompt}
-
-${screenshotsListText}
-`.trim();
-
-      const mappedPriority: "low" | "normal" | "high" | "urgent" =
-        priority === "critical" ? "urgent" : priority === "medium" ? "normal" : priority;
-
-      const { error } = await supabase.from("support_tickets").insert({
-        id: crypto.randomUUID(),
-        tenant_id: tenantId,
-        customer_name: reporterName,
-        raised_by_email: reporterEmail,
-        category: "other",
-        subject: formattedSubject,
-        body: fullBody,
-        status: "open",
-        priority: mappedPriority,
+      const result = await submit.mutateAsync({
+        // Never defaulted. It once defaulted to Anutech Digital's tenant id, which filed
+        // another tenant's bug report into Anutech's books.
+        tenantId: currentUser?.tenantId ?? "",
+        reportedType: type,
+        reportedSeverity: priority,
+        text: cleanedPrompt,
+        pagePath: pathname,
+        reporterId: currentUser?.userId ?? null,
+        reporterName: currentUser?.fullName ?? null,
+        reporterEmail: currentUser?.authEmail ?? null,
+        screenshots: screenshots.map((s) => ({ name: s.name, dataUrl: s.dataUrl })),
       });
 
-      if (error) {
-        console.warn("Supabase ticket error, saving to local feedback store:", error);
-      }
+      // The report is saved by this point. Everything below is about being honest
+      // regarding the parts that are not.
+      const parts: string[] = [];
+      if (result.uploaded > 0) parts.push(`${result.uploaded} screenshot(s) attached`);
+      if (!result.triaged) parts.push("AI triage will run when you open /admin/feedback");
 
-      toast.success(
-        `Thank you! Your testing report & ${screenshots.length} screenshot(s) have been submitted.`,
-        {
-          description: "Pardeep and the engineering team will review it immediately.",
-        }
-      );
+      if (result.failedUploads.length > 0) {
+        // Deliberately a warning and not a success: the words were saved, the pictures
+        // were not, and the reporter is the only person who can attach them again.
+        toast.warning(`Report saved — but ${result.failedUploads.length} screenshot(s) did not upload.`, {
+          description: `Not attached: ${result.failedUploads.join(", ")}. The report itself is safe; please re-attach from /admin/feedback if they matter.`,
+          duration: 10_000,
+        });
+      } else {
+        toast.success("Report submitted — thank you.", {
+          description: parts.length ? parts.join(" · ") : "It is now in the triage queue.",
+        });
+      }
 
       setPromptText("");
       setScreenshots([]);
       onOpenChange(false);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed submitting report";
-      toast.error(msg);
-    } finally {
-      setSubmitting(false);
+      const msg = err instanceof Error ? err.message : "Could not submit the report.";
+      // Nothing is cleared and the dialog stays open, so the text the reporter typed is
+      // still on screen and a retry costs one click instead of retyping it.
+      toast.error(msg, {
+        description: "Your report was NOT saved. The text is still here — try again in a moment.",
+        duration: 10_000,
+      });
     }
   };
 

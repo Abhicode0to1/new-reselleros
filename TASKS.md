@@ -5,6 +5,61 @@
 
 ## Active
 
+### 🤖 Feedback Triage & Agent Directive Engine (`/admin/feedback`) — ✅ DONE (19 Aug 2026, DB applied + browser-verified end-to-end)
+
+**Ye pehle se aadha bana hua tha, aur jo bana tha usme ek chup-chaap data-loss bug tha.** `feedback-dialog.tsx` + `global-bug-reporter.tsx` (Ctrl+Shift+B) already existed. Par:
+
+```ts
+const { error } = await supabase.from("support_tickets").insert({...});
+if (error) console.warn("… saving to local feedback store:", error);   // koi local store nahi tha
+toast.success("Thank you! Your testing report … have been submitted.");
+```
+
+Insert fail hone par report **gayab** ho jaati thi aur reporter ko "thank you" mil jaata tha. Feedback box ki sabse buri kharabi yahi hai: banda maan leta hai ki problem ab pata hai, isliye dobara kabhi nahi bolta, aur koi dekh bhi nahi raha. **Ab har write throw karti hai**, dialog khula rehta hai aur likha hua text bacha rehta hai.
+
+**Naapa hua, likhne se pehle:** `support_tickets` me **4 rows hain aur chaaron internal bug report hain** — ek bhi asli customer ticket kabhi aaya hi nahi. Yaani SLA clock (`20260817170000`) aur tier allowance (`20260817180000`) galat cheez gin rahe the. Sabse bada body **214,531 characters** ka tha — ek PNG, base64 me, text column ke andar.
+
+**Chaar asli report ne design decide kiya (inhi ko test fixture banaya gaya hai):**
+
+| # | Report | Kya sikhaya |
+|---|---|---|
+| 1 | `NOT JENERATED INVIOCE` · /quotes/Q-ADPL-2026-27-0002 | Typo-heavy. "INVIOCE" ke bina koi target file nahi milti — observed misspellings alias list me hain, fuzzy matcher nahi (chhote domain words par fuzzy confident bakwaas deta hai). |
+| 2 | `Camera is not opening. There is no error where the problem is.` | Ek line me **do** kharabi — camera, aur khamoshi. Dono alag file par jaati hain. |
+| 3 | `Allow the user to see his attendance History with Selfies.` | Filed as **bug**, hai **feature**. |
+| 4 | `Kuch Aisa kar do ki … popup mil jaye jisse wo attendance miss na kare …` | Poora Hinglish, aur sabse lamba/detailed report. English-only lexicon isko "no signal" bata kar dafan kar deta. |
+
+**Teen niyam jo isi data se nikle:**
+1. **Reporter ka dropdown saboot nahi hai.** Chaaron "bug" file hue, do sach me feature the. `inferred_type` **text** padhta hai; `reported_type` bagal me rehta hai aur dono ka farak khud ek information hai (UI par "filed as bug" chip).
+2. **Khamoshi faisla nahi hai.** Text me kuch na mile to reporter ki choice hi rehti hai — report #1 exactly yahi case hai.
+3. **Hinglish first-class hai**, guess nahi. Har lexicon me dono hain.
+
+**Severity 0–100, aur cap hi asli baat hai.** `feature` cap 35, `ui_improvement` cap 30, bug 0–100. Invariant jo test lock karta hai: **sabse kamzor money bug (low + money = 37) sabse strong feature request (35) se upar rehta hai.** Warna koi bhi "Critical" tick karke apni farmaish ko galat invoice total ke upar bitha sakta tha. Gemini ko **score badalne ki ijazat nahi hai** — sirf summary aur extra file leads; type badalne par engine **dobara** chalta hai taaki cap phir bhi lagey.
+
+**Prompt injection — ye feature isi ka natural target hai.** Report ka text ek agent ke prompt me jaata hai. Isliye: fence tag text me se **strip** hota hai (andar se band nahi kar sakte, lowercase copy bhi), directive khud kehti hai ki block symptom hai instruction nahi, aur instruction-jaisi wording `notes` me ⚠ ke saath dikhti hai. Teeno tested.
+
+**🔴 Ek asli bug jo live run me hi pakda gaya:** pehle AI ke suggest kiye file paths seedha `target_files` me merge ho rahe the. Asli run me Gemini ne `src/components/attendance/ReminderPopup.tsx` aur `src/lib/attendance/client-reminders.ts` diye — **dono repo me hain hi nahi**, ye sirf "agar feature banta to naam ye hota" hai. `plausibleRepoPath` sirf shape dekhta hai, existence nahi. Ab AI ke guesses `notes` me quarantine hote hain ("NOT verified to exist"), `target_files` me nahi — kyunki `triage.test.ts` har emitted path ka disk par hona assert karta hai, aur merge chup-chaap wahi invariant tod raha tha.
+
+**Live nateeja (prod DB, Gemini se, browser me click karke):**
+
+| Sev | Type | Summary (Gemini ne likha) | Screen |
+|---|---|---|---|
+| **57** | bug | An invoice was not generated from a quote. | `/quotes/[id]` |
+| **47** | bug | The camera fails to open …, and no error message is displayed to the user. | `/attendance/me` |
+| 35 | feature *(filed as bug)* | …attendance popup reminder … and a configurable check-out popup reminder | `/attendance/me` |
+| 35 | feature *(filed as bug)* | Users cannot view their attendance history along with associated selfies. | `/attendance/me` |
+
+**⚠️ "Run AI Auto-Fix" jo karta hai, poora yahi hai:** directive banata hai, clipboard par copy karta hai, aur row ko `agent_queued` + kisne/kab stamp karta hai. **Code khud nahi badalta** — ye app Cloud Run par hai, uske paas repo ka checkout, git credentials ya shell kuch nahi. Screen par bhi yahi likha hai, kyunki "queued" ko owner "ban raha hai" samajh le to wo chase karna band kar dega. Asli value directive me hai (sahi files + repo ke niyam + gate), button aakhri 5% hai.
+
+**Files:** [triage.ts](production/src/lib/feedback/triage.ts) · [directive.ts](production/src/lib/feedback/directive.ts) · [route-map.ts](production/src/lib/feedback/route-map.ts) · [queries/feedback.ts](production/src/lib/queries/feedback.ts) · [api/feedback/triage](production/src/app/api/feedback/triage/route.ts) · [admin/feedback/page.tsx](<production/src/app/(app)/admin/feedback/page.tsx>) · migrations [20260819120000](production/supabase/migrations/20260819120000_feedback_triage.sql) + [20260819130000](production/supabase/migrations/20260819130000_backfill_feedback_from_tickets.sql).
+
+**`route-map.ts` khud stale nahi ho sakta:** 118 routes ka committed table hai (client se fs padha nahi ja sakta), par `route-map.test.ts` `src/app` ko **khud scan karke** compare karta hai — nayi page add karke ye file bhoolna suite red kar dega. Is repo ne stale directory-listing ki keemat pehle bhi di hai. Matcher literal segment ko dynamic se upar rakhta hai (`/customers/groups` ≠ `/customers/[id]`), aur na milne par **null** deta hai — galat file par bhejna khali jawab se mehnga hai.
+
+**DB:** dono migration prod par lagi + alag run me verify (2 tables, 6 policies, 4 indexes, RLS on), ledger **276 → 277**. `db push` **nahi** chalayi. Chaaron report backfill ho gayi (body 214,531 → max 295 chars); **`support_tickets` ko haath nahi lagaya** — copy hai, move nahi, kyunki ticket band karna Pardeep ka faisla hai. Screenshots purani ticket rows me hi hain (base64 ko SQL se storage me nahi bheja ja sakta) — naye screenshots `documents` bucket me `<tenant_id>/feedback/<id>/` par jaate hain, **naya bucket nahi banaya** (usi bucket ki chaar tenant policies pehle se sahi hain).
+
+**Gate:** typecheck 0 · **158 files / 3048 tests pass** (2926 → +122) · lint 0 errors, naye files me 0 warnings. **`npm run build` jaan-boojh kar nahi chalayi** — port 3000 par doosre session ka dev server chal raha hai aur build uska `.next` uda deta. **Deploy se pehle build chalani baaki hai** (§25.2: typedRoutes ki galtiyan sirf build pakadta hai).
+
+**Baaki:** `/admin/feedback` par screenshot re-attach karne ka rasta nahi hai · duplicate detection nahi hai (do log ek hi bug file karein to do rows) · `support_tickets` ki 4 purani rows ka kya karna hai — band karna Pardeep ka call.
+
 ### 🔴 HANDOFF — padho pehle (19 Aug 2026)
 
 Branch `session/money-spine-hardening-jun1`. Sab commit ho gaya (`aebdda1` tak). **Deploy 18 Aug ka hi chalu hai** — revision `resellersos-00295-fgm`, 100% traffic, `/login` 200 · https://resellersos-1005662057478.asia-south1.run.app. **19 Aug ka koi badlav abhi live nahi hai** (sab tests, scripts, docs aur DB-ledger ka kaam tha — app code nahi badla).
@@ -23,6 +78,7 @@ Branch `session/money-spine-hardening-jun1`. Sab commit ho gaya (`aebdda1` tak).
 1. **`supabase db push` ab bilkul mat chalao** jab tak GST ka faisla na aaye — wo theek wahi 2 pending files chalayega, jinme paisa badalne wali bhi hai. (Item 4 padho.)
 2. **`Q-2026-9776` par ₹8,165 GST gayab hai**, aur quote **accept ho chuka hai** — ye Pardeep ka business faisla hai, code ka nahi.
 3. **Backup ab CLI se chalta hai, MCP se nahi.** Dump chhota aaye to ghabrao mat, par maano bhi mat — dusre connection se `count(*)` milao. (Item 5b.)
+4. **🔴 `0231` aur `0232` anaath hain — koi command inhe kabhi apply nahi karegi.** (Naapa 19 Aug, DB se.) TASKS.md dono ko "written, NOT applied" kehta tha, aur wo **sach** hai: `task_kudos`, `task_collaborators`, `leads.utm_source`, `expenses.channel`, `salary_payments.performance_points` — paanchon prod me gayab hain. Par dono files `migrations-archive/` me padi hain, jo run-path se **bahar** hai, aur `baseline.sql` me bhi nahi hain. To na `db push` inhe chalayega, na `db:rebuild`. Aur `migrations-archive/README.md` kehta hai *"every one of them ran against the production database"* — **in do ke liye ye galat hai.** Matlab marketing UTM attribution aur gamification/kudos ka poora TypeScript + tests likha hua hai aur DB me uska base hai hi nahi. Faisla chahiye: files ko `migrations/` me wapas laana hai (timestamp naam ke saath), ya feature drop karna hai.
 
 **Naye tools jo ab maujood hain:** `npm run migrations:verify` (git ki migration DB me lagi hai ya nahi) · `.claude/skills/resellersos-env` (is machine par kaun sa Supabase raasta chalta hai, aur rollback-test ka pattern) · `supabase/tests/users_privileged_columns_owner_only.test.sql`.
 

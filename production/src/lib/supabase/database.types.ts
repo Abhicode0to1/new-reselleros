@@ -2786,6 +2786,56 @@ type ExpenseClaimRow = {
 type ExpenseClaimInsert = Partial<ExpenseClaimRow> & { tenant_id: string; loan_id: string; employee_id: string; amount: number; category: string; spent_on: string };
 type ExpenseClaimUpdate = Partial<Omit<ExpenseClaimInsert, "tenant_id">>;
 
+/* Migration 20260819120000 — internal feedback + its machine triage.
+   Deliberately not support_tickets: that table carries a customer SLA clock. */
+type FeedbackRow = {
+  id:                string;
+  tenant_id:         string;
+  reported_type:     "bug" | "feature" | "ui_improvement";
+  reported_severity: "low" | "medium" | "high" | "critical";
+  title:             string;
+  body:              string;
+  /** Raw captured URL, dynamic segments and all. */
+  page_path:         string | null;
+  /** Collapsed to a Next.js route so reports group per screen. */
+  route_pattern:     string | null;
+  reported_by:       string | null;
+  reporter_name:     string | null;
+  reporter_email:    string | null;
+  triage_status:     "pending" | "triaged" | "failed";
+  triage_mode:       "gemini" | "stub" | null;
+  triaged_at:        string | null;
+  problem_summary:   string | null;
+  /** What the TEXT says it is — compare with reported_type before believing either. */
+  inferred_type:     "bug" | "feature" | "ui_improvement" | null;
+  severity_score:    number | null;
+  target_files:      string[];
+  directive:         string | null;
+  triage_notes:      string[];
+  status:            "open" | "agent_queued" | "fixed" | "wont_fix" | "duplicate";
+  dispatched_at:     string | null;
+  dispatched_by:     string | null;
+  resolved_at:       string | null;
+  resolution_note:   string | null;
+  created_at:        string;
+  updated_at:        string;
+};
+type FeedbackInsert = Partial<FeedbackRow> & { tenant_id: string; title: string; body: string };
+type FeedbackUpdate = Partial<Omit<FeedbackInsert, "tenant_id">>;
+
+type FeedbackScreenshotRow = {
+  id:          string;
+  feedback_id: string;
+  tenant_id:   string;
+  /** <tenant_id>/feedback/<feedback_id>/<file> inside the `documents` bucket. */
+  file_path:   string;
+  file_name:   string | null;
+  byte_size:   number | null;
+  created_at:  string;
+};
+type FeedbackScreenshotInsert = Partial<FeedbackScreenshotRow> & { tenant_id: string; feedback_id: string; file_path: string };
+type FeedbackScreenshotUpdate = Partial<Omit<FeedbackScreenshotInsert, "tenant_id">>;
+
 type LeadActivityRow = {
   id:         string;
   tenant_id:  string;
@@ -3717,6 +3767,8 @@ export type Database = {
       referral_partners:    { Row: ReferralPartnerRow;    Insert: ReferralPartnerInsert;    Update: ReferralPartnerUpdate;    Relationships: [] };
       referral_agreements:  { Row: ReferralAgreementRow;  Insert: ReferralAgreementInsert;  Update: ReferralAgreementUpdate;  Relationships: [] };
       referral_commissions: { Row: ReferralCommissionRow; Insert: ReferralCommissionInsert; Update: ReferralCommissionUpdate; Relationships: [] };
+      feedback:             { Row: FeedbackRow;           Insert: FeedbackInsert;           Update: FeedbackUpdate;           Relationships: [] };
+      feedback_screenshots: { Row: FeedbackScreenshotRow; Insert: FeedbackScreenshotInsert; Update: FeedbackScreenshotUpdate; Relationships: [] };
     };
     Views: {
       // Added in migration 0040 — tenant joined with its parent's display fields.
