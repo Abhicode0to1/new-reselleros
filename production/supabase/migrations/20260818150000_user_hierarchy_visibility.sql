@@ -43,6 +43,20 @@
 --   backfill is done, then uncomment and run it one table at a time.
 -- ============================================================================
 
+-- APPLIED STATUS (18 Aug 2026)
+--   Sections 1 and 2 are LIVE in production, applied via `supabase db query --linked`
+--   and verified in a separate run: manager_id, users_manager_idx,
+--   users_manager_not_self and get_subordinate_user_ids() all exist.
+--
+--   NOT applied via `supabase db push`, deliberately. The CLI reports 29 local migrations
+--   as absent from the remote tracking table, but the OBJECTS from those migrations all
+--   exist in the database — they were applied by hand through the SQL editor. So the drift
+--   is in the tracking, not the schema, and `db push` would try to re-apply 28 files that
+--   are already in place. That is worth fixing (`supabase migration repair`) but it is a
+--   decision about 28 files nobody has re-read, not a step in this migration.
+--
+--   Section 3 remains OFF. See below.
+
 -- ─── SECTION 1: the reporting tree ──────────────────────────────────────────
 begin;
 
