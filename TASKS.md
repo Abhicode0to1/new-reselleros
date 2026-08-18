@@ -32,7 +32,47 @@ Jo baaki hai, ghatte kram me:
 
 > **Jo rukawat thi wo galat maan lena tha, access nahi.** Migration ke "HOW TO VERIFY" me likha tha ki asli test "do session maangta hai aur superuser connection se nahi ho sakta" — isliye kaam insaan par chala gaya aur ek din pada raha. Sach: superuser carve-out sirf isliye leta hai kyunki uske paas `auth.uid()` nahi hota, aur `auth.uid()` sirf `request.jwt.claims ->> 'sub'` hai — jo `set_config(..., true)` set kar deta hai; upar se `set local role authenticated` RLS wapas laga deta hai. **`portal_customer_users_no_self_update.test.sql` ye pehle se kar raha tha.** Test "0 rows changed" par pass nahi hota, function ka apna message maangta hai — warna trigger drop hone ke baad bhi green rehta.
 
-**2. Reporting lines khaali hain, aur ek insaan ko iska asar dikh raha hai.** RLS live hai, to `ananya@anutech.in` ko **0 of 18 leads** dikhte hain — manager hai, kuch own nahi karti, koi report nahi. Fix ek click: /team → kisi rep ka "Reports to" = Ananya. Baaki tree bhi bharna hai; abhi sirf do logon ka manager set tha aur wo bhi mere test wale the (hata diye).
+**2. 📋 REPORTING LINES — poora naksha naap liya (19 Aug). Sirf naam batane baaki hain.**
+
+Har aankda neeche **naap kar** nikala hai: har bande ki jagah baith kar (`request.jwt.claims` → `auth.uid()`, role `authenticated`) RLS se ginwaya gaya, policy padh kar andaza nahi lagaya.
+
+**Abhi ka tree:** poore ANUTECH me **ek hi** link hai — `ananya@anutech.in` → `pardeep@anutech.in`. Baaki 9 logon ka manager khaali hai.
+
+**Abhi kisko kya dikhta hai (18 leads me se):**
+
+| Kaun | Role | Reports | Apne leads | **Dikhte hain** |
+|---|---|---|---|---|
+| pardeep@anutech.in | owner | 1 | 2 | **18** |
+| deepak@anutech.in | owner | 0 | 0 | **18** |
+| info@srigangatechnologies.com | owner | 0 | 0 | **18** ⚠️ |
+| pratik@anutech.in | support | 0 | 0 | **18** |
+| ranjeet@anutech.in | support | 0 | 0 | **18** |
+| pawan@anutech.in | delivery | 0 | 0 | **18** |
+| abhishek@anutech.in | delivery | 0 | 0 | **18** |
+| sales@anutech.in (Darshan) | sales_senior | 0 | 15 | **15** |
+| hitesh@anutech.in | manager | 0 | 1 | **1** |
+| **ananya@anutech.in** | **manager** | **0** | **0** | **0** 🔴 |
+
+**Teen baatein jo is table se nikalti hain:**
+
+1. **Ananya akeli nahi hai — Hitesh bhi tooti halat me hai.** Dono manager hain jinke neeche koi nahi. Ananya 0 dekhti hai kyunki wo kuch own nahi karti; Hitesh 1 dekhta hai kyunki wo apna ek lead own karta hai. **Manager hone ka koi fayda tab tak nahi jab tak uske neeche koi na ho.**
+2. **Rok sirf teen role par hai** — `sales`, `sales_senior`, `manager`. Baaki sab (owner, support, delivery) poora pipeline dekhte hain. Yaani **support aur delivery ke chaar log — Pratik, Ranjeet, Pawan, Abhishek — saare 18 leads dekh sakte hain.** Ye niyam ke hisaab se sahi hai, par ye ek faisla hai; agar ye nahi chahiye to niyam badalna padega, tree nahi.
+3. **`info@srigangatechnologies.com` teesra owner hai aur poora sab dekhta hai** — 18 leads, saare quotes, saare customers. Ye HANDOFF #3 hai, ab chauthi baar likha ja raha hai.
+
+**Quotes aur customers par hierarchy ka koi asar nahi** — sab ko 25 quotes / 14 customers dikhte hain (baaki 2 quotes aur 1 customer doosre tenant ke hain). Wajah: `quotes.owner_id` aur `customers.account_manager_id` **khaali hain**, aur khaali rows sabko dikhti hain. Yaani ye feature abhi sirf **leads** par asar daal raha hai.
+
+**Chaar sambhavit tree, aur unka NAAPA HUA asar** (rollback me sach me laga kar ginwaya, 18 me se):
+
+| | Tree | Ananya | Hitesh | Darshan |
+|---|---|---|---|---|
+| **A** | Darshan → Ananya · Hitesh → Pardeep | **15** | 1 | 15 |
+| **B** | Darshan → Hitesh · Hitesh → Pardeep | 0 | **16** | 15 |
+| **C** | Darshan → Hitesh → Ananya | **16** | **16** | 15 |
+| **D** | Darshan → Ananya · Hitesh → Ananya | **16** | 1 | 15 |
+
+> **Koi bhi option 18 tak nahi pahunchta.** Bache hue 2 leads `pardeep@anutech.in` ke apne hain, aur wo sabse upar hai — neeche wale kabhi nahi dekhenge. Agar wo do leads bhi team ko dikhne chahiye, to unka **owner badalna** padega; tree se ye nahi hoga.
+
+**🔴 Jo sirf Pardeep bata sakta hai:** Darshan kiske neeche kaam karta hai — Ananya ya Hitesh? Aur Hitesh kiske neeche — Pardeep ya Ananya? Bas ye do jawab; baaki main laga dunga. (Support/delivery ka manager set karna vaikalpik hai — unki visibility par koi farak nahi padta, sirf org-chart saaf dikhega.)
 
 **3. `info@srigangatechnologies.com` ANUTECH tenant ka teesra OWNER hai** — poora access, password reset ka haq. Teen baar flag kiya, koi nirdesh nahi mila. Agar wo company ka banda nahi hai to /team se role badlo.
 
