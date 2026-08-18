@@ -21,7 +21,30 @@ Jo baaki hai, ghatte kram me:
 
 **3. `info@srigangatechnologies.com` ANUTECH tenant ka teesra OWNER hai** — poora access, password reset ka haq. Teen baar flag kiya, koi nirdesh nahi mila. Agar wo company ka banda nahi hai to /team se role badlo.
 
-**4. 29 local migrations remote tracking me nahi hain,** par unke objects DB me maujood hain — yaani tracking drift, changes ka nahi. **`supabase db push` yahan khatarnak hai** (28 already-lagi files dobara lagayega). `supabase migration repair` karna chahiye, par wo 28 un-padhi files ka faisla hai.
+**4. 🔬 JAANCH LI (19 Aug) — 30 files untracked hain, aur "sirf tracking drift hai" wali baat SACH NAHI NIKLI. 2 migrations kabhi chali hi nahi, aur ek me ₹8,165 GST atka hua hai.**
+
+Naapa hua: `migrations/` me **30** files hain (29 nahi), sab 16–18 Aug ki; remote ledger me 247 records hain jinme sabse naya **10 Aug** ka — yaani teeso untracked. Nayi jaanch: **`cd production && npm run migrations:verify`** ([migration-drift-check.mjs](production/scripts/migration-drift-check.mjs)).
+
+| | |
+|---|---|
+| **26 schema migrations** — har object (table/column/function/trigger/policy/index) DB me maujood | ✅ **repair sahi hai** |
+| **4 data/comment migrations** — inka koi object hota hi nahi, isliye tool ne inhe pass nahi kiya, **"insaan padhe"** bola | haath se padhi |
+
+Chaaro haath se padhi aur **unka asar data me** dhoonda — yahi asli sawaal hai, kyunki `create table` na ho to "chali ya nahi" schema se pata hi nahi chalta:
+
+- ✅ `20260816112000_backfill_quote_total_cost` — 0 quotes pending. **Chal chuki.**
+- ✅ `20260817160000_support_tier_skus` — 12 SUP-* items maujood (6 × 2 tenants). **Chal chuki.**
+- ❌ `20260817210000_dunning_pre_due_comments` — **kabhi nahi chali.** Ye sirf do `comment on column` karti hai, jinme koi shart nahi hai — to "shayad skip ho gaya" ka bahana bhi nahi. `invoice_dunning_log` par sirf `action_taken` ka comment hai (kisi purani migration se); `dunning_step` aur `days_overdue` dono khaali.
+- 🔴 `20260817100000_fix_missing_gst_on_onboarded_quotes` — **asar nahi hua, aur usme paisa hai.** Poore DB me ek quote is haalat me hai:
+
+  > **`Q-2026-9776` — SAHAKAR INFRACON PROJECTS PRIVATE LIMITED · status `accepted`** · subtotal ₹45,360 · tax_rate 18 · **amount ₹45,360 jabki ₹53,525 hona chahiye — ₹8,165 GST gayab.** Na invoice bani hai, na payment aayi hai (isliye abhi sudharna surakshit hai).
+
+**Iska matlab kya hai:** handoff ki baat 26 files ke liye sahi thi, par **saari 30 par `migration repair` chala dete to do na-chali migrations "chal gayi" mark ho jaatin — aur ye ₹8,165 wali GST hamesha ke liye dab jaati.** Ledger jhooth bolne lagta aur agla banda usi par bharosa karta. `db push` ab bhi khatarnak hai (28 already-lagi files dobara chalayega).
+
+**Aage ka raasta:**
+1. **28 files `repair --status applied`** — 26 schema + 2 data jinka asar sabit hai.
+2. **2 na-chali migrations lagao** — dono idempotent hain. Dunning wali sirf comments hai (koi risk nahi, par `comment on` DDL hai to classifier rokta hai).
+3. **🔴 GST wali Pardeep ka faisla hai, meri marzi nahi.** Quote **accept ho chuka hai** ₹45,360 par. Use ₹53,525 karna matlab customer ke accept karne ke **baad daam badalna**. Do hi soorat hain: ya to quote galti se GST ke bina bana tha (to sudhar sahi hai, customer ko batana padega), ya daam GST-sahit tay hua tha (to `tax_rate` galat hai, `amount` nahi). **Ye business call hai.**
 
 **5. ~~Ek ANUTECH support subscription "about ₹0" dikhata hai~~ 🔍 JAANCH LI (19 Aug 2026) — subscription theek hai, uske aage ka raasta toota hai.**
 

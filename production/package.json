@@ -11,6 +11,7 @@
     "backup:code": "node scripts/backup-code.mjs",
     "backup:db": "node scripts/backup-db.mjs ../../resellersos-backups",
     "backup:check": "node scripts/restore-check.mjs",
+    "migrations:verify": "node scripts/migration-drift-check.mjs",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
