@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { layoutWaterfall, pnlWaterfall, type WaterfallInput } from "./waterfall";
+import { layoutWaterfall, pnlWaterfall, hundredRupeeSplit, type WaterfallInput } from "./waterfall";
 
 /** ANUTECH's own shape: ₹1,11,051 revenue, ₹70,340 licence cost, ₹30,000 running costs. */
 const LIVE: WaterfallInput[] = [
@@ -178,5 +178,102 @@ describe("pnlWaterfall", () => {
     const by = Object.fromEntries(layoutWaterfall(steps).bars.map((b) => [b.key, b]));
     expect(by.gross.end).toBe(40_711);
     expect(by.net.end).toBe(10_711);
+  });
+});
+
+/**
+ * ─── THE SCALE PROBLEM A WATERFALL CANNOT FIX ───────────────────────────────
+ * ANUTECH's ₹67,000 net profit against ₹9,14,376 of revenue is 7% — a bar four pixels
+ * tall beside one that fills the plot. The chart is accurate and the most important number
+ * on it is the one you cannot see. Normalising to ₹100 removes the scale entirely.
+ */
+describe("where every ₹100 goes", () => {
+  it("turns the live figures into a sentence a reseller can repeat", () => {
+    const s = hundredRupeeSplit({ revenue: 914_376, cogs: 571_827, expenses: 275_551 })!;
+    expect(s.licence).toBe(63);
+    expect(s.running).toBe(30);
+    expect(s.profit).toBe(7);
+    expect(s.isLoss).toBe(false);
+  });
+
+  it("ALWAYS totals exactly 100", () => {
+    /* Rounding three shares independently gives 99 or 101, and a bar captioned "of every
+       ₹100" that adds to 101 makes a reader distrust the whole page. */
+    for (const t of [
+      { revenue: 914_376, cogs: 571_827, expenses: 275_551 },
+      { revenue: 100_000, cogs: 33_333, expenses: 33_333 },
+      { revenue: 3, cogs: 1, expenses: 1 },
+      { revenue: 7_777, cogs: 2_591, expenses: 2_593 },
+    ]) {
+      const s = hundredRupeeSplit(t)!;
+      expect(s.licence + s.running + s.profit).toBe(100);
+    }
+  });
+
+  it("shows a NEGATIVE profit share rather than clamping to zero", () => {
+    /* A business spending ₹120 to earn ₹100 must read as −20, not 0. Clamping would draw
+       a break-even business that is actually bleeding. */
+    const s = hundredRupeeSplit({ revenue: 100_000, cogs: 70_000, expenses: 50_000 })!;
+    expect(s.profit).toBe(-20);
+    expect(s.isLoss).toBe(true);
+  });
+
+  it("returns null on no revenue — there is no 'every ₹100' to split", () => {
+    expect(hundredRupeeSplit({ revenue: 0, cogs: 0, expenses: 50_000 })).toBeNull();
+  });
+
+  it("gives the whole ₹100 to profit when nothing was spent", () => {
+    const s = hundredRupeeSplit({ revenue: 50_000, cogs: 0, expenses: 0 })!;
+    expect(s.profit).toBe(100);
+  });
+
+  it("keeps every share a whole rupee — no decimals in a ₹100 story", () => {
+    const s = hundredRupeeSplit({ revenue: 914_376, cogs: 571_827, expenses: 275_551 })!;
+    for (const n of [s.licence, s.running, s.profit]) expect(Number.isInteger(n)).toBe(true);
+  });
+});
+
+/**
+ * ─── THE CONNECTOR IS WHAT MAKES IT A WATERFALL ─────────────────────────────
+ * Without the line joining one bar's end to the next bar's start, five columns read as
+ * five separate quantities of different sizes. The subtlety: it sits at the RUNNING
+ * BALANCE, not at the bar's own top edge — and those differ on every cost bar, because a
+ * cost bar hangs downwards.
+ */
+describe("connectors", () => {
+  const { bars } = layoutWaterfall(LIVE);
+  const by = Object.fromEntries(bars.map((b) => [b.key, b]));
+
+  it("leaves the last bar unconnected — it joins nothing", () => {
+    expect(by.net.connectorFrac).toBeNull();
+    for (const k of ["revenue", "cogs", "gross", "opex"]) {
+      expect(by[k].connectorFrac).not.toBeNull();
+    }
+  });
+
+  it("sits where the NEXT bar starts, which is this bar's running balance", () => {
+    /* Revenue ends at ₹1,11,051 and the cost bar starts there. */
+    expect(by.revenue.connectorFrac).toBeCloseTo(by.revenue.baseFrac + by.revenue.heightFrac, 6);
+  });
+
+  it("is NOT the top of a downward bar — that is the trap", () => {
+    /* The cost bar's top is ₹1,11,051 (where it starts); its connector must be at
+       ₹40,711 (where it ends), because that is where gross margin begins. */
+    const topOfCogs = by.cogs.baseFrac + by.cogs.heightFrac;
+    expect(by.cogs.connectorFrac).toBeLessThan(topOfCogs);
+    expect(by.cogs.connectorFrac).toBeCloseTo(by.cogs.baseFrac, 6);
+  });
+
+  it("stays inside the plot even when the balance goes negative", () => {
+    const loss = layoutWaterfall([
+      { key: "revenue", label: "R", delta: 50_000 },
+      { key: "opex", label: "O", delta: -80_000 },
+      { key: "net", label: "N", delta: 0, isTotal: true },
+    ]);
+    for (const b of loss.bars) {
+      if (b.connectorFrac === null) continue;
+      expect(b.connectorFrac).toBeGreaterThanOrEqual(0);
+      expect(b.connectorFrac).toBeLessThanOrEqual(1);
+    }
   });
 });

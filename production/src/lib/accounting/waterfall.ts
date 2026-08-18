@@ -45,6 +45,19 @@ export interface WaterfallBar extends WaterfallInput {
   /** Fraction from the BOTTOM of the plot to the bar's base, 0–1. */
   baseFrac: number;
   direction: "up" | "down" | "total";
+  /**
+   * Where the connector leaving this bar sits, 0–1 from the bottom — or null on the last
+   * bar, which connects to nothing.
+   *
+   * It sits at the RUNNING BALANCE after this bar, which is exactly where the next one
+   * begins. Without that line the five bars read as five separate quantities of different
+   * sizes; with it they read as one balance moving, which is the only thing a waterfall is
+   * for.
+   *
+   * Computed from `end`, never from the bar's own top edge — those differ whenever a bar
+   * hangs downwards, which is every cost bar on the chart.
+   */
+  connectorFrac: number | null;
 }
 
 export interface WaterfallLayout {
@@ -66,7 +79,7 @@ export interface WaterfallLayout {
  */
 export function layoutWaterfall(steps: readonly WaterfallInput[]): WaterfallLayout {
   let running = 0;
-  const raw: Omit<WaterfallBar, "heightFrac" | "baseFrac">[] = [];
+  const raw: Omit<WaterfallBar, "heightFrac" | "baseFrac" | "connectorFrac">[] = [];
 
   for (const s of steps) {
     if (s.isTotal) {
@@ -96,16 +109,62 @@ export function layoutWaterfall(steps: readonly WaterfallInput[]): WaterfallLayo
   return {
     max, min,
     zeroFrac: (0 - min) / span,
-    bars: raw.map((b) => {
+    bars: raw.map((b, i) => {
       const lo = Math.min(b.start, b.end);
       const hi = Math.max(b.start, b.end);
       return {
         ...b,
         heightFrac: (hi - lo) / span,
         baseFrac: (lo - min) / span,
+        connectorFrac: i === raw.length - 1 ? null : (b.end - min) / span,
       };
     }),
   };
+}
+
+/**
+ * Where every ₹100 of sales goes.
+ *
+ * ─── WHY THIS EXISTS BESIDE THE WATERFALL ───────────────────────────────────
+ * A waterfall on a thin-margin business has a scale problem no styling fixes: ANUTECH's
+ * ₹67,000 net profit against ₹9,14,376 of revenue is 7% — a bar four pixels tall next to
+ * one that fills the plot. The chart is accurate and the most important number on it is
+ * the one you cannot see.
+ *
+ * Normalising to ₹100 removes the scale entirely. "Of every ₹100 you invoice, ₹63 goes to
+ * Google, ₹30 to running the business, ₹7 is yours" is a sentence a reseller can hold in
+ * their head and repeat to their accountant. Lakhs are not.
+ *
+ * ─── THE SHARES ARE FORCED TO SUM TO 100 ────────────────────────────────────
+ * Rounding three percentages independently gives 63 + 30 + 7 = 99 or 101, and a bar
+ * captioned "of every ₹100" that adds to 101 is the kind of small wrongness that makes a
+ * reader distrust the whole page. Profit absorbs the remainder because it is the
+ * derived figure — the other two are measured.
+ */
+export interface HundredRupeeSplit {
+  /** ₹ of every 100 that goes to the vendor. */
+  licence: number;
+  /** ₹ of every 100 spent running the business. */
+  running: number;
+  /** What is left. Can be NEGATIVE, and then the caption says so. */
+  profit: number;
+  /** True when the business spends more than it earns. */
+  isLoss: boolean;
+}
+
+export function hundredRupeeSplit(p: {
+  revenue: number;
+  cogs: number;
+  expenses: number;
+}): HundredRupeeSplit | null {
+  if (p.revenue <= 0) return null;
+
+  const licence = Math.round((p.cogs / p.revenue) * 100);
+  const running = Math.round((p.expenses / p.revenue) * 100);
+  /* Derived last so the three always total exactly 100. */
+  const profit = 100 - licence - running;
+
+  return { licence, running, profit, isLoss: profit < 0 };
 }
 
 /**

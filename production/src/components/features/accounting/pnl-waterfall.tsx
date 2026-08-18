@@ -21,10 +21,87 @@
 
 import * as React from "react";
 import { cn, rupee } from "@/lib/utils";
-import { layoutWaterfall, type WaterfallInput } from "@/lib/accounting/waterfall";
+import { layoutWaterfall, type WaterfallInput, type HundredRupeeSplit } from "@/lib/accounting/waterfall";
 
 /** Plot height in px. Labels live outside it, so this is the bars' own space. */
 const PLOT_H = 176;
+
+/**
+ * "Of every ₹100 you invoice…" — one bar, three parts.
+ *
+ * ─── THE PROBLEM IT SOLVES ──────────────────────────────────────────────────
+ * A waterfall on a thin-margin business has a scale problem that no styling fixes:
+ * ANUTECH's ₹67,000 profit against ₹9,14,376 of revenue is a bar four pixels tall beside
+ * one that fills the plot. The chart is accurate and the most important number on it is
+ * the one nobody can see.
+ *
+ * Normalising to ₹100 deletes the scale. "Of every ₹100 you invoice, ₹63 goes to Google,
+ * ₹30 to running the business, ₹7 is yours" is a sentence an owner can carry to their
+ * accountant. Lakhs are not.
+ *
+ * ─── AND A LOSS IS DRAWN AS ONE ─────────────────────────────────────────────
+ * When the business spends more than it earns the profit share is negative — there is no
+ * width to give it, so the bar shows only what was spent and the caption states the
+ * shortfall in words. Clamping it to zero would draw a business breaking even while it
+ * bleeds.
+ */
+export function HundredRupeeBar({ split }: { split: HundredRupeeSplit }) {
+  const { licence, running, profit, isLoss } = split;
+  /* Widths are of the SPENT portion when losing, so the bar still fills its track and the
+     reader is not left wondering what the empty space means. */
+  const denom = isLoss ? licence + running : 100;
+  const parts = [
+    { key: "licence", label: "Vendor licences", value: licence, cls: "bg-rose/60" },
+    { key: "running", label: "Running the business", value: running, cls: "bg-amber/60" },
+    ...(isLoss ? [] : [{ key: "profit", label: "Yours to keep", value: profit, cls: "bg-emerald/70" }]),
+  ];
+
+  return (
+    <div>
+      <div className="flex h-9 w-full overflow-hidden rounded-md">
+        {parts.map((p) => (
+          <div
+            key={p.key}
+            title={`${p.label} · ₹${p.value} of every ₹100`}
+            className={cn("flex items-center justify-center", p.cls)}
+            style={{ width: `${(p.value / denom) * 100}%` }}
+          >
+            {/* The number goes IN the segment. A legend forces the eye to travel and
+                match colours, which is the work the chart was supposed to save. */}
+            {p.value >= 8 && (
+              <span className="font-mono text-[12px] font-semibold text-ink tabular-nums">₹{p.value}</span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        {parts.map((p) => (
+          <span key={p.key} className="flex items-center gap-1.5 text-[11px] text-ink-2">
+            <span aria-hidden className={cn("h-2.5 w-2.5 rounded-sm", p.cls)} />
+            {p.label} <b className="font-mono tabular-nums text-ink">₹{p.value}</b>
+          </span>
+        ))}
+      </div>
+
+      <p className="mt-2 text-[12px] leading-snug text-ink-2">
+        {isLoss ? (
+          <>
+            Of every <b>₹100</b> you invoice, <b className="text-rose">₹{licence + running} goes out</b> —
+            that is <b className="text-rose">₹{Math.abs(profit)} more than you take in</b>. The business is
+            spending faster than it sells.
+          </>
+        ) : (
+          <>
+            Of every <b>₹100</b> you invoice, <b>₹{licence}</b> goes to the vendor, <b>₹{running}</b> to
+            running the business, and <b className="text-emerald">₹{profit} is yours</b>.
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
 
 export function PnlWaterfall({
   steps, onSelect, className,
@@ -73,7 +150,24 @@ export function PnlWaterfall({
           );
 
           return (
-            <div key={b.key} className="flex min-w-0 flex-1 flex-col justify-end" style={{ height: PLOT_H }}>
+            <div key={b.key} className="relative flex min-w-0 flex-1 flex-col justify-end" style={{ height: PLOT_H }}>
+              {/* ── THE CONNECTOR ────────────────────────────────────────────
+                  A dotted line from the top of this bar to where the next one begins.
+                  Without it the five bars read as five separate quantities of different
+                  sizes; with it they read as one running balance, which is the only thing
+                  a waterfall is for. Drawn from the LEFT bar so it can extend into the
+                  gap, and skipped on the last one. */}
+              {b.connectorFrac !== null && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute border-t border-dashed border-ink-3/70"
+                  style={{
+                    bottom: b.connectorFrac * PLOT_H,
+                    left: "8%",
+                    right: "-16%",
+                  }}
+                />
+              )}
               {clickable ? (
                 <button
                   type="button"

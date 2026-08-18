@@ -28,12 +28,16 @@ import { rupee } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import { createClient } from "@/lib/supabase/client";
 import { PnLDrilldownDialog, type PnLDrillKind } from "@/components/features/accounting/pnl-drilldown-dialog";
-import { PnlWaterfall } from "@/components/features/accounting/pnl-waterfall";
+import { PnlWaterfall, HundredRupeeBar } from "@/components/features/accounting/pnl-waterfall";
 import {
   buildPnl, vendorsFromSubscriptions, cogsBasisNote, compareFigures, isPartialPeriod,
   type PnlPeriod,
 } from "@/lib/accounting/pnl";
-import { pnlWaterfall } from "@/lib/accounting/waterfall";
+import { pnlWaterfall, hundredRupeeSplit } from "@/lib/accounting/waterfall";
+import { ProfitDonut, MonthlyTrend } from "@/components/features/accounting/pnl-charts";
+import {
+  profitContribution, monthlySeries, trendHighlights, type MonthPoint,
+} from "@/lib/accounting/pnl-charts";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -289,6 +293,57 @@ function usePnL(range: DateRange, enabled = true) {
   });
 }
 
+/**
+ * Twelve months of revenue and expenses for the trend chart.
+ *
+ * ONE query per table for the whole financial year, bucketed client-side — not twelve
+ * calls to `usePnL`. That would be 12 × 6 round trips to draw a line, and the page would
+ * visibly assemble itself month by month.
+ *
+ * The cost ratio is passed in from the headline figures, so every point on the line is
+ * consistent with the waterfall above it. Deriving it separately here is how a chart ends
+ * up disagreeing with the number printed beside it.
+ */
+function useMonthlyTrend(fyStartYear: number, cogsRatio: number, enabled: boolean) {
+  const from = `${fyStartYear}-04-01`;
+  const to   = `${fyStartYear + 1}-03-31`;
+
+  return useQuery({
+    queryKey: ["accounting", "pnl", "trend", fyStartYear, cogsRatio],
+    enabled,
+    queryFn: async (): Promise<MonthPoint[]> => {
+      const supabase = createClient();
+      const [inv, exp] = await Promise.all([
+        supabase.from("invoices")
+          .select("invoice_date, amount, taxable_value, tax_rate")
+          .gte("invoice_date", from).lte("invoice_date", to)
+          .in("status", ["pending", "paid", "overdue"]),
+        supabase.from("expenses")
+          .select("expense_date, amount")
+          .gte("expense_date", from).lte("expense_date", to),
+      ]);
+      if (inv.error) throw inv.error;
+      if (exp.error) throw exp.error;
+
+      /* Taxable value, never the GST-inclusive amount — output GST is money owed to the
+         government, not income. Same rule as the headline query above it. */
+      const revenue = (inv.data ?? []).map((i) => ({
+        date: i.invoice_date as string,
+        amount: i.taxable_value ?? Math.round((i.amount ?? 0) * 100 / (100 + (i.tax_rate ?? 18))),
+      }));
+      const expenses = (exp.data ?? []).map((e) => ({
+        date: e.expense_date as string,
+        amount: e.amount ?? 0,
+      }));
+
+      return monthlySeries({
+        fyStartYear, revenue, expenses, cogsRatio,
+        today: yyyymmdd(istToday()),
+      });
+    },
+  });
+}
+
 // ────────────────────────────────────────────────────────────────
 // Page
 // ────────────────────────────────────────────────────────────────
@@ -320,6 +375,21 @@ export default function PnLPage() {
   const partial = isPartialPeriod(range.to, today);
 
   const [vendorTab, setVendorTab] = React.useState<string | "all">("all");
+
+  /* Profit contribution + the FY trend. The ratio comes from the headline so the chart
+     and the number beside it cannot disagree. */
+  const contribution = React.useMemo(
+    () => profitContribution(data?.model.byVendor ?? []),
+    [data?.model.byVendor],
+  );
+  const cogsRatio = React.useMemo(() => {
+    const m = data?.model;
+    if (!m || m.revenue <= 0) return 0;
+    return m.cogs / m.revenue;
+  }, [data?.model]);
+  const fyStart = React.useMemo(() => fiscalYearStart(istToday()).getUTCFullYear(), []);
+  const { data: trend } = useMonthlyTrend(fyStart, cogsRatio, !!data);
+  const highlights = React.useMemo(() => trendHighlights(trend ?? []), [trend]);
 
   // Export the statement as a CSV the owner can hand to their CA (mirrors GST export).
   function exportCSV() {
@@ -429,6 +499,22 @@ export default function PnLPage() {
               </div>
             </div>
 
+            {/* ── THE HEADLINE, BEFORE THE CHART ───────────────────────────────
+                One bar, three parts, no lakhs. A waterfall on a 7%-margin business draws
+                the most important number as four pixels; this draws it as a sentence.
+                Placed ABOVE the waterfall because it is what should be read first — the
+                waterfall then explains how it got there. */}
+            {(() => {
+              const split = hundredRupeeSplit({
+                revenue: m.revenue, cogs: m.cogs, expenses: m.expenses,
+              });
+              return split ? (
+                <div className="mb-4 border-b border-hairline pb-4">
+                  <HundredRupeeBar split={split} />
+                </div>
+              ) : null;
+            })()}
+
             {steps ? (
               <PnlWaterfall
                 steps={steps}
@@ -490,6 +576,19 @@ export default function PnLPage() {
             Profit by vendor · from your subscription book
           </h2>
 
+          {/* The donut drives the SAME `vendorTab` the buttons below do — one selection,
+              two ways to make it. Two independent selections on one card is how a reader
+              ends up looking at a chart for Google and a table for everything. */}
+          <div className="mb-4 border-b border-hairline pb-4">
+            <ProfitDonut
+              slices={contribution.slices}
+              losing={contribution.losing}
+              totalGross={contribution.totalGross}
+              selected={vendorTab}
+              onSelect={setVendorTab}
+            />
+          </div>
+
           <div className="mb-3 flex flex-wrap items-center gap-1">
             {(["all", ...data.model.byVendor.map((v) => v.vendor)] as const).map((v) => (
               <button
@@ -540,6 +639,50 @@ export default function PnLPage() {
                 </div>
               ))}
           </div>
+        </Card>
+      )}
+
+      {/* ── THE FINANCIAL YEAR, MONTH BY MONTH ───────────────────────────────
+          The period cards answer "how was this month". This answers "is the business
+          getting better", which is the question an owner actually carries around. */}
+      {trend && trend.length > 1 && (
+        <Card className="p-4 md:p-5 mb-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+            <h2 className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+              This financial year, month by month
+            </h2>
+            <span className="text-[11px] text-ink-3">
+              Bars in ₹ · margin line in % on the right
+            </span>
+          </div>
+
+          <MonthlyTrend points={trend} />
+
+          {/* The two months worth pointing at, in words. A chart tells you the shape; a
+              sentence tells you which month to go and look at. */}
+          {highlights.best && highlights.worst && highlights.best.key !== highlights.worst.key && (
+            <p className="mt-2 border-t border-hairline pt-2 text-[11px] leading-snug text-ink-2">
+              {/* "Best month was Apr at ₹-90,000" makes a reader stop and re-read. When
+                  every finished month is a loss, the honest sentence is about the size of
+                  the losses, not about a winner there wasn't one of. */}
+              {highlights.best.netProfit < 0 ? (
+                <>
+                  <span className="text-rose">Every finished month this year lost money.</span>{" "}
+                  Smallest loss was <b>{highlights.best.label}</b> at {rupee(Math.abs(highlights.best.netProfit))};
+                  worst was <b>{highlights.worst.label}</b> at {rupee(Math.abs(highlights.worst.netProfit))}.
+                </>
+              ) : (
+                <>
+                  Best month so far was <b>{highlights.best.label}</b> at {rupee(highlights.best.netProfit)} net;
+                  weakest was <b>{highlights.worst.label}</b> at {rupee(highlights.worst.netProfit)}.
+                  {highlights.lossMonths > 0 && (
+                    <> <span className="text-rose">{highlights.lossMonths} month{highlights.lossMonths === 1 ? "" : "s"} lost money.</span></>
+                  )}
+                </>
+              )}
+              {" "}The current month is still running and is left out of both.
+            </p>
+          )}
         </Card>
       )}
 
