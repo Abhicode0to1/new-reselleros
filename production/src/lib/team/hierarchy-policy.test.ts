@@ -138,6 +138,54 @@ describe("hierarchy RLS policies", () => {
     expect(sqlTest).not.toMatch(/^\s*commit;/m);
   });
 
+  it("keeps the paste-into-the-editor file in step with the migration", () => {
+    /* A third copy of the policies exists because the CLI route failed on Pardeep's machine
+       (a malformed SUPABASE_ACCESS_TOKEN) and the SQL editor needs no token. Convenient, and
+       a drift hazard: the copy somebody actually PASTES is the one that must not go stale.
+       Stale here means pasting a predicate the repo no longer describes — and it would look
+       like it worked. */
+    const applyFile = readFileSync(
+      path.join(process.cwd(), "supabase", "apply", "SECTION3-paste-into-sql-editor.sql"),
+      "utf8",
+    );
+    const migration = readFileSync(MIGRATION, "utf8");
+
+    const predicate = (sql: string): string | undefined =>
+      /create or replace function public\.can_see_record\(p_owner uuid\)[\s\S]*?as \$\$([\s\S]*?)\$\$/
+        .exec(sql)?.[1]
+        .replace(/\s+/g, " ")
+        .trim();
+
+    expect(predicate(applyFile), "the paste file's predicate differs from the migration's")
+      .toBe(predicate(migration));
+
+    /* All nine policies, and every one restrictive — the same invariant as the migration.
+       A permissive copy in the file people paste is the worst place for it to hide. */
+    for (const table of ["leads", "quotes", "customers"]) {
+      for (const kind of ["select", "write", "delete"]) {
+        expect(applyFile, `the paste file is missing ${table}_hierarchy_${kind}`)
+          .toContain(`create policy ${table}_hierarchy_${kind}`);
+      }
+    }
+    const permissiveCopies = applyFile
+      .split(";")
+      .map((s) => s.replace(/\s+/g, " ").trim())
+      .filter((s) => /^create policy \w+_hierarchy_/i.test(s))
+      .filter((s) => !/as restrictive/i.test(s));
+    expect(permissiveCopies, "a policy in the paste file is not restrictive").toEqual([]);
+
+    /* No verify SELECT in the runnable part — it would execute inside the same uncommitted
+       transaction, see the new policies, and report success for a change that may vanish
+       (CLAUDE.md §25.6). The verify query lives in this file as a comment, which is why the
+       check is on uncommented lines only. */
+    const runnable = applyFile
+      .split(/\r?\n/)
+      .filter((l) => !/^\s*--/.test(l))
+      .join("\n");
+    expect(runnable.toLowerCase(), "the paste file runs a verify SELECT in the same transaction")
+      .not.toMatch(/select .*pg_policies/);
+  });
+
   it("scopes the same roles in TypeScript as in SQL", () => {
     /* The screen filters with PEER_SCOPED_ROLES; the database filters with the role branch
        of can_see_record(). If they disagree, the UI hides rows the API would serve — a page
