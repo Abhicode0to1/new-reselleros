@@ -584,6 +584,13 @@ export default function QuotesPage() {
                        One flag, one call site, so the caveat disappears everywhere the day
                        the database actually enforces it. */
                     enforcedInDatabase={HIERARCHY_ENFORCED_IN_DATABASE}
+                    /* This page is why the counts exist: every quote in the live books has a
+                       NULL owner, so both halves of the toggle show the same rows and the
+                       note used to call them "assigned to you". */
+                    counts={{
+                      total: (quotes ?? []).length,
+                      unassigned: (quotes ?? []).filter((q) => !q.owner_id).length,
+                    }}
                   />
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">

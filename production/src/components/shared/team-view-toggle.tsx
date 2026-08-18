@@ -18,7 +18,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import {
-  showsTeamToggle, scopeNote, type TeamMember, type TeamViewMode,
+  showsTeamToggle, scopeNote, type ScopeCounts, type TeamMember, type TeamViewMode,
 } from "@/lib/team/visibility";
 
 export interface TeamViewToggleProps {
@@ -32,11 +32,18 @@ export interface TeamViewToggleProps {
    * changes and the caveat disappears everywhere at once.
    */
   enforcedInDatabase?: boolean;
+  /**
+   * How many rows are in view and how many of them have no owner.
+   *
+   * Optional, but a caller that omits it gets the old note — which claimed "only records
+   * assigned to you" while showing rows assigned to nobody. Pass it.
+   */
+  counts?: ScopeCounts;
   className?: string;
 }
 
 export function TeamViewToggle({
-  me, all, mode, onChange, enforcedInDatabase = false, className,
+  me, all, mode, onChange, enforcedInDatabase = false, counts, className,
 }: TeamViewToggleProps) {
   /* Hidden entirely when both halves would show the same rows — see showsTeamToggle. A
      control that does nothing teaches people that controls do nothing. */
@@ -62,7 +69,7 @@ export function TeamViewToggle({
       </div>
 
       <p className="text-[11px] leading-snug text-ink-3">
-        {scopeNote(me, all, mode)}{" "}
+        {scopeNote(me, all, mode, counts)}{" "}
         {!enforcedInDatabase && (
           /* Stated plainly. The alternative is a filter that looks like a permission.
              The space above is explicit, not the span's old ml-1: margin is visual only, so

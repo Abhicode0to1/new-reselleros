@@ -1064,6 +1064,13 @@ function LeadsPageInner() {
           mode={leadTeamMode}
           onChange={setLeadTeamMode}
           enforcedInDatabase={HIERARCHY_ENFORCED_IN_DATABASE}
+          /* Counted BEFORE the toggle narrows anything — the note describes the pool being
+             filtered, not the result. Unowned rows show in both halves, so without this the
+             note claims "only records assigned to you" over rows assigned to nobody. */
+          counts={{
+            total: (leads ?? []).length,
+            unassigned: (leads ?? []).filter((l) => !l.owner_id).length,
+          }}
         />
 
         <div className="shrink-0 mb-3 flex items-center gap-2 flex-wrap">

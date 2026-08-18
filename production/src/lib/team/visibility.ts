@@ -186,13 +186,44 @@ export function idsForMode(
  * States the count because "Team view" on its own does not say whose team, and a manager
  * with two reports and a manager with forty need different things from the same screen.
  */
-export function scopeNote(me: TeamMember, all: readonly TeamMember[], mode: TeamViewMode): string {
-  if (mode === "mine") return "Only records assigned to you.";
+export interface ScopeCounts {
+  /** Rows in view before the toggle narrows anything. */
+  total: number;
+  /** Of those, how many have no owner — and therefore show up in BOTH halves. */
+  unassigned: number;
+}
+
+export function scopeNote(
+  me: TeamMember,
+  all: readonly TeamMember[],
+  mode: TeamViewMode,
+  counts?: ScopeCounts,
+): string {
+  /* ─── THE NOTE USED TO LIE, AND /quotes IS WHERE IT SHOWED ─────────────────
+     "Only records assigned to you." was returned unconditionally for `mine`. But unowned
+     rows are visible to everybody by design, so on the live books — where all 23 quotes
+     have a NULL owner — "My assigned" displayed 23 quotes assigned to nobody while
+     claiming they were assigned to the reader.
+
+     Worse than a wrong number: it is the screen asserting something it cannot know, and it
+     also made the toggle inert without saying so. Both halves showed the same 23 rows, and
+     a control that silently does nothing teaches people that controls do nothing. */
+  const unassigned = counts?.unassigned ?? 0;
+  const allUnassigned = counts !== undefined && counts.total > 0 && unassigned === counts.total;
+
+  if (allUnassigned) {
+    /* Names the cause and the fix, rather than leaving a dead control. */
+    return `Nothing here is assigned to anyone yet, so both views show the same ${counts.total}. Set an owner to make this filter bite.`;
+  }
+
+  const plus = unassigned > 0 ? ` Plus ${unassigned} unassigned, which everyone can see.` : "";
+
+  if (mode === "mine") return `Only records assigned to you.${plus}`;
 
   const ids = visibleUserIds(me, all);
-  if (ids === null) return "Everything in this workspace — you are an owner.";
+  if (ids === null) return `Everything in this workspace — you are an owner.${plus}`;
 
   const others = ids.length - 1;
-  if (others <= 0) return "Only records assigned to you — nobody reports to you yet.";
-  return `You and ${others} ${others === 1 ? "person who reports" : "people who report"} to you.`;
+  if (others <= 0) return `Only records assigned to you — nobody reports to you yet.${plus}`;
+  return `You and ${others} ${others === 1 ? "person who reports" : "people who report"} to you.${plus}`;
 }
