@@ -38,7 +38,17 @@ This file is read by Claude Code on every session. It contains all conventions, 
 
 **The goal (compass):** make the money-spine **lead → quote → pay → subscription → invoice → renewal** provably correct (test-backed) → confident soft launch → first paying customer. *Correct first, beautiful second, big third.*
 
-**Map:** `docs/PROJECT-KNOWLEDGE.md` (whole system — ⚠️ audited only to migration `0050`, see its banner) · `docs/MONEY-FLOW-TEST-MATRIX.md` (**transaction**-level money bugs + launch line) · `docs/ACCOUNTING-AUDIT.md` (**statement**-level: P&L / Balance Sheet correctness) · `docs/UX-AUDIT.md` (interaction / behaviour — incl. §24 compliance measured at 1-of-278) · `TASKS.md` (live status).
+**Map:** `docs/PROJECT-KNOWLEDGE.md` (whole system — ⚠️ audited only to migration `0050`, see its banner) · `docs/MONEY-FLOW-TEST-MATRIX.md` (**transaction**-level money bugs + launch line) · `docs/ACCOUNTING-AUDIT.md` (**statement**-level: P&L / Balance Sheet correctness) · `docs/UX-AUDIT.md` (interaction / behaviour — incl. §24 compliance measured at 1-of-278) · `TASKS.md` (live status — **the HANDOFF block at the top of `## Active` says what is half-done; read it before starting anything**).
+
+**Two operational docs added 18 Aug 2026, both written from measurement:**
+`docs/NEW-SESSION.md` — the 2-minute checklist Pardeep runs when opening a session, and the
+paste-ready first message that makes you read the handoff and state your understanding
+*before* working. It exists because five goals ran in one session and, after compaction, I
+twice mis-remembered my own earlier work and asserted a blocker I had never tested.
+`docs/WORKING-ENVIRONMENT.md` — the machine-level fixes (Defender exclusion, the malformed
+`SUPABASE_ACCESS_TOKEN`, permission rules) with the measured cost of each. Note its first
+section: I blamed the Stop-hook test gate for the slowness and it turned out to be **9
+seconds**. Measure before you propose removing a safeguard.
 
 ---
 
