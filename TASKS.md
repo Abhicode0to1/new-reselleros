@@ -5,6 +5,27 @@
 
 ## Active
 
+### 🔴 HANDOFF — padho pehle (18 Aug 2026, session `6404ace2`)
+
+Ye session **paanch goals** chala (Enquiries Hub → Poka-Yoke → Billing → Keyboard → Hierarchy). Branch `session/money-spine-hardening-jun1`. Jo baaki hai, ghatte kram me:
+
+**1. Trigger lag gaya par sabit nahi hua.** `20260818160000_users_privileged_columns_owner_only.sql` production me hai (`trigger_exists 1`, `fn_exists 1`). Par "non-owner ko rokta hai" — ye **reasoned hai, test-verified nahi**; probe classifier ne roka. Sabit karne ka tareeka file ke "HOW TO VERIFY" me hai.
+
+**2. Reporting lines khaali hain, aur ek insaan ko iska asar dikh raha hai.** RLS live hai, to `ananya@anutech.in` ko **0 of 18 leads** dikhte hain — manager hai, kuch own nahi karti, koi report nahi. Fix ek click: /team → kisi rep ka "Reports to" = Ananya. Baaki tree bhi bharna hai; abhi sirf do logon ka manager set tha aur wo bhi mere test wale the (hata diye).
+
+**3. `info@srigangatechnologies.com` ANUTECH tenant ka teesra OWNER hai** — poora access, password reset ka haq. Teen baar flag kiya, koi nirdesh nahi mila. Agar wo company ka banda nahi hai to /team se role badlo.
+
+**4. 29 local migrations remote tracking me nahi hain,** par unke objects DB me maujood hain — yaani tracking drift, changes ka nahi. **`supabase db push` yahan khatarnak hai** (28 already-lagi files dobara lagayega). `supabase migration repair` karna chahiye, par wo 28 un-padhi files ka faisla hai.
+
+**5. Ek ANUTECH support subscription "about ₹0" dikhata hai** (mrr 0, koi matching quote line nahi). Bilkul nahi jaancha.
+
+**6. Environment (dekho [docs/WORKING-ENVIRONMENT.md](docs/WORKING-ENVIRONMENT.md)):** token theek ho gaya par **explorer restart baaki** hai, to purani windows me abhi bhi galat copy hai. Defender exclusion baaki (Tamper Protection command ko rokta hai — GUI se karna hoga).
+
+**7. Bahut purana, user par ruka:** GitHub Team plan → branch protection wapas · `gh auth login -s workflow` → `money-check.yml` commit · teen developer usernames → `CODEOWNERS`. **Developers ko invite mat karo jab tak branch protection wapas na aaye.**
+
+**Jo is session me poora hua:** hierarchy visibility (paanchon step, RLS live — 9 restrictive policies), /team ka "Reports to" picker, sidebar me role, keyboard system, billing engine, poka-yoke forms. Gate: 2926 tests / 155 files, typecheck + lint clean, build exit 0.
+
+
 ### 📢 Marketing & Advertising OS (Pardeep, 13 Aug 2026) — 🟡 CHANNEL ECONOMICS DONE (29 tests). CAC/ROAS deliberately withheld — see below.
 
 **Already existed, so the brief shrank:** `/campaigns` and `/coupons` pages · `/api/campaigns/ai-generate` (the Gemini copywriter — directive 3's generator, with a deterministic stub fallback) · `/api/campaigns/send` · `/api/public/coupons/validate` · and **`/accounting/saas-metrics` already computes LTV** as ARPC ÷ monthly churn rate, which is half of directive 6.
