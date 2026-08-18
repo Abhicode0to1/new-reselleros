@@ -13,6 +13,8 @@ import { toastError } from "@/lib/errors/toast-error";
 import { useQuote, useDeleteQuote, quoteDeleteBlockReason } from "@/lib/queries/quotes";
 import { useGenerateInvoice } from "@/lib/queries/invoices";
 import { quoteMoneyActions } from "@/lib/quotes/money-stage";
+import { orphanState, isOrphan, orphanNote } from "@/lib/subscriptions/orphan-quote";
+import { useSubscriptions, useRecreateSubscription } from "@/lib/queries/subscriptions";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -109,6 +111,8 @@ export default function QuoteDetailPage() {
   const [blockedOpen, setBlockedOpen] = React.useState(false);
   const [approvalOpen, setApprovalOpen] = React.useState(false);
   const requestApproval = useRequestApproval();
+  const { data: allSubs } = useSubscriptions();
+  const recreateSub = useRecreateSubscription();
   // In-app confirm dialog — native window.confirm() is suppressed in some
   // embeds/webviews and silently returns false, which made destructive actions
   // (Reopen, Delete) look dead. See tasks/page.tsx for the same fix.
@@ -327,6 +331,30 @@ export default function QuoteDetailPage() {
     },
     rupee,
   );
+  /* ── Did this quote's subscription survive? ───────────────────────────────
+     A deleted subscription does not stop the money, it stops the money being KNOWN:
+     the customer keeps their mailboxes, the reseller keeps paying the vendor, and
+     nothing ever chases the renewal. It is the quietest way this product can lose a
+     customer's annual revenue, and until now no screen said a word about it.
+
+     Counted per LINE, not "is there one?" — a licence line plus a support line is the
+     normal shape here, so a quote that had two and lost one still looks connected.
+     See lib/subscriptions/orphan-quote.ts. */
+  /* A plain filter, NOT useMemo: this sits below the page's early returns, and a hook
+     called after one runs in a different order on the loading render — React's
+     rules-of-hooks caught it. The list is a handful of rows; memoising it would buy
+     nothing and cost correctness. */
+  const quoteSubs = (allSubs ?? []).filter((s) => s.quote_id === quote.id);
+  const orphan = orphanState({
+    status:        quote.status,
+    paymentStatus: quote.payment_status,
+    received:      totalReceivedSoFar,
+    isRenewal:     quote.is_renewal,
+    isAddSeats:    quote.is_add_seats,
+    lines:         (quote.line_items ?? []) as { name?: string | null; qty?: number | null; rate?: number | null }[],
+    existingSubs:  quoteSubs.length,
+  });
+
   /* Margin comes from the LINE ITEMS, not from quotes.total_cost.
      The column is an aggregate written at save time and at least one writer forgot
      it: Q-2026-9778 stores total_cost = 0 while its single line carries ₹19,800, so
@@ -741,6 +769,35 @@ export default function QuoteDetailPage() {
             renders whatever it says. It also reads the RECORDED payments rather than
             the status label, because the label is something somebody has to remember
             to move and the payment rows are what actually happened. */}
+        {/* ── The subscription this quote should have, and does not ───────────
+            Above the money row on purpose: a paid deal with no subscription is a
+            bigger problem than anything the money row can offer, and it is the one
+            nobody would otherwise notice. */}
+        {isOrphan(orphan) && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose/50 bg-rose-soft/40 px-4 py-3">
+            <div className="flex items-start gap-2 text-sm">
+              <Icon name="alert" size={16} className="mt-0.5 shrink-0 text-rose" />
+              <span className="text-ink">{orphanNote(orphan)}</span>
+            </div>
+            <Button
+              variant="primary"
+              icon="refresh"
+              loading={recreateSub.isPending}
+              onClick={() => setConfirm({
+                title: "Rebuild the subscription from this quote?",
+                /* Says exactly what it will and will NOT touch. A repair button that
+                   does not explain its blast radius is one nobody dares press. */
+                body: "It creates only the missing subscription rows, dated from this quote's own start date so the renewal falls where it always should have. No payment, invoice or document number is touched.",
+                confirmLabel: "Rebuild subscription",
+                icon: "refresh",
+                onConfirm: () => recreateSub.mutate(params.id),
+              })}
+            >
+              Re-create subscription from quote
+            </Button>
+          </div>
+        )}
+
         {(money.canRecordPayment || money.canGenerateInvoice || money.note) && (
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="text-sm text-ink-2">{money.note}</div>

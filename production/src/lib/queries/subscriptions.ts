@@ -156,3 +156,42 @@ export function useCustomerSubscriptions(customerId: string | undefined) {
     },
   });
 }
+
+/**
+ * Rebuild the subscriptions a paid quote lost.
+ *
+ * ─── NOT OPTIMISTIC, AND NOT SILENT ─────────────────────────────────────────
+ * This creates future revenue and a renewal obligation. The screen waits for the server,
+ * and the toast NAMES what was created rather than saying "done" — an operator repairing
+ * money needs to see the seats and the renewal date, because a wrong renewal date is the
+ * difference between chasing in April and chasing in August.
+ */
+export function useRecreateSubscription() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (quoteId: string) => {
+      const res = await fetch(`/api/quotes/${quoteId}/recreate-subscription`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not rebuild the subscription");
+      return json as { ok: true; created: { id: string; plan: string; seats: number; mrr: number; renewal_date: string }[] };
+    },
+    onSuccess: ({ created }) => {
+      qc.invalidateQueries({ queryKey: ["subscriptions"] });
+      qc.invalidateQueries({ queryKey: ["quotes"] });
+      qc.invalidateQueries({ queryKey: ["nav-badges"] });
+      const first = created[0];
+      toast.success(
+        created.length === 1
+          ? `Rebuilt: ${first.plan} · ${first.seats} seats · renews ${first.renewal_date}`
+          : `Rebuilt ${created.length} subscriptions from this quote`,
+        {
+          description: created.length > 1
+            ? created.map((c) => `${c.plan} — ${c.seats} seats, renews ${c.renewal_date}`).join(" · ")
+            : "Check the renewal date is the one you expect — it is backdated to the quote's start, not today.",
+        },
+      );
+    },
+    onError: (e: Error) => guardErrorToast(e),
+  });
+}
