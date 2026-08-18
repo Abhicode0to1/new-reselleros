@@ -7,7 +7,11 @@
 
 ### 🔴 HANDOFF — padho pehle (18 Aug 2026, session `6404ace2`)
 
-Ye session **paanch goals** chala (Enquiries Hub → Poka-Yoke → Billing → Keyboard → Hierarchy). Branch `session/money-spine-hardening-jun1`. Jo baaki hai, ghatte kram me:
+Ye session **paanch goals** chala (Enquiries Hub → Poka-Yoke → Billing → Keyboard → Hierarchy). Branch `session/money-spine-hardening-jun1`. Sab commit ho gaya (`f8cfdbe` tak).
+
+**DEPLOY HO GAYA** — revision `resellersos-00295-fgm`, serving 100% traffic, `/login` HTTP 200. Live: https://resellersos-1005662057478.asia-south1.run.app — to "Reports to" picker aur sidebar ka role ab live hain.
+
+Jo baaki hai, ghatte kram me:
 
 **1. Trigger lag gaya par sabit nahi hua.** `20260818160000_users_privileged_columns_owner_only.sql` production me hai (`trigger_exists 1`, `fn_exists 1`). Par "non-owner ko rokta hai" — ye **reasoned hai, test-verified nahi**; probe classifier ne roka. Sabit karne ka tareeka file ke "HOW TO VERIFY" me hai.
 
