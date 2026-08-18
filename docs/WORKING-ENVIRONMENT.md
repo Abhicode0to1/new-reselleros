@@ -141,10 +141,42 @@ Ye credential ka kaam hai — main na token maangunga na dikhaunga. Aap khud:
 4. Us par sahi PAT lagao — Supabase dashboard → **Account → Access Tokens** → naya banao
    (`sbp_` + 40 hex). **Ya** agar zaroorat nahi to variable **Delete** kar do — CLI stored
    login se chal jaata hai (aaj `env -u` isi liye kaam kiya).
-5. **Command Prompt band karke naya kholo** (env var purani window me nahi badalti)
-6. Check: `npx supabase projects list` — list aani chahiye, error nahi
+Sabse saaf raasta — delete kar do, kyoki `supabase login` pehle se hua hua hai. Ek command,
+admin ki zaroorat nahi (variable **HKCU** me hai, HKLM me nahi — naapa hua):
 
-Delete karna sabse saaf hai, kyoki `supabase login` pehle se hua hua hai.
+```bash
+reg delete "HKCU\Environment" /v SUPABASE_ACCESS_TOKEN /f
+```
+
+### ⚠️ "Naya window kholo" kaafi NAHI hai — ye aaj kaata
+
+Pehle isme likha tha "Command Prompt band karke naya kholo". **Wo adhoora tha.** Registry se
+value hat gayi thi, phir bhi naya Command Prompt wahi purana error de raha tha.
+
+Wajah: Windows me har naya window `explorer.exe` se environment **inherit** karta hai, aur
+explorer ne purani copy pakad kar rakhi hoti hai. To "naya window" bhi purana token leke
+aata hai.
+
+**Turant test karne ke liye** — usi window me:
+
+```bash
+set SUPABASE_ACCESS_TOKEN=
+```
+
+(`=` ke baad kuch nahi.) Phir `npx supabase projects list` — list aani chahiye.
+
+**Permanent** — explorer restart karo:
+
+1. **Ctrl + Shift + Esc** (Task Manager)
+2. **Processes** me **Windows Explorer** dhundo
+3. Right-click → **Restart** (screen ek pal blink karegi, normal hai)
+
+Ya sign out / restart. Uske baad naye windows saaf environment ke saath khulenge.
+
+> Ye Claude ke shell par bhi lagu hota hai: is session ka shell purani copy leke chal raha
+> hai (naapa: length 75), isliye usme `env -u` lagana zaroori rahega. **Explorer restart ke
+> baad naya Claude session** shuru karo — tab shell saaf hoga aur `Bash(npx supabase db
+> query:*)` rule apne aap match karega.
 
 ---
 
@@ -177,18 +209,42 @@ claude mcp remove supabase-db
 Is size ke Next.js app ke liye 10+ minute **abnormal** hai. Windows par sabse aam wajah:
 **Defender har `node_modules` file scan karta hai.**
 
-**PowerShell ko "Run as Administrator" se kholo** (Start → PowerShell par right-click →
-Run as administrator) aur ye chalao:
+### ⚠️ Command se ye NAHI hoga — Tamper Protection rokta hai
 
-```powershell
-Add-MpPreference -ExclusionPath "C:\dev\ResellerOSv3 - Copy"
+Pehle isme likha tha "admin PowerShell me `Add-MpPreference` chalao". **Wo galat tha.**
+Chala kar dekha:
+
+```
+Add-MpPreference : You don't have enough permissions to perform the requested operation.
+FullyQualifiedErrorId : HRESULT 0xc0000142
 ```
 
-Check:
+Wajah naapi:
 
-```powershell
-(Get-MpPreference).ExclusionPath
 ```
+IsTamperProtected : True
+```
+
+Tamper Protection Windows ka security feature hai jo Defender settings ko **command se
+badalne se rokta hai — admin ko bhi**. To ye command kabhi nahi chalegi.
+
+**Tamper Protection band karne ki salah nahi hai** — GUI se wahi kaam ho jaata hai, bina
+security kamzor kiye.
+
+### GUI se karo — Windows Security app
+
+1. **Windows key** → type `Windows Security` → kholo
+2. Baayin taraf **Virus & threat protection**
+3. "Virus & threat protection settings" ke neeche → **Manage settings**
+4. Neeche scroll → **Exclusions** → **Add or remove exclusions**
+5. UAC popup → **Yes**
+6. **+ Add an exclusion** → **Folder**
+7. Chuno: `C:\dev\ResellerOSv3 - Copy` → **Select Folder**
+
+List me folder dikhne lagega. Bas.
+
+> Sabak (`CLAUDE.md §25.1`): wo command likhte waqt maine Tamper Protection check nahi kiya
+> tha. Ek `Get-MpComputerStatus` pehle chala leta to aap do galat command na chalate.
 
 Phir build ka time naapo:
 
