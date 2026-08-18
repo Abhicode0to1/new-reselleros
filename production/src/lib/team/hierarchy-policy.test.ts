@@ -23,6 +23,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { HIERARCHY_ENFORCED_IN_DATABASE } from "./enforcement";
 
 const MIGRATION = path.join(
   process.cwd(),
@@ -84,6 +85,25 @@ describe("hierarchy RLS policies", () => {
       expect(sql).not.toContain(`drop policy if exists ${policy} `);
       expect(sql).not.toContain(`drop policy ${policy} `);
     }
+  });
+
+  it("keeps the UI caveat in step with the policies that actually shipped", () => {
+    /* The dangerous drift is the flag going true while the policies are still commented
+       out: the "this only filters what you see" caveat disappears from /leads and /quotes,
+       and a filter starts reading as privacy. Tying the two together means enabling one
+       without the other fails here rather than on somebody's screen.
+
+       Read RAW, not uncommented — an uncommented `create policy` at the start of a line is
+       exactly what distinguishes shipped from staged. */
+    const raw = readFileSync(MIGRATION, "utf8");
+    const policiesShipped = /^[ \t]*create policy \w+_hierarchy_select/m.test(raw);
+
+    expect(
+      HIERARCHY_ENFORCED_IN_DATABASE,
+      policiesShipped
+        ? "Section 3b is uncommented but the UI still says visibility is not enforced"
+        : "the UI claims database enforcement while Section 3b is still commented out",
+    ).toBe(policiesShipped);
   });
 
   it("exempts unclaimed rows and portal customers in the shared predicate", () => {

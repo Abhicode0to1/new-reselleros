@@ -23,6 +23,7 @@ import * as React from "react";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { useTeamTree } from "@/lib/queries/team-tree";
 import { TeamViewToggle } from "@/components/shared/team-view-toggle";
+import { HIERARCHY_ENFORCED_IN_DATABASE } from "@/lib/team/enforcement";
 import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
@@ -1062,7 +1063,7 @@ function LeadsPageInner() {
           all={leadTeam}
           mode={leadTeamMode}
           onChange={setLeadTeamMode}
-          enforcedInDatabase={false}
+          enforcedInDatabase={HIERARCHY_ENFORCED_IN_DATABASE}
         />
 
         <div className="shrink-0 mb-3 flex items-center gap-2 flex-wrap">

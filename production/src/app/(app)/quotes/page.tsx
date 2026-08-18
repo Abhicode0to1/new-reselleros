@@ -7,6 +7,7 @@ import * as React from "react";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { useTeamTree } from "@/lib/queries/team-tree";
 import { TeamViewToggle } from "@/components/shared/team-view-toggle";
+import { HIERARCHY_ENFORCED_IN_DATABASE } from "@/lib/team/enforcement";
 import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import Link from "next/link";
@@ -582,7 +583,7 @@ export default function QuotesPage() {
                     /* False until 20260818150000_user_hierarchy_visibility.sql is applied.
                        One flag, one call site, so the caveat disappears everywhere the day
                        the database actually enforces it. */
-                    enforcedInDatabase={false}
+                    enforcedInDatabase={HIERARCHY_ENFORCED_IN_DATABASE}
                   />
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">

@@ -62,10 +62,12 @@ export function TeamViewToggle({
       </div>
 
       <p className="text-[11px] leading-snug text-ink-3">
-        {scopeNote(me, all, mode)}
+        {scopeNote(me, all, mode)}{" "}
         {!enforcedInDatabase && (
-          /* Stated plainly. The alternative is a filter that looks like a permission. */
-          <span className="ml-1 text-amber-ink">
+          /* Stated plainly. The alternative is a filter that looks like a permission.
+             The space above is explicit, not the span's old ml-1: margin is visual only, so
+             a screen reader read "you are an owner.This filters what you see". */
+          <span className="text-amber-ink">
             This filters what you see; it does not yet restrict what teammates can reach.
           </span>
         )}
