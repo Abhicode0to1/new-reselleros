@@ -106,6 +106,33 @@ describe("hierarchy RLS policies", () => {
     ).toBe(policiesShipped);
   });
 
+  it("keeps the SQL regression test in step with the migration", () => {
+    /* hierarchy_peer_isolation.test.sql creates the policies itself so it can prove them
+       inside a rolled-back transaction. That is what makes it runnable before the migration
+       is applied — and it is also how it could quietly start proving something the database
+       does not do. Both files must use `as restrictive` and the same predicate. */
+    const sqlTest = readFileSync(
+      path.join(process.cwd(), "supabase", "tests", "hierarchy_peer_isolation.test.sql"),
+      "utf8",
+    );
+
+    for (const kind of ["select", "update"]) {
+      expect(
+        sqlTest.replace(/\s+/g, " "),
+        `the SQL test's ${kind} policy is not restrictive — it would pass against no policy at all`,
+      ).toContain(`as restrictive for ${kind} using (public.can_see_record(owner_id))`);
+    }
+
+    /* The role switch is what makes RLS apply at all. A superuser connection bypasses every
+       policy, so without this line the file is a very convincing no-op. */
+    expect(sqlTest, "the SQL test never drops to the authenticated role")
+      .toContain("set local role authenticated");
+
+    /* It must not be able to leave fixtures behind on whatever database it is pointed at. */
+    expect(sqlTest.trimEnd().endsWith("rollback;"), "the SQL test does not end in rollback").toBe(true);
+    expect(sqlTest).not.toMatch(/^\s*commit;/m);
+  });
+
   it("exempts unclaimed rows and portal customers in the shared predicate", () => {
     const sql = uncommentedSql();
     /* Anchored on `as $$` rather than the first `$$` after the function name: the file

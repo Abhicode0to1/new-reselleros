@@ -326,3 +326,20 @@ commit;
 --   -- The owner's tree must include everybody who reports up to them:
 --   select count(*) from public.get_subordinate_user_ids(
 --     (select id from public.users where email = 'pardeep@anutech.in'));
+--
+-- ─── AND THE ONE THAT ACTUALLY PROVES SECTION 3 ───────────────────────────────
+--   supabase/tests/hierarchy_peer_isolation.test.sql
+--
+--   It builds its own owner / manager / repA / repB tree, creates the function and the two
+--   restrictive policies, drops to `set local role authenticated` so RLS is genuinely
+--   enforced, asserts that repA sees own+unowned but never repB's, that repB mirrors it,
+--   that the manager sees both, that the owner sees all, and that repA cannot blind-write
+--   repB's lead by id — then rolls all of it back.
+--
+--   Because DDL is transactional, it runs BEFORE this migration is applied. That matters:
+--   it separates "is the SQL correct" from "should support staff see the pipeline", and only
+--   the second one needs a decision. On a dev/test DB only — it inserts fixtures:
+--     npx supabase db query --db-url "<dev url>" -f supabase/tests/hierarchy_peer_isolation.test.sql
+--
+--   As of 18 Aug 2026 it has NOT been run: no dev database exists on this machine and it
+--   must not be pointed at production. It is asserted, not passed. Its own header says so.
