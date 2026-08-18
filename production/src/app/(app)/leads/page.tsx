@@ -21,6 +21,9 @@
 
 import * as React from "react";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
+import { useTeamTree } from "@/lib/queries/team-tree";
+import { TeamViewToggle } from "@/components/shared/team-view-toggle";
+import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead } from "@/lib/queries/leads";
@@ -377,7 +380,28 @@ function LeadsPageInner() {
   // Delfos Technologies, a real separate tenant, badged as "Excel Tech". RLS already
   // scopes every read to the caller's tenant, so the filter only ever hid the
   // tenant's own leads. Name kept: it is referenced throughout this page.
-  const workspaceLeads = React.useMemo(() => leads ?? [], [leads]);
+  /* ── Whose leads ──────────────────────────────────────────────────────────
+     The reporting tree decides, not the role — lib/team/visibility.ts. Unlike quotes, all
+     14 live leads DO carry an owner_id, so this filter actually bites here, which makes the
+     unowned-stays-visible branch the safety net rather than the main path.
+
+     A view, not a wall: row-level enforcement ships in
+     20260818150000_user_hierarchy_visibility.sql and is not applied yet. */
+  const { data: leadTeamTree } = useTeamTree();
+  const leadTeam = React.useMemo(() => leadTeamTree ?? [], [leadTeamTree]);
+  const leadMeMember = React.useMemo(
+    () => leadTeam.find((u) => u.id === currentUser?.userId) ?? null,
+    [leadTeam, currentUser?.userId],
+  );
+  const [leadTeamMode, setLeadTeamMode] = React.useState<TeamViewMode>("team");
+
+  const workspaceLeads = React.useMemo(() => {
+    const rows = leads ?? [];
+    if (!leadMeMember) return rows;
+    const ids = idsForMode(leadMeMember, leadTeam, leadTeamMode);
+    if (ids === null) return rows;
+    return rows.filter((l) => !l.owner_id || ids.includes(l.owner_id));
+  }, [leads, leadMeMember, leadTeam, leadTeamMode]);
 
   // Duplicate index — computed over workspace leads (dups can span the workspace),
   // surfaced as a per-row "Duplicate?" flag + a "Duplicates" smart view. Declared
@@ -1028,6 +1052,19 @@ function LeadsPageInner() {
           and the width it was hogging goes to the search box, which was the
           other cramped control on this row. */}
       {!isLoading && leads && (
+        <>
+        {/* Whose leads. Renders nothing for a rep with no reports — both halves would show
+            the same rows, and a control that does nothing teaches people that controls do
+            nothing. */}
+        <TeamViewToggle
+          className="shrink-0 mb-2"
+          me={leadMeMember}
+          all={leadTeam}
+          mode={leadTeamMode}
+          onChange={setLeadTeamMode}
+          enforcedInDatabase={false}
+        />
+
         <div className="shrink-0 mb-3 flex items-center gap-2 flex-wrap">
           <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[180px] sm:max-w-sm">
             <Input
@@ -1164,6 +1201,7 @@ function LeadsPageInner() {
             )}
           </div>
         </div>
+        </>
       )}
 
 

@@ -5,6 +5,9 @@
 
 import * as React from "react";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
+import { useTeamTree } from "@/lib/queries/team-tree";
+import { TeamViewToggle } from "@/components/shared/team-view-toggle";
+import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -162,7 +165,31 @@ export default function QuotesPage() {
   };
 
   // Workspace keyword filter removed 2026-08-13 — RLS already scopes to tenant.
-  const quotesByWorkspace = React.useMemo(() => quotes ?? [], [quotes]);
+  /* ── Whose quotes ─────────────────────────────────────────────────────────
+     The tree decides, not the role — see lib/team/visibility.ts. An UNOWNED quote stays
+     visible to everybody, and that is not a loophole: all 25 quotes in the live books have
+     owner_id NULL, so filtering them out would empty this page while the rows sat safely
+     in the database. Company data nobody has claimed is not private data.
+
+     Note what this is: a view. Row-level enforcement ships in
+     20260818150000_user_hierarchy_visibility.sql and is not applied yet, which is why the
+     toggle carries a caveat rather than implying privacy. */
+  const { data: me } = useCurrentUser();
+  const { data: teamTree } = useTeamTree();
+  const team = React.useMemo(() => teamTree ?? [], [teamTree]);
+  const meMember = React.useMemo(
+    () => team.find((u) => u.id === me?.userId) ?? null,
+    [team, me?.userId],
+  );
+  const [teamMode, setTeamMode] = React.useState<TeamViewMode>("team");
+
+  const quotesByWorkspace = React.useMemo(() => {
+    const rows = quotes ?? [];
+    if (!meMember) return rows;
+    const ids = idsForMode(meMember, team, teamMode);
+    if (ids === null) return rows;
+    return rows.filter((q) => !q.owner_id || ids.includes(q.owner_id));
+  }, [quotes, meMember, team, teamMode]);
 
   // Counts per status — adds an "invoiced" bucket on top of the quote.status
   // enum, derived from payment_status. Truly-done deals (accepted + paid +
@@ -543,6 +570,20 @@ export default function QuotesPage() {
               <div className="flex justify-between items-center gap-3 flex-wrap">
                 <div className="text-xs text-ink-3">
                   Showing {filtered.length} of {counts.all ?? 0} quote{counts.all === 1 ? "" : "s"}
+                  {/* Beside the count on purpose: the count is the thing the toggle
+                      changes, and a filter whose effect is shown somewhere else on the
+                      page reads as the list being wrong. */}
+                  <TeamViewToggle
+                    className="mt-1.5"
+                    me={meMember}
+                    all={team}
+                    mode={teamMode}
+                    onChange={setTeamMode}
+                    /* False until 20260818150000_user_hierarchy_visibility.sql is applied.
+                       One flag, one call site, so the caveat disappears everywhere the day
+                       the database actually enforces it. */
+                    enforcedInDatabase={false}
+                  />
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <div className="w-full sm:w-64">
