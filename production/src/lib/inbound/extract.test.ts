@@ -181,3 +181,131 @@ describe("the subject is searched too", () => {
     expect(e.seats.value).toBe(20);
   });
 });
+
+/**
+ * ─── THE WORDS AN INDIAN RESELLER'S CUSTOMER ACTUALLY USES ──────────────────
+ * The live enquiry — "mujhe 20 email google workspace standard chahiye. iske liye mujhe
+ * quote bhej do" — reported SEATS: not found. The quote button then carried no seat count,
+ * and whoever built that quote typed a number from memory onto a priced document.
+ *
+ * Nobody in this market writes "20 seats".
+ */
+describe("Hinglish and Indian-English seat counts", () => {
+  const seats = (body: string) => run({ body, subject: "", catalogue: [] }).seats.value;
+
+  it("reads the LIVE enquiry that failed", () => {
+    expect(seats("mujhe 20 email google workspace standard chahiye. iske liye mujhe quote bhej do"))
+      .toBe(20);
+  });
+
+  it.each([
+    ["mujhe 20 email chahiye",            20],
+    ["20 emails chahiye",                 20],
+    ["mujhe 20 email id chahiye",         20],
+    ["we need 50 IDs",                    50],
+    ["25 id bana do",                     25],
+    ["10 mail id chahiye",                10],
+    ["hamare 30 log hain",                30],
+    ["12 bande ke liye chahiye",          12],
+    ["8 karmchari ke liye",                8],
+    ["kindly quote for 15 mailbox",       15],
+  ])("reads %j as %i", (body, expected) => {
+    expect(seats(body)).toBe(expected);
+  });
+
+  it("still reads the textbook phrasings", () => {
+    expect(seats("We need 14 seats")).toBe(14);
+    expect(seats("40 users please")).toBe(40);
+    expect(seats("Please add 5 licenses")).toBe(5);
+  });
+
+  it("shows the SOURCE text, so the rep can check before it becomes a price", () => {
+    const e = run({ body: "mujhe 20 email chahiye", subject: "", catalogue: [] });
+    expect(e.seats.source).toMatch(/20 email/i);
+  });
+});
+
+/**
+ * ─── THE COST OF ACCEPTING "EMAIL" AS A UNIT, AND THE GUARD ─────────────────
+ * "I sent you 20 emails" is a complaint about unanswered mail, not an order for twenty
+ * mailboxes. Without the guard it becomes a 20-seat quote.
+ */
+describe("a count of MESSAGES is not a count of seats", () => {
+  const seats = (body: string) => run({ body, subject: "", catalogue: [] }).seats.value;
+
+  it.each([
+    "I sent you 20 emails last week",
+    "we sent 5 mails and got no reply",
+    "I have received 12 emails from your team",
+    "got 3 emails about this",
+    "already forwarded 4 mails",
+    "I attached 2 emails for reference",
+  ])("ignores %j", (body) => {
+    expect(seats(body)).toBeNull();
+  });
+
+  it("still reads a real request in the SAME message", () => {
+    /* The complaint and the order often arrive together. */
+    expect(seats("I sent you 3 emails already. Anyway, mujhe 20 email chahiye."))
+      .toBe(20);
+  });
+});
+
+describe("the old false positives stay excluded", () => {
+  const seats = (body: string) => run({ body, subject: "", catalogue: [] }).seats.value;
+
+  it("does not read a date as a quantity", () => {
+    expect(seats("We want to start by 14 August.")).toBeNull();
+  });
+
+  it("does not read money as a quantity", () => {
+    expect(seats("Our budget is 24,000 for the year.")).toBeNull();
+  });
+
+  it("does not read a bare number", () => {
+    expect(seats("Please call me about 20 of these")).toBeNull();
+  });
+});
+
+/**
+ * ─── STEP 2 IS A CONSEQUENCE OF STEP 1, NOT SEPARATE WORK ───────────────────
+ * quoteHref() already passes `seats` when the extractor found one — it just never found
+ * one on a Hinglish enquiry, so the button carried nothing and the operator typed a
+ * number from memory onto a priced document.
+ *
+ * These pin the contract the quote link depends on: what the panel shows is exactly what
+ * the button sends, and a field that was not found stays absent rather than going as zero.
+ */
+describe("what the panel shows is what the quote button sends", () => {
+  const LIVE = "mujhe 20 email google workspace standard chahiye. iske liye mujhe quote bhej do";
+
+  it("finds seats AND product on the live enquiry", () => {
+    const e = run({
+      body: LIVE, subject: "", fromName: "Pardeep Sharma",
+      fromEmail: "pardeep@exceltechnologies.in",
+      catalogue: [{ id: "gws-std", name: "Google Workspace Standard" }],
+    });
+    expect(e.seats.value).toBe(20);
+    expect(e.product.value?.name).toBe("Google Workspace Standard");
+    expect(e.name.value).toBe("Pardeep Sharma");
+    expect(e.email.value).toBe("pardeep@exceltechnologies.in");
+  });
+
+  it("raises the found-count the panel prints", () => {
+    /* It read "DETAILS FOUND · 3 OF 5" while seats were missing. */
+    const e = run({
+      body: LIVE, subject: "", fromName: "Pardeep Sharma",
+      fromEmail: "pardeep@exceltechnologies.in",
+      catalogue: [{ id: "gws-std", name: "Google Workspace Standard" }],
+    });
+    expect(foundCount(e)).toBe(4);
+  });
+
+  it("leaves a field NULL when it is absent, so nothing is sent as a guess", () => {
+    /* An empty `seats=` in the URL lands in the builder as a value somebody has to notice
+       and clear. A guessed seat count becomes a price on a signed quote. */
+    const e = run({ body: "please send your rate card", subject: "", catalogue: [] });
+    expect(e.seats.value).toBeNull();
+    expect(e.product.value).toBeNull();
+  });
+});

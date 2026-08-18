@@ -87,10 +87,44 @@ function findPhone(text: string): Extracted<string> {
  * count. Requiring the unit word is what keeps a date from becoming a quantity on a
  * quote.
  */
-const SEAT_UNITS = "seats?|users?|licen[cs]es?|mailboxes|mailbox|accounts?|employees|staff|people";
+/**
+ * ─── AND THE UNITS AN INDIAN RESELLER'S CUSTOMER ACTUALLY TYPES ─────────────
+ * The live enquiry read "mujhe 20 email google workspace standard chahiye" and the panel
+ * said SEATS: not found — so the quote button carried no seat count and whoever built that
+ * quote typed a number from memory.
+ *
+ * Nobody in this market writes "20 seats". They write 20 email, 20 email id, 20 IDs,
+ * 20 mailbox, 20 log (Hinglish for people). Those are the words, and a parser that knows
+ * only the textbook ones is a parser for a different country.
+ */
+const SEAT_UNITS =
+  "seats?|users?|licen[cs]es?|mailboxes|mailbox|accounts?|employees|staff|people" +
+  /* E-mail as a COUNTABLE THING — "20 email", "20 emails", "20 email id", "20 mail". */
+  String.raw`|e-?mails?(?:\s*ids?)?|mails?(?:\s*ids?)?` +
+  /* "20 IDs" — everyday Indian usage for accounts. */
+  "|ids?" +
+  /* Hinglish for people: "20 log", "20 bande", "20 karmchari". */
+  "|log|bande|banda|aadmi|karmchari";
+
+/**
+ * Verbs that turn a count of emails into a count of MESSAGES.
+ *
+ * "I sent you 20 emails" and "we received 20 mails" are the one real cost of accepting
+ * "email" as a seat unit, and they are cheap to exclude: the giveaway is always a sending
+ * or receiving verb immediately before the number. Without this guard, a complaint about
+ * unanswered mail becomes a 20-seat quote.
+ */
+const NOT_A_COUNT_BEFORE =
+  "sent|send|sending|receiv(?:e|ed)|got|reply|replied|forward(?:ed)?|attach(?:ed)?";
+
 const SEATS_RE = new RegExp(
-  `(?<![0-9,.])([0-9]{1,4})\\s*(?:${SEAT_UNITS})\\b` +
-  `|\\b(?:for|need|want|require|add)\\s+([0-9]{1,4})\\s*(?:${SEAT_UNITS})\\b`,
+  /* The lookbehind allows up to two words between the verb and the number, because the
+     real sentences are "I sent YOU 20 emails" and "we received YOUR LAST 20 mails", not
+     "sent 20 emails". A single-space lookbehind matches neither and lets the complaint
+     through as an order. JS allows a variable-length lookbehind; two words is enough for
+     every phrasing seen and short enough not to reach across a clause. */
+  String.raw`(?<!\b(?:${NOT_A_COUNT_BEFORE})\s+(?:\w+\s+){0,2})(?<![0-9,.])([0-9]{1,4})\s*(?:${SEAT_UNITS})\b` +
+  String.raw`|\b(?:for|need|want|require|add|chahiye)\s+([0-9]{1,4})\s*(?:${SEAT_UNITS})\b`,
   "i",
 );
 

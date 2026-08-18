@@ -47,6 +47,8 @@ import {
 import { groupIntoThreads, threadFor } from "@/lib/inbound/threads";
 import { extractEntities, foundCount, type ExtractedEntities } from "@/lib/inbound/extract";
 import { useItems } from "@/lib/queries/items";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { ReplyComposer } from "@/components/features/enquiries/reply-composer";
 import { dialable } from "@/lib/leads/call-queue";
 import type { InboundEmailRow } from "@/lib/supabase/database.types";
 
@@ -200,6 +202,12 @@ export default function EnquiriesPage() {
     [threads, selectedId],
   );
   const selected = selectedThread?.latest ?? null;
+
+  /* Who the reply is signed by. Null while it loads, and reply-pills.ts then leaves the
+     draft UNSIGNED rather than signing it with a placeholder — the same rule as
+     lib/whatsapp.ts, where the wrong company name once went out on live reminders. */
+  const { data: me } = useCurrentUser();
+  const tenantName = me?.tenantName ?? null;
 
   /* The tenant's own catalogue, so the extractor matches real SKUs instead of
      guessing a plan name out of the prose. */
@@ -746,6 +754,31 @@ export default function EnquiriesPage() {
                     </div>
                   </aside>
                 )}
+              </div>
+
+              {/* ── And the answer, written where the question is ─────────────
+                  Below the conversation, not inside its column: a reply box the
+                  width of a phone is one people write four-word replies in, and
+                  the whole point is that the seat count and the product stay
+                  visible above while it is typed. */}
+              <div className="px-4 pb-4">
+                <ReplyComposer
+                  enquiryId={selected.id}
+                  toEmail={selected.from_email}
+                  originalSubject={selected.subject}
+                  receivedAt={selected.created_at}
+                  formatWhen={formatDate}
+                  context={{
+                    contactName: entities?.name.value ?? null,
+                    product:     entities?.product.value?.name ?? null,
+                    seats:       entities?.seats.value ?? null,
+                    /* The phone-ask pill hides itself when a number is already on the
+                       enquiry — asking for something on file reads as "they did not
+                       read my email". */
+                    hasPhone:    Boolean(entities?.phone.value),
+                    sellerName:  tenantName,
+                  }}
+                />
               </div>
             </Card>
           )}

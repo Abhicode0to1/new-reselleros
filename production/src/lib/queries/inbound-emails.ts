@@ -117,3 +117,70 @@ export function useConvertInboundToLead() {
     onError: (err) => toast.error((err as Error).message),
   });
 }
+
+/**
+ * What has already been sent in answer to one enquiry.
+ *
+ * Read from email_log through the route, never from a flag on the row — see
+ * lib/inbound/replied.ts for why. Disabled until an enquiry is selected, so opening the
+ * page does not fire a request per email in the list.
+ */
+export function useEnquiryReplies(enquiryId: string | null) {
+  return useQuery({
+    queryKey: ["enquiry-replies", enquiryId],
+    enabled: enquiryId != null,
+    queryFn: async (): Promise<{ sentAt: string; status: string; subject: string | null }[]> => {
+      const res = await fetch(`/api/inbound-emails/${enquiryId}/reply`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Could not check what was already sent");
+      }
+      const json = await res.json();
+      return json.replies ?? [];
+    },
+  });
+}
+
+/**
+ * Send a reply to an enquiry.
+ *
+ * ─── NOT OPTIMISTIC, UNLIKE STAR AND ARCHIVE ────────────────────────────────
+ * Those move a row and are undoable. This puts an email in a stranger's inbox and cannot
+ * be recalled, so the button stays in its loading state until the server says the send
+ * happened. A composer that clears itself on click would, on a failed send, leave a rep
+ * looking at an empty box believing the customer had been answered.
+ */
+export function useSendEnquiryReply() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { id: string; subject: string; body: string }) => {
+      const { id, ...body } = input;
+      const res = await fetch(`/api/inbound-emails/${id}/reply`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not send this reply");
+      return json as { ok: true; stub: boolean; provider: string };
+    },
+    onSuccess: (result, input) => {
+      qc.invalidateQueries({ queryKey: ["enquiry-replies", input.id] });
+      if (result.stub) {
+        /* §24 — the honest version. No provider is configured, so nothing left. Saying
+           "Sent" here is the exact lie this codebase keeps hunting. */
+        toast.warning("Nothing was actually sent — no email provider is connected.", {
+          description: "The reply was recorded but no mail left. Connect Gmail or Resend in Settings, then send it again.",
+        });
+      } else {
+        toast.success("Reply sent.");
+      }
+    },
+    onError: (e: Error) => {
+      toast.error("The reply did not send.", {
+        description: `${e.message} Your text is still in the box — nothing was lost.`,
+      });
+    },
+  });
+}
