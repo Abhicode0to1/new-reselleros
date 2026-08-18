@@ -13,7 +13,9 @@ Ye session **paanch goals** chala (Enquiries Hub → Poka-Yoke → Billing → K
 
 Jo baaki hai, ghatte kram me:
 
-**1. Trigger lag gaya par sabit nahi hua.** `20260818160000_users_privileged_columns_owner_only.sql` production me hai (`trigger_exists 1`, `fn_exists 1`). Par "non-owner ko rokta hai" — ye **reasoned hai, test-verified nahi**; probe classifier ne roka. Sabit karne ka tareeka file ke "HOW TO VERIFY" me hai.
+**1. ~~Trigger lag gaya par sabit nahi hua.~~ ✅ SABIT HO GAYA (19 Aug 2026)** — [users_privileged_columns_owner_only.test.sql](production/supabase/tests/users_privileged_columns_owner_only.test.sql), live DB par chalaya, ek row: `PASS`. Paanch cheezein sabit: support apna role owner nahi kar sakta · kisi teammate ka `manager_id` nahi badal sakta · apna `full_name` ab bhi badal sakta hai · owner ab bhi teammate ka role badal sakta hai · bina `auth.uid()` wala server path ab bhi guzarta hai (OAuth callback zinda hai). Transaction rollback — DB me kuch nahi bacha (11 users, jaise the).
+
+> **Jo rukawat thi wo galat maan lena tha, access nahi.** Migration ke "HOW TO VERIFY" me likha tha ki asli test "do session maangta hai aur superuser connection se nahi ho sakta" — isliye kaam insaan par chala gaya aur ek din pada raha. Sach: superuser carve-out sirf isliye leta hai kyunki uske paas `auth.uid()` nahi hota, aur `auth.uid()` sirf `request.jwt.claims ->> 'sub'` hai — jo `set_config(..., true)` set kar deta hai; upar se `set local role authenticated` RLS wapas laga deta hai. **`portal_customer_users_no_self_update.test.sql` ye pehle se kar raha tha.** Test "0 rows changed" par pass nahi hota, function ka apna message maangta hai — warna trigger drop hone ke baad bhi green rehta.
 
 **2. Reporting lines khaali hain, aur ek insaan ko iska asar dikh raha hai.** RLS live hai, to `ananya@anutech.in` ko **0 of 18 leads** dikhte hain — manager hai, kuch own nahi karti, koi report nahi. Fix ek click: /team → kisi rep ka "Reports to" = Ananya. Baaki tree bhi bharna hai; abhi sirf do logon ka manager set tha aur wo bhi mere test wale the (hata diye).
 

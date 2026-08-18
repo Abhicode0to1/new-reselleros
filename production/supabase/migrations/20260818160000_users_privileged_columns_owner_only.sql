@@ -109,13 +109,27 @@ create trigger users_privileged_columns_guard
 commit;
 
 -- ─── HOW TO VERIFY (a SEPARATE run from the DDL — AGENTS.md §5) ───────────────
---   select tgname from pg_trigger where tgname = 'users_privileged_columns_guard';
+--   ✅ VERIFIED 19 Aug 2026 — automated, no human step. Run:
+--       cd production && env -u SUPABASE_ACCESS_TOKEN \
+--         npx supabase db query --linked -f supabase/tests/users_privileged_columns_owner_only.test.sql
+--   Output on a healthy database is one row: `PASS — guard blocks non-owner …`. Every
+--   assertion inside raises instead, so a regression is an ERROR, never a quiet pass.
 --
---   The real test needs two sessions and cannot be done from a superuser connection, which
---   bypasses nothing here but has no auth.uid() and so takes the carve-out. Sign in as a
---   support user in the app and try, from the browser console:
---       await supabase.from("users").update({ role: "owner" }).eq("id", myOwnId)
---   Expect the exception above. Then repeat as an owner and expect success.
+--   ⚠️ THE PARAGRAPH THAT USED TO BE HERE WAS WRONG, and being wrong is what kept this
+--   trigger unproven for a day. It said the real test "needs two sessions and cannot be
+--   done from a superuser connection", and so handed the check to a person, who did not
+--   do it. But a superuser connection takes the carve-out only because it has no
+--   auth.uid() — and auth.uid() is nothing but `request.jwt.claims ->> 'sub'`, which
+--   `set_config(..., true)` sets for the transaction. `set local role authenticated`
+--   puts RLS back in force on top. One connection proves both sides, rolled back.
+--   portal_customer_users_no_self_update.test.sql was already doing exactly this.
+--
+--   What the run actually proved, on the live database: a support user is blocked from
+--   escalating their own role AND from re-pointing a teammate's manager_id (both with
+--   this function's own message, not a generic RLS refusal — a "0 rows changed" pass
+--   would survive the trigger being dropped); an ordinary self-edit of full_name still
+--   succeeds; an owner can still change a teammate's role; and a caller with no
+--   auth.uid() still passes through, so the OAuth-callback path is not bricked.
 --
 -- ─── ROLLBACK ─────────────────────────────────────────────────────────────────
 --   drop trigger if exists users_privileged_columns_guard on public.users;
