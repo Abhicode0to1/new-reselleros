@@ -24,6 +24,19 @@
  *
  * Self-hiding: nothing due, nothing rendered. A permanent "no calls today" panel is
  * the fastest way to teach someone to ignore the top of the page.
+ *
+ * ─── COLLAPSIBLE — AND WHAT COLLAPSING IS NOT ALLOWED TO HIDE ───────────────
+ * Three rows plus the footers is roughly 360px, which pushed the Kanban board below the
+ * fold on a laptop. So the panel folds, and the choice is remembered per browser.
+ *
+ * The rule that makes that safe: **collapsing hides the DETAIL, never the ALARM.** The
+ * header keeps the count, and the "N late" badge stays on it in red. A rep who folds this
+ * away still sees "3 of 8 due · 1 late" every time they open the page — they have chosen
+ * not to look at the rows, not to stop being told.
+ *
+ * That is the whole reason this is a fold and not a dismiss. A "hide for today" button
+ * would let a rep clear the warning without clearing the work, and the queue would be
+ * lying by 11am — the same failure the truncation note above exists to prevent.
  */
 "use client";
 
@@ -40,6 +53,11 @@ import { heatBadge } from "@/lib/leads/heat-score";
 import { OutcomeChips } from "./outcome-chips";
 import type { LeadOutcome } from "@/lib/leads/outcomes";
 import type { Lead } from "@/lib/supabase/database.types";
+
+/** Remembered per browser, not per user — it is a layout preference, not a setting. */
+const STORAGE_KEY = "ros_call_queue_open";
+/** Ties the header button to the panel it controls, for screen readers. */
+const PANEL_ID = "priority-call-queue-panel";
 
 function overdueLabel(days: number): { text: string; kind: "danger" | "warning" } {
   if (days <= 0) return { text: "Due today", kind: "warning" };
@@ -152,23 +170,68 @@ export function PriorityCallQueue({
 }) {
   const queue = React.useMemo(() => buildCallQueue(leads, limit), [leads, limit]);
 
+  /* Open by default, and the choice is remembered. Reading localStorage in an effect
+     rather than in useState's initialiser keeps the server and the first client render
+     identical — reading it inline hydrates to a different tree and React discards the
+     markup. Same idiom as the tips panel on the leads page. */
+  const [open, setOpen] = React.useState(true);
+  React.useEffect(() => {
+    try { if (localStorage.getItem(STORAGE_KEY) === "0") setOpen(false); } catch { /* private mode */ }
+  }, []);
+  const toggle = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(STORAGE_KEY, next ? "1" : "0"); } catch { /* private mode */ }
+      return next;
+    });
+  };
+
   // Nothing due and nobody unreachable → render nothing at all.
   if (queue.entries.length === 0 && queue.dueWithoutPhone.length === 0) return null;
 
   const hidden = queue.dueCount - queue.entries.length;
 
   return (
-    <Card
-      flush
-      className="border-amber/40"
-      title={<span className="flex items-center gap-2">🔥 Today&apos;s priority call queue</span>}
-      sub={
-        queue.entries.length > 0
-          ? `${queue.entries.length} of ${queue.dueCount} due` +
-            (queue.overdueCount > 0 ? ` · ${queue.overdueCount} already late` : "")
-          : "Everything due today is missing a phone number"
-      }
-    >
+    <Card flush className="border-amber/40">
+      {/* The header IS the control — a chevron alone is a target a thumb misses, and this
+          sits at the top of a page a rep uses on a phone. */}
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        aria-controls={PANEL_ID}
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-paper-2/60"
+      >
+        <Icon
+          name="chevron_right"
+          size={14}
+          className={cn("shrink-0 text-ink-3 transition-transform", open && "rotate-90")}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-semibold text-ink">
+            🔥 Today&apos;s priority call queue
+          </span>
+          {/* Stays visible when folded. This is the count a rep must keep seeing. */}
+          <span className="block text-[11px] text-ink-3">
+            {queue.entries.length > 0
+              ? `${queue.entries.length} of ${queue.dueCount} due`
+              : "Everything due today is missing a phone number"}
+          </span>
+        </span>
+        {/* The alarm, never folded away — see the header note. Red, on the outside, in
+            both states, because "1 already late" is the one fact that changes the order
+            of a rep's morning. */}
+        {queue.overdueCount > 0 && (
+          <Badge kind="danger" size="sm">
+            {queue.overdueCount} late
+          </Badge>
+        )}
+        {!open && (
+          <span className="shrink-0 text-[11px] font-semibold text-primary">Show</span>
+        )}
+      </button>
+
+      <div id={PANEL_ID} hidden={!open}>
       {queue.entries.length > 0 && (
         <ul>
           {queue.entries.map((e) => (
@@ -208,6 +271,7 @@ export function PriorityCallQueue({
           to fill them in.
         </p>
       )}
+      </div>
     </Card>
   );
 }
