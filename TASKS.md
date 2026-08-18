@@ -41,10 +41,17 @@ Chaaro haath se padhi aur **unka asar data me** dhoonda — yahi asli sawaal hai
 
 **Iska matlab kya hai:** handoff ki baat 26 files ke liye sahi thi, par **saari 30 par `migration repair` chala dete to do na-chali migrations "chal gayi" mark ho jaatin — aur ye ₹8,165 wali GST hamesha ke liye dab jaati.** Ledger jhooth bolne lagta aur agla banda usi par bharosa karta. `db push` ab bhi khatarnak hai (28 already-lagi files dobara chalayega).
 
-**Aage ka raasta:**
-1. **28 files `repair --status applied`** — 26 schema + 2 data jinka asar sabit hai.
-2. **2 na-chali migrations lagao** — dono idempotent hain. Dunning wali sirf comments hai (koi risk nahi, par `comment on` DDL hai to classifier rokta hai).
-3. **🔴 GST wali Pardeep ka faisla hai, meri marzi nahi.** Quote **accept ho chuka hai** ₹45,360 par. Use ₹53,525 karna matlab customer ke accept karne ke **baad daam badalna**. Do hi soorat hain: ya to quote galti se GST ke bina bana tha (to sudhar sahi hai, customer ko batana padega), ya daam GST-sahit tay hua tha (to `tax_rate` galat hai, `amount` nahi). **Ye business call hai.**
+**Kya ho gaya:**
+1. ✅ **28 files `repair --status applied` ho gayin** (26 schema + 2 data jinka asar sabit hai). Ledger 247 → **275**, aur dono na-chali versions jaan-boojh kar **bahar** rakhi gayin. Verify: `select count(*) from supabase_migrations.schema_migrations` → 275.
+
+**Kya baaki hai:**
+
+> ### ⚠️ `supabase db push` ab **theek wahi 2 files chalayega** — aur unme se ek paisa badalti hai
+>
+> Repair se pehle push khatarnak tha kyunki 28 already-lagi files dobara chalti. Ab wo khatra gaya, par ek naya banna hai: push ab `20260817100000` (GST) aur `20260817210000` (dunning comments) dono laga dega — yaani **GST wala faisla bina liye hi lag jayega.** Jab tak neeche wala jawab na aaye, **push mat karo.**
+
+2. **Dunning comments wali (`20260817210000`) surakshit hai** — sirf do `comment on column`, koi data nahi badalta. Classifier DDL rokta hai, isliye ye ek permission rule maangti hai ya alag se chalani padegi.
+3. **🔴 GST wali Pardeep ka faisla hai, meri marzi nahi.** Quote **accept ho chuka hai** ₹45,360 par. Use ₹53,525 karna matlab customer ke accept karne ke **baad daam badalna**. Do hi soorat hain: ya to quote galti se GST ke bina bana tha (to sudhar sahi hai, aur customer ko batana padega), ya daam GST-sahit tay hua tha (to `tax_rate` galat hai, `amount` nahi — aur tab ye migration is quote par chalni hi nahi chahiye). **Ye business call hai, aur dono ka jawab alag hai.**
 
 **5. ~~Ek ANUTECH support subscription "about ₹0" dikhata hai~~ 🔍 JAANCH LI (19 Aug 2026) — subscription theek hai, uske aage ka raasta toota hai.**
 
