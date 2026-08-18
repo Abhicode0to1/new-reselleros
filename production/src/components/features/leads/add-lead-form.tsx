@@ -23,7 +23,7 @@ import { FieldPill } from "@/components/ui/field-pill";
 import { SmartPaste } from "@/components/shared/smart-paste";
 import {
   liveGstin, checkGstin, livePhone, commitPhone, checkPhone, liveEmail, checkEmail,
-  liveMoney, commitMoney, parseMoney, checkMoney,
+  liveMoney, commitMoney, parseMoney, checkMoney, gstinState,
 } from "@/lib/forms/poka-yoke";
 import { useDraftGuard } from "@/lib/hooks/useDraftGuard";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -121,6 +121,50 @@ const PLAN_PRICE_PER_SEAT_PM: Record<string, number> = {
 //   • Empty  → the lead lives in the Lead Inbox awaiting qualification.
 // This matches the conceptual split: raw inquiries (Inbox) vs qualified
 // opportunities (Pipeline). Same DB table, different filter cuts.
+/**
+ * The three steps, and which fields each one owns.
+ *
+ * `STEP_FIELDS` drives per-step validation. Running the whole schema on "Next" would
+ * red-flag a field two steps ahead that nobody has reached — the same "shouting at an
+ * untouched field" that the validation pills exist to prevent.
+ */
+const STEP_LABELS = ["Contact", "Product & seats", "Review"] as const;
+const STEP_FIELDS = [
+  ["company", "contact_name", "contact_email", "contact_phone", "gstin"],
+  ["plan", "seats", "value", "stage", "source", "priority", "subscription_type",
+   "follow_up_date", "owner_id", "notes"],
+] as const;
+
+/** A step's fields, or nothing. Kept as a component so the wrapper div is consistent. */
+function Step({ show, children }: { show: boolean; children: React.ReactNode }) {
+  if (!show) return null;
+  return <div className="space-y-4">{children}</div>;
+}
+
+/**
+ * One line on the review step.
+ *
+ * An unset field SAYS "not set" rather than showing a gap — a blank row reads as a
+ * rendering fault, and an operator cannot tell it apart from a value that failed to load.
+ */
+function Review({ label, value, mono, note }: {
+  label: string; value?: string | null; mono?: boolean; note?: string;
+}) {
+  const v = (value ?? "").trim();
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] uppercase tracking-wider text-ink-3">{label}</dt>
+      {v ? (
+        <dd className={cn("break-words text-[13px] font-medium text-ink", mono && "font-mono")}>
+          {v}{note && <span className="ml-1 font-sans text-[11px] font-normal text-ink-3">· {note}</span>}
+        </dd>
+      ) : (
+        <dd className="text-[12px] italic text-ink-3">not set</dd>
+      )}
+    </div>
+  );
+}
+
 const PRIORITY_OPTIONS: { value: LeadPriority; label: string; dot: string }[] = [
   { value: "low",    label: "Low",    dot: "bg-slate"   },
   { value: "medium", label: "Medium", dot: "bg-amber"   },
@@ -232,6 +276,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
     setValue,
     watch,
     getValues,
+    trigger,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -270,6 +315,14 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
   // React Hook Form's own comparison against defaultValues, so re-typing the
   // original value correctly counts as clean.
   useDraftGuard(isDirty && !isSubmitting);
+
+  /* ── Progressive disclosure ──────────────────────────────────────────────
+     Steps are for CREATING a lead only. Somebody who opened this sheet to correct one
+     phone number should not be walked through a wizard to reach it, so an edit keeps
+     the single long form it has always had. */
+  const useSteps = !isEditing;
+  const [step, setStep] = React.useState(1);
+  React.useEffect(() => { if (open) setStep(1); }, [open]);
 
   const watchedSeats = watch("seats");
 
@@ -567,6 +620,47 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
           onSubmit={handleSubmit(onSubmit)}
           className="flex flex-col flex-1 min-h-0 min-w-0 w-full"
         >
+          {/* ── Three steps, and the third one is the point ────────────────────
+              Contact → Product & seats → Review. The first two only shorten what is
+              on screen at once; the REVIEW step is what makes this poka-yoke rather
+              than decoration, because it shows the operator exactly what is about to
+              be written before it is written.
+
+              Editing skips the steps entirely. Somebody who opened this sheet to
+              correct one phone number should not be walked through a wizard to reach
+              it — see `steps` below. */}
+          {useSteps && (
+            <nav aria-label="Progress" className="flex items-center gap-1 border-b border-hairline px-5 py-2.5">
+              {STEP_LABELS.map((label, i) => {
+                const n = i + 1;
+                const done = n < step;
+                return (
+                  <React.Fragment key={label}>
+                    <button
+                      type="button"
+                      /* A completed step is clickable, an unreached one is not — going
+                         back to fix something must never cost the operator their place,
+                         and jumping forward past a required field just fails there. */
+                      disabled={n > step}
+                      onClick={() => setStep(n)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] transition-colors",
+                        n === step ? "bg-amber-soft font-semibold text-amber-ink"
+                          : done    ? "text-ink-2 hover:bg-paper-2"
+                          : "text-ink-3",
+                      )}
+                      aria-current={n === step ? "step" : undefined}
+                    >
+                      <span aria-hidden="true">{done ? "✓" : n}</span>
+                      <span>{label}</span>
+                    </button>
+                    {n < STEP_LABELS.length && <span aria-hidden="true" className="text-ink-3">›</span>}
+                  </React.Fragment>
+                );
+              })}
+            </nav>
+          )}
+
           <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
           {/* ── Paste the WhatsApp message instead of retyping it ──────────────
               Offered on a NEW lead only. On an edit it would overwrite fields the
@@ -592,6 +686,8 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               }}
             />
           )}
+
+          <Step show={!useSteps || step === 1}>
 
           {/* Company name */}
           <FormField label="Company name" required htmlFor="company">
@@ -705,6 +801,10 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               </p>
             )}
           </FormField>
+
+          </Step>
+
+          <Step show={!useSteps || step === 2}>
 
           {/* Plan — optional. If empty → lead lands in Inbox (raw, awaiting
               qualification). If picked → lead enters Pipeline as a deal. */}
@@ -930,23 +1030,76 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
             />
           </FormField>
 
+          </Step>
+
+          {/* ── Step 3: what is about to be saved ─────────────────────────────
+              Read-only, and that is the whole value. A form's last screen is the only
+              place an operator sees every field at once without having to scroll past
+              the ones they already filled — which is where a wrong seat count or a
+              landline in the phone box actually gets caught. */}
+          <Step show={useSteps && step === 3}>
+            <div className="rounded-lg border border-hairline bg-paper-2/40 p-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+                About to be saved
+              </p>
+              <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Review label="Company"     value={watch("company")} />
+                <Review label="Contact"     value={watch("contact_name")} />
+                <Review label="Email"       value={watch("contact_email")} />
+                <Review label="Phone"       value={watch("contact_phone")} />
+                <Review label="GSTIN"       value={watch("gstin")} mono
+                        note={gstinState(watch("gstin") ?? "")?.name} />
+                <Review label="Plan"        value={plan} />
+                <Review label="Seats"       value={watchedSeats == null ? "" : String(watchedSeats)} />
+                <Review label="Deal value"  value={valueText ? `₹${valueText}` : ""} />
+                <Review label="Stage"       value={STAGES.find((s) => s.value === stage)?.label} />
+                <Review label="Priority"    value={PRIORITY_OPTIONS.find((p) => p.value === priority)?.label} />
+              </dl>
+              {/* Blanks are stated, not shown as gaps — a blank row reads as a
+                  rendering fault and an operator cannot tell it apart from a value
+                  that failed to load. See the same rule on the enquiry panel. */}
+              <p className="mt-2.5 border-t border-hairline pt-2 text-[10px] leading-snug text-ink-3">
+                Anything marked “not set” will be saved empty. Go back to any step above to
+                fill it — nothing is lost.
+              </p>
+            </div>
+          </Step>
+
           </div>  {/* close scrollable form body */}
 
           <SheetFooter>
             <Button
               type="button"
               variant="ghost"
-              onClick={() => onOpenChange(false)}
+              onClick={() => (useSteps && step > 1 ? setStep(step - 1) : onOpenChange(false))}
             >
-              Cancel
+              {useSteps && step > 1 ? "Back" : "Cancel"}
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              loading={isSubmitting || createLead.isPending || updateLead.isPending}
-            >
-              {isEditing ? "Save changes" : "Add lead"}
-            </Button>
+
+            {useSteps && step < STEP_LABELS.length ? (
+              <Button
+                type="button"
+                variant="primary"
+                onClick={async () => {
+                  /* Validates ONLY this step's fields. Running the whole schema here
+                     would red-flag a field two steps ahead that nobody has reached
+                     yet, which is the same "shouting at an untouched field" the pills
+                     were built to stop. */
+                  const ok = await trigger(step === 1 ? STEP_FIELDS[0] : STEP_FIELDS[1]);
+                  if (ok) setStep(step + 1);
+                }}
+              >
+                Next
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                variant="primary"
+                loading={isSubmitting || createLead.isPending || updateLead.isPending}
+              >
+                {isEditing ? "Save changes" : "Add lead"}
+              </Button>
+            )}
           </SheetFooter>
         </form>
       </SheetContent>

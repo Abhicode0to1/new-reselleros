@@ -1,0 +1,169 @@
+/**
+ * What can be DONE with the money on a quote right now.
+ *
+ * ─── THE DEAD END THIS REPLACES ─────────────────────────────────────────────
+ * The quote page decided its own actions inline, in two conditions written months apart:
+ *
+ *     accepted && payment_status === "awaiting"                    → Record payment
+ *     accepted && (payment_status === "received" || "partial")     → Generate GST Invoice
+ *
+ * Neither matches `payment_status = 'none'`, which is the column DEFAULT. So an accepted
+ * quote that never went through the Mark-accepted button — accepted on the public page,
+ * imported, or set directly — showed no money action at all. Live example, reported by
+ * Pardeep: Q-2026-9776, accepted, ₹45,360, `payment_status = 'none'`, no Record payment
+ * button and no invoice button. The deal simply could not be progressed from its own page.
+ *
+ * 'none' and 'awaiting' say the same thing in plain English: accepted, no money yet.
+ * Treating them as different states was the whole bug, and the fix is to stop having two
+ * places that each decide half of this.
+ *
+ * ─── AND AN INVOICE NO LONGER WAITS FOR PAYMENT ─────────────────────────────
+ * The old rule let you invoice only once money had arrived. That is a constraint this app
+ * invented; GST law does not have it. CGST §31(2) with Rule 47 requires a tax invoice for
+ * services WITHIN 30 days of supply — payment is not a precondition, and a B2B customer
+ * routinely needs the invoice in hand before their own accounts department will release
+ * the payment at all. Pardeep's words: *"kai baar log payment se pehle invoice maangte
+ * hai."* Refusing meant the reseller had to raise that invoice somewhere else, and the
+ * books here would never know about it.
+ *
+ * So invoicing is offered from acceptance onward. What changes with payment is the
+ * WORDING, not the permission — an invoice raised before any money says the full amount
+ * is payable, and one raised after a part payment says what is left.
+ */
+
+export interface QuoteMoneyInput {
+  status: string;
+  /** `quotes.payment_status` — 'none' is the column default and means the same as
+   *  'awaiting'. Null is treated the same way. */
+  paymentStatus: string | null | undefined;
+  /** Set once an invoice exists. From then on the invoice owns the money. */
+  invoiceId: string | null | undefined;
+  /** ₹, whole rupees. */
+  total: number;
+  /** ₹ received so far, across every recorded payment. */
+  received: number;
+}
+
+export type MoneyStage =
+  /** Not sent yet — nothing to collect. */
+  | "draft"
+  /** Sent or viewed, not yet accepted. */
+  | "open"
+  /** Accepted, no money received. Covers BOTH 'none' and 'awaiting'. */
+  | "unpaid"
+  /** Some money in, balance outstanding. */
+  | "partial"
+  /** Paid in full, no invoice raised yet. */
+  | "paid"
+  /** An invoice exists — it owns the balance from here. */
+  | "invoiced"
+  /** Rejected or expired. */
+  | "closed";
+
+export interface MoneyActions {
+  stage: MoneyStage;
+  /** Offer a Record-payment button. */
+  canRecordPayment: boolean;
+  /** Offer a Generate-invoice button. */
+  canGenerateInvoice: boolean;
+  /** Button label — "Record payment" vs "Record balance payment" is a real difference. */
+  recordLabel: string;
+  /** The sentence beside the buttons. Always states the amount at stake. */
+  note: string;
+  /** ₹ still to collect. */
+  outstanding: number;
+}
+
+export function quoteMoneyActions(q: QuoteMoneyInput, rupees: (n: number) => string): MoneyActions {
+  const outstanding = Math.max(0, q.total - q.received);
+  const stage = moneyStage(q);
+
+  switch (stage) {
+    case "draft":
+      return base(stage, outstanding, {
+        note: "This is a draft. Send it to the customer before any money can be recorded against it.",
+      });
+
+    case "open":
+      return base(stage, outstanding, {
+        note: "Waiting on the customer. You can still record a payment if money arrives before they formally accept.",
+        /* Money sometimes lands before anyone presses Accept, and refusing to record it
+           is how a real payment ends up in a WhatsApp thread instead of the books. */
+        canRecordPayment: true,
+      });
+
+    case "unpaid":
+      return base(stage, outstanding, {
+        note: `Accepted. ${rupees(q.total)} to collect — record the payment when it arrives, or raise the GST invoice now if the customer needs it first.`,
+        canRecordPayment: true,
+        canGenerateInvoice: true,
+        recordLabel: "Record payment",
+      });
+
+    case "partial":
+      return base(stage, outstanding, {
+        note: `${rupees(q.received)} of ${rupees(q.total)} received · ${rupees(outstanding)} still outstanding.`,
+        canRecordPayment: true,
+        canGenerateInvoice: true,
+        recordLabel: "Record balance payment",
+      });
+
+    case "paid":
+      return base(stage, outstanding, {
+        note: `Paid in full — ${rupees(q.received || q.total)} received. Raise the GST invoice to close this off in the books.`,
+        canGenerateInvoice: true,
+      });
+
+    case "invoiced":
+      return base(stage, outstanding, {
+        /* Deliberately no buttons. Two places that both take payment against one deal is
+           how the same rupee gets recorded twice. */
+        note: "An invoice has been raised — record any further payment against the invoice, not against this quote.",
+      });
+
+    case "closed":
+      return base(stage, outstanding, {
+        note: "This quote is closed. Reopen it if the customer has come back.",
+      });
+  }
+}
+
+function base(
+  stage: MoneyStage,
+  outstanding: number,
+  over: Partial<Omit<MoneyActions, "stage" | "outstanding">>,
+): MoneyActions {
+  return {
+    stage,
+    outstanding,
+    canRecordPayment: false,
+    canGenerateInvoice: false,
+    recordLabel: "Record payment",
+    note: "",
+    ...over,
+  };
+}
+
+export function moneyStage(q: QuoteMoneyInput): MoneyStage {
+  /* An invoice wins over everything: once it exists, it is the document the customer owes
+     against, and the quote is history. */
+  if (q.invoiceId || q.paymentStatus === "invoiced") return "invoiced";
+
+  if (q.status === "rejected" || q.status === "expired" || q.status === "lost") return "closed";
+  if (q.status === "draft") return "draft";
+  if (q.status !== "accepted") return "open";
+
+  /* From here the quote IS accepted, and the money decides.
+
+     Read from the recorded amounts first and the status column second. `payment_status`
+     is a label somebody has to remember to move; `received` is the sum of actual payment
+     rows. Where they disagree, the rows are right — the same derived-over-stored rule as
+     the already-quoted banner on /enquiries. */
+  if (q.received > 0) return q.received >= q.total ? "paid" : "partial";
+  if (q.paymentStatus === "received") return "paid";
+  if (q.paymentStatus === "partial")  return "partial";
+
+  /* 'none' (the column default), 'awaiting', null — all one state: accepted, nothing in.
+     Splitting these is what produced a quote with no buttons at all. */
+  return "unpaid";
+}

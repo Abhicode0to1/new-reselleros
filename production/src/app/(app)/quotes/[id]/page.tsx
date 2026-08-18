@@ -12,6 +12,7 @@ import { toastError } from "@/lib/errors/toast-error";
 
 import { useQuote, useDeleteQuote, quoteDeleteBlockReason } from "@/lib/queries/quotes";
 import { useGenerateInvoice } from "@/lib/queries/invoices";
+import { quoteMoneyActions } from "@/lib/quotes/money-stage";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -312,6 +313,20 @@ export default function QuoteDetailPage() {
   const taxable = quote.subtotal - discount;
   const tax = Math.round(taxable * (quote.tax_rate / 100));
   const total = quote.amount ?? taxable + tax;
+
+  /* What can be DONE with the money right now — one tested decision instead of three
+     inline conditions that between them left `payment_status = 'none'` (the column
+     default) with no action at all. See lib/quotes/money-stage.ts. */
+  const money = quoteMoneyActions(
+    {
+      status:        quote.status,
+      paymentStatus: quote.payment_status,
+      invoiceId:     quote.invoice_id,
+      total,
+      received:      totalReceivedSoFar,
+    },
+    rupee,
+  );
   /* Margin comes from the LINE ITEMS, not from quotes.total_cost.
      The column is an aggregate written at save time and at least one writer forgot
      it: Q-2026-9778 stores total_cost = 0 while its single line carries ₹19,800, so
@@ -703,98 +718,76 @@ export default function QuoteDetailPage() {
               <Button variant="ghost" loading={markRejected.isPending} onClick={() => markRejected.mutate()}>
                 Mark rejected
               </Button>
+              {/* This row owns the STATUS decision only. The payment button that used to
+                  sit here has moved to the money row below, which is now the single
+                  place that decides what can be done with the money — leaving it here
+                  as well put two "Record payment" buttons on one screen. */}
               <Button variant="primary" icon="check_circle" loading={markAccepted.isPending} onClick={() => markAccepted.mutate()}>
                 Mark accepted (no payment yet)
               </Button>
-              <Button variant="primary" icon="rupee" onClick={() => setPaymentOpen(true)}>
-                Record payment now
-              </Button>
             </div>
           </div>
         )}
 
-        {quote.status === "accepted" && quote.payment_status === "awaiting" && (
+        {/* ── One money row, one decision ───────────────────────────────────
+            This used to be three separate conditions written months apart, each
+            handling one payment_status by name — and none of them matched 'none',
+            which is the column DEFAULT. An accepted quote that never went through
+            the Mark-accepted button therefore showed NO money action at all: live
+            example Q-2026-9776, accepted, ₹45,360, no Record payment and no invoice
+            button, so the deal could not be progressed from its own page.
+
+            The decision now lives in lib/quotes/money-stage.ts with tests, and this
+            renders whatever it says. It also reads the RECORDED payments rather than
+            the status label, because the label is something somebody has to remember
+            to move and the payment rows are what actually happened. */}
+        {(money.canRecordPayment || money.canGenerateInvoice || money.note) && (
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-sm">
-              <span className="font-medium text-amber-ink">Awaiting payment of {rupee(total)}</span>{" "}
-              <span className="text-ink-3">from {quote.customer_name}. Record payment when received — partial payments supported.</span>
-            </div>
+            <div className="text-sm text-ink-2">{money.note}</div>
             <div className="flex gap-2 flex-wrap">
-              {/* Reopen — undo an accidental accept (only while no money has moved). */}
-              <Button
-                variant="ghost"
-                icon="arrow_left"
-                loading={reopenQuote.isPending}
-                onClick={() => setConfirm({
-                  title: `Reopen quote ${quote.id}?`,
-                  body: "It moves back to Sent so you can edit or re-send. The customer record stays — reverse this only if the accept was a mistake.",
-                  confirmLabel: "Reopen quote",
-                  icon: "arrow_left",
-                  onConfirm: () => reopenQuote.mutate(),
-                })}
-              >
-                Reopen
-              </Button>
-              <Button variant="primary" icon="rupee" onClick={() => setPaymentOpen(true)}>
-                Record payment
-              </Button>
-            </div>
-          </div>
-        )}
+              {/* Reopen stays available while no money has moved — undoing an
+                  accidental accept must not need a database. */}
+              {money.stage === "unpaid" && (
+                <Button
+                  variant="ghost"
+                  icon="arrow_left"
+                  loading={reopenQuote.isPending}
+                  onClick={() => setConfirm({
+                    title: `Reopen quote ${quote.id}?`,
+                    body: "It moves back to Sent so you can edit or re-send. The customer record stays — reverse this only if the accept was a mistake.",
+                    confirmLabel: "Reopen quote",
+                    icon: "arrow_left",
+                    onConfirm: () => reopenQuote.mutate(),
+                  })}
+                >
+                  Reopen
+                </Button>
+              )}
 
-        {quote.status === "accepted" && quote.payment_status === "partial" && (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-sm">
-              <span className="font-medium text-indigo">
-                Partially paid · {rupee(totalReceivedSoFar)} of {rupee(total)}
-              </span>{" "}
-              <span className="text-ink-3">
-                ({rupee(total - totalReceivedSoFar)} remaining · {paymentHistory?.length ?? 0} payment{(paymentHistory?.length ?? 0) === 1 ? "" : "s"} so far)
-              </span>
-            </div>
-            <Button variant="primary" icon="rupee" onClick={() => setPaymentOpen(true)}>
-              Record next payment
-            </Button>
-          </div>
-        )}
+              {/* Invoicing no longer waits for money. CGST §31(2) with Rule 47 requires
+                  the invoice within 30 days of supply and says nothing about payment —
+                  and a B2B customer routinely needs it before their accounts team will
+                  release the payment at all. Refusing meant the reseller raised that
+                  invoice somewhere else and these books never heard about it. */}
+              {money.canGenerateInvoice && (
+                <Button
+                  variant={money.canRecordPayment ? "default" : "primary"}
+                  icon="receipt"
+                  loading={generateInvoice.isPending}
+                  onClick={() => generateInvoice.mutate(params.id)}
+                >
+                  {money.outstanding > 0 && money.outstanding === total
+                    ? "Invoice now (before payment)"
+                    : "Generate GST Invoice"}
+                </Button>
+              )}
 
-        {/* Generate Tax Invoice — legally allowed both for fully-received AND
-            partial-paid quotes per CGST §13(2) (supply triggers invoicing,
-            not full payment) + Rule 47 (30-day clock from first advance).
-            The frozen advance-adjustment snapshot in the Invoice PDF shows
-            customer exactly how much was already received via RV(s) and
-            what's still due. */}
-        {quote.status === "accepted"
-          && (quote.payment_status === "received" || quote.payment_status === "partial") && (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-sm">
-              {quote.payment_status === "received" ? (
-                <>
-                  <span className="font-medium text-emerald">
-                    ✓ Payment of {rupee(quote.payment_amount ?? total)} received via {quote.payment_method?.toUpperCase()}
-                  </span>{" "}
-                  <span className="text-ink-3">on {quote.payment_received_at ? formatDate(quote.payment_received_at) : "—"}. You can now generate the GST invoice.</span>
-                </>
-              ) : (
-                <>
-                  <span className="font-medium text-amber-ink">
-                    ⓘ Partial payment received · {rupee(quote.payment_amount ?? 0)} of {rupee(total)}
-                  </span>{" "}
-                  <span className="text-ink-3">
-                    — service started? Issue the GST invoice now (legally allowed under CGST §13(2)).
-                    Net payable on invoice will be <b className="text-ink">{rupee(Math.max(0, total - (quote.payment_amount ?? 0)))}</b>.
-                  </span>
-                </>
+              {money.canRecordPayment && (
+                <Button variant="primary" icon="rupee" onClick={() => setPaymentOpen(true)}>
+                  {money.recordLabel}
+                </Button>
               )}
             </div>
-            <Button
-              variant="primary"
-              icon="receipt"
-              loading={generateInvoice.isPending}
-              onClick={() => generateInvoice.mutate(params.id)}
-            >
-              Generate GST Invoice
-            </Button>
           </div>
         )}
 

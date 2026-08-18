@@ -1,0 +1,139 @@
+import { describe, it, expect } from "vitest";
+import { moneyStage, quoteMoneyActions, type QuoteMoneyInput } from "./money-stage";
+import { rupee } from "@/lib/utils";
+
+const q = (over: Partial<QuoteMoneyInput> = {}): QuoteMoneyInput => ({
+  status: "accepted", paymentStatus: "none", invoiceId: null,
+  total: 45360, received: 0,
+  ...over,
+});
+
+/**
+ * ─── THE LIVE DEAD END ──────────────────────────────────────────────────────
+ * Q-2026-9776: accepted, ₹45,360, payment_status 'none' — the column DEFAULT. The page
+ * offered no Record payment and no invoice button, so the deal could not be progressed
+ * from its own screen at all.
+ */
+describe("an accepted quote is never a dead end", () => {
+  it("offers BOTH actions when payment_status is the default 'none'", () => {
+    const a = quoteMoneyActions(q({ paymentStatus: "none" }), rupee);
+    expect(a.stage).toBe("unpaid");
+    expect(a.canRecordPayment).toBe(true);
+    expect(a.canGenerateInvoice).toBe(true);
+  });
+
+  it("treats 'none', 'awaiting' and null as the SAME state", () => {
+    /* They say the same thing in plain English: accepted, no money yet. Splitting them is
+       what produced a quote with no buttons. */
+    for (const ps of ["none", "awaiting", null, undefined]) {
+      expect(moneyStage(q({ paymentStatus: ps })), `payment_status ${ps}`).toBe("unpaid");
+    }
+  });
+
+  it("names the amount to collect rather than saying 'awaiting payment'", () => {
+    expect(quoteMoneyActions(q(), rupee).note).toContain("₹45,360");
+  });
+
+  it("every accepted, un-invoiced state can still take money", () => {
+    for (const ps of ["none", "awaiting", "partial", null]) {
+      expect(quoteMoneyActions(q({ paymentStatus: ps, received: ps === "partial" ? 10000 : 0 }), rupee)
+        .canRecordPayment, `payment_status ${ps}`).toBe(true);
+    }
+  });
+});
+
+/**
+ * ─── AN INVOICE DOES NOT WAIT FOR PAYMENT ───────────────────────────────────
+ * The old rule allowed invoicing only once money had arrived. CGST §31(2) with Rule 47
+ * requires the invoice within 30 days of supply and says nothing about payment — and a
+ * B2B customer routinely needs the invoice before their accounts team will release the
+ * money at all.
+ */
+describe("invoicing before payment", () => {
+  it("is allowed on an accepted quote with nothing received", () => {
+    expect(quoteMoneyActions(q({ received: 0 }), rupee).canGenerateInvoice).toBe(true);
+  });
+
+  it("says the invoice can be raised first, so nobody has to guess", () => {
+    expect(quoteMoneyActions(q(), rupee).note).toMatch(/if the customer needs it first/i);
+  });
+
+  it("is NOT offered before acceptance — there is no supply to invoice yet", () => {
+    for (const status of ["draft", "sent", "viewed"]) {
+      expect(quoteMoneyActions(q({ status }), rupee).canGenerateInvoice, status).toBe(false);
+    }
+  });
+});
+
+describe("money already received", () => {
+  it("part paid reports both figures and the balance", () => {
+    const a = quoteMoneyActions(q({ received: 20000 }), rupee);
+    expect(a.stage).toBe("partial");
+    expect(a.outstanding).toBe(25360);
+    expect(a.note).toContain("₹20,000");
+    expect(a.note).toContain("₹25,360");
+    expect(a.recordLabel).toBe("Record balance payment");
+  });
+
+  it("paid in full stops asking for money", () => {
+    const a = quoteMoneyActions(q({ received: 45360 }), rupee);
+    expect(a.stage).toBe("paid");
+    expect(a.canRecordPayment).toBe(false);
+    expect(a.canGenerateInvoice).toBe(true);
+    expect(a.outstanding).toBe(0);
+  });
+
+  it("an overpayment is still 'paid', never a negative balance", () => {
+    const a = quoteMoneyActions(q({ received: 50000 }), rupee);
+    expect(a.stage).toBe("paid");
+    expect(a.outstanding).toBe(0);
+  });
+
+  /**
+   * The recorded payments are the truth; `payment_status` is a label somebody has to
+   * remember to move. Where they disagree the rows win — the same derived-over-stored
+   * rule as the already-quoted banner on /enquiries.
+   */
+  it("believes the recorded amount over a stale payment_status", () => {
+    expect(moneyStage(q({ paymentStatus: "none", received: 20000 }))).toBe("partial");
+    expect(moneyStage(q({ paymentStatus: "awaiting", received: 45360 }))).toBe("paid");
+  });
+});
+
+describe("once an invoice exists", () => {
+  it("the quote stops offering money actions", () => {
+    /* Two places that both take payment against one deal is how the same rupee gets
+       recorded twice. */
+    const a = quoteMoneyActions(q({ invoiceId: "INV-ADPL-2026-27-0001" }), rupee);
+    expect(a.stage).toBe("invoiced");
+    expect(a.canRecordPayment).toBe(false);
+    expect(a.canGenerateInvoice).toBe(false);
+    expect(a.note).toMatch(/against the invoice, not against this quote/i);
+  });
+
+  it("an invoice_id wins even when payment_status disagrees", () => {
+    expect(moneyStage(q({ invoiceId: "INV-1", paymentStatus: "awaiting" }))).toBe("invoiced");
+  });
+});
+
+describe("the other ends of the funnel", () => {
+  it("a draft collects nothing", () => {
+    const a = quoteMoneyActions(q({ status: "draft" }), rupee);
+    expect(a.canRecordPayment).toBe(false);
+    expect(a.canGenerateInvoice).toBe(false);
+  });
+
+  it("a SENT quote can still take money that arrived early", () => {
+    /* Money sometimes lands before anyone presses Accept, and refusing to record it is
+       how a real payment ends up in a WhatsApp thread instead of the books. */
+    const a = quoteMoneyActions(q({ status: "sent" }), rupee);
+    expect(a.stage).toBe("open");
+    expect(a.canRecordPayment).toBe(true);
+  });
+
+  it("rejected and expired are closed", () => {
+    for (const status of ["rejected", "expired", "lost"]) {
+      expect(moneyStage(q({ status })), status).toBe("closed");
+    }
+  });
+});

@@ -52,15 +52,62 @@ export async function POST(request: NextRequest) {
   const role  = parsed.data.role;
 
   // ── Create the invite (RLS: team_invites is owner-scoped) ─────────────
+  let roleChangedFrom: string | null = null;
+
   const { error: insErr } = await supabase
     .from("team_invites")
     .insert({ tenant_id: me.tenant_id, email, role, invited_by: authData.user.id });
+
   if (insErr) {
-    // 23505 = unique violation (email already invited, here or elsewhere)
-    if (insErr.code === "23505") {
-      return NextResponse.json({ error: "That email is already invited (here or to another workspace)." }, { status: 409 });
+    // 23505 = unique violation: this email already has an invite somewhere.
+    if (insErr.code !== "23505") {
+      return NextResponse.json({ error: insErr.message }, { status: 500 });
     }
-    return NextResponse.json({ error: insErr.message }, { status: 500 });
+
+    /* ─── AN EXISTING INVITE IS UPDATED, NOT REFUSED ────────────────────────
+       This used to answer "That email is already invited" and stop, which is a dead
+       end with no next step (CLAUDE.md §24) and, worse, one with no way round: there
+       is no UI anywhere to change an invite's role, so an owner who invited somebody
+       as Billing and then wanted them as Sales Senior simply could not do it.
+
+       Found live on 18 Aug 2026 — ananya@anutech.in had been invited on 10 Aug as
+       `billing`, and re-inviting as `sales_senior` changed nothing while the screen
+       gave no clue why.
+
+       RLS already permits this: team_invites_owner_manage is an ALL policy scoped to
+       the caller's own tenant, so the update below cannot touch anyone else's row. */
+    const { data: existing } = await supabase
+      .from("team_invites")
+      .select("role, tenant_id")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (!existing) {
+      /* RLS hid it, which means it belongs to ANOTHER workspace. Refused, and
+         deliberately without naming which one — that would leak who else is using the
+         product to anyone who can guess an address. */
+      return NextResponse.json(
+        { error: "That email is already invited to a different workspace. They need to leave it, or use another address." },
+        { status: 409 },
+      );
+    }
+
+    if (existing.role === role) {
+      return NextResponse.json(
+        { error: `${email} is already invited as ${role}. Nothing to change — they just need to sign in with Google using that address.` },
+        { status: 409 },
+      );
+    }
+
+    const { error: updErr } = await supabase
+      .from("team_invites")
+      .update({ role, invited_by: authData.user.id })
+      .eq("email", email)
+      .eq("tenant_id", me.tenant_id);
+    if (updErr) {
+      return NextResponse.json({ error: updErr.message }, { status: 500 });
+    }
+    roleChangedFrom = existing.role;
   }
 
   // ── Notify the invitee (best-effort) ──────────────────────────────────
@@ -94,6 +141,9 @@ That's it — signing in with this email drops you straight into ${workspace}. N
 
   return NextResponse.json({
     ok: true,
+    /* Reported so the screen can say "role changed from billing to sales_senior" rather
+       than "invited", which would read as a new person to anyone glancing at it. */
+    roleChangedFrom,
     emailStatus: emailRes.status,             // "sent" | "stubbed" | "failed"
     emailError:  emailRes.errorMessage,
   });
