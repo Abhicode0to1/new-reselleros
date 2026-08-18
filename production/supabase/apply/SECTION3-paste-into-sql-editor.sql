@@ -1,4 +1,32 @@
 -- ============================================================================
+-- ⚠️ ALREADY APPLIED, 18 Aug 2026, to project ontpnqjoysjgrlsukecm. Kept for the record and
+--    because it is idempotent — re-running it is harmless. Verified in a separate run:
+--    9 policies, all 9 RESTRICTIVE, can_see_record() present.
+--
+-- ⚠️⚠️ THE PROJECT REF IS PART OF THE INSTRUCTION. THIS IS NOT PEDANTRY.
+--    The first attempt pasted this into the SQL editor of project ixgvlbgmvgaihvudtbwt —
+--    "resellersosv3-staging", whose branch is even labelled PRODUCTION in the dashboard. It
+--    failed with `42883: function public.get_subordinate_user_ids(uuid) does not exist`,
+--    because Sections 1 and 2 live in the OTHER project.
+--
+--    Nothing was applied to the wrong database, and the reason is the single transaction
+--    argued for below: the missing function aborted the whole script. Had this been pasted in
+--    small batches, the function and some policies would have landed in staging first.
+--
+--    The right project — the one .env.local points the app at:
+--        https://supabase.com/dashboard/project/ontpnqjoysjgrlsukecm/sql/new
+--    CLAUDE.md §25.6 already warns that current_database() is `postgres` on every Supabase
+--    project and cannot tell two apart. Use the ref in the URL. Never the name — the wrong
+--    project here is named more convincingly than the right one.
+--
+-- IF YOU USE THE CLI INSTEAD, STRIP THE ENV VAR FIRST
+--    A malformed SUPABASE_ACCESS_TOKEN is set on this machine (sbp_ prefix, 75 chars, not the
+--    44-char hex a real PAT is), and the CLI prefers it over the stored login, failing with
+--    "Invalid access token format". Removing it for one command falls back to the login:
+--        env -u SUPABASE_ACCESS_TOKEN npx supabase db query --linked -f <this file>
+--    That is how it was actually applied. Fixing the env var itself is a credential job for
+--    its owner, not something to work around further.
+--
 -- PASTE THIS WHOLE FILE INTO THE SUPABASE SQL EDITOR AND PRESS RUN.
 --
 -- This is Section 3 of 20260818150000_user_hierarchy_visibility.sql — the predicate

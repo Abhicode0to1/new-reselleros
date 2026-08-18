@@ -13,11 +13,12 @@
 --   3. RLS policies scoping leads / quotes / customers to that tree — written, approved,
 --      and NOT yet applied. One marker line below is the authority on that:
 --
---   SECTION 3B APPLIED: no
+--   SECTION 3B APPLIED: yes
 --
---      Change it to `yes` the moment §3c has actually run, and flip
---      HIERARCHY_ENFORCED_IN_DATABASE in src/lib/team/enforcement.ts in the same commit.
---      A test binds the two together, so they cannot drift apart in either direction.
+--      Applied 18 Aug 2026 to project ontpnqjoysjgrlsukecm and verified in a SEPARATE run:
+--      9 hierarchy policies, all 9 RESTRICTIVE, 3 of them SELECT, and can_see_record()
+--      present. HIERARCHY_ENFORCED_IN_DATABASE in src/lib/team/enforcement.ts was flipped to
+--      true in the same commit; a test binds the two so they cannot drift apart.
 --
 -- THE COLUMN NAMES ARE THE ONES THAT EXIST
 --   The brief specified `assigned_to_user_id`. No such column exists on any table.
@@ -206,14 +207,18 @@ commit;
 --        TENANT-WIDE   everybody else                  → owner, billing, accountant,
 --                                                        delivery, support
 --
---    THE SECOND PREDICATE — measured the same way, same day:
---        pardeep    owner         14/14      deepak   owner    14/14
---        info@srig… owner         14/14
---        pratik     support       14/14      ranjeet  support  14/14
---        abhishek   delivery      14/14      pawan    delivery 14/14
---        sales@     sales_senior  11/14   ← their own 11; NOT pardeep's 2 or hitesh's 1
---        hitesh     manager        1/14   ← their own; nobody reports to them yet
---        ananya     manager        0/14   ← owns nothing, and has no reports
+--    THE SECOND PREDICATE — re-measured immediately before applying, because the data had
+--    MOVED while this was being written: 18 leads and 11 users, not 14 and 10. Four leads and
+--    one user arrived mid-session. An impact table quoted from an hour ago is a stale
+--    forecast, and the whole point of measuring was to not guess:
+--        pardeep    owner         18/18      deepak   owner    18/18
+--        info@srig… owner         18/18
+--        pratik     support       18/18      ranjeet  support  18/18
+--        abhishek   delivery      18/18      pawan    delivery 18/18
+--        sales@     sales_senior  15/18   ← their own 15; NOT pardeep's or hitesh's
+--        hitesh     manager        1/18   ← their own; nobody reports to them yet
+--        ananya     manager        0/18   ← owns nothing, and has no reports
+--    Quotes: 25 of 25 visible to everybody, because all 25 are unowned.
 --
 --    That is the goal met — peer isolation between the people who actually hold pipeline —
 --    with nobody blinded who was not meant to be.
