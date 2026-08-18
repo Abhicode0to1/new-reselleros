@@ -267,6 +267,12 @@ export const APP_NAV: NavSection[] = [
       { id: "reports",             href: "/reports",                  label: "Reports Hub",         icon: "chart" },
       { id: "acc-overview",        href: "/accounting",               label: "Accounting Overview", icon: "layout" },
       { id: "banking",             href: "/accounting/banking",       label: "Banking",             icon: "rupee" },
+      /* The khata. It sits in BOTH this section and the accountant-only "Filing" one,
+         which is not a duplication mistake — P&L, Balance Sheet and Cash Flow already do
+         the same, and the command palette de-dupes by href (command-palette.tsx:122).
+         Adding it only to "Filing" made it invisible to the owner, who is exactly the
+         person a customer asks for a statement. */
+      { id: "ledger",              href: "/accounting/ledger",        label: "Ledger (Khata)",      icon: "file" },
       { id: "pnl",                 href: "/accounting/pnl",           label: "P&L Report",          icon: "trending_up" },
       { id: "balance-sheet",       href: "/accounting/balance-sheet", label: "Balance Sheet",       icon: "layout" },
       { id: "cash-flow",           href: "/accounting/cash-flow",     label: "Cash Flow",           icon: "rupee" },

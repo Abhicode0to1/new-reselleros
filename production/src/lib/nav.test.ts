@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { getCrumb, getParentListHref, getSectionPrimaryHref, APP_NAV } from "./nav";
+import { getCrumb, getParentListHref, getSectionPrimaryHref, APP_NAV, allowedRoutesForRole, filterNavForRole } from "./nav";
 
 describe("getCrumb", () => {
   it("returns the exact crumb for a known static route", () => {
@@ -147,5 +147,57 @@ describe("APP_NAV ↔ app router", () => {
       s.items.flatMap((i) => [i.id, ...(i.children ?? []).map((c) => c.id)]),
     );
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+/**
+ * ─── THE NAV IS ALSO THE ROUTE GUARD ────────────────────────────────────────
+ * `allowedRoutesForRole` is derived from `filterNavForRole`, and middleware redirects
+ * anything outside it. So a page placed in the wrong nav section is not merely hard to
+ * find — it is UNREACHABLE for every role that section excludes, even by typing the URL.
+ *
+ * The ledger was added only to the accountant-only "Filing" section. Pardeep is an owner,
+ * so the khata he asked for was invisible in his menu AND blocked by middleware, while an
+ * unauthenticated probe still returned 200 (it redirects to /login) — which is exactly why
+ * "the route responds" is not evidence that a signed-in user can open it.
+ */
+describe("a page in the wrong nav section is unreachable, not just hidden", () => {
+  const ACCOUNTING_ROLES = ["owner", "manager", "billing", "accountant"] as const;
+
+  it("lets every role that can open /accounting also open the ledger", () => {
+    for (const role of ACCOUNTING_ROLES) {
+      const routes = allowedRoutesForRole(role);
+      if (!routes.includes("/accounting")) continue;
+      expect(routes, `${role} can reach /accounting but not the ledger`)
+        .toContain("/accounting/ledger");
+    }
+  });
+
+  it("shows it to the OWNER specifically — the person a customer asks for a statement", () => {
+    expect(allowedRoutesForRole("owner")).toContain("/accounting/ledger");
+    const sections = filterNavForRole(APP_NAV, "owner");
+    const labels = sections.flatMap((s) => s.items.map((i) => i.label));
+    expect(labels).toContain("Ledger (Khata)");
+  });
+
+  it("keeps it for the accountant, whose main tool this is", () => {
+    expect(allowedRoutesForRole("accountant")).toContain("/accounting/ledger");
+  });
+
+  it("does not hand it to a sales role that cannot see accounting at all", () => {
+    /* Not a security boundary on its own — RLS is — but the menu should not offer a
+       screen the middleware will bounce. */
+    const sales = allowedRoutesForRole("sales");
+    if (!sales.includes("/accounting")) expect(sales).not.toContain("/accounting/ledger");
+  });
+
+  it("guards the general rule: every /accounting/* page is reachable by some role", () => {
+    /* An orphaned accounting page is a page nobody can open. */
+    const reachable = new Set(
+      ACCOUNTING_ROLES.flatMap((r) => allowedRoutesForRole(r)),
+    );
+    const declared = APP_NAV.flatMap((s) => s.items.map((i) => i.href))
+      .filter((h) => h.startsWith("/accounting"));
+    for (const href of new Set(declared)) expect(reachable).toContain(href);
   });
 });
