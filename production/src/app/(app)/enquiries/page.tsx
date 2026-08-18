@@ -21,6 +21,8 @@
 "use client";
 
 import * as React from "react";
+import { useListKeys } from "@/lib/hooks/useKeyboard";
+import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import Link from "next/link";
 import type { Route } from "next";
 import { toast } from "sonner";
@@ -177,6 +179,7 @@ export default function EnquiriesPage() {
   const [query, setQuery]           = React.useState("");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [snoozeOpen, setSnoozeOpen] = React.useState(false);
+  const [helpOpen,   setHelpOpen]   = React.useState(false);
 
   /* ── "Now", pinned and refreshed on a timer ───────────────────────────────
      Snoozing is judged against the clock on every read (lib/inbound/folders.ts),
@@ -295,6 +298,25 @@ export default function EnquiriesPage() {
   /* A folder change drops the selection: keeping it would leave the reading pane
      showing an email that is no longer in the list beside it. */
   React.useEffect(() => { setSelectedId(null); setSnoozeOpen(false); }, [folder]);
+
+  /* ── j / k through the conversation list ──────────────────────────────────
+     In a two-pane inbox the selection IS the preview, so moving with j/k opens the
+     conversation as it goes — the way a mail client behaves. A separate "cursor" that
+     needed Enter to preview would mean two keys to read each email, which is slower than
+     the mouse and would go unused.
+
+     Disabled while the snooze menu is open, so j/k does not scroll the list out from
+     under a menu the operator is aiming at. */
+  const enquiryKeys = useListKeys({
+    count: threads.length,
+    enabled: !snoozeOpen,
+    onOpen: (i) => { const t = threads[i]; if (t) setSelectedId(t.latest.id); },
+  });
+  React.useEffect(() => {
+    const t = threads[enquiryKeys.index];
+    if (t) setSelectedId(t.latest.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enquiryKeys.index]);
 
   /* WhatsApp target. `dialable` is imported from lib/leads/call-queue rather than
      rewritten — it already handles the Indian trunk-prefix case that makes wa.me
@@ -860,6 +882,10 @@ export default function EnquiriesPage() {
           account&apos;s Sent folder for those.
         </p>
       )}
+
+      {/* Shown only once a key has actually been used — see the note on KeyHintBar. */}
+      <KeyHintBar visible={enquiryKeys.index >= 0} onShowHelp={() => setHelpOpen(true)} />
+      <ShortcutsSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
 }

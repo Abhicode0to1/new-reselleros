@@ -41,6 +41,7 @@ import { useItems } from "@/lib/queries/items";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { isInterStateSupply, isExportSupply } from "@/lib/gst/place-of-supply";
 import { hsnSummary } from "@/lib/gst/hsn";
+import { Kbd } from "@/components/ui/kbd";
 import { COUNTRIES } from "@/lib/gst/countries";
 import { BILLING_CURRENCIES, isForeignCurrency, formatForeign } from "@/lib/currency";
 import { addOrMergeLine } from "@/lib/quotes/line-items";
@@ -935,6 +936,34 @@ export function QuoteBuilder() {
     }
   };
 
+  /* ── Ctrl+Enter sends, Alt+A adds a line ──────────────────────────────────
+     Both are MODIFIED keypresses, and that is why they are safe inside a form: a bare
+     letter here would fight every field on the page. It is also why they are handled
+     separately from the global single-letter shortcuts, which deliberately bail out the
+     moment an input has focus — these are meant to work WHILE you are typing a rate.
+
+     Ctrl+Enter respects the same disabled condition as the button. A shortcut that can
+     send a quote the button refuses to send is a shortcut that bypasses a guard — here,
+     the one stopping a quote going out with no customer on it. */
+  const canSendNow = isLeadMode || !!customerId || !!prospectName.trim();
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        if (!canSendNow || createQuote.isPending) return;
+        e.preventDefault();
+        void handleSubmit("sent");
+        return;
+      }
+      if (e.altKey && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        setAddOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSendNow, createQuote.isPending]);
+
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1240px] mx-auto flex flex-col gap-4">
       {/* Page head */}
@@ -1525,8 +1554,8 @@ export function QuoteBuilder() {
             <Button size="sm" variant="default" icon="layers" onClick={() => setBulkOpen(true)}>
               Bulk / many domains
             </Button>
-            <Button size="sm" icon="plus" onClick={() => setAddOpen(true)}>
-              Add item
+            <Button size="sm" icon="plus" onClick={() => setAddOpen(true)} title="Add item (Alt+A)">
+              Add item <Kbd keys={["Alt", "A"]} className="ml-1.5 hidden sm:inline-flex" />
             </Button>
           </div>
         </div>
@@ -2095,7 +2124,7 @@ export function QuoteBuilder() {
             loading={createQuote.isPending}
             disabled={!isLeadMode && !customerId && !prospectName.trim()}
           >
-            Save &amp; send quote
+            Save &amp; send quote <Kbd keys={["Ctrl", "Enter"]} className="ml-1.5 hidden sm:inline-flex" />
           </Button>
           </div>
           )}

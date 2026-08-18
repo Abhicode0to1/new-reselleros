@@ -20,6 +20,7 @@
 "use client";
 
 import * as React from "react";
+import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead } from "@/lib/queries/leads";
@@ -3176,6 +3177,20 @@ function LeadListView({
     return out;
   }, [leads, sortBy, sortDir]);
 
+  /* ── j / k over the list view ─────────────────────────────────────────────
+     Keyed against `sorted`, so re-sorting a column re-clamps the cursor rather than
+     leaving it pointing at whatever row slid into that position. Enter opens the same
+     drawer a click does — one path, so the keyboard cannot reach a different screen from
+     the mouse. */
+  const leadKeys = useListKeys({
+    count: sorted.length,
+    onOpen: (i) => { const l = sorted[i]; if (l) onRowClick(l); },
+  });
+  const selectedLeadRef = React.useRef<HTMLTableRowElement | null>(null);
+  React.useEffect(() => {
+    selectedLeadRef.current?.scrollIntoView({ block: "nearest" });
+  }, [leadKeys.index]);
+
   // NOTE: buildWaMessage / followUpLabel / priorityDot helpers used to live
   // here for the inline mobile card. They've been lifted into SwipeLeadCard
   // (the new component handles its own formatting). Desktop / tablet table
@@ -3276,7 +3291,7 @@ function LeadListView({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((lead) => {
+          {sorted.map((lead, rowIndex) => {
             const age         = daysSince(lead.updated_at);
             const isSelected  = selectedIds.has(lead.id);
             // Heat → visual hierarchy. High-value (big money) wins the emerald
@@ -3295,10 +3310,17 @@ function LeadListView({
                               :               "border-l-2 border-transparent";
             const isDup       = dupIds.has(lead.id);
             // Phone/email affordances now live inside <RowActions/>.
+            const kbSelected = rowIndex === leadKeys.index;
             return (
               <tr
                 key={lead.id}
                 data-lead-id={lead.id}
+                ref={kbSelected ? selectedLeadRef : undefined}
+                /* aria-selected as well as the tint — a screen reader has to know which
+                   row Enter will open. `selectedIds` is a different thing: that is the
+                   bulk-action checkbox set, and conflating the two would make Enter act
+                   on a tick rather than on the cursor. */
+                aria-selected={kbSelected}
                 onClick={() => onRowClick(lead)}
                 tabIndex={0}
                 aria-label={`Open ${lead.company}`}

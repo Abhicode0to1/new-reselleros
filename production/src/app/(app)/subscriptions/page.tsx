@@ -5,6 +5,8 @@
 
 import * as React from "react";
 import { SUB_FOLDERS, folderOf, folderCounts } from "@/lib/subscriptions/folders";
+import { useListKeys } from "@/lib/hooks/useKeyboard";
+import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import { useRouter } from "next/navigation";
 import { useSubscriptions, useSetSubscriptionDomain, useDeleteSubscription } from "@/lib/queries/subscriptions";
 import { useActiveTrials } from "@/lib/queries/trials";
@@ -159,6 +161,7 @@ export default function SubscriptionsPage() {
   const [addDirectOpen,  setAddDirectOpen]  = React.useState(false);
   const [reconcileOpen,  setReconcileOpen]  = React.useState(false);
   const [auditOpen,      setAuditOpen]      = React.useState(false);
+  const [helpOpen,       setHelpOpen]       = React.useState(false);
   const [addGoogleOpen,  setAddGoogleOpen]  = React.useState(false);
   const [kpiOpen, setKpiOpen] = React.useState(true);
   const [visible, setVisible] = React.useState(60);  // render cap — paginates large lists
@@ -224,6 +227,23 @@ export default function SubscriptionsPage() {
     }
     return true;
   });
+  /* ── j / k over the table ─────────────────────────────────────────────────
+     `count` is `shown`, the RENDERED slice — not `filtered`. This list paginates at 60
+     rows, and keying against the full filtered length would let j walk the selection into
+     rows that are not on the page, where Enter opens a subscription the operator never
+     saw highlighted. */
+  const subKeys = useListKeys({
+    count: shown.length,
+    onOpen: (i) => {
+      const s = shown[i];
+      if (s?.customer_id) router.push(`/customers/${s.customer_id}` as never);
+    },
+  });
+  const selectedSubRef = React.useRef<HTMLTableRowElement | null>(null);
+  React.useEffect(() => {
+    selectedSubRef.current?.scrollIntoView({ block: "nearest" });
+  }, [subKeys.index]);
+
   const folderCount = folderCounts(subsByWorkspace, todayISO);
 
   /* All + the four lifecycle folders, then Trials LAST and visibly apart.
@@ -646,17 +666,27 @@ export default function SubscriptionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {shown.map((s) => {
+                {shown.map((s, rowIndex) => {
                   const cogs = subscriptionCogs(s, catalog);
                   const mb = cogsBadge(cogs);
                   const util = assessUtilisation({ seats: s.seats, used: s.used, usedSyncedAt: s.used_synced_at });
                   const dl = daysUntil(s.renewal_date);
                   const t  = term(s.start_date, s.renewal_date);
                   const isUrgent = dl !== null && dl >= 0 && dl <= 30;
+                  const kbSelected = rowIndex === subKeys.index;
                   return (
                     <tr
                       key={s.id}
-                      className="group border-b border-hairline last:border-0 hover:bg-paper-2/50 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset"
+                      ref={kbSelected ? selectedSubRef : undefined}
+                      /* aria-selected as well as the tint: a screen reader has to know
+                         which row Enter will open. */
+                      aria-selected={kbSelected}
+                      className={cn(
+                        "group border-b border-hairline last:border-0 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset",
+                        kbSelected
+                          ? "bg-amber-soft/60 ring-1 ring-inset ring-amber/40"
+                          : "hover:bg-paper-2/50",
+                      )}
                       role="button"
                       tabIndex={0}
                       aria-label={`Open ${cleanDisplayName(s.customer_name)}`}
@@ -1053,6 +1083,10 @@ export default function SubscriptionsPage() {
         onOpenChange={setAddGoogleOpen}
         onComplete={() => refetch()}
       />
+
+      {/* Shown only once a key has actually been used — see the note on KeyHintBar. */}
+      <KeyHintBar visible={subKeys.index >= 0} onShowHelp={() => setHelpOpen(true)} />
+      <ShortcutsSheet open={helpOpen} onOpenChange={setHelpOpen} />
 
       {/* Real analytics card — MRR by plan. (The "Vendor Reconciliation ·
           Not configured · Phase 2" placeholder that used to sit beside this was
