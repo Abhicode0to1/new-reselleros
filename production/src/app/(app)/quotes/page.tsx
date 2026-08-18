@@ -4,6 +4,8 @@
 "use client";
 
 import * as React from "react";
+import { useListKeys } from "@/lib/hooks/useKeyboard";
+import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -130,6 +132,7 @@ export default function QuotesPage() {
   const deleteProject = useDeleteProjectSale();
   const [previewing, setPreviewing] = React.useState<Quote | null>(null);
   const [kpiOpen, setKpiOpen] = React.useState(true);
+  const [helpOpen, setHelpOpen] = React.useState(false);
   const confirm = useConfirm();
 
   const handleDelete = async (q: Quote) => {
@@ -225,6 +228,25 @@ export default function QuotesPage() {
       (q.plan?.toLowerCase().includes(s) ?? false)
     );
   });
+
+  /* ── j / k / Enter over this table ────────────────────────────────────────
+     `count` is the FILTERED length, so the selection is re-clamped whenever a tab or a
+     search changes the list. Without that, Enter after a filter would open whichever row
+     had slid into the old index — the wrong quote, confidently. See useListKeys. */
+  const keys = useListKeys({
+    count: filtered.length,
+    onOpen: (i) => {
+      const q = filtered[i];
+      if (q) router.push(`/quotes/${q.id}` as never);
+    },
+  });
+
+  /* The selected row scrolls itself into view: driving a long list by keyboard is useless
+     if the highlight walks off the bottom of the screen. */
+  const selectedRowRef = React.useRef<HTMLTableRowElement | null>(null);
+  React.useEffect(() => {
+    selectedRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [keys.index]);
 
   // KPIs
   const totalValue = quotesByWorkspace.reduce((s, q) => s + (q.amount ?? 0), 0);
@@ -674,16 +696,26 @@ export default function QuotesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((q) => {
+                {filtered.map((q, rowIndex) => {
                   const margin = estimateMarginForQuote(q);
                   const uStatus = unifiedStatus(q);
                   const dl = q.expires_date ? daysBetween(new Date(), q.expires_date) : null;
                   const expiringSoon = dl !== null && dl >= 0 && dl <= 7;
+                  const kbSelected = rowIndex === keys.index;
                   return (
                     <tr
                       key={q.id}
+                      ref={kbSelected ? selectedRowRef : undefined}
                       onClick={() => router.push(`/quotes/${q.id}` as any)}
-                      className="group border-b border-hairline last:border-0 hover:bg-paper-2/50 cursor-pointer transition-colors"
+                      /* aria-selected, not only a tint: a screen reader has to know which
+                         row Enter will open, and a background colour says nothing to it. */
+                      aria-selected={kbSelected}
+                      className={cn(
+                        "group border-b border-hairline last:border-0 cursor-pointer transition-colors",
+                        kbSelected
+                          ? "bg-amber-soft/60 ring-1 ring-inset ring-amber/40"
+                          : "hover:bg-paper-2/50",
+                      )}
                     >
                       {/* Compact ID — the tail number as a chip; full ID on hover. */}
                       <td className="px-3 py-2.5 align-top" title={q.id}>
@@ -981,6 +1013,12 @@ export default function QuotesPage() {
         onOpenChange={(o) => { if (!o) setEditProject(null); }}
         editProject={editProject}
       />
+
+      {/* Appears only once a key has actually been pressed. A permanent bar across the
+          bottom of every list is chrome an operator stops seeing within a day, and it
+          costs 40px of a phone screen for ever. */}
+      <KeyHintBar visible={keys.index >= 0} onShowHelp={() => setHelpOpen(true)} />
+      <ShortcutsSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
 }

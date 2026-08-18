@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Kbd } from "@/components/ui/kbd";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 
@@ -119,13 +120,14 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
         type="button"
         onClick={() => cmdk.setOpen(true)}
         className="flex items-center gap-2 h-8 px-2.5 rounded-md border border-hairline bg-paper-2 hover:bg-paper-3 text-xs text-ink-3 transition-colors"
-        aria-label="Search dashboard (Cmd+K)"
+        aria-label="Search customers, leads, quotes, invoices and domains"
       >
         <Icon name="search" size={14} />
         <span className="hidden lg:inline">Search...</span>
-        <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono px-1 rounded bg-paper border border-hairline text-ink-3">
-          ⌘K
-        </kbd>
+        {/* Was a hardcoded "⌘K", which is an instruction a Windows operator cannot follow —
+            and they conclude the shortcut is broken rather than that the label is. <Kbd>
+            draws ⌘ on a Mac and Ctrl everywhere else. */}
+        <Kbd keys={["Ctrl", "K"]} className="hidden sm:inline-flex" />
       </button>
 
       {/* Theme toggle */}

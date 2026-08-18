@@ -13,9 +13,22 @@ import { TopBar } from "@/components/layout/topbar";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { WorkspaceTabBar } from "@/components/layout/workspace-tab-bar";
 import { GlobalBugReporter } from "@/components/shared/global-bug-reporter";
+import { ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
+import { useGlobalKeys } from "@/lib/hooks/useKeyboard";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+
+  /* ─── THE GLOBAL KEYS LIVE HERE, ONCE ──────────────────────────────────────
+     `g l` and `?` are mounted in the shell rather than per page. Mounting them per page
+     would stack a listener for every route the operator has visited and fire one keypress
+     several times — a double navigation that looks like the app skipping a screen.
+
+     Both refuse to fire while a field has focus; that rule and the `g` timing live in
+     lib/keyboard/shortcuts.ts with tests, because a shortcut that eats a keystroke out of
+     somebody's typing is the way this feature fails. */
+  const [helpOpen, setHelpOpen] = React.useState(false);
+  useGlobalKeys(() => setHelpOpen(true));
 
   return (
     <div className="flex min-h-screen bg-paper-2/50">
@@ -40,6 +53,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Always-on-top Global Floating Bug Reporter (z-[9999]) */}
       <GlobalBugReporter />
+
+      {/* The ? cheat sheet. Rendered from the same registry the handlers read, so it cannot
+          list a shortcut nobody implemented — or omit one that works. */}
+      <ShortcutsSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
 }
