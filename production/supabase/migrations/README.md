@@ -57,8 +57,14 @@ idempotent — applying to prod is a no-op, since the objects are already there.
 **Verification:** `npm run backup:check` went from `in prod but NOT in git: 11` to `0`.
 
 > Same class of drift as `0003` and `0146`, and the third time it has had to be cleaned
-> up. The read-only MCP config (`.mcp.json`, no `apply_migration` tool) exists so it
-> stops happening.
+> up. A read-only DB path (no `apply_migration` tool) exists so it stops happening.
+>
+> ⚠️ Updated 19 Aug 2026: that path is **no longer** the project `.mcp.json` — that file
+> declared its token as `"${SUPABASE_ACCESS_TOKEN}"`, which does not expand, so the server
+> answered `Unauthorized` to everything and was removed. The read-only route is now the
+> user-scoped `supabase-db` MCP server; writes go through the Supabase CLI. What has not
+> changed is the rule this note is really about: **no schema change without a versioned
+> migration file in git.**
 
 ## Removed: `0224_grant_execute_current_customer_id` and `0225_employee_expense_advances`
 

@@ -44,7 +44,9 @@ Aur us line par `list_rate` set hi nahi hota, to renewal quote par discount hame
 
 **5b. 🔴→✅ DB BACKUP CHHUP KAR TOOTA HUA THA — 6 din (13–19 Aug), ab theek.** Safai karte hue mila, dhoonda nahi tha. `npm run backup:db` MCP server par chalti thi jise `SUPABASE_ACCESS_TOKEN` chahiye — aur wo var is machine par kharab hai. To har run `Unauthorized` laata tha, aur script use `rows(...).map is not a function` bana deti thi. **Free plan par PITR nahi hai, automatic backup nahi hai** — yaani poora safety net ek 13 Aug ki purani file thi, aur kisi ne bataya tak nahi. Ab transport CLI par hai (token chahiye hi nahi) aur **har parse failure throw karti hai** — pehle `[]` lautati thi, jisse ek baar "0 tables wala backup" likha ja chuka hai. Chala kar dekha: **96 tables / 933 rows, exit 0**. Rows 1210 → 933 giri, jo aadha-adhoora backup jaisa hi dikhta hai — isliye maana nahi, **dusre connection se har table ka live `count(*)` milaya, sab exact match**; kami asli test-data deletion hai. [docs/BACKUP.md](docs/BACKUP.md)
 
-**5c. Safai (19 Aug):** purani global skill `resellersos-builder` **archive** kar di (`~/.claude/backups/skills-archive/`, mitayi nahi) — wo 27 May ki thi, path galat batati thi, aur "4 users, 3 Excel Technologies me" kehti thi jabki asli me 11 users / 2 tenants hain. Uski jagah repo ke andar [.claude/skills/resellersos-env](.claude/skills/resellersos-env/SKILL.md) — sirf access/machine ki sachchai (code patterns `production/CLAUDE.md` me hi rahenge). **`.mcp.json` se toota `supabase` server hatana baaki hai — delete classifier ne roka, Pardeep ki haan chahiye.**
+**5c. Safai (19 Aug) — poori ho gayi:** purani global skill `resellersos-builder` **archive** kar di (`~/.claude/backups/skills-archive/`, mitayi nahi) — wo 27 May ki thi, path galat batati thi, aur "4 users, 3 Excel Technologies me" kehti thi jabki asli me 11 users / 2 tenants hain. Uski jagah repo ke andar [.claude/skills/resellersos-env](.claude/skills/resellersos-env/SKILL.md) — sirf access/machine ki sachchai (code patterns `production/CLAUDE.md` me hi rahenge). **`.mcp.json` hata di** (Pardeep ki haan par) — usme sirf ek server tha jo `"${SUPABASE_ACCESS_TOKEN}"` ki wajah se hamesha `Unauthorized` deta tha; kaam ka server `supabase-db` user-scope me hai aur chalta hai.
+
+> Naye teammate ko Supabase MCP chahiye to wo **apne user-scope me asli PAT ke saath** joḍe. Repo me token nahi jaana chahiye, aur `${VAR}` `.mcp.json` me expand hota hi nahi — yahi is file ki maut thi.
 
 **6. Environment (dekho [docs/WORKING-ENVIRONMENT.md](docs/WORKING-ENVIRONMENT.md)):** token theek ho gaya par **explorer restart baaki** hai, to purani windows me abhi bhi galat copy hai. Defender exclusion baaki (Tamper Protection command ko rokta hai — GUI se karna hoga).
 
@@ -342,7 +344,9 @@ Two things the generation caught that a hand-written file would have missed:
 
 ### ✅ Prod verified via read-only Supabase MCP — F1 + F2 FIXED, two dead migrations removed (2026-08-12)
 
-Read-only Supabase MCP is configured ([.mcp.json](.mcp.json) — `--read-only --features=database,docs`, so `apply_migration` doesn't exist; token lives in gitignored `settings.local.json`). Everything below moved from **reasoned-only → measured**.
+Read-only Supabase MCP is configured (`--read-only --features=database,docs`, so `apply_migration` doesn't exist). Everything below moved from **reasoned-only → measured**.
+
+> ⚠️ **19 Aug 2026 — ye ab `.mcp.json` nahi hai.** Wo file `"${SUPABASE_ACCESS_TOKEN}"` likhti thi jo expand hota hi nahi, isliye wo server har call par `Unauthorized` deta tha; file hata di gayi. Read-only raasta ab user-scope wala `supabase-db` server hai, aur likhne ka kaam Supabase CLI se hota hai. Dekho [docs/WORKING-ENVIRONMENT.md](docs/WORKING-ENVIRONMENT.md) §3.
 
 **Balance Sheet was overstating equity by ₹7,02,550.** Two errors, opposite directions, same statement — and the Equity plug meant it always "balanced":
 
