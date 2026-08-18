@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Icon } from "@/components/ui/icon";
 import { extractEntities, foundCount, type CatalogueEntry, type ExtractedEntities } from "@/lib/inbound/extract";
+import { companyDomainFromEmail } from "@/lib/forms/poka-yoke";
 
 export interface SmartPasteValues {
   name?:    string;
@@ -35,6 +36,14 @@ export interface SmartPasteValues {
   seats?:   number;
   /** The catalogue entry, so the caller can select the real SKU rather than a string. */
   product?: CatalogueEntry;
+  /**
+   * The company DOMAIN behind a work email — the honest half of "Company".
+   *
+   * The NAME is not derivable: "Acme", "Acme Corp" and "Acme Corporation Pvt Ltd" are
+   * three strings for one business and the one that lands on a tax invoice is a legal
+   * fact. The domain is the same every time. See companyDomainFromEmail.
+   */
+  domain?: string;
 }
 
 export interface SmartPasteProps {
@@ -53,6 +62,11 @@ function toValues(e: ExtractedEntities): SmartPasteValues {
   if (e.phone.value)   v.phone   = e.phone.value;
   if (e.seats.value)   v.seats   = e.seats.value;
   if (e.product.value) v.product = e.product.value;
+  /* Free-mail addresses give nothing — three customers on gmail.com are not one
+     company, and filing them under "gmail.com" would tie three businesses together in
+     the domain matching. companyDomainFromEmail returns null for those. */
+  const domain = companyDomainFromEmail(e.email.value);
+  if (domain) v.domain = domain;
   return v;
 }
 
@@ -66,7 +80,12 @@ export function SmartPaste({ catalogue, onFill }: SmartPasteProps) {
       : null),
     [text, catalogue],
   );
-  const found = entities ? foundCount(entities) : 0;
+  /* The domain counts as a found field when it is there — it fills a real box on the
+     customer form, and a preview that said "4 of 5" while filling five would be lying
+     about its own work. */
+  const found = entities
+    ? foundCount(entities) + (companyDomainFromEmail(entities.email.value) ? 1 : 0)
+    : 0;
 
   if (!open) {
     return (
@@ -108,7 +127,7 @@ export function SmartPaste({ catalogue, onFill }: SmartPasteProps) {
       {entities && (
         <div className="mt-2.5 rounded-md border border-hairline bg-paper p-2.5">
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
-            Found {found} of 5
+            Found {found} of 6
           </p>
           <dl className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             <Row label="Name"    value={entities.name.value}    source={entities.name.source} />
@@ -116,6 +135,11 @@ export function SmartPaste({ catalogue, onFill }: SmartPasteProps) {
             <Row label="Phone"   value={entities.phone.value}   source={entities.phone.source} />
             <Row label="Seats"   value={entities.seats.value}   source={entities.seats.source} />
             <Row label="Product" value={entities.product.value?.name ?? null} source={entities.product.source} />
+            <Row
+              label="Company domain"
+              value={companyDomainFromEmail(entities.email.value)}
+              source={entities.email.value ? `the address ${entities.email.value}` : null}
+            />
           </dl>
           <p className="mt-2 border-t border-hairline pt-1.5 text-[10px] leading-snug text-ink-3">
             Read from the text by rules, not by a model — anything blank was not found and is

@@ -4,7 +4,7 @@ import {
   livePhone, commitPhone, checkPhone,
   liveDomain, checkDomain,
   liveMoney, parseMoney, commitMoney, checkMoney,
-  liveEmail, checkEmail,
+  liveEmail, checkEmail, companyDomainFromEmail,
 } from "./poka-yoke";
 import { GST_STATE_BY_CODE } from "@/lib/utils";
 
@@ -206,5 +206,33 @@ describe("email", () => {
   it("accepts a real address and rejects a broken one", () => {
     expect(checkEmail("pardeep@anutech.in").tone).toBe("ok");
     expect(checkEmail("pardeep@anutech").tone).toBe("error");
+  });
+});
+
+/**
+ * ─── "COMPANY", AS FAR AS IT CAN HONESTLY BE KNOWN ──────────────────────────
+ * The brief asks smart-paste to extract a Company. The DOMAIN is the part of that which
+ * is derivable; the NAME is not — "Acme", "Acme Corp" and "Acme Corporation Pvt Ltd" are
+ * three strings for one business, and the one that lands on a tax invoice is a legal fact
+ * nobody should guess from an email address.
+ */
+describe("the company domain behind a work email", () => {
+  it("is the host of a work address", () => {
+    expect(companyDomainFromEmail("rahul@acme.co.in")).toBe("acme.co.in");
+    expect(companyDomainFromEmail(" Pardeep@ANUTECH.in ")).toBe("anutech.in");
+  });
+
+  it("is NULL for free mail — three gmail customers are not one company", () => {
+    /* Without this, domain-matching would tie together every business whose contact
+       happens to use gmail. */
+    for (const e of ["a@gmail.com", "b@yahoo.co.in", "c@rediffmail.com", "d@outlook.com", "e@icloud.com"]) {
+      expect(companyDomainFromEmail(e), e).toBeNull();
+    }
+  });
+
+  it("is NULL when there is no usable address", () => {
+    for (const e of [null, undefined, "", "not-an-email", "no@host"]) {
+      expect(companyDomainFromEmail(e), String(e)).toBeNull();
+    }
   });
 });

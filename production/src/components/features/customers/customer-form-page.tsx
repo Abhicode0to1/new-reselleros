@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { GST_STATE_BY_CODE, cn } from "@/lib/utils";
 import { FieldPill } from "@/components/ui/field-pill";
+import { SmartPaste } from "@/components/shared/smart-paste";
 import {
   liveGstin, checkGstin, livePhone, commitPhone, checkPhone,
   liveEmail, checkEmail, liveDomain, checkDomain,
@@ -209,6 +210,37 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
             record is already correct and a fresh scan would overwrite a
             corrected field with a guess. Fills nothing that decides tax: state,
             state_code and country come from the verified GSTIN below. */}
+        {/* ── Paste the message instead of retyping it ─────────────────────────
+            The twin of Scan-a-card, for the far commoner case: the details arrived
+            as WhatsApp text, not as a photograph of a visiting card.
+
+            Create mode only, for the same reason as the scanner — on an edit it
+            would overwrite the field the operator opened this page to correct.
+
+            It fills only what the extractor actually FOUND, and shows the whole list
+            before filling anything. Nothing here decides tax: state, state_code and
+            country come from the verified GSTIN below, never from pasted prose. */}
+        {!isEdit && (
+          <div className="mb-3">
+            <SmartPaste
+              catalogue={[]}
+              onFill={(v) => {
+                const opts = { shouldDirty: true } as const;
+                if (v.name)   setValue("contact_name",  v.name, opts);
+                if (v.email)  setValue("contact_email", liveEmail(v.email), opts);
+                if (v.phone)  setValue("contact_phone", commitPhone(v.phone), opts);
+                /* The honest half of "company": the DOMAIN. The name is not derivable
+                   from an address and the one that lands on a tax invoice is a legal
+                   fact — the GSTIN lookup fills that properly. */
+                if (v.domain) setValue("domain",        v.domain, opts);
+                toast.success("Filled from the pasted text.", {
+                  description: "Check each field before saving — anything it could not read is still blank.",
+                });
+              }}
+            />
+          </div>
+        )}
+
         {!isEdit && (
           <div className="mb-5">
             <ScanCardPanel

@@ -256,3 +256,40 @@ export function checkEmail(raw: string): FieldCheck {
   }
   return { tone: "ok", message: "Valid email" };
 }
+
+/* ── Company, as far as it can honestly be known ───────────────────────────── */
+
+/**
+ * Free-mail hosts. An address at one of these says nothing about the company.
+ *
+ * The list matters more than it looks: without it, three customers on gmail.com would all
+ * be filed under the "company domain" gmail.com, and the domain-matching that links an
+ * enquiry to a customer would tie together three businesses that have never met.
+ */
+const FREE_MAIL: ReadonlySet<string> = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.in", "yahoo.co.in",
+  "hotmail.com", "outlook.com", "live.com", "msn.com",
+  "rediffmail.com", "rediff.com", "icloud.com", "me.com", "aol.com",
+  "protonmail.com", "proton.me", "zohomail.in", "zoho.com",
+]);
+
+/**
+ * The company DOMAIN implied by a work email — and nothing more.
+ *
+ * ─── WHY THIS AND NOT A COMPANY NAME ────────────────────────────────────────
+ * The brief asks smart-paste to extract "Company". A domain is the part of that which can
+ * actually be known: `rahul@acme.co.in` is `acme.co.in`, derivably, every time. The NAME
+ * is not — "Acme", "Acme Corp", "Acme Corporation Pvt Ltd" and "ACME India" are four
+ * different strings for one business, and the one that ends up on a tax invoice is a legal
+ * fact nobody should guess from an email address. The GSTIN lookup already fills the legal
+ * name properly.
+ *
+ * So this fills the website field and leaves the company name for a human. A blank costs
+ * ten seconds of typing; a wrong bill-to party costs a reissued invoice.
+ */
+export function companyDomainFromEmail(email: string | null | undefined): string | null {
+  const host = liveEmail(email ?? "").split("@")[1] ?? "";
+  const domain = liveDomain(host);
+  if (!domain || !domain.includes(".")) return null;
+  return FREE_MAIL.has(domain) ? null : domain;
+}
