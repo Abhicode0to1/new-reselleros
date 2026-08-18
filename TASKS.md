@@ -5,11 +5,26 @@
 
 ## Active
 
-### 🔴 HANDOFF — padho pehle (18 Aug 2026, session `6404ace2`)
+### 🔴 HANDOFF — padho pehle (19 Aug 2026)
 
-Ye session **paanch goals** chala (Enquiries Hub → Poka-Yoke → Billing → Keyboard → Hierarchy). Branch `session/money-spine-hardening-jun1`. Sab commit ho gaya (`f8cfdbe` tak).
+Branch `session/money-spine-hardening-jun1`. Sab commit ho gaya (`aebdda1` tak). **Deploy 18 Aug ka hi chalu hai** — revision `resellersos-00295-fgm`, 100% traffic, `/login` 200 · https://resellersos-1005662057478.asia-south1.run.app. **19 Aug ka koi badlav abhi live nahi hai** (sab tests, scripts, docs aur DB-ledger ka kaam tha — app code nahi badla).
 
-**DEPLOY HO GAYA** — revision `resellersos-00295-fgm`, serving 100% traffic, `/login` HTTP 200. Live: https://resellersos-1005662057478.asia-south1.run.app — to "Reports to" picker aur sidebar ka role ab live hain.
+**19 Aug ke session ne 4 kaam kiye, aur teeno me handoff ka andaza galat nikla — isliye har cheez naap kar hi maano:**
+
+| # | Kaam | Nateeja |
+|---|---|---|
+| 1 | Trigger verify | ✅ **PASS** — ab test-verified hai, reasoned nahi. "Do session chahiye" wali baat galat thi. |
+| 5 | ₹0 subscription | Subscription **theek hai** (support muft diya gaya). Kharabi renewal me hai — 2027-08-02 ko ₹0 ka quote customer ko email ho jayega. |
+| 5b | **DB backup** | 🔴 **6 din se chup-chaap toota tha.** Theek kiya, chala kar verify kiya (96 tables / 933 rows). |
+| 4 | Migration drift | ✅ 28 repair ho gayin. Par **2 migrations kabhi chali hi nahi**, aur ek me **₹8,165 GST atka hai**. |
+
+**🔴 Teen cheezein jo agla session shuru me hi jaan le:**
+
+1. **`supabase db push` ab bilkul mat chalao** jab tak GST ka faisla na aaye — wo theek wahi 2 pending files chalayega, jinme paisa badalne wali bhi hai. (Item 4 padho.)
+2. **`Q-2026-9776` par ₹8,165 GST gayab hai**, aur quote **accept ho chuka hai** — ye Pardeep ka business faisla hai, code ka nahi.
+3. **Backup ab CLI se chalta hai, MCP se nahi.** Dump chhota aaye to ghabrao mat, par maano bhi mat — dusre connection se `count(*)` milao. (Item 5b.)
+
+**Naye tools jo ab maujood hain:** `npm run migrations:verify` (git ki migration DB me lagi hai ya nahi) · `.claude/skills/resellersos-env` (is machine par kaun sa Supabase raasta chalta hai, aur rollback-test ka pattern) · `supabase/tests/users_privileged_columns_owner_only.test.sql`.
 
 Jo baaki hai, ghatte kram me:
 
