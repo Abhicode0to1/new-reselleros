@@ -4,6 +4,7 @@
 "use client";
 
 import * as React from "react";
+import { SUB_FOLDERS, folderOf, folderCounts } from "@/lib/subscriptions/folders";
 import { useRouter } from "next/navigation";
 import { useSubscriptions, useSetSubscriptionDomain, useDeleteSubscription } from "@/lib/queries/subscriptions";
 import { useActiveTrials } from "@/lib/queries/trials";
@@ -43,7 +44,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
 import { subscriptionExceptions } from "@/lib/subscriptions/exceptions";
-import { term, renewalDistance } from "@/lib/subscriptions/renewal-display";
+import { term, renewalDistance, termValue, termValueLabel } from "@/lib/subscriptions/renewal-display";
+import { useQuotes } from "@/lib/queries/quotes";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import type { Subscription } from "@/lib/supabase/database.types";
@@ -102,6 +104,36 @@ export default function SubscriptionsPage() {
   const { data: snapshotRows } = useMrrSnapshots();
   const mrrSnapshots = React.useMemo(() => snapshotRows ?? [], [snapshotRows]);
   const { data: trials } = useActiveTrials();
+  /* ─── THE CONTRACTED ANNUAL, SO THE SCREEN STOPS INVENTING RUPEES ──────────
+     `subscriptions` stores only a MONTHLY figure, so this page was rebuilding the annual
+     as mrr × 12 — and a support plan quoted at ₹2,000/yr came back as ₹2,004, because
+     round(2000 / 12) × 12 = 2004. Reported live by Pardeep. It is invisible on ₹45,360,
+     which divides evenly by 12, and wrong on anything that does not — so the Google line
+     was right while the support line beside it was not.
+
+     The originating quote still holds the negotiated annual rate and the subscription
+     carries `quote_id`. Keyed by quote AND plan name, because one quote routinely carries
+     a licence line and a support line at completely different prices. */
+  const { data: allQuotes } = useQuotes();
+  const contractedAnnual = React.useMemo(() => {
+    const m = new Map<string, number>();
+    for (const q of allQuotes ?? []) {
+      const lines = Array.isArray(q.line_items) ? q.line_items : [];
+      for (const l of lines as { name?: string | null; qty?: number | null; rate?: number | null }[]) {
+        const name = (l.name ?? "").trim().toLowerCase();
+        const amt  = (l.rate ?? 0) * (l.qty ?? 0);
+        if (name && amt > 0) m.set(`${q.id}|${name}`, amt);
+      }
+    }
+    return m;
+  }, [allQuotes]);
+  const annualFor = React.useCallback(
+    (sub: { quote_id?: string | null; plan: string }) =>
+      sub.quote_id
+        ? contractedAnnual.get(`${sub.quote_id}|${sub.plan.trim().toLowerCase()}`) ?? null
+        : null,
+    [contractedAnnual],
+  );
   const [tab, setTab] = React.useState("all");
   const [vendor, setVendor] = React.useState("all");
   const [search, setSearch] = React.useState("");
@@ -129,19 +161,26 @@ export default function SubscriptionsPage() {
   const [kpiOpen, setKpiOpen] = React.useState(true);
   const [visible, setVisible] = React.useState(60);  // render cap — paginates large lists
   const today = new Date();
+  /* One "today" for every folder decision on this page, in IST — a date derived per call
+     would let two rows disagree about which day it is across a midnight render. */
+  const todayISO = localDateISO(today);
   const daysUntil = (renewal: string | null) =>
     renewal ? daysBetween(today, renewal) : null;
 
   // Workspace keyword filter removed 2026-08-13 — RLS already scopes to tenant.
   const subsByWorkspace = React.useMemo(() => subs ?? [], [subs]);
 
-  // Filter — paid subs only (trials handled separately below)
+  /* ── Folder membership comes from ONE tested rule ────────────────────────
+     These used to be three inline predicates, and they OVERLAPPED: an active
+     subscription renewing in twenty days matched both `active` and `expiring`, so the
+     two counts beside each other could not be added. Numbers side by side get added —
+     the same arithmetic that made the leads chips unreadable.
+
+     SUB_FOLDERS is a partition now: active | expiring | suspended | ended, every row in
+     exactly one, summing to the total. See lib/subscriptions/folders.ts. */
   const filtered = subsByWorkspace.filter((s) => {
-    const dl = daysUntil(s.renewal_date);
-    if (tab === "active" && s.status !== "active") return false;
-    if (tab === "expiring" && (dl === null || dl < 0 || dl > 30)) return false;
-    if (tab === "expired" && s.status !== "expired") return false;
     if (tab === "trials") return false;  // trials handled in separate table below
+    if (tab !== "all" && folderOf(s, todayISO) !== tab) return false;
     if (vendor !== "all" && s.vendor !== vendor) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -183,23 +222,21 @@ export default function SubscriptionsPage() {
     }
     return true;
   });
-  const counts = {
-    all: subsByWorkspace.length,
-    active: subsByWorkspace.filter((s) => s.status === "active").length,
-    expiring: subsByWorkspace.filter((s) => {
-      const dl = daysUntil(s.renewal_date);
-      return dl !== null && dl >= 0 && dl <= 30;
-    }).length,
-    expired: subsByWorkspace.filter((s) => s.status === "expired").length,
-    trials: trials?.length ?? 0,
-  };
+  const folderCount = folderCounts(subsByWorkspace, todayISO);
 
+  /* All + the four lifecycle folders, then Trials LAST and visibly apart.
+     Trials are a different table entirely — they are not subscriptions — so putting
+     them in the middle of a partition invited exactly the addition the partition
+     exists to prevent. */
   const tabs: TabBarItem[] = [
-    { id: "all",      label: "All",          count: counts.all },
-    { id: "active",   label: "Active",       count: counts.active, dot: "emerald" },
-    { id: "trials",   label: "Trials",       count: counts.trials, dot: "amber" },
-    { id: "expiring", label: "Expiring 30d", count: counts.expiring, dot: "amber" },
-    { id: "expired",  label: "Expired",      count: counts.expired, dot: "rose" },
+    { id: "all", label: "All", count: subsByWorkspace.length },
+    ...SUB_FOLDERS.map((f) => ({
+      id: f.id,
+      label: f.label,
+      count: folderCount[f.id],
+      dot: f.dot,
+    })),
+    { id: "trials", label: "Trials (separate)", count: trials?.length ?? 0, dot: "amber" as const },
   ];
 
   // KPIs
@@ -307,7 +344,7 @@ export default function SubscriptionsPage() {
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                   <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Total Subscriptions</p>
-                  <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{counts.all} <span className="text-xs text-emerald font-normal">({counts.active} active)</span></p>
+                  <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{subsByWorkspace.length} <span className="text-xs text-emerald font-normal">({folderCount.active + folderCount.expiring} live)</span></p>
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                   <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Seats In Use</p>
@@ -529,8 +566,8 @@ export default function SubscriptionsPage() {
                   <Badge kind={vm.kind} size="sm" dot>{vm.label}</Badge>
                   {t && (
                     <Badge kind="muted" size="sm"
-                           title={`${t.label} term — ${rupee(s.mrr * t.months)} invoiced at each renewal`}>
-                      {t.label}{t.months > 1 ? ` · ${rupee(s.mrr * t.months)}` : ""}
+                           title={`${t.label} term — ${termValueLabel(termValue(s.mrr, t.months, annualFor(s)), rupee)} invoiced at each renewal`}>
+                      {t.label}{t.months > 1 ? ` · ${termValueLabel(termValue(s.mrr, t.months, annualFor(s)), rupee)}` : ""}
                     </Badge>
                   )}
                 </div>
@@ -623,8 +660,8 @@ export default function SubscriptionsPage() {
                         <div className="break-words leading-snug">{s.plan}</div>
                         {t && (
                           <Badge kind="muted" size="sm" className="mt-1"
-                                 title={`${t.label} term — ${rupee(s.mrr * t.months)} invoiced at each renewal`}>
-                            {t.label}{t.months > 1 ? ` · ${rupee(s.mrr * t.months)}` : ""}
+                                 title={`${t.label} term — ${termValueLabel(termValue(s.mrr, t.months, annualFor(s)), rupee)} invoiced at each renewal`}>
+                            {t.label}{t.months > 1 ? ` · ${termValueLabel(termValue(s.mrr, t.months, annualFor(s)), rupee)}` : ""}
                           </Badge>
                         )}
                       </td>

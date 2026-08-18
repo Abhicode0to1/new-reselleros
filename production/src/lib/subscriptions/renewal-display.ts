@@ -56,3 +56,58 @@ export function renewalDistance(days: number): string {
   if (days <= 60) return `in ${days} days`;
   return `in ~${Math.round(days / 30.44)} months`;
 }
+
+/* ── What is actually invoiced at renewal ───────────────────────────────────── */
+
+export interface TermValue {
+  /** ₹, whole rupees. */
+  amount: number;
+  /**
+   * True when this is the CONTRACTED figure. False when it was rebuilt from a rounded
+   * monthly and may be a few rupees out.
+   */
+  exact: boolean;
+}
+
+/**
+ * The amount a term is worth — and whether we actually know it.
+ *
+ * ─── THE ₹4 THAT NOBODY AGREED TO ───────────────────────────────────────────
+ * Reported live: a support plan quoted at ₹2,000 a year showed as "Annual · ₹2,004".
+ * Nothing was corrupt. `subscriptions` stores only a MONTHLY figure, so ₹2,000/yr became
+ * mrr = round(2000 / 12) = 167, and the page rebuilt the annual as 167 × 12 = 2,004. The
+ * ₹4 was invented by the round trip.
+ *
+ * It is invisible on most rows, which is what makes it nasty: ₹45,360 a year divides
+ * evenly by 12, so the Google line on the same screen was exactly right while the support
+ * line beside it was wrong. Any annual price not divisible by 12 is out by up to ₹11 —
+ * enough for a customer to query a renewal invoice against the quote they signed.
+ *
+ * ─── SO THE CONTRACTED AMOUNT IS PREFERRED, AND THE REST IS LABELLED ────────
+ * A subscription raised from a quote carries `quote_id`, and that quote's line still holds
+ * the negotiated annual `rate`. When the caller can supply it, that is the number — exact,
+ * to the rupee. When it cannot (a subscription entered by hand, or an older row), the
+ * monthly × months answer is still shown, but flagged `exact: false` so the screen can say
+ * "about" instead of asserting a precision it does not have.
+ *
+ * Storing the annual figure would fix this properly and needs a migration; until then, not
+ * lying about it is the part that can be done today.
+ */
+export function termValue(
+  mrr: number | null | undefined,
+  months: number,
+  /** ₹/year from the originating quote line (`rate × qty`), when known. */
+  contractedAnnual?: number | null,
+): TermValue {
+  if (contractedAnnual != null && contractedAnnual > 0) {
+    /* Scaled from the annual for a non-annual term, and rounded ONCE — going via a
+       monthly would reintroduce exactly the drift this function exists to remove. */
+    return { amount: Math.round((contractedAnnual * months) / 12), exact: true };
+  }
+  return { amount: Math.round((mrr ?? 0) * months), exact: false };
+}
+
+/** "₹2,000" when known, "about ₹2,004" when rebuilt from a rounded monthly. */
+export function termValueLabel(v: TermValue, rupees: (n: number) => string): string {
+  return v.exact ? rupees(v.amount) : `about ${rupees(v.amount)}`;
+}
