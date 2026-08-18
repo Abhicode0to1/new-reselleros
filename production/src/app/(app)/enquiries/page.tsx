@@ -33,8 +33,10 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { cn, formatDate, rupee } from "@/lib/utils";
-import { useQuotesByLead } from "@/lib/queries/quotes";
-import { answeredState, answeredNote, quoteButtonLabel } from "@/lib/inbound/answered";
+import { useQuotes } from "@/lib/queries/quotes";
+import { useLeads } from "@/lib/queries/leads";
+import { answeredState, answeredNote, quoteButtonLabel, answeredTone } from "@/lib/inbound/answered";
+import { matchQuotesToEnquiry, weakestBasis, basisCaveat } from "@/lib/inbound/quote-match";
 import { useInboundEmails, useConvertInboundToLead, useSetInboundState } from "@/lib/queries/inbound-emails";
 import { inboundStatusMeta, canConvertToLead } from "@/lib/inbound/status";
 import {
@@ -217,23 +219,47 @@ export default function EnquiriesPage() {
     [items],
   );
 
-  /* ── Already answered? ────────────────────────────────────────────────────
-     Scoped to the enquiry's OWN lead. A quote to a different customer must never be able
-     to mark this one answered, so the filtering is by lead_id here and answeredState()
-     does none of its own. */
-  const { data: leadQuotes } = useQuotesByLead(selected?.lead_id ?? null);
-  const answered = React.useMemo(
-    () => answeredState(
-      selected?.created_at ?? new Date(0).toISOString(),
-      (leadQuotes ?? []).map((q) => ({
+  /* ── Already quoted? ──────────────────────────────────────────────────────
+     This used to ask useQuotesByLead(), and that was nearly useless: eleven of the
+     thirteen quotes in ANUTECH's live books carry lead_id = null, INCLUDING the two
+     ₹1,34,138 duplicates fifteen minutes apart that this banner exists to prevent. It
+     could not see either, so the screen said "Send quote" and would have allowed a third.
+
+     lead_id, customer name and company are all filed differently depending on where the
+     builder was opened from, so the match reads all of them and REPORTS which one it used
+     — see lib/inbound/quote-match.ts. */
+  const { data: allQuotes } = useQuotes();
+  const { data: allLeads }  = useLeads();
+  const enquiryLead = React.useMemo(
+    () => (allLeads ?? []).find((l) => l.id === selected?.lead_id) ?? null,
+    [allLeads, selected?.lead_id],
+  );
+
+  const matchedQuotes = React.useMemo(
+    () => matchQuotesToEnquiry(
+      {
+        leadId: selected?.lead_id ?? null,
+        names: [enquiryLead?.company, enquiryLead?.contact_name, selected?.from_name],
+      },
+      (allQuotes ?? []).map((q) => ({
         id: q.id,
         createdAt: q.created_at ?? q.created_date ?? "",
         amount: q.amount ?? 0,
         status: q.status,
+        leadId: q.lead_id,
+        customerId: q.customer_id,
+        customerName: q.customer_name,
       })).filter((q) => q.createdAt),
     ),
-    [selected?.created_at, leadQuotes],
+    [selected?.lead_id, selected?.from_name, enquiryLead, allQuotes],
   );
+
+  const answered = React.useMemo(
+    () => answeredState(selected?.created_at ?? new Date(0).toISOString(), matchedQuotes),
+    [selected?.created_at, matchedQuotes],
+  );
+  /* The WEAKEST basis, so a name-only match can never ride on a lead match's confidence. */
+  const answeredCaveat = basisCaveat(weakestBasis(matchedQuotes));
 
   const entities: ExtractedEntities | null = React.useMemo(() => {
     if (!selectedThread) return null;
@@ -551,20 +577,28 @@ export default function EnquiriesPage() {
                   the same breath as doing the work — which is exactly the memory that
                   failed. A state maintained by hand disagrees with reality on the day it
                   matters. */}
-              {answeredNote(answered, rupee) && (
+              {/* The COLOUR is decided by answeredTone(), not by "is it answered". A green
+                  tick beside "you have already sent 2 quotes — check which one the customer
+                  should keep" reads as reassurance for a sentence that is reporting a
+                  mistake, and people scan the colour before they read the words. */}
+              {answeredNote(answered, rupee, answeredCaveat) && (
                 <div className={cn(
                   "flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-4 py-2",
-                  answered.kind === "answered"
-                    ? "border-emerald/40 bg-emerald-soft/40"
-                    : "border-amber/40 bg-amber-soft/30",
+                  answeredTone(answered) === "problem" ? "border-rose/50 bg-rose-soft/40"
+                    : answeredTone(answered) === "warn" ? "border-amber/40 bg-amber-soft/30"
+                    : "border-emerald/40 bg-emerald-soft/40",
                 )}>
                   <Icon
-                    name={answered.kind === "answered" ? "check_circle" : "alert"}
+                    name={answeredTone(answered) === "ok" ? "check_circle" : "alert"}
                     size={14}
-                    className={answered.kind === "answered" ? "text-emerald" : "text-amber-ink"}
+                    className={
+                      answeredTone(answered) === "problem" ? "text-rose"
+                        : answeredTone(answered) === "warn" ? "text-amber-ink"
+                        : "text-emerald"
+                    }
                   />
                   <span className="text-[12px] leading-snug text-ink">
-                    {answeredNote(answered, rupee)}
+                    {answeredNote(answered, rupee, answeredCaveat)}
                   </span>
                   {answered.kind === "answered" && (
                     <Link

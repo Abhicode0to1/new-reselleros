@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  answeredState, answeredNote, quoteButtonLabel, blocksSending, type QuoteRef,
+  answeredState, answeredNote, quoteButtonLabel, blocksSending, answeredTone, type QuoteRef,
 } from "./answered";
 import { rupee } from "@/lib/utils";
 
@@ -168,5 +168,29 @@ describe("a quote with no lead link cannot answer anything", () => {
     /* And the banner leads with the duplicate, because that is the mistake already made. */
     expect(answeredNote(s, rupee)).toMatch(/already sent 2 quotes/);
     expect(answeredNote(s, rupee)).toMatch(/which one the customer should keep/);
+  });
+});
+
+describe("the colour has to agree with the sentence", () => {
+  const q = (id: string, iso: string) => ({ id, createdAt: iso, amount: 134138 });
+  const EMAIL = "2026-08-18T03:00:00.000Z";
+
+  it("one quote is a green tick — the work is done", () => {
+    expect(answeredTone(answeredState(EMAIL, [q("A", "2026-08-18T03:01:00.000Z")]))).toBe("ok");
+  });
+
+  it("TWO quotes is not reassurance, it is the mistake", () => {
+    /* A green tick beside "check which one the customer should keep" is read as
+       "all fine" by anyone scanning the page, which is everyone. */
+    const s = answeredState(EMAIL, [
+      q("A", "2026-08-18T03:01:00.000Z"),
+      q("B", "2026-08-18T03:16:00.000Z"),
+    ]);
+    expect(s).toMatchObject({ kind: "answered", alsoAfter: 1 });
+    expect(answeredTone(s)).toBe("problem");
+  });
+
+  it("quoted only BEFORE this email is a warning — they are asking again", () => {
+    expect(answeredTone(answeredState(EMAIL, [q("A", "2026-07-01T10:00:00.000Z")]))).toBe("warn");
   });
 });

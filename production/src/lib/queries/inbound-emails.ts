@@ -156,12 +156,31 @@ export function useSendEnquiryReply() {
   return useMutation({
     mutationFn: async (input: { id: string; subject: string; body: string }) => {
       const { id, ...body } = input;
-      const res = await fetch(`/api/inbound-emails/${id}/reply`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+
+      let res: Response;
+      try {
+        res = await fetch(`/api/inbound-emails/${id}/reply`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch (e) {
+        /* ─── NO ANSWER IS NOT THE SAME AS "IT FAILED" ─────────────────────────
+           This happened on 18 Aug 2026 and is the reason the branch exists. Pardeep
+           pressed Send, the server sent the mail through Gmail (email_log 04:15:18 UTC,
+           status sent, id 1a01314af035739c) — and the connection dropped before the
+           reply came back. The screen said "The reply did not send… your text is still
+           in the box", which is an invitation to send a second copy of an email the
+           customer already had.
+
+           A thrown fetch means the outcome is UNKNOWN. Saying so is the only honest
+           answer, and it is the opposite instruction: go and look, do not resend. */
+        throw new UnknownSendOutcome(e instanceof Error ? e.message : "connection lost");
+      }
+
       const json = await res.json().catch(() => ({}));
+      /* The server answered — this IS a known failure, and nothing was sent: the route
+         returns 502 only after sendEmail reported failure. */
       if (!res.ok) throw new Error(json.error || "Could not send this reply");
       return json as { ok: true; stub: boolean; provider: string };
     },
@@ -177,10 +196,34 @@ export function useSendEnquiryReply() {
         toast.success("Reply sent.");
       }
     },
-    onError: (e: Error) => {
+    onError: (e: Error, input) => {
+      if (e instanceof UnknownSendOutcome) {
+        /* Deliberately NOT an error toast and NOT "did not send". The mail may well be
+           in the customer's inbox. §24 — what happened, why, and the next step, which
+           here is CHECK rather than retry. */
+        qc.invalidateQueries({ queryKey: ["enquiry-replies", input.id] });
+        toast.warning("The connection dropped — we do not know if this went out.", {
+          description: "It may already be with the customer. Reload this enquiry: if it says you have replied, it was sent. Do not send again until you have checked.",
+        });
+        return;
+      }
       toast.error("The reply did not send.", {
         description: `${e.message} Your text is still in the box — nothing was lost.`,
       });
     },
   });
+}
+
+/**
+ * The request never got an answer, so the send may or may not have happened.
+ *
+ * A distinct class rather than a message string because the two cases need opposite
+ * advice — "try again" for a refusal the server stated, "go and check" for a silence —
+ * and a string comparison is how that distinction quietly rots.
+ */
+export class UnknownSendOutcome extends Error {
+  constructor(detail: string) {
+    super(detail);
+    this.name = "UnknownSendOutcome";
+  }
 }

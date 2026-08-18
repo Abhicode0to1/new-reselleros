@@ -96,23 +96,35 @@ export function answeredState(
  * question is always "which one, and for how much", and making them go and look is how
  * they end up raising a second one anyway.
  */
-export function answeredNote(state: AnsweredState, rupees: (n: number) => string): string | null {
+export function answeredNote(
+  state: AnsweredState,
+  rupees: (n: number) => string,
+  /**
+   * How the quotes were tied to this enquiry, appended verbatim.
+   *
+   * Passed in rather than computed here because this function knows nothing about matching
+   * — and because the caveat MUST be printed when the match rested on a customer name. A
+   * warning that sounds certain when it is not is the kind people learn to ignore, and an
+   * ignored warning is worse than none. See lib/inbound/quote-match.ts.
+   */
+  caveat = "",
+): string | null {
   switch (state.kind) {
     case "answered": {
       /* Two answers to one email is not a footnote — it is the mistake this banner
          exists to prevent, already made. It leads. */
       if (state.alsoAfter > 0) {
         const total = state.alsoAfter + 1;
-        return `You have already sent ${total} quotes for this enquiry — the latest is ${state.quote.id} for ${rupees(state.quote.amount)}. Check which one the customer should keep.`;
+        return `You have already sent ${total} quotes for this enquiry — the latest is ${state.quote.id} for ${rupees(state.quote.amount)}. Check which one the customer should keep.${caveat}`;
       }
       const extra = state.alsoEarlier > 0
         ? ` There ${state.alsoEarlier === 1 ? "is 1 older quote" : `are ${state.alsoEarlier} older quotes`} as well.`
         : "";
-      return `You already answered this — quote ${state.quote.id} for ${rupees(state.quote.amount)}.${extra}`;
+      return `You already answered this — quote ${state.quote.id} for ${rupees(state.quote.amount)}.${extra}${caveat}`;
     }
     case "earlier-only":
       /* Deliberately NOT "already quoted". This customer has asked again and is waiting. */
-      return `This customer was quoted before (${state.latest.id}, ${rupees(state.latest.amount)}), but that was BEFORE this email — they are asking again.`;
+      return `This customer was quoted before (${state.latest.id}, ${rupees(state.latest.amount)}), but that was BEFORE this email — they are asking again.${caveat}`;
     case "none":
       return null;
   }
@@ -136,4 +148,25 @@ export function quoteButtonLabel(state: AnsweredState): string {
  */
 export function blocksSending(_state: AnsweredState): boolean {
   return false;
+}
+
+/**
+ * How the banner should LOOK, which is not the same question as what it says.
+ *
+ * A green tick beside "you have already sent 2 quotes — check which one the customer
+ * should keep" reads as reassurance for a sentence that is reporting a mistake. The
+ * operator scans the colour before the words, so the colour has to agree with them.
+ *
+ *   ok      — one quote, the work is done and nothing needs looking at
+ *   problem — more than one quote answers this email; that is the duplicate itself
+ *   warn    — quoted before, but BEFORE this email; the customer is asking again
+ */
+export type AnsweredTone = "ok" | "warn" | "problem";
+
+export function answeredTone(state: AnsweredState): AnsweredTone {
+  switch (state.kind) {
+    case "answered":     return state.alsoAfter > 0 ? "problem" : "ok";
+    case "earlier-only": return "warn";
+    case "none":         return "ok";
+  }
 }
