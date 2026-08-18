@@ -13,6 +13,7 @@ import { TopBar } from "@/components/layout/topbar";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { WorkspaceTabBar } from "@/components/layout/workspace-tab-bar";
 import { GlobalBugReporter } from "@/components/shared/global-bug-reporter";
+import { AttendanceReminder } from "@/components/features/attendance/attendance-reminder";
 import { ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import { useGlobalKeys } from "@/lib/hooks/useKeyboard";
 
@@ -53,6 +54,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Always-on-top Global Floating Bug Reporter (z-[9999]) */}
       <GlobalBugReporter />
+
+      {/* Check-in / check-out nudge. Here rather than on /attendance/me, because the
+          people who miss a punch are precisely the ones not looking at that page. It
+          renders nothing unless a punch is actually outstanding, and never on
+          /attendance itself. */}
+      <AttendanceReminder />
 
       {/* The ? cheat sheet. Rendered from the same registry the handlers read, so it cannot
           list a shortcut nobody implemented — or omit one that works. */}

@@ -11,6 +11,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import type { Database } from "@/lib/supabase/database.types";
 
 export type MyAttendanceToday =
   | { linked: false }
@@ -230,6 +231,78 @@ export function useSetMyEmployee() {
     },
     onError: (err: unknown) => {
       toast.error(err instanceof Error ? err.message : "Link nahi ho paya");
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reminder preferences (migration 20260819150000)
+//
+// Read straight off the caller's own `users` row. Deliberately NOT folded into
+// `useCurrentUser`: that hook is consumed by the sidebar, the topbar and a long tail of
+// screens, and widening it means every one of them refetches when somebody changes a
+// reminder time. This is two columns that matter on two screens.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ReminderPrefs {
+  enabled: boolean;
+  /** Postgres `time`, e.g. "18:00:00". Parsed by lib/attendance/reminders.ts. */
+  checkoutAt: string;
+}
+
+export function useMyReminderPrefs() {
+  return useQuery({
+    queryKey: ["my-reminder-prefs"],
+    queryFn: async (): Promise<ReminderPrefs | null> => {
+      const supabase = createClient();
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return null;
+
+      const { data, error } = await supabase
+        .from("users")
+        .select("attendance_reminders_enabled, attendance_checkout_reminder_at")
+        .eq("id", auth.user.id)
+        .maybeSingle();
+
+      /* A missing column (migration not applied yet) must not take the whole attendance
+         screen down with it. Returning null reads downstream as "no preference known",
+         and `decideAttendanceReminder` shows nothing rather than guessing. */
+      if (error) return null;
+      if (!data) return null;
+
+      return {
+        enabled: data.attendance_reminders_enabled ?? true,
+        checkoutAt: data.attendance_checkout_reminder_at ?? "18:00:00",
+      };
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useSetMyReminderPrefs() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (patch: Partial<ReminderPrefs>): Promise<void> => {
+      const supabase = createClient();
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) throw new Error("Aap logged in nahi ho.");
+
+      const update: Database["public"]["Tables"]["users"]["Update"] = {};
+      if (patch.enabled !== undefined) update.attendance_reminders_enabled = patch.enabled;
+      if (patch.checkoutAt !== undefined) update.attendance_checkout_reminder_at = patch.checkoutAt;
+      if (Object.keys(update).length === 0) return;
+
+      /* Own row only. `users_self_update` (id = auth.uid()) allows this, and the
+         privileged-column trigger from 20260818160000 returns early because neither
+         column is role / manager_id / can_view_deals / tenant_id / is_active. */
+      const { error } = await supabase.from("users").update(update).eq("id", auth.user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["my-reminder-prefs"] });
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Reminder setting save nahi hui");
     },
   });
 }

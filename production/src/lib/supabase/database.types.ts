@@ -558,6 +558,10 @@ type UserRow = {
   employee_id: string | null;   // migration 0216 — self check-in link
   /** Who this user reports to. NULL at the top of the tree. Applied 18 Aug 2026. */
   manager_id: string | null;
+  /** Migration 20260819150000 — attendance check-in / check-out popup. */
+  attendance_reminders_enabled: boolean;
+  /** Wall-clock `time` in Asia/Kolkata, e.g. "18:00:00". */
+  attendance_checkout_reminder_at: string;
   created_at: string;
 }
 type UserInsert = {
@@ -573,6 +577,8 @@ type UserInsert = {
   can_view_deals?: boolean;
   employee_id?: string | null;
   manager_id?: string | null;
+  attendance_reminders_enabled?: boolean;
+  attendance_checkout_reminder_at?: string;
   created_at?: string;
 }
 type UserUpdate = Partial<UserInsert>;

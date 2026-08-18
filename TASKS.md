@@ -5,6 +5,31 @@
 
 ## Active
 
+### ⏰ Attendance check-in / check-out reminder — ✅ BUILT (19 Aug 2026, DB applied · **awaiting deploy**)
+
+**Pehla kaam jo naye triage system ke directive se hua.** Report: *"Kuch Aisa kar do ki Computer ko open karte hi user ko attendance ka popup mil jaye … iske saath hi 6 baje (ya time set karne ka option) ek Check Out Popup Reminder hona chahiye."* Triage ne ise `feature` (filed as bug), sev 35, screen `/attendance/me` bataya — sab sahi nikla.
+
+**Report sach me valid thi, aur saboot screen par hi tha:** `/attendance/me` ke "Recent record" me Pardeep ke **teen me se teen** din — 18 Aug, 12 Aug, 10 Aug — sab par *"check-out reh gaya"*. Jo problem report hui thi wo har record kiye gaye din ho rahi thi.
+
+**Popup punch nahi karta, sirf bhejta hai.** Asli check-in selfie, DPDP consent, rotating presence code aur face match maang sakta hai (tenant setting par). Dialog me "Check in" button daalne ka matlab hota ya wo saara logic dobara likhna (doosra check-in path jo pehle se drift karega), ya use chupke se bypass karna — yaani ghar baithe attendance lagane ka rasta. Isliye dialog samjhata hai aur `/attendance/me` par le jaata hai; guards ek hi jagah rehte hain.
+
+**Faisle jo test me lock hain** ([reminders.ts](production/src/lib/attendance/reminders.ts), 28 tests):
+- **Sab kuch IST me.** `my_attendance_today` "aaj" Asia/Kolkata me decide karta hai, to client bhi wahi kare. Browser ka local midnight use karte to doosre timezone wala laptop us din ka check-in maangta jo DB band kar chuka hai — aur ye "reminder toota hai" jaisa dikhta, ek ghante ki galti jaisa nahi.
+- **Padha na ja sakne wala time = koi popup nahi.** `00:00` par fallback karte to aadhi raat ko popup aata aur sab ise ignore karna seekh jaate.
+- **Din khatam hone ke baad check-in ka nag band.** 19:00 baje "aapne check-in nahi kiya" nudge nahi, taana hai.
+- **Check-in ka dismiss check-out ko chup nahi karata** — dono alag nudge hain; subah wala band karne se shaam wala kho jaana theek wahi punch khota jiske liye ye feature hai.
+- **Snooze us din ka hai.** 23:50 ka snooze agli subah 00:05 par bhi dabaye rakhta, agar din se na bandha jaata.
+
+**Setting `users` par hai, `employees` par nahi** — reminder us insaan ki cheez hai jo browser par baitha hai, aur wo `users` row hai. Bina login wale employee ko popup se pahuncha hi nahi ja sakta. Dismiss/snooze **localStorage** me (per-device scratch, expire hona chahiye), par **time DB me** — reporter ne "time set karne ka option" maanga hai, aur phone par kholne par reset ho jaane wali setting tooti hui lagti hai. Default 18:00 reporter ka apna suggestion hai; poore schema me koi shift/office-hours column hai hi nahi (check kiya), to virasat me lene ko kuch tha nahi.
+
+**Ek lint warning ne behtar code diya:** pehle memo ki dependency me ek bump-counter tha taaki localStorage badalne par dobara chale. Chalta tha, par dependency jhooth bol rahi thi — `exhaustive-deps` isi ke liye hai. Ab dismissal state khud React me hai, dependency asli hai.
+
+**Verify:** settings card browser me render hua aur save round-trip **prod DB tak** gaya (`19:45:00` likha, phir 18:00 par reset kiya) — RLS + `users_privileged_columns_guard` dono ke through. Popup khud browser me **nahi** dekha ja saka: us waqt 02:39 IST tha, jo 06:00 window se pehle hai, to sahi behaviour kuch na dikhana tha — aur wo suppression live verify hui. Render ke liye 12 component tests hain (jsdom, ghadi 10:00 aur 18:30 IST par freeze karke), kyunki subah ka intezaar test nahi hota.
+
+**Gate:** typecheck 0 · **160 files / 3088 tests** (3048 → +40) · lint 0 errors. Migration `20260819150000` prod par lagi + alag run me verify, ledger **277 → 278**.
+
+**Report jaan-boojh kar `open` chhodi hai** `/admin/feedback` me — code ban gaya, par live 18 Aug ka revision hai, to Hitesh ke liye abhi kuch nahi badla. "Fixed" mark karna use ye batana hota ki ho gaya jabki wo use kar hi nahi sakta.
+
 ### 🤖 Feedback Triage & Agent Directive Engine (`/admin/feedback`) — ✅ DONE (19 Aug 2026, DB applied + browser-verified end-to-end)
 
 **Ye pehle se aadha bana hua tha, aur jo bana tha usme ek chup-chaap data-loss bug tha.** `feedback-dialog.tsx` + `global-bug-reporter.tsx` (Ctrl+Shift+B) already existed. Par:

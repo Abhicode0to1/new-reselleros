@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { getDeviceToken } from "@/lib/attendance/device";
 import { useEmployees, useAttendanceNetwork } from "@/lib/queries/payroll";
@@ -30,8 +31,11 @@ import {
   useWithdrawConsent,
   useEnrollMyFace,
   useUndoLastPunch,
+  useMyReminderPrefs,
+  useSetMyReminderPrefs,
 } from "@/lib/queries/my-attendance";
 import { LeaveRequestDialog } from "@/components/features/attendance/leave-request-dialog";
+import { minutesToTimeValue, parseTimeToMinutes } from "@/lib/attendance/reminders";
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "—";
@@ -116,6 +120,7 @@ export default function MyAttendancePage() {
             requirePresence={requirePresence}
           />
           <HistoryCard />
+          <ReminderSettingsCard />
           {meQ.data.consent_at && (
             <ConsentStatus consentAt={meQ.data.consent_at} retentionDays={meQ.data.retention_days} />
           )}
@@ -219,6 +224,86 @@ function EnrollFaceCard() {
 }
 
 /** Consent status + withdraw (right to erasure) — transparency. */
+/**
+ * Reminder settings — the "time set karne ka option" half of the request.
+ *
+ * Lives on this screen and not in /settings because this is where somebody already is
+ * when they think about their punches, and because the setting is personal: /settings is
+ * the tenant's configuration, not one person's.
+ *
+ * Saves on change rather than behind a Save button. Two controls with no other state
+ * cannot get into a half-saved condition, and a Save button on a two-field card is the
+ * kind of thing people leave un-pressed.
+ */
+function ReminderSettingsCard() {
+  const prefsQ = useMyReminderPrefs();
+  const save = useSetMyReminderPrefs();
+
+  // Local mirror so the time input stays responsive while the write is in flight.
+  const [timeValue, setTimeValue] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!prefsQ.data) return;
+    const mins = parseTimeToMinutes(prefsQ.data.checkoutAt);
+    setTimeValue(mins == null ? "18:00" : minutesToTimeValue(mins));
+  }, [prefsQ.data]);
+
+  // The migration may not be applied yet on a given environment; the hook returns null
+  // rather than throwing, and the card simply does not appear. Better than a card whose
+  // controls silently do nothing.
+  if (!prefsQ.data) return null;
+
+  const enabled = prefsQ.data.enabled;
+
+  return (
+    <Card className="mt-4 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
+            <Icon name="clock" size={13} className="text-ink-3" />
+            Punch reminder
+          </div>
+          <p className="mt-1 text-[12px] text-ink-3">
+            App khula ho aur check-in ya check-out reh gaya ho to popup dikhega.
+          </p>
+        </div>
+        <Switch
+          checked={enabled}
+          disabled={save.isPending}
+          onCheckedChange={(v) => save.mutate({ enabled: v })}
+          aria-label="Punch reminder chalu ya band"
+        />
+      </div>
+
+      {enabled && (
+        <div className="mt-3 pt-3 border-t border-hairline flex items-center justify-between gap-3">
+          <label htmlFor="checkout-reminder-at" className="text-[12px] text-ink-2">
+            Check-out reminder ka time
+          </label>
+          <input
+            id="checkout-reminder-at"
+            type="time"
+            value={timeValue ?? "18:00"}
+            disabled={save.isPending}
+            onChange={(e) => setTimeValue(e.target.value)}
+            onBlur={(e) => {
+              const mins = parseTimeToMinutes(e.target.value);
+              // A cleared or half-typed time is ignored rather than saved — writing
+              // "00:00" here would put a popup on the screen at midnight.
+              if (mins == null) {
+                const current = parseTimeToMinutes(prefsQ.data?.checkoutAt ?? "");
+                setTimeValue(current == null ? "18:00" : minutesToTimeValue(current));
+                return;
+              }
+              save.mutate({ checkoutAt: `${minutesToTimeValue(mins)}:00` });
+            }}
+            className="rounded-md border border-hairline bg-paper px-2 py-1 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function ConsentStatus({ consentAt, retentionDays }: { consentAt: string; retentionDays: number }) {
   const withdraw = useWithdrawConsent();
   const [confirming, setConfirming] = React.useState(false);
