@@ -13,6 +13,7 @@
  * We're forgiving: accept missing columns, blank fields, alternate header casing.
  * Returns parsed rows + count of skipped (no-name).
  */
+import { parseCsvLine, findColumn } from "@/lib/csv";
 
 export interface ParsedContact {
   fullName:   string;
@@ -32,51 +33,9 @@ export interface ParseResult {
   warnings:   string[];
 }
 
-/** Parse a single CSV line, respecting double-quote escapes (RFC 4180-ish). */
-function parseCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let cur = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (inQuotes) {
-      if (c === '"' && line[i + 1] === '"') {
-        cur += '"';
-        i++;
-      } else if (c === '"') {
-        inQuotes = false;
-      } else {
-        cur += c;
-      }
-    } else {
-      if (c === ",") {
-        out.push(cur);
-        cur = "";
-      } else if (c === '"') {
-        inQuotes = true;
-      } else {
-        cur += c;
-      }
-    }
-  }
-  out.push(cur);
-  return out.map((s) => s.trim());
-}
-
-/** Normalize header for matching: lowercase, strip non-alphanumeric */
-function normHeader(h: string): string {
-  return h.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-/** Find the first column index whose normalized header matches one of the candidates */
-function findColumn(headers: string[], candidates: string[]): number {
-  const normalized = headers.map(normHeader);
-  for (const c of candidates) {
-    const i = normalized.indexOf(normHeader(c));
-    if (i >= 0) return i;
-  }
-  return -1;
-}
+/* parseCsvLine, normHeader and findColumn moved to lib/csv.ts when the vendor licence
+   reconciliation became a second reader of the same shapes. Two copies of "how do you
+   split a quoted CSV line" is how two importers come to disagree about one file. */
 
 export function parseGoogleContactsCsv(csv: string): ParseResult {
   const warnings: string[] = [];

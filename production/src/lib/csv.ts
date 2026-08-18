@@ -84,3 +84,58 @@ export function downloadCSV(
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/* ── Reading a CSV, not writing one ─────────────────────────────────────────
+   These three were private inside lib/contacts/parse-google-csv.ts. They are here now
+   because a second reader arrived (vendor licence reconciliation) and two copies of "how
+   do you split a quoted CSV line" is how two importers come to disagree about the same
+   file — the exact drift this codebase has already paid for in the folder rules and the
+   search box. */
+
+/**
+ * Split one CSV line, respecting double-quote escapes (RFC 4180-ish).
+ *
+ * Quoting matters more than it looks for vendor exports: a Google Admin CSV puts
+ * "Sharma, Rajesh" in the name column, and a naive comma split shifts every column after
+ * it by one — which silently reads the wrong field as the licence.
+ */
+export function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { cur += c; }
+    } else {
+      if (c === ",") { out.push(cur); cur = ""; }
+      else if (c === '"') { inQuotes = true; }
+      else { cur += c; }
+    }
+  }
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
+
+/** Normalise a header for matching: lower-cased, non-alphanumerics dropped. */
+export function normHeader(h: string): string {
+  return h.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/**
+ * The first column whose normalised header matches one of the candidates, or -1.
+ *
+ * Candidates are tried IN ORDER, so a caller lists the most specific header first —
+ * vendor exports rename columns between releases and a stale name must not win over the
+ * current one.
+ */
+export function findColumn(headers: string[], candidates: readonly string[]): number {
+  const normalised = headers.map(normHeader);
+  for (const c of candidates) {
+    const i = normalised.indexOf(normHeader(c));
+    if (i >= 0) return i;
+  }
+  return -1;
+}
