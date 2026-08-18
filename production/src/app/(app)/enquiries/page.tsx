@@ -118,8 +118,36 @@ function Detail({ label, e }: { label: string; e: { value: string | number | nul
  */
 function quoteHref(e: InboundEmailRow, ent: ExtractedEntities | null): string {
   const p = new URLSearchParams();
-  const company = ent?.name.value ?? e.from_name ?? null;
-  if (company)              p.set("company", company);
+
+  /* THE LEAD ID, WHICH WAS MISSING AND BROKE THREE THINGS
+     This never passed the lead id, so a quote raised from an enquiry saved with
+     lead_id = null (quote-builder.tsx:824 sets it only in lead mode). Three
+     consequences, all found on live data:
+
+       - The enquiry could never know it had been answered. That check joins on
+         lead_id, so the "already quoted" banner could not fire however well it was
+         written. My own previous fix was unreachable.
+       - The lead kept no quote history, so its stage never advanced to `quote`.
+       - And it happened: Q-ADPL-2026-27-0010 and -0011, both for Rs 1,34,138, fifteen
+         minutes apart, for one enquiry. The duplicate Pardeep predicted, already in
+         the books.
+
+     One missing parameter, three symptoms. */
+  if (e.lead_id) p.set("leadId", e.lead_id);
+
+  /* A PERSON IS NOT A COMPANY
+     This was `ent?.name.value ?? e.from_name`, and `ent.name` is the SENDER’S name --
+     so both quotes above went out addressed to "Pardeep Sharma" rather than to Excel
+     Technologies. On a document that becomes a tax invoice, the bill-to party is not a
+     courtesy field.
+
+     With the lead id passed the builder loads the lead and uses its company. Where
+     there is no lead, the field is left EMPTY rather than filled with a person: an
+     operator fills a blank, but has to notice a wrong party.
+
+     The extractor has no `company` field at all -- only `name`, which is a person
+     (extract.ts:33). So with no lead there is genuinely nothing to put here, and the
+     honest move is to set nothing. */
   if (ent?.product.value)   p.set("plan", ent.product.value.name);
   if (ent?.seats.value)     p.set("seats", String(ent.seats.value));
   if (ent?.name.value)      p.set("contact", ent.name.value);

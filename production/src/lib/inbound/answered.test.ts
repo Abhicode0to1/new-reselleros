@@ -52,6 +52,7 @@ describe("an enquiry that has already been answered", () => {
       q({ id: "Q-LASTMONTH", createdAt: "2026-07-01T10:00:00Z" }),
     ]);
     expect(s.kind === "answered" && s.alsoEarlier).toBe(1);
+    expect(s.kind === "answered" && s.alsoAfter).toBe(0);
     expect(answeredNote(s, rupee)).toMatch(/1 older quote/);
   });
 });
@@ -123,5 +124,49 @@ describe("it does not decide from quotes it was not given", () => {
     /* A quote to the wrong customer must never be able to mark an enquiry answered, so
        this function filters by party not at all — the caller does, from lead_id. */
     expect(answeredState.length).toBe(2);
+  });
+});
+
+/**
+ * ─── THE LINK THIS WHOLE FEATURE DEPENDS ON ────────────────────────────────
+ * answeredState() is given quotes scoped by lead_id. If the quote never CARRIES a lead_id,
+ * this module is unreachable however well it is written — which is exactly what happened.
+ *
+ * The Enquiries "Send quote" link did not pass `leadId`, so quote-builder.tsx:824 saved
+ * `lead_id: null`. The live books show the result: Q-ADPL-2026-27-0010 and -0011, both
+ * ₹1,34,138, fifteen minutes apart, for one enquiry. The duplicate, already made.
+ *
+ * These assert the shape the caller must produce, so the join cannot be quietly dropped
+ * again.
+ */
+describe("a quote with no lead link cannot answer anything", () => {
+  it("reports 'none' when the quote list is empty because the join found nothing", () => {
+    /* What the page saw for eight months: quotes existed, none carried lead_id, so the
+       lead-scoped query returned zero rows and the enquiry looked untouched. */
+    expect(answeredState(EMAIL_AT, []).kind).toBe("none");
+  });
+
+  it("answers correctly the moment the link exists", () => {
+    const s = answeredState(EMAIL_AT, [
+      q({ id: "Q-ADPL-2026-27-0010", createdAt: "2026-08-18T03:01:04Z", amount: 134_138 }),
+    ]);
+    expect(s.kind).toBe("answered");
+    expect(answeredNote(s, rupee)).toContain("₹1,34,138");
+  });
+
+  it("names only ONE of two duplicates as the answer, and counts the other", () => {
+    /* Both real quotes, fifteen minutes apart. The banner must not read as though two
+       separate things were answered. */
+    const s = answeredState(EMAIL_AT, [
+      q({ id: "Q-ADPL-2026-27-0010", createdAt: "2026-08-18T03:01:04Z", amount: 134_138 }),
+      q({ id: "Q-ADPL-2026-27-0011", createdAt: "2026-08-18T03:16:50Z", amount: 134_138 }),
+    ]);
+    expect(s.kind === "answered" && s.quote.id).toBe("Q-ADPL-2026-27-0011");
+    /* Both are AFTER the email, so neither is "earlier" -- there is one OTHER answer. */
+    expect(s.kind === "answered" && s.alsoAfter).toBe(1);
+    expect(s.kind === "answered" && s.alsoEarlier).toBe(0);
+    /* And the banner leads with the duplicate, because that is the mistake already made. */
+    expect(answeredNote(s, rupee)).toMatch(/already sent 2 quotes/);
+    expect(answeredNote(s, rupee)).toMatch(/which one the customer should keep/);
   });
 });

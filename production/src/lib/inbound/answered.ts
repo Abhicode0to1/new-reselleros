@@ -38,7 +38,22 @@ export interface QuoteRef {
 
 export type AnsweredState =
   /** A quote went out after this email arrived. */
-  | { kind: "answered"; quote: QuoteRef; alsoEarlier: number }
+  | {
+      kind: "answered";
+      /** The newest one — the live answer. */
+      quote: QuoteRef;
+      /**
+       * How many OTHER quotes also answer this email.
+       *
+       * More than zero means the duplicate already happened, and saying so is more use
+       * than naming only the newest: the customer is holding two documents and the
+       * operator needs to know which to stand behind. ANUTECH has exactly this —
+       * Q-…-0010 and -0011, both Rs 1,34,138, fifteen minutes apart.
+       */
+      alsoAfter: number;
+      /** Quotes predating the email — history, not answers. */
+      alsoEarlier: number;
+    }
   /** Quotes exist, but all predate this email — history, not a reply. */
   | { kind: "earlier-only"; latest: QuoteRef; count: number }
   /** Nothing has been quoted to this lead. */
@@ -65,7 +80,11 @@ export function answeredState(
   const after = byNewest.filter((q) => Date.parse(q.createdAt) >= received);
 
   if (after.length > 0) {
-    return { kind: "answered", quote: after[0], alsoEarlier: quotes.length - after.length };
+    return {
+      kind: "answered", quote: after[0],
+      alsoAfter: after.length - 1,
+      alsoEarlier: quotes.length - after.length,
+    };
   }
   return { kind: "earlier-only", latest: byNewest[0], count: quotes.length };
 }
@@ -80,6 +99,12 @@ export function answeredState(
 export function answeredNote(state: AnsweredState, rupees: (n: number) => string): string | null {
   switch (state.kind) {
     case "answered": {
+      /* Two answers to one email is not a footnote — it is the mistake this banner
+         exists to prevent, already made. It leads. */
+      if (state.alsoAfter > 0) {
+        const total = state.alsoAfter + 1;
+        return `You have already sent ${total} quotes for this enquiry — the latest is ${state.quote.id} for ${rupees(state.quote.amount)}. Check which one the customer should keep.`;
+      }
       const extra = state.alsoEarlier > 0
         ? ` There ${state.alsoEarlier === 1 ? "is 1 older quote" : `are ${state.alsoEarlier} older quotes`} as well.`
         : "";
