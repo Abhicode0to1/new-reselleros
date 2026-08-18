@@ -23,7 +23,24 @@ Jo baaki hai, ghatte kram me:
 
 **4. 29 local migrations remote tracking me nahi hain,** par unke objects DB me maujood hain — yaani tracking drift, changes ka nahi. **`supabase db push` yahan khatarnak hai** (28 already-lagi files dobara lagayega). `supabase migration repair` karna chahiye, par wo 28 un-padhi files ka faisla hai.
 
-**5. Ek ANUTECH support subscription "about ₹0" dikhata hai** (mrr 0, koi matching quote line nahi). Bilkul nahi jaancha.
+**5. ~~Ek ANUTECH support subscription "about ₹0" dikhata hai~~ 🔍 JAANCH LI (19 Aug 2026) — subscription theek hai, uske aage ka raasta toota hai.**
+
+Handoff ka andaza galat tha: **matching quote line hai.** `Q-ADPL-2026-27-0003` (AB corprotion, accepted, ₹4,28,198) ki doosri line —
+
+```
+name: "ANUTECH DIGITAL PVT LTD Standard Support (Yearly)"   qty 1
+rate: 0        list_rate: 9996        cost: 0
+```
+
+Yaani support **muft diya gaya** 35-seat Google Workspace deal ke saath. `mrr = 0` uska sahi hisaab hai, bug nahi. Quote ka ganit bhi milta hai: subtotal ₹3,62,880 = 35 × 10,368 (support ne ₹0 jodha), amount = +18% GST.
+
+**Approval gate bhi sahi chala, dhoka nahi hua.** [approval-economics.ts](production/src/lib/quotes/approval-economics.ts) discount `list_rate` bनाम `rate` se nikalta hai (`discount_pct` se nahi — wo galti pehle hi soch li gayi thi). Blended discount = 9,996 ÷ 3,72,876 = **2.68%**, jo 10% ki auto-approve limit se neeche hai. Margin 28.2%. To `approval_status: not_required` sahi hai — ₹3.6L ke deal me ₹9,996 ka freebie sach me chhota discount hai.
+
+**⚠️ Asli kharabi renewal me hai, aur wo paisa aur customer dono chhuti hai.** [create-renewal-quote.ts:103](production/src/lib/renewals/create-renewal-quote.ts:103) renewal ka amount `mrr × 12` se banata hai. Is subscription ka mrr 0 hai, aur wo `status: active` + `auto_renew: true` hai. Renewals cron ([route.ts:158](production/src/app/api/cron/renewals/route.ts:158)) sirf `status=active` + `auto_renew=true` par chunta hai — **mrr ka koi filter nahi.** Natija: `renewal_date` 2027-08-17, to T-15 par **2027-08-02 ko customer ko ₹0 ka renewal quote email ho jayega** (`amount: 0`, [route.ts:312](production/src/app/api/cron/renewals/route.ts:312)). Company ke naam se zero-rupee quote bahar jayega.
+
+Aur us line par `list_rate` set hi nahi hota, to renewal quote par discount hamesha `null` — approval kabhi nahi lagega, chahe rate kuch bhi ho.
+
+**Ye ek pricing faisla maangta hai (Pardeep ka), par ek technical guard dono jawab me sahi hai:** agar support hamesha muft hai to quote bhejne ki zaroorat hi nahi; agar aage se chargeable hai to quote par asli daam hona chahiye. Dono soorat me **₹0 ka quote auto-send nahi hona chahiye** — usse rok kar insaan ko dikhana chahiye. Abhi bandh nahi kiya kyunki pehli aag 2027-08-02 hai, aur behaviour Pardeep ke jawab par nirbhar hai.
 
 **6. Environment (dekho [docs/WORKING-ENVIRONMENT.md](docs/WORKING-ENVIRONMENT.md)):** token theek ho gaya par **explorer restart baaki** hai, to purani windows me abhi bhi galat copy hai. Defender exclusion baaki (Tamper Protection command ko rokta hai — GUI se karna hoga).
 
