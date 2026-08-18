@@ -25,6 +25,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { localDateISO } from "@/lib/leads/outcomes";
 import { ImportSubscriptionsDialog } from "@/components/features/subscriptions/import-subscriptions-dialog";
 import { ReconcileGoogleDialog } from "@/components/features/subscriptions/reconcile-google-dialog";
+import { LicenceAuditDialog } from "@/components/features/subscriptions/licence-audit-dialog";
 import { ImportGoogleSubsDialog } from "@/components/features/subscriptions/import-google-subs-dialog";
 import { MarginAlertsCard } from "@/components/features/subscriptions/margin-alerts-card";
 import Link from "next/link";
@@ -157,6 +158,7 @@ export default function SubscriptionsPage() {
   const [importOpen,     setImportOpen]     = React.useState(false);
   const [addDirectOpen,  setAddDirectOpen]  = React.useState(false);
   const [reconcileOpen,  setReconcileOpen]  = React.useState(false);
+  const [auditOpen,      setAuditOpen]      = React.useState(false);
   const [addGoogleOpen,  setAddGoogleOpen]  = React.useState(false);
   const [kpiOpen, setKpiOpen] = React.useState(true);
   const [visible, setVisible] = React.useState(60);  // render cap — paginates large lists
@@ -287,6 +289,17 @@ export default function SubscriptionsPage() {
             ➕ Add Subscription
           </Button>
           <Button icon="refresh" onClick={() => setReconcileOpen(true)}>Reconcile Google</Button>
+          {/* The vendor-console audit. Distinct from "Reconcile Google", which pulls seats
+              from the CSP API for the accounts it can reach — this reads an export of the
+              WHOLE console, so it also finds domains the app has never heard of, which is
+              where the unbilled seats hide. */}
+          <Button
+            icon="alert"
+            onClick={() => setAuditOpen(true)}
+            title="Compare a Google or Microsoft user export against what you bill — finds seats you pay for and do not charge."
+          >
+            Check licences vs books
+          </Button>
           <Button icon="upload" onClick={() => setImportOpen(true)}>Import CSV</Button>
         </div>
       </div>
@@ -765,6 +778,20 @@ export default function SubscriptionsPage() {
                                   <Icon name="receipt" size={16} /> View invoices
                                 </DropdownMenuItem>
                               )}
+                              {/* The statement, one click from here. A renewal conversation
+                                  is exactly when somebody asks "and what do they actually
+                                  owe us?", and the answer used to be four clicks away
+                                  through Accounting with the customer picked by hand.
+                                  ?customer= seeds the picker; the Tally XML and CSV exports
+                                  on that page are the ones a CA imports. */}
+                              {s.customer_id && (
+                                <DropdownMenuItem
+                                  className="gap-2.5 py-2 cursor-pointer"
+                                  onClick={() => router.push(`/accounting/ledger?customer=${s.customer_id}` as never)}
+                                >
+                                  <Icon name="book" size={16} /> Statement / Tally ledger
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setEditSub(s)}>
                                 <Icon name="edit" size={16} /> Correct details
                               </DropdownMenuItem>
@@ -991,6 +1018,26 @@ export default function SubscriptionsPage() {
         open={importOpen}
         onOpenChange={setImportOpen}
         onImportComplete={() => refetch()}
+      />
+
+      {/* The vendor-console licence audit. Reads the CSV in the browser and sends nothing —
+          a user export is a list of every employee's address at a customer's company, and
+          there is no reason for it to leave this machine. */}
+      <LicenceAuditDialog
+        open={auditOpen}
+        onOpenChange={setAuditOpen}
+        subs={subsByWorkspace.map((s) => ({
+          id: s.id,
+          customerName: s.customer_name,
+          plan: s.plan,
+          domain: s.domain,
+          seats: s.seats ?? 0,
+          mrr: s.mrr ?? 0,
+          status: s.status,
+        }))}
+        /* The vendor comes off the row, so the scope filter needs no string matching on a
+           plan name — the thing that makes a licence comparison go quietly wrong. */
+        vendorOf={(s) => subsByWorkspace.find((x) => x.id === s.id)?.vendor ?? "other"}
       />
 
       {/* Reconcile vs Google reseller panel (read-only report) → Phase 2 matcher */}

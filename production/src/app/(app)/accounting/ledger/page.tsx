@@ -23,6 +23,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
 import { toast } from "sonner";
@@ -73,9 +74,28 @@ function periodFor(key: PeriodKey, fy: number): LedgerPeriod {
   }
 }
 
-export default function LedgerPage() {
+/**
+ * ─── WHY THE SUSPENSE WRAPPER BELOW EXISTS ──────────────────────────────────
+ * This page reads ?customer= with useSearchParams(), and Next refuses to prerender a
+ * component that does so unless it sits inside a Suspense boundary — the build fails with
+ * a prerender error on this route and nothing else. Worth stating:  and
+ * the whole test suite pass regardless, so only  catches it. Same class as
+ * the typedRoutes trap in CLAUDE.md §25.2.
+ */
+function LedgerPageInner() {
+  /* ─── ?customer=<id> OPENS STRAIGHT ON THAT PARTY ──────────────────────────
+     So a statement is one click from wherever the customer already is — the
+     subscriptions list, in particular, where a renewal conversation is exactly when
+     somebody asks "what do they actually owe us?".
+
+     Read once, into the initial state, rather than in an effect: an effect would let the
+     page paint an empty picker first and then jump, and a param that fights a later
+     manual choice is worse than one that seeds it. */
+  const search = useSearchParams();
+  const seededCustomer = search.get("customer");
+
   const [kind, setKind] = React.useState<LedgerKind>("customer");
-  const [partyId, setPartyId] = React.useState<string | null>(null);
+  const [partyId, setPartyId] = React.useState<string | null>(seededCustomer);
   const [vendorName, setVendorName] = React.useState<string | null>(null);
   const [periodKey, setPeriodKey] = React.useState<PeriodKey>("fy");
 
@@ -411,5 +431,15 @@ function StatementTable({ statement: s }: { statement: LedgerStatement }) {
           : "Cr = owed to the vendor · Dr = paid ahead. Purchase orders are excluded: nothing is owed until a bill arrives."}
       </p>
     </Card>
+  );
+}
+
+export default function LedgerPage() {
+  return (
+    /* A skeleton rather than null: the fallback is what a customer with a slow connection
+       actually sees, and a blank screen reads as a broken link. */
+    <React.Suspense fallback={<div className="p-4 md:p-6 lg:p-8"><Skeleton className="h-8 w-48" /></div>}>
+      <LedgerPageInner />
+    </React.Suspense>
   );
 }
