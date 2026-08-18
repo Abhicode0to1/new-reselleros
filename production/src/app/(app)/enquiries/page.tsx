@@ -32,7 +32,9 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, rupee } from "@/lib/utils";
+import { useQuotesByLead } from "@/lib/queries/quotes";
+import { answeredState, answeredNote, quoteButtonLabel } from "@/lib/inbound/answered";
 import { useInboundEmails, useConvertInboundToLead, useSetInboundState } from "@/lib/queries/inbound-emails";
 import { inboundStatusMeta, canConvertToLead } from "@/lib/inbound/status";
 import {
@@ -177,6 +179,24 @@ export default function EnquiriesPage() {
   const catalogue = React.useMemo(
     () => (items ?? []).map((i) => ({ id: i.id, name: i.name })),
     [items],
+  );
+
+  /* ── Already answered? ────────────────────────────────────────────────────
+     Scoped to the enquiry's OWN lead. A quote to a different customer must never be able
+     to mark this one answered, so the filtering is by lead_id here and answeredState()
+     does none of its own. */
+  const { data: leadQuotes } = useQuotesByLead(selected?.lead_id ?? null);
+  const answered = React.useMemo(
+    () => answeredState(
+      selected?.created_at ?? new Date(0).toISOString(),
+      (leadQuotes ?? []).map((q) => ({
+        id: q.id,
+        createdAt: q.created_at ?? q.created_date ?? "",
+        amount: q.amount ?? 0,
+        status: q.status,
+      })).filter((q) => q.createdAt),
+    ),
+    [selected?.created_at, leadQuotes],
   );
 
   const entities: ExtractedEntities | null = React.useMemo(() => {
@@ -484,6 +504,43 @@ export default function EnquiriesPage() {
                 </div>
               </div>
 
+              {/* ── HAS THIS ALREADY BEEN ANSWERED? ───────────────────────────
+                  Pardeep quoted this enquiry, came back later, and the screen looked
+                  identical — so the next move was to quote it again. Two quotes for one
+                  request, possibly at different prices, and the customer opens with
+                  "which one is correct?".
+
+                  Derived from the quotes table, NOT from the Mark done button. That button
+                  already existed and depends on the operator remembering to press it in
+                  the same breath as doing the work — which is exactly the memory that
+                  failed. A state maintained by hand disagrees with reality on the day it
+                  matters. */}
+              {answeredNote(answered, rupee) && (
+                <div className={cn(
+                  "flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-4 py-2",
+                  answered.kind === "answered"
+                    ? "border-emerald/40 bg-emerald-soft/40"
+                    : "border-amber/40 bg-amber-soft/30",
+                )}>
+                  <Icon
+                    name={answered.kind === "answered" ? "check_circle" : "alert"}
+                    size={14}
+                    className={answered.kind === "answered" ? "text-emerald" : "text-amber-ink"}
+                  />
+                  <span className="text-[12px] leading-snug text-ink">
+                    {answeredNote(answered, rupee)}
+                  </span>
+                  {answered.kind === "answered" && (
+                    <Link
+                      href={`/quotes/${answered.quote.id}` as Route}
+                      className="text-[12px] font-semibold text-amber-ink hover:underline"
+                    >
+                      Open it
+                    </Link>
+                  )}
+                </div>
+              )}
+
               {/* ── The four moves, above the email ──────────────────────── */}
               <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-paper-2/40 px-4 py-2.5">
                 {canConvertToLead(selected) ? (
@@ -498,9 +555,17 @@ export default function EnquiriesPage() {
 
                 {/* Pre-fills the builder from what the extractor actually FOUND.
                     Fields it could not find are simply absent from the URL — a
-                    guessed seat count here becomes a price on a signed quote. */}
+                    guessed seat count here becomes a price on a signed quote.
+
+                    The LABEL changes to "Send another quote" once one has gone out. It is
+                    never disabled: revising a quote is normal — seats changed, price
+                    renegotiated, the first expired — and blocking it would make the app
+                    wrong on a legitimate path to prevent a mistake the banner already
+                    prevents. See lib/inbound/answered.ts. */}
                 <Button size="sm" variant="ghost" asChild>
-                  <Link href={quoteHref(selected, entities) as Route}>📄 Send quote</Link>
+                  <Link href={quoteHref(selected, entities) as Route}>
+                    📄 {quoteButtonLabel(answered)}
+                  </Link>
                 </Button>
 
                 {/* No phone, no button that pretends. Opening wa.me with a blank
