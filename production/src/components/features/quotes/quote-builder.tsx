@@ -28,6 +28,8 @@ import { GeminiCard } from "@/components/shared/gemini-card";
 import { AddLineItemDialog } from "@/components/features/quotes/add-line-item-dialog";
 import { BulkDomainsDialog } from "@/components/features/quotes/bulk-domains-dialog";
 import { ViewDomainsDialog } from "@/components/features/quotes/view-domains-dialog";
+import { matchLeadToCustomer, matchNote } from "@/lib/quotes/match-customer";
+import { SUPPORT_TIERS, findSupportSku } from "@/lib/support/tiers";
 import { QuotePreviewDialog } from "@/components/features/quotes/quote-preview-dialog";
 import { useCustomers } from "@/lib/queries/customers";
 import { CustomerCombobox } from "@/components/features/customers/customer-combobox";
@@ -201,6 +203,53 @@ export function QuoteBuilder() {
     setProspectName(leadCompanyInit.trim());
     setCustMode("prospect");
   }, [isLeadMode, customerId, leadCompanyInit]);
+
+  /* ── ARRIVING FROM A LEAD: FIND THE CUSTOMER, OR OPEN THE RIGHT TAB ─────────
+     Reported as "existing customer selected nahi aata", and it was two faults with one
+     symptom. The effect above returns early on `isLeadMode`, so a quote started from a
+     lead left this toggle on its initial "existing" with an empty dropdown — and nothing
+     ever moved it.
+
+       • The lead IS already a customer → nothing looked it up. The operator had to find
+         their own customer in a dropdown, on a page they reached FROM that customer.
+       • The lead is NOT a customer → there was nothing to select. "Demo1 Company" is at
+         stage `contact` and none of this tenant's four customers is it, so the form was
+         sitting on a tab that could never be satisfied.
+
+     Both are now decided once, on arrival. The matching rule and its refusals live in
+     lib/quotes/match-customer.ts with tests: email is trusted, an exact name is trusted
+     once, and nothing else is guessed — a wrong preselection silently addresses a quote,
+     and then an invoice, to somebody else.
+
+     Runs once via the ref so the operator can change it freely afterwards. */
+  const leadMatchRef = React.useRef(false);
+  const [leadMatchNote, setLeadMatchNote] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (leadMatchRef.current) return;
+    if (!isLeadMode || customerId) return;
+    if (customersLoading) return;                  // deciding on an empty book finds nothing
+    if (!leadCompanyInit.trim() && !leadEmailInit.trim()) return;
+
+    leadMatchRef.current = true;
+    const match = matchLeadToCustomer(
+      { company: leadCompanyInit, contactEmail: leadEmailInit },
+      customers ?? [],
+    );
+
+    if (match.kind === "none") {
+      /* No customer to pick. Open the tab that CAN be completed, with the name already in
+         it, rather than leaving an empty dropdown the operator must diagnose. */
+      setCustMode("prospect");
+      setProspectName(leadCompanyInit.trim());
+      return;
+    }
+
+    setCustomerId(match.customerId);
+    setCustMode("existing");
+    setLeadMatchNote(
+      matchNote(match, (customers ?? []).find((c) => c.id === match.customerId)?.name),
+    );
+  }, [isLeadMode, customerId, customersLoading, customers, leadCompanyInit, leadEmailInit]);
   // Typed-prospect country — lets a NEW international prospect (no lead, no
   // customer record) be detected as an export (zero-rated).
   const [prospectCountry, setProspectCountry] = React.useState<string>("India");
@@ -1124,6 +1173,12 @@ export function QuoteBuilder() {
                       onCreateNew={() => setAddCustomerOpen(true)}
                     />
                   )}
+                  {/* Why it was preselected. An unexplained selection on a money document
+                      is one the operator has to verify by hand — which costs more than the
+                      preselection saved. A name match says so and asks them to check. */}
+                  {leadMatchNote && customerId && (
+                    <p className="mt-1 text-[10px] leading-snug text-emerald">{leadMatchNote}</p>
+                  )}
                 </FormField>
               )}
 
@@ -2009,7 +2064,33 @@ export function QuoteBuilder() {
           Inline rather than behind the Add-item modal because the yearly saving is
           only persuasive when it is on screen while the quote is being built. */}
       <Card className="mt-4">
-        <SupportPlanPicker items={catalog} onAdd={addLine} />
+        {(() => {
+          /* Which support line, if any, is already on this quote.
+             Identified by matching the line's item_id against the catalogue's support
+             SKUs rather than by sniffing the NAME — a rename in the catalogue would break
+             a name check silently, and the operator would see the three cards again on a
+             quote that already has a plan. */
+          const supportSkuIds = new Set(
+            SUPPORT_TIERS.flatMap((t) =>
+              (["monthly", "yearly"] as const)
+                .map((c) => findSupportSku(catalog, t.id, c)?.id)
+                .filter((id): id is string => !!id)),
+          );
+          const line = lineItems.find((l) => l.item_id && supportSkuIds.has(l.item_id));
+
+          return (
+            <SupportPlanPicker
+              items={catalog}
+              onAdd={addLine}
+              selected={line ? {
+                name: line.name,
+                annualRate: line.rate,
+                cycleLabel: line.commitment === "monthly" ? "per year, billed monthly" : "per year",
+              } : null}
+              onRemove={line ? () => removeLine(line.id) : undefined}
+            />
+          );
+        })()}
       </Card>
 
       {/* Add item modal */}

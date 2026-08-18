@@ -376,8 +376,6 @@ export default function PnLPage() {
   const partial = isPartialPeriod(range.to, today);
 
   const [vendorTab, setVendorTab] = React.useState<string | "all">("all");
-  /* The list is the default. See the note where MoneyFlow is rendered. */
-  const [flowView, setFlowView] = React.useState<"list" | "steps">("list");
 
   /* Profit contribution + the FY trend. The ratio comes from the headline so the chart
      and the number beside it cannot disagree. */
@@ -492,23 +490,6 @@ export default function PnLPage() {
                 {m.cogsBasis === "estimated" && (
                   <Badge kind="warning" size="sm">Licence cost estimated</Badge>
                 )}
-                {/* List / Steps. Two words, not icons — an icon toggle between a list and
-                    a chart is a guess the reader has to make before they can read. */}
-                <div className="inline-flex overflow-hidden rounded-md border border-hairline">
-                  {(["list", "steps"] as const).map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setFlowView(v)}
-                      className={cn(
-                        "px-2 py-0.5 text-[11px] font-medium transition-colors",
-                        flowView === v ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-paper-2",
-                      )}
-                    >
-                      {v === "list" ? "List" : "Steps"}
-                    </button>
-                  ))}
-                </div>
                 <button
                   type="button"
                   onClick={() => setCompare((c) => !c)}
@@ -536,13 +517,16 @@ export default function PnLPage() {
             })()}
 
             {steps ? (
-              /* ── LIST BY DEFAULT, WATERFALL ON REQUEST ──────────────────────
+              /* ── BOTH, LIST FIRST ───────────────────────────────────────────
                  Pardeep, after using the waterfall: "isko samjhane me dimag lagana pad
-                 raha hai", and Profit by Vendor was easier because it is a list of rows.
-                 So the list is the default and the waterfall is one click away — the brief
-                 asked for a waterfall and live use said it is hard, and the honest
-                 resolution is to let the reader pick rather than to argue with either. */
-              flowView === "list" ? (
+                 raha hai" — and then, having seen the list: keep the waterfall too, as an
+                 additional view. So both render, list first.
+
+                 The one risk in showing two pictures of one thing is that a reader wonders
+                 whether they are different data. The waterfall therefore carries a
+                 sub-heading saying it is the SAME five numbers — that sentence is what
+                 makes "additional" free rather than confusing. */
+              <>
                 <MoneyFlow
                   scale={m.revenue}
                   rows={[
@@ -586,16 +570,27 @@ export default function PnLPage() {
                     },
                   ]}
                 />
-              ) : (
-                <PnlWaterfall
-                  steps={steps}
-                  onSelect={(key) => {
-                    if (key === "revenue") setDrill("revenue");
-                    else if (key === "cogs") setDrill("cogs");
-                    else if (key === "opex") { setDrillExpenseCat(null); setDrill("expenses"); }
-                  }}
-                />
-              )
+
+                <div className="mt-5 border-t border-hairline pt-4">
+                  <div className="mb-3">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+                      Same five numbers, as steps
+                    </h3>
+                    <p className="text-[11px] leading-snug text-ink-3">
+                      Each bar starts where the one before it ended, so the dotted line follows
+                      the money down from sales to what you kept. Click a bar for the entries.
+                    </p>
+                  </div>
+                  <PnlWaterfall
+                    steps={steps}
+                    onSelect={(key) => {
+                      if (key === "revenue") setDrill("revenue");
+                      else if (key === "cogs") setDrill("cogs");
+                      else if (key === "opex") { setDrillExpenseCat(null); setDrill("expenses"); }
+                    }}
+                  />
+                </div>
+              </>
             ) : (
               /* The chart REFUSES to draw when the cost of goods is unknown. A waterfall's
                  shape asserts that every step is known — drawing one over a missing COGS

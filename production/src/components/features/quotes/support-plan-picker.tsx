@@ -19,6 +19,7 @@
  */
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
+import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { cn, rupee } from "@/lib/utils";
 import {
@@ -34,6 +35,28 @@ export interface SupportPlanPickerProps {
   items: readonly Item[];
   /** Add a line to the quote. The builder owns merging and list-price freezing. */
   onAdd: (line: QuoteLineItem) => void;
+  /**
+   * The support line already on the quote, if any.
+   *
+   * ─── WHY THE PICKER COLLAPSES INSTEAD OF DISAPPEARING ──────────────────────
+   * Pardeep: once a plan is added, the three big cards should stop taking the screen.
+   * Right — three cards for a decision already made is the largest block on the page
+   * arguing for something the operator has already agreed to.
+   *
+   * But removing the section outright breaks three things, and all three are worse than
+   * the wasted space:
+   *   • Nothing on screen says WHICH plan was added without scrolling to the line items.
+   *   • Changing your mind — Standard to Enterprise — has nowhere to happen.
+   *   • Re-opening a saved draft would show no support section at all, so a plan added by
+   *     mistake could never be removed from here.
+   *
+   * So it collapses to one line that states the plan, the price, and keeps Change and
+   * Remove a single click away. The screen space comes back and nothing becomes
+   * unreachable.
+   */
+  selected?: { name: string; annualRate: number; cycleLabel: string } | null;
+  /** Take the support line off the quote. */
+  onRemove?: () => void;
 }
 
 /** What a tier costs on the chosen cycle, expressed the way a quote line wants it. */
@@ -44,8 +67,45 @@ function annualRateFor(tier: SupportTier, cycle: Cycle): number {
   return cycle === "yearly" ? tier.annualTotal : supportPrice(tier, "monthly") * 12;
 }
 
-export function SupportPlanPicker({ items, onAdd }: SupportPlanPickerProps) {
+export function SupportPlanPicker({ items, onAdd, selected, onRemove }: SupportPlanPickerProps) {
   const [cycle, setCycle] = React.useState<Cycle>("yearly");
+  /* "Change" reopens the cards without removing the line — the operator is choosing, not
+     yet deciding, and taking their plan away mid-thought would be its own small betrayal. */
+  const [changing, setChanging] = React.useState(false);
+
+  /* ── DECIDED: one line, not three cards ─────────────────────────────────── */
+  if (selected && !changing) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="flex items-center gap-1.5">
+          <Icon name="check_circle" size={15} className="shrink-0 text-emerald" />
+          <span className="text-[13px] font-medium text-ink">{selected.name}</span>
+          <Badge kind="success" size="sm">added to quote</Badge>
+        </span>
+        <span className="font-mono text-[13px] tabular-nums text-ink-2">
+          {rupee(selected.annualRate)} {selected.cycleLabel}
+        </span>
+        <span className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setChanging(true)}
+            className="text-[12px] font-semibold text-amber-ink hover:underline"
+          >
+            Change plan
+          </button>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="text-[12px] font-semibold text-ink-3 hover:text-rose hover:underline"
+            >
+              Remove
+            </button>
+          )}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -146,17 +206,24 @@ export function SupportPlanPicker({ items, onAdd }: SupportPlanPickerProps) {
                   size="sm"
                   variant="ghost"
                   className="w-full justify-center"
-                  onClick={() => onAdd({
-                    id:        `sup-${tier.id}-${cycle}-${Date.now()}`,
-                    item_id:   sku.id,
-                    name:      sku.name,
-                    qty:       1,
-                    rate,
-                    cost:      0,
-                    commitment: cycle === "yearly" ? "annual_yearly" : "monthly",
-                  })}
+                  onClick={() => {
+                    /* Changing plan removes the old line first, so the quote never carries
+                       two support plans — a quote with both Standard and Enterprise on it
+                       is not a choice the customer made. */
+                    if (changing && onRemove) onRemove();
+                    onAdd({
+                      id:        `sup-${tier.id}-${cycle}-${Date.now()}`,
+                      item_id:   sku.id,
+                      name:      sku.name,
+                      qty:       1,
+                      rate,
+                      cost:      0,
+                      commitment: cycle === "yearly" ? "annual_yearly" : "monthly",
+                    });
+                    setChanging(false);
+                  }}
                 >
-                  Add to quote
+                  {changing ? "Use this plan" : "Add to quote"}
                 </Button>
               )}
             </div>
