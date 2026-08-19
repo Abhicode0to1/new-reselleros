@@ -118,7 +118,9 @@ Insert fail hone par report **gayab** ho jaati thi aur reporter ko "thank you" m
 
 ### 🔴 HANDOFF — padho pehle (19 Aug 2026)
 
-Branch `session/money-spine-hardening-jun1`. Sab commit ho gaya (`aebdda1` tak). **Deploy 18 Aug ka hi chalu hai** — revision `resellersos-00295-fgm`, 100% traffic, `/login` 200 · https://resellersos-1005662057478.asia-south1.run.app. **19 Aug ka koi badlav abhi live nahi hai** (sab tests, scripts, docs aur DB-ledger ka kaam tha — app code nahi badla).
+Branch `session/money-spine-hardening-jun1`. Sab commit ho gaya (`63586e6` tak). ✅ **19 Aug ko DEPLOY HO GAYA** — revision **`resellersos-00297-728`**, 100% traffic · https://resellersos-1005662057478.asia-south1.run.app. Ab live hai: feedback triage (`/admin/feedback`), attendance check-in/check-out reminder, aur Owner Private Vault (`/vault/personal`). Branch remote par **push nahi ki** (43+ commits aage hai) — wo alag faisla hai.
+
+> **Deploy ke baad ke verification ne ek purani kami pakdi, aur wo usi waqt theek karke dobara deploy hui.** `curl` se dekha to `/dashboard` sahi 307 de raha tha par **`/vault` aur `/attendance/me` bina session ke 200** de rahe the — middleware ki `PROTECTED_PREFIXES` me dono the hi nahi. Data kabhi nahi khula (RLS bina `auth.uid()` ke kuch nahi deta), par signed-out visitor ko Password Vault ka shell dikhna apne aap me galat hai. `/vault` ye kami shuru se leke chal raha tha. Ab chaaron 307 dete hain. **Sabak: deploy ke baad sirf `/login` check karna kaafi nahi — jo route abhi bane hain unhe bina session ke curl karo.**
 
 **19 Aug ke session ne 4 kaam kiye, aur teeno me handoff ka andaza galat nikla — isliye har cheez naap kar hi maano:**
 
