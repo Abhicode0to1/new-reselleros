@@ -51,6 +51,22 @@ const PROTECTED_PREFIXES = [
   /* Internal bug-report triage queue. The role gate is the nav-derived one further
      down (owner + manager); this list is only the "must be signed in" half. */
   "/admin",
+  /* ─── BOTH ADDED 19 Aug 2026, AND BOTH WERE ALREADY MISSING ──────────────────
+     Found by curling the live service right after a deploy: `/dashboard` answered 307
+     to /login as expected, and `/vault` and `/attendance/me` answered **200** — the app
+     shell rendered for a request with no session at all.
+
+     No data was exposed: every query underneath runs through PostgREST under RLS, and
+     with no session there is no `auth.uid()`, so nothing comes back. But rendering the
+     Password Vault and the private vault to a signed-out visitor is wrong on its own
+     terms, and it is precisely the shape of thing a security review reads as a leak.
+
+     `/vault` predates this session — the customer-console Password Vault has been
+     reachable this way the whole time. `/attendance` covers /attendance/me and the
+     kiosk; the kiosk is safe to gate because its own header says the office tablet runs
+     it "logged in as the owner", so it always had a session. */
+  "/vault",
+  "/attendance",
   /* Onboarding fork for a signed-in person who has no workspace yet. It is
      PROTECTED (you must be authenticated to see it) but deliberately NOT in
      AUTH_PREFIXES below — those bounce a signed-in user to their role home,
