@@ -2792,6 +2792,81 @@ type ExpenseClaimRow = {
 type ExpenseClaimInsert = Partial<ExpenseClaimRow> & { tenant_id: string; loan_id: string; employee_id: string; amount: number; category: string; spent_on: string };
 type ExpenseClaimUpdate = Partial<Omit<ExpenseClaimInsert, "tenant_id">>;
 
+/* Migration 20260819170000 — the owner's PRIVATE books.
+   Every one of these is scoped by RLS to `owner_user_id = auth.uid()`, not to the
+   tenant and not to the owner role. Read the migration header before changing that. */
+type PersonalAccountRow = {
+  id:            string;
+  tenant_id:     string;
+  /** WHOSE row this is. The entire privacy model hangs off this column. */
+  owner_user_id: string;
+  kind:          "savings" | "current" | "credit_card" | "fd" | "rd" | "ppf" | "cash" | "wallet";
+  label:         string;
+  institution:   string | null;
+  /** Last four digits only — enforced by a CHECK constraint. */
+  account_last4: string | null;
+  /** Whole rupees. For credit_card this is what is OWED, held positive. */
+  balance:       number;
+  credit_limit:  number | null;
+  interest_rate: number | null;
+  maturity_date: string | null;
+  is_active:     boolean;
+  notes:         string | null;
+  created_at:    string;
+  updated_at:    string;
+};
+type PersonalAccountInsert = Partial<PersonalAccountRow> & { tenant_id: string; owner_user_id: string; kind: PersonalAccountRow["kind"]; label: string };
+type PersonalAccountUpdate = Partial<Omit<PersonalAccountInsert, "tenant_id" | "owner_user_id">>;
+
+type PersonalTransactionRow = {
+  id:            string;
+  tenant_id:     string;
+  owner_user_id: string;
+  kind:          "drawing" | "dividend" | "salary" | "interest" | "other_income" | "expense";
+  category:      string | null;
+  /** Whole rupees, always positive — direction comes from `kind`. */
+  amount:        number;
+  occurred_on:   string;
+  account_id:    string | null;
+  note:          string | null;
+  created_at:    string;
+  updated_at:    string;
+};
+type PersonalTransactionInsert = Partial<PersonalTransactionRow> & { tenant_id: string; owner_user_id: string; kind: PersonalTransactionRow["kind"]; amount: number; occurred_on: string };
+type PersonalTransactionUpdate = Partial<Omit<PersonalTransactionInsert, "tenant_id" | "owner_user_id">>;
+
+type PersonalHoldingRow = {
+  id:            string;
+  tenant_id:     string;
+  owner_user_id: string;
+  asset_class:   "mutual_fund" | "stock" | "real_estate" | "gold" | "sgb" | "lic" | "ppf" | "epf" | "nps" | "fd" | "bond" | "crypto" | "other";
+  name:          string;
+  invested:      number;
+  current_value: number;
+  units:         number | null;
+  /** When current_value was last true. Null = never marked; the UI must say so. */
+  valued_on:     string | null;
+  notes:         string | null;
+  created_at:    string;
+  updated_at:    string;
+};
+type PersonalHoldingInsert = Partial<PersonalHoldingRow> & { tenant_id: string; owner_user_id: string; asset_class: PersonalHoldingRow["asset_class"]; name: string };
+type PersonalHoldingUpdate = Partial<Omit<PersonalHoldingInsert, "tenant_id" | "owner_user_id">>;
+
+type PersonalVaultPinRow = {
+  user_id:         string;
+  tenant_id:       string;
+  /** Salted scrypt hash. The PIN itself is never stored and never leaves the server. */
+  pin_hash:        string;
+  pin_salt:        string;
+  failed_attempts: number;
+  locked_until:    string | null;
+  created_at:      string;
+  updated_at:      string;
+};
+type PersonalVaultPinInsert = Partial<PersonalVaultPinRow> & { user_id: string; tenant_id: string; pin_hash: string; pin_salt: string };
+type PersonalVaultPinUpdate = Partial<Omit<PersonalVaultPinInsert, "user_id" | "tenant_id">>;
+
 /* Migration 20260819120000 — internal feedback + its machine triage.
    Deliberately not support_tickets: that table carries a customer SLA clock. */
 type FeedbackRow = {
@@ -3775,6 +3850,10 @@ export type Database = {
       referral_commissions: { Row: ReferralCommissionRow; Insert: ReferralCommissionInsert; Update: ReferralCommissionUpdate; Relationships: [] };
       feedback:             { Row: FeedbackRow;           Insert: FeedbackInsert;           Update: FeedbackUpdate;           Relationships: [] };
       feedback_screenshots: { Row: FeedbackScreenshotRow; Insert: FeedbackScreenshotInsert; Update: FeedbackScreenshotUpdate; Relationships: [] };
+      personal_accounts:     { Row: PersonalAccountRow;     Insert: PersonalAccountInsert;     Update: PersonalAccountUpdate;     Relationships: [] };
+      personal_transactions: { Row: PersonalTransactionRow; Insert: PersonalTransactionInsert; Update: PersonalTransactionUpdate; Relationships: [] };
+      personal_holdings:     { Row: PersonalHoldingRow;     Insert: PersonalHoldingInsert;     Update: PersonalHoldingUpdate;     Relationships: [] };
+      personal_vault_pin:    { Row: PersonalVaultPinRow;    Insert: PersonalVaultPinInsert;    Update: PersonalVaultPinUpdate;    Relationships: [] };
     };
     Views: {
       // Added in migration 0040 — tenant joined with its parent's display fields.

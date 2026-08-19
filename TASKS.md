@@ -5,6 +5,37 @@
 
 ## Active
 
+### 🔐 Owner Private Vault (`/vault/personal`) — ✅ DONE (19 Aug 2026, DB applied · isolation **proven on live DB** · build green · awaiting deploy)
+
+**Do cheezein goal se alag ki gayi hain, dono jaan-boojh kar:**
+
+**1. `/vault` par nahi bana — `/vault/personal` par bana.** `/vault` pehle se ek chalta hua feature hai: customer console ka Password Vault, jisme encryption, access log aur reveal API hai, aur **manager ko bhi chahiye**. Use replace karna ek live feature mitana hota; use owner-only karna manager ko customer passwords se kaat deta. Isliye private vault uske neeche baitha hai, aur dono ka na table prefix milta hai na policy. Table prefix bhi `vault_*` nahi hai (wo password vault ka hai) — `personal_*` hai.
+
+**2. 🔴 RLS `tenant_id` par nahi, `auth.uid()` par hai — aur yahi is poore feature ki jaan hai.** Goal ka hard rule #3 kehta hai "har query me tenant_id + current_tenant_id() RLS". Baaki har table ke liye wo sahi hai. **Yahan wahi rule, akela, ek data breach hai.** Naapa hua: ANUTECH tenant me **teen** log `role = 'owner'` hain — Pardeep, Deepak, aur `info@srigangatechnologies.com`. Tenant-scoped ya role-scoped policy ek owner ka bank balance, ghar ka kharcha aur net worth baaki do ko de deti.
+
+> Teeno account sahi hain — Sriganga wala ANUTECH ka apna Workspace console id hai (Pardeep ne 19 Aug ko confirm kiya). **Phir bhi kuch nahi badalta**, aur wajah likhna zaroori hai: khatra kabhi ye tha hi nahi ki koi ajnabi ho. Pardeep aur Deepak dono asli director hain, dono ko company ka poora data dekhna chahiye — aur **kisi ko doosre ka bank balance nahi**. "Personal" ka matlab ek insaan hai, ek company nahi. Upar se shared console address wo account hai jisme ek se zyada log login kar sakte hain.
+
+**Isliye policy hai `tenant_id = current_tenant_id() and owner_user_id = auth.uid()`** — tenant wala bahari daayra hai, `auth.uid()` wala asli kaam karta hai. Kisi bhi policy me `role` ka zikr nahi hai: role doosra owner badal sakta hai, aur "owner hona" aur "yahi insaan hona" do alag baatein hain.
+
+**Suraksha sabit ki gayi hai, maani nahi:** [personal_vault_owner_isolation.test.sql](production/supabase/tests/personal_vault_owner_isolation.test.sql) — **live prod DB par chalaya, 8 me se 8 PASS**, poora transaction rollback me. Case 2 hi asli hai: *ek doosra owner, usi tenant me, usi role ke saath, ZERO rows dekhta hai.* Baaki: staff zero dekhta hai · owner B, owner A ke vault me row daal nahi sakta (RLS error) · A ki holding badal nahi sakta · A ka account delete nahi kar sakta · A ka PIN hash overwrite nahi kar sakta · aur A apna kaam kar sakta hai (over-block nahi hua). Write wale case "0 rows affected" par pass nahi hote — wapas owner A banke value **padh kar** milaya jaata hai, warna galat id se bhi test pass ho jaata.
+
+**PIN ke baare me saaf baat, aur wo UI par bhi likhi hai.** Ye **screen ka lock hai, encryption nahi**. Kis se bachata hai: khula laptop, kandhe se dekhta banda, screen share. Kis se nahi: koi bhi technical banda jiske paas live session hai — wo PostgREST se seedha padh sakta hai. Ye khaayi mehnat se band nahi hoti: 4 digit = 10,000 possibilities, uske neeche encrypt karna jhoothi tasalli hai, aur PIN bhool jaane par data hamesha ke liye chala jaata. **Isliye asli suraksha RLS hai, aur PIN ko utna hi bataya gaya hai jitna wo hai.** Phir bhi wo *bura* lock na ho: server-side salted scrypt hash (browser tak kabhi nahi jaata), timing-safe compare, 5 galat koshish par 15 minute lockout (counter lock lagne par reset **nahi** hota, warna har 15 minute me 5 nayi koshish milti rehti), aur 1234/0000/1212 jaise PIN mana hain.
+
+**🔴 Ek asli bug jo sirf app chalane se mila:** `pin.ts` `node:crypto` import karta tha aur client components usse `PIN_LENGTH` le rahe the — webpack ne poora `/vault/personal` route **500** kar diya (`UnhandledSchemeError`). **Typecheck, lint aur 3150 tests — teeno green the.** Ye theek wahi cheez hai jiske liye CLAUDE.md §25.2 build ko gate me rakhta hai. Fix: [pin-rules.ts](production/src/lib/vault/personal/pin-rules.ts) (crypto-free, client-safe) aur [pin.ts](production/src/lib/vault/personal/pin.ts) (server-only) me baant diya.
+
+**Chaar screen:** Overview (net worth + is FY ka cash flow + allocation) · Banking (savings/current/card/FD/RD/PPF/cash/wallet) · Drawings & Expenses · Wealth (MF, stock, property, gold/SGB, LIC, PPF, EPF, NPS…).
+
+**Teen design faisle jo test me locked hain:**
+- **Credit card ka balance positive store hota hai aur ghataya jaata hai.** Ulta karte to sign convention har form aur report ko yaad rakhna padta, aur pehli bhoolne wali jagah ₹80,000 ka karza ₹80,000 ki jaayedaad bana deti — ₹1.6L ki galti, galat taraf.
+- **Har value haath se likhi hai — koi market feed nahi.** Isliye `valued_on` hi is screen ki poori imaandari hai: purani ya bina date wali value kitne rupaye ki hai, wo total ke **bagal me** likha jaata hai. March ka aankda aaj ka bata dena bina aankde se bura hai, kyunki uspar faisla hota hai.
+- **Yahan drawing likhne se company ki books me kuch nahi hota** — ek tarfa deewar, aur screen par likhi hui. Warna ek aadmi ki yaaddasht chup-chaap company ke accounts badal deti, bina bank line, bina approval.
+
+**Browser me sach me verify hua:** account add kiya → DB me `owner_user_id = pardeep@anutech.in`, 420000 whole rupees · PIN route ka poora chakkar (weak PIN 400, galat format 400, set 200, galat verify 401 "4 koshish baaki", sahi verify 200) · DB me PIN nahi, 64-char hash + 32-char salt, `leaks_pin: false` · lock screen aaya, unlock hua · **net worth ₹9,80,000 = 4,20,000 + 6,40,000 − 80,000** (card ghata), allocation 100% MF, gain +₹1,40,000 (+28.0%), Indian formatting sahi. **Saara test data aur PIN baad me hata diya** — vault ab bilkul khali hai (0/0/0/0).
+
+**Gate:** typecheck 0 · **162 files / 3150 tests** (3088 → +62) · lint 0 errors, vault files me 0 warnings · **`npm run build` exit 0** — chaaron vault route bane. Migration `20260819170000` prod par lagi + alag run me verify (4 tables, 4 policies, chaaron me `auth.uid()`), ledger **278 → 279**. `db push` nahi chalayi.
+
+**Baaki:** company ke drawings se link nahi hai (jaan-boojh kar — ek tarfa deewar) · koi market feed nahi · PIN bhool jaane par reset ka rasta nahi hai (abhi seedha DB se hataana padega).
+
 ### ⏰ Attendance check-in / check-out reminder — ✅ BUILT (19 Aug 2026, DB applied · **awaiting deploy**)
 
 **Pehla kaam jo naye triage system ke directive se hua.** Report: *"Kuch Aisa kar do ki Computer ko open karte hi user ko attendance ka popup mil jaye … iske saath hi 6 baje (ya time set karne ka option) ek Check Out Popup Reminder hona chahiye."* Triage ne ise `feature` (filed as bug), sev 35, screen `/attendance/me` bataya — sab sahi nikla.
@@ -138,7 +169,7 @@ Har aankda neeche **naap kar** nikala hai: har bande ki jagah baith kar (`reques
 
 1. **Ananya akeli nahi hai — Hitesh bhi tooti halat me hai.** Dono manager hain jinke neeche koi nahi. Ananya 0 dekhti hai kyunki wo kuch own nahi karti; Hitesh 1 dekhta hai kyunki wo apna ek lead own karta hai. **Manager hone ka koi fayda tab tak nahi jab tak uske neeche koi na ho.**
 2. **Rok sirf teen role par hai** — `sales`, `sales_senior`, `manager`. Baaki sab (owner, support, delivery) poora pipeline dekhte hain. Yaani **support aur delivery ke chaar log — Pratik, Ranjeet, Pawan, Abhishek — saare 18 leads dekh sakte hain.** Ye niyam ke hisaab se sahi hai, par ye ek faisla hai; agar ye nahi chahiye to niyam badalna padega, tree nahi.
-3. **`info@srigangatechnologies.com` teesra owner hai aur poora sab dekhta hai** — 18 leads, saare quotes, saare customers. Ye HANDOFF #3 hai, ab chauthi baar likha ja raha hai.
+3. **`info@srigangatechnologies.com` teesra owner hai aur poora sab dekhta hai** — 18 leads, saare quotes, saare customers. ✅ **19 Aug: ye ANUTECH ka apna email hai** (Google Workspace sales console ka user id), to poora access sahi hai. Sawaal band.
 
 **Quotes aur customers par hierarchy ka koi asar nahi** — sab ko 25 quotes / 14 customers dikhte hain (baaki 2 quotes aur 1 customer doosre tenant ke hain). Wajah: `quotes.owner_id` aur `customers.account_manager_id` **khaali hain**, aur khaali rows sabko dikhti hain. Yaani ye feature abhi sirf **leads** par asar daal raha hai.
 
@@ -155,7 +186,9 @@ Har aankda neeche **naap kar** nikala hai: har bande ki jagah baith kar (`reques
 
 **🔴 Jo sirf Pardeep bata sakta hai:** Darshan kiske neeche kaam karta hai — Ananya ya Hitesh? Aur Hitesh kiske neeche — Pardeep ya Ananya? Bas ye do jawab; baaki main laga dunga. (Support/delivery ka manager set karna vaikalpik hai — unki visibility par koi farak nahi padta, sirf org-chart saaf dikhega.)
 
-**3. `info@srigangatechnologies.com` ANUTECH tenant ka teesra OWNER hai** — poora access, password reset ka haq. Teen baar flag kiya, koi nirdesh nahi mila. Agar wo company ka banda nahi hai to /team se role badlo.
+**3. ~~`info@srigangatechnologies.com` kaun hai~~ ✅ JAWAB MIL GAYA (19 Aug 2026) — ye ANUTECH ka apna hi email hai.** Pardeep ne confirm kiya: yahi login Google Workspace sales console ka user id bhi hai. Chaar baar pooche jaane ke baad ye sawaal **band**. Role `owner` sahi hai, koi badlav nahi chahiye — aage ke session isko dobara flag na karein.
+
+> Ek baat phir bhi yaad rahe: ye ek **shared console address** hai, yaani ek se zyada log ismein sign in kar sakte hain. Company data ke liye theek hai. Par kisi bhi *vyaktigat* (personal) data ke liye ye maayne rakhta hai — isiliye Owner Vault ki RLS `role = 'owner'` par nahi, `auth.uid()` par tiki hai.
 
 **4. 🔬 JAANCH LI (19 Aug) — 30 files untracked hain, aur "sirf tracking drift hai" wali baat SACH NAHI NIKLI. 2 migrations kabhi chali hi nahi, aur ek me ₹8,165 GST atka hua hai.**
 

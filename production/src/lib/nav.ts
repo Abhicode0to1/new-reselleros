@@ -314,6 +314,13 @@ export const APP_NAV: NavSection[] = [
       // owner/manager only — these are customers' admin console passwords, and
       // "billing" has no reason to reach a Google Admin login.
       { id: "vault",     href: "/vault",                label: "Password Vault",   icon: "lock", roles: ["owner", "manager"] },
+      /* The owner's PRIVATE books — personal bank, drawings, net worth. Owner-only here,
+         but understand what this line does and does not do: middleware skips its role
+         guard entirely for `owner` AND `manager`, so this hides the menu item and nothing
+         more. The data is protected by RLS scoped to auth.uid(), proven by
+         supabase/tests/personal_vault_owner_isolation.test.sql. Note it is per-USER, not
+         per-role: this tenant has three owners and none of them may read another's. */
+      { id: "vault-personal", href: "/vault/personal",  label: "Private Vault",    icon: "wallet", roles: ["owner"], hint: "Aapke apne paise — team me kisi ko nahi dikhta" },
       /* Third page found with no nav entry, after Marketing and Backup. /team
          had a breadcrumb — so the app knew its NAME — and exactly one link in
          the whole codebase, buried in the Add Task dialog's help text. It is
@@ -365,6 +372,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/my-expenses":     ["Me", "My Advance & Expenses"],
   "/vault":           ["Admin", "Password Vault"],
   "/admin/feedback":  ["Admin", "Feedback & AI Fixes"],
+  "/vault/personal":  ["Admin", "Private Vault"],
   "/marketing/reports": ["Marketing", "ROAS & CAC"],
   "/enquiries":       ["Sales", "Enquiries"],
   "/deals":           ["Sales", "Deal Pipeline"],
