@@ -34,6 +34,13 @@
 
 **Gate:** typecheck 0 · **162 files / 3150 tests** (3088 → +62) · lint 0 errors, vault files me 0 warnings · **`npm run build` exit 0** — chaaron vault route bane. Migration `20260819170000` prod par lagi + alag run me verify (4 tables, 4 policies, chaaron me `auth.uid()`), ledger **278 → 279**. `db push` nahi chalayi.
 
+**Baad me jodi gayi verification (19 Aug, session ke aakhir me — DB ka darwaza band ho jaane ke baad):**
+
+- **19 naye screen tests** ([vault-screens.test.tsx](<production/src/app/(app)/vault/personal/vault-screens.test.tsx>)) — chaaron screens ko asli jaisi rows dekar assert kiya jaata hai. Sabse zaroori: card ka ₹80,000 **ghataya** jaata hai (₹7,70,000 aata hai, ₹9,30,000 nahi). Saath me: band account total se bahar, kharche rupaye se rank hote hain count se nahi, income spending bucket me nahi girti, null valuation par staleness warning total ke bagal me. Suite 3150 → **3169**. Ye browser me ek baar dekhne ki jagah nahi leta — ye us dekhne ko **dobara chalne wala** bana deta hai.
+- **Live anon probe (curl, prod PostgREST, public anon key se):** chaaron `personal_*` tables → **401, zero rows**, message `permission denied for function current_tenant_id`. Do baatein isse sabit hoti hain: (a) **tables prod me maujood hain** — error `42P01 relation does not exist` nahi hai, yaani migration lagi hui hai; (b) **bina login koi kuch nahi padh sakta**. Ye wahi message hai jo vault screen par "session khatam ho gaya" banta hai — poora chakkar milta hai.
+
+> **⚠️ Jo is session me dobara SABIT NAHI hua:** `personal_vault_owner_isolation.test.sql` — yaani *"usi tenant ka doosra owner zero rows dekhta hai"*. Wo `af8b219` par 8/8 pass tha, par uske baad DB ka raasta band ho gaya (CLI `SUPABASE_DB_PASSWORD` maangne laga, MCP connector authorization maangne laga, aur `.env.local` me koi DB password nahi hai). Anon probe iska aadha hissa hai — "bina session koi nahi" — par *"doosra owner nahi"* ke liye do authenticated session ya seedha Postgres connection chahiye. **Agle session me sabse pehla kaam: connector authorize karke ye test chalao.**
+
 **Baaki:** company ke drawings se link nahi hai (jaan-boojh kar — ek tarfa deewar) · koi market feed nahi · PIN bhool jaane par reset ka rasta nahi hai (abhi seedha DB se hataana padega).
 
 ### ⏰ Attendance check-in / check-out reminder — ✅ BUILT (19 Aug 2026, DB applied · **awaiting deploy**)
