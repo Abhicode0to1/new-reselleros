@@ -234,6 +234,24 @@ Pardeep Sharma (owner)
 
 **Script khud likhne se pehle jaanchti hai:** poora inline script parse hota hai, `renderOrg()` ek stub DOM par chalaya jaata hai, aur har bande ka naam output me hona zaroori hai — warna kuch likha hi nahi jaata. Manager kisi doosre tenant me ho, ya chain me cycle ho, ya koi bhi aadmi chart me na aaye, to **error** aata hai — chup-chaap chhoot nahi jaata.
 
+**🧪 Dashboard ke dono naye hisse ab suite me hain — 17 test, [tests/dashboard.test.ts](production/tests/dashboard.test.ts).** Suite **3169 → 3186**, files 163 → 164. `vitest.config.ts` me `tests/**` jodna pada: `dashboard.html` app ka hissa nahi hai (na build, na import) — uska logic inline `<script>` me hai, jise nikaal kar `node:vm` me chalaya jaata hai. Use `src/` me rakhna matlab ye maan lena ki app ise ship karta hai.
+
+**Test kisi ginti par nahi tike hain, invariant par tike hain** — kyunki ORG block generate hota hai. "Ananya 15 dekhti hai" pin karte to kal ka sahi `org:sync` suite ko red kar deta, aur jo test bina wajah red hota hai wo hata diya jaata hai. Jo hamesha sach rehna chahiye, wahi assert hota hai: har aadmi render hota hai · bachche apne hi parent ke *baad* aate hain · koi duplicate email nahi · koi bhi `own`/`sees` tenant ke kul se zyada nahi · partition note ka ganit (`a + b + c = N`) khud jod kar milaya jaata hai · aur save guard ki ginti test **apne hisaab se dobara** nikaalta hai, taaki wo code se sirf haan-me-haan na mila de.
+
+**🔴 Aur mutation testing ne mere pehle test ko fail kar diya — ye likhne layak hai.** Teen jagah code jaan-boojh kar todi gayi:
+
+| Mutation | Nateeja |
+|---|---|
+| Guard ka lock hataya (`saveBtn.disabled = false`) | ✅ 2 test red |
+| Chart se children render band | ✅ 2 test red |
+| Note 3 ka purana bug wapas (sab descendants gino) | ❌ **17/17 pass — pakda hi nahi** |
+
+Wajah samajhne layak hai: us bug se note **contradiction bolta nahi, chup ho jaata hai** — sab descendants ginne par sabse zyada = kul = 19, aur note ki apni `best >= total` shart use skip kar deti hai. Aur **gayab note ko wo test dekh hi nahi sakta jo sirf maujood notes padhta hai.** "Koi ulti baat na ho" assert karna kaafi nahi tha; **"jo baat honi chahiye wo ho"** assert karna pada — data se: agar root ke paas apne leads hain aur uske neeche kisi rok wale ko kul se kam dikhta hai, to panel ko ye **bolna hi padega**, aur wahi aankda bolna padega. Ab mutation dobara lagayi to: `pardeep@anutech.in withholds 3 lead(s) from its team and the panel is silent`.
+
+**Sabak, aur ye aaj doosri baar hua:** green test ka matlab kuch nahi hai jab tak wo red hote hue **dekha** na ho. Subah ye khaali loop ki shakal me mila (upar wala SUDHAAR), shaam ko ek aise test ki shakal me jo galat cheez naap raha tha. Dono baar pakad ne wala tareeka ek hi tha — jaan-boojh kar tod kar dekho.
+
+**Gate:** typecheck 0 · **164 files / 3186 tests pass** · lint 0 errors (6 purani warning, chhui hui file me ek bhi nahi) · `npm run build` **nahi** chalayi (doosre session ka dev server chal raha hai, aur aaj ka koi badlav Next route ko chhuta hi nahi — deploy se pehle chalani zaroori hai).
+
 
 **3. ~~`info@srigangatechnologies.com` kaun hai~~ ✅ JAWAB MIL GAYA (19 Aug 2026) — ye ANUTECH ka apna hi email hai.** Pardeep ne confirm kiya: yahi login Google Workspace sales console ka user id bhi hai. Chaar baar pooche jaane ke baad ye sawaal **band**. Role `owner` sahi hai, koi badlav nahi chahiye — aage ke session isko dobara flag na karein.
 
