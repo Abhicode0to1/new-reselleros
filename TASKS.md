@@ -5,7 +5,7 @@
 
 ## Active
 
-### 🔐 Owner Private Vault (`/vault/personal`) — ✅ DONE (19 Aug 2026, DB applied · isolation **proven on live DB** · build green · awaiting deploy)
+### 🔐 Owner Private Vault (`/vault/personal`) — ✅ DONE (19 Aug 2026, DB applied · **deployed** rev `resellersos-00297-728` · isolation **re-proven on live DB 20 Aug, 8/8**)
 
 **Do cheezein goal se alag ki gayi hain, dono jaan-boojh kar:**
 
@@ -39,7 +39,7 @@
 - **19 naye screen tests** ([vault-screens.test.tsx](<production/src/app/(app)/vault/personal/vault-screens.test.tsx>)) — chaaron screens ko asli jaisi rows dekar assert kiya jaata hai. Sabse zaroori: card ka ₹80,000 **ghataya** jaata hai (₹7,70,000 aata hai, ₹9,30,000 nahi). Saath me: band account total se bahar, kharche rupaye se rank hote hain count se nahi, income spending bucket me nahi girti, null valuation par staleness warning total ke bagal me. Suite 3150 → **3169**. Ye browser me ek baar dekhne ki jagah nahi leta — ye us dekhne ko **dobara chalne wala** bana deta hai.
 - **Live anon probe (curl, prod PostgREST, public anon key se):** chaaron `personal_*` tables → **401, zero rows**, message `permission denied for function current_tenant_id`. Do baatein isse sabit hoti hain: (a) **tables prod me maujood hain** — error `42P01 relation does not exist` nahi hai, yaani migration lagi hui hai; (b) **bina login koi kuch nahi padh sakta**. Ye wahi message hai jo vault screen par "session khatam ho gaya" banta hai — poora chakkar milta hai.
 
-> **⚠️ Jo is session me dobara SABIT NAHI hua:** `personal_vault_owner_isolation.test.sql` — yaani *"usi tenant ka doosra owner zero rows dekhta hai"*. Wo `af8b219` par 8/8 pass tha, par uske baad DB ka raasta band ho gaya (CLI `SUPABASE_DB_PASSWORD` maangne laga, MCP connector authorization maangne laga, aur `.env.local` me koi DB password nahi hai). Anon probe iska aadha hissa hai — "bina session koi nahi" — par *"doosra owner nahi"* ke liye do authenticated session ya seedha Postgres connection chahiye. **Agle session me sabse pehla kaam: connector authorize karke ye test chalao.**
+> **✅ 20 Aug 2026: ye kami band ho gayi — `personal_vault_owner_isolation.test.sql` live prod DB par dobara chala, 8/8 PASS.** Pichhle handoff ka andaza ("DB ka raasta band ho gaya") is session me galat nikla: **dono darwaze khule the** — CLI ne `SUPABASE_DB_PASSWORD` maanga hi nahi (`env -u SUPABASE_ACCESS_TOKEN npx supabase db query --linked`, exit 0), aur MCP `supabase-db` bhi authorized tha (read-only). Rasta: `cd production && env -u SUPABASE_ACCESS_TOKEN npx supabase db query --linked -f supabase/tests/personal_vault_owner_isolation.test.sql` → ek row `PASS`. **Wo ek row hi 8/8 ka saboot hai:** har case fail hone par `raise exception` karta hai, jo poora transaction abort kar deta hai — to aakhri `select 'PASS'` fail hone par dikh hi nahi sakta. Yaani **Case 2 phir sabit hai**: usi tenant ka doosra owner, usi `role = 'owner'` ke saath, chaaron `personal_*` tables me **zero rows** dekhta hai — saath me staff zero, aur B ka insert/update/delete/PIN-overwrite chaaron blocked, aur A apna kaam kar sakta hai. **Rollback alag connection se verify kiya:** synthetic tenant 0, synthetic users 0 (`auth.users` me bhi 0), asli ginti waisi hi — 2 tenants / 11 users, vault 0/0/0/0. **Sabak:** "DB ka raasta band hai" ek andaza hai, haalat nahi — naye session me pehle `env -u` wala probe chalao, tabhi maano.
 
 **Baaki:** company ke drawings se link nahi hai (jaan-boojh kar — ek tarfa deewar) · koi market feed nahi · PIN bhool jaane par reset ka rasta nahi hai (abhi seedha DB se hataana padega).
 
@@ -153,47 +153,42 @@ Jo baaki hai, ghatte kram me:
 
 > **Jo rukawat thi wo galat maan lena tha, access nahi.** Migration ke "HOW TO VERIFY" me likha tha ki asli test "do session maangta hai aur superuser connection se nahi ho sakta" — isliye kaam insaan par chala gaya aur ek din pada raha. Sach: superuser carve-out sirf isliye leta hai kyunki uske paas `auth.uid()` nahi hota, aur `auth.uid()` sirf `request.jwt.claims ->> 'sub'` hai — jo `set_config(..., true)` set kar deta hai; upar se `set local role authenticated` RLS wapas laga deta hai. **`portal_customer_users_no_self_update.test.sql` ye pehle se kar raha tha.** Test "0 rows changed" par pass nahi hota, function ka apna message maangta hai — warna trigger drop hone ke baad bhi green rehta.
 
-**2. 📋 REPORTING LINES — poora naksha naap liya (19 Aug). Sirf naam batane baaki hain.**
+**2. ~~📋 REPORTING LINES~~ ✅ LAG GAYI (20 Aug 2026) — Pardeep ne dono naam bataye, TREE A prod par apply ho gaya.**
 
-Har aankda neeche **naap kar** nikala hai: har bande ki jagah baith kar (`request.jwt.claims` → `auth.uid()`, role `authenticated`) RLS se ginwaya gaya, policy padh kar andaza nahi lagaya.
+**Faisla (Pardeep, 20 Aug):** Darshan → **Ananya** · Hitesh → **Pardeep**. (Ananya → Pardeep link pehle se tha, chhua nahi.)
 
-**Abhi ka tree:** poore ANUTECH me **ek hi** link hai — `ananya@anutech.in` → `pardeep@anutech.in`. Baaki 9 logon ka manager khaali hai.
+```
+Pardeep Sharma (owner)
+├── Ananya Sharma (manager)
+│   └── Darshan (Sales) (sales_senior, 15 leads)
+└── Hitesh Baghel (manager, 1 lead)
+```
 
-**Abhi kisko kya dikhta hai (18 leads me se):**
+**Kaise laga:** ek transaction ne dono `manager_id` likhe, phir **usi transaction me** har bande ki seat par baith kar (`request.jwt.claims` → `auth.uid()`, role `authenticated`) RLS se leads ginwaye aur expected se milaye — koi ginti galat hoti to `raise exception` transaction abort kar deta, yaani **galat tree commit ho hi nahi sakta tha.** Saath me cycle check (recursive chain, 0 cycles). Script repo me hai: [set-reporting-lines-2026-08-20.sql](production/supabase/maintenance/set-reporting-lines-2026-08-20.sql), aur uska read-only jodidaar [verify-reporting-lines.sql](production/supabase/maintenance/verify-reporting-lines.sql) — jab bhi shak ho, wo dobara chala kar live asar naapa ja sakta hai (kuch likhta nahi).
 
-| Kaun | Role | Reports | Apne leads | **Dikhte hain** |
-|---|---|---|---|---|
-| pardeep@anutech.in | owner | 1 | 2 | **18** |
-| deepak@anutech.in | owner | 0 | 0 | **18** |
-| info@srigangatechnologies.com | owner | 0 | 0 | **18** ⚠️ |
-| pratik@anutech.in | support | 0 | 0 | **18** |
-| ranjeet@anutech.in | support | 0 | 0 | **18** |
-| pawan@anutech.in | delivery | 0 | 0 | **18** |
-| abhishek@anutech.in | delivery | 0 | 0 | **18** |
-| sales@anutech.in (Darshan) | sales_senior | 0 | 15 | **15** |
-| hitesh@anutech.in | manager | 0 | 1 | **1** |
-| **ananya@anutech.in** | **manager** | **0** | **0** | **0** 🔴 |
+**🔴 Aur assertion ne sach me ek cheez pakdi: leads ab 18 nahi, 19 hain.** Pehla run `FAIL: Pardeep sees 19 leads, expected 18` par abort hua — kuch likhe bina. Naapa: naya lead **20 Aug ka hai aur Pardeep ka apna** hai (owner-wise aaj: Darshan 15 · Pardeep 3 · Hitesh 1 · unowned 0). Expectation 19 ki, phir apply. **Sabak: pichhle session ka naapa hua aankda bhi ek tareekh ka hai — assert karo, warna chup-chaap purane number par bharosa ho jayega.**
 
-**Teen baatein jo is table se nikalti hain:**
+**Alag connection se verify (committed state par, 6 me se 6 assertion pass):**
 
-1. **Ananya akeli nahi hai — Hitesh bhi tooti halat me hai.** Dono manager hain jinke neeche koi nahi. Ananya 0 dekhti hai kyunki wo kuch own nahi karti; Hitesh 1 dekhta hai kyunki wo apna ek lead own karta hai. **Manager hone ka koi fayda tab tak nahi jab tak uske neeche koi na ho.**
-2. **Rok sirf teen role par hai** — `sales`, `sales_senior`, `manager`. Baaki sab (owner, support, delivery) poora pipeline dekhte hain. Yaani **support aur delivery ke chaar log — Pratik, Ranjeet, Pawan, Abhishek — saare 18 leads dekh sakte hain.** Ye niyam ke hisaab se sahi hai, par ye ek faisla hai; agar ye nahi chahiye to niyam badalna padega, tree nahi.
-3. **`info@srigangatechnologies.com` teesra owner hai aur poora sab dekhta hai** — 18 leads, saare quotes, saare customers. ✅ **19 Aug: ye ANUTECH ka apna email hai** (Google Workspace sales console ka user id), to poora access sahi hai. Sawaal band.
+| Kaun | Role | Reports to | Direct reports | Apne leads | Dikhte hain | Pehle |
+|---|---|---|---|---|---|---|
+| pardeep@anutech.in | owner | — | **2** | 3 | **19** | 18 |
+| deepak@anutech.in | owner | — | 0 | 0 | **19** | 18 |
+| **ananya@anutech.in** | manager | pardeep | **1** | 0 | **15** | **0** 🔴→✅ |
+| hitesh@anutech.in | manager | **pardeep** | 0 | 1 | **1** | 1 |
+| sales@anutech.in (Darshan) | sales_senior | **ananya** | 0 | 15 | **15** | 15 |
+| pratik@anutech.in | support | — | 0 | 0 | **19** | 18 |
 
-**Quotes aur customers par hierarchy ka koi asar nahi** — sab ko 25 quotes / 14 customers dikhte hain (baaki 2 quotes aur 1 customer doosre tenant ke hain). Wajah: `quotes.owner_id` aur `customers.account_manager_id` **khaali hain**, aur khaali rows sabko dikhti hain. Yaani ye feature abhi sirf **leads** par asar daal raha hai.
+**Teen baatein jo lagne ke baad bhi sach hain — inhe kami na samjho, ye is tree ke seedhe natije hain:**
 
-**Chaar sambhavit tree, aur unka NAAPA HUA asar** (rollback me sach me laga kar ginwaya, 18 me se):
+1. **Hitesh ab bhi sirf 1 lead dekhta hai.** Wo manager hai jiske neeche koi nahi — Tree A me Darshan Ananya ke neeche gaya. Manager hone ka fayda tabhi milta hai jab neeche koi ho. Agar Hitesh ko bhi pipeline chahiye to **uske neeche kisi ko lagana padega** (role badalne se kuch nahi hoga).
+2. **Pardeep ke apne 3 leads kisi ko nahi dikhte** — wo sabse upar hai, aur visibility neeche ki taraf chalti hai. Ananya 15 par ruk jaati hai, 19 par nahi jaati. Un 3 ko team ko dikhana hai to **owner_id badalna** padega; tree se ye kabhi nahi hoga.
+3. **Support/delivery ke chaar log (Pratik, Ranjeet, Pawan, Abhishek) poore 19 leads dekhte hain.** Rok sirf `sales`, `sales_senior`, `manager` par hai. Ye niyam ke hisaab se sahi hai par ek **faisla** hai — nahi chahiye to niyam badlega, tree nahi.
 
-| | Tree | Ananya | Hitesh | Darshan |
-|---|---|---|---|---|
-| **A** | Darshan → Ananya · Hitesh → Pardeep | **15** | 1 | 15 |
-| **B** | Darshan → Hitesh · Hitesh → Pardeep | 0 | **16** | 15 |
-| **C** | Darshan → Hitesh → Ananya | **16** | **16** | 15 |
-| **D** | Darshan → Ananya · Hitesh → Ananya | **16** | 1 | 15 |
+**Quotes aur customers par ab bhi koi asar nahi** — `quotes.owner_id` aur `customers.account_manager_id` khaali hain, aur khaali rows sabko dikhti hain. Hierarchy filhaal sirf **leads** par kaam karti hai.
 
-> **Koi bhi option 18 tak nahi pahunchta.** Bache hue 2 leads `pardeep@anutech.in` ke apne hain, aur wo sabse upar hai — neeche wale kabhi nahi dekhenge. Agar wo do leads bhi team ko dikhne chahiye, to unka **owner badalna** padega; tree se ye nahi hoga.
+**Support/delivery ka manager set karna baaki hai (vaikalpik)** — unki visibility par koi farak nahi padega, sirf org-chart saaf dikhega. Pardeep bole to laga dunga.
 
-**🔴 Jo sirf Pardeep bata sakta hai:** Darshan kiske neeche kaam karta hai — Ananya ya Hitesh? Aur Hitesh kiske neeche — Pardeep ya Ananya? Bas ye do jawab; baaki main laga dunga. (Support/delivery ka manager set karna vaikalpik hai — unki visibility par koi farak nahi padta, sirf org-chart saaf dikhega.)
 
 **3. ~~`info@srigangatechnologies.com` kaun hai~~ ✅ JAWAB MIL GAYA (19 Aug 2026) — ye ANUTECH ka apna hi email hai.** Pardeep ne confirm kiya: yahi login Google Workspace sales console ka user id bhi hai. Chaar baar pooche jaane ke baad ye sawaal **band**. Role `owner` sahi hai, koi badlav nahi chahiye — aage ke session isko dobara flag na karein.
 
