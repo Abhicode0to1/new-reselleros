@@ -200,13 +200,39 @@ Pardeep Sharma (owner)
     └── Abhishek Sharma (delivery)   → 19
 ```
 
-**🔴 Is badlav ne ek bhi ginti nahi hilai, aur yahi iska poora matlab hai.** Hitesh ke ab **4 direct reports** hain, par wo **ab bhi sirf 1 lead** dekhta hai — kyunki chaaron ke paas 0 leads hain. Aur chaaron neeche wale ab bhi poore 19 dekhte hain, kyunki support/delivery par rok hai hi nahi. Yaani: **org-chart me kisi ko manager ke neeche daal dena visibility nahi deta — dena hai to uske neeche kisi ke paas leads hone chahiye.** Nau me se nau assertion pass (), aur wahi script ab poore tenant ko cover karti hai.
+**🔴 Is badlav ne ek bhi ginti nahi hilai, aur yahi iska poora matlab hai.** Hitesh ke ab **4 direct reports** hain, par wo **ab bhi sirf 1 lead** dekhta hai — kyunki chaaron ke paas 0 leads hain. Aur chaaron neeche wale ab bhi poore 19 dekhte hain, kyunki support/delivery par rok hai hi nahi. Yaani: **org-chart me kisi ko manager ke neeche daal dena visibility nahi deta — dena hai to uske neeche kisi ke paas leads hone chahiye.** Pehle yahan “nau me se nau assertion pass” likha tha — **wo daawa galat tha** (khaali loop), neeche SUDHAAR padho. Ab `verify-reporting-lines.sql` sach me naapta hai aur poore tenant ko cover karta hai.
 
 **Ek baat aage ke liye:** agar kabhi Pratik/Ranjeet/Pawan/Abhishek ko leads dene lage, to Hitesh ko wo **apne aap** dikhne lagenge — ye tree ab live hai, sirf sajaawat nahi.
 
 **📊 [dashboard.html](dashboard.html) me naya `Org` tab hai** — wahi tree, par padhne layak: har naam ke saath role, "apne leads" aur "dikhte hain", upar **"naapa gaya 20 Aug 2026"** ka badge, aur neeche wahi verify command. Data file ke andar likha hai kyunki dashboard `file://` se khulta hai aur DB se query nahi kar sakta — isliye tareekh **data ka hissa** hai, sajaawat nahi: purana aankda naye jaisa hi dikhta hai. Tree badle to numbers **aur** `ORG_AS_OF` dono badalna.
 
 **🔴 Usi file me ek chalu landmine mila aur band kar diya: dashboard TASKS.md ko chup-chaap kaat sakta tha.** `parseTaskMarkdown()` sirf `## section` aur `- [ ] task` samajhta hai, aur `toMarkdown()` file ko **sirf unhi se** dobara likhta hai — yaani is file ki **775 line** (85 `###` heading, 101 table row, 8 code block, 573 line prose — ye ginti khud badalti rehti hai, banner har baar load par naapta hai) ek write me chali jaatin. Aur wo write maangni bhi nahi padti thi: `markChanged()` **500ms baad `autoSave()`** chala deta hai, to ek card khisakana kaafi tha. Ab guard **load par** chalta hai — save-time par poochhne se pehle hi nuksaan ho chuka hota: file me kuch bhi aisa ho jo board dobara na bana sake to save **band**, aur ek banner asli ginti ke saath wajah batata hai. Board-jaisi saadi file par kuch nahi badalta — teen case par test kiya (asli TASKS.md → band · saadi file → khuli · `# Tasks` ke alawa koi h1 → band, kyunki wo sach me mit jaata hai).
+
+**🔴 SUDHAAR (usi din, 20 Aug): jo "9/9 assertion pass" likha tha, wo khaali loop tha — ek bhi assert chala hi nahi tha.**
+
+`for r in select id, email from public.users ...` loop **`set local role authenticated` ke baad** rakha tha. Us waqt tak koi JWT set nahi hota, to `auth.uid()` null hota hai, RLS `public.users` ki **saari row chhupa deta hai** — loop **zero baar** chala aur file ne "sab pass" bol diya. Naapa hua: `begin; set local role authenticated; select count(*) from public.users;` → **0**.
+
+**Kya asli tha aur kya nahi, saaf-saaf:**
+
+| | Haal |
+|---|---|
+| Tree A ke chaar number (Ananya 15 · Hitesh 1 · Darshan 15 · Pardeep 19) | ✅ **asli** — `set-reporting-lines` me har banda hardcode UUID se likha tha, loop nahi tha. Isi liye pehla run `18 vs 19` par phata tha. |
+| Support/delivery ka org-chart hissa (4 direct reports · 3 rootless · no cycle) | ✅ **asli** — wo block role switch se **pehle** hai, privileged connection par. |
+| "9/9" aur "6/6" visibility assertions | ❌ **vacuous** — kuch bhi naapa nahi gaya tha. |
+
+**Pakda kaise gaya:** naye `npm run org:sync` ne **doosri jagah se naap kar** ulta jawab diya (`no measurement for: <saare 10 log>`). **Ek vacuous test khud kabhi red nahi hota** — usse pakadne ke liye doosra rasta chahiye. Yahi is script ka sabse bada fayda nikla, chart to baad ki baat hai.
+
+**Ab dono jagah do badlav:** (1) roster `authenticated` par utarne se **pehle** padha jaata hai aur GUC me le jaaya jaata hai; (2) loop **apni iteration ginta hai** aur poore roster se kam par `VACUOUS RUN` phenkta hai. Doosra pehle se zyada zaroori hai — wo "kisi ko naapa nahi" ko pass se **fail** bana deta hai, chahe aage koi jaise bhi ye galti dobara laaye.
+
+**Aur ab ye sach me chalta hai, kyunki red hona bhi sabit kiya:** expected `15 → 99` karke → `MISMATCH: ananya@anutech.in sees 15 leads, expected 99`; aur purani bug wapas daal kar → `VACUOUS RUN: measured 0 people, expected 10`. Dono baar exit 1.
+
+**Asli, naapa hua nateeja (chaaron file ab imaandar hain) — 10 me se 10 log:** Pardeep 19 · Deepak 19 · Sriganga 19 · Pratik/Ranjeet/Pawan/Abhishek 19 · Ananya **15** · Darshan 15 · Hitesh **1**. Leads 19, owned 19, unowned 0. **Jo aankde pehle bataye the wo sahi the — kami saboot me thi, ginti me nahi.**
+
+**📊 [dashboard.html](dashboard.html) ka `Org` tab ab generate hota hai:** `cd production && npm run org:sync` ([org-chart-sync.mjs](production/scripts/org-chart-sync.mjs)) live DB se naap kar `>>> ORG DATA` markers ke beech ka block khud likhta hai — tareekh, tenant ka naam, poora tree, aur dono number. `--check` sirf batata hai (exit 2 = purana), aur wo **tareekh ko nazarandaz karta hai**, warna har naye din jhoothi warning aati.
+
+**Markers ke bahar ka sab kuch haath se likha hai aur usme koi number nahi hai** — chaaron note apne aankde data se khud nikaalte hain, isliye tree badalne par prose apne aap sahi rehta hai. Ek note isi wajah se bakwaas bol raha tha ("sabse zyada 19 tak pahunchta hai, 19 tak nahi") — kyunki wo *sabhi* neeche walon ko gin raha tha, jabki support/delivery poora pipeline **tree ki wajah se nahi** dekhte. Ab wo sirf un logon ko ginta hai jinpar rok hai → sahi jawab **15**.
+
+**Script khud likhne se pehle jaanchti hai:** poora inline script parse hota hai, `renderOrg()` ek stub DOM par chalaya jaata hai, aur har bande ka naam output me hona zaroori hai — warna kuch likha hi nahi jaata. Manager kisi doosre tenant me ho, ya chain me cycle ho, ya koi bhi aadmi chart me na aaye, to **error** aata hai — chup-chaap chhoot nahi jaata.
 
 
 **3. ~~`info@srigangatechnologies.com` kaun hai~~ ✅ JAWAB MIL GAYA (19 Aug 2026) — ye ANUTECH ka apna hi email hai.** Pardeep ne confirm kiya: yahi login Google Workspace sales console ka user id bhi hai. Chaar baar pooche jaane ke baad ye sawaal **band**. Role `owner` sahi hai, koi badlav nahi chahiye — aage ke session isko dobara flag na karein.

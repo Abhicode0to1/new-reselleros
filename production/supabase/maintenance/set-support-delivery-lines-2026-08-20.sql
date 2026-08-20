@@ -38,6 +38,29 @@ begin
   if n <> 0 then raise exception 'FAIL: manager chain has a cycle'; end if;
 end $$;
 
+-- ⚠ CORRECTED 20 Aug 2026, the same day, and the correction matters more than the change.
+-- As originally run, the visibility block below drove its loop off `select ... from
+-- public.users` AFTER the role switch. As `authenticated` with no JWT yet there is no
+-- auth.uid(), RLS hides every row, so the loop ran ZERO times and the file committed
+-- reporting nine assertions it never evaluated. The org-chart half (direct reports, no
+-- cycle, three rootless owners) DID run -- that block is above the role switch, on the
+-- privileged connection -- so the tree itself was always proven. What was not proven was
+-- the claim this file exists to make: that nobody's visibility moved.
+--
+-- Fixed the same way as verify-reporting-lines.sql: read the roster BEFORE dropping to
+-- `authenticated`, and count the loop's own iterations so measuring nobody fails instead
+-- of passing. Re-verified afterwards -- and the numbers were right all along; only the
+-- evidence was missing.
+do $$
+declare roster jsonb;
+begin
+  select jsonb_agg(jsonb_build_object('id', id, 'email', email) order by email)
+    into roster from public.users
+    where tenant_id = 'fbb976f1-9090-4f10-9726-0901bd144e42';
+  if roster is null then raise exception 'no users in the tenant -- wrong tenant id?'; end if;
+  perform set_config('org.roster', roster::text, true);
+end $$;
+
 set local role authenticated;
 
 do $$
@@ -54,20 +77,27 @@ declare
     'pawan@anutech.in',    19,
     'abhishek@anutech.in', 19
   );
-  r record; n integer; want integer;
+  roster jsonb := current_setting('org.roster')::jsonb;
+  item jsonb; n integer; want integer; iterated integer := 0;
 begin
-  for r in select id, email from public.users
-           where email in (select jsonb_object_keys(expected)) order by email
-  loop
+  for item in select value from jsonb_array_elements(roster) loop
+    if not (expected ? (item->>'email')) then continue; end if;   -- e.g. the third owner
     perform set_config('request.jwt.claims',
-      json_build_object('sub', r.id::text, 'role','authenticated')::text, true);
-    if auth.uid() <> r.id then raise exception 'SETUP FAIL for %', r.email; end if;
-    select count(*) into n from public.leads;
-    want := (expected ->> r.email)::int;
-    if n <> want then
-      raise exception 'MISMATCH: % sees % leads, expected %', r.email, n, want;
+      json_build_object('sub', item->>'id', 'role','authenticated')::text, true);
+    if auth.uid()::text <> (item->>'id') then
+      raise exception 'SETUP FAIL for %', item->>'email';
     end if;
+    select count(*) into n from public.leads;
+    want := (expected ->> (item->>'email'))::int;
+    if n <> want then
+      raise exception 'MISMATCH: % sees % leads, expected %', item->>'email', n, want;
+    end if;
+    iterated := iterated + 1;
   end loop;
+  if iterated <> (select count(*) from jsonb_object_keys(expected)) then
+    raise exception 'VACUOUS RUN: measured % of % people -- an empty loop must not pass',
+      iterated, (select count(*) from jsonb_object_keys(expected));
+  end if;
 end $$;
 
 reset role;
