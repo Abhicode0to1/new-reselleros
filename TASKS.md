@@ -204,6 +204,10 @@ Pardeep Sharma (owner)
 
 **Ek baat aage ke liye:** agar kabhi Pratik/Ranjeet/Pawan/Abhishek ko leads dene lage, to Hitesh ko wo **apne aap** dikhne lagenge — ye tree ab live hai, sirf sajaawat nahi.
 
+**📊 [dashboard.html](dashboard.html) me naya ``Org`` tab hai** — wahi tree, par padhne layak: har naam ke saath role, "apne leads" aur "dikhte hain", upar **"naapa gaya 20 Aug 2026"** ka badge, aur neeche wahi verify command. Data file ke andar likha hai kyunki dashboard ``file://`` se khulta hai aur DB se query nahi kar sakta — isliye tareekh **data ka hissa** hai, sajaawat nahi: purana aankda naye jaisa hi dikhta hai. Tree badle to numbers **aur** ``ORG_AS_OF`` dono badalna.
+
+**🔴 Usi file me ek chalu landmine mila aur band kar diya: dashboard TASKS.md ko chup-chaap kaat sakta tha.**  sirf  aur  samajhta hai, aur  file ko **sirf unhi se** dobara likhta hai — yaani is file ki **773 line** (85  heading, 101 table row, 8 code block, 571 line prose) ek write me chali jaatin. Aur wo write maangni bhi nahi padti thi:  **500ms baad ** chala deta hai, to ek card khisakana kaafi tha. Ab guard **load par** chalta hai (save-time par poochhne se pehle hi nuksaan ho sakta tha): file me kuch bhi aisa ho jo board dobara na bana sake to save **band**, aur ek banner asli ginti ke saath wajah batata hai. Board-shaped saadi file par kuch nahi badalta — teen case par test kiya (asli TASKS.md → band · saadi file → khuli ·  ke alawa koi h1 → band, kyunki wo sach me mit jaata).
+
 
 **3. ~~`info@srigangatechnologies.com` kaun hai~~ ✅ JAWAB MIL GAYA (19 Aug 2026) — ye ANUTECH ka apna hi email hai.** Pardeep ne confirm kiya: yahi login Google Workspace sales console ka user id bhi hai. Chaar baar pooche jaane ke baad ye sawaal **band**. Role `owner` sahi hai, koi badlav nahi chahiye — aage ke session isko dobara flag na karein.
 

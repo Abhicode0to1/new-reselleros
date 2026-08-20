@@ -56,6 +56,55 @@
 
     h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; color: var(--text-secondary); }
 
+    .guard-banner { background: #fdf1ec; border: 1px solid #f4d6c9; border-left: 3px solid var(--accent);
+      border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px;
+      color: var(--text-secondary); line-height: 1.55; flex-shrink: 0; }
+    .guard-banner b { color: var(--text-primary); }
+    .guard-banner b:first-child { display: block; margin-bottom: 4px; }
+    .guard-banner code { background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px;
+      padding: 1px 5px; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+    /* ===== ORG CHART ===== */
+    .org-scroll { overflow-y: auto; flex: 1; padding-right: 8px; }
+    .org-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .org-head h2 { margin-bottom: 0; color: var(--text-primary); font-size: 1.15rem; }
+    .org-asof { font-size: 12px; font-weight: 600; color: var(--accent); background: #fdf1ec;
+      border: 1px solid #f4d6c9; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+    .org-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; max-width: 70ch; }
+    .org-tree, .org-tree ul { list-style: none; }
+    .org-tree ul { margin-left: 14px; padding-left: 18px; border-left: 1px solid var(--border); }
+    .org-tree li { margin: 6px 0; }
+    .org-node { display: flex; align-items: center; gap: 10px; background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px;
+      box-shadow: 0 1px 2px var(--shadow); flex-wrap: wrap; }
+    .org-node.is-root { border-color: #f0c9b8; }
+    .org-name { font-weight: 600; font-size: 14px; }
+    .org-email { font-size: 12px; color: var(--text-muted); }
+    .org-chip { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+      padding: 2px 8px; border-radius: 5px; background: var(--bg-secondary); color: var(--text-secondary); }
+    .org-chip.owner { background: #fdf1ec; color: #b4552f; }
+    .org-chip.manager { background: #eef2fb; color: #3d5a9a; }
+    .org-nums { margin-left: auto; display: flex; gap: 18px; }
+    .org-num { text-align: right; }
+    .org-num b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+    .org-num span { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .org-num.sees b { color: var(--accent); }
+    .org-num.zero b { color: var(--text-muted); }
+    .org-peers { margin-top: 22px; }
+    .org-peers h3, .org-notes h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
+      color: var(--text-muted); margin-bottom: 8px; font-weight: 600; }
+    .org-notes { margin-top: 26px; display: grid; gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .org-note { background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+      border-radius: 8px; padding: 12px 14px; font-size: 13px; color: var(--text-secondary); }
+    .org-note b { color: var(--text-primary); display: block; margin-bottom: 4px; font-size: 13px; }
+    .org-verify { margin: 26px 0 8px; background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px 16px; }
+    .org-verify p { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
+    .org-verify code { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;
+      padding: 10px 12px; color: var(--text-primary); overflow-x: auto; white-space: pre; }
+
     .header-left {
       display: flex;
       align-items: flex-start;
@@ -1207,6 +1256,7 @@
       <div class="view-toggle" id="mainTabToggle">
         <button id="tasksTabBtn" class="active">Tasks</button>
         <button id="memoryTabBtn">Memory</button>
+        <button id="orgTabBtn">Org</button>
       </div>
       <div class="view-toggle" id="taskViewToggle">
         <button id="boardViewBtn" class="active">Board</button>
@@ -1223,6 +1273,7 @@
   <!-- TASKS TAB PANEL -->
   <div class="tab-panel active" id="tasksPanel">
     <div class="list-view" id="listView" style="display: none;"></div>
+    <div class="guard-banner" id="taskGuardBanner" style="display: none;"></div>
     <div class="board" id="board">
       <div class="empty-state" id="boardEmptyState" style="width: 100%;">
         <p style="margin-bottom: 24px; font-size: 18px; font-weight: 600; color: var(--text-primary);">Select your TASKS.md file</p>
@@ -1245,6 +1296,11 @@
     </div>
   </div>
 
+  <!-- ORG TAB PANEL -->
+  <div class="tab-panel" id="orgPanel">
+    <div class="org-scroll" id="orgContent"></div>
+  </div>
+
   <!-- MODAL (shared for memory) -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal">
@@ -1264,7 +1320,7 @@
 
   <script>
     // ===== SHARED STATE =====
-    let activeMainTab = 'tasks'; // 'tasks' or 'memory'
+    let activeMainTab = 'tasks'; // 'tasks' | 'memory' | 'org'
 
     const statusEl = document.getElementById('status');
     const filePathEl = document.getElementById('filePath');
@@ -1280,6 +1336,8 @@
     const memoryTabBtn = document.getElementById('memoryTabBtn');
     const tasksPanel = document.getElementById('tasksPanel');
     const memoryPanel = document.getElementById('memoryPanel');
+    const orgTabBtn = document.getElementById('orgTabBtn');
+    const orgPanel = document.getElementById('orgPanel');
     const taskViewToggle = document.getElementById('taskViewToggle');
     const openTaskBtn = document.getElementById('openTaskBtn');
     const openMemoryBtn = document.getElementById('openMemoryBtn');
@@ -1290,9 +1348,11 @@
 
       tasksTabBtn.classList.toggle('active', tab === 'tasks');
       memoryTabBtn.classList.toggle('active', tab === 'memory');
+      orgTabBtn.classList.toggle('active', tab === 'org');
 
       tasksPanel.classList.toggle('active', tab === 'tasks');
       memoryPanel.classList.toggle('active', tab === 'memory');
+      orgPanel.classList.toggle('active', tab === 'org');
 
       // Show/hide view toggle for tasks
       taskViewToggle.style.display = tab === 'tasks' ? 'flex' : 'none';
@@ -1305,6 +1365,8 @@
       // Update file path display
       if (tab === 'tasks') {
         filePathEl.textContent = taskFileHandle ? taskFileName : '';
+      } else if (tab === 'org') {
+        filePathEl.textContent = 'ANUTECH DIGITAL PVT LTD · reporting lines';
       } else {
         filePathEl.textContent = memoryDirHandle ? memoryDirHandle.name : '';
       }
@@ -1312,6 +1374,198 @@
 
     tasksTabBtn.addEventListener('click', () => switchMainTab('tasks'));
     memoryTabBtn.addEventListener('click', () => switchMainTab('memory'));
+    orgTabBtn.addEventListener('click', () => { switchMainTab('org'); renderOrg(); });
+
+    // ============================================================
+    // ============================================================
+    // ===== SAVE GUARD =====
+    // ============================================================
+    //
+    // parseTaskMarkdown() understands exactly two things: "## section" and "- [ ] task".
+    // toMarkdown() then rebuilds the file from ONLY those. For a board-shaped file that is
+    // a clean round trip. For this project's TASKS.md -- 1100+ lines of "###" sections,
+    // tables, code blocks and prose -- it is a shredder: everything the parser cannot see
+    // is silently dropped on the next write.
+    //
+    // And the write is not something you have to ask for: markChanged() schedules autoSave
+    // 500ms later, so dragging one card was enough. That is why the guard runs on LOAD and
+    // turns saving off before any change can happen, instead of asking at save time.
+    //
+    // Representable = the line survives a round trip. Anything else is a line this board
+    // would delete, so we count it and say the number out loud.
+
+    let taskFileLoss = null;   // null = safe to save; otherwise { total, headings, tableRows, other }
+
+    function assessTaskRoundTrip(raw) {
+      const kept = [];
+      const lost = { total: 0, headings: 0, tableRows: 0, fences: 0, other: 0 };
+      for (const line of raw.split(/\r?\n/)) {
+        const t = line.trim();
+        if (!t) continue;
+        // toMarkdown() emits exactly "# Tasks" as the first line, so that one h1 survives;
+        // any OTHER h1 does not, and pretending otherwise is how a guard starts lying.
+        if (t === '# Tasks' || /^##\s/.test(t) || /^-\s\[[ xX]\]/.test(t)) { kept.push(t); continue; }
+        lost.total++;
+        if (/^#{3,}\s/.test(t)) lost.headings++;
+        else if (t.startsWith('|')) lost.tableRows++;
+        else if (t.startsWith('```')) lost.fences++;
+        else lost.other++;
+      }
+      return lost.total > 0 ? lost : null;
+    }
+
+    function describeTaskLoss(loss) {
+      const bits = [];
+      if (loss.headings)  bits.push(loss.headings + ' "###" heading');
+      if (loss.tableRows) bits.push(loss.tableRows + ' table row');
+      if (loss.fences)    bits.push((loss.fences / 2 | 0) + ' code block');
+      if (loss.other)     bits.push(loss.other + ' line prose/bullet');
+      return bits.join(' \u00b7 ');
+    }
+
+    function applyTaskGuard(raw) {
+      taskFileLoss = assessTaskRoundTrip(raw);
+      const banner = document.getElementById('taskGuardBanner');
+      if (!taskFileLoss) {
+        if (banner) banner.style.display = 'none';
+        return;
+      }
+      // Saving off, and the button says why rather than just going grey.
+      saveBtn.disabled = true;
+      saveBtn.title = 'Is file par save band hai \u2014 board isse zyada rakhti hai jitna wo dikha sakta hai';
+      if (banner) {
+        banner.style.display = 'block';
+        banner.innerHTML =
+          '<b>Save is file par band hai \u2014 jaan-boojh kar.</b>' +
+          'Is file me <b>' + taskFileLoss.total + ' line</b> aisi hain jo ye board dikhata hi nahi (' +
+          escapeHtml(describeTaskLoss(taskFileLoss)) + '). Board sirf <code>## section</code> aur ' +
+          '<code>- [ ] task</code> samajhta hai, aur save karte waqt file ko <b>sirf unhi se dobara likhta hai</b> \u2014 ' +
+          'yaani baaki sab mit jaata. Isliye padhna chalu hai, likhna band. ' +
+          'Task badalne hain to TASKS.md seedha editor me kholo.';
+      }
+    }
+
+    // ===== ORG CHART =====
+    // ============================================================
+    //
+    // MEASURED, not drawn. Every number below came out of the production DB on the date in
+    // ORG_AS_OF, by sitting in each person's seat (request.jwt.claims -> auth.uid(), role
+    // authenticated) and counting what RLS actually returned -- not by reading a policy and
+    // reasoning about it.
+    //
+    // This file is opened over file://, so it cannot query the DB itself. That makes the
+    // date part of the data rather than decoration: a stale number here looks exactly like
+    // a fresh one. When the tree changes, run the verify script shown on the panel and
+    // update BOTH the numbers and ORG_AS_OF, or this panel starts lying quietly.
+
+    const ORG_AS_OF = '20 Aug 2026';
+    const ORG_TOTAL_LEADS = 19;
+
+    // own  = leads this person owns         -- these PARTITION: 3 + 15 + 1 = 19
+    // sees = leads RLS actually returns     -- these OVERLAP: each is a filter of the same 19
+    const ORG_ROOTS = [
+      {
+        name: 'Pardeep Sharma', email: 'pardeep@anutech.in', role: 'owner', own: 3, sees: 19,
+        children: [
+          {
+            name: 'Ananya Sharma', email: 'ananya@anutech.in', role: 'manager', own: 0, sees: 15,
+            children: [
+              { name: 'Darshan (Sales)', email: 'sales@anutech.in', role: 'sales_senior', own: 15, sees: 15 }
+            ]
+          },
+          {
+            name: 'Hitesh Baghel', email: 'hitesh@anutech.in', role: 'manager', own: 1, sees: 1,
+            children: [
+              { name: 'Pratik Sharma',   email: 'pratik@anutech.in',   role: 'support',  own: 0, sees: 19 },
+              { name: 'Ranjeet Raj',     email: 'ranjeet@anutech.in',  role: 'support',  own: 0, sees: 19 },
+              { name: 'Pawan Kumar',     email: 'pawan@anutech.in',    role: 'delivery', own: 0, sees: 19 },
+              { name: 'Abhishek Sharma', email: 'abhishek@anutech.in', role: 'delivery', own: 0, sees: 19 }
+            ]
+          }
+        ]
+      }
+    ];
+
+    // The other two owners are PEERS of Pardeep, not under him. Drawing them as children
+    // would invent a reporting line that does not exist in the DB.
+    const ORG_PEERS = [
+      { name: 'Deepak Sharma',         email: 'deepak@anutech.in',              role: 'owner', own: 0, sees: 19 },
+      { name: 'Sriganga Technologies', email: 'info@srigangatechnologies.com',  role: 'owner', own: 0, sees: 19 }
+    ];
+
+    const ORG_NOTES = [
+      {
+        title: 'Manager hone se apne aap kuch nahi dikhta',
+        body: 'Hitesh ke 4 direct reports hain, phir bhi use sirf 1 lead dikhta hai \u2014 apna. Wajah: chaaron ke paas 0 leads hain. Kisi ko manager ke neeche daalna visibility nahi deta \u2014 neeche wale ke paas leads hone chahiye.'
+      },
+      {
+        title: 'Support aur delivery par rok hai hi nahi',
+        body: 'Pratik, Ranjeet, Pawan, Abhishek \u2014 chaaron ko poore ' + ORG_TOTAL_LEADS + ' leads dikhte hain, manager koi bhi ho. Rok sirf teen role par hai: sales, sales_senior, manager. Ye ek faisla hai, kami nahi \u2014 badalna ho to niyam badlega, tree nahi.'
+      },
+      {
+        title: 'Pardeep ke apne leads neeche kabhi nahi jaate',
+        body: 'Visibility neeche ki taraf chalti hai. Pardeep ke 3 leads Ananya ya Hitesh ko kabhi nahi dikhenge \u2014 isi liye Ananya 15 par rukti hai, 19 par nahi. Un 3 ko team ko dikhana hai to unka owner badalna padega; tree se ye nahi hoga.'
+      },
+      {
+        title: 'Do number hain, aur sirf ek jodne layak hai',
+        body: '"Apne leads" baant hai \u2014 3 + 15 + 1 = ' + ORG_TOTAL_LEADS + '. "Dikhte hain" ko kabhi mat jodo: wo usi ' + ORG_TOTAL_LEADS + ' ka filter hai, isliye jodne par 100 se upar chala jayega aur bilkul asli lagega.'
+      }
+    ];
+
+    // One line on purpose: a backslash continuation is one more thing to get wrong when
+    // you are copying a command by hand, and the <code> block scrolls sideways anyway.
+    const ORG_VERIFY_CMD = 'cd production && env -u SUPABASE_ACCESS_TOKEN npx supabase db query --linked -f supabase/maintenance/verify-reporting-lines.sql';
+
+    function orgNodeHtml(person, isRoot) {
+      const roleClass = person.role === 'owner' ? 'owner' : (person.role === 'manager' ? 'manager' : '');
+      return '<div class="org-node' + (isRoot ? ' is-root' : '') + '">' +
+        '<span class="org-name">' + escapeHtml(person.name) + '</span>' +
+        '<span class="org-chip ' + roleClass + '">' + escapeHtml(person.role) + '</span>' +
+        '<span class="org-email">' + escapeHtml(person.email) + '</span>' +
+        '<span class="org-nums">' +
+          '<span class="org-num' + (person.own === 0 ? ' zero' : '') + '"><b>' + person.own + '</b><span>apne leads</span></span>' +
+          '<span class="org-num sees"><b>' + person.sees + '</b><span>dikhte hain</span></span>' +
+        '</span>' +
+      '</div>';
+    }
+
+    function orgTreeHtml(people, isRoot) {
+      let html = '<ul class="org-tree">';
+      for (const person of people) {
+        html += '<li>' + orgNodeHtml(person, isRoot);
+        if (person.children && person.children.length) html += orgTreeHtml(person.children, false);
+        html += '</li>';
+      }
+      return html + '</ul>';
+    }
+
+    function renderOrg() {
+      const el = document.getElementById('orgContent');
+      if (!el) return;
+
+      let html = '<div class="org-head">' +
+        '<h2>ANUTECH DIGITAL PVT LTD \u2014 reporting lines</h2>' +
+        '<span class="org-asof">naapa gaya ' + ORG_AS_OF + ' \u00b7 ' + ORG_TOTAL_LEADS + ' leads</span>' +
+      '</div>';
+
+      html += '<p class="org-sub">Ye chart DB se <b>naap kar</b> banaya gaya hai \u2014 har bande ki seat par baith kar RLS se ginwaya gaya, policy padh kar andaza nahi lagaya. Numbers upar likhi tareekh ke hain; aaj ka sach dekhna ho to neeche wala command chala lo.</p>';
+
+      html += orgTreeHtml(ORG_ROOTS, true);
+
+      html += '<div class="org-peers"><h3>Doosre owner \u2014 kisi ke neeche nahi (Pardeep ke barabar)</h3>' +
+        orgTreeHtml(ORG_PEERS, true) + '</div>';
+
+      html += '<div class="org-notes"><h3 style="grid-column: 1 / -1;">Jo is chart se seekha gaya</h3>';
+      for (const note of ORG_NOTES) {
+        html += '<div class="org-note"><b>' + escapeHtml(note.title) + '</b>' + escapeHtml(note.body) + '</div>';
+      }
+      html += '</div>';
+
+      html += '<div class="org-verify"><p><b>Aaj ka sach khud naapo</b> \u2014 ye script kuch likhti nahi, sirf ginti karke milati hai. Green hone par ek line aati hai: MEASURED-OK. Koi seat khisak gayi to red ho jayegi, naam aur dono ginti ke saath.</p>' +
+        '<code>' + escapeHtml(ORG_VERIFY_CMD) + '</code></div>';
+
+      el.innerHTML = html;
+    }
 
     // ============================================================
     // ===== TASKS FUNCTIONALITY =====
@@ -1844,6 +2098,10 @@
 
     function markChanged() {
       hasChanges = true;
+      if (taskFileLoss) {
+        showStatus('Save band hai — ye board is file ki ' + taskFileLoss.total + ' line dikha nahi sakta, aur save use mita deta');
+        return;
+      }
       saveBtn.disabled = false;
       if (saveTimeout) clearTimeout(saveTimeout);
       saveTimeout = setTimeout(autoSave, 500);
@@ -1851,6 +2109,7 @@
 
     async function autoSave() {
       if (!taskFileHandle || !hasChanges || isSaving) return;
+      if (taskFileLoss) return;   // guard: this file holds more than the board can rebuild
       isSaving = true;
       try {
         const writable = await taskFileHandle.createWritable();
@@ -1878,6 +2137,7 @@
           const result = parseTaskMarkdown(content);
           sections = result.sections;
           tasks = result.tasks;
+          applyTaskGuard(content);
           renderTasks();
           showStatus('Reloaded');
         }
@@ -2444,6 +2704,7 @@
         const result = parseTaskMarkdown(content);
         sections = result.sections;
         tasks = result.tasks;
+        applyTaskGuard(content);
         switchTaskView('board');
         startWatching();
         taskFileName = file.name;
@@ -2459,6 +2720,7 @@
 
     saveBtn.addEventListener('click', async () => {
       if (!taskFileHandle) return;
+      if (taskFileLoss) { showStatus('Save band hai — TASKS.md ki ' + taskFileLoss.total + ' line is board ke bahar hain'); return; }
       try {
         const writable = await taskFileHandle.createWritable();
         await writable.write(toMarkdown());
