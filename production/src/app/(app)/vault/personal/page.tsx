@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { usePersonalAccounts, usePersonalHoldings, usePersonalTransactions } from "@/lib/queries/personal-vault";
 import { computeNetWorth, summariseCashFlow, STALE_AFTER_DAYS } from "@/lib/vault/personal/net-worth";
 import { VaultPinSettings } from "@/components/features/vault/vault-pin-settings";
+import { VaultLoadError } from "@/components/features/vault/vault-load-error";
 import { rupee } from "@/lib/utils";
 
 export default function PersonalVaultOverview() {
@@ -48,22 +49,7 @@ export default function PersonalVaultOverview() {
   );
 
   if (error) {
-    return (
-      <Card className="p-6">
-        <EmptyState
-          icon="alert"
-          title="Vault load nahi hua"
-          body={
-            <>
-              {error instanceof Error ? error.message : "Unknown error."}
-              <br />
-              Agar likha hai ki table nahi mila, to migration{" "}
-              <code className="font-mono text-[11px]">20260819170000_owner_personal_vault</code> abhi lagi nahi hai.
-            </>
-          }
-        />
-      </Card>
-    );
+    return <VaultLoadError error={error} onRetry={() => { void accountsQ.refetch(); void holdingsQ.refetch(); void txQ.refetch(); }} />;
   }
 
   if (loading) {

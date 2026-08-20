@@ -28,6 +28,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { VaultLoadError } from "@/components/features/vault/vault-load-error";
 import {
   usePersonalAccounts,
   useSavePersonalAccount,
@@ -172,11 +173,7 @@ export default function PersonalBankingPage() {
         </Button>
       </div>
 
-      {error && (
-        <Card className="p-6">
-          <EmptyState icon="alert" title="Load nahi hua" body={error instanceof Error ? error.message : "Unknown error."} />
-        </Card>
-      )}
+      {error && <VaultLoadError error={error} />}
 
       {isLoading && <Skeleton className="h-48 w-full rounded-xl" />}
 
