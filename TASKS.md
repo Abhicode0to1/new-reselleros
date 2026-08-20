@@ -187,7 +187,22 @@ Pardeep Sharma (owner)
 
 **Quotes aur customers par ab bhi koi asar nahi** — `quotes.owner_id` aur `customers.account_manager_id` khaali hain, aur khaali rows sabko dikhti hain. Hierarchy filhaal sirf **leads** par kaam karti hai.
 
-**Support/delivery ka manager set karna baaki hai (vaikalpik)** — unki visibility par koi farak nahi padega, sirf org-chart saaf dikhega. Pardeep bole to laga dunga.
+**✅ Support/delivery bhi lag gaye (20 Aug, Pardeep ka faisla): chaaron Hitesh ke neeche.** Pratik · Ranjeet · Pawan · Abhishek → `hitesh@anutech.in`. Ab ANUTECH me **sirf teen** log bina manager hain, aur wo teeno owner hain — poora org-chart bhar gaya. Script: [set-support-delivery-lines-2026-08-20.sql](production/supabase/maintenance/set-support-delivery-lines-2026-08-20.sql).
+
+```
+Pardeep Sharma (owner)
+├── Ananya Sharma (manager)          → dekhti hai 15
+│   └── Darshan (Sales) (sales_senior, 15 leads)
+└── Hitesh Baghel (manager, 1 lead)  → dekhta hai 1
+    ├── Pratik Sharma (support)      → dekhta hai 19
+    ├── Ranjeet Raj (support)        → 19
+    ├── Pawan Kumar (delivery)       → 19
+    └── Abhishek Sharma (delivery)   → 19
+```
+
+**🔴 Is badlav ne ek bhi ginti nahi hilai, aur yahi iska poora matlab hai.** Hitesh ke ab **4 direct reports** hain, par wo **ab bhi sirf 1 lead** dekhta hai — kyunki chaaron ke paas 0 leads hain. Aur chaaron neeche wale ab bhi poore 19 dekhte hain, kyunki support/delivery par rok hai hi nahi. Yaani: **org-chart me kisi ko manager ke neeche daal dena visibility nahi deta — dena hai to uske neeche kisi ke paas leads hone chahiye.** Nau me se nau assertion pass (), aur wahi script ab poore tenant ko cover karti hai.
+
+**Ek baat aage ke liye:** agar kabhi Pratik/Ranjeet/Pawan/Abhishek ko leads dene lage, to Hitesh ko wo **apne aap** dikhne lagenge — ye tree ab live hai, sirf sajaawat nahi.
 
 
 **3. ~~`info@srigangatechnologies.com` kaun hai~~ ✅ JAWAB MIL GAYA (19 Aug 2026) — ye ANUTECH ka apna hi email hai.** Pardeep ne confirm kiya: yahi login Google Workspace sales console ka user id bhi hai. Chaar baar pooche jaane ke baad ye sawaal **band**. Role `owner` sahi hai, koi badlav nahi chahiye — aage ke session isko dobara flag na karein.

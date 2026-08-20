@@ -11,12 +11,15 @@ set local role authenticated;
 do $$
 declare
   expected constant jsonb := jsonb_build_object(
-    'pardeep@anutech.in', 19,   -- owner: whole pipeline
-    'deepak@anutech.in',  19,   -- second owner: unchanged by the tree
-    'ananya@anutech.in',  15,   -- was 0 -- now sees Darshan's book
-    'hitesh@anutech.in',   1,   -- own lead only: no reports under him
-    'sales@anutech.in',   15,   -- own book, unchanged
-    'pratik@anutech.in',  19    -- support: role is not restricted (a decision, not a bug)
+    'pardeep@anutech.in',  19,   -- owner: whole pipeline
+    'deepak@anutech.in',   19,   -- second owner: the tree does not touch owners
+    'ananya@anutech.in',   15,   -- Darshan's book, via the 20 Aug line
+    'hitesh@anutech.in',    1,   -- 4 direct reports, but they own no leads
+    'sales@anutech.in',    15,   -- own book
+    'pratik@anutech.in',   19,   -- support: role is not restricted (a decision, not a bug)
+    'ranjeet@anutech.in',  19,
+    'pawan@anutech.in',    19,
+    'abhishek@anutech.in', 19
   );
   r record; n integer; want integer;
 begin
