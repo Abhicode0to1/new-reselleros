@@ -111,11 +111,25 @@ async function handle(req: Request) {
   }
 
   if (isDry) {
+    /* A dry run has to answer "what would happen", not "who is due" — and those differ by
+       everybody already reminded today. Reported as `due: 4` while a live pass would push
+       1, this output invited exactly the wrong conclusion, which was noticed by running
+       the two back to back. So the log is read here too, and the dry run splits the list
+       the same way the live path does. */
+    const { data: alreadyRows } = await admin
+      .from("attendance_reminder_log")
+      .select("user_id, kind")
+      .eq("work_date", now.date);
+    const alreadyKeys = new Set((alreadyRows ?? []).map((r) => `${r.user_id}:${r.kind}`));
+    const wouldPush = due.filter((d) => !alreadyKeys.has(`${d.userId}:${d.kind}`));
+    const alreadyReminded = due.filter((d) => alreadyKeys.has(`${d.userId}:${d.kind}`));
+
     return NextResponse.json({
       dryRun: true,
       istNow: { date: now.date, minutes: now.minutes },
       considered: (users ?? []).length,
-      due,
+      wouldPush,
+      alreadyRemindedToday: alreadyReminded,
       skipped,
     });
   }
