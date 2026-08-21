@@ -45,7 +45,17 @@ Invite gaya: **`testing@anutech.in`** (teeno jagah khaali tha), role `owner`, sa
 
 Do baatein isko chalati hain: **`anutech.in` live tenant ka verified domain hai**, to bina invite koi bhi @anutech.in signup live tenant par jaakar `join_requests` me park hota — invite usko override karta hai, aur ye design hai ([domain.ts:129](production/src/lib/auth/domain.ts:129): *"an invite is a decision someone already made"*). Aur `/api/auth/signup` me `email_confirm: true` hai, to **us address par mailbox hone ki zaroorat nahi**, na koi password share karna padta.
 
-**⏳ Signup baaki hai** (Pratik office me nahi tha). Uske liye teen step: `/signup` → email `testing@anutech.in` → naam + apna password. Company ka naam kuch bhi — invite ki wajah se naya tenant banega hi nahi.
+**~~⏳ Signup baaki hai~~ ✅ ho gaya** (Pratik office me nahi tha). Uske liye teen step: `/signup` → email `testing@anutech.in` → naam + apna password. Company ka naam kuch bhi — invite ki wajah se naya tenant banega hi nahi.
+
+**✅ 4c. SIGNUP HO GAYA aur asli login par isolation naap liya (21 Aug, 08:23 IST).** `testing@anutech.in` → naam "tester", role `owner`, tenant **ZZ TESTING SANDBOX**. `team_invites.accepted_at` usi pal stamp hua — yaani use wahan **invite ne** rakha, sanyog se nahi.
+
+**Sabse saaf saboot: tenants ab bhi 3 hain.** Koi naya tenant nahi bana — yaani invite ne `anutech.in` ke verified-domain raste ko sach me override kiya (warna signup live tenant par jaakar `join_requests` me park hota).
+
+Us **asli session** ki seat par baith kar ginwaya (synthetic user par nahi): leads · customers · quotes · invoices · payments · subscriptions · expenses · vault · live teammates — **sab 0**. Control case bhi pass: usi session ko sandbox ke apne **25 items** dikhte hain, to zero "session tooti hai" ki wajah se nahi hain. 10 check + control, ek bhi skip nahi (`checked <> 10` par vacuous-guard).
+
+**Live tenant chhua nahi gaya:** 10 users · 19 leads · 14 customers · 21 invoices · 23 payments — signup se pehle jaisa tha waisa hi.
+
+**Ab tester kaam shuru kar sakta hai.** Sandbox me 25 items hain aur baaki sab khaali — lead → quote → pay → invoice → renewal khud banana hi test hai. Screen par "Report Bug" button hai (Ctrl+Shift+B bhi), aur uski report seedha `/admin/feedback` me triage ho kar aati hai.
 
 **✅ 4b. Deewar ab sabit hai, Pratik ke signup ka intezaar kiye bina.** [sandbox_tenant_isolation.test.sql](production/supabase/tests/sandbox_tenant_isolation.test.sql) — live prod par chalaya, **5 me se 5 PASS**, poora transaction rollback me. Synthetic sandbox owner banaya, uski seat par baith kar RLS se ginwaya: live tenant ke **0 customers · 0 quotes · 0 invoices · 0 payments · 0 subscriptions · 0 leads · 0 expenses · 0 teammate rows**. Deewar dono taraf hai — live owner ko sandbox ke 25 items aur uska user **nahi** dikhte.
 
