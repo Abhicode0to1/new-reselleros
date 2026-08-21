@@ -3267,7 +3267,23 @@ function LeadListView({
   return (
     <>
     {/* Adaptive card list — viewports < 1280px */}
-    <ul className="xl:hidden space-y-3 pb-2">
+    {/* ── THE CARD LIST MUST SCROLL ITSELF ──────────────────────────────────────
+        `flex-1 min-h-0 overflow-y-auto` is not styling, it is the difference between
+        seeing 2 leads and seeing 17. The page wrapper is a fixed-height flex column with
+        `overflow-hidden` (line 716), so a child that does not scroll gets CLIPPED — and
+        clipped silently: no scrollbar appears anywhere, the rows are all in the DOM, and
+        the page simply ends.
+
+        Reported 21 Aug 2026 on a 1051px window: "All open 17" with two cards under it.
+        Measured in the running page — 20 card action-rows in the DOM, content 3217px tall
+        inside a 666px box, and `document.scrollingElement.scrollHeight === clientHeight`,
+        so nothing could scroll at all.
+
+        The table branch below has carried `overflow-auto flex-1 min-h-0` all along, which
+        is exactly why this went unseen: on a monitor ≥1280px the list works. The bug lived
+        only under `xl` — the tablet and narrow-laptop band CLAUDE.md §20 warns about, and
+        where a phone-shaped card list is the ONLY way to read this page. */}
+    <ul className="xl:hidden flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-3 pb-2 pr-0.5">
       {sorted.map((lead) => {
         // `stale` used to be computed here on a >14-day rule and passed in. The
         // card now derives it from lib/leads/heat itself, so phone and desktop
