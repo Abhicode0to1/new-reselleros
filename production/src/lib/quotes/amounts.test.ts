@@ -1,5 +1,35 @@
 import { describe, it, expect } from "vitest";
-import { grossAmount } from "./amounts";
+import { grossAmount, quoteAmountGap, isQuoteAmountConsistent, QUOTE_AMOUNT_TOLERANCE } from "./amounts";
+
+describe("quote amount integrity", () => {
+  it("clears the 26 production quotes whose numbers agree", () => {
+    // Representative shapes measured 21 Aug 2026: plain, discounted, and zero-rated.
+    expect(isQuoteAmountConsistent(103680, 18, 122342)).toBe(true);
+    expect(isQuoteAmountConsistent(362880, 18, 428198)).toBe(true);
+    expect(isQuoteAmountConsistent(0, 18, 0)).toBe(true);
+    expect(isQuoteAmountConsistent(45360, 0, 45360)).toBe(true);
+  });
+
+  it("catches Q-2026-9776, the one quote missing its GST", () => {
+    // subtotal ₹45,360 at 18% must be ₹53,525; the row says ₹45,360.
+    expect(quoteAmountGap(45360, 18, 45360)).toBe(8165);
+    expect(isQuoteAmountConsistent(45360, 18, 45360)).toBe(false);
+  });
+
+  it("tolerates a rupee of legacy rounding, but not two", () => {
+    expect(isQuoteAmountConsistent(103680, 18, 122342 + QUOTE_AMOUNT_TOLERANCE)).toBe(true);
+    expect(isQuoteAmountConsistent(103680, 18, 122342 - QUOTE_AMOUNT_TOLERANCE)).toBe(true);
+    expect(isQuoteAmountConsistent(103680, 18, 122342 + QUOTE_AMOUNT_TOLERANCE + 1)).toBe(false);
+    expect(isQuoteAmountConsistent(103680, 18, 122342 - QUOTE_AMOUNT_TOLERANCE - 1)).toBe(false);
+  });
+
+  it("signs the gap so the direction is unambiguous", () => {
+    // Positive = the quote is billing LESS than its own tax rate implies.
+    expect(quoteAmountGap(100000, 18, 100000)).toBeGreaterThan(0);
+    // Negative = it is billing more.
+    expect(quoteAmountGap(100000, 18, 130000)).toBeLessThan(0);
+  });
+});
 
 describe("grossAmount", () => {
   it("adds 18% GST to a Standard ×10 annual renewal subtotal", () => {

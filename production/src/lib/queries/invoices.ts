@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
+import { grossAmount, isQuoteAmountConsistent } from "@/lib/quotes/amounts";
 import type { Invoice } from "@/lib/supabase/database.types";
 
 // ============================================================
@@ -131,6 +132,32 @@ export function useGenerateInvoice() {
   return useMutation({
     mutationFn: async (quoteId: string) => {
       const supabase = createClient();
+
+      /* Pre-flight: refuse a quote whose own numbers disagree.
+         `generate_invoice` copies `quotes.amount` onto the invoice as-is, and a tax
+         invoice is not editable afterwards — so a quote storing ₹45,360 while its 18%
+         rate says ₹53,525 would become a GST document under-charging ₹8,165, silently.
+         Measured 21 Aug 2026: exactly one of 27 production quotes is in this state
+         (Q-2026-9776), so this blocks the broken row and nothing else. §24 — say what,
+         why, and the next step. */
+      const check = await supabase
+        .from("quotes")
+        .select("subtotal, tax_rate, amount")
+        .eq("id", quoteId)
+        .single();
+      if (check.error) throw check.error;
+      const { subtotal, tax_rate, amount } = check.data;
+      if (!isQuoteAmountConsistent(subtotal ?? 0, tax_rate ?? 0, amount ?? 0)) {
+        const should = grossAmount(subtotal ?? 0, tax_rate ?? 0);
+        throw new Error(
+          `Is quote ka total apne hi GST se mel nahi khata — invoice nahi ban sakti. `
+          + `Subtotal ₹${(subtotal ?? 0).toLocaleString("en-IN")} par ${tax_rate ?? 0}% GST = `
+          + `₹${should.toLocaleString("en-IN")}, par quote me ₹${(amount ?? 0).toLocaleString("en-IN")} likha hai `
+          + `(₹${Math.abs(should - (amount ?? 0)).toLocaleString("en-IN")} ka farak). `
+          + `Invoice banne ke baad ye number badla nahi ja sakta. Pehle quote edit karke total theek karo — `
+          + `ya agar daam GST-sahit tay hua tha to tax rate theek karo — phir invoice banao.`,
+        );
+      }
 
       // Atomic, tenant-safe invoice generation — one SECURITY DEFINER
       // transaction (migration 0058 `generate_invoice`). Replaces the old

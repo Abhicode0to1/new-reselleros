@@ -17,6 +17,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { isQuoteExpired } from "@/lib/utils";
 import { quoteTokenMatches } from "@/lib/quotes/accept-token";
 import { quoteInstalments } from "@/lib/billing/instalments";
+import { isQuoteAmountConsistent } from "@/lib/quotes/amounts";
 
 const ENV_RAZORPAY_KEY_ID =
   process.env.RAZORPAY_KEY_ID?.trim() || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || "";
@@ -64,6 +65,28 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   // then everything below behaves exactly as it always has.
   const taxRate  = quote.tax_rate ?? 18;
   const subtotal = quote.subtotal ?? 0;
+
+  /* ── 2aa. Refuse a quote whose own total disagrees with its own GST ──────────
+     Everything below charges `quote.amount` and then invoices it. One production
+     quote stores ₹45,360 where its 18% rate says ₹53,525 (Q-2026-9776 — migration
+     20260817100000 never ran). Left open, this path would take ₹8,165 too LITTLE from
+     the customer and then issue a tax invoice for the short amount, which is the worst
+     of the three possible outcomes: the company loses the GST, the customer holds an
+     invoice that understates their input credit, and neither number can be edited
+     afterwards. Failing the payment is recoverable; a wrong tax invoice is not.
+     Measured 21 Aug 2026: 26 of 27 production quotes pass this, so nothing legitimate
+     is blocked. Wording stays customer-facing — the arithmetic is the reseller's
+     problem, not the buyer's. */
+  if (!isQuoteAmountConsistent(subtotal, taxRate, quote.amount ?? 0)) {
+    return NextResponse.json(
+      {
+        error: "This quote's total needs to be corrected before it can be paid.",
+        nextStep: "Please ask the reseller to re-send it — the GST on it does not add up, and paying now would leave you with an invoice that understates the tax.",
+      },
+      { status: 409 },
+    );
+  }
+
   const instalments = quoteInstalments({
     cycle:       quote.billing_cycle,
     // Same taxable value generate_invoice computes — subtotal net of discount.
