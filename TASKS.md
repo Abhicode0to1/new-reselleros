@@ -39,6 +39,24 @@ Naam jaan-boojh kar bhadda hai. §4a ka sabak: company jaisa naam wala tenant co
 
 **⏳ 4. Jo baaki hai — tester ka email.** `team_invites` me us tester ka **theek wahi address** daalna hai (columns: `tenant_id`, `email`, `role`). Callback ki pehli branch invited address ko **usi tenant** me daalti hai — isliye Google sign-in sandbox me girega, live tenant me **nahi ja sakta**. Password kisi ko dene ki zaroorat nahi.
 
+**✅ 4a. Invite lag gaya — par `pratik@anutech.in` par NAHI, aur wajah maayne rakhti hai.** Pratik ka `public.users` row live tenant me **12 Aug se** hai. Callback ka pehla check `if (existing) return redirect(next)` hai — jiska users row pehle se hai, uske liye invite wali branch tak pahuncha hi nahi jaata; aur ek doosri branch purane profile ko naye auth UID se **wapas jod** deti hai. Us address par invite ek **no-op** hota jo fix jaisa dikhta. **Yahan ek email = ek tenant hai.**
+
+Invite gaya: **`testing@anutech.in`** (teeno jagah khaali tha), role `owner`, sandbox par pinned. [add-test-tenant-invite.sql](production/supabase/maintenance/add-test-tenant-invite.sql)
+
+Do baatein isko chalati hain: **`anutech.in` live tenant ka verified domain hai**, to bina invite koi bhi @anutech.in signup live tenant par jaakar `join_requests` me park hota — invite usko override karta hai, aur ye design hai ([domain.ts:129](production/src/lib/auth/domain.ts:129): *"an invite is a decision someone already made"*). Aur `/api/auth/signup` me `email_confirm: true` hai, to **us address par mailbox hone ki zaroorat nahi**, na koi password share karna padta.
+
+**⏳ Signup baaki hai** (Pratik office me nahi tha). Uske liye teen step: `/signup` → email `testing@anutech.in` → naam + apna password. Company ka naam kuch bhi — invite ki wajah se naya tenant banega hi nahi.
+
+**✅ 4b. Deewar ab sabit hai, Pratik ke signup ka intezaar kiye bina.** [sandbox_tenant_isolation.test.sql](production/supabase/tests/sandbox_tenant_isolation.test.sql) — live prod par chalaya, **5 me se 5 PASS**, poora transaction rollback me. Synthetic sandbox owner banaya, uski seat par baith kar RLS se ginwaya: live tenant ke **0 customers · 0 quotes · 0 invoices · 0 payments · 0 subscriptions · 0 leads · 0 expenses · 0 teammate rows**. Deewar dono taraf hai — live owner ko sandbox ke 25 items aur uska user **nahi** dikhte.
+
+**Case 2 filler nahi hai, wahi is file ki jaan hai.** Case 1 ka har aankda 0 hai — aur 0 wahi hai jo ek tooti session bhi deti hai. Isliye usi session se wo cheezein padhi jaati hain jo **dikhni chahiye** (sandbox ke 25 items, apne tenant ka 1 user). Iske bina file kuch sabit nahi karti.
+
+**Do cheezein likhte waqt hi pakdi gayin:**
+- Case 3 ka insert pehle `customers.email` par tha — wo column hai hi nahi (`contact_email` hai). Insert missing column se fail hua, aur assertion ne use **RLS block maanne se inkaar** kar diya. *"Insert nahi hua"* wala test muft me pass ho jaata hai agar insert kabhi valid hi na tha.
+- Asli block **RLS se nahi, document-numbering trigger se** aata hai (`Cannot allocate a customer number for another tenant`) — wo RLS se pehle bol deta hai. Do aazaad deewarein, aur bahar wali ka message behtar hai. Ab assertion dono maanti hai, par **sirf** ye do — "koi bhi error" maanna hi upar wali typo ko security-pass bana raha tha.
+
+**Aur ye red bhi hota hai — mutation se sabit:** tester ko live tenant me daala → `FAIL 1: can read 14 customer(s) of the live business` · session hi bina-tenant kar di → `FAIL 2: sees NO items at all — the zeros above prove nothing`. Aaj green ka matlab do baar kuch nahi nikla, to teesri baar bina tod kar dekhe nahi maana.
+
 **Aur do baatein tester ko batani chahiye:**
 - **Live app 19 Aug ka build hai.** HEAD us se aage hai, par app code me sirf vault ki error-screen wali file badli hai. Deploy hone tak tester ko vault ki purani error screen milegi.
 - **Vault ka PIN bhool gaye to reset ka rasta nahi hai** — DB se hataana padta hai. Tester ko bata do, ya wo screen abhi chhod de.
