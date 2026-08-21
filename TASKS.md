@@ -5,6 +5,46 @@
 
 ## Active
 
+### 🧪 TESTING KE LIYE TAIYAARI — 21 Aug 2026 (Pardeep ke teen faisle par kaam hua)
+
+Sawaal tha *"app testing ke liye perfect hai kya"*. Jawab naap kar: **nahi thi, ab kaafi behtar hai** — teen cheezein ho gayin, ek baaki hai.
+
+**🔴 Pehle ek sudhaar jo poore doc par asar daalta hai.** Kal tak jo aankde "live tenant" ke naam se likhe gaye (15 customers · 27 quotes · 22 invoices · 24 payments · 30 subscriptions) wo **poore DB ke** the, ek tenant ke nahi. Asli per-tenant ginti:
+
+| | ANUTECH (live) | Excel Technologies | ZZ TESTING SANDBOX |
+|---|---|---|---|
+| items | 25 | 21 | **25** |
+| customers | 14 | 1 | 0 |
+| quotes | 25 | 2 | 0 |
+| invoices | **21** | 1 | 0 |
+| payments | **23** | 1 | 0 |
+| subscriptions | 28 | 2 | 0 |
+| leads | 19 | 0 | 0 |
+
+Ye galti khud ek assertion ne pakdi — `create-test-tenant.sql` ka pehla run `FAIL: live tenant now has 21 invoices, expected 22` par ruk gaya, kyunki maine **global aankda per-tenant guard me** likh diya tha. Wahi purani `counts-must-add-up` wali galti, par is baar commit hone se pehle pakdi gayi.
+
+**1. ✅ Ek self-inconsistent quote se ab invoice nahi ban sakti.** `Q-2026-9776` me subtotal ₹45,360 par 18% GST hai par `amount` bhi ₹45,360 — **₹8,165 GST gayab** (migration `20260817100000` kabhi chali nahi). Quote **accepted** hai, aur `generate_invoice` wahi amount GST document par chipka deta — jo baad me badla nahi ja sakta. Public payment route customer se **kam paisa** le leta.
+
+Dono raaste ab mana karte hain, `grossAmount()` se (wahi helper jisme ye ganit pehle se hai), ₹1 ki rounding chhoot ke saath. **Naapa pehle, guard baad me: 27 me se 26 quotes exact match hain**, to ye sirf tooti row rokta hai, kisi asli kaam ko nahi. 4 test, jisme wahi ₹8,165 ka gap aur dono tolerance kinare. Message §24 ke hisaab se — kya/kyun/aage kya; customer wale message me reseller ka ganit nahi khola gaya.
+
+> **Ye wo business faisla nahi leta** — ₹45,360 GST-sahit tha ya nahi, wo ab bhi Pardeep ka call hai. Ye sirf itna karta hai ki wo faisla **galti se** na ho jaye.
+
+**2. ✅ `0231` aur `0232` lag gayin** — jo `migrations-archive/` me padi thin jahan se koi command inhe chalati hi nahi. Dono **sirf jodti hain**: 3 table (`task_collaborators`, `task_comments`, `task_kudos`), 7 column (`tasks.delegated_by`, `salary_payments.performance_points`, `expenses.channel`, `leads.utm_source/medium/campaign`, `leads.gclid`), 8 index, 10 policy, teeno par RLS. **Alag run me verify** (§25.6), phir `migration repair` se ledger me darj — **279 → 281**. Repair ka yahi sahi istemaal hai: object pehle sabit, phir ledger.
+
+Ab wo screens *"migration missing"* nahi, **khaali** dikhayengi — jo alag baat hai aur sahi hai: 19 me se 0 lead par UTM tag hai, aur 1 Marketing expense (₹4,000 Facebook) untagged hai. CAC/ROAS dekhna ho to us expense par channel tag karna padega.
+
+**3. ✅ Testing sandbox tenant ban gaya** — `ZZ TESTING SANDBOX — not a real company` (`7e57e57e-0000-4000-8000-000000000001`, doc_code `TEST`). Usme **sirf item catalogue** hai (25 rows live tenant se copy, naye id `TST-` prefix ke saath). Customers/quotes/invoices/payments **jaan-boojh kar nahi** — money spine banana hi wo cheez hai jo test honi chahiye; banaya hua data dekar wo poora hissa skip ho jata aur banane me chhupe bug bhi.
+
+Naam jaan-boojh kar bhadda hai. §4a ka sabak: company jaisa naam wala tenant company jaisa hi padha jata hai — aur usi galti ne ek "Excel Technologies" tenant me do din ka asli kaam aur ₹21,240 ka payment chhupa rakha tha. Script deewar ko **maanti nahi, assert karti hai**: sandbox me 0 customer/quote/invoice/payment, aur copy ke baad live tenant bilkul waisa hi. [create-test-tenant.sql](production/supabase/maintenance/create-test-tenant.sql)
+
+**⏳ 4. Jo baaki hai — tester ka email.** `team_invites` me us tester ka **theek wahi address** daalna hai (columns: `tenant_id`, `email`, `role`). Callback ki pehli branch invited address ko **usi tenant** me daalti hai — isliye Google sign-in sandbox me girega, live tenant me **nahi ja sakta**. Password kisi ko dene ki zaroorat nahi.
+
+**Aur do baatein tester ko batani chahiye:**
+- **Live app 19 Aug ka build hai.** HEAD us se aage hai, par app code me sirf vault ki error-screen wali file badli hai. Deploy hone tak tester ko vault ki purani error screen milegi.
+- **Vault ka PIN bhool gaye to reset ka rasta nahi hai** — DB se hataana padta hai. Tester ko bata do, ya wo screen abhi chhod de.
+
+**Backup:** aaj ka le liya — **102 tables / 974 rows**, exit 0 (19 Aug: 96/933). Free plan par PITR nahi hai, isliye testing shuru hone se pehle ek aur le lena samajhdari hai.
+
 ### 🔐 Owner Private Vault (`/vault/personal`) — ✅ DONE (19 Aug 2026, DB applied · **deployed** rev `resellersos-00297-728` · isolation **re-proven on live DB 20 Aug, 8/8**)
 
 **Do cheezein goal se alag ki gayi hain, dono jaan-boojh kar:**
