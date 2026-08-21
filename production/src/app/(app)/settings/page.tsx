@@ -25,6 +25,7 @@ import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { TabBar, type TabBarItem } from "@/components/ui/tabs";
+import { NotificationsCard } from "@/components/features/settings/notifications-card";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useUpdateTenant, useSetTenantLogo } from "@/lib/queries/tenant";
 import { isValidGstin, gstStateFromGstin, validateGstin, formatDate } from "@/lib/utils";
@@ -58,8 +59,11 @@ const TABS: TabBarItem[] = [
   { id: "company",       label: "Company"       },
   { id: "integrations",  label: "Integrations"  },
   { id: "branding",      label: "Branding"      },
-  // Notifications + Security tabs intentionally omitted until they do something real —
-  // a "Coming soon" dead-end reads as half-built to a non-technical owner.
+  /* Notifications earns its tab as of 21 Aug 2026: it turns web push on for this device
+     and chooses what may interrupt you. The note below still holds for Security — a
+     "Coming soon" dead-end reads as half-built to a non-technical owner, so it stays out
+     until it does something. */
+  { id: "notifications", label: "Notifications" },
 ];
 
 // ─── Field wrapper ────────────────────────────────────────────────────────────
@@ -925,6 +929,7 @@ export default function SettingsPage() {
       {tab === "company"       && <CompanyTab />}
       {tab === "integrations"  && <IntegrationsTab />}
       {tab === "branding"      && <BrandingTab />}
+      {tab === "notifications" && <NotificationsCard />}
     </div>
   );
 }

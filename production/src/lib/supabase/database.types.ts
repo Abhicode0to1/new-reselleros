@@ -2867,6 +2867,34 @@ type PersonalVaultPinRow = {
 type PersonalVaultPinInsert = Partial<PersonalVaultPinRow> & { user_id: string; tenant_id: string; pin_hash: string; pin_salt: string };
 type PersonalVaultPinUpdate = Partial<Omit<PersonalVaultPinInsert, "user_id" | "tenant_id">>;
 
+
+/* Migration 20260821120000 + 20260821123000 — Web Push subscriptions.
+   One row per DEVICE: `endpoint` is unique, so re-subscribing updates instead of adding
+   a second row (a phone with two rows receives every notification twice). `categories`
+   is the consent split — one browser permission covers offers and work alerts alike, so
+   the difference has to live in our data. */
+type PushSubscriptionRow = {
+  id:             string;
+  tenant_id:      string;
+  user_id:        string;
+  /** Identifies one browser on one device. Unique across the table. */
+  endpoint:       string;
+  /** The device public key material used to encrypt the payload (RFC 8291). */
+  p256dh:         string;
+  auth:           string;
+  user_agent:     string | null;
+  created_at:     string;
+  last_used_at:   string | null;
+  failed_at:      string | null;
+  failure_reason: string | null;
+  /** "operational" and/or "offers". Never empty — no consent means the row is deleted. */
+  categories:     string[];
+};
+type PushSubscriptionInsert = Partial<PushSubscriptionRow> & {
+  tenant_id: string; user_id: string; endpoint: string; p256dh: string; auth: string;
+};
+type PushSubscriptionUpdate = Partial<Omit<PushSubscriptionInsert, "tenant_id" | "user_id">>;
+
 /* Migration 20260819120000 — internal feedback + its machine triage.
    Deliberately not support_tickets: that table carries a customer SLA clock. */
 type FeedbackRow = {
@@ -3854,6 +3882,7 @@ export type Database = {
       personal_transactions: { Row: PersonalTransactionRow; Insert: PersonalTransactionInsert; Update: PersonalTransactionUpdate; Relationships: [] };
       personal_holdings:     { Row: PersonalHoldingRow;     Insert: PersonalHoldingInsert;     Update: PersonalHoldingUpdate;     Relationships: [] };
       personal_vault_pin:    { Row: PersonalVaultPinRow;    Insert: PersonalVaultPinInsert;    Update: PersonalVaultPinUpdate;    Relationships: [] };
+      push_subscriptions:    { Row: PushSubscriptionRow;    Insert: PushSubscriptionInsert;    Update: PushSubscriptionUpdate;    Relationships: [] };
     };
     Views: {
       // Added in migration 0040 — tenant joined with its parent's display fields.
