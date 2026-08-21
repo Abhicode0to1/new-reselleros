@@ -2868,6 +2868,29 @@ type PersonalVaultPinInsert = Partial<PersonalVaultPinRow> & { user_id: string; 
 type PersonalVaultPinUpdate = Partial<Omit<PersonalVaultPinInsert, "user_id" | "tenant_id">>;
 
 
+
+/* Migration 20260821140000 — one attendance reminder per person per day per kind.
+   The unique index on (user_id, work_date, kind) is the point of the table: it makes a
+   Scheduler retry, an overlapping deploy and a half-hourly cron all harmless. Written by
+   the cron under the service role only — RLS is on with no policies. */
+type AttendanceReminderLogRow = {
+  id:         string;
+  tenant_id:  string;
+  user_id:    string;
+  /** The IST calendar date the reminder was for, not when the job ran. */
+  work_date:  string;
+  kind:       "check_in" | "check_out";
+  claimed_at: string;
+  /** Null when the slot was claimed but nothing was delivered. */
+  sent_at:    string | null;
+  devices:    number;
+  error:      string | null;
+};
+type AttendanceReminderLogInsert = Partial<AttendanceReminderLogRow> & {
+  tenant_id: string; user_id: string; work_date: string; kind: "check_in" | "check_out";
+};
+type AttendanceReminderLogUpdate = Partial<Omit<AttendanceReminderLogInsert, "tenant_id" | "user_id">>;
+
 /* Migration 20260821120000 + 20260821123000 — Web Push subscriptions.
    One row per DEVICE: `endpoint` is unique, so re-subscribing updates instead of adding
    a second row (a phone with two rows receives every notification twice). `categories`
@@ -3883,6 +3906,7 @@ export type Database = {
       personal_holdings:     { Row: PersonalHoldingRow;     Insert: PersonalHoldingInsert;     Update: PersonalHoldingUpdate;     Relationships: [] };
       personal_vault_pin:    { Row: PersonalVaultPinRow;    Insert: PersonalVaultPinInsert;    Update: PersonalVaultPinUpdate;    Relationships: [] };
       push_subscriptions:    { Row: PushSubscriptionRow;    Insert: PushSubscriptionInsert;    Update: PushSubscriptionUpdate;    Relationships: [] };
+      attendance_reminder_log: { Row: AttendanceReminderLogRow; Insert: AttendanceReminderLogInsert; Update: AttendanceReminderLogUpdate; Relationships: [] };
     };
     Views: {
       // Added in migration 0040 — tenant joined with its parent's display fields.

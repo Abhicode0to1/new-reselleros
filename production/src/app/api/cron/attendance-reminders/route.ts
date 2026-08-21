@@ -1,0 +1,177 @@
+/**
+ * /api/cron/attendance-reminders — push the attendance nudge to people's phones.
+ *
+ * ─── WHY A CRON AT ALL ──────────────────────────────────────────────────────
+ * The reminder already exists, and it is mounted in (app)/layout.tsx — so it only fires
+ * while somebody has ResellerOS open. The whole point of the feature is to catch a
+ * forgotten check-in, which is exactly the state where the app is closed. Until this
+ * route existed, the reminder could only reach people who did not need it.
+ *
+ * ─── THE DECISION IS NOT MADE HERE ──────────────────────────────────────────
+ * `decideAttendanceReminder` from lib/attendance/reminders.ts decides, the same function
+ * the popup uses, with its own 28 tests. Two copies of "is this person due a nudge" would
+ * drift within a month and the phone and the screen would start disagreeing about the
+ * same day.
+ *
+ * What this route deliberately does NOT pass is the dismissal and the snooze: those live
+ * in localStorage on one device, so the server cannot see them. The consequence is honest
+ * and bounded — somebody who dismissed the popup on their laptop may still get one push —
+ * and the log below guarantees it is at most one.
+ *
+ * ─── SAFE TO RUN OFTEN ──────────────────────────────────────────────────────
+ * Every send claims a row in attendance_reminder_log first, and a unique index on
+ * (user_id, work_date, kind) makes a second attempt fail in the database. So Scheduler
+ * retries, an overlapping deploy and a half-hourly schedule are all harmless. Run it
+ * every 30 minutes; it will nudge each person at most twice a day.
+ *
+ * ─── DRY RUN ────────────────────────────────────────────────────────────────
+ * `?dry=1` reports exactly who WOULD be pushed and why, and writes nothing. Same reason
+ * the renewals cron has one: a job whose correct behaviour is usually "do nothing" cannot
+ * otherwise be told apart from a job that is broken.
+ */
+import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/server";
+import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
+import { istNow, decideAttendanceReminder } from "@/lib/attendance/reminders";
+import { sendPushToUsers } from "@/lib/push/send";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+interface Due {
+  userId: string;
+  tenantId: string;
+  name: string | null;
+  kind: "check_in" | "check_out";
+}
+
+export async function GET(req: Request) { return handle(req); }
+export async function POST(req: Request) { return handle(req); }
+
+async function handle(req: Request) {
+  /* Fail closed, exactly like the renewals cron: this route sends notifications under the
+     service role, so an unconfigured secret must refuse rather than allow. */
+  const expected = process.env.CRON_SECRET?.trim();
+  if (!expected) return NextResponse.json({ error: "cron not configured" }, { status: 503 });
+  const provided = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!timingSafeEqualStr(provided, expected)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const isDry = new URL(req.url).searchParams.get("dry") === "1";
+  const admin = createAdminClient();
+  const now = istNow(new Date());
+
+  /* Only people who could actually act on it: reminders on, and linked to an employee
+     record. Nagging a login that cannot punch is how a reminder becomes something people
+     close without reading. */
+  const { data: users, error: usersErr } = await admin
+    .from("users")
+    .select("id, tenant_id, full_name, employee_id, attendance_reminders_enabled, attendance_checkout_reminder_at")
+    .eq("attendance_reminders_enabled", true)
+    .not("employee_id", "is", null);
+
+  if (usersErr) {
+    return NextResponse.json({ error: `could not read users: ${usersErr.message}` }, { status: 500 });
+  }
+
+  const employeeIds = (users ?? []).map((u) => u.employee_id).filter((x): x is string => Boolean(x));
+  /* One query for the whole tenant's day rather than one per person: this runs every
+     half hour and a per-user round trip would be the slow kind of correct. */
+  const { data: today } = employeeIds.length
+    ? await admin
+        .from("attendance")
+        .select("employee_id, check_in, check_out")
+        .eq("work_date", now.date)
+        .in("employee_id", employeeIds)
+    : { data: [] as { employee_id: string; check_in: string | null; check_out: string | null }[] };
+
+  const byEmployee = new Map((today ?? []).map((r) => [r.employee_id, r]));
+
+  const due: Due[] = [];
+  const skipped: { userId: string; reason: string }[] = [];
+
+  for (const u of users ?? []) {
+    const row = u.employee_id ? byEmployee.get(u.employee_id) : undefined;
+    const decision = decideAttendanceReminder({
+      now,
+      linked: true,
+      checkIn:  row?.check_in ?? null,
+      checkOut: row?.check_out ?? null,
+      enabled:  true,
+      checkoutReminderAt: u.attendance_checkout_reminder_at ?? null,
+      /* dismissed / snoozedUntilMin / onAttendanceScreen are localStorage facts on one
+         device. The server cannot see them, so it does not pretend to. */
+    });
+    if (!decision.kind) {
+      skipped.push({ userId: u.id, reason: decision.reason });
+      continue;
+    }
+    due.push({ userId: u.id, tenantId: u.tenant_id, name: u.full_name, kind: decision.kind });
+  }
+
+  if (isDry) {
+    return NextResponse.json({
+      dryRun: true,
+      istNow: { date: now.date, minutes: now.minutes },
+      considered: (users ?? []).length,
+      due,
+      skipped,
+    });
+  }
+
+  let pushed = 0;
+  let alreadyDone = 0;
+  const failures: { userId: string; error: string }[] = [];
+
+  for (const person of due) {
+    /* Claim the slot BEFORE sending. A unique violation here means another run — or a
+       Scheduler retry — already handled this person today, and skipping is the whole
+       point of the constraint. */
+    const { data: claimed, error: claimErr } = await admin
+      .from("attendance_reminder_log")
+      .insert({
+        tenant_id: person.tenantId,
+        user_id:   person.userId,
+        work_date: now.date,
+        kind:      person.kind,
+      })
+      .select("id")
+      .single();
+
+    if (claimErr) {
+      /* 23505 = unique violation = already reminded. Anything else is a real problem. */
+      if (claimErr.code === "23505") { alreadyDone += 1; continue; }
+      failures.push({ userId: person.userId, error: claimErr.message });
+      continue;
+    }
+
+    const result = await sendPushToUsers([person.userId], {
+      kind: person.kind === "check_in" ? "attendance_checkin" : "attendance_checkout",
+      name: person.name?.split(" ")[0] ?? null,
+    });
+
+    await admin
+      .from("attendance_reminder_log")
+      .update({
+        sent_at: result.sent > 0 ? new Date().toISOString() : null,
+        devices: result.sent,
+        /* A claimed slot that sent nothing is recorded as such — otherwise it looks
+           identical to a day when nobody was due. */
+        error: result.sent > 0 ? null : (result.problem ?? `no device (attempted ${result.attempted})`),
+      })
+      .eq("id", claimed.id);
+
+    if (result.sent > 0) pushed += 1;
+    else failures.push({ userId: person.userId, error: result.problem ?? "no device reached" });
+  }
+
+  return NextResponse.json({
+    istDate: now.date,
+    considered: (users ?? []).length,
+    due: due.length,
+    pushed,
+    alreadyRemindedToday: alreadyDone,
+    failures,
+  });
+}
