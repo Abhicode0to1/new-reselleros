@@ -128,8 +128,22 @@ Each phase ends green on its own, and each is useful even if the next never happ
 Migration:
 - `bank_transactions.category text null`, `category_source text null`
   (`'rule' | 'ai' | 'manual'`), `category_confidence int null`
-- `txn_category_rules` — `tenant_id`, `pattern text`, `category text`, `match_type`
-  (`contains` | `regex`), `hit_count int`, `created_from_txn_id`, RLS by tenant
+- `txn_category_rules` — `tenant_id`, `pattern text`, `category text`, `direction`
+  (`debit` | `credit` | `any`), `hit_count int`, `created_from_txn_id`, RLS by tenant
+
+> **Two corrections to this section, made while building it — the plan was one hour old
+> and already wrong in two places.**
+>
+> **`match_type (contains | regex)` became contains-only.** Every narration measured is a
+> plain substring, and a regex authored in a UI is a denial-of-service waiting to happen —
+> catastrophic backtracking during a statement import. A `match_type` column can be added
+> the day a real case needs one; shipping the footgun first cannot be undone.
+>
+> **`direction` was not in the plan and had to be.** It is a correctness guard, not a
+> refinement: "SALARY" appearing in a **credit** is money coming IN — a refund or a
+> reversal — and a direction-blind rule files it under Salaries and overstates the wage
+> bill. That is an accounting error, not a cosmetic one. Cheap to add now, painful later,
+> because by then rules exist that were written without a direction in mind.
 
 Seed the rules from what is already known: the 8 categories, plus patterns derived from the
 35 categorised expenses and the 20 matched lines. That seeding is a script whose output is

@@ -470,6 +470,31 @@ type BankAccountInsert = Partial<BankAccountRow> & {
 };
 type BankAccountUpdate = Partial<Omit<BankAccountInsert, "id" | "tenant_id">>;
 
+/** Which layer decided a bank line's category. Mirrors the DB check constraint. */
+export type TxnCategorySource = "rule" | "ai" | "manual";
+/** Which side of the statement a rule may fire on. Mirrors the DB check constraint. */
+export type TxnRuleDirection = "debit" | "credit" | "any";
+
+type TxnCategoryRuleRow = {
+  id:                  string;
+  tenant_id:           string;
+  /** Matched case-insensitively as a SUBSTRING of the narration. Never blank (DB check). */
+  pattern:             string;
+  category:            string;
+  direction:           TxnRuleDirection;
+  hit_count:           number;
+  created_from_txn_id: string | null;
+  created_by:          string | null;
+  created_at:          string;
+  updated_at:          string;
+};
+type TxnCategoryRuleInsert = Partial<TxnCategoryRuleRow> & {
+  tenant_id: string;
+  pattern:   string;
+  category:  string;
+};
+type TxnCategoryRuleUpdate = Partial<Omit<TxnCategoryRuleInsert, "id" | "tenant_id">>;
+
 type BankTransactionRow = {
   id:               string;
   tenant_id:        string;
@@ -486,6 +511,13 @@ type BankTransactionRow = {
   matched_at:       string | null;
   matched_by:       string | null;
   match_confidence: BankMatchConfidence | null;
+  /* Categorisation (20260822090000). Nullable on purpose: null means "no category yet",
+     which is a real state and must stay distinguishable from a category. The DB enforces
+     that category and category_source are set together — a category with no stated source
+     is an unattributable number in the books. */
+  category:            string | null;
+  category_source:     TxnCategorySource | null;
+  category_confidence: number | null;
   imported_at:      string;
   created_at:       string;
   updated_at:       string;
@@ -3895,6 +3927,7 @@ export type Database = {
       whatsapp_messages:  { Row: WhatsAppMessageRow;   Insert: WhatsAppMessageInsert;   Update: WhatsAppMessageUpdate;   Relationships: [] };
       bank_accounts:        { Row: BankAccountRow;       Insert: BankAccountInsert;       Update: BankAccountUpdate;       Relationships: [] };
       bank_transactions:    { Row: BankTransactionRow;   Insert: BankTransactionInsert;   Update: BankTransactionUpdate;   Relationships: [] };
+      txn_category_rules:   { Row: TxnCategoryRuleRow;   Insert: TxnCategoryRuleInsert;   Update: TxnCategoryRuleUpdate;   Relationships: [] };
       bank_aa_connections:  { Row: BankAaConnectionRow;  Insert: BankAaConnectionInsert;  Update: BankAaConnectionUpdate;  Relationships: [] };
       referral_partners:    { Row: ReferralPartnerRow;    Insert: ReferralPartnerInsert;    Update: ReferralPartnerUpdate;    Relationships: [] };
       referral_agreements:  { Row: ReferralAgreementRow;  Insert: ReferralAgreementInsert;  Update: ReferralAgreementUpdate;  Relationships: [] };
@@ -4873,4 +4906,5 @@ export type SubscriptionBillingInsertT = SubscriptionBillingInsert;
 export type Invoice      = InvoiceRow;
 export type Subscription = SubscriptionRow;
 export type Payment      = PaymentRow;
+export type TxnCategoryRule = TxnCategoryRuleRow;
 export type Task         = TaskRow;
