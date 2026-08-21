@@ -371,7 +371,7 @@ export default function CustomerDetailPage() {
       <>
       {/* Answer-bar */}
       <div className="mb-4">
-        <CustomerMetricBar insights={insights} />
+        <CustomerMetricBar insights={insights} customerId={customer.id} />
       </div>
 
       {/* Advance credit held (from an earlier overpayment) — adjustable against the next bill */}

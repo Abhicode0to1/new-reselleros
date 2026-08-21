@@ -14,6 +14,7 @@
  */
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { Customer, Subscription, Invoice, Quote } from "@/lib/supabase/database.types";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -249,7 +250,13 @@ export function buildCustomerActivity(subs: Subscription[], invoices: Invoice[],
 // ════════════════════════════════════════════════════════════════════════
 
 /** 4-KPI answer-bar — health / owed / value in one glance (real numbers). */
-export function CustomerMetricBar({ insights }: { insights: CustomerInsights }) {
+export function CustomerMetricBar({ insights, customerId }: {
+  insights: CustomerInsights;
+  /** When given, the money tiles link to the records behind them. Optional so the
+   *  contacts panel — which derives insights for a company that may have no customer
+   *  row — keeps working rather than linking to a filter that would match nothing. */
+  customerId?: string;
+}) {
   const { outstanding, projectReceivable, overdueCount, lifetimePaid, totalMRR, activeSubs, seatsUsed, seatsTotal, nearestRenewal, renewalDays } = insights;
   // Exact figures (not compact lakh) for the money KPIs so they match the
   // Next-Best-Action + Transactions to the rupee — "₹15.2L" vs "₹15,16,000"
@@ -269,7 +276,16 @@ export function CustomerMetricBar({ insights }: { insights: CustomerInsights }) 
         tone={outstanding > 0 ? "danger" : "success"}
         hint={outHint}
       />
-      <MetricCard label="Lifetime paid" value={lifetimePaid > 0 ? rupee(lifetimePaid) : "—"} />
+      {/* Clickable when we know whose money it is. "Lifetime paid ₹70,027" invites exactly
+          one question — which payments? — and the tile had no answer. Filtered by customer
+          ID, never by name: this book already holds "AB corprotion" and "abc corporaton",
+          so a name search would quietly show one customer somebody else's receipts. */}
+      <MetricCard
+        label="Lifetime paid"
+        value={lifetimePaid > 0 ? rupee(lifetimePaid) : "—"}
+        href={customerId && lifetimePaid > 0 ? `/payments?customer=${customerId}` : undefined}
+        hrefTitle="See the payments this adds up to"
+      />
       <MetricCard
         label="MRR"
         value={totalMRR > 0 ? rupee(totalMRR) : "—"}
@@ -451,7 +467,18 @@ export function SubscriptionList({ subs }: { subs: Subscription[] }) {
     <div className="space-y-2">
       {subs.map((s) => {
         const active = s.status === "active";
-        const owed = s.outstanding_amount ?? 0;
+        /* Say it, do not imply it. The card printed a balance only when it was above zero,
+           so a settled subscription rendered NOTHING — and blank space was left to carry
+           the meaning of the word "Paid". Pardeep hit it on a real customer: three active
+           subscriptions, one reading "₹18,232 due" and two reading nothing, with no way to
+           know whether that was good news or a gap.
+
+           Two states only, deliberately. `outstanding_amount` is NOT NULL DEFAULT 0 in the
+           database and `number` in the row type, so "we never worked it out" cannot arrive
+           here — an extra branch for it would put a message on screen that can never be
+           true and imply a state that does not exist. (The `?? 0` that used to be here was
+           already dead for the same reason.) */
+        const owed = s.outstanding_amount;
         const renewalDays = s.renewal_date ? daysBetween(new Date(), s.renewal_date) : null;
         const term = subTerm(s.start_date, s.renewal_date);
         return (
@@ -482,7 +509,11 @@ export function SubscriptionList({ subs }: { subs: Subscription[] }) {
             <div className="text-right flex-shrink-0">
               <div className="text-sm font-medium text-ink tabular-nums">{rupee(s.mrr)}<span className="text-[10px] text-ink-3">/mo</span></div>
               {term === "Annual" && <div className="text-[10px] text-ink-3 tabular-nums">{rupee(s.mrr * 12, { compact: true })}/yr</div>}
-              {owed > 0 && <div className="text-[11px] text-rose mt-0.5">{rupee(owed)} due</div>}
+              {owed > 0 ? (
+                <div className="text-[11px] text-rose mt-0.5">{rupee(owed)} due</div>
+              ) : (
+                <div className="text-[11px] text-emerald mt-0.5">Paid</div>
+              )}
             </div>
           </div>
         );
@@ -660,17 +691,40 @@ export function CustomerIdentityRail({ c }: { c: Customer }) {
 // ──────────────────────────────────────────────────────────────────────
 // Small shared primitives
 // ──────────────────────────────────────────────────────────────────────
-export function MetricCard({ label, value, tone = "default", hint }: {
+/**
+ * A KPI tile. Pass `href` to make the number open the records behind it.
+ *
+ * A big number an operator cannot drill into is a claim they have to take on trust —
+ * "Lifetime paid ₹70,027" raises the question "from which payments?" and the tile used to
+ * be a dead end. `href` renders it as a real link rather than a div with an onClick, so it
+ * is keyboard-reachable and middle-clickable like every other link on the page (§8).
+ */
+export function MetricCard({ label, value, tone = "default", hint, href, hrefTitle }: {
   label: string; value: string; tone?: "default" | "danger" | "warning" | "success"; hint?: string;
+  href?: string;
+  /** Tooltip / accessible name for the link, e.g. "See the payments behind this". */
+  hrefTitle?: string;
 }) {
   const valueColor =
     tone === "danger" ? "text-rose" : tone === "warning" ? "text-amber-ink" : tone === "success" ? "text-emerald" : "text-ink";
-  return (
-    <div className="bg-paper-2/40 border border-hairline rounded-md px-3 py-2.5">
+  const body = (
+    <>
       <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
       <div className={cn("text-sm font-semibold tabular-nums mt-1 truncate", valueColor)}>{value}</div>
       {hint && <div className="text-[10px] text-ink-3 mt-0.5 truncate">{hint}</div>}
-    </div>
+    </>
+  );
+  const shell = "bg-paper-2/40 border border-hairline rounded-md px-3 py-2.5";
+
+  if (!href) return <div className={shell}>{body}</div>;
+  return (
+    <Link
+      href={href as never}
+      title={hrefTitle}
+      className={cn(shell, "block transition-colors hover:bg-paper-2 hover:border-ink-3/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber")}
+    >
+      {body}
+    </Link>
   );
 }
 

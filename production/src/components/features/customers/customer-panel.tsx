@@ -170,7 +170,7 @@ export function CustomerPanel({ customerId, onClose }: { customerId: string; onC
         <CustomerContactActions customer={c} />
 
         {/* 2. Answer-bar */}
-        <CustomerMetricBar insights={insights} />
+        <CustomerMetricBar insights={insights} customerId={c.id} />
 
         {/* 3. Next-best-action */}
         <NextBestActionCard nba={insights.nba} customer={c} />

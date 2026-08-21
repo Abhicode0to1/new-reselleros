@@ -6,7 +6,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { getDocumentSignedUrl } from "@/lib/queries/documents";
 
@@ -80,10 +80,20 @@ const PAY_COL_WIDTHS: Record<string, string> = {
   date: "10%", customer: "19%", amount: "12%", method: "13%", reference: "12%", linked: "16%", status: "10%", action: "8%",
 };
 
-export default function PaymentsPage() {
+function PaymentsPageInner() {
   const [tab, setTab]       = React.useState<"all" | "received" | "refunded">("all");
   const [view, setView]     = React.useState<"all" | "subscription" | "project">("all");
   const [search, setSearch] = React.useState("");
+
+  /* ── One customer's receipts ───────────────────────────────────────────────
+     `?customer=<id>` — how the "Lifetime paid" tile on a customer answers "which
+     payments is that number made of?".
+
+     By ID, not by the search box, and that is the whole point. The search matches customer
+     NAME as a substring, and this book already contains "AB corprotion", "abc corporaton"
+     and more near-identical names, so ?q=<name> would show one customer somebody else's
+     receipts — on a money screen, under a heading claiming they are theirs. */
+  const customerFilter = useSearchParams().get("customer");
   // Payment currently open in the "edit details" sheet (null = closed).
   const [editPayment, setEditPayment] = React.useState<Payment | null>(null);
 
@@ -132,6 +142,15 @@ export default function PaymentsPage() {
   // Filter
   const filtered = (payments ?? []).filter((p) => {
     if (tab !== "all" && p.status !== tab) return false;
+    if (customerFilter) {
+      /* Two ways a payment belongs to a customer, and both count. `payments.customer_id`
+         is what record_payment stamps, but it is nullable — a receipt taken before the
+         lead was converted has none, and dropping those would under-report the very total
+         the operator clicked. So fall back to the customer on its quote. */
+      const own = p.customer_id === customerFilter;
+      const viaQuote = quoteById.get(p.quote_id)?.customerId === customerFilter;
+      if (!own && !viaQuote) return false;
+    }
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     const quoteCtx = quoteById.get(p.quote_id);
@@ -423,6 +442,27 @@ export default function PaymentsPage() {
         </GeminiCard>
       )}
 
+      {/* ── Arrived here from one customer ──────────────────────────────────
+          Names whose payments these are, and offers the way out. A filter applied from
+          another screen and then never mentioned is how an operator concludes the payments
+          page has lost their money — the count at the top would say "Showing 3 of 47" with
+          nothing on screen explaining the 3. */}
+      {customerFilter && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-paper-2/60 px-3.5 py-2.5">
+          <Icon name="filter" size={15} className="shrink-0 text-ink-3" />
+          <p className="min-w-0 flex-1 text-[13px] text-ink-2">
+            Showing only payments from{" "}
+            <b className="text-ink">{customerById.get(customerFilter)?.name ?? "this customer"}</b>.
+          </p>
+          {/* A Link, not a click handler: this is navigation, so it should behave like a
+              link — focusable, middle-clickable, and it drops the query string by going to
+              the bare route. */}
+          <Button size="sm" variant="ghost" icon="x" asChild>
+            <Link href="/payments">Show all payments</Link>
+          </Button>
+        </div>
+      )}
+
       {/* Sticky TabBar + Search */}
       {!isLoading && payments && (
         <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
@@ -694,6 +734,20 @@ export default function PaymentsPage() {
         }
       />
     </div>
+  );
+}
+
+/**
+ * `useSearchParams()` (the ?customer= filter) forces this page out of static prerender
+ * unless it sits under a Suspense boundary — Next fails the BUILD on it, while
+ * typecheck, vitest and lint all pass. Same split as the login page, and the same
+ * reason: `npm run build` is the only gate that catches this (CLAUDE.md §25.2).
+ */
+export default function PaymentsPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <PaymentsPageInner />
+    </React.Suspense>
   );
 }
 
