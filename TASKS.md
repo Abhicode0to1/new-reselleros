@@ -5,6 +5,34 @@
 
 ## Active
 
+### ⌨️ Tooltip me keyboard shortcut (21 Aug 2026) — ✅ DONE, local par verify
+
+`<TooltipContent shortcut="report-bug">` — sirf **id** deni hai, keys `SHORTCUTS` se aati hain. Prop ka type registry se nikalta hai, to **galat id compile hi nahi hoti** (`"report-bugg"` par tsc ne khud sahi naam suggest kiya). Commit `e06401f`.
+
+**Do shortcut mile jo bane hue the par kahin darj nahi the** — jabki `shortcuts.ts` ki pehli line kehti hai "every keyboard shortcut in the app, in one place": `Ctrl+Shift+B` (sirf `global-bug-reporter.tsx` me) aur workspace tab keys (`Alt+1–8`, `Ctrl+Alt+←/→`, `Ctrl+Alt+W`). Dono cheat sheet me nahi the, yaani kisi ko pata nahi tha. Ab registry me hain, aur bug-reporter ka handler keys **registry se padhta hai** (`matchesShortcut`).
+
+**`Ctrl+Tab` / `Ctrl+W` jaan-boojh kar nahi daale** — provider khud kehta hai browser inhe rakh leta hai. Cheat sheet me likhna matlab aisa waada jo chalta nahi, aur ek jhoothi line poori list ka bharosa tod deti hai.
+
+**Ulti galti bhi theek ki:** `quote-builder` me `title="Add item (Alt+A)"` haath se likha tha; ab `shortcutText("add-quote-item")` se aata hai.
+
+**Dono galtiyan aage se band:** test ab **saari `.tsx` scan karta hai** — `title=` ya tooltip ke andar keys likhi ho to red (wahi tareeka jo `route-map.test.ts` ka hai). Dono mutation se sabit, aur scan khud assert karta hai ki 100+ file mili — warna wo "kuch scan na karke" green ho sakta tha.
+
+> **Ek seekh likh rakhi hai:** registry `as const` karne se `keys` bhi literal tuple ban gaya aur har purana `keys.includes(str)` toot gaya. Har call site par cast lagana matlab **ek type-safety ka faayda barah chhote chhed** me badalna — to const tuple andar rakha, `SHORTCUTS` widened export kiya.
+
+### 🔴 gcloud ka auth EXPIRE ho chuka hai — deploy se pehle isko theek karna padega
+
+21 Aug: `gcloud run services describe` ne `Reauthentication failed. cannot prompt during non-interactive execution` diya. Yaani **main deploy nahi kar sakta** jab tak ye theek na ho, aur live revision bhi query nahi kar sakta (isliye "live par kaun sa build hai" ye TASKS.md ke 19 Aug ke record se maana ja raha hai, naapa hua nahi).
+
+Theek karne ka rasta (Pardeep ko ek baar chalana padega, browser khulega):
+
+```
+gcloud auth login
+```
+
+Account pehle se do hain, active `pardeep@anutech.in` (doosra `Pardeep@exceltechnologies.in` — purana). Deploy script `production/deploy.sh` hai.
+
+**Ye ab zyada maayne rakhta hai** kyunki tester chalu ho gaya hai: aaj ke chaar guard (invoice ka GST guard dono raaste, tooltip shortcut) live par nahi hain — tester ke liye wo cheezein maujood hi nahi hain.
+
 ### 🧪 TESTING KE LIYE TAIYAARI — 21 Aug 2026 (Pardeep ke teen faisle par kaam hua)
 
 Sawaal tha *"app testing ke liye perfect hai kya"*. Jawab naap kar: **nahi thi, ab kaafi behtar hai** — teen cheezein ho gayin, ek baaki hai.
