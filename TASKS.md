@@ -227,6 +227,24 @@ Branch `session/money-spine-hardening-jun1`, sab commit (`90f6db5` tak). ✅ **2
 >
 > **`gcloud run services update` par hamesha `--update-env-vars` — kabhi `--set-env-vars`.** Doosra poora set **replace** karta hai; chup-chaap `SUPABASE_SERVICE_ROLE_KEY` aur `CRON_SECRET` samet nau var uda deta. Baad me gina: 11 var, purane nau salaamat.
 
+**🔴 EK COMMAND BAKI HAI — partial payment par quote accepted karne wali migration likhi aur test ki hui hai, par APPLY NAHI HUI.** Auto-mode classifier is machine par DDL rokta hai. Pardeep ko `production/` folder me ye chalana hai:
+
+```bash
+env -u SUPABASE_ACCESS_TOKEN npx supabase db query --linked -f supabase/migrations/20260821210000_accept_quote_on_first_payment.sql
+```
+
+Phir test (kuch likhta nahi, rollback me khatam hota hai) — `PASS` aana chahiye:
+
+```bash
+env -u SUPABASE_ACCESS_TOKEN npx supabase db query --linked -f supabase/tests/quote_accepted_on_first_payment.test.sql
+```
+
+Aakhir me ledger me darj karo: `npx supabase migration repair --status applied 20260821210000`.
+
+> **Kya badla:** `record_payment` me **ek line** — `when v_is_fully_paid and status in (...)` → `when status in (...)`. Migration live `pg_get_functiondef` se **generate** hui hai, haath se likhi nahi, aur script assert karta hai ki sirf wahi ek line badli. **`delete_payment` chhua nahi** — padh kar dekha ki wo pehle se ulta kar deta hai (`v_remaining <= 0 and status = 'accepted'` → `'sent'`), isliye maanga gaya kaam se change **chhota** nikla, bada nahi. **Renewal roll-forward jaan-boojh kar full payment par hi hai** — aadhe paise par saal bhar ki service aage badhana labelling nahi, muft dena hai.
+>
+> **Test pehle RED saabit hua**, phir likha gaya: current prod function par chalaya to theek wahi galti mili jo Pardeep ne dekhi — `CASE 1 FAIL: partial payment left the quote at "sent" instead of accepted`. TypeScript ke 3284 test is RPC ko chalate hi nahi, isliye green suite ka yahan matlab **kuch nahi**.
+
 **⏰ Scheduler par ab 10 job hain.** Naya: `resellersos-attendance-reminders` — `*/30 9-20 * * *` **Asia/Kolkata** (baaki job bhi IST me hain, UTC me nahi). Itni baar chalana safe hai kyunki `attendance_reminder_log` par `(user_id, work_date, kind)` ka unique index hai — Scheduler ka retry, overlapping deploy, aur half-hourly schedule teeno bekaar ho jaate hain, ek aadmi ko din me ek hi baar (per kind) jaati hai. Header wahi `CRON_SECRET` hai jo renewals job me chalता hai (naap kar milaya — galat header wala job hamesha chup-chaap 401 deta rehta aur pata hafton baad chalta).
 
 > **Deployed cron ko `?dry=1` se naapa (kuch likhta nahi):** IST 20:44 par 7 log dekhe, 1 due (Hitesh, check_out), 6 asli wajah se skip — 4 "past the end of the working day with no check-in", 2 "already checked out". Yani deployed route apne env ke saath theek chal raha hai.
