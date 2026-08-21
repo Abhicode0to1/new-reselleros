@@ -516,6 +516,6 @@ begin
     'idempotent_replay', false
   );
 end;
-$function$
+$function$;
 
 commit;
