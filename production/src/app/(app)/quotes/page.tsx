@@ -40,6 +40,7 @@ import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { FAB } from "@/components/ui/fab";
 import { rupee, daysBetween, cleanDisplayName, phoneSuffixOf } from "@/lib/utils";
+import { unifiedStatus, cashNote } from "@/lib/quotes/status-badge";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
@@ -84,42 +85,10 @@ function estimateMarginForQuote(q: Quote): ReturnType<typeof computeMargin> & { 
   return { ...computeMargin(cost, taxable), known };
 }
 
-type QuoteBadgeKind = "muted" | "success" | "warning" | "danger" | "info";
-
-/**
- * ONE primary status per row (Stripe/Linear style) — folds quote.status +
- * payment_status into a single lifecycle stage, so a row never shows two
- * competing badges (the old "Accepted" + "Invoiced" overlap). The outstanding-
- * cash detail rides underneath as a muted hint via {@link dueHint}, not a badge.
- */
-function unifiedStatus(q: Quote): { label: string; kind: QuoteBadgeKind } {
-  if (q.payment_status === "invoiced") return { label: "Invoiced", kind: "info" };
-  if (q.status === "accepted") {
-    if (q.payment_status === "received") return { label: "Paid", kind: "success" };
-    if (q.payment_status === "partial")  return { label: "Partially paid", kind: "warning" };
-    return { label: "Accepted", kind: "success" };
-  }
-  switch (q.status) {
-    case "draft":    return { label: "Draft", kind: "muted" };
-    case "sent":     return { label: "Out for review", kind: "warning" };
-    case "viewed":   return { label: "Viewed", kind: "info" };
-    case "rejected": return { label: "Rejected", kind: "danger" };
-    case "expired":  return { label: "Expired", kind: "danger" };
-    default:         return { label: "Draft", kind: "muted" };
-  }
-}
-
-/** Muted "cash still due" hint shown under the status badge (only when relevant). */
-function dueHint(q: Quote): string | null {
-  const due = (q.amount ?? 0) - (q.payment_amount ?? 0);
-  if ((q.payment_status === "partial" || q.payment_status === "invoiced") && due > 0) {
-    return `₹${due.toLocaleString("en-IN")} due`;
-  }
-  if (q.payment_status === "awaiting" || (q.status === "accepted" && (!q.payment_status || q.payment_status === "none"))) {
-    return "Awaiting payment";
-  }
-  return null;
-}
+/* unifiedStatus + the cash note now live in lib/quotes/status-badge.ts, with tests.
+   They decide what an operator believes about money at a glance, and while they lived
+   here nothing could test them — which is how a quote holding ₹20,000 came to display
+   "Out for review". */
 
 export default function QuotesPage() {
   const router = useRouter();
@@ -666,6 +635,7 @@ export default function QuotesPage() {
         <ul className="xl:hidden space-y-2 mb-3">
           {filtered.map((q) => {
             const uStatus = unifiedStatus(q);
+            const note = cashNote(q);
             const dl = q.expires_date ? daysBetween(new Date(), q.expires_date) : null;
             return (
               <li key={q.id}>
@@ -713,6 +683,18 @@ export default function QuotesPage() {
                         <Badge kind="warning" size="sm">
                           {dl}d left
                         </Badge>
+                      )}
+                      {/* The cash note never appeared on the card at all — only in the
+                          desktop table. So below 1280px, where this card list IS the page,
+                          a quote holding ₹20,000 showed a status badge and no money
+                          anywhere. Same helper as the table, so the two cannot drift. */}
+                      {note && (
+                        <span className={cn(
+                          "text-[10px] font-semibold tabular-nums",
+                          note.tone === "owed" ? "text-rose" : "text-amber-ink",
+                        )}>
+                          {note.text}
+                        </span>
                       )}
                       <Badge kind={uStatus.kind} size="sm" dot>{uStatus.label}</Badge>
                     </div>
@@ -835,14 +817,27 @@ export default function QuotesPage() {
                         )}
                       </td>
                       <td className="px-3 py-2.5 align-top">
-                        <div className="flex flex-col items-start gap-0.5">
-                          <Badge kind={uStatus.kind} dot>{uStatus.label}</Badge>
-                          {dueHint(q) && (
-                            <span className={cn("text-[10px] font-medium tabular-nums", dueHint(q) === "Awaiting payment" ? "text-amber-ink" : "text-rose")}>
-                              {dueHint(q)}
-                            </span>
-                          )}
-                        </div>
+                        {(() => {
+                          /* One call, not three. dueHint(q) was invoked three times per
+                             row — once to test, once to compare, once to print — and the
+                             comparison was against the literal "Awaiting payment", so
+                             rewording that string would silently have turned every
+                             outstanding balance the wrong colour. */
+                          const note = cashNote(q);
+                          return (
+                            <div className="flex flex-col items-start gap-0.5">
+                              <Badge kind={uStatus.kind} dot>{uStatus.label}</Badge>
+                              {note && (
+                                <span className={cn(
+                                  "text-[10px] font-medium tabular-nums",
+                                  note.tone === "owed" ? "text-rose" : "text-amber-ink",
+                                )}>
+                                  {note.text}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-2.5 text-sm align-top">
                         {q.status === "accepted" || q.status === "rejected" ? (
