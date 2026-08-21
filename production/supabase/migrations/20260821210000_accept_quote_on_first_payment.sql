@@ -36,6 +36,8 @@
 -- The status column is only ever moved FORWARD out of draft/sent/viewed. A rejected or
 -- expired quote is left alone, exactly as before.
 
+begin;
+
 CREATE OR REPLACE FUNCTION public.record_payment(p_quote_id text, p_amount integer, p_method text, p_reference text, p_notes text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -516,3 +518,4 @@ begin
 end;
 $function$
 
+commit;
