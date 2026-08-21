@@ -108,13 +108,20 @@ describe("internal links point at routes that exist", () => {
     ).toEqual([]);
   });
 
-  it("would have caught the dead route it was written for", () => {
+  it("rejects a route that does not exist, and accepts the ones that do", () => {
     /* Guards the guard: if `resolves` ever became permissive enough to accept anything,
-       the test above would pass on a broken app and nobody would know. */
-    expect(resolves("/quotes/[*]/edit")).toBe(false);
+       the test above would pass on a broken app and nobody would know.
+
+       This originally asserted that `/quotes/[*]/edit` does NOT resolve — the dead route
+       this file was written for. That route now exists (an in-place draft editor was
+       built), so the assertion was inverted rather than deleted: the negative control
+       moved to a path that is not going to be built, and the route that WAS dead is
+       asserted live, which is the fact worth keeping. */
+    expect(resolves("/quotes/[*]/edit")).toBe(true);
     expect(resolves("/quotes/[*]")).toBe(true);
     expect(resolves("/quotes/new")).toBe(true);
     expect(resolves("/invoices")).toBe(true);
     expect(resolves("/nonsense/page")).toBe(false);
+    expect(resolves("/quotes/[*]/edit/deeper")).toBe(false);
   });
 });

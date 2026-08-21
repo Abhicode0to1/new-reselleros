@@ -137,6 +137,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/quote/view/[token]", file: "src/app/(public)/quote/view/[token]/page.tsx" },
   { route: "/quotes", file: "src/app/(app)/quotes/page.tsx" },
   { route: "/quotes/[id]", file: "src/app/(app)/quotes/[id]/page.tsx" },
+  { route: "/quotes/[id]/edit", file: "src/app/(app)/quotes/[id]/edit/page.tsx" },
   { route: "/quotes/new", file: "src/app/(app)/quotes/new/page.tsx" },
   { route: "/referrals", file: "src/app/(app)/referrals/page.tsx" },
   { route: "/renewals", file: "src/app/(app)/renewals/page.tsx" },

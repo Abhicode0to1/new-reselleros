@@ -13,7 +13,7 @@
 
 import * as React from "react";
 import { useDraftGuard } from "@/lib/hooks/useDraftGuard";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
@@ -79,6 +79,7 @@ const PLAN_PRICE_PER_SEAT_PM: Record<string, number> = {
 export function QuoteBuilder() {
   const router       = useRouter();
   const searchParams = useSearchParams();
+  const pathname     = usePathname();
   const { data: customers, isLoading: customersLoading } = useCustomers();
   // Subscription quotes only pull recurring items — one-time products live in
   // the separate Items Catalog and are quoted via project quotes.
@@ -108,6 +109,21 @@ export function QuoteBuilder() {
   const urlPhone    = searchParams.get("phone");
   // Duplicate / revise an existing quote ("edit & resend" workflow)
   const duplicateOf       = searchParams.get("duplicate");
+  /* ── In-place edit of a DRAFT ────────────────────────────────────────────────
+     Read from the path, not from a prop, because this component takes none — it
+     configures itself entirely from the URL, and adding one prop for one caller would
+     split that rule in half. Mounted at /quotes/<id>/edit; the pathname is matched
+     exactly so mounting the builder under some other `[id]` route can never be mistaken
+     for "edit this".
+
+     Editing vs duplicating is the same prefill and a different SAVE: duplicate allocates
+     a fresh quote number, edit keeps this one. The draft-only guard lives in
+     lib/quotes/editable.ts and is enforced by the route before this ever renders. */
+  const editOf = React.useMemo(() => {
+    const m = /^\/quotes\/([^/]+)\/edit\/?$/.exec(pathname ?? "");
+    return m ? decodeURIComponent(m[1]) : null;
+  }, [pathname]);
+  const prefillFrom = duplicateOf ?? editOf;
   const urlCustomer       = searchParams.get("customer");  // Customer 360 → "Add service"
   // Invoice mode (?invoice=1): the same builder, but on save it generates a GST
   // invoice immediately (a "direct invoice") instead of just saving a quote.
@@ -117,7 +133,7 @@ export function QuoteBuilder() {
   React.useEffect(() => {
     if (isInvoiceMode) document.title = "New Invoice · ResellerOS";
   }, [isInvoiceMode]);
-  const { data: sourceQuote } = useQuote(duplicateOf ?? undefined);
+  const { data: sourceQuote } = useQuote(prefillFrom ?? undefined);
 
   // Look up the lead from the cached useLeads() query so the operator can
   // navigate to /quotes/new?lead=L-XXX with JUST the ID — we fill in the
@@ -506,13 +522,20 @@ export function QuoteBuilder() {
     );
   }, [isLeadMode, leadCompany, leadPlan, leadSeats, leadContact, catalog]);
 
-  // ── Pre-fill from existing quote (Duplicate / Revise & resend) ──
+  // ── Pre-fill from existing quote (Duplicate / Revise & resend / in-place Edit) ──
   const duplicatedRef = React.useRef(false);
   React.useEffect(() => {
     if (duplicatedRef.current) return;
-    if (!duplicateOf || !sourceQuote) return;
+    if (!prefillFrom || !sourceQuote) return;
 
     duplicatedRef.current = true;
+
+    /* Editing keeps the quote's own number. handleSubmit reuses `quoteId` when it is
+       already set instead of calling next_document_number, and useCreateQuote turns an
+       insert that hits the existing primary key into an update of that row — the path it
+       already used for "Save as draft, then Send". So seeding this one value is what makes
+       edit an edit rather than a second quote. */
+    if (editOf) setQuoteId(editOf);
 
     // Copy customer / lead linkage from source
     if (sourceQuote.customer_id) {
@@ -534,8 +557,32 @@ export function QuoteBuilder() {
     if (sourceQuote.terms_conditions)     setTermsConditions(sourceQuote.terms_conditions);
     if (sourceQuote.notes)                setNotes(sourceQuote.notes);
 
-    toast.success(`Revising ${sourceQuote.id} — edit anything, then Save & send`);
-  }, [duplicateOf, sourceQuote]);
+    /* ── The fields this effect used to leave behind ─────────────────────────────
+       Harmless while this only ever DUPLICATED (a fresh quote starting at INR and a
+       blank place-of-supply is merely inconvenient). Not harmless once the same effect
+       feeds an in-place EDIT: whatever it fails to load is written back as its default,
+       so an untouched Save would quietly reset it. A ₹-only reset on a USD quote and a
+       blanked prospect state are both money bugs — the second one decides IGST versus
+       CGST+SGST on the tax invoice.
+       Copying them is right for a duplicate too: a copy of a USD quote should be USD. */
+    if (sourceQuote.currency)             setCurrency(sourceQuote.currency);
+    if (sourceQuote.exchange_rate != null && sourceQuote.exchange_rate > 0) {
+      setExchangeRate(sourceQuote.exchange_rate);
+    }
+    if (sourceQuote.prospect_state_code)  setProspectStateCode(sourceQuote.prospect_state_code);
+    if (sourceQuote.prospect_country)     setProspectCountry(sourceQuote.prospect_country);
+    /* Typed-prospect name — only when there is no customer record to name it instead,
+       otherwise the customer's own name wins downstream and this would be dead state. */
+    if (!sourceQuote.customer_id && sourceQuote.customer_name) {
+      setProspectName(sourceQuote.customer_name);
+    }
+
+    toast.success(
+      editOf
+        ? `Editing draft ${sourceQuote.id} — changes replace this quote`
+        : `Revising ${sourceQuote.id} — edit anything, then Save & send`,
+    );
+  }, [prefillFrom, editOf, sourceQuote]);
 
   // ── Pre-fill the customer from ?customer=<id> (Customer 360 → "Add service") ──
   // Mirrors the ?lead= path but for an EXISTING customer (cross-sell / new service).
@@ -824,7 +871,12 @@ export function QuoteBuilder() {
         id: idToUse,
         customer_id:   isLeadMode ? null : (customerId || null),
         customer_name: resolvedCustomerName,
-        lead_id:       isLeadMode ? leadId : null,
+        /* Keep the lead linkage when editing in place. `isLeadMode` is driven by
+           `?leadId=` in the URL, and the edit route has no query string — so this wrote
+           `null` and an untouched Save would have DETACHED the draft from the lead it was
+           raised for. Two production quotes carry a lead_id; nothing in the UI would have
+           shown it going missing. */
+        lead_id:       isLeadMode ? leadId : (editOf ? (sourceQuote?.lead_id ?? null) : null),
         // Quote-level domain = the first line's domain (the primary subscription).
         // record_payment stamps this on the subscription it creates today; per-line
         // domains also live on each line_item for the coming multi-sub fan-out.

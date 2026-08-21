@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 
 import { useQuote, useDeleteQuote, quoteDeleteBlockReason } from "@/lib/queries/quotes";
+import { isQuoteEditableInPlace } from "@/lib/quotes/editable";
 import { useGenerateInvoice } from "@/lib/queries/invoices";
 import { quoteMoneyActions } from "@/lib/quotes/money-stage";
 import { orphanState, isOrphan, orphanNote } from "@/lib/subscriptions/orphan-quote";
@@ -718,15 +719,21 @@ export default function QuoteDetailPage() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="text-sm text-ink-3">This is a draft. Send it to the customer when ready.</div>
               <div className="flex gap-2">
-                {/* Same dead route as above. This one sits on a DRAFT, where editing in
-                    place is what an operator actually wants — so the honest label matters:
-                    this duplicates into the builder rather than editing this draft, and
-                    the draft stays behind. An in-place editor is the real fix and is a
-                    feature, not a link change; until it exists, a prefilled builder beats
-                    a 404. */}
-                <Button asChild variant="default" icon="copy">
-                  <Link href={`/quotes/new?duplicate=${quote.id}` as any}>Duplicate &amp; edit</Link>
-                </Button>
+                {/* This block only renders for a draft, and a draft is what the in-place
+                    editor accepts — so "Edit" means edit here, and the route now exists.
+                    The guard is still CONSULTED rather than assumed from context: a draft
+                    can carry a payment (the direct-invoice path produces exactly that
+                    shape), and that one must not be rewritten. When it says no, the
+                    duplicate flow is offered instead of a disabled button. */}
+                {isQuoteEditableInPlace(quote) ? (
+                  <Button asChild variant="default" icon="edit">
+                    <Link href={`/quotes/${quote.id}/edit` as any}>Edit</Link>
+                  </Button>
+                ) : (
+                  <Button asChild variant="default" icon="copy">
+                    <Link href={`/quotes/new?duplicate=${quote.id}` as any}>Duplicate &amp; edit</Link>
+                  </Button>
+                )}
                 <Button
                   variant="primary"
                   icon="send"
