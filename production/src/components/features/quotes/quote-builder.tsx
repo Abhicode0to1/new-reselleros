@@ -861,22 +861,35 @@ export function QuoteBuilder() {
       // Resolve customer_name: lead → use lead.company. Else if customerId
       // picked → use that customer's name. Else (prospect mode) → use typed
       // prospect name. Validation upstream ensures one of these is present.
-      const resolvedCustomerName = isLeadMode
-        ? (leadCompany ?? "Prospect")
-        : customer
-          ? customer.name
-          : (prospectName.trim() || "Prospect");
+      /* `?? "Prospect"` only catches null/undefined, and lead-mode's company starts as an
+         EMPTY STRING when no lead was loaded from the URL — which is every in-place edit,
+         because the edit route has no query string. Saving an edited draft therefore wrote
+         customer_name = "" and the quote lost the buyer's name. Measured: "EDITOR TEST CO"
+         became "" on the first real save through this editor.
+         So: trim-and-fall-through at each step, and let the row it is editing be the last
+         word before the generic placeholder. */
+      const resolvedCustomerName =
+        (isLeadMode
+          ? (leadCompany?.trim() || "")
+          : customer
+            ? customer.name
+            : prospectName.trim())
+        || (editOf ? (sourceQuote?.customer_name?.trim() ?? "") : "")
+        || "Prospect";
 
       const quote = await createQuote.mutateAsync({
         id: idToUse,
         customer_id:   isLeadMode ? null : (customerId || null),
         customer_name: resolvedCustomerName,
-        /* Keep the lead linkage when editing in place. `isLeadMode` is driven by
-           `?leadId=` in the URL, and the edit route has no query string — so this wrote
-           `null` and an untouched Save would have DETACHED the draft from the lead it was
-           raised for. Two production quotes carry a lead_id; nothing in the UI would have
-           shown it going missing. */
-        lead_id:       isLeadMode ? leadId : (editOf ? (sourceQuote?.lead_id ?? null) : null),
+        /* Keep the lead linkage when editing in place: URL first, then the row itself.
+           `isLeadMode` is NOT a safe gate here, and the first version of this fix used it
+           and was wrong. isLeadMode is true when the URL carries ?leadId= OR when the
+           SOURCE QUOTE has a lead and no customer — a fallback written for the duplicate
+           flow. On the edit route there is no query string, so isLeadMode was true because
+           of the row while `leadId` was null, and `isLeadMode ? leadId : …` therefore still
+           resolved to null. An untouched Save would have detached the draft from its lead.
+           Found by running it, not by reading it. */
+        lead_id:       leadId ?? (editOf ? (sourceQuote?.lead_id ?? null) : null),
         // Quote-level domain = the first line's domain (the primary subscription).
         // record_payment stamps this on the subscription it creates today; per-line
         // domains also live on each line_item for the coming multi-sub fan-out.
