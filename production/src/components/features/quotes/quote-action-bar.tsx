@@ -106,7 +106,12 @@ export function QuoteActionBar({ quote, onOpenFullQuote, onChanged, className }:
   // Non-inline states → a single button into the hub, labelled by state.
   const hub = (() => {
     if (ps === "received") return { label: "Issue GST invoice", icon: "receipt" };
-    if (ps === "invoiced") return { label: "View invoice", icon: "receipt" };
+    /* Labelled for where it GOES, not for what happened. This said "View invoice" while
+       opening the quote hub — and the hub is the right destination here for the reason
+       stated above (it loads the authoritative payment history), so the label is what was
+       wrong, not the route. The hub's own banner now deep-links to the invoice itself, so
+       nothing is lost by naming this honestly. */
+    if (ps === "invoiced") return { label: "Open quote · invoiced", icon: "receipt" };
     if (ps === "partial") return { label: "Record remaining payment", icon: "rupee" };
     if (st === "draft") return { label: "Send draft quote", icon: "send" };
     if (st === "rejected") return { label: "Open quote · duplicate & re-send", icon: "file" };

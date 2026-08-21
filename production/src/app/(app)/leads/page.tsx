@@ -1911,12 +1911,26 @@ function LeadDetailSheet({
       };
     }
     if (latestQuoteForAction?.payment_status === "invoiced") {
+      /* Same fix as the quote-detail banner: a button labelled "View invoice" goes to the
+         INVOICE. This pushed `/quotes/<id>` — the quote, one hop short of the document it
+         named — so the reader had to find the invoice from there. `?open=<id>` opens it
+         directly, and the quote id is only used when there is no invoice id to open,
+         which should not happen at payment_status `invoiced` but is not worth crashing
+         over if it does. */
+      const invoiceId = latestQuoteForAction.invoice_id;
       return {
-        label: "View invoice",
+        label: invoiceId ? "View invoice" : "Open quote",
         icon: "receipt",
         tone: "emerald",
-        onClick: () => { onClose(); router.push(`/quotes/${latestQuoteForAction.id}` as any); },
-        hint: "Already invoiced",
+        onClick: () => {
+          onClose();
+          router.push(
+            invoiceId
+              ? (`/invoices?open=${invoiceId}` as any)
+              : (`/quotes/${latestQuoteForAction.id}` as any),
+          );
+        },
+        hint: invoiceId ? `Invoiced · ${invoiceId}` : "Already invoiced",
       };
     }
     if (latestQuoteForAction?.payment_status === "partial") {

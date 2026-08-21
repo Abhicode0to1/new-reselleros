@@ -888,8 +888,26 @@ export default function QuoteDetailPage() {
                     {nothingPaid ? "Record payment" : "Record balance payment"}
                   </Button>
                 )}
+                {/* Deep-link to the one invoice, not to the list of them.
+                    This button names a specific document — "View invoice
+                    INV-ADPL-2026-27-0018" — and used to land on `/invoices`, leaving the
+                    reader to find that row among 21. The exact destination already
+                    existed: `/invoices?open=<id>` auto-opens that invoice's dialog, and
+                    five other places already used it (the Quotes LIST's own Invoiced
+                    button, payments, the customer panel, the command palette, and the
+                    invoices page's copy-link). This screen was the odd one out, which is
+                    also why it read as a bug rather than a missing feature.
+                    §24: when a destination exists, the button goes there. */}
                 <Button asChild variant={hasBalance ? "ghost" : "primary"} icon="receipt">
-                  <Link href={`/invoices` as any}>View invoice {quote.invoice_id}</Link>
+                  <Link
+                    href={
+                      quote.invoice_id
+                        ? (`/invoices?open=${quote.invoice_id}` as any)
+                        : (`/invoices` as any)
+                    }
+                  >
+                    View invoice {quote.invoice_id}
+                  </Link>
                 </Button>
               </div>
             </div>
