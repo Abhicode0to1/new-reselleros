@@ -1153,16 +1153,20 @@ function InvoicePreviewContainer({
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {quote?.id && (
+                /* "View quote" — same reasoning as tax-invoice-dialog.tsx. This opens the
+                   quote hub, which is a read-only view, and an issued tax invoice is no
+                   place to suggest editing the figures behind it (CGST §31; corrections are
+                   credit/debit notes under §34). */
                 <Button
                   size="sm"
                   variant="outline"
-                  icon="edit"
+                  icon="file"
                   onClick={() => {
                     onOpenChange(false);
                     router.push(`/quotes/${quote.id}` as any);
                   }}
                 >
-                  Edit Quote
+                  View quote
                 </Button>
               )}
               <Button

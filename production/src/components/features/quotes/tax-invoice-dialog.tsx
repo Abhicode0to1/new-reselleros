@@ -245,16 +245,28 @@ export function TaxInvoiceDialog({
           </div>
           <div className="flex gap-2">
             {invoice.quote_id && (
+              /* "View quote", not "Edit Quote".
+                 Two things were wrong with the old label, and the smaller one is that this
+                 button does not edit anything — it opens the quote hub, which is a
+                 read-only view.
+
+                 The larger one is that offering to EDIT beside an issued tax invoice is
+                 the wrong idea to put in someone's head. Under CGST §31 an invoice is the
+                 document of record; once it exists its figures are not editable, and a
+                 correction is a credit or debit note (§34, and this schema has both). An
+                 operator who believes the quote behind a paid invoice can be edited will
+                 eventually try it on a real one. Reading the origin document is useful and
+                 safe, so that is what this offers. */
               <Button
                 size="sm"
                 variant="outline"
-                icon="edit"
+                icon="file"
                 onClick={() => {
                   onOpenChange(false);
                   router.push(`/quotes/${invoice.quote_id}` as any);
                 }}
               >
-                Edit Quote
+                View quote
               </Button>
             )}
             <Button

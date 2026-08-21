@@ -696,8 +696,19 @@ export default function QuoteDetailPage() {
                         Review &amp; decide
                       </Button>
                     )}
+                    {/* Was `/quotes/<id>/edit`, which 404s — that route does not exist.
+                        Verified by fetching it: HTTP 404, "This page could not be found".
+                        The `as any` on the href is what let it ship; typedRoutes would
+                        have rejected an unknown route, and the cast silenced exactly the
+                        check that was right.
+
+                        The working path is the one the More menu already offers: duplicate
+                        into the builder, prefilled from this quote (quote-builder reads
+                        ?duplicate=). Labelled for what it does, because it does make a new
+                        quote rather than editing this one. A dead end is the one thing
+                        §24 says a block may never be. */}
                     <Button size="sm" variant="default" asChild>
-                      <Link href={`/quotes/${quote.id}/edit` as any}>Change the pricing</Link>
+                      <Link href={`/quotes/new?duplicate=${quote.id}` as any}>Duplicate &amp; re-price</Link>
                     </Button>
                   </div>
                 </div>
@@ -707,8 +718,14 @@ export default function QuoteDetailPage() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="text-sm text-ink-3">This is a draft. Send it to the customer when ready.</div>
               <div className="flex gap-2">
-                <Button asChild variant="default" icon="edit">
-                  <Link href={`/quotes/${quote.id}/edit` as any}>Edit</Link>
+                {/* Same dead route as above. This one sits on a DRAFT, where editing in
+                    place is what an operator actually wants — so the honest label matters:
+                    this duplicates into the builder rather than editing this draft, and
+                    the draft stays behind. An in-place editor is the real fix and is a
+                    feature, not a link change; until it exists, a prefilled builder beats
+                    a 404. */}
+                <Button asChild variant="default" icon="copy">
+                  <Link href={`/quotes/new?duplicate=${quote.id}` as any}>Duplicate &amp; edit</Link>
                 </Button>
                 <Button
                   variant="primary"

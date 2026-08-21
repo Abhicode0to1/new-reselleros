@@ -259,10 +259,10 @@ export default function BalanceSheetPage() {
                   <BSLine label="Advances from customers" hint="paid to you, not yet invoiced — service still owed" amount={auto?.advancesFromCustomers ?? 0} kind="auto" source="advance receipts" href="/invoices" />
                 )}
                 {(auto?.salaryPayable ?? 0) > 0 && (
-                  <BSLine label="Salary payable" hint="payroll run, not yet paid out" amount={auto?.salaryPayable ?? 0} kind="auto" source="Payroll" href="/payroll" />
+                  <BSLine label="Salary payable" hint="payroll run, not yet paid out" amount={auto?.salaryPayable ?? 0} kind="auto" source="Payroll" href="/accounting/payroll" />
                 )}
                 {(auto?.salaryDuesPayable ?? 0) > 0 && (
-                  <BSLine label="Salary dues payable" hint="withheld TDS/PF/ESI, not yet remitted" amount={auto?.salaryDuesPayable ?? 0} kind="auto" source="Payroll" href="/payroll" />
+                  <BSLine label="Salary dues payable" hint="withheld TDS/PF/ESI, not yet remitted" amount={auto?.salaryDuesPayable ?? 0} kind="auto" source="Payroll" href="/accounting/payroll" />
                 )}
                 {(auto?.reimbursementsPayable ?? 0) > 0 && (
                   <BSLine label="Reimbursements payable" hint="expenses paid from someone's own card, not yet repaid" amount={auto?.reimbursementsPayable ?? 0} kind="auto" source="Reimbursements" href="/accounting/reimbursements" />
