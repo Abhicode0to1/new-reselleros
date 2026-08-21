@@ -36,6 +36,9 @@ import { looksLikeJunk } from "@/lib/leads/junk";
 import { MarkJunkDialog } from "@/components/features/leads/mark-junk-dialog";
 import { qualification } from "@/lib/leads/qualification";
 import { useLeadActivities, useLogLeadActivity } from "@/lib/queries/lead-activities";
+import { useInboundEmails } from "@/lib/queries/inbound-emails";
+import { isSentReply } from "@/lib/inbound/sent";
+import { ReplyComposer } from "@/components/features/enquiries/reply-composer";
 import { LeadsBulkBar } from "@/components/features/leads/leads-bulk-bar";
 import { useQuotesByLead } from "@/lib/queries/quotes";
 import { QuoteActionBar } from "@/components/features/quotes/quote-action-bar";
@@ -1740,6 +1743,21 @@ function LeadDetailSheet({
   const { data: drawerCatalog } = useItems();
   const drawerPlanCosts = React.useMemo(() => buildPlanCostIndex(drawerCatalog ?? []), [drawerCatalog]);
   const { data: activities = [] } = useLeadActivities(lead?.id);
+
+  /* The mail this lead last SENT US — the thread a reply attaches to.
+     Replies we sent are excluded: replying to our own message would thread the conversation
+     onto the wrong side of it, and isSentReply is the same test the Sent folder uses, so
+     the two cannot disagree about what counts as inbound. */
+  const { data: allInbound = [] } = useInboundEmails();
+  const replyAnchor = React.useMemo(() => {
+    if (!lead?.id) return null;
+    return (
+      allInbound
+        .filter((e) => e.lead_id === lead.id && !isSentReply(e) && e.from_email)
+        .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))[0] ?? null
+    );
+  }, [allInbound, lead?.id]);
+
   const [drawerTab, setDrawerTab] = React.useState<"details" | "followups" | "activity">("details");
   React.useEffect(() => { setDrawerTab("details"); }, [lead?.id]);
 
@@ -2267,8 +2285,14 @@ function LeadDetailSheet({
                   drawerTab === t ? "border-amber text-amber-ink" : "border-transparent text-ink-3 hover:text-ink",
                 )}
               >
+                {/* "Conversation", not "Activity". This tab already held every call, email,
+                    quote and task on the lead, and the reply box now sits under it — so the
+                    tab is where you read the thread and answer it, which is what a name
+                    should say. A separate third tab was considered and rejected: the same
+                    conversation would then live in three places (the Details preview, the
+                    timeline, and a new tab), and the drawer already had two. */}
                 {t === "activity"
-                  ? `Activity${activities.length ? ` (${activities.length})` : ""}`
+                  ? `Conversation${activities.length ? ` (${activities.length})` : ""}`
                   : t === "followups"
                     ? `Follow-ups${openTasks.length ? ` (${openTasks.length})` : ""}`
                     : "Details"}
@@ -2362,13 +2386,13 @@ function LeadDetailSheet({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold">Recent communication</div>
-              {activities.length > 3 && (
+              {activities.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setDrawerTab("activity")}
                   className="text-[11px] font-medium text-amber-ink hover:text-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
                 >
-                  See all ({activities.length})
+                  Open conversation ({activities.length})
                 </button>
               )}
             </div>
@@ -2468,6 +2492,54 @@ function LeadDetailSheet({
                 invent an order that never happened.
               </p>
             )}
+          {/* ── Reply to this lead, from here ──────────────────────────────────
+              Both halves of the conversation already existed and lived on different
+              screens. Inbound mail was readable on the lead (the timeline above); replying
+              was only possible on /enquiries. The lead's own Email button opens GMAIL and
+              records a one-line note — "Emailed x@y · subject" — so what was actually
+              written was never kept anywhere.
+
+              Nothing new is invented here: the same ReplyComposer and the same
+              /api/inbound-emails/[id]/reply route, which files the sent text into the Sent
+              folder and only on a real send. The anchor is the latest mail this lead sent
+              us, because that route deliberately refuses a caller-supplied `to` — the
+              address comes from the stored enquiry, so nobody can send from this app to an
+              address they typed in. */}
+          {replyAnchor ? (
+            <div>
+              <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">
+                Reply by email
+              </div>
+              <ReplyComposer
+                enquiryId={replyAnchor.id}
+                toEmail={replyAnchor.from_email}
+                originalSubject={replyAnchor.subject}
+                receivedAt={replyAnchor.created_at}
+                formatWhen={formatDate}
+                /* Built from the LEAD, not from the extractor: these fields have been
+                   qualified by a human, and the extractor's guesses were only ever a
+                   stand-in for that. */
+                context={{
+                  contactName: lead.contact_name,
+                  product:     lead.plan,
+                  seats:       lead.seats,
+                  hasPhone:    Boolean(lead.contact_phone?.trim()),
+                  sellerName:  currentUser?.tenantName ?? null,
+                }}
+              />
+            </div>
+          ) : lead.contact_email ? (
+            /* No inbound mail to reply to — so there is no thread to attach a reply to, and
+               saying that plainly beats a composer that cannot send. The Email button is
+               still there; what it does NOT do is worth stating, because a logged
+               "Emailed …" line looks like the mail was kept. */
+            <div className="text-[11px] leading-snug text-ink-3 p-2.5 bg-paper-2 rounded-md">
+              No email from this lead yet, so there is no thread to reply into. The Email
+              button opens Gmail — the send is logged on the timeline, but what you write
+              there is not kept in ResellerOS. Once they email you, the reply box appears
+              here and the text is saved.
+            </div>
+          ) : null}
           </div>
           )}
 
