@@ -137,3 +137,55 @@ describe("the other ends of the funnel", () => {
     }
   });
 });
+
+/* ── Money is read before the workflow status ─────────────────────────────────
+   Q-ADPL-2026-27-0024, exactly as production held it: ₹38,232 quoted, ₹20,000 received by
+   UPI with receipt voucher RV-ADPL-2026-27-0024, status still `sent` because nobody had
+   pressed Mark accepted. The three money checks sat below `if (status !== "accepted")
+   return "open"`, so the stage came back "open" and the page offered "Record payment" as
+   though the account were empty. */
+describe("a payment is not hidden by an unmoved status label", () => {
+  const partOfIt = { total: 38232, received: 20000, status: "sent" as const, paymentStatus: "partial" as const, invoiceId: null };
+
+  it("calls the real production row partial, not open", () => {
+    expect(moneyStage(partOfIt)).toBe("partial");
+  });
+
+  it("offers the BALANCE, not a fresh payment", () => {
+    const a = quoteMoneyActions(partOfIt, (n) => `₹${n.toLocaleString("en-IN")}`);
+    expect(a.recordLabel).toBe("Record balance payment");
+    expect(a.canRecordPayment).toBe(true);
+    expect(a.note).toContain("₹20,000");
+    expect(a.note).toContain("₹18,232");
+  });
+
+  it("reads the money whatever the status says", () => {
+    for (const status of ["sent", "viewed", "accepted"] as const) {
+      expect(moneyStage({ total: 100, received: 40, status, paymentStatus: null, invoiceId: null }), status).toBe("partial");
+      expect(moneyStage({ total: 100, received: 100, status, paymentStatus: null, invoiceId: null }), status).toBe("paid");
+    }
+  });
+
+  it("trusts the payment ROWS over the status column when they disagree", () => {
+    /* payment_status says nothing arrived; a payment row says ₹40 did. The row wins. */
+    expect(moneyStage({ total: 100, received: 40, status: "sent", paymentStatus: "none", invoiceId: null })).toBe("partial");
+  });
+
+  it("still lets an invoice outrank everything", () => {
+    expect(moneyStage({ total: 100, received: 40, status: "sent", paymentStatus: "partial", invoiceId: "INV-1" })).toBe("invoiced");
+  });
+
+  it("keeps a dead quote closed even if money once landed on it", () => {
+    /* Deliberate: offering "record the balance" on a rejected deal invites collecting
+       against something nobody is selling. A refund is a different conversation. */
+    for (const status of ["rejected", "expired"] as const) {
+      expect(moneyStage({ total: 100, received: 40, status, paymentStatus: "partial", invoiceId: null }), status).toBe("closed");
+    }
+  });
+
+  it("leaves an untouched quote where it was", () => {
+    expect(moneyStage({ total: 100, received: 0, status: "draft", paymentStatus: "none", invoiceId: null })).toBe("draft");
+    expect(moneyStage({ total: 100, received: 0, status: "sent", paymentStatus: "none", invoiceId: null })).toBe("open");
+    expect(moneyStage({ total: 100, received: 0, status: "accepted", paymentStatus: "none", invoiceId: null })).toBe("unpaid");
+  });
+});

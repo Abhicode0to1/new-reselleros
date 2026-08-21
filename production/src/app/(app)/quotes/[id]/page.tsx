@@ -74,7 +74,11 @@ const STATUS_META: Record<Quote["status"], { kind: "muted" | "success" | "warnin
 const PAYMENT_META: Record<Quote["payment_status"], { kind: "muted" | "success" | "warning" | "info" | "danger"; label: string }> = {
   none:     { kind: "muted",   label: "Not awaiting" },
   awaiting: { kind: "warning", label: "Awaiting payment" },
-  partial:  { kind: "info",    label: "Partially paid" },
+  /* Rose, matching the list. `info` put half-collected money in the same blue as
+     "Invoiced" and "Payment received" — the two states where nothing is owed — so the one
+     row with cash outstanding looked like the settled ones. Tone is the only thing a
+     glance reads. */
+  partial:  { kind: "danger",  label: "Partly paid" },
   received: { kind: "info",    label: "Payment received" },
   invoiced: { kind: "success", label: "Invoiced" },
 };
@@ -764,7 +768,18 @@ export default function QuoteDetailPage() {
               )}
               Customer accepted? Mark accepted to convert the lead into a customer.
               {" "}
-              <span className="text-ink-2">Payment can land later — record it when received.</span>
+              {/* What this sentence used to say, unconditionally: "Payment can land later —
+                  record it when received." On Q-ADPL-2026-27-0024 that was printed under a
+                  ₹20,000 UPI payment with its own receipt voucher. Money that has already
+                  arrived is stated, in rose, instead of being described as a future
+                  possibility. */}
+              {totalReceivedSoFar > 0 ? (
+                <span className="font-medium text-rose">
+                  {rupee(totalReceivedSoFar)} already received of {rupee(total)} — {rupee(Math.max(0, total - totalReceivedSoFar))} still outstanding.
+                </span>
+              ) : (
+                <span className="text-ink-2">Payment can land later — record it when received.</span>
+              )}
             </div>
             <div className="flex gap-2 flex-wrap">
               <Button variant="ghost" loading={markRejected.isPending} onClick={() => markRejected.mutate()}>
@@ -774,8 +789,12 @@ export default function QuoteDetailPage() {
                   sit here has moved to the money row below, which is now the single
                   place that decides what can be done with the money — leaving it here
                   as well put two "Record payment" buttons on one screen. */}
+              {/* "(no payment yet)" is a claim about the bank, and it was printed whether
+                  or not one had. The parenthetical is what made it wrong, so it goes when
+                  money exists; the button's job — recording the STATUS decision — does
+                  not change. */}
               <Button variant="primary" icon="check_circle" loading={markAccepted.isPending} onClick={() => markAccepted.mutate()}>
-                Mark accepted (no payment yet)
+                {totalReceivedSoFar > 0 ? "Mark accepted" : "Mark accepted (no payment yet)"}
               </Button>
             </div>
           </div>

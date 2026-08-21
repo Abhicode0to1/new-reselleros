@@ -149,19 +149,30 @@ export function moneyStage(q: QuoteMoneyInput): MoneyStage {
      against, and the quote is history. */
   if (q.invoiceId || q.paymentStatus === "invoiced") return "invoiced";
 
+  /* A dead quote stays dead even if money once landed on it — offering "record the
+     balance" on a rejected deal invites collecting against something nobody is selling.
+     A refund is the conversation there, and it does not live on this row. */
   if (q.status === "rejected" || q.status === "expired" || q.status === "lost") return "closed";
-  if (q.status === "draft") return "draft";
-  if (q.status !== "accepted") return "open";
 
-  /* From here the quote IS accepted, and the money decides.
+  /* ── MONEY BEFORE WORKFLOW ────────────────────────────────────────────────
+     These three checks used to sit BELOW `if (q.status !== "accepted") return "open"`, so
+     the money was only ever consulted for a quote somebody had remembered to mark
+     accepted. Measured on production: Q-ADPL-2026-27-0024 · ₹38,232 · ₹20,000 received
+     by UPI with receipt voucher RV-ADPL-2026-27-0024 · status still `sent`. Stage came
+     back "open", so its page offered "Record payment" as though the account were empty
+     and said "Payment can land later — record it when received" about money already in
+     the bank.
 
-     Read from the recorded amounts first and the status column second. `payment_status`
-     is a label somebody has to remember to move; `received` is the sum of actual payment
-     rows. Where they disagree, the rows are right — the same derived-over-stored rule as
-     the already-quoted banner on /enquiries. */
+     A status is a note about a conversation. A payment is a fact about a bank account.
+     Money is read first, and from the recorded ROWS before the status column — a label is
+     something somebody has to remember to move, and where the two disagree the rows are
+     right. Same derived-over-stored rule as the already-quoted banner on /enquiries. */
   if (q.received > 0) return q.received >= q.total ? "paid" : "partial";
   if (q.paymentStatus === "received") return "paid";
   if (q.paymentStatus === "partial")  return "partial";
+
+  if (q.status === "draft") return "draft";
+  if (q.status !== "accepted") return "open";
 
   /* 'none' (the column default), 'awaiting', null — all one state: accepted, nothing in.
      Splitting these is what produced a quote with no buttons at all. */
