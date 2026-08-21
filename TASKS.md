@@ -219,9 +219,17 @@ Insert fail hone par report **gayab** ho jaati thi aur reporter ko "thank you" m
 
 **Baaki:** `/admin/feedback` par screenshot re-attach karne ka rasta nahi hai · duplicate detection nahi hai (do log ek hi bug file karein to do rows) · `support_tickets` ki 4 purani rows ka kya karna hai — band karna Pardeep ka call.
 
-### 🔴 HANDOFF — padho pehle (19 Aug 2026)
+### 🔴 HANDOFF — padho pehle (21 Aug 2026)
 
-Branch `session/money-spine-hardening-jun1`. Sab commit ho gaya (`63586e6` tak). ✅ **19 Aug ko DEPLOY HO GAYA** — revision **`resellersos-00297-728`**, 100% traffic · https://resellersos-1005662057478.asia-south1.run.app. Ab live hai: feedback triage (`/admin/feedback`), attendance check-in/check-out reminder, aur Owner Private Vault (`/vault/personal`). Branch remote par **push nahi ki** (43+ commits aage hai) — wo alag faisla hai.
+Branch `session/money-spine-hardening-jun1`, sab commit (`90f6db5` tak). ✅ **21 Aug ko DEPLOY HO GAYA** — revision **`resellersos-00299-pqj`**, 100% traffic. Ab live: web push notifications, attendance reminder ka cron, quote ka in-place draft editor, lead ke saath do-tarfa email, aur approvals queue. Branch remote par **push nahi ki** (ab 34+ commits aage) — wo alag faisla hai.
+
+> **🔴 `NEXT_PUBLIC_*` ko Cloud Run env var mat banao — wo browser tak nahi pahunchta.** `next build` use bundle me *substitute* karta hai, isliye sirf runtime par diya value browser me `undefined` aata hai. Notifications card theek yahi var padh kar batata hai ki push set up hai ya nahi — to "sahi" tareeke se karne par production har user ko *"Push is not set up on the server yet"* dikhata, jabki server ke paas dono key hoti aur cron chal raha hota. **Koi error kahin log nahi hota.** Isliye VAPID ka **public** key `Dockerfile` me `ENV` hai (Supabase anon key ke saath), aur sirf `VAPID_PRIVATE_KEY` + `VAPID_SUBJECT` Cloud Run par hain.
+>
+> **`gcloud run services update` par hamesha `--update-env-vars` — kabhi `--set-env-vars`.** Doosra poora set **replace** karta hai; chup-chaap `SUPABASE_SERVICE_ROLE_KEY` aur `CRON_SECRET` samet nau var uda deta. Baad me gina: 11 var, purane nau salaamat.
+
+**⏰ Scheduler par ab 10 job hain.** Naya: `resellersos-attendance-reminders` — `*/30 9-20 * * *` **Asia/Kolkata** (baaki job bhi IST me hain, UTC me nahi). Itni baar chalana safe hai kyunki `attendance_reminder_log` par `(user_id, work_date, kind)` ka unique index hai — Scheduler ka retry, overlapping deploy, aur half-hourly schedule teeno bekaar ho jaate hain, ek aadmi ko din me ek hi baar (per kind) jaati hai. Header wahi `CRON_SECRET` hai jo renewals job me chalता hai (naap kar milaya — galat header wala job hamesha chup-chaap 401 deta rehta aur pata hafton baad chalta).
+
+> **Deployed cron ko `?dry=1` se naapa (kuch likhta nahi):** IST 20:44 par 7 log dekhe, 1 due (Hitesh, check_out), 6 asli wajah se skip — 4 "past the end of the working day with no check-in", 2 "already checked out". Yani deployed route apne env ke saath theek chal raha hai.
 
 > **Deploy ke baad ke verification ne ek purani kami pakdi, aur wo usi waqt theek karke dobara deploy hui.** `curl` se dekha to `/dashboard` sahi 307 de raha tha par **`/vault` aur `/attendance/me` bina session ke 200** de rahe the — middleware ki `PROTECTED_PREFIXES` me dono the hi nahi. Data kabhi nahi khula (RLS bina `auth.uid()` ke kuch nahi deta), par signed-out visitor ko Password Vault ka shell dikhna apne aap me galat hai. `/vault` ye kami shuru se leke chal raha tha. Ab chaaron 307 dete hain. **Sabak: deploy ke baad sirf `/login` check karna kaafi nahi — jo route abhi bane hain unhe bina session ke curl karo.**
 
