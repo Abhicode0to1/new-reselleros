@@ -701,7 +701,15 @@ Dashboard showed **`LAST BACKUP: No backups`** on a DB holding **₹57,30,703 of
 
 Same drift as `0003`/`0146`, now measured exactly. Backup also gained **430 constraints** the same day — without them it knew a table's columns but not its rules.
 
-**✅ FIXED — `0224_capture_remaining_drift.sql` generated from the live catalog** (750 lines: 11 tables · 163 columns · 54 constraints · 41 indexes · 30 policies · 5 triggers · **9 functions**). Idempotent, so applying to prod is a no-op. **NOT applied — read-only MCP has no `apply_migration`, and it's your call.**
+**✅ FIXED — `0224_capture_remaining_drift.sql` generated from the live catalog** (750 lines: 11 tables · 163 columns · 54 constraints · 41 indexes · 30 policies · 5 triggers · **9 functions**). Idempotent, so applying to prod is a no-op.
+
+> **🟢 FAISLA (21 Aug 2026): apply NAHI karni — `baseline.sql` ne ise superseded kar diya. Ye file band samjho.**
+> Teen cheezein naapi gayin, andaza nahi:
+> 1. **Prod me kuch missing nahi** — 11/11 tables maujood (`to_regclass`). To apply karna sach me no-op hai, sirf kagaz par nahi.
+> 2. **Rebuild ko iski zaroorat nahi** — `npm run db:rebuild` → `scripts/rebuild-db.mjs` sirf `baseline.sql` + `baseline-storage.sql` chalata hai, aur `baseline.sql` me **11/11 `CREATE TABLE` maujood hain**. Jo gap 0224 bharne ke liye likhi gayi thi (fresh DB me `contacts` ki 58 row rakhne ki jagah na hona), wo gap **band ho chuka hai**.
+> 3. **Timeline se wajah saaf hai** — 0224 **13 Aug** ki hai; `baseline.sql` **15 Aug** ko prod se dobara dump hui, do din baad, wahi 11 tables uthate hue. Isliye redundant hai, galat nahi.
+>
+> ⚠️ **Yahan naapne ka tarika galti se chala tha, aur wo bachane layak hai.** Pehla grep `create table (if not exists )?(public\.)?"?x"?` tha aur usne kaha **11/11 baseline me NAHI hain** — theek ulta. Kyunki `baseline.sql` `CREATE TABLE IF NOT EXISTS "public"."x"` likhta hai, **schema bhi quote me**. Pakda tab gaya jab `quotes` par sanity-check chalaya — wo bhi "nahi mila", jo asambhav hai. **Sabak: schema ke grep ko ek aise object par tolo jiska hona pakka hai, warna false negative "kaam bacha hai" ban jata hai** — aur yahan wo 750-line ki bekaar prod DDL banti.
 
 Two things the generation caught that a hand-written file would have missed:
 - **The drift went past tables into functions.** 9 prod functions have no definition in git — 3 back triggers created here (§5 would have failed on a fresh DB without them) and two are money-adjacent RPCs the reimbursements feature calls: `settle_reimbursement`, `delete_reimbursement`. Verified none overlaps a git function, so nothing is overwritten.
