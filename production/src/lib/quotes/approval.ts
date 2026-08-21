@@ -194,8 +194,23 @@ export type SendGate =
  *
  * §24 — every refusal names what happened, why, and the next step. "Needs approval"
  * on its own leaves a rep staring at a disabled button.
+ *
+ * `approvers` names the people who could actually clear a pending quote, and has three
+ * meaningful states, because "we do not know yet" and "nobody can" are different answers
+ * and only one of them is a problem:
+ *   • `undefined` — the caller has not loaded the team, so say nothing about who.
+ *   • `null`      — the team IS loaded and nobody is eligible. Usually the only owner is
+ *                   the person who asked, and they cannot approve their own quote. That is
+ *                   a dead end worth naming, not an empty list to print.
+ *   • a string    — "Deepak Sharma or Sriganga Technologies", from approverSentence().
+ * Build it with eligibleApprovers() + approverSentence() in ./awaiting-approval, so the
+ * banner and the approvals queue can never name different people.
  */
-export function canSend(record: ApprovalRecord, now: ApprovalRequirement): SendGate {
+export function canSend(
+  record: ApprovalRecord,
+  now: ApprovalRequirement,
+  approvers?: string | null,
+): SendGate {
   if (now.tier === "none") return { allowed: true };
 
   const who = now.tier === "owner" ? "the owner" : "a manager";
@@ -226,8 +241,17 @@ export function canSend(record: ApprovalRecord, now: ApprovalRequirement): SendG
     return {
       allowed: false,
       tier: now.tier,
-      reason: `Waiting for ${who} to approve.`,
-      nextStep: "It is in their approvals queue. Nudge them if it is urgent.",
+      reason: approvers
+        ? `Waiting for ${approvers} to approve.`
+        : `Waiting for ${who} to approve.`,
+      /* "It is in their approvals queue" used to be a claim with nothing behind it —
+         there was no queue, so the only working half of this sentence was "nudge them".
+         The queue exists now (Quotes → Awaiting my approval, and the sidebar count), so
+         the sentence is true, and when the team is loaded it names the actual people
+         instead of "the owner", of which this workspace has three. */
+      nextStep: approvers === null
+        ? "Nobody else in this workspace can approve it — you cannot approve your own quote. Add another owner, or ask an owner to raise it."
+        : "It is in their approvals queue on the Quotes page. Nudge them if it is urgent.",
     };
   }
 

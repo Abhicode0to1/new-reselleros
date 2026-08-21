@@ -49,6 +49,8 @@ import { overallProvisionStatus, type ProvisionStatus } from "@/lib/provisioning
 import { useProvisioning } from "@/lib/queries/provisioning";
 import { useQuoteSignature } from "@/lib/queries/quote-signatures";
 import { requiredApproval, canSend, canApprove, approvalBadge } from "@/lib/quotes/approval";
+import { eligibleApprovers, approverSentence } from "@/lib/quotes/awaiting-approval";
+import { useTeamMembers } from "@/lib/queries/team";
 import { quoteEconomics, quoteApprovalRecord } from "@/lib/quotes/approval-economics";
 import { useRequestApproval } from "@/lib/queries/quotes";
 import { usePaymentsByQuote, totalReceived as sumReceived } from "@/lib/queries/payments";
@@ -153,7 +155,21 @@ export default function QuoteDetailPage() {
   const approvalEconomics = React.useMemo(() => quote ? quoteEconomics(quote) : null, [quote]);
   const approvalNeed      = React.useMemo(() => approvalEconomics ? requiredApproval(approvalEconomics) : null, [approvalEconomics]);
   const approvalRec       = React.useMemo(() => quote ? quoteApprovalRecord(quote) : null, [quote]);
-  const sendGate          = approvalNeed && approvalRec ? canSend(approvalRec, approvalNeed) : null;
+
+  /* Who can actually clear it, by name. "Waiting for the owner to approve" is wrong in a
+     workspace with three owners, and worse than vague: the person most likely to be
+     reading it is the one who RAISED the quote, and they are the one person who cannot
+     approve it. `isSuccess` is what separates "nobody is eligible" (null → the banner says
+     the rule cannot be satisfied) from "the roster has not arrived yet" (undefined → the
+     banner keeps the old role wording). Treating a slow query as "nobody can approve"
+     would flash a dead end on every load. */
+  const { data: team, isSuccess: teamLoaded } = useTeamMembers();
+  const approverNames = React.useMemo(() => {
+    if (!teamLoaded || !quote) return undefined;
+    return approverSentence(eligibleApprovers(team ?? [], quote));
+  }, [teamLoaded, team, quote]);
+
+  const sendGate          = approvalNeed && approvalRec ? canSend(approvalRec, approvalNeed, approverNames) : null;
   const approvalPill      = approvalNeed && approvalRec ? approvalBadge(approvalRec, approvalNeed) : null;
   const viewerCanApprove  = approvalNeed && approvalRec && me
     ? canApprove({ id: me.userId, role: me.role }, approvalRec, approvalNeed).allowed

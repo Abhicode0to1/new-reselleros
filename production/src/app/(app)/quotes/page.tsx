@@ -41,6 +41,8 @@ import { Icon } from "@/components/ui/icon";
 import { FAB } from "@/components/ui/fab";
 import { rupee, daysBetween, cleanDisplayName, phoneSuffixOf } from "@/lib/utils";
 import { unifiedStatus, cashNote } from "@/lib/quotes/status-badge";
+import { awaitsMyApproval } from "@/lib/quotes/awaiting-approval";
+import { ApprovalsStrip } from "@/components/features/quotes/approvals-strip";
 import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
@@ -158,8 +160,18 @@ export default function QuotesPage() {
     if (!meMember) return rows;
     const ids = idsForMode(meMember, team, teamMode);
     if (ids === null) return rows;
-    return rows.filter((q) => !q.owner_id || ids.includes(q.owner_id));
-  }, [quotes, meMember, team, teamMode]);
+    return rows.filter((q) =>
+      !q.owner_id ||
+      ids.includes(q.owner_id) ||
+      /* A quote waiting on YOUR approval is always yours to see, whoever owns it and
+         whichever view you are in. Asking somebody to approve a quote and then hiding it
+         behind a team filter is a deadlock: the sidebar counts it, the queue cannot show
+         it, and nobody can send it. Being asked to sign something makes you a party to it.
+         This also keeps the badge honest — the count and this page now select the same
+         rows, which is the rule useNavBadges is written around. */
+      awaitsMyApproval(q, { id: me?.userId ?? "", role: me?.role }),
+    );
+  }, [quotes, meMember, team, teamMode, me?.userId, me?.role]);
 
   // Counts per status — adds an "invoiced" bucket on top of the quote.status
   // enum, derived from payment_status. Truly-done deals (accepted + paid +
@@ -192,6 +204,27 @@ export default function QuotesPage() {
     (q.payment_status === "invoiced" && (q.amount ?? 0) - (q.payment_amount ?? 0) > 0);
   const awaitingPayment = quotesByWorkspace.filter(isAwaitingCash).length;
 
+  /* ── Quotes waiting on THIS person's approval ─────────────────────────────
+     The queue the quote page has been promising. Until this existed, the banner said
+     "it is in their approvals queue" and there was no such thing — a pending quote was
+     visible only to whoever thought to open it, so the other owner had no way to know.
+
+     Deliberately NOT another status tab. Draft and Sent already count these rows, and
+     two counts sitting in one row of folders get read as a total (the mistake this
+     codebase has made twice) — so it lives in its own strip below, worded as a filter.
+     One predicate, shared with the quote banner and the sidebar badge, so the three can
+     never disagree about which quotes these are. */
+  const myApprovals = me
+    ? quotesByWorkspace.filter((q) => awaitsMyApproval(q, { id: me.userId, role: me.role }))
+    : [];
+  const [onlyMyApprovals, setOnlyMyApprovals] = React.useState(false);
+  /* Turn the filter off by itself once the queue empties — otherwise clearing the last
+     approval leaves the operator on a filter with nothing in it, which reads as the list
+     having broken rather than the work being finished. */
+  React.useEffect(() => {
+    if (onlyMyApprovals && myApprovals.length === 0) setOnlyMyApprovals(false);
+  }, [onlyMyApprovals, myApprovals.length]);
+
   const tabs: TabBarItem[] = [
     { id: "all",      label: "All",      count: counts.all ?? 0 },
     { id: "draft",    label: "Draft",    count: counts.draft ?? 0, dot: "slate" },
@@ -205,6 +238,10 @@ export default function QuotesPage() {
 
   // Filter
   const filtered = quotesByWorkspace.filter((q) => {
+    /* Stacks with the status tabs, which is why turning it on also resets the tab to All
+       (see the strip below). Left on "Invoiced", the two filters intersect to nothing and
+       an operator who just clicked "Review them" would be shown an empty table. */
+    if (onlyMyApprovals && !awaitsMyApproval(q, { id: me?.userId ?? "", role: me?.role })) return false;
     if (tab === "expired") {
       if (q.status !== "expired" && q.status !== "rejected") return false;
     } else if (tab === "awaiting") {
@@ -532,6 +569,24 @@ export default function QuotesPage() {
               )}
             </div>
           )}
+
+          {/* ── Somebody is waiting on you ───────────────────────────
+              Above the tabs and outside them, because it is not a status — it is work
+              addressed to the person reading the screen. Its own component so it can be
+              render-tested: the one pending quote in the live books was raised by the only
+              login on this machine, and nobody may approve their own quote, so the running
+              app correctly shows this strip to no one. */}
+          <ApprovalsStrip
+            count={myApprovals.length}
+            filtered={onlyMyApprovals}
+            onToggle={(next) => {
+              setOnlyMyApprovals(next);
+              /* All, so the approval filter cannot land on a status tab that excludes every
+                 quote it just selected — an operator who clicked "Review them" and got an
+                 empty table would read it as the queue being wrong. */
+              if (next) setTab("all");
+            }}
+          />
 
           {/* Sticky Horizontal TabBar + Date Range + Search */}
           {!isLoading && quotes && quotes.length > 0 && (

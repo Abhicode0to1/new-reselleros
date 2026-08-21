@@ -8,6 +8,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { tiersApprovableBy } from "@/lib/quotes/awaiting-approval";
 
 interface NavBadges {
   leads?:        string;
@@ -17,6 +18,7 @@ interface NavBadges {
   renewals?:     string;
   invoices?:     string;
   payments?:     string;
+  quotes?:       string;
   support?:      string;
   whatsapp?:     string;
 }
@@ -24,6 +26,15 @@ interface NavBadges {
 async function fetchNavBadges(): Promise<NavBadges> {
   const supabase = createClient();
   const badges: NavBadges = {};
+
+  /* Who is asking. Every other count in this hook is a tenant fact, but "waiting for YOUR
+     approval" is not, and a badge that counted everyone's pending approvals would send
+     three owners to look at the same one quote. */
+  const { data: auth } = await supabase.auth.getUser();
+  const myId = auth.user?.id ?? null;
+  const myRole = myId
+    ? (await supabase.from("users").select("role").eq("id", myId).maybeSingle()).data?.role ?? null
+    : null;
 
   // End-of-today in IST as UTC ISO — used for "due today or overdue" count.
   // (Replicated from lib/queries/tasks.ts todayBoundariesIST so this hook
@@ -109,6 +120,33 @@ async function fetchNavBadges(): Promise<NavBadges> {
   if (renewalsCount > 0) badges.renewals = String(renewalsCount);
   if (invoicesCount > 0) badges.invoices = String(invoicesCount);
   if (paymentsCount > 0) badges.payments = String(paymentsCount);
+
+  /* ── Quotes waiting on YOUR approval ───────────────────────────────────────
+     The only count in this hook addressed to a person rather than to the tenant, so it
+     has to know who is asking — hence the extra round trip, and only for people whose
+     role can approve anything at all.
+
+     It exists because the quote page told a rep "it is in their approvals queue" while no
+     queue existed: a pending quote was visible only to whoever thought to open it, so the
+     owner who had to clear it was never told. This is what turns that sentence true.
+
+     Mirrors /quotes exactly, which is this file's own rule (see the Leads-vs-Deals note
+     above). Three parts, all matching `awaitsMyApproval`: pending, not raised by me — a
+     person cannot approve their own quote, and Postgres drops NULL rows on `neq`, which is
+     also what the predicate wants — and a tier my role may clear, from the shared
+     `tiersApprovableBy` so the count and the page cannot drift. The page deliberately
+     shows an approval-pending quote even when the team filter would hide it, so this
+     count needs no visibility clause to agree with it. */
+  const myTiers = tiersApprovableBy(myRole);
+  if (myId && myTiers.length > 0) {
+    const { count } = await supabase
+      .from("quotes")
+      .select("id", { count: "exact", head: true })
+      .eq("approval_status", "pending")
+      .neq("approval_requested_by", myId)
+      .in("approval_tier", myTiers);
+    if ((count ?? 0) > 0) badges.quotes = String(count);
+  }
 
   return badges;
 }

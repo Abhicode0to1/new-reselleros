@@ -194,6 +194,35 @@ describe("canSend — §24, never a bare refusal", () => {
     if (!g.allowed) expect(g.nextStep).toMatch(/approvals queue/);
   });
 
+  it("names the actual approvers when the caller knows them", () => {
+    /* "the owner" is wrong in this workspace — there are three, and the one reading the
+       banner is usually the one who cannot approve it. */
+    const g = canSend(rec({ status: "pending" }), need, "Deepak Sharma or Sriganga Technologies");
+    expect(g.allowed).toBe(false);
+    if (!g.allowed) {
+      expect(g.reason).toBe("Waiting for Deepak Sharma or Sriganga Technologies to approve.");
+      expect(g.nextStep).toMatch(/approvals queue/);
+    }
+  });
+
+  it("falls back to the role when the team has not been loaded", () => {
+    const g = canSend(rec({ status: "pending" }), need, undefined);
+    expect(g.allowed).toBe(false);
+    if (!g.allowed) expect(g.reason).toMatch(/Waiting for (the owner|a manager) to approve/);
+  });
+
+  it("says the rule cannot be satisfied when nobody is eligible", () => {
+    /* null means "we looked, and there is nobody" — a one-owner workspace where the owner
+       raised the quote. Telling them to wait for a queue that can never clear is the one
+       answer that leaves them stuck (§24). */
+    const g = canSend(rec({ status: "pending" }), need, null);
+    expect(g.allowed).toBe(false);
+    if (!g.allowed) {
+      expect(g.nextStep).toMatch(/Nobody else in this workspace can approve/);
+      expect(g.nextStep).not.toMatch(/approvals queue/);
+    }
+  });
+
   it("blocks a rejected quote and repeats the reason given", () => {
     const g = canSend(rec({ status: "rejected", rejectionReason: "Margin too thin for this account" }), need);
     expect(g.allowed).toBe(false);
