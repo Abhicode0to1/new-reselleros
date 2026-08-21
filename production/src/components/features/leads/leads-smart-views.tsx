@@ -110,7 +110,15 @@ export function LeadsSmartViews({
     l.stage !== "won" && l.stage !== "lost").length;
 
   const views: ViewDef[] = [
-    { id: "all",   label: "All",     count: all,      tone: "default", hint: "Everything except junk" },
+    /* Labelled "All open", not "All", and the hint says what is missing.
+       This chip is fed `leadsForTab`, which is `workspaceLeads.filter(isOpenLead)` — so it
+       never held won or lost leads, while the label said "All" and the hint said
+       "Everything except junk". On 21 Aug that cost real confusion: 19 leads exist, this
+       read 17, and the owner reasonably concluded two had disappeared. They were the two
+       `won` deals, sitting in the Won folder, which the chip strip had scrolled out of
+       view. The data was right and the word was wrong, which is the harder bug to see. */
+    { id: "all",   label: "All open", count: all,     tone: "default",
+      hint: "Every open lead. Won and lost are not open — they have their own folders." },
     ...(currentUserId
       ? [{ id: "mine" as SmartView, label: "Mine", count: mine, tone: "default" as Tone, hint: "Assigned to you" }]
       : []),

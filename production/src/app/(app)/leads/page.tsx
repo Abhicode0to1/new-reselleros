@@ -803,7 +803,12 @@ function LeadsPageInner() {
           <button
             type="button"
             onClick={() => selectFolder("all")}
-            title="Inbox + In Talks + Quote Sent + Demo/Trial. Every open lead is in exactly one of those four."
+            /* The second sentence exists because the first one was not enough. Won and
+               Lost sit in the SAME chip strip as the four open folders but are not part of
+               this total, and on a narrow window they scroll out of sight — so a strip
+               reading 17 next to nothing else looks like every lead there is. Asked on
+               21 Aug about exactly this: 19 leads, 17 shown, the 2 won ones off-screen. */
+            title={`Inbox + In Talks + Quote Sent + Demo/Trial. Every open lead is in exactly one of those four. Won (${folderCounts.won}) and Lost (${folderCounts.lost}) are closed, so they are not counted here — scroll the strip to reach them.`}
             className={cn(
               "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
               /* `folder` alone is not enough: the Junk view leaves folder at "all", and
