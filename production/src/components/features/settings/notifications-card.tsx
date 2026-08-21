@@ -106,7 +106,23 @@ export function NotificationsCard() {
         userAgent: navigator.userAgent.slice(0, 400),
       }),
     });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Could not save this device");
+    if (!res.ok) {
+      /* 401 deserves its own sentence. The browser prompt was allowed, the subscription
+         was created locally, and then the save failed because THIS browser has no session
+         — which happened on the first real attempt at this feature. The raw "Not signed
+         in" from the route tells an operator nothing about what to do next, and the
+         notification permission they just granted makes it look as though it worked. */
+      if (res.status === 401) {
+        /* Undo the local subscription: leaving it means the browser thinks it is
+           subscribed while the server has never heard of it, and the card would show
+           "On" for a device that can never be reached. */
+        await sub.unsubscribe().catch(() => {});
+        throw new Error(
+          "You are signed out in this browser — sign in, then turn notifications on again.",
+        );
+      }
+      throw new Error((await res.json().catch(() => ({}))).error || "Could not save this device");
+    }
     return sub;
   }, []);
 
