@@ -30,6 +30,16 @@ export type ShortcutScope =
   | "form";
 
 export interface Shortcut {
+  /**
+   * Stable slug, so a button's tooltip can point at a shortcut instead of restating it.
+   *
+   * A tooltip that spells the keys out in its own words is the same drift the cheat sheet
+   * used to have: change `Ctrl+Shift+B` and the badge keeps promising the old keys. The
+   * `shortcut` prop on <TooltipContent> takes one of these ids and reads the keys from
+   * here, and the prop's TYPE is derived from this list — so a wrong id is a compile
+   * error rather than a tooltip that quietly shows nothing.
+   */
+  id: string;
   /** How the keys are drawn, e.g. ["g", "l"] or ["Ctrl", "K"]. */
   keys: readonly string[];
   label: string;
@@ -45,25 +55,111 @@ export interface Shortcut {
  * hard-coding one would be wrong for half the users, and this app runs on Windows desks
  * and Macs both.
  */
-export const SHORTCUTS: readonly Shortcut[] = [
-  { keys: ["Ctrl", "K"], label: "Search everything — customers, leads, quotes, invoices, domains", scope: "global", group: "Move around" },
-  { keys: ["g", "l"],    label: "Go to Leads",         scope: "global", group: "Move around" },
-  { keys: ["g", "e"],    label: "Go to Enquiries",     scope: "global", group: "Move around" },
-  { keys: ["g", "q"],    label: "Go to Quotes",        scope: "global", group: "Move around" },
-  { keys: ["g", "s"],    label: "Go to Subscriptions", scope: "global", group: "Move around" },
-  { keys: ["g", "a"],    label: "Go to Accounting",    scope: "global", group: "Move around" },
+const SHORTCUT_DEFS = [
+  { id: "search",          keys: ["Ctrl", "K"], label: "Search everything — customers, leads, quotes, invoices, domains", scope: "global", group: "Move around" },
+  { id: "go-leads",        keys: ["g", "l"],    label: "Go to Leads",         scope: "global", group: "Move around" },
+  { id: "go-enquiries",    keys: ["g", "e"],    label: "Go to Enquiries",     scope: "global", group: "Move around" },
+  { id: "go-quotes",       keys: ["g", "q"],    label: "Go to Quotes",        scope: "global", group: "Move around" },
+  { id: "go-subscriptions", keys: ["g", "s"],   label: "Go to Subscriptions", scope: "global", group: "Move around" },
+  { id: "go-accounting",   keys: ["g", "a"],    label: "Go to Accounting",    scope: "global", group: "Move around" },
 
-  { keys: ["j"],         label: "Next row",            scope: "list", group: "Lists" },
-  { keys: ["k"],         label: "Previous row",        scope: "list", group: "Lists" },
-  { keys: ["Enter"],     label: "Open the selected row", scope: "list", group: "Lists" },
-  { keys: ["o"],         label: "Open the selected row", scope: "list", group: "Lists" },
-  { keys: ["Esc"],       label: "Close a dialog, or clear the selection", scope: "list", group: "Lists" },
+  { id: "next-row",        keys: ["j"],         label: "Next row",            scope: "list", group: "Lists" },
+  { id: "prev-row",        keys: ["k"],         label: "Previous row",        scope: "list", group: "Lists" },
+  { id: "open-row-enter",  keys: ["Enter"],     label: "Open the selected row", scope: "list", group: "Lists" },
+  { id: "open-row-o",      keys: ["o"],         label: "Open the selected row", scope: "list", group: "Lists" },
+  { id: "escape",          keys: ["Esc"],       label: "Close a dialog, or clear the selection", scope: "list", group: "Lists" },
 
-  { keys: ["Ctrl", "Enter"], label: "Send — on a quote or a reply", scope: "form", group: "Actions" },
-  { keys: ["Alt", "A"],      label: "Add an item to the quote",     scope: "form", group: "Actions" },
+  { id: "send",            keys: ["Ctrl", "Enter"], label: "Send — on a quote or a reply", scope: "form", group: "Actions" },
+  { id: "add-quote-item",  keys: ["Alt", "A"],      label: "Add an item to the quote",     scope: "form", group: "Actions" },
+  /* Was implemented in global-bug-reporter.tsx and listed NOWHERE — not here, so not in
+     the cheat sheet either, while this file's own first line claimed to hold every
+     shortcut in the app. A shortcut nobody can discover is a shortcut nobody uses; it was
+     working and invisible for as long as it has existed. The handler now reads its keys
+     from this entry (see matchesShortcut), so the three copies cannot drift apart. */
+  { id: "report-bug",      keys: ["Ctrl", "Shift", "B"], label: "Report a bug or suggest a feature", scope: "global", group: "Actions" },
 
-  { keys: ["?"],         label: "Show this list",      scope: "global", group: "Help" },
-] as const;
+  /* Workspace tabs. Implemented in workspace-tabs-provider.tsx and, like report-bug,
+     listed nowhere until now.
+     Only the ones that actually WORK are listed. That file also attempts Ctrl+Tab and
+     Ctrl+W, and says so plainly: the browser keeps them, and they land only in the
+     installed PWA. Printing those in a cheat sheet would promise the operator something
+     that does nothing on their machine, which is worse than saying nothing — they would
+     press it, watch their browser switch tabs, and stop trusting the rest of the list. */
+  { id: "tab-jump",   keys: ["Alt", "1–8"],         label: "Jump to workspace tab 1–8", scope: "global", group: "Move around" },
+  { id: "tab-next",   keys: ["Ctrl", "Alt", "→"],   label: "Next workspace tab",        scope: "global", group: "Move around" },
+  { id: "tab-prev",   keys: ["Ctrl", "Alt", "←"],   label: "Previous workspace tab",    scope: "global", group: "Move around" },
+  { id: "tab-close",  keys: ["Ctrl", "Alt", "W"],   label: "Close the workspace tab",   scope: "global", group: "Move around" },
+
+  { id: "help",            keys: ["?"],         label: "Show this list",      scope: "global", group: "Help" },
+] as const satisfies readonly Shortcut[];
+
+/** Every id above, as a type. A tooltip pointing at a shortcut that does not exist should
+ *  not compile — that is cheaper than a test, and it cannot be forgotten. */
+export type ShortcutId = (typeof SHORTCUT_DEFS)[number]["id"];
+
+/**
+ * The registry as everything else sees it.
+ *
+ * Two shapes on purpose. `SHORTCUT_DEFS` is `as const`, which is what makes ShortcutId a
+ * union of real ids instead of plain `string`. But `as const` also freezes `keys` into
+ * literal tuples, and that leaks: `s.keys.includes(someString)` stops compiling for every
+ * existing caller, and the fix at each call site would be a cast — which is how a
+ * type-safety win turns into a dozen small holes. Widening here keeps the strictness
+ * exactly where it is useful (the id) and nowhere it is not.
+ */
+export const SHORTCUTS: readonly Shortcut[] = SHORTCUT_DEFS;
+
+/** The one shortcut with this id. Throws rather than returning undefined: a missing id
+ *  means a caller is out of step with the registry, and a silent no-op hides that. */
+export function findShortcut(id: ShortcutId): Shortcut {
+  const found = SHORTCUTS.find((s) => s.id === id);
+  if (!found) throw new Error(`Unknown shortcut id: ${id}`);
+  return found;
+}
+
+/**
+ * The keys as plain text, e.g. "Alt+A" — for a `title` attribute, which cannot hold JSX
+ * and so cannot use <Kbd>.
+ *
+ * Deliberately platform-NEUTRAL: a title attribute is rendered by the browser, not by us,
+ * so there is nowhere to swap ⌘ in after mount. Prefer <Kbd> or a tooltip's `shortcut`
+ * prop wherever markup is possible; reach for this only when the target is an attribute.
+ */
+export function shortcutText(id: ShortcutId): string {
+  return findShortcut(id).keys.join("+");
+}
+
+/**
+ * Does this keyboard event press this shortcut?
+ *
+ * Only for shortcuts held together with modifiers (Ctrl/Alt/Shift + a key). Sequences like
+ * `g` then `l` are two events and are handled by chordStep; single letters go through
+ * shouldIgnore. Ctrl is matched against ctrlKey OR metaKey so a Mac's ⌘ works — which is
+ * what the badge already promises the user.
+ *
+ * Modifier combinations deliberately fire even while typing: shouldIgnore() exists to keep
+ * BARE letters out of text fields, and someone hitting Ctrl+Shift+B mid-sentence to report
+ * the bug they just hit means exactly that.
+ */
+export function matchesShortcut(
+  shortcut: Shortcut,
+  e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">,
+): boolean {
+  const keys = shortcut.keys;
+  const wantCtrl  = keys.includes("Ctrl");
+  const wantAlt   = keys.includes("Alt");
+  const wantShift = keys.includes("Shift");
+  const main = keys.filter((k) => k !== "Ctrl" && k !== "Alt" && k !== "Shift");
+  if (main.length !== 1) return false;               // not a modifier combo
+
+  if (wantCtrl !== (e.ctrlKey || e.metaKey)) return false;
+  if (wantAlt !== e.altKey) return false;
+  if (wantShift !== e.shiftKey) return false;
+
+  const want = main[0].toLowerCase();
+  const got = (e.key ?? "").toLowerCase();
+  return got === want || (want === "enter" && got === "enter");
+}
 
 /** The cheat sheet's sections, derived so it can never disagree with the map above. */
 export function shortcutGroups(): { group: Shortcut["group"]; items: Shortcut[] }[] {

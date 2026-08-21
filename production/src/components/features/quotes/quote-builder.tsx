@@ -42,6 +42,7 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { isInterStateSupply, isExportSupply } from "@/lib/gst/place-of-supply";
 import { hsnSummary } from "@/lib/gst/hsn";
 import { Kbd } from "@/components/ui/kbd";
+import { shortcutText } from "@/lib/keyboard/shortcuts";
 import { COUNTRIES } from "@/lib/gst/countries";
 import { BILLING_CURRENCIES, isForeignCurrency, formatForeign } from "@/lib/currency";
 import { addOrMergeLine } from "@/lib/quotes/line-items";
@@ -1554,7 +1555,11 @@ export function QuoteBuilder() {
             <Button size="sm" variant="default" icon="layers" onClick={() => setBulkOpen(true)}>
               Bulk / many domains
             </Button>
-            <Button size="sm" icon="plus" onClick={() => setAddOpen(true)} title="Add item (Alt+A)">
+            {/* The keys in this title came from the registry, not from a typist. The badge
+                beside the label is hidden below `sm`, so on a narrow screen the title is
+                the only place the shortcut appears — and a title reading the OLD keys is
+                exactly the drift the registry exists to prevent. */}
+            <Button size="sm" icon="plus" onClick={() => setAddOpen(true)} title={`Add item (${shortcutText("add-quote-item")})`}>
               Add item <Kbd keys={["Alt", "A"]} className="ml-1.5 hidden sm:inline-flex" />
             </Button>
           </div>

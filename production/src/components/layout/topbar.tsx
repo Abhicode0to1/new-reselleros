@@ -112,7 +112,7 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
             <span className="hidden sm:inline">Report Bug</span>
           </button>
         </TooltipTrigger>
-        <TooltipContent>Report a bug or suggest a new feature</TooltipContent>
+        <TooltipContent shortcut="report-bug">Report a bug or suggest a new feature</TooltipContent>
       </Tooltip>
 
       {/* Search button (triggers ⌘K) */}
