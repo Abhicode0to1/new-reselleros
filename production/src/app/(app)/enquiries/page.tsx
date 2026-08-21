@@ -338,8 +338,19 @@ export default function EnquiriesPage() {
   const folderMeta = MAIL_FOLDERS.find((f) => f.id === folder)!;
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
-      <header className="mb-4">
+    /* ── ONE SURFACE, NOT THREE FLOATING CARDS ──────────────────────────────────
+       This page is a mail client, and it was sizing itself to its contents: with one
+       message in the inbox the whole three-pane layout collapsed to 274px in a 722px
+       window, and the three panes ended up 261 / 156 / 272 tall — three ragged boxes with
+       a large blank area underneath. Reported as "the page looks scattered", which is
+       exactly what it looked like.
+
+       A fixed-height flex column fixes both: the header keeps its natural height, the mail
+       row takes everything left, and each pane fills it. Every pane below scrolls
+       INTERNALLY — /leads taught this the hard way, where a bounded page and a child that
+       could not scroll silently hid 15 of 17 rows. */
+    <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto flex flex-col h-[calc(100vh-3.5rem-4rem)] md:h-[calc(100vh-3.5rem)]">
+      <header className="mb-4 shrink-0">
         <h1 className="font-serif text-2xl text-ink">Enquiries</h1>
         <p className="text-sm text-ink-3 mt-0.5">
           Every email that came in, and what you still owe an answer on.
@@ -347,7 +358,7 @@ export default function EnquiriesPage() {
       </header>
 
       {/* ── Search, full width above everything ──────────────────────────── */}
-      <div className="mb-4">
+      <div className="mb-4 shrink-0">
         <div className="relative">
           <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
           <Input
@@ -384,9 +395,13 @@ export default function EnquiriesPage() {
         )}
       </div>
 
-      <div className="flex gap-4">
+      {/* flex-1 min-h-0: take the rest of the column, and let the children shrink so
+          their own overflow-y-auto can work. Without min-h-0 a flex child keeps its
+          content height and overflows the parent instead of scrolling — the near-miss
+          that makes a scroll fix look applied when it is not. */}
+      <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0">
         {/* ── Folder rail ───────────────────────────────────────────────── */}
-        <nav className="hidden md:block w-[190px] shrink-0" aria-label="Mail folders">
+        <nav className="hidden md:block w-[190px] shrink-0 overflow-y-auto" aria-label="Mail folders">
           <ul className="space-y-0.5">
             {MAIL_FOLDERS.map((f) => {
               const isActive = f.id === folder;
@@ -416,7 +431,7 @@ export default function EnquiriesPage() {
         </nav>
 
         {/* Mobile folder picker — the rail would eat the screen (CLAUDE.md §20). */}
-        <div className="md:hidden mb-2 w-full">
+        <div className="md:hidden mb-2 w-full shrink-0">
           <select
             value={folder}
             onChange={(e) => setFolder(e.target.value as MailFolder)}
@@ -438,8 +453,8 @@ export default function EnquiriesPage() {
              and a squeezed reading pane is unreadable. */
           selected ? "hidden lg:block lg:max-w-[380px]" : "block lg:max-w-[380px]",
         )}>
-          <Card className="p-0 overflow-hidden">
-            <div className="flex items-center justify-between border-b border-hairline px-3 py-2">
+          <Card className="p-0 overflow-hidden h-full flex flex-col">
+            <div className="flex items-center justify-between border-b border-hairline px-3 py-2 shrink-0">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">
                 {folderMeta.icon} {folderMeta.label}
                 {threads.length > 0 && <span className="ml-1.5 tabular-nums">({threads.length})</span>}
@@ -478,7 +493,10 @@ export default function EnquiriesPage() {
                 />
               </div>
             ) : (
-              <ul className="divide-y divide-hairline max-h-[calc(100vh-260px)] overflow-y-auto">
+              /* Was max-h-[calc(100vh-260px)]: a magic number measured against a header
+                 that grows — the unsupported-search-operator warning appears above this
+                 list and pushed the bottom off screen. flex-1 min-h-0 needs no number. */
+              <ul className="divide-y divide-hairline flex-1 min-h-0 overflow-y-auto">
                 {threads.map((t) => {
                   const e = t.latest;
                   /* A conversation is unread if ANY message in it is — the badge has
@@ -550,13 +568,19 @@ export default function EnquiriesPage() {
         <div className={cn("min-w-0 flex-1", selected ? "block" : "hidden lg:block")}>
           {!selected ? (
             <Card className="h-full">
-              <div className="flex h-full min-h-[240px] items-center justify-center">
+              {/* min-h dropped: the row now has a real height, so h-full is a height and
+                  not zero. The 240px floor was propping up a pane that had nothing to
+                  fill. */}
+              <div className="flex h-full items-center justify-center">
                 <p className="text-sm text-ink-3">Pick an enquiry to read it.</p>
               </div>
             </Card>
           ) : (
-            <Card className="p-0 overflow-hidden">
-              <div className="border-b border-hairline p-4">
+            /* h-full + its own scroll: a long email must scroll INSIDE the pane. Without
+               this the bounded row clips it and the end of the mail is unreachable with no
+               scrollbar anywhere — exactly what happened to 15 of 17 leads. */
+            <Card className="p-0 overflow-hidden h-full flex flex-col">
+              <div className="border-b border-hairline p-4 shrink-0">
                 <div className="mb-2 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="font-serif text-lg leading-snug text-ink">
@@ -657,7 +681,7 @@ export default function EnquiriesPage() {
                   archive about our own outgoing mail, and a "Send quote" button sitting
                   above a record of work already done is an invitation to do it twice. */}
               {!viewingSentReply && (
-              <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-paper-2/40 px-4 py-2.5">
+              <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-paper-2/40 px-4 py-2.5 shrink-0">
                 {canConvertToLead(selected) ? (
                   <Button size="sm" loading={convert.isPending} onClick={() => convert.mutate(selected.id)}>
                     🎯 Convert to lead
@@ -715,7 +739,7 @@ export default function EnquiriesPage() {
 
               {/* ── Secondary: flag and defer ────────────────────────────── */}
               {!viewingSentReply && (
-              <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-1.5">
+              <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-1.5 shrink-0">
                 <Button
                   size="sm"
                   variant={selected.starred ? "default" : "ghost"}
@@ -764,7 +788,9 @@ export default function EnquiriesPage() {
               )}
 
               {/* ── The conversation, and what we read out of it ─────────── */}
-              <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[1fr_260px]">
+              {/* The mail body is the part that scrolls; the header and the two toolbars
+                  above stay put. */}
+              <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[1fr_260px] flex-1 min-h-0 overflow-y-auto">
                 <div className="min-w-0">
                   {selectedThread && !selectedThread.isSingle && (
                     <p className="mb-3 rounded-md border border-hairline bg-paper-2/60 px-2.5 py-1.5 text-[11px] leading-snug text-ink-3">
