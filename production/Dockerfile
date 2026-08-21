@@ -47,6 +47,21 @@ ENV NEXT_PUBLIC_SUPABASE_ANON_KEY="sb_publishable_M1d2SCgCNq5QXLVAOsBPUA_UwLutFU
 ARG NEXT_PUBLIC_APP_URL="https://resellersos-1005662057478.asia-south1.run.app"
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
+# Web-push VAPID PUBLIC key. Public by design — the browser sends it to the push
+# service when subscribing, so it ends up in the client bundle either way (RFC 8292).
+#
+# It has to be HERE and not a Cloud Run env var, and the difference is not cosmetic:
+# NEXT_PUBLIC_* is substituted into the bundle by `next build`, so a value supplied only
+# at runtime arrives as undefined in the browser. The Notifications card reads exactly
+# this variable to decide whether push is configured — so setting it the obvious way
+# would have shipped a production app telling every user "Push is not set up on the
+# server yet" while the server held both keys and worked fine.
+#
+# The matching VAPID_PRIVATE_KEY is a real secret and is a Cloud Run runtime env var.
+# It must never appear in this file. The pair must stay together: a public key that does
+# not match the private one produces subscriptions the server cannot ever push to.
+ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY="BD4DQzE6L6cSqpFJH8_409BbMpIZ4tyQ6PpToNVqviGN2v5uWUO5T4WU99Z7eIL3vJXK8Z3axZrV3iMS6SmP2Qk"
+
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
