@@ -17,6 +17,21 @@ select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 insert into public.tenants (id, name, email, state_code)
   values ('bbbbbbbb-0000-0000-0000-0000000000b1'::uuid, 'CC LIABILITY TEST', 'cc-liab@example.in', '07');
 
+/* An operator inside this tenant, and this is the fix of 22 Aug 2026.
+   `bank_account_current_balance` is SECURITY DEFINER and scoped by `current_tenant_id()`.
+   The file set only {"role":"service_role"} — a role, not an identity — so there was no
+   tenant to scope to and the function returned 0 for every account. The failure read
+   "FAIL: card spend touched the bank (bank=0)", which sent a reader looking at card logic
+   for a number that came from an empty result. See AGENTS.md L10: distinguish a wrong
+   number from no rows. */
+insert into auth.users (id, email)
+  values ('bbbbbbbb-0000-0000-0000-0000000000a1'::uuid, 'cc-tester@example.test');
+insert into public.users (id, tenant_id, email, full_name, role, is_active)
+  values ('bbbbbbbb-0000-0000-0000-0000000000a1'::uuid, 'bbbbbbbb-0000-0000-0000-0000000000b1'::uuid,
+          'cc-tester@example.test', 'CC Tester', 'owner', true);
+select set_config('request.jwt.claims',
+  json_build_object('sub','bbbbbbbb-0000-0000-0000-0000000000a1','role','authenticated')::text, true);
+
 insert into public.bank_accounts (id, tenant_id, name, bank_name, account_type, opening_balance, opening_balance_date, is_active)
   values ('bbbbbbbb-0000-0000-0000-00000000bb01'::uuid, 'bbbbbbbb-0000-0000-0000-0000000000b1'::uuid, 'HDFC Current', 'HDFC', 'current', 100000, current_date, true);
 insert into public.bank_accounts (id, tenant_id, name, bank_name, account_type, opening_balance, opening_balance_date, is_active)
@@ -55,5 +70,9 @@ begin
 
   raise notice 'PASS: card spend raises owed (bank untouched); bill payment clears card + debits bank; net worth unchanged (no double-count)';
 end $$;
+
+-- A NOTICE is invisible through `supabase db query -f`: this file returned exit 0 with no
+-- output at all, which is indistinguishable from a file that asserted nothing. One row says it.
+select 'PASS' as credit_card_liability;
 
 rollback;

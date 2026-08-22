@@ -632,3 +632,38 @@ dead the entire time.
 - **This is what an unrun test costs.** The one file exercising this path had stopped running
   (deleted customer id) and asserted nothing before that. Fixing the test found the bug in a
   single run.
+
+## L14. Read your ids BEFORE `set role authenticated`, or the exploit you test targets NULL
+*22 Aug 2026, from `portal_customer_users_no_self_update`.*
+
+That file proved a portal customer cannot re-point their `customer_users` link at another
+customer. It had been passing. It was proving nothing:
+
+```sql
+set local role authenticated;
+do $$ begin
+  select auth_user_id::text into v_uid from public.customer_users where customer_id = '…a7';
+  perform set_config('request.jwt.claims', json_build_object('sub', v_uid, …), true);
+  update public.customer_users set customer_id = '…a8' where auth_user_id::text = v_uid;
+  -- assert 0 rows updated
+```
+
+The SELECT runs as `authenticated` with **no claims set yet**. RLS filters it, `v_uid` is
+NULL, and the exploit UPDATE becomes `where auth_user_id::text = NULL` — zero rows whatever
+the policies say. A green security test over a statement that could never have touched a row.
+
+The symptom that exposed it was the *other* case: `portal_touch_login()` keys off `auth.uid()`
+and also did nothing, so `last_login_at` stayed at its seeded 2020 value. That failure is the
+only reason anybody looked, and it was the smaller problem by far.
+
+**The rules:**
+- **Capture ids before the role switch**, and carry them in a transaction-local GUC —
+  `authenticated` can read a GUC but not a temp table owned by the connection role.
+  `hierarchy_peer_isolation.test.sql` already documented this; the lesson had not spread.
+- **Guard the guard.** A "cannot update / cannot insert" assertion needs a setup check that
+  the target row IS reachable as that user first, so "0 rows" means *refused* and not
+  *invisible*. This file now asserts `auth.uid()` matches and that the user sees exactly 1 of
+  their own rows before trying the exploit — and reverting to the old order makes it say
+  `SETUP FAIL: … would match no rows and prove nothing` instead of passing.
+- **Suspect any security test whose every number is 0.** That is the shape both this and
+  `sandbox_tenant_isolation` failed in, in two different ways (L7).
