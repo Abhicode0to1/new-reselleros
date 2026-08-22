@@ -193,8 +193,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **1492 tests
-passing**, typecheck clean, lint clean. If your change drops that, it is not done.
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **3,404 tests
+passing across 182 files**, typecheck clean, lint clean, `npm run build` exit 0 (measured
+22 Aug 2026 — this line said 1,492 until then, which is §12 happening to this very file).
+If your change drops that, it is not done.
 
 - CI runs on **pull requests** and on pushes to `main`. It does **not** run on feature
   branches — on a long-lived branch the local gate is the only gate. This is exactly how
@@ -257,3 +259,63 @@ a module list, or a bug status from a doc — verify it, then cite `file:line`.
 
 **And when you find a doc wrong: fix it in the same session.** Working around a stale doc
 leaves the trap armed for the next reader. That rule is why §1 of this file exists.
+
+---
+
+# Learned Guidelines
+
+> One rule per incident, each written the day it cost something. Newest last.
+
+## L1. A scheduled job with no retry and no alert loses a whole unit of work, silently
+*22 Aug 2026, from the nightly backup.*
+
+`[cron/backup] sweep failed: JWT issued at future` (20 Aug 18:30 UTC = 21 Aug 00:00 IST).
+One attempt, one failure, no retry, no notification. `backup.snapshots` has automated rows
+for 17, 18, 19, 20 and 22 Aug and **nothing for the 21st** — one night in six, on a free
+plan with no PITR. It was found two days later by reading Cloud Run logs, because nothing
+tells anybody.
+
+**The rule:** for any scheduled job, answer all three before calling it done — *what
+retries it, who is told when it fails, and how you would notice the failure a week later.*
+"It returns 500" is not an answer to any of them. A 500 nobody reads is a silent failure
+with extra steps.
+
+**Cloud Scheduler specifically:** a `retryConfig` **without `retryCount` means zero
+retries**. Every job in this project was created that way (`scripts/setup-cloud-scheduler.sh`
+passes no retry flags), so treat every cron here as one-shot until proven otherwise.
+
+## L2. Classify a failure before retrying it — default to NOT retrying
+*22 Aug 2026, same incident.*
+
+The obvious fix is `withRetry(3)`. It is wrong. A missing grant or an unapplied migration
+cannot fix itself in four seconds, so retrying it produces the same error fifteen seconds
+later, having tripled the load and delayed the only signal anybody gets. That is §2's
+"failure converted into a plausible value" wearing a different hat.
+
+**The rule:** retry only failures with a *named* mechanism that a later attempt could
+survive — clock skew, a transport blip, lock contention. Anything unrecognised surfaces
+immediately. See `lib/backup/sweep-retry.ts` (default-deny, both lists tested) and
+`lib/email/gmail-transport.ts` (`retryable: boolean` per failure kind), which is the older
+example of the same shape.
+
+Two traps that live in the same list: **"invalid JWT" and "JWT issued at future" both
+mention a JWT** and only one is transient, so check the permanent list first. And a
+**statement timeout is deliberately permanent** — a job outgrowing its window is a fact the
+owner needs, and retrying hides the growth while tripling the load that caused it.
+
+## L3. Do not add a retry to an endpoint that returns non-2xx for PARTIAL success
+*22 Aug 2026, the fix that was deliberately not shipped.*
+
+Adding `--max-retry-attempts` to the backup scheduler job looks like the completing half of
+L1. It is unsafe here, and the reason generalises. `/api/cron/backup` returns 500 in two
+different situations: the sweep failed (nothing written — a retry is free), and the sweep
+*partly* succeeded (`result.failed > 0`, some tenants already have tonight's snapshot). Cloud
+Scheduler cannot tell those apart; it retries any non-2xx. On the second one, a retry writes
+duplicate snapshots for the tenants that already succeeded, and `backup._take` keeps only
+the newest 30 per tenant — so the retry **evicts genuine older restore points**. The repair
+does more damage than the fault.
+
+**The rule:** before putting a retry in front of anything, ask what the endpoint does when it
+half-succeeds. If a second run is not idempotent, make it idempotent *first* — the retry is
+not the change, the idempotency is. Retrying inside the handler (where you know nothing was
+written) is safe; retrying from outside, where you cannot know, is not.

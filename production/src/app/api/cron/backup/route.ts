@@ -25,6 +25,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
+import { runSweepWithRetry } from "@/lib/backup/sweep-retry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -40,14 +41,41 @@ export async function GET(req: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("backup_all_tenants", { p_label: null });
 
-  if (error) {
-    console.error("[cron/backup] sweep failed:", error.message);
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  /* Retried, because on 21 Aug 2026 this exact call answered "JWT issued at future"
+   * once and the night's backup was simply never taken — the Cloud Scheduler job has
+   * no retryCount, so nothing tried again until the next midnight. Only failures a
+   * second attempt could survive are retried; see lib/backup/sweep-retry.ts, which
+   * refuses to retry a bad grant or an unapplied migration on purpose. */
+  const run = await runSweepWithRetry(async () => {
+    const { data, error } = await admin.rpc("backup_all_tenants", { p_label: null });
+    return error ? { ok: false as const, message: error.message } : { ok: true as const, data };
+  });
+
+  /* Logged even when the retry WORKED. A backup that only succeeds on the second try
+   * is still a warning worth reading — silently absorbing it is how a clock drifting
+   * further every night stays invisible until the night it exceeds the retry budget. */
+  if (run.retriedBecause.length > 0) {
+    console.warn(
+      `[cron/backup] retried ${run.retriedBecause.length}x — ${run.retriedBecause.join(" | ")}`,
+    );
   }
 
-  const result = data;
+  if (!run.result.ok) {
+    /* Keeps the "[cron/backup] sweep failed" prefix the 21 Aug incident was found by,
+     * so any log filter or search built on it still matches — with the attempt count
+     * added, which is the thing that was missing that night. */
+    console.error(
+      `[cron/backup] sweep failed after ${run.attemptsMade} attempt(s):`,
+      run.result.message,
+    );
+    return NextResponse.json(
+      { ok: false, error: run.result.message, attempts: run.attemptsMade },
+      { status: 500 },
+    );
+  }
+
+  const result = run.result.data;
 
   /* The function's `ok` is a COUNT of tenants; the response's `ok` is a boolean
    * for the caller. Spreading one over the other silently overwrote the count,
