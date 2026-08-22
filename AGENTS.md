@@ -560,6 +560,14 @@ rows (L7).
   rule applied to tests, where it is easiest to excuse.
 - **Never point a write-path test at the live tenant**, even inside a transaction. Correctness
   should not depend on one keyword at the bottom of the file.
+
+**The rule paid for itself the same day.** Hours after those seven were rewritten, the live
+ANUTECH tenant had every transactional table cleared at Pardeep's request — leads, quotes,
+payments, invoices, customers, subscriptions and the rest, all to 0. The SQL suite came back
+**32/38, byte-identical to before the wipe**: not one test broke. Every one of the seven would
+have died on the missing customer id that morning. A fixture that owns its data does not
+notice what the operator did to theirs.
+
 - **Report-style tests are not tests.** `raise exception 'TESTRESULT >> %'` with expected values
   in a header comment means a regression prints a slightly different sentence and passes. Assert,
   then finish with a visible `select 'PASS'`.
