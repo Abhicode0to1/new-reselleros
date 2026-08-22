@@ -132,3 +132,138 @@ describe("decideCadence — past renewal (grace / suspend)", () => {
     expect(d.shouldSendEmail).toBe(false);
   });
 });
+
+/* ── Monthly subscriptions (22 Aug 2026) ─────────────────────────────────────
+   A tester's monthly Google Workspace sale produced no subscription at all; once it did,
+   the question became which reminders it should get. The annual ladder is not merely
+   noisy on a 30-day cycle — T-30 lands on the day the PREVIOUS term renewed, so the
+   customer would be on seven emails a month, for ever. */
+import { triggersForTerm, MONTHLY_CADENCE_TRIGGERS, CADENCE_TRIGGERS } from "./cadence";
+
+describe("the ladder depends on the billing cycle", () => {
+  it("gives monthly its own, shorter ladder", () => {
+    expect(triggersForTerm(1)).toBe(MONTHLY_CADENCE_TRIGGERS);
+    expect(triggersForTerm(1).map((t) => t.daysOut)).toEqual([7, 3, 0]);
+  });
+
+  it("leaves every other cycle on the annual ladder", () => {
+    /* Quarterly (90 days) and half-yearly (180) are fine with a 30-day heads-up, and
+       inventing two more schedules nobody asked for is more code to keep true than it is
+       worth. Asserted so that decision is visible rather than an omission. */
+    for (const t of [3, 6, 12, null, undefined] as const) {
+      expect(triggersForTerm(t), String(t)).toBe(CADENCE_TRIGGERS);
+    }
+  });
+});
+
+describe("a monthly subscription's reminders", () => {
+  const at = (daysOut: number, currentState: RenewalState = "pending") => {
+    const today = new Date("2026-09-01T06:00:00Z");
+    const renewal = new Date(today);
+    renewal.setUTCDate(renewal.getUTCDate() + daysOut);
+    return decideCadence({
+      renewalDate: renewal, graceDays: 7, currentState,
+      termMonths: 1, today,
+    });
+  };
+
+  it("says nothing three weeks out", () => {
+    /* THE WHOLE POINT. On the annual ladder T-30 and T-15 would both have fired by now,
+       and on a 30-day cycle T-30 is the day the last term renewed. */
+    expect(at(21).shouldSendEmail).toBe(false);
+    expect(at(21).targetState).toBe("pending");
+    expect(at(10).shouldSendEmail).toBe(false);
+  });
+
+  it("gives a week's notice, then chases, then the day itself", () => {
+    expect(at(7).targetState).toBe("notice_sent");
+    expect(at(7).shouldSendEmail).toBe(true);
+    expect(at(3, "notice_sent").targetState).toBe("reminder_4");
+    expect(at(3, "notice_sent").shouldSendEmail).toBe(true);
+    expect(at(0, "reminder_4").targetState).toBe("final_sent");
+    expect(at(0, "reminder_4").shouldSendEmail).toBe(true);
+  });
+
+  it("sends at most three emails in a cycle, not seven", () => {
+    /* Counted rather than asserted by eye: a monthly customer getting the annual ladder
+       receives seven emails every month. */
+    let sent = 0;
+    let state: RenewalState = "pending";
+    for (let d = 30; d >= 0; d--) {
+      const decision = at(d, state);
+      if (decision.shouldSendEmail) sent += 1;
+      state = decision.targetState;
+    }
+    expect(sent).toBe(3);
+  });
+
+  it("does not resend a step it has already reached", () => {
+    expect(at(7, "notice_sent").shouldSendEmail).toBe(false);
+    expect(at(3, "reminder_4").shouldSendEmail).toBe(false);
+  });
+
+  it("still falls into grace and then suspension after the date", () => {
+    /* The tail of the machine is cycle-independent and must not have been disturbed. */
+    expect(at(-2, "final_sent").targetState).toBe("grace_period");
+    expect(at(-30, "grace_period").targetState).toBe("suspended");
+    expect(at(-30, "grace_period").shouldSuspend).toBe(true);
+  });
+
+  it("counts the annual ladder as seven, for contrast", () => {
+    let sent = 0;
+    let state: RenewalState = "pending";
+    const today = new Date("2026-09-01T06:00:00Z");
+    for (let d = 40; d >= 0; d--) {
+      const renewal = new Date(today);
+      renewal.setUTCDate(renewal.getUTCDate() + d);
+      const decision = decideCadence({ renewalDate: renewal, graceDays: 7, currentState: state, today });
+      if (decision.shouldSendEmail) sent += 1;
+      state = decision.targetState;
+    }
+    expect(sent).toBe(7);
+  });
+});
+
+/* ── The case Pardeep named, 22 Aug 2026 ─────────────────────────────────────
+   "monthly renewal do cases me ho sakta hai — ek monthly commitment monthly payment,
+   doosra annual commitment monthly payment."
+
+   He is right, and the second one broke my first attempt. I had keyed the ladder off
+   billing_cycle, so a Google Workspace annual plan PAID MONTHLY — invoiced twelve times,
+   renewing once — would have been handed the three-touch monthly schedule for the end of
+   a year-long commitment. No 30-day runway to raise a PO or clear a budget, which is the
+   entire reason T-30 exists.
+
+   The ladder is decided by the TERM. billing_cycle answers a different question. */
+describe("annual commitment paid monthly", () => {
+  const decide = (daysOut: number, termMonths: number, currentState: RenewalState = "pending") => {
+    const today = new Date("2026-09-01T06:00:00Z");
+    const renewal = new Date(today);
+    renewal.setUTCDate(renewal.getUTCDate() + daysOut);
+    return decideCadence({ renewalDate: renewal, graceDays: 7, currentState, termMonths, today });
+  };
+
+  it("gets the ANNUAL runway even though it is invoiced every month", () => {
+    /* term 12, billed monthly. T-30 must fire — it is a year-long commitment ending. */
+    expect(decide(30, 12).targetState).toBe("early_notice");
+    expect(decide(30, 12).shouldSendEmail).toBe(true);
+  });
+
+  it("is not confused with a flex-monthly plan, which renews every month", () => {
+    /* Same invoice frequency, completely different renewal event. Only the term differs,
+       and only the term should decide. */
+    expect(decide(30, 12).shouldSendEmail).toBe(true);   // annual term: 30 days' notice
+    expect(decide(30, 1).shouldSendEmail).toBe(false);   // monthly term: far too early
+  });
+
+  it("gives the annual-paid-monthly plan all seven touches, not three", () => {
+    let sent = 0;
+    let state: RenewalState = "pending";
+    for (let d = 40; d >= 0; d--) {
+      const decision = decide(d, 12, state);
+      if (decision.shouldSendEmail) sent += 1;
+      state = decision.targetState;
+    }
+    expect(sent).toBe(7);
+  });
+});

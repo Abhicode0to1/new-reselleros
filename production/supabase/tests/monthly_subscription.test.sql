@@ -8,7 +8,7 @@
 -- THE CASES (each FAILS LOUDLY -- the file is self-asserting)
 --   1. A monthly quote now produces a subscription.              <- the report
 --   2. ...marked billing_cycle='monthly', term_months=1.         <- so a future cadence can find it
---   3. ...with renewal_date NULL.                                <- the safety decision
+--   3. ...with renewal_date one MONTH out.                       <- chaseable, once the ladder is term-aware
 --   4. ...and MRR NOT divided by 12.                             <- the silent 12x error
 --   5. An ANNUAL quote is completely unchanged.                  <- no regression
 --   6. A one-off quote still produces nothing.                   <- not over-corrected
@@ -77,8 +77,16 @@ begin
     raise exception 'CASE 2 FAIL: term_months is %, expected 1', s.term_months;
   end if;
 
-  if s.renewal_date is not null then
-    raise exception 'CASE 3 FAIL: renewal_date is % — a non-null date puts this row into the renewal cadence, which on a monthly cycle emails almost continuously, or into the lapse pass, which expires it in a month', s.renewal_date;
+  /* A REAL date now. It was NULL while the cadence was annual-only and would have emailed
+     a monthly customer seven times a month; cadence.ts picks the ladder from term_months
+     now (T-7/T-3/T-0 for a one-month term), so the honest date is safe and the
+     subscription can finally be chased. */
+  /* IS DISTINCT FROM, not <>. NULL <> date is NULL, not TRUE, so a plain <> silently
+     passes on exactly the value this case exists to reject — the assertion would have
+     been vacuous against the old function, which set NULL. Caught by running it before
+     applying the migration and getting an impossible PASS. */
+  if s.renewal_date is distinct from (current_date + interval '1 month')::date then
+    raise exception 'CASE 3 FAIL: renewal_date is %, expected one month out', s.renewal_date;
   end if;
 
   /* Rs 38,232 a month is Rs 38,232 of MRR. The /12 that is right for an annual line would

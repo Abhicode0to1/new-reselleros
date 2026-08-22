@@ -153,7 +153,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
     .from("subscriptions")
     .select(`
       id, tenant_id, customer_id, customer_name, plan, vendor, seats, mrr,
-      renewal_date, status, renewal_state, reminder_count, renewal_quote_id
+      renewal_date, status, renewal_state, reminder_count, renewal_quote_id, term_months
     `)
     .eq("status", "active")
     .eq("auto_renew", true)
@@ -188,6 +188,10 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
         renewalDate:  sub.renewal_date!,
         graceDays:    tenant.grace_period_days ?? 0,
         currentState: (sub.renewal_state ?? "pending") as any,
+        /* The TERM picks the ladder, not the invoice frequency. An annual plan paid
+           monthly is invoiced twelve times and renews once, and it needs the 30-day
+           runway; a flex-monthly plan renews every month and would be buried by it. */
+        termMonths:   sub.term_months,
       });
 
       const detail = {
@@ -488,7 +492,7 @@ async function planOnly(
 
   const { data: allSubs } = await supabase
     .from("subscriptions")
-    .select("id, tenant_id, customer_id, customer_name, renewal_date, status, renewal_state, auto_renew");
+    .select("id, tenant_id, customer_id, customer_name, renewal_date, status, renewal_state, auto_renew, term_months");
   const subs = allSubs ?? [];
 
   const eligible = subs.filter(
@@ -517,6 +521,7 @@ async function planOnly(
       renewalDate:  sub.renewal_date!,
       graceDays:    graceByTenant.get(sub.tenant_id) ?? 0,
       currentState: (sub.renewal_state ?? "pending") as never,
+      termMonths:   sub.term_months,
       today:        asOf,
     });
 
