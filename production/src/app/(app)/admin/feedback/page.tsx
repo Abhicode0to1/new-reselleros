@@ -32,6 +32,7 @@ import { formatDate } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import {
   useFeedbackList,
+  usePlatformFeedbackList,
   useTriageFeedback,
   useDispatchFeedback,
   useUpdateFeedbackStatus,
@@ -349,6 +350,17 @@ export default function AdminFeedbackPage() {
   const filter = tab === "all" ? {} : { status: tab as FeedbackStatus };
   const { data, isLoading, error } = useFeedbackList(filter);
 
+  /* ── Every workspace, for the platform owner ───────────────────────────────
+     A tester with his own tenant filed a bug on 22 Aug and nobody could read it:
+     feedback is RLS-scoped to the signed-in workspace, so this page could only ever
+     show ANUTECH's own reports. Reporting worked, reading did not.
+
+     The flag here only decides whether the toggle is DRAWN. The route re-checks the
+     authenticated email against the same founder allowlist before it touches the
+     service role, so flipping this in a browser gets you a 403 and nothing else. */
+  const [scope, setScope] = React.useState<"mine" | "all">("mine");
+  const platform = usePlatformFeedbackList(Boolean(me?.isPlatformAdmin) && scope === "all");
+
   const rows = data ?? [];
   const untriagedCount = rows.filter((r) => r.triage_status !== "triaged").length;
 
@@ -362,6 +374,39 @@ export default function AdminFeedbackPage() {
           <kbd className="px-1 py-0.5 rounded bg-paper-2 border border-hairline font-mono text-[11px]">B</kbd>, triaged and turned into a directive for a coding agent.
         </p>
       </div>
+
+      {/* Only the platform owner sees this. Everyone else gets the page exactly as before. */}
+      {me?.isPlatformAdmin && (
+        <div className="flex flex-wrap items-center gap-2">
+          {(["mine", "all"] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setScope(s)}
+              className={
+                "rounded-md border px-2.5 py-1 text-[12px] font-medium transition-colors " +
+                (scope === s
+                  ? "border-amber bg-amber-soft text-amber-ink"
+                  : "border-hairline text-ink-2 hover:bg-paper-2")
+              }
+            >
+              {s === "mine" ? "This workspace" : "All workspaces"}
+            </button>
+          ))}
+          <span className="text-[11px] text-ink-3">
+            Testers on their own workspace file reports here too — they are invisible on
+            &ldquo;This workspace&rdquo;.
+          </span>
+        </div>
+      )}
+
+      {scope === "all" && me?.isPlatformAdmin && (
+        <PlatformFeedbackList
+          rows={platform.data ?? []}
+          isLoading={platform.isLoading}
+          error={platform.error as Error | null}
+        />
+      )}
 
       {/* Said once, at the top, rather than left for someone to infer from a status chip. */}
       <div className="rounded-lg border border-hairline bg-paper-2 p-3 flex gap-2.5">
@@ -434,5 +479,103 @@ export default function AdminFeedbackPage() {
         </div>
       )}
     </div>
+  );
+}
+
+
+/**
+ * Other workspaces' reports — READ ONLY, and it says so.
+ *
+ * Every mutation on this page (triage, auto-fix, mark fixed) goes through the browser
+ * client, so RLS would refuse a row belonging to another tenant. Rather than render
+ * buttons that fail, this list offers the two things that genuinely work across a tenant
+ * boundary: reading the report, and copying the directive that was already generated for
+ * it. Showing an action that cannot succeed is worse than not showing it.
+ */
+function PlatformFeedbackList({
+  rows, isLoading, error,
+}: {
+  rows: import("@/lib/queries/feedback").PlatformFeedbackRow[];
+  isLoading: boolean;
+  error: Error | null;
+}) {
+  if (isLoading) return <Card className="p-4 text-[13px] text-ink-3">Loading every workspace…</Card>;
+
+  /* An error must not read as "no reports". */
+  if (error) {
+    return (
+      <Card className="p-4 text-[13px] text-ink-2">
+        <b className="text-ink">Could not load other workspaces.</b> {error.message}
+      </Card>
+    );
+  }
+
+  const others = rows.filter((r) => !r.isOwnWorkspace);
+  if (others.length === 0) {
+    return (
+      <Card className="p-4 text-[13px] text-ink-2">
+        No reports from other workspaces yet.
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="p-0 overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-hairline bg-paper-2/50">
+        <p className="text-[12px] text-ink-2">
+          <b className="text-ink">{others.length} report{others.length === 1 ? "" : "s"} from other workspaces.</b>{" "}
+          Read-only here — triage and Auto-Fix act on your own workspace, so those buttons
+          would fail on these rows rather than do nothing.
+        </p>
+      </div>
+      <ul className="divide-y divide-hairline">
+        {others.map((r) => (
+          <li key={r.id} className="px-4 py-3">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="rounded bg-paper-2 border border-hairline px-1.5 py-0.5 text-[10px] font-medium text-ink-2">
+                {r.tenantName}
+              </span>
+              <span className="text-[13px] font-medium text-ink">{r.title ?? "(no title)"}</span>
+              {r.severity_score != null && (
+                <span className="text-[11px] text-ink-3 tabular-nums">{r.severity_score}/100</span>
+              )}
+            </div>
+            <p className="mt-1 text-[12px] text-ink-2 leading-snug">{r.body}</p>
+            <p className="mt-1 text-[11px] text-ink-3">
+              {r.reporter_name ?? "someone"} &middot; {r.reporter_email ?? "no email"}
+              {r.page_path ? ` · ${r.page_path}` : ""} &middot; {new Date(r.created_at).toLocaleString("en-IN")}
+            </p>
+            {r.screenshots.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {r.screenshots.map((sh) =>
+                  sh.url ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <a key={sh.id} href={sh.url} target="_blank" rel="noopener noreferrer">
+                      <img src={sh.url} alt={sh.fileName} className="h-20 rounded border border-hairline" />
+                    </a>
+                  ) : (
+                    <span key={sh.id} className="text-[11px] text-ink-3">
+                      {sh.fileName} — could not be loaded
+                    </span>
+                  ),
+                )}
+              </div>
+            )}
+            {r.directive && (
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard.writeText(r.directive!);
+                  toast.success("Directive copied — paste it into Claude Code.");
+                }}
+                className="mt-2 rounded border border-hairline px-2 py-0.5 text-[11px] text-ink-2 hover:bg-paper-2"
+              >
+                Copy directive
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }

@@ -307,3 +307,43 @@ export async function feedbackScreenshotUrl(path: string): Promise<string | null
   const { data } = await supabase.storage.from(SCREENSHOT_BUCKET).createSignedUrl(path, 60 * 10);
   return data?.signedUrl ?? null;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Platform view — every workspace's feedback, for the platform owner only.
+
+   WHY IT GOES THROUGH A ROUTE. `feedback` is RLS-scoped to the signed-in tenant, and
+   that stays true: widening the policy would make every existing query silently
+   cross-tenant, including ones written later by someone who never knew. The single
+   place allowed to cross is /api/admin/feedback/platform, server-side and gated on
+   owner-of-the-distributor. See that file for the full argument.
+
+   This exists because a tester on his own tenant filed a bug on 22 Aug and nobody could
+   read it — reporting worked, reading did not.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export interface PlatformFeedbackRow extends FeedbackRow {
+  tenantName: string;
+  isOwnWorkspace: boolean;
+  screenshots: { id: string; fileName: string; url: string | null }[];
+}
+
+/**
+ * `enabled` is the caller's job: the toggle that turns this on is only rendered for a
+ * platform owner, so a reseller never fires a request that can only 403.
+ */
+export function usePlatformFeedbackList(enabled: boolean) {
+  return useQuery({
+    queryKey: ["feedback", "platform"],
+    enabled,
+    queryFn: async (): Promise<PlatformFeedbackRow[]> => {
+      const res = await fetch("/api/admin/feedback/platform");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        /* The route writes its own next step; showing it beats a bare status code. */
+        throw new Error([json.error, json.nextStep].filter(Boolean).join(" ") || "Could not load");
+      }
+      return (json.rows ?? []) as PlatformFeedbackRow[];
+    },
+    staleTime: 30_000,
+  });
+}
