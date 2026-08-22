@@ -319,3 +319,49 @@ does more damage than the fault.
 half-succeeds. If a second run is not idempotent, make it idempotent *first* — the retry is
 not the change, the idempotency is. Retrying inside the handler (where you know nothing was
 written) is safe; retrying from outside, where you cannot know, is not.
+
+## L4. Never decide authorization by name substring — and never hardcode a colleague's name to do it
+*22 Aug 2026, from `/api/my-advances`.*
+
+That route reads `expenses` with `createAdminClient()`, so **RLS is off** and a plain
+JS filter was the only thing between one employee and another's money. The filter was:
+
+```ts
+curNameLower.includes(empNameLower) || empNameLower.includes(curNameLower)
+```
+
+plus a hardcoded ladder of six colleagues' first names, plus a clause granting anyone
+whose *email* contained "sales" every advance named "darshan".
+
+Against the live staff list that is not theoretical. An advance recorded as **"Raj"**
+would show to **"Ranjeet Raj"**; one recorded as **"Sharma"** to all five Sharmas in this
+tenant. **Surnames are shared — a substring test cannot decide whose money this is.**
+
+**The rules:**
+- **A route that uses `createAdminClient()` has no RLS.** Its filter *is* the security
+  boundary, so it belongs in a tested module, not inline — see
+  `lib/expenses/advance-visibility.ts`.
+- **Match whole name tokens, never substrings**, and fail closed: no name on the viewer
+  or no name on the record means no match.
+- **Never match on a display placeholder.** `vendor_name || "Employee"` must not reach the
+  matcher, or every unnamed row belongs to anyone called "Employee" (§2 again).
+- **Never hardcode a person's name in a rule.** It matched nothing in the live data, so it
+  read as harmless — a standing grant that fires the day the data changes.
+- **Check the WRITE side too.** The same route's POST took `advance_id` from the request
+  body and never checked whose it was, so any employee could file a claim against a
+  colleague's advance — and since the balance is derived by summing linked claims, a
+  ₹5,000 claim against a ₹2,000 advance drove someone else's balance to zero. Read-side
+  filtering is half a fix.
+
+## L5. An `as any` on a Supabase insert switches off checking for EVERY column in it
+*22 Aug 2026, same route.*
+
+`(admin.from("expenses" as any) as any).insert({...})` existed because `ExpenseInsert` was
+missing `prepaid_advance_id` — a column `ExpenseRow` has had since migration 0209. The cast
+was written to smuggle one field past the compiler, and in doing so it stopped type-checking
+the other twelve fields in the same object.
+
+**The rule:** a cast to get one column through is never local to that column. When a type
+fights you, **fix the type** — the missing field took one line in
+`lib/supabase/database.types.ts`, and the route then type-checked clean with no casts at all.
+A missing field in the generated types is a bug in the types, not a reason to opt out of them.

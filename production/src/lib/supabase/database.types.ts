@@ -2152,6 +2152,16 @@ type ExpenseInsert = {
   notes?:           string | null;
   /** Migration 0232 — marketing channel for ad spend. Set only on marketing rows. */
   channel?:         string | null;
+  /**
+   * Migration 0209 — the employee advance this expense was consumed from.
+   *
+   * Present on `ExpenseRow` since 0209 but missing here until 22 Aug 2026, so the
+   * one route that writes it (`/api/my-advances`) could only do so through
+   * `(admin.from("expenses" as any) as any)`. That cast is what a missing field
+   * costs: it did not merely smuggle this column past the compiler, it switched
+   * off checking for every other column in the same insert.
+   */
+  prepaid_advance_id?: string | null;
 };
 type ExpenseUpdate = Partial<ExpenseInsert>;
 

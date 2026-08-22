@@ -1,12 +1,56 @@
 /**
- * Server-Side API Route for Employee Advances (/api/my-advances).
+ * Employee advances — /api/my-advances.
  *
- * Uses `createAdminClient()` to bypass Supabase RLS restrictions on the
- * `expenses` table for non-owner/manager roles (e.g. sales, sales_senior, support, delivery).
- * Returns active employee advances & claims for the authenticated user.
+ * ─── WHY THIS ROUTE EXISTS ──────────────────────────────────────────────────
+ * It uses `createAdminClient()`, which means **RLS is off**. The `expenses` table
+ * does not grant read to the individual-contributor roles (sales, sales_senior,
+ * support, delivery), so an employee could not see their own advance at all.
+ *
+ * The direct consequence: with RLS out of the picture, the visibility decision in
+ * `lib/expenses/advance-visibility.ts` is the ONLY thing between one employee and
+ * another employee's money. It used to be six lines of substring matching written
+ * inline here, with a hardcoded ladder of six colleagues' first names and no test.
+ * Both halves — read and write — now go through that one tested module.
+ *
+ * ─── WHAT IS STILL A STOPGAP ────────────────────────────────────────────────
+ * `expenses` has no employee link (measured 22 Aug 2026: `vendor_name` text,
+ * `vendor_id` is a *vendor* FK, `prepaid_advance_id`). So "whose advance is this"
+ * is answered from a typed-in name. Two employees sharing a first name are
+ * indistinguishable, and no string rule fixes that. The real fix is an id column
+ * on the advance; see the module header.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/supabase/database.types";
+import { isOwnAdvance, visibleAdvances } from "@/lib/expenses/advance-visibility";
+
+type ExpenseRow = Database["public"]["Tables"]["expenses"]["Row"];
+
+const ADVANCE_CATEGORY = "Employee Advance Disbursal";
+
+/** The shape the client's `EmployeeAdvance` type expects (lib/queries/advances.ts). */
+interface AdvanceView {
+  id: string;
+  tenant_id: string;
+  employee_id: string | null;
+  employee_name: string;
+  disbursed_amount: number;
+  disbursed_date: string;
+  payment_method: string;
+  bank_account_id: string | null;
+  purpose: string | null;
+  status: "active" | "closed";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  total_spent: number;
+  remaining_balance: number;
+  linked_expenses: ExpenseRow[];
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 export async function GET(_request: NextRequest) {
   try {
@@ -19,7 +63,6 @@ export async function GET(_request: NextRequest) {
 
     const admin = createAdminClient();
 
-    // Fetch user profile to get tenant_id, full_name, email, role
     const { data: profile, error: profErr } = await admin
       .from("users")
       .select("tenant_id, full_name, email, role, employee_id")
@@ -30,15 +73,14 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: "User profile not found" }, { status: 404 });
     }
 
-    const { tenant_id, full_name, email, role } = profile;
+    const { tenant_id, full_name, role } = profile;
 
-    // Fetch all advance disbursals + claimed expenses for tenant using admin client
     const [{ data: disbursals, error: dErr }, { data: claims, error: cErr }] = await Promise.all([
       admin
         .from("expenses")
         .select("*")
         .eq("tenant_id", tenant_id)
-        .eq("category", "Employee Advance Disbursal")
+        .eq("category", ADVANCE_CATEGORY)
         .order("expense_date", { ascending: false }),
       admin
         .from("expenses")
@@ -50,33 +92,36 @@ export async function GET(_request: NextRequest) {
     if (dErr) throw dErr;
     if (cErr) throw cErr;
 
-    const claimMap = new Map<string, any[]>();
+    const claimMap = new Map<string, ExpenseRow[]>();
     for (const c of claims ?? []) {
-      if (c.prepaid_advance_id) {
-        const list = claimMap.get(c.prepaid_advance_id) ?? [];
-        list.push(c);
-        claimMap.set(c.prepaid_advance_id, list);
-      }
+      if (!c.prepaid_advance_id) continue;
+      const list = claimMap.get(c.prepaid_advance_id) ?? [];
+      list.push(c);
+      claimMap.set(c.prepaid_advance_id, list);
     }
 
-    const allAdvances = (disbursals ?? []).map((d: any) => {
+    const allAdvances: AdvanceView[] = (disbursals ?? []).map((d) => {
       const linked = claimMap.get(d.id) ?? [];
-      const total_spent = linked.reduce((sum: number, x: any) => sum + (x.amount || 0), 0);
-      const remaining_balance = Math.max(0, (d.amount || 0) - total_spent);
-      const status = remaining_balance === 0 ? "closed" : "active";
+      const total_spent = linked.reduce((sum, x) => sum + (x.amount ?? 0), 0);
+      const remaining_balance = Math.max(0, (d.amount ?? 0) - total_spent);
 
       return {
         id: d.id,
         tenant_id: d.tenant_id,
-        employee_id: profile.employee_id || null,
+        /* NOT the viewer's employee_id. This used to be `profile.employee_id`, which
+         * stamped the CALLER's id onto every row in the list — so to an owner, all
+         * ten advances claimed to be theirs. There is no employee link on `expenses`
+         * to read the true value from, and inventing one is the §2 mistake, so the
+         * honest answer is null. */
+        employee_id: null,
         employee_name: d.vendor_name || "Employee",
-        disbursed_amount: d.amount || 0,
+        disbursed_amount: d.amount ?? 0,
         disbursed_date: d.expense_date,
         payment_method: d.payment_method || "cash",
-        bank_account_id: d.bank_account_id || null,
-        purpose: d.description || null,
-        status,
-        notes: d.notes || null,
+        bank_account_id: d.bank_account_id ?? null,
+        purpose: d.description ?? null,
+        status: remaining_balance === 0 ? "closed" : "active",
+        notes: d.notes ?? null,
         created_at: d.created_at,
         updated_at: d.updated_at,
         total_spent,
@@ -85,53 +130,35 @@ export async function GET(_request: NextRequest) {
       };
     });
 
-    // If owner/manager/accountant, return all advances
-    if (role === "owner" || role === "manager" || role === "accountant") {
-      return NextResponse.json({ advances: allAdvances });
-    }
+    /* One decision, one module, both verbs. `visibleAdvances` returns everything for
+     * owner/manager/accountant and only the viewer's own rows otherwise — matching on
+     * the RAW vendor_name, never the "Employee" display fallback. */
+    const advances = visibleAdvances(
+      allAdvances,
+      (a) => (a.employee_name === "Employee" ? null : a.employee_name),
+      { role, fullName: full_name },
+    );
 
-    // For individual employee (e.g. sales, sales_senior, support, delivery):
-    // Strictly filter advances matching logged-in employee name or email
-    const curEmailLower = (email || "").toLowerCase();
-    const curNameLower = (full_name || "").toLowerCase();
-
-    const myAdvances = allAdvances.filter((a: any) => {
-      const empNameLower = (a.employee_name || "").toLowerCase();
-      
-      const nameMatch = curNameLower && (empNameLower.includes(curNameLower) || curNameLower.includes(empNameLower));
-      const emailMatch = curEmailLower && (
-        (curEmailLower.includes("sales") && (empNameLower.includes("darshan") || empNameLower.includes("sales"))) ||
-        (curEmailLower.includes("pawan") && empNameLower.includes("pawan")) ||
-        (curEmailLower.includes("ranjeet") && empNameLower.includes("ranjeet")) ||
-        (curEmailLower.includes("abhishek") && empNameLower.includes("abhishek")) ||
-        (curEmailLower.includes("pratik") && empNameLower.includes("pratik")) ||
-        (curEmailLower.includes("hitesh") && empNameLower.includes("hitesh"))
-      );
-
-      const isSalesUser = curEmailLower.includes("sales") || curNameLower.includes("darshan") || curNameLower.includes("sales");
-      const isDarshanAdvance = empNameLower.includes("darshan") || empNameLower.includes("sales");
-
-      return nameMatch || emailMatch || (isSalesUser && isDarshanAdvance);
-    });
-
-    return NextResponse.json({ advances: myAdvances });
-  } catch (err: any) {
+    return NextResponse.json({ advances });
+  } catch (err) {
     console.error("GET /api/my-advances error:", err);
-    return NextResponse.json({ error: err.message || "Failed to load advances" }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(err) || "Failed to load advances" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const supabase = createClient();
     const { data: authData, error: authErr } = await supabase.auth.getUser();
 
     if (authErr || !authData?.user) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { advance_id, category, amount, expense_date, vendor_name, description, attachment_url } = body;
+    const body: unknown = await request.json();
+    const {
+      advance_id, category, amount, expense_date, vendor_name, description, attachment_url,
+    } = (body ?? {}) as Record<string, unknown>;
 
     if (!advance_id || !category || !amount || !expense_date) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -139,10 +166,9 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    // Get tenant_id from user profile
     const { data: profile, error: profErr } = await admin
       .from("users")
-      .select("tenant_id")
+      .select("tenant_id, full_name, role")
       .eq("id", authData.user.id)
       .single();
 
@@ -150,21 +176,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User profile not found" }, { status: 404 });
     }
 
-    // Insert expense claim using admin client with explicit UUID
+    /* ─── The advance must be one this caller may spend against ────────────────
+     * This check did not exist. The insert took `advance_id` from the request body
+     * and wrote it straight into `prepaid_advance_id`, so any authenticated employee
+     * could file a claim against a COLLEAGUE's advance — and because GET derives
+     * `total_spent` and `remaining_balance` by summing the claims linked to an
+     * advance, a Rs 5,000 claim against somebody's Rs 2,000 advance drove their
+     * remaining balance to zero and flipped it to "closed". Someone else's money,
+     * moved by a request body.
+     *
+     * It also let the id cross a tenant boundary (AGENTS.md §4): nothing tied
+     * `advance_id` to the caller's tenant, so the claim landed in the caller's
+     * tenant pointing at a row in another one. Loading the advance under an explicit
+     * tenant_id filter closes both at once. */
+    const { data: advance, error: advErr } = await admin
+      .from("expenses")
+      .select("id, vendor_name, tenant_id, category")
+      .eq("id", String(advance_id))
+      .eq("tenant_id", profile.tenant_id)
+      .eq("category", ADVANCE_CATEGORY)
+      .maybeSingle();
+
+    if (advErr) throw advErr;
+    if (!advance) {
+      /* Deliberately the same answer whether the advance is missing, in another
+       * tenant, or somebody else's — a distinct message here would confirm that a
+       * given id exists. §24 still applies, so it says what to do next. */
+      return NextResponse.json(
+        { error: "That advance is not available to you. Open Advances and pick one of your own." },
+        { status: 404 },
+      );
+    }
+
+    const mayClaim =
+      isOwnAdvance(profile.full_name, advance.vendor_name) ||
+      // Owners/managers/accountants settle advances on an employee's behalf.
+      visibleAdvances([advance], (a) => a.vendor_name, { role: profile.role, fullName: profile.full_name }).length > 0;
+
+    if (!mayClaim) {
+      return NextResponse.json(
+        { error: "That advance belongs to a colleague. Open Advances and pick one of your own." },
+        { status: 403 },
+      );
+    }
+
     const newId = crypto.randomUUID();
-    const { data: newExpense, error: insErr } = await (admin.from("expenses" as any) as any)
+    const { data: newExpense, error: insErr } = await admin
+      .from("expenses")
       .insert({
         id: newId,
         tenant_id: profile.tenant_id,
-        category,
+        category: String(category),
         amount: Number(amount),
-        expense_date,
-        vendor_name: vendor_name || null,
-        description: description || null,
-        attachment_url: attachment_url || null,
+        expense_date: String(expense_date),
+        vendor_name: vendor_name ? String(vendor_name) : null,
+        description: description ? String(description) : null,
+        attachment_url: attachment_url ? String(attachment_url) : null,
         paid: true,
-        paid_date: expense_date,
-        prepaid_advance_id: advance_id,
+        paid_date: String(expense_date),
+        prepaid_advance_id: advance.id,
         payment_method: "advance_deduction",
       })
       .select()
@@ -173,8 +243,11 @@ export async function POST(request: NextRequest) {
     if (insErr) throw insErr;
 
     return NextResponse.json({ success: true, expense: newExpense });
-  } catch (err: any) {
+  } catch (err) {
     console.error("POST /api/my-advances error:", err);
-    return NextResponse.json({ error: err.message || "Failed to record expense claim" }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(err) || "Failed to record expense claim" },
+      { status: 500 },
+    );
   }
 }
