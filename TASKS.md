@@ -103,9 +103,41 @@ purane pad jate hain. Aaj chalayi (pehli baar poori). Teen theek kar diye, teeno
 | `hierarchy_peer_isolation` | **Aaj pehli baar chala** (header khud kehta tha "NOT YET RUN"). Asli auth id "borrow" karta tha; ek id tester ki thi → `users_pkey` duplicate, ek bhi assertion chala hi nahi | ✅ PASS. Ab apne synthetic auth users banata hai (sibling test ka idiom). Mutation: role switch hataya → `expected own + unowned, got [A,B,NULL]`. **Migration `20260818150000` Section 3b pehli baar sabit hua** |
 | `renewal_and_subscription_creation` | "monthly-flex sale creates NO subscription" — aaj ke `85a5d67` ne wo jaan-boojh kar badla, test stale tha | ✅ PASS. Naapa: `n=1, term=1, mrr=3900, renewal=start+1 month`. Mutation: 3900→325 → red |
 
-**Baaki 3 red, triage nahi hua:** `credit_card_liability` ("card spend touched the bank"),
-`customer_dedup` ("expected 1 customer (reuse), got 2"), `portal_customer_users_no_self_update`
-("last_login_at not stamped by RPC"). Agla session yahan se uthaye.
+**Poori suite ka final aankda: 38 me se 27 PASS, 11 FAIL.** Gyarah do tarah ke hain:
+
+**(a) 6 fixture-toote** — `accrue_referral_commission`, `create_direct_invoice`,
+`create_direct_invoice_recurring`, `create_project_direct_invoice`,
+`generate_invoice_payment_terms`, `record_payment_billing_cycle_decouple`,
+`record_payment_one_off_guard`. Sab `Customer not found` ya FK violation (23503) par girti
+hain — apni pehli assertion tak pahunchti hi nahi. Ye purane seed data par likhi thin jo ab DB
+me nahi hai. Inka code se koi lena-dena nahi.
+
+**(b) 4 asli assertion failures.** Ek ka poora diagnosis ho gaya:
+
+**🔴 `zero_amount_guards` — bug #27 ka guard function me MAUJOOD NAHI hai.**
+Test kehta hai ki ₹0 quote par payment reject hona chahiye (migration 0060/0061). Naapa:
+`record_payment` me guard hai par **galat cheez par** — line 92 `p_amount <= 0` yaani *payment*
+ka amount check karta hai, *quote* ka total (`v_quote.amount`) kahin check nahi hota. To ₹0
+quote par ₹5,000 ka payment aaram se chala jata hai. Function 26,000 char ka hai aur kaafi baar
+dobara likha gaya — guard usi me kho gaya lagta hai.
+
+**Nuksaan abhi ZERO hai, aur ye bhi naapa hua:** DB me ₹0 amount ka **ek bhi quote nahi** (0
+rows), ₹0 ka koi payment nahi. To ye khatra hai, ghatna nahi.
+
+**Maine test ko "theek" nahi kiya, jaan-boojh kar.** Use reality se match karana ek money guard
+ko chupchaap retire kar dena hota. Red rehna hi sach hai. Guard wapas laane ke liye
+`record_payment` badalna padega = migration + money-code faisla → Pardeep ka call.
+
+**Ek aur cheez jo isi khoj me nikli aur bug NAHI hai** (taaki agla session isse na chase kare):
+ek active subscription ka `mrr = 0` hai — `6fb7a892`, "AB corprotion", Standard Support
+(Yearly), quote `Q-ADPL-2026-27-0003`. Wajah sahi hai: us quote ki support line par
+`rate: 0, list_rate: 9996` — support **muft diya gaya** hai, aur `list_rate` discount dikhane
+ke liye bacha hua hai. ₹0 line ka MRR 0 hi hona chahiye.
+
+**Baaki 3 asli failures, triage baaki:** `credit_card_liability` ("card spend touched the bank
+(bank=0)"), `customer_dedup` ("expected 1 customer (reuse), got 2"),
+`portal_customer_users_no_self_update` ("last_login_at not stamped by RPC"). Agla session yahan
+se uthaye — teeno assertion tak pahunchti hain, yaani teeno ka kuch matlab hai.
 
 **Ek trap jo darj karna zaroori hai** (AGENTS.md L7 me poora hai): is folder me **do
 convention** hain. 31 file `rollback;` par khatam hoti hain aur pass par exit 0 deti hain. Baaki
@@ -116,11 +148,11 @@ jayega**.
 
 ### 📓 AGENTS.md me naya section
 
-`# Learned Guidelines` — **L1–L7**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
+`# Learned Guidelines` — **L1–L8**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
 pehle classify phir retry · jo retry jaan-boojh kar mana kiya · naam ke substring se
 authorization mat karo · ek `as any` poore insert ka checking band kar deta hai · config error
 5xx nahi hota · aur **L7**: isolation ka zero-assertion doosre tenant par scoped hona chahiye,
-warna security test jhooth bolne lagta hai. Naya session ise padh kar shuru kare.
+warna security test jhooth bolne lagta hai · aur **L8**: jis guard ka test koi nahi chalata, wo guard ab aapke paas nahi hai. Naya session ise padh kar shuru kare.
 
 ### Purana record (17–22 Aug) — neeche waisa hi hai
 

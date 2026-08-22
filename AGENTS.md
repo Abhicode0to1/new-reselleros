@@ -439,3 +439,32 @@ legitimately acquires something.
 - **A duplicate-key failure in an isolation test means a previous run did not roll back.** Check
   for the leftover row before believing the assertion — `hierarchy_peer_isolation` failed today
   on `users_pkey`, and the synthetic user from an earlier run was still in `public.users`.
+
+## L8. A guard proved by a test that nobody runs is a guard you no longer have
+*22 Aug 2026, from `zero_amount_guards.test.sql`.*
+
+`supabase/tests/zero_amount_guards.test.sql` asserts bug #27: `record_payment` rejects a
+payment against a ₹0 quote (migrations 0060/0061). Run for the first time in a long while, it
+fails — and the reason is that **the guard is not in the function any more.**
+
+`record_payment` does have `if p_amount is null or p_amount <= 0 then raise exception 'amount
+must be > 0'`, and at a glance that looks like the guard. It is not. It checks the **payment
+argument**, not the **quote's total**. Nothing anywhere reads `v_quote.amount` for this, so a
+₹5,000 payment against a ₹0 quote goes straight through. The function is 26,000 characters and
+has been rewritten repeatedly; the guard was lost in one of those rewrites and the only thing
+that would have noticed was a test file outside CI.
+
+Measured before claiming harm: there are **zero** ₹0-amount quotes and zero ₹0 payments in the
+database, so this is an exposure, not an incident.
+
+**The rules:**
+- **A migration is not evidence a guard exists today.** `0060/0061` applied; the behaviour is
+  gone. Before citing any guard, grep the live function body — `pg_get_functiondef` — not the
+  migration that introduced it.
+- **When a guard's test goes red, do not "fix" the test to match the code.** That silently
+  retires the guard and destroys the only record that it was ever wanted. Leave it red, say so
+  out loud, and let a human decide whether to restore the guard. Red is the correct state for a
+  protection that has gone missing.
+- **Two guards with the same shape are not the same guard.** `p_amount <= 0` and
+  `quote.amount <= 0` differ by one word and by the entire thing being protected. This is how a
+  missing check reads as a present one to anybody skimming.
