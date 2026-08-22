@@ -1,11 +1,18 @@
 -- Invoice due date: fall back to net-30 when the quote carries no payment terms.
 --
--- ⚠️ WRITTEN BUT NOT APPLIED (22 Aug 2026). Applying it changes when every future invoice
---    falls due, and therefore when the dunning cron starts chasing — a commercial decision,
---    not an agent's. To apply:
+-- ✅ APPLIED 22 Aug 2026. It changes when every future invoice falls due, and therefore
+--    when the dunning cron starts chasing — a commercial decision, so it waited for the
+--    operator, who chose net-30 and asked for it to be applied. Applied via
+--    scripts/apply-migration.mjs and recorded with
+--    `supabase migration repair --status applied 20260822190000`.
 --
---        cd production
---        node scripts/apply-migration.mjs supabase/migrations/20260822190000_invoice_due_date_net30_fallback.sql
+--    Verified live: the function contains `payment_terms_days, 30)` and no longer
+--    contains `payment_terms_days, 0)`.
+--
+--    ⚠️ FUTURE invoices only. The 41 invoices already issued still carry
+--    due_date = invoice_date, and the dunning cron will go on treating them as overdue
+--    from the day after issue. Changing a due date on an already-issued GST document is
+--    a separate decision and is deliberately NOT done here.
 --
 -- ─── WHAT IS WRONG TODAY ────────────────────────────────────────────────────
 -- `generate_invoice` stamps the due date as `v_today + coalesce(v_quote.payment_terms_days, 0)`.

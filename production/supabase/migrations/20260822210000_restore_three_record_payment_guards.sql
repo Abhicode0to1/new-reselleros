@@ -1,5 +1,11 @@
 -- Restore three guards that were lost from public.record_payment
 -- ============================================================================
+-- ✅ APPLIED 22 Aug 2026 on the operator's instruction, via
+--    scripts/apply-migration.mjs (NOT `supabase db push` — see that script's header),
+--    then recorded with `supabase migration repair --status applied 20260822210000`
+--    so the tracking drift did not grow.
+--    Full suite afterwards, live and with nothing injected: 37 / 38, up from 32 / 38.
+--
 -- Written 22 Aug 2026, from a measured run of supabase/tests/ (32 pass / 6 fail).
 -- Four of those six failures are these three defects; each names the migration it
 -- came from, and each is asserted by a test that is red before this file and green
