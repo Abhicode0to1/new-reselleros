@@ -21,6 +21,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { canSendWithScopes, type EmailProvider } from "@/lib/email/provider";
+import { listSenderCandidates, type SenderCandidateInput } from "@/lib/email/sender-candidates";
 import { resolveSecretField } from "@/lib/integrations/secret-field";
 import { encryptSecret, isVaultConfigured } from "@/lib/crypto/vault";
 
@@ -46,6 +47,37 @@ function emailDb(admin: ReturnType<typeof createAdminClient>) {
       upsert(p: Record<string, unknown>, o: { onConflict: string }): Promise<{ error: { message: string } | null }>;
     };
   };
+}
+
+/**
+ * Every teammate in the workspace paired with their Google token, so the card can offer a
+ * choice the server will not reject. Tenant-scoped by the caller's own tenant_id, never by
+ * anything from the request.
+ */
+async function loadSenderCandidates(tenantId: string): Promise<ReturnType<typeof listSenderCandidates>> {
+  const admin = createAdminClient();
+  const { data: team } = await admin
+    .from("users").select("id, email, role").eq("tenant_id", tenantId).eq("is_active", true);
+  if (!team || team.length === 0) return [];
+
+  const { data: tokens } = await admin
+    .from("user_google_tokens")
+    .select("user_id, google_email, refresh_token, scopes")
+    .in("user_id", team.map((t) => t.id));
+  const byUser = new Map((tokens ?? []).map((t) => [t.user_id, t]));
+
+  const inputs: SenderCandidateInput[] = team.map((t) => {
+    const tok = byUser.get(t.id);
+    return {
+      userId: t.id,
+      email: t.email ?? null,
+      role: t.role ?? null,
+      token: tok
+        ? { google_email: tok.google_email ?? null, refresh_token: tok.refresh_token ?? null, scopes: tok.scopes ?? null }
+        : null,
+    };
+  });
+  return listSenderCandidates(inputs);
 }
 
 async function loadContext(userId: string) {
@@ -103,6 +135,14 @@ export async function GET() {
   if (!ctx) return NextResponse.json({ error: "No tenant." }, { status: 403 });
 
   const provider = ctx.tenant?.email_provider ?? "resend";
+
+  /* Who COULD be the sending account. PATCH has always accepted a gmailSenderUserId and the
+     card never sent one, so the sender stayed whoever configured email first — which is why
+     mail was leaving as pardeep@anutech.in with no screen able to change it. Offering the
+     list is the missing half. Ineligible teammates are included on purpose: "not in the
+     list" and "has not connected Google" are different problems. */
+  const candidates = await loadSenderCandidates(ctx.me.tenant_id);
+
   return NextResponse.json({
     provider,
     fromAddress: ctx.tenant?.email_from_address ?? null,
@@ -112,6 +152,9 @@ export async function GET() {
     /** True when the deployment-wide fallback is available. */
     hasEnvResendKey: Boolean(process.env.RESEND_API_KEY?.trim()),
     gmail: ctx.gmail,
+    senderCandidates: candidates,
+    /** Only the owner may switch it — PATCH enforces the same. */
+    canChooseSender: ctx.me.role === "owner",
     canSendNow: provider === "gmail"
       ? ctx.gmail.canSend
       : ctx.hasResendKey || Boolean(process.env.RESEND_API_KEY?.trim()),

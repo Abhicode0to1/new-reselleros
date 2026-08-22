@@ -739,3 +739,31 @@ scrolls as designed.
   the columns measure identically before and after. `lib/ui/grid-flow-col-reset.test.ts` scans
   the source for the class combination instead — the same approach as `route-map.test.ts`, with
   a guard that it actually scanned 100+ files.
+
+## L17. An API field the UI never sends is a feature that does not exist
+*22 Aug 2026, from "email sales@anutech.in se jani chahiye".*
+
+`PATCH /api/integrations/email-provider` has accepted `gmailSenderUserId` all along, and
+validates it properly — it refuses an account with no refresh token, refuses one that never
+granted `gmail.send`, and returns a §24 message with a `next` link for each. Everything
+needed to choose a different sending account was there.
+
+`email-sending-card.tsx` never sent the field. So the sender was whoever configured email
+FIRST, because PATCH derives it as `body.gmailSenderUserId || current || the caller's id`.
+Pardeep set it up, so every email left as `pardeep@anutech.in`, and no screen in the app
+could change it. From the outside this looks exactly like a missing feature; in the code it
+looks finished.
+
+**The rules:**
+- **A validated parameter with no caller is dead weight that reads as capability.** When
+  reviewing "does the app support X", check the call site, not the handler. `grep` for the
+  field name and see whether anything sends it.
+- **Defaulting an identity to "whoever is asking" outlives the request.** `|| user.id` is
+  reasonable for a first save and wrong forever after — it silently makes a config decision
+  that nobody chose and nobody can see.
+- **List the ineligible options, do not hide them.** "sales@ is not in the picker" and
+  "sales@ has not connected Google" send someone to different places, and only the second
+  was true. The row is shown, disabled, with what is missing and who has to fix it.
+- **Show the address mail actually leaves from.** A workspace login of sales@anutech.in
+  connected to a personal Gmail sends from the personal one. Displaying the login would
+  hide from the operator what the customer sees in From.

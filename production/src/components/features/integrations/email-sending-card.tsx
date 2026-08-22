@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
+import { blockerText, type SenderCandidate } from "@/lib/email/sender-candidates";
 
 interface EmailSettings {
   provider: "resend" | "gmail";
@@ -42,6 +43,11 @@ interface EmailSettings {
     email: string | null;
     canSend: boolean;
   };
+  /** Every teammate, eligible first. Ineligible ones are kept so "not in the list"
+   *  and "has not connected Google" stay different problems. */
+  senderCandidates: SenderCandidate[];
+  /** Only the owner may switch it — PATCH enforces the same. */
+  canChooseSender: boolean;
   canSendNow: boolean;
 }
 
@@ -216,6 +222,55 @@ export default function EmailSendingCard() {
             </Button>
           </a>
         </div>
+
+        {/* ── Which teammate's account sends ───────────────────────────────────
+            PATCH has always accepted a gmailSenderUserId; this card never sent one, so the
+            sender stayed whoever configured email FIRST (PATCH derives it as
+            `body.gmailSenderUserId || current || the caller`). Reported 22 Aug 2026: mail
+            was leaving as pardeep@anutech.in and should leave as sales@anutech.in, and no
+            screen could change it. This is the missing half.
+
+            Ineligible teammates are LISTED, not hidden. "sales@ is not in the list" and
+            "sales@ has not connected Google" send the operator to different places, and
+            only the second was ever true. */}
+        {data.canChooseSender && data.senderCandidates.length > 1 && (
+          <div className="mt-3 border-t border-hairline pt-3">
+            <Label htmlFor="gmail-sender">Send as</Label>
+            <select
+              id="gmail-sender"
+              value={data.gmail.senderId ?? ""}
+              onChange={(e) => save.mutate({ provider: "gmail", gmailSenderUserId: e.target.value })}
+              disabled={save.isPending}
+              className="mt-1 w-full rounded-md border border-hairline bg-paper px-2.5 py-2 text-sm text-ink outline-none focus:border-amber disabled:opacity-60"
+            >
+              {data.senderCandidates.map((c) => (
+                <option key={c.userId} value={c.userId} disabled={!c.eligible}>
+                  {c.sendsAs ?? c.loginEmail ?? c.userId}
+                  {c.sendsAs && c.loginEmail && c.sendsAs !== c.loginEmail ? ` (logs in as ${c.loginEmail})` : ""}
+                  {c.eligible ? "" : " — not available"}
+                </option>
+              ))}
+            </select>
+
+            {/* The blockers, named, with who has to act. OAuth belongs to the person: the
+                owner cannot connect a teammate's Google for them. */}
+            {data.senderCandidates.filter((c) => !c.eligible).length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {data.senderCandidates.filter((c) => !c.eligible).map((c) => (
+                  <li key={c.userId} className="text-[11px] leading-relaxed text-ink-3">
+                    <span className="font-mono text-ink-2">{c.loginEmail ?? c.userId}</span>{" "}
+                    {blockerText(c.blocker!)}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
+              Mail leaves from the <b>Google address</b> shown here, which is what the
+              customer sees — not the workspace login.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Resend key + From ────────────────────────────────────────────── */}
