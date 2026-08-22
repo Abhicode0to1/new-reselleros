@@ -833,16 +833,6 @@ export default function QuoteDetailPage() {
             Above the money row on purpose: a paid deal with no subscription is a
             bigger problem than anything the money row can offer, and it is the one
             nobody would otherwise notice. */}
-        {/* Billed monthly — nothing is missing, but nothing is tracked either. Shown
-            without a Recreate button on purpose: a monthly subscription added here would
-            be renewed ANNUALLY by the cron, which is a worse wrong answer than none. */}
-        {orphan.kind === "monthly-untracked" && (
-          <div className="flex items-start gap-2 rounded-lg border border-amber/40 bg-amber-soft px-4 py-3 text-sm">
-            <Icon name="info" size={16} className="mt-0.5 shrink-0 text-amber-ink" />
-            <span className="text-ink">{orphanNote(orphan)}</span>
-          </div>
-        )}
-
         {isOrphan(orphan) && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose/50 bg-rose-soft/40 px-4 py-3">
             <div className="flex items-start gap-2 text-sm">

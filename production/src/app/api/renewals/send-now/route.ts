@@ -22,7 +22,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import {
-  CADENCE_TRIGGERS,
+  triggersForTerm,
   decideCadence,
   type CadenceTone,
 } from "@/lib/renewals/cadence";
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
     .from("subscriptions")
     .select(
       `id, tenant_id, customer_id, customer_name, plan, vendor, seats, mrr,
-       renewal_date, status, renewal_state, reminder_count, renewal_quote_id`
+       renewal_date, status, renewal_state, reminder_count, renewal_quote_id, term_months`
     )
     .eq("id", body.subscription_id)
     .single();
@@ -119,6 +119,11 @@ export async function POST(req: Request) {
     renewalDate:  sub.renewal_date,
     graceDays:    tenant.grace_period_days ?? 0,
     currentState: (sub.renewal_state ?? "pending") as never,
+    /* The cron passes this and this route did not, so a monthly subscription force-sent
+       from the screen was judged against the ANNUAL ladder while the same subscription in
+       the nightly run was judged against the monthly one — one decision, two answers,
+       depending on which button reached it. */
+    termMonths:   sub.term_months,
   });
 
   // Pick effective tone for the manual send:
@@ -131,7 +136,7 @@ export async function POST(req: Request) {
       tone = "grace";
     } else {
       // Find the next trigger whose daysOut <= current daysUntil (sorted desc by daysOut)
-      const candidates = [...CADENCE_TRIGGERS].sort((a, b) => b.daysOut - a.daysOut);
+      const candidates = [...triggersForTerm(sub.term_months)].sort((a, b) => b.daysOut - a.daysOut);
       const match = candidates.find((t) => t.daysOut <= daysUntil) ?? candidates[candidates.length - 1];
       tone = match?.tone ?? "soft";
     }

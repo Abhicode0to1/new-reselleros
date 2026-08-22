@@ -561,14 +561,14 @@ export function RecordPaymentDialog({
               `${item} is a one-time purchase — there is no subscription to renew.`,
               { duration: 6000 },
             );
-          } else if (expectation === "monthly") {
-            toast.warning(
-              `${item} is billed monthly, and monthly plans are not tracked as renewing subscriptions yet — diarise the next bill, nothing will remind you.`,
-              { duration: 9000 },
-            );
           } else {
+            /* Monthly and annual read the same here now. Monthly used to say "not tracked
+               yet — diarise it", which was true for a few hours and then stopped being
+               true when record_payment learned to create them. A reassurance that has gone
+               stale is worse than the silence it replaced, because it tells somebody not
+               to look. */
             toast.warning(
-              "No subscription was created for this annual plan. That should not happen — open the quote and add it, so the renewal is not missed.",
+              "No subscription was created for this plan. That should not happen — open the quote and add it, so the renewal is not missed.",
               { duration: 9000 },
             );
           }

@@ -67,19 +67,13 @@ export type OrphanState =
   /** Money is in and NOTHING was created. */
   | { kind: "missing-all"; expected: number }
   /** Some were created and some are gone — the half-loss a zero-check misses. */
-  | { kind: "missing-some"; expected: number; found: number }
-  /**
-   * Billed monthly, and `record_payment` does not create subscriptions for those:
-   * `v_is_annual := v_commitment is distinct from 'monthly' and v_commitment is not null`.
-   *
-   * Its own state rather than "missing", because "one subscription should exist" would be
-   * false — none will ever be created for this quote, whatever anyone does. Nor is it
-   * "healthy": a monthly plan really does recur and nothing here will chase it. A tester
-   * paid Rs 38,232 for a monthly Google Workspace quote on 22 Aug, got no subscription and
-   * no explanation, and filed it as a bug. He was right that something is wrong; it is
-   * just not a missing row.
-   */
-  | { kind: "monthly-untracked"; lines: number };
+  | { kind: "missing-some"; expected: number; found: number };
+
+/* There was briefly a "monthly-untracked" state here, for the window in which monthly
+   sales produced no subscription at all. 20260822120000 and 20260822140000 closed that,
+   so a paid monthly quote with no subscription is now an ordinary missing one — same
+   fault, same fix, same words. Removed rather than left as a branch that can no longer
+   be reached: dead states get copied. */
 
 /**
  * A line that should become a subscription.
@@ -112,8 +106,17 @@ export function subscriptionExpectation(l: QuoteLine): LineExpectation {
   return c === "monthly" ? "monthly" : "annual";
 }
 
+/**
+ * Monthly counts too, since 20260822120000. It did not when this function first learned
+ * about commitments — record_payment created subscriptions for annual lines only — and for
+ * a few hours this module correctly reported monthly as "not tracked". Two migrations
+ * later that sentence became false, and a stale reassurance is worse than the original
+ * silence: it tells somebody not to look.
+ *
+ * A one-off is still not a subscription line, and that is the distinction worth keeping.
+ */
 export function isSubscriptionLine(l: QuoteLine): boolean {
-  return subscriptionExpectation(l) === "annual";
+  return subscriptionExpectation(l) !== "one-off";
 }
 
 export function orphanState(input: OrphanInput): OrphanState {
@@ -145,12 +148,6 @@ export function orphanState(input: OrphanInput): OrphanState {
 
   const expected = input.lines.filter(isSubscriptionLine).length;
   if (expected === 0) {
-    /* Before concluding there is nothing recurring here, check for the case that IS
-       recurring and simply is not tracked. Reporting a monthly plan as "nothing recurring"
-       would be the same silence the tester ran into. */
-    const monthly = input.lines.filter((l) => subscriptionExpectation(l) === "monthly").length;
-    if (monthly > 0) return { kind: "monthly-untracked", lines: monthly };
-
     /* A one-off charge. Reporting "missing" here would be inventing an expectation. */
     return { kind: "not-due", because: "Nothing on this quote is a recurring line." };
   }
@@ -187,11 +184,6 @@ export function orphanNote(s: OrphanState): string | null {
       /* Named separately because the quote still LOOKS connected — which is exactly why
          this one goes unnoticed for a year. */
       return `Only ${s.found} of ${s.expected} subscriptions from this quote still exist. The missing ${s.expected - s.found === 1 ? "one" : "ones"} will never be renewed and are absent from your MRR.`;
-    case "monthly-untracked":
-      /* States the consequence and the only thing that helps today. It does NOT say "add
-         the subscription manually": a monthly line added by hand would be renewed annually
-         by the cron, which is a worse wrong answer than none. */
-      return `${s.lines === 1 ? "This line is" : `${s.lines} lines are`} billed monthly, and monthly plans are not tracked as renewing subscriptions yet — so this sale will not appear in MRR and nothing will remind you about the next bill. Diarise it.`;
     case "not-due":
     case "healthy":
       return null;

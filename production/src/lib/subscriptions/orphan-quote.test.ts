@@ -141,8 +141,11 @@ describe("which lines are subscription-worthy", () => {
     expect(isSubscriptionLine({ name: "Domain Registration", qty: 1, rate: 1500 })).toBe(false);
     expect(isSubscriptionLine({ name: "GW", qty: 1, rate: 864, commitment: null })).toBe(false);
     expect(isSubscriptionLine({ name: "GW", qty: 1, rate: 864, commitment: "  " })).toBe(false);
-    expect(isSubscriptionLine({ name: "GW", qty: 1, rate: 864, commitment: "monthly" })).toBe(false);
-    expect(isSubscriptionLine({ name: "GW", qty: 1, rate: 864, commitment: " MONTHLY " })).toBe(false);
+    /* Monthly counts as a subscription line since 20260822120000. It did not for the few
+       hours between that migration and the one before it, and this assertion is flipped
+       rather than deleted so the change of behaviour is on the record. */
+    expect(isSubscriptionLine({ name: "GW", qty: 1, rate: 864, commitment: "monthly" })).toBe(true);
+    expect(isSubscriptionLine({ name: "GW", qty: 1, rate: 864, commitment: " MONTHLY " })).toBe(true);
     expect(isSubscriptionLine({ name: "GW", qty: 1, rate: 864, commitment: "annual_yearly" })).toBe(true);
   });
 
@@ -238,29 +241,31 @@ describe("the two reports a tester filed", () => {
     expect(orphanNote(s)).toBeNull();
   });
 
-  it("does not stay silent about a paid monthly plan either", () => {
+  it("treats a paid monthly plan with no subscription as a plain fault", () => {
     /* Q-TEST-2026-27-0009: Google Workspace, monthly, Rs 38,232 paid in full, no
-       subscription — because record_payment never makes one for monthly. Silence here
-       would just be the original bug with extra steps. */
+       subscription. When first written this returned its own "monthly-untracked" state,
+       because record_payment genuinely never created one and "a subscription should
+       exist" would have been false. Two migrations later it does create one, so this is
+       now an ordinary missing subscription — a STRONGER claim than before, and one the
+       operator can act on with the Recreate button. */
     const s = orphanState(q({
       lines: [{ name: "Google Workspace Business Starter", qty: 10, rate: 3823, commitment: "monthly" }],
       existingSubs: 0, received: 38232,
     }));
-    expect(s.kind).toBe("monthly-untracked");
-    /* Not a missing row — nothing will ever create one — but the operator must be told. */
-    expect(isOrphan(s)).toBe(false);
-    expect(orphanNote(s)).toMatch(/not tracked as renewing subscriptions yet/);
-    expect(orphanNote(s)).toMatch(/Diarise it/);
+    expect(s.kind).toBe("missing-all");
+    expect(isOrphan(s)).toBe(true);
+    expect(orphanNote(s)).toMatch(/paid but has no subscription/);
   });
 
-  it("never tells anyone to add a monthly subscription by hand", () => {
-    /* A monthly line added manually would be renewed ANNUALLY by the cron — a worse wrong
-       answer than none, and the kind of advice that looks helpful in review. */
+  it("still leaves a paid one-off alone", () => {
+    /* The half of the original pair that has NOT changed: a domain purchase needs no
+       subscription and must not be reported as missing one. */
     const s = orphanState(q({
-      lines: [{ name: "GW", qty: 1, rate: 500, commitment: "monthly" }],
-      existingSubs: 0, received: 500,
+      lines: [{ name: "Domain Registration", qty: 1, rate: 1500 }],
+      existingSubs: 0, received: 1770,
     }));
-    expect(orphanNote(s)).not.toMatch(/manual|by hand/i);
+    expect(s.kind).toBe("not-due");
+    expect(orphanNote(s)).toBeNull();
   });
 
   it("still catches the real fault it was written for", () => {

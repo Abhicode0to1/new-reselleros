@@ -29,6 +29,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { orphanState, isOrphan, missingLines } from "@/lib/subscriptions/orphan-quote";
+import { rebuildTerm } from "@/lib/subscriptions/rebuild-term";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -40,6 +41,8 @@ interface QuoteLineRow {
   domain?: string | null;
   item_id?: string | null;
   start_date?: string | null;
+  /** Price tier, as stored on the line. Read to tell a 1-month term from a 12-month one. */
+  commitment?: string | null;
 }
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
@@ -162,11 +165,14 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const rows = missing.map((l) => {
     const start  = (l.start_date ?? fallbackStart).slice(0, 10);
     const seats  = l.qty ?? 0;
-    /* `rate` on a quote line is ₹ per seat per YEAR (see the quote builder, which stores
-       msrp × 12). MRR is that twelfth, in whole rupees — this schema stores integers. */
-    const mrr    = Math.round(((l.rate ?? 0) * seats) / 12);
-    const renew  = new Date(start);
-    renew.setFullYear(renew.getFullYear() + 1);
+
+    /* Term, MRR and renewal date come from lib/subscriptions/rebuild-term.ts, which exists
+       so this route and record_payment cannot drift apart again. They already had: the
+       twelfth and the +1 year were hard-coded here, so a monthly subscription rebuilt after
+       20260822120000 came back with a tenth of its MRR and a renewal a year away. */
+    const { termMonths, mrr, renewalDate } = rebuildTerm({
+      commitment: l.commitment, rate: l.rate, qty: seats, startDate: start,
+    });
 
     return {
       tenant_id:     me.tenant_id,
@@ -177,8 +183,12 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       seats,
       mrr,
       start_date:    start,
-      renewal_date:  renew.toISOString().slice(0, 10),
+      renewal_date:  renewalDate,
       status:        "active" as const,
+      /* term_months drives the reminder ladder (lib/renewals/cadence.ts). billing_cycle is
+         deliberately NOT set: the trigger subscription_cycle_follows_quote owns it and
+         copies it from the quote, and writing it here too would be a second writer. */
+      term_months:   termMonths,
       domain:        l.domain ? l.domain.trim() : null,
       item_id:       l.item_id ?? null,
       quote_id:      quote.id,
