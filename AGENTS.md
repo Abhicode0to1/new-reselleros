@@ -767,3 +767,57 @@ looks finished.
 - **Show the address mail actually leaves from.** A workspace login of sales@anutech.in
   connected to a personal Gmail sends from the personal one. Displaying the login would
   hide from the operator what the customer sees in From.
+
+## L18. A `redirectTo` that is not allowlisted is discarded in silence, and Site URL takes over
+*22 Aug 2026, from the first real password-reset link.*
+
+`/forgot-password` sends
+`redirectTo: ${origin}/callback?next=/reset-password`, and `appPathOr` accepts
+`/reset-password` — the app-side chain is correct and was verified. Clicking the link still
+landed on the **marketing landing page**, at
+`resellersos-1005662057478.asia-south1.run.app` with no path, no `code`, no query.
+
+That is Supabase Auth falling back to **Site URL**: when `redirectTo` is not in the
+project's Redirect URLs allowlist it is ignored, and nothing anywhere reports it. Not an
+error, not a warning, not a different landing page — the operator simply arrives somewhere
+that looks like the app failed.
+
+**Two hosts serve this Cloud Run service and both are real** —
+`resellersos-njvk4nxhdq-el.a.run.app` (what `gcloud run services describe` returns) and
+`resellersos-1005662057478.asia-south1.run.app` (what the Cloud Scheduler jobs call). An
+allowlist holding one of them breaks every flow started from the other.
+
+**The rules:**
+- **Any OAuth or magic-link `redirectTo` needs its origin in the allowlist**, with a path
+  wildcard: `https://<host>/**`. Add every host that serves the app, plus
+  `http://localhost:3000/**` for development.
+- **Do not debug this in the app first.** The give-away is a landing URL with no `code`
+  parameter: the callback was never reached, so no amount of reading the callback route
+  explains it. Check the allowlist before the code.
+- **The service having more than one hostname is the part that surprises people.** Grep for
+  hardcoded hosts (`scripts/setup-cloud-scheduler.sh` pins one, docs pin the other) before
+  assuming there is a single canonical origin.
+
+## L19. Supabase Auth still emails under a brand this company retired
+*22 Aug 2026, same email.*
+
+The password-reset mail arrives as:
+
+```
+Excel Technologies <no-reply@mail.exceltechnologies.in>
+```
+
+**Excel Technologies is historical.** The company is ANUTECH DIGITAL PVT LTD
+(`CLAUDE.md §1`, corrected 14 Aug 2026 after the same name was found in `doc_code`, the
+dev-login list, and the docs). Auth email is one more place it survived — and the worst
+one, because it is the only branding a *teammate or customer* sees before they trust a link
+enough to click it. A reset mail from a company they have never heard of is a mail they
+should ignore.
+
+**The rules:**
+- **Auth emails are branding, not plumbing.** They are sent by Supabase, so they are invisible
+  to every grep of this repo and survive every rename done in code. Check
+  Authentication → Emails / SMTP whenever the company name changes.
+- **When correcting a historical name, list the places it can hide**: `doc_code`, seeded demo
+  data, docs, and anything a third-party service sends on your behalf. §1 caught the first
+  three; this is the fourth.
