@@ -110,7 +110,10 @@ export function EmailThreadPanel({
                        and putting it on screen means running their markup in this session. */
                     ? "This message came as formatted HTML only. Open it in your mail client to read it — it is not shown here because it is not plain text."
                     : out
-                      ? "Sent from Gmail — the text was not saved in ResellerOS."
+                      /* Reachable only for a row filed without its text. The current send
+                         path always stores the body, so this covers older or partial rows
+                         rather than the Gmail hand-off it originally described. */
+                      ? "This message was sent, but its text was not stored."
                       : "This message arrived with no readable body."}
                 </div>
               )}

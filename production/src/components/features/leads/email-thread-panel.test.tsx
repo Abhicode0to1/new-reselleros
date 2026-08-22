@@ -89,11 +89,12 @@ describe("EmailThreadPanel", () => {
     expect(document.body.innerHTML).not.toContain("alert(1)");
   });
 
-  it("says a Gmail send has no stored text rather than showing an empty bubble", () => {
-    /* The drawer already tells the operator that the Email button's text is not kept. This
-       panel must not contradict it by rendering a blank message. */
+  it("says an outbound row without text is unstored, not an empty message", () => {
+    /* The send path always stores the body now, so this covers an older or partially
+       filed row. Either way a blank bubble would read as an empty email, which is a
+       different and wrong fact. */
     renderThread([sent({ body_text: null, body_html: null })]);
-    expect(screen.getByText(/not saved in ResellerOS/i)).toBeTruthy();
+    expect(screen.getByText(/text was not stored/i)).toBeTruthy();
   });
 
   it("shows the subject when there is one", () => {

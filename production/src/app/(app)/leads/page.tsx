@@ -40,6 +40,7 @@ import { useInboundEmails } from "@/lib/queries/inbound-emails";
 import { isSentReply } from "@/lib/inbound/sent";
 import { buildEmailThread, summariseThread } from "@/lib/leads/email-thread";
 import { EmailThreadPanel } from "@/components/features/leads/email-thread-panel";
+import { LeadEmailComposer } from "@/components/features/leads/lead-email-composer";
 import { ReplyComposer } from "@/components/features/enquiries/reply-composer";
 import { LeadsBulkBar } from "@/components/features/leads/leads-bulk-bar";
 import { useQuotesByLead } from "@/lib/queries/quotes";
@@ -1789,7 +1790,8 @@ function LeadDetailSheet({
   /* Which half of the Conversation tab is showing. Resets with the lead so opening a
      different one never lands you in a view you did not choose. */
   const [convoView, setConvoView] = React.useState<"all" | "email">("all");
-  React.useEffect(() => { setDrawerTab("details"); setConvoView("all"); }, [lead?.id]);
+  const [emailComposerOpen, setEmailComposerOpen] = React.useState(false);
+  React.useEffect(() => { setDrawerTab("details"); setConvoView("all"); setEmailComposerOpen(false); }, [lead?.id]);
 
   // Drag-to-resize the drawer (desktop only): the left edge is a grab handle;
   // the chosen width is remembered per browser. Mobile stays full-width.
@@ -1906,20 +1908,22 @@ function LeadDetailSheet({
     router.push(`/quotes/new?${params.toString()}` as any);
   };
 
+  /* Opens the in-app composer instead of Gmail.
+     ─── WHAT THIS REPLACED, AND WHY ────────────────────────────────────────────
+     It used to build a mail.google.com compose URL, open it in a new tab, and log
+     "Emailed x@y · subject". The message itself went to Gmail and nowhere else, so the
+     lead's Email thread (added 22 Aug 2026) could show the customer's words and only a
+     stub for ours — a half conversation, which reads as data loss.
+     /api/leads/[id]/email sends through lib/email/send.ts (the tenant's own connected
+     Gmail, when they have one) and files the text into inbound_emails the same way the
+     enquiry reply route does, so both sides of the thread are real. */
   const handleEmail = () => {
     if (!lead.contact_email) {
-      toast.error("No email on this lead");
+      /* §24 — where to fix it, not just what is wrong. */
+      toast.error("No email on this lead — add one with Edit, then you can write to them from here.");
       return;
     }
-    const subject = `About your inquiry · ${lead.company}`;
-    const signoff = currentUser?.tenantName ?? "your team";
-    const body    = `Hi ${lead.contact_name ?? "there"},\n\nThanks for your interest in ${lead.plan ?? "our services"}. Let me know a good time to connect.\n\n— ${signoff}`;
-    // Open Gmail compose in a new tab — reliable across machines (a raw mailto:
-    // does nothing when no desktop mail client is configured).
-    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(lead.contact_email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
-    logActivity.mutate({ leadId: lead.id, kind: "email", detail: `Emailed ${lead.contact_email} · ${subject}` });
-    toast.success("Logged on the lead's timeline");
+    setEmailComposerOpen(true);
   };
 
   const handleArchive = () => {
@@ -2568,9 +2572,11 @@ function LeadDetailSheet({
               ───────────────────────────────────────────────────────────────────
               Both halves of the conversation already existed and lived on different
               screens. Inbound mail was readable on the lead (the timeline above); replying
-              was only possible on /enquiries. The lead's own Email button opens GMAIL and
-              records a one-line note — "Emailed x@y · subject" — so what was actually
-              written was never kept anywhere.
+              was only possible on /enquiries. The lead's Email button USED TO open Gmail
+              and record a one-line note — "Emailed x@y · subject" — so what was actually
+              written was never kept anywhere. Since 22 Aug 2026 it opens
+              LeadEmailComposer and posts to /api/leads/[id]/email, which files the text
+              alongside the mail it answers, so both directions are real.
 
               Nothing new is invented here: the same ReplyComposer and the same
               /api/inbound-emails/[id]/reply route, which files the sent text into the Sent
@@ -2607,10 +2613,10 @@ function LeadDetailSheet({
                still there; what it does NOT do is worth stating, because a logged
                "Emailed …" line looks like the mail was kept. */
             <div className="text-[11px] leading-snug text-ink-3 p-2.5 bg-paper-2 rounded-md">
-              No email from this lead yet, so there is no thread to reply into. The Email
-              button opens Gmail — the send is logged on the timeline, but what you write
-              there is not kept in ResellerOS. Once they email you, the reply box appears
-              here and the text is saved.
+              No email from this lead yet, so there is no thread to reply into. Use the{" "}
+              <b className="text-ink-2">Email</b> button to write to them — it sends from
+              your connected account and keeps the text, so it shows up in the Email tab.
+              Once they write back, the reply box appears here too.
             </div>
           ) : null}
           </div>
@@ -3018,6 +3024,22 @@ function LeadDetailSheet({
         linkLabel={lead.company}
         linkTo={{ lead_id: lead.id }}
       />
+
+      {/* Email from inside the app, so the text is kept and the Email thread has both
+          sides. Mounted only with an address, because the composer's whole premise is a
+          recipient it can show and cannot edit. */}
+      {emailComposerOpen && lead.contact_email && (
+        <LeadEmailComposer
+          open={emailComposerOpen}
+          onOpenChange={setEmailComposerOpen}
+          leadId={lead.id}
+          company={lead.company}
+          toEmail={lead.contact_email}
+          contactName={lead.contact_name}
+          plan={lead.plan}
+          senderName={currentUser?.tenantName ?? null}
+        />
+      )}
 
       {/* Send-via-WhatsApp — pre-fills contact phone and an opening line
           using the lead's plan/seats context. */}
