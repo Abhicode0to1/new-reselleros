@@ -28,6 +28,7 @@
  * ask, not to guess well. Step 3 no longer creates anything it was not told to.
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { appPathOr } from "@/lib/safe-path";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { initials } from "@/lib/utils";
 import { normalizeEmail, type InviteMatch } from "@/lib/auth/membership";
@@ -59,7 +60,10 @@ function tenantNameFromEmail(email: string | undefined): string {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
+  /* Prefixing origin below already stops an off-site redirect, so this is defence in
+     depth rather than a fix — but the same string is validated the same way everywhere,
+     which is cheaper to keep true than three subtly different checks. */
+  const next = appPathOr(searchParams.get("next"));
 
   // Public host for redirects — NEVER new URL(request.url).origin. On Cloud Run
   // the container binds 0.0.0.0:3000, so that origin is the internal address and

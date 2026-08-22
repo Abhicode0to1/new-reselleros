@@ -5,6 +5,8 @@
  * from an HTTP status code, and getting that wrong deletes real subscriptions.
  */
 
+import { isAppPath } from "@/lib/safe-path";
+
 /** The events this app is allowed to interrupt someone's phone for. */
 export type PushEvent =
   | { kind: "attendance_checkin";  name?: string | null }
@@ -64,9 +66,9 @@ const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
  * worker refuses cross-origin too, so this is the inner of two guards; both exist because
  * the offer payload is the one a person types.
  */
-function isAppPath(url: string | undefined): boolean {
-  return Boolean(url) && url!.startsWith("/") && !url!.startsWith("//");
-}
+/* Moved to lib/safe-path.ts, which the login page and the middleware also use. The copy
+   that lived here stopped at "//" and let "/\evil.com" through — browsers normalise the
+   backslash, so that was the same hole wearing a disguise. One checker, one behaviour. */
 
 export function pushPayload(event: PushEvent): PushPayload {
   switch (event.kind) {

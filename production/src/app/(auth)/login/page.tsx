@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { appPathOr } from "@/lib/safe-path";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,7 +33,11 @@ const DEMO_USERS: Array<{ label: string; email: string; password: string }> = [
 
 function LoginPageInner() {
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") ?? "/dashboard";
+  /* VALIDATED, not trusted. This value is assigned to window.location.href below, so
+     an unchecked ?next=https://evil.com walked the operator off-site the instant they
+     signed in — on the one page where they have just typed a password. It also travels
+     into the OAuth redirectTo, so the same string reaches the provider. */
+  const nextPath = appPathOr(searchParams.get("next"));
   const [showPassword, setShowPassword] = React.useState(false);
 
   const {

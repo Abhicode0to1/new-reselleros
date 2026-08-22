@@ -102,8 +102,19 @@ export async function middleware(request: NextRequest) {
   // Not logged in → block protected routes
   if (!isAuthed && isProtected) {
     const url = request.nextUrl.clone();
+    /* Two fixes in three lines, both found by curling the deployed app.
+
+       The QUERY has to survive. `next` used to carry the pathname alone, so a signed-out
+       click on "Lifetime paid" (/payments?customer=<id>) landed on a bare /payments after
+       logging in — the filter silently gone, which reads as the link being broken.
+
+       And the inherited params have to go. `url` is a CLONE of the original request, so
+       /payments?customer=abc produced /login?customer=abc&next=%2Fpayments — the app's own
+       query strings leaking onto the login screen, where they mean nothing. */
+    const target = pathname + request.nextUrl.search;
+    url.search = "";
     url.pathname = "/login";
-    url.searchParams.set("next", pathname);
+    url.searchParams.set("next", target);
     return NextResponse.redirect(url);
   }
 
