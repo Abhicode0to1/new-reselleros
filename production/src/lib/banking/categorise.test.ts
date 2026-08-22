@@ -147,3 +147,69 @@ describe("a batch reports what it could NOT do", () => {
     expect(unmatched).toHaveLength(1);
   });
 });
+
+/* ── The two layers together ───────────────────────────────────────────────────
+   These assertions MEASURE which layer answers, rather than only that something did.
+   That matters because the whole justification for having two is that each reaches cases
+   the other cannot, and if the built-in list quietly covered everything the tenant-rule
+   table would be dead weight nobody noticed. */
+import { suggestForLine, suggestBatch } from "./categorise";
+import { suggestCategory } from "@/lib/queries/expenses";
+
+describe("tenant rules and the built-in keyword list, in that order", () => {
+  it("proves the built-in list CANNOT read a machine narration", () => {
+    /* The reason tenant rules exist. suggestCategory's patterns are \b-anchored because it
+       was written for text an operator types; BILLDKPLAYSTOREGOOGL has no word boundary
+       before GOOGL, so no anchored pattern can ever reach it. Asserted, not assumed —
+       if this ever starts returning a category, the two-layer design needs revisiting. */
+    expect(suggestCategory(REAL_GOOGLE)).toBeNull();
+    expect(suggestCategory(REAL_FACEBOOK)).toBeNull();
+
+    // ...and the tenant rule does reach it.
+    expect(suggestForLine(debit(REAL_GOOGLE), RULES, suggestCategory)).toMatchObject({
+      category: "Software", layer: "tenant-rule",
+    });
+  });
+
+  it("proves the built-in list refuses Salaries, which is why the rule layer owns it", () => {
+    /* suggestCategory's own comment: "'Salaries' is intentionally never guessed (those
+       belong in Payroll)". Correct for a typed note, wrong for a bank statement where
+       ...-SALARY is precisely a salary payment. */
+    expect(suggestCategory(REAL_SALARY)).toBeNull();
+    expect(suggestForLine(debit(REAL_SALARY, 150000), RULES, suggestCategory)).toMatchObject({
+      category: "Salaries", layer: "tenant-rule",
+    });
+  });
+
+  it("falls through to the built-in list on a human-readable narration", () => {
+    /* And here the built-in layer earns its place: no tenant rule covers this, and the
+       shared keyword list already knows it. */
+    const hit = suggestForLine(debit("NEFT DR-BANK CHARGE FOR RTGS"), RULES, suggestCategory);
+    expect(hit).toMatchObject({ category: "Bank Charges", layer: "builtin-keyword" });
+    expect(hit?.reason).toBe("keyword match");
+  });
+
+  it("prefers the tenant rule when BOTH layers have an answer", () => {
+    /* The learned, tenant-specific decision must win over the shared default, or
+       corrections made in Phase 4 would be silently overridden by the global list. */
+    const rules = [rule({ pattern: "HOSTING", category: "Software" })];
+    expect(suggestCategory("AWS HOSTING RENEWAL")).toBe("Hosting");          // built-in says Hosting
+    expect(suggestForLine(debit("AWS HOSTING RENEWAL"), rules, suggestCategory)).toMatchObject({
+      category: "Software", layer: "tenant-rule",                            // tenant wins
+    });
+  });
+
+  it("returns null when neither layer knows, instead of picking something", () => {
+    expect(suggestForLine(debit("NEFT-XX9931-QRSTU ENTERPRISES"), RULES, suggestCategory)).toBeNull();
+  });
+
+  it("keeps a null suggestion in the batch rather than dropping the row", () => {
+    /* A row silently missing from the result is worse than one marked uncategorised: the
+       operator would import a line they never saw. */
+    const lines = [debit(REAL_SALARY, 150000), debit("NEFT-UNKNOWN VENDOR", 900)];
+    const out = suggestBatch(lines, RULES, suggestCategory);
+    expect(out).toHaveLength(2);
+    expect(out[0].suggestion?.category).toBe("Salaries");
+    expect(out[1].suggestion).toBeNull();
+  });
+});

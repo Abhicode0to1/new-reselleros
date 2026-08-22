@@ -158,3 +158,109 @@ export function categoriseBatch<T extends BankLine>(
   }
   return { matched, unmatched };
 }
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   Two layers, and the order matters
+   ──────────────────────────────────────────────────────────────────────────────
+
+   `suggestCategory` in lib/queries/expenses.ts already existed before any of this and
+   is good: 18 canonical categories, keyword regexes in English AND Hinglish, ordered
+   most-specific-first, returns null rather than guessing. Reusing it beats writing a
+   second keyword list that would drift from it.
+
+   But it cannot do this job alone, for two measured reasons:
+
+   1. Its patterns are `\b`-anchored, because it was built for the free text an operator
+      TYPES ("team ke liye khana"). Bank narrations are machine noise with no word
+      boundaries — DHDF23P1QTMPV7/BILLDKPLAYSTOREGOOGL has no \b before GOOGL, so no
+      word-anchored pattern can ever reach it. Substring rules can.
+
+   2. It deliberately never returns "Salaries" — its own comment says those belong in
+      Payroll. That is right for a typed expense note and wrong for a bank statement,
+      where IMPS-...-PARDEEP SHARMA-...-SALARY is exactly a salary payment. The tenant
+      rule layer is where that case lives.
+
+   So: tenant rules first (specific, learned, substring, direction-aware), then the
+   built-in keywords (broad, shared, word-anchored), then null. Null stays a real answer.
+*/
+
+/**
+ * Payment rails — the words a bank stamps on a line to say HOW money moved, not what for.
+ * Present on nearly every narration, so they must never be what decides a category.
+ *
+ * Word-bounded deliberately: without the boundaries this would strip "ach" out of the
+ * middle of a real merchant name and change what the keyword layer gets to see.
+ */
+const PAYMENT_RAILS = /\b(neft|rtgs|imps|upi|ach|ecs|inft|mmt)\b/gi;
+
+/** Where a suggestion came from. Both are deterministic; neither is AI. */
+export type SuggestionLayer = "tenant-rule" | "builtin-keyword";
+
+export interface CategorySuggestion {
+  category: string;
+  layer: SuggestionLayer;
+  /** Shown to the operator: `rule: PAYUFACEBOOK` or `keyword match`. */
+  reason: string;
+}
+
+/**
+ * The suggestion for one line, from whichever deterministic layer answers first.
+ *
+ * `keywordFn` is injected rather than imported so this module stays pure and testable
+ * without pulling in the queries layer — and so the two layers can be tested apart.
+ *
+ * Returns null when neither layer knows. The caller MUST render that differently from a
+ * category: an uncategorised line showing blank is how a half-done statement reads as
+ * finished, which is the same bug the subscription card had on 21 Aug.
+ */
+export function suggestForLine(
+  line: BankLine,
+  rules: readonly CategoryRule[],
+  keywordFn: (text: string) => string | null,
+): CategorySuggestion | null {
+  const ruleHit = categoriseByRules(line, rules);
+  if (ruleHit) {
+    return { category: ruleHit.category, layer: "tenant-rule", reason: ruleHit.reason };
+  }
+
+  const text = line.description ?? "";
+  if (!text.trim()) return null;
+
+  /* Direction is NOT consulted for the built-in layer, and that is deliberate rather than
+     an oversight: those keywords describe what a thing IS ("hosting", "insurance"), not
+     which way the money went, and the one direction-sensitive case — salaries — is the one
+     it already refuses to answer. */
+  const keyword = keywordFn(text);
+  if (!keyword) return null;
+
+  /* THE RAIL GUARD, and it was found by a test rather than reasoned about.
+     suggestCategory lists "neft" and "rtgs" among its Bank Charges keywords, which is
+     correct for a note somebody TYPES — if you write "NEFT" in an expense note you
+     usually mean the fee. In a bank narration those words appear on nearly every line,
+     because they are the payment RAIL, not the expense. Unguarded, this layer filed
+     NEFT-XX9931-QRSTU ENTERPRISES (a Rs 50,000 vendor payment) under Bank Charges, and
+     every transfer in the statement with it. That does not look like a bug on screen; it
+     looks like a plausible P&L with the wrong number in it.
+
+     The test: strip the rail words and ask again. If the answer evaporates, the match was
+     about the rail. If it survives — "NEFT DR-BANK CHARGE FOR RTGS" still says bank
+     charge without the rails — it was about the expense, and it stands.
+
+     Accepted cost, stated rather than hidden: a bare "NEFT CHARGES" line now returns null
+     instead of Bank Charges, because nothing is left once the rail is removed. That is a
+     MISS, and a miss is cheap here — the operator categorises it once and Phase 4 turns
+     that into a rule. A wrong answer is the expensive one, because nobody re-checks it. */
+  const withoutRails = text.replace(PAYMENT_RAILS, " ");
+  if (keywordFn(withoutRails) !== keyword) return null;
+
+  return { category: keyword, layer: "builtin-keyword", reason: "keyword match" };
+}
+
+/** Suggest across a batch, keeping the leftovers visible. */
+export function suggestBatch<T extends BankLine>(
+  lines: readonly T[],
+  rules: readonly CategoryRule[],
+  keywordFn: (text: string) => string | null,
+): { suggestion: CategorySuggestion | null; line: T }[] {
+  return lines.map((line) => ({ line, suggestion: suggestForLine(line, rules, keywordFn) }));
+}

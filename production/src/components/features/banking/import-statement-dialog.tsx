@@ -27,6 +27,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { useImportBankTransactions, useExistingTxnKeys, bankTxnKey } from "@/lib/queries/bank";
+import { useTxnCategoryRules } from "@/lib/queries/txn-category-rules";
+import { EXPENSE_CATEGORIES, suggestCategory } from "@/lib/queries/expenses";
+import { suggestForLine } from "@/lib/banking/categorise";
 import { rupee, formatDate } from "@/lib/utils";
 
 interface Props {
@@ -229,6 +232,29 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
   }, [reading]);
   const { data: existingKeys } = useExistingTxnKeys(open ? accountId : null);
 
+  /* ── Categorisation (docs/AI-CATEGORISATION-PLAN.md, Phase 2) ─────────────
+     Two deterministic layers and no model: the tenant's own rules first, then the
+     built-in keyword list lib/queries/expenses.ts already had. Whatever neither answers
+     stays EMPTY and says so — see the counter under the table. */
+  const { data: rules = [] } = useTxnCategoryRules();
+
+  /** Suggestion per row index, recomputed when the parse or the rules change. */
+  const suggestions = React.useMemo(() => {
+    if (!parsed) return [];
+    return parsed.rows.map((r) => suggestForLine(r, rules, suggestCategory));
+  }, [parsed, rules]);
+
+  /* The operator's overrides, by row index. Kept apart from `suggestions` so a re-parse
+     cannot silently discard a choice somebody made, and so "set to no category" stays
+     distinguishable from "never touched". */
+  const [override, setOverride] = React.useState<Record<number, string>>({});
+  React.useEffect(() => { setOverride({}); }, [parsed]);
+
+  const categoryFor = (i: number): string | null =>
+    override[i] !== undefined ? (override[i] || null) : (suggestions[i]?.category ?? null);
+
+  const categorisedCount = parsed ? parsed.rows.filter((_, i) => categoryFor(i)).length : 0;
+
   // How many parsed rows are already in the books (will be skipped on import).
   const dupCount = React.useMemo(() => {
     if (!parsed || !existingKeys) return 0;
@@ -299,7 +325,24 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
       return;
     }
     try {
-      await importMut.mutateAsync({ accountId, rows: parsed.rows });
+      /* Categories travel with the rows. category_source is 'manual' where the operator
+         picked it and 'rule' where a layer did, because the DB refuses a category with no
+         stated source — an unattributable number in the books is the thing an auditor
+         asks about first. */
+      await importMut.mutateAsync({
+        accountId,
+        rows: parsed.rows.map((r, i) => {
+          const category = categoryFor(i);
+          if (!category) return r;
+          const touched = override[i] !== undefined;
+          return {
+            ...r,
+            category,
+            category_source: touched ? ("manual" as const) : ("rule" as const),
+            category_confidence: 100,
+          };
+        }),
+      });
       onOpenChange(false);
     } catch {
       /* hook handles toast */
@@ -394,31 +437,67 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
               )}
               {parsed.rows.length > 0 && (
                 <div className="overflow-x-auto">
+                  {/* Every row, in a scroll box — not the first five. A five-row preview
+                      beside an editable category column would let somebody set 5 of 39
+                      categories and believe they had reviewed the statement. */}
+                  <div className="max-h-[320px] overflow-y-auto custom-scrollbar">
                   <table className="w-full text-[11px]">
-                    <thead className="text-ink-3">
+                    <thead className="text-ink-3 sticky top-0 bg-paper">
                       <tr>
                         <th className="text-left py-1">Date</th>
                         <th className="text-left py-1">Description</th>
                         <th className="text-right py-1">Debit</th>
                         <th className="text-right py-1">Credit</th>
+                        <th className="text-left py-1 pl-2">Category</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {parsed.rows.slice(0, 5).map((r, i) => (
-                        <tr key={i} className="border-t border-hairline">
-                          <td className="py-1 whitespace-nowrap">{formatDate(r.txn_date)}</td>
-                          <td className="py-1 truncate max-w-[200px]">{r.description}</td>
-                          <td className="py-1 text-right text-rose tabular-nums">{r.debit > 0 ? rupee(r.debit) : "—"}</td>
-                          <td className="py-1 text-right text-emerald tabular-nums">{r.credit > 0 ? rupee(r.credit) : "—"}</td>
-                        </tr>
-                      ))}
+                      {parsed.rows.map((r, i) => {
+                        const suggestion = suggestions[i];
+                        const chosen = categoryFor(i);
+                        return (
+                          <tr key={i} className="border-t border-hairline">
+                            <td className="py-1 whitespace-nowrap">{formatDate(r.txn_date)}</td>
+                            <td className="py-1 truncate max-w-[170px]" title={r.description}>{r.description}</td>
+                            <td className="py-1 text-right text-rose tabular-nums">{r.debit > 0 ? rupee(r.debit) : "—"}</td>
+                            <td className="py-1 text-right text-emerald tabular-nums">{r.credit > 0 ? rupee(r.credit) : "—"}</td>
+                            <td className="py-1 pl-2">
+                              <select
+                                aria-label={`Category for ${r.description}`}
+                                value={chosen ?? ""}
+                                onChange={(e) => setOverride((o) => ({ ...o, [i]: e.target.value }))}
+                                className="w-full max-w-[150px] rounded border border-hairline bg-paper px-1 py-0.5 text-[11px] text-ink"
+                              >
+                                {/* Named, not blank. An empty option reads as "nothing
+                                    needed here"; this one admits there is no answer yet. */}
+                                <option value="">— not set —</option>
+                                {EXPENSE_CATEGORIES.map((c) => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
+                              {/* Why, and from which layer. Hidden once overridden, because
+                                  then the reason is simply "you chose it". */}
+                              {suggestion && override[i] === undefined && (
+                                <span className="block text-[9px] text-ink-3 truncate max-w-[150px]">
+                                  {suggestion.layer === "tenant-rule" ? suggestion.reason : "keyword"}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
-                  {parsed.rows.length > 5 && (
-                    <p className="text-[10px] text-ink-3 mt-1 italic">
-                      …and {parsed.rows.length - 5} more rows
-                    </p>
-                  )}
+                  </div>
+                  {/* The honest number — it says what is NOT done, so a half-categorised
+                      statement cannot read as a finished one. */}
+                  <p className="text-[10px] text-ink-3 mt-1.5">
+                    <b className="text-ink-2">{categorisedCount} of {parsed.rows.length}</b> line
+                    {parsed.rows.length === 1 ? "" : "s"} have a category.
+                    {categorisedCount < parsed.rows.length && (
+                      <> The other {parsed.rows.length - categorisedCount} will import without one — set them above, or later on the transactions page.</>
+                    )}
+                  </p>
                 </div>
               )}
             </div>
