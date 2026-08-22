@@ -12,6 +12,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { subscriptionExpectation, type QuoteLine } from "@/lib/subscriptions/orphan-quote";
 import { FeedbackDialog } from "@/components/shared/feedback-dialog";
 
 import {
@@ -81,6 +82,12 @@ function computeTds(quoteAmountInclGst: number, ratePct: number): { preGST: numb
 }
 
 interface RecordPaymentDialogProps {
+  /**
+   * The quote's line items, used only to explain WHY no subscription was created.
+   * Optional: without it the explanation falls back to a generic one rather than
+   * blocking the dialog, because a missing prop must never stop a payment being recorded.
+   */
+  lineItems?: QuoteLine[] | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   quoteId: string;
@@ -115,6 +122,7 @@ export function RecordPaymentDialog({
   customerId = null,
   askDomain: _askDomain = false,
   defaultDomain = null,
+  lineItems,
 }: RecordPaymentDialogProps) {
   const qc = useQueryClient();
   const [method, setMethod] = React.useState("upi");
@@ -505,11 +513,12 @@ export function RecordPaymentDialog({
         }
         if (res.subscriptionCreated) {
           setTimeout(() => toast.success("Subscription created · renewal in 1 year", { duration: 5000 }), 1200);
-        } else {
-          // Money is in + customer created, but no subscription — surface it so
-          // the paid customer doesn't silently miss the renewal cycle.
-          setTimeout(() => toast.warning("No subscription created — check the quote's billing commitment, then add the subscription manually", { duration: 7000 }), 1200);
         }
+        /* The "no subscription" case used to be explained HERE, and that was the bug: this
+           branch only runs when the payment also CREATED the customer (converted_now). A
+           tester paid a quote whose customer already existed, so the branch was skipped and
+           he was told nothing at all — twice, on 22 Aug. The explanation now lives after
+           the whole chain, where every path reaches it. */
       } else if (res.invoicePaid) {
         // Post-invoice balance payment that fully cleared the invoice
         toast.success("Balance received · invoice marked paid 🎉", { duration: 5000 });
@@ -527,6 +536,45 @@ export function RecordPaymentDialog({
           { duration: 5000 },
         );
       }
+      /* ── Why there is no subscription ──────────────────────────────────────
+         Fired for any first payment that produced none, not only for a conversion.
+         The wording depends on the cause, because the responses differ: a one-off needs
+         nothing, a monthly plan needs a diary note (record_payment does not track those
+         yet), and an annual one that produced nothing is a genuine fault. Saying the same
+         thing for all three is what left a tester unable to tell a correct outcome from a
+         broken one. */
+      if (res.isFirstPayment && !res.subscriptionCreated && !res.isRenewalQuote) {
+        /* subscriptionExpectation is the SAME function the quote page's orphan warning
+           uses. One rule, read the way record_payment reads it — a second copy here
+           would be the toast and the page disagreeing about one quote, which is worse
+           than either being wrong on its own. */
+        const first = (lineItems ?? [])[0];
+        const expectation = first ? subscriptionExpectation(first) : "one-off";
+        const item = first?.name?.trim() || "This item";
+
+        setTimeout(() => {
+          if (expectation === "one-off") {
+            /* Correct, and it must not be dressed as a problem. The old message said
+               "check the quote's billing commitment, then add the subscription
+               manually", which sends somebody to fix a domain purchase. */
+            toast.info(
+              `${item} is a one-time purchase — there is no subscription to renew.`,
+              { duration: 6000 },
+            );
+          } else if (expectation === "monthly") {
+            toast.warning(
+              `${item} is billed monthly, and monthly plans are not tracked as renewing subscriptions yet — diarise the next bill, nothing will remind you.`,
+              { duration: 9000 },
+            );
+          } else {
+            toast.warning(
+              "No subscription was created for this annual plan. That should not happen — open the quote and add it, so the renewal is not missed.",
+              { duration: 9000 },
+            );
+          }
+        }, 1200);
+      }
+
       // Overpayment acknowledgement — money was received above the quote and
       // saved as an advance credit (not lost).
       if (res.overpaidCredit > 0) {

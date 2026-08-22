@@ -34,6 +34,16 @@ export interface QuoteLine {
   name?: string | null;
   qty?: number | null;
   rate?: number | null;
+  /**
+   * 'annual_yearly' | 'monthly' | null, as stored on the quote line.
+   *
+   * Added 22 Aug 2026 because its absence made this module confidently wrong. Without it
+   * every priced line looked like a subscription line, so a paid Domain Registration was
+   * reported as "paid but has no subscription, so nothing will ever chase its renewal" —
+   * a false alarm on a one-off purchase, and the fastest way to teach an operator to skip
+   * this warning before it ever catches a real one.
+   */
+  commitment?: string | null;
 }
 
 export interface OrphanInput {
@@ -57,7 +67,19 @@ export type OrphanState =
   /** Money is in and NOTHING was created. */
   | { kind: "missing-all"; expected: number }
   /** Some were created and some are gone — the half-loss a zero-check misses. */
-  | { kind: "missing-some"; expected: number; found: number };
+  | { kind: "missing-some"; expected: number; found: number }
+  /**
+   * Billed monthly, and `record_payment` does not create subscriptions for those:
+   * `v_is_annual := v_commitment is distinct from 'monthly' and v_commitment is not null`.
+   *
+   * Its own state rather than "missing", because "one subscription should exist" would be
+   * false — none will ever be created for this quote, whatever anyone does. Nor is it
+   * "healthy": a monthly plan really does recur and nothing here will chase it. A tester
+   * paid Rs 38,232 for a monthly Google Workspace quote on 22 Aug, got no subscription and
+   * no explanation, and filed it as a bug. He was right that something is wrong; it is
+   * just not a missing row.
+   */
+  | { kind: "monthly-untracked"; lines: number };
 
 /**
  * A line that should become a subscription.
@@ -66,8 +88,32 @@ export type OrphanState =
  * generate_invoice already refuses a zero-value tax invoice for the same reason — and a
  * zero-quantity line is a leftover row somebody cleared instead of deleting.
  */
+export type LineExpectation =
+  /** An annual commitment — record_payment creates a subscription for this. */
+  | "annual"
+  /** Recurring in intent, but record_payment creates nothing. A gap, not a fault. */
+  | "monthly"
+  /** A one-off charge, or a line too empty to bill. No subscription is due. */
+  | "one-off";
+
+/**
+ * What this line should produce, judged the way `record_payment` actually judges it.
+ *
+ * The commitment test mirrors the RPC exactly (v_is_annual, line 242) rather than
+ * describing what one might expect: anything other than 'monthly', and not null, is
+ * treated as annual. Restating a database rule in slightly different words is how the two
+ * come to disagree, and the disagreement is always discovered on a paid quote.
+ */
+export function subscriptionExpectation(l: QuoteLine): LineExpectation {
+  const billable = (l.qty ?? 0) > 0 && (l.rate ?? 0) > 0 && Boolean((l.name ?? "").trim());
+  if (!billable) return "one-off";
+  const c = l.commitment?.trim().toLowerCase();
+  if (!c) return "one-off";
+  return c === "monthly" ? "monthly" : "annual";
+}
+
 export function isSubscriptionLine(l: QuoteLine): boolean {
-  return (l.qty ?? 0) > 0 && (l.rate ?? 0) > 0 && Boolean((l.name ?? "").trim());
+  return subscriptionExpectation(l) === "annual";
 }
 
 export function orphanState(input: OrphanInput): OrphanState {
@@ -99,8 +145,13 @@ export function orphanState(input: OrphanInput): OrphanState {
 
   const expected = input.lines.filter(isSubscriptionLine).length;
   if (expected === 0) {
-    /* Nothing on the quote could become a subscription — a one-off charge, say. Reporting
-       "missing" here would be inventing an expectation. */
+    /* Before concluding there is nothing recurring here, check for the case that IS
+       recurring and simply is not tracked. Reporting a monthly plan as "nothing recurring"
+       would be the same silence the tester ran into. */
+    const monthly = input.lines.filter((l) => subscriptionExpectation(l) === "monthly").length;
+    if (monthly > 0) return { kind: "monthly-untracked", lines: monthly };
+
+    /* A one-off charge. Reporting "missing" here would be inventing an expectation. */
     return { kind: "not-due", because: "Nothing on this quote is a recurring line." };
   }
 
@@ -110,9 +161,17 @@ export function orphanState(input: OrphanInput): OrphanState {
 }
 
 /** Is this a fault the operator has to act on? */
+/**
+ * Is this a fault — a subscription that should exist and does not?
+ *
+ * Deliberately FALSE for monthly-untracked: nothing is missing, the product does not make
+ * one. Callers that want to tell the operator something should ask `orphanNote`, which
+ * now speaks for that state too — see the note on `needsAttention`.
+ */
 export function isOrphan(s: OrphanState): boolean {
   return s.kind === "missing-all" || s.kind === "missing-some";
 }
+
 
 /**
  * The sentence the quote page shows.
@@ -128,6 +187,11 @@ export function orphanNote(s: OrphanState): string | null {
       /* Named separately because the quote still LOOKS connected — which is exactly why
          this one goes unnoticed for a year. */
       return `Only ${s.found} of ${s.expected} subscriptions from this quote still exist. The missing ${s.expected - s.found === 1 ? "one" : "ones"} will never be renewed and are absent from your MRR.`;
+    case "monthly-untracked":
+      /* States the consequence and the only thing that helps today. It does NOT say "add
+         the subscription manually": a monthly line added by hand would be renewed annually
+         by the cron, which is a worse wrong answer than none. */
+      return `${s.lines === 1 ? "This line is" : `${s.lines} lines are`} billed monthly, and monthly plans are not tracked as renewing subscriptions yet — so this sale will not appear in MRR and nothing will remind you about the next bill. Diarise it.`;
     case "not-due":
     case "healthy":
       return null;
