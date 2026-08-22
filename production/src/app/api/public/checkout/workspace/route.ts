@@ -28,6 +28,7 @@ import { z } from "zod";
 import Razorpay from "razorpay";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
+import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
@@ -41,7 +42,9 @@ const ENV_RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET?.trim() || "";
 
 // Email config — used for simulated-payment confirmations.
 const FROM_EMAIL    = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
-const PARDEEP_EMAIL = "Pardeep@exceltechnologies.in";
+/* The owner recipient was hardcoded here to an address on a retired domain
+   (CLAUDE.md §1). Resolved from the storefront tenant's row now — see
+   lib/email/owner-alert.ts for why there is no fallback constant. */
 
 const checkoutSchema = z.object({
   fullName:    z.string().min(2).max(120),
@@ -476,12 +479,18 @@ export async function POST(request: NextRequest) {
 
       // Best-effort confirmation emails — clearly tagged [TEST] in subject.
       const amountFmt = `₹${amount.toLocaleString("en-IN")}`;
+      const { alert: owner, tenant: ownerTenant } = await loadOwnerAlert(admin, BUY_PAGE_TENANT_ID);
+      if (!owner.ok) {
+        console.error(`[checkout/workspace] simulated order ${quoteId} recorded, but no owner alert: ${owner.reason}`);
+      }
       await Promise.allSettled([
         // Customer copy
-        sendEmail({
+        owner.ok && sendEmail({
           to:      email,
           from:    FROM_EMAIL,
-          replyTo: PARDEEP_EMAIL,
+          replyTo: owner.to,
+          kind:    "buy_page_checkout_sim_customer",
+          route:   { tenantId: BUY_PAGE_TENANT_ID },
           subject: `[TEST] Payment received · ${quoteId} · ${amountFmt}`,
           text:
 `Hi ${fullName.split(" ")[0] || "there"},
@@ -498,14 +507,15 @@ ORDER SUMMARY
   Domain      ${cleanDomain}
   Total       ${amountFmt} (incl 18% GST)
 
-— Pardeep Sharma
-   Founder, Excel Technologies
+— ${owner.ownerName || ownerTenant?.name?.trim() || "Your reseller"}
    (Simulated email — system test only)`,
         }),
-        // Pardeep alert — flagged clearly as test
-        sendEmail({
-          to:      PARDEEP_EMAIL,
+        // Owner alert — flagged clearly as test
+        owner.ok && sendEmail({
+          to:      owner.to,
           from:    FROM_EMAIL,
+          kind:    "buy_page_checkout_sim_owner",
+          route:   { tenantId: BUY_PAGE_TENANT_ID },
           subject: `[TEST 🧪] Simulated purchase · ${companyName} · ${amountFmt}`,
           text:
 `A SIMULATED direct-buy was just submitted via /buy/workspace.

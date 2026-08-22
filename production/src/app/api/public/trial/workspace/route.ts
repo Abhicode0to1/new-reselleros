@@ -22,8 +22,11 @@ import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
+import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 
-const PARDEEP_EMAIL = "Pardeep@exceltechnologies.in";
+/* The owner recipient was hardcoded here to an address on a retired domain
+   (CLAUDE.md §1). Resolved from the storefront tenant's row now — see
+   lib/email/owner-alert.ts for why there is no fallback constant. */
 const FROM_EMAIL    = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const APP_URL       = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 const BUY_PAGE_TENANT_ID =
@@ -174,11 +177,18 @@ export async function POST(request: NextRequest) {
       day: "2-digit", month: "short", year: "numeric",
     });
 
+    const { alert: owner, tenant: ownerTenant } = await loadOwnerAlert(admin, BUY_PAGE_TENANT_ID);
+    if (!owner.ok) {
+      console.error(`[trial/workspace] lead ${leadId} saved, but no owner alert: ${owner.reason}`);
+    }
+
     await Promise.allSettled([
-      // Pardeep alert
-      sendEmail({
-        to:      PARDEEP_EMAIL,
+      // Owner alert
+      owner.ok && sendEmail({
+        to:      owner.to,
         from:    FROM_EMAIL,
+        kind:    "buy_page_trial_owner",
+        route:   { tenantId: BUY_PAGE_TENANT_ID },
         replyTo: email,
         subject: `🎯 TRIAL REQUEST — ${companyName} · ${seats} users · ${cleanDomain}`,
         text:
@@ -199,20 +209,28 @@ ${APP_URL}/leads/${leadId}
 — ResellerOS`,
       }),
 
-      // Customer trial acknowledgement
-      sendEmail({
+      /* Customer trial acknowledgement.
+         Named from the tenant row. This body previously said "through Excel
+         Technologies", "Pardeep will WhatsApp you", a fixed phone number, and
+         "Google Premier Partner · since 2014" — on a storefront owned by any other
+         tenant, four statements about a company and a person the customer has no
+         relationship with, one of them a partner certification this code cannot
+         know is held. Absent details are omitted, never invented. */
+      owner.ok && sendEmail({
         to:      email,
         from:    FROM_EMAIL,
-        replyTo: PARDEEP_EMAIL,
+        replyTo: owner.to,
+        kind:    "buy_page_trial_customer",
+        route:   { tenantId: BUY_PAGE_TENANT_ID },
         subject: `Your ${TRIAL_DAYS}-day Google Workspace trial — ${cleanDomain}`,
         text:
 `Hi ${fullName.split(" ")[0]},
 
-Thanks for trying Google Workspace through Excel Technologies. Here's
+Thanks for trying Google Workspace${ownerTenant?.name?.trim() ? ` through ${ownerTenant.name.trim()}` : ""}. Here's
 what happens next:
 
 WITHIN 4 HOURS
-  • Pardeep will WhatsApp you to verify the domain (${cleanDomain})
+  • We'll be in touch to verify the domain (${cleanDomain})
   • You'll receive a DNS TXT record to add (or we can guide you over the phone)
 
 WITHIN 24 HOURS
@@ -227,19 +245,23 @@ DAY 12
 NO CREDIT CARD until you decide to convert. ${TRIAL_DAYS} days fully free, no
 strings attached. Trial period ends ${trialEndsFmt}.
 
-If you want to talk before then — call/WhatsApp Pardeep on +91 99999 30300
-(Mon–Sat, 9am–9pm IST).
+If you want to talk before then, just reply to this email${ownerTenant?.phone?.trim() ? ` — or call/WhatsApp ${owner.ownerName || "us"} on ${ownerTenant.phone.trim()}` : ""}.
 
-— Pardeep Sharma
-   Founder, Excel Technologies
-   Google Premier Partner · since 2014`,
+— ${owner.ownerName || ownerTenant?.name?.trim() || "Your reseller"}${
+  ownerTenant?.name?.trim() && owner.ownerName !== ownerTenant.name.trim()
+    ? `\n   ${ownerTenant.name.trim()}`
+    : ""
+}`,
       }),
     ]).then((results) => {
+      const labels = ["owner alert", "customer acknowledgement"];
       results.forEach((r, i) => {
+        /* A skipped send settles as the literal `false`, so this must not be read
+           as a send result — otherwise "not sent" logs as "sent fine". */
         if (r.status === "rejected") {
-          console.error(`[trial/workspace] email ${i === 0 ? "to Pardeep" : "to customer"} failed:`, r.reason);
-        } else if (r.value.status === "failed") {
-          console.error(`[trial/workspace] email ${i === 0 ? "to Pardeep" : "to customer"} failed:`, r.value.errorMessage);
+          console.error(`[trial/workspace] ${labels[i]} failed:`, r.reason);
+        } else if (r.value && r.value.status === "failed") {
+          console.error(`[trial/workspace] ${labels[i]} failed:`, r.value.errorMessage);
         }
       });
     });

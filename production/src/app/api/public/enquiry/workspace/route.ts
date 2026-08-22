@@ -38,15 +38,19 @@ import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
+import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import {
   fetchWorkspaceCatalogPrice,
   buildWorkspaceLines,
   TIER_DISPLAY_NAME,
 } from "@/lib/pricing/workspace";
 
-// Pardeep's inbox — the reseller owner who sees every new buy-page lead.
-// Hardcoded for v1 (single tenant); resolve per-tenant once we go multi-tenant.
-const PARDEEP_EMAIL = "Pardeep@exceltechnologies.in";
+/* The owner inbox used to be hardcoded here, with the comment "Hardcoded for v1
+   (single tenant); resolve per-tenant once we go multi-tenant." That TODO came due
+   and nobody noticed — the address it named is on a retired domain (CLAUDE.md §1),
+   so buy-page leads were alerting an inbox the company no longer uses, and the
+   `replyTo` on the CUSTOMER's acknowledgement pointed there too. It is resolved
+   from the storefront tenant's own row now. See lib/email/owner-alert.ts. */
 const FROM_EMAIL    = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const APP_URL       = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 
@@ -222,12 +226,23 @@ export async function POST(request: NextRequest) {
     const valueFmt = `₹${value.toLocaleString("en-IN")}`;
     const draftUrl = draftQuoteId ? `${APP_URL}/quotes/${draftQuoteId}` : `${APP_URL}/leads`;
 
+    /* Who owns this storefront, and can they be reached? Resolved once for both
+       emails below. `ok: false` is a stated reason, never a substituted address —
+       the lead is already saved either way, so a lost notification is recoverable
+       and a misdirected one is not. */
+    const { alert: owner, tenant: ownerTenant } = await loadOwnerAlert(admin, tenantId);
+    if (!owner.ok) {
+      console.error(`[enquiry/workspace] lead ${leadId} saved, but no owner alert: ${owner.reason}`);
+    }
+
     await Promise.allSettled([
-      // ── EMAIL 1: Pardeep alert ────────────────────────────────────────
-      sendEmail({
-        to:      PARDEEP_EMAIL,
+      // ── EMAIL 1: owner alert ──────────────────────────────────────────
+      owner.ok && sendEmail({
+        to:      owner.to,
         from:    FROM_EMAIL,
-        replyTo: email,            // Pardeep can hit Reply to talk to lead directly
+        kind:    "buy_page_lead_alert",
+        route:   { tenantId },
+        replyTo: email,            // hit Reply to talk to the lead directly
         subject: `🔔 New ${tierName} lead — ${companyName} (${seats} users · ${valueFmt})`,
         text:
 `A new buy-page enquiry just landed in your pipeline.
@@ -247,20 +262,29 @@ ${draftQuoteId
 — ResellerOS`,
       }),
 
-      // ── EMAIL 2: Customer acknowledgement ─────────────────────────────
-      sendEmail({
+      /* ── EMAIL 2: Customer acknowledgement ─────────────────────────────
+         Every identity in this body used to be hardcoded: it promised "a WhatsApp
+         message from Pardeep (he runs Excel Technologies himself)", gave a fixed
+         phone number, and signed off "Google Premier Partner · since 2014". On a
+         storefront owned by any other tenant that is three false statements to a
+         stranger — including a partner certification this code cannot know the
+         tenant holds. Named from the tenant row now, and anything absent is left
+         out rather than guessed. Needs `owner.ok` because a customer told to reply
+         is owed somewhere for the reply to land. */
+      owner.ok && sendEmail({
         to:      email,
         from:    FROM_EMAIL,
-        replyTo: PARDEEP_EMAIL,
+        replyTo: owner.to,
+        kind:    "buy_page_lead_ack",
+        route:   { tenantId },
         subject: `Got it, ${fullName.split(" ")[0]} — your Google Workspace quote is on the way`,
         text:
 `Hi ${fullName.split(" ")[0]},
 
-Thanks for the enquiry. Here's what you'll get from us in the next 30 minutes:
+Thanks for the enquiry. Here's what you'll get from us shortly:
 
-• A WhatsApp message from Pardeep (he runs Excel Technologies himself)
 • A custom GST quote for ${seats} Google Workspace ${tierName} users
-• Answers to any migration / setup / pricing questions
+• Answers to any migration / setup / pricing questions${ownerTenant?.phone?.trim() ? `\n• A call or WhatsApp from ${owner.ownerName || "our team"} on ${ownerTenant.phone.trim()}` : ""}
 
 WHAT WE HAVE FROM YOU
   Company    ${companyName}
@@ -268,18 +292,24 @@ WHAT WE HAVE FROM YOU
   Seats      ${seats}
   Billing    ${billing}
 
-Quote ready in your inbox shortly. If you'd rather call us directly: +91 99999 30300 (Mon–Sat, 9am–9pm IST).
+Just reply to this email if anything above is wrong, or if you'd like to add detail.
 
-— Pardeep Sharma
-   Founder, Excel Technologies
-   Google Premier Partner · since 2014`,
+— ${owner.ownerName || ownerTenant?.name?.trim() || "Your reseller"}${
+  ownerTenant?.name?.trim() && owner.ownerName !== ownerTenant.name.trim()
+    ? `\n   ${ownerTenant.name.trim()}`
+    : ""
+}`,
       }),
     ]).then((results) => {
+      const labels = ["owner alert", "customer acknowledgement"];
       results.forEach((r, i) => {
+        /* `owner.ok && sendEmail(...)` yields the literal `false` when unaddressed,
+           so a settled value is not necessarily a send result. Checked before it is
+           read as one — otherwise a skipped send reads as a successful send. */
         if (r.status === "rejected") {
-          console.error(`[enquiry/workspace] notification email ${i === 0 ? "to Pardeep" : "to customer"} failed:`, r.reason);
-        } else if (r.value.status === "failed") {
-          console.error(`[enquiry/workspace] notification email ${i === 0 ? "to Pardeep" : "to customer"} failed:`, r.value.errorMessage);
+          console.error(`[enquiry/workspace] ${labels[i]} failed:`, r.reason);
+        } else if (r.value && r.value.status === "failed") {
+          console.error(`[enquiry/workspace] ${labels[i]} failed:`, r.value.errorMessage);
         }
       });
     });

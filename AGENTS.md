@@ -821,3 +821,60 @@ should ignore.
 - **When correcting a historical name, list the places it can hide**: `doc_code`, seeded demo
   data, docs, and anything a third-party service sends on your behalf. §1 caught the first
   three; this is the fourth.
+
+## L20. A hardcoded recipient is a data leak, not a stale string
+*22 Aug 2026, found in five routes while reading an unrelated log line.*
+
+Five server routes carried `const PARDEEP_EMAIL = "Pardeep@exceltechnologies.in"` and used it
+as `to:` / `replyTo:`. `api/webhooks/razorpay/route.ts` had been fixed months earlier and its
+own header states the cost — *"every tenant's payment alert, carrying their customer's name,
+email and amount, was mailed to one fixed address. The owner of the tenant that made the sale
+never got it, and someone else did."* The other four kept the bug, and one of them,
+`api/cron/trial-expiry`, **SELECTS `tenant_id` for every expired trial and never reads it.**
+
+Two things make this class hard to see:
+
+- **It never looks broken.** A misdirected alert is delivered, so nothing errors, nothing
+  retries, no log line appears. A *missing* alert eventually gets noticed; a misdirected one
+  does not. That inverts the usual instinct — here, refusing to send is the safer failure.
+- **The comment tells you it is temporary and nobody re-reads comments.** The enquiry route
+  said, in full: *"Hardcoded for v1 (single tenant); resolve per-tenant once we go
+  multi-tenant."* That TODO came due and no test, type, or lint rule was watching it.
+
+**The rules:**
+- **Resolve every recipient from data, never from a constant.** `lib/email/owner-alert.ts`
+  returns an address or a *stated reason* — there is no fallback constant to leak, the same
+  posture as `lib/invoices/supplier-identity.ts` ("never invent a tax identity").
+- **A fallback recipient is the bug with better manners.** The razorpay route's
+  `seller.email || FALLBACK_OWNER_EMAIL` was defended in its comment as better than "silently
+  dropping" the alert. It was not dropping it — it was delivering another tenant's customer
+  data to a third party. Deleted, not improved.
+- **Guard the SHAPE, not the string.** The obvious test is
+  `expect(src).not.toMatch(/exceltechnologies/)`, which `lib/whatsapp.test.ts` does for
+  signatures. Wrong tool here: one live tenant legitimately *has* that address on file, and a
+  brand-dated guard passes the day somebody hardcodes `pardeep@anutech.in` instead — the same
+  bug with a fresher domain. `lib/email/no-hardcoded-recipient.test.ts` scans for *a literal
+  at a recipient field*, so it fails on an address nobody has thought of yet.
+- **A shape guard has a blind spot, and you must go fix what it cannot see.** The razorpay
+  fallback reached `to:` through a variable, so the scan showed that route clean while the
+  other four looked guilty. Green there was luck. Grep the same idea by hand once, then
+  remove what the guard cannot reach rather than trusting the pass.
+- **The same audit finds hardcoded IDENTITY, not just hardcoded addressing.** Those routes
+  also told every customer that "Pardeep will WhatsApp you", gave one fixed phone number,
+  and signed off *"Google Premier Partner · since 2014"* — a certification claim asserted on
+  behalf of whichever tenant owns the storefront. Check the message body, not only the
+  headers.
+
+## L21. `x && sendEmail(...)` inside Promise.allSettled makes "not sent" read as "sent fine"
+*22 Aug 2026, introduced by the L20 fix and caught before it shipped.*
+
+Guarding a send as `owner.ok && sendEmail({...})` is the natural way to skip it. But
+`Promise.allSettled` settles the literal `false` as `{ status: "fulfilled", value: false }`,
+and the handlers below all read `r.value.status === "failed"`. On a skipped send that is
+`undefined` — falsy — so the skip is silently classified as a success. No throw, no log, and
+the counter that was supposed to prove the mail went out counts it.
+
+**The rule:** when a conditional send sits in an `allSettled` array, check the value is a
+result before reading it as one (`r.value && r.value.status === "failed"`). Same family as the
+dunning-log defect: a log that reports a send nobody made is worse than no log, because it is
+the thing you will trust later.

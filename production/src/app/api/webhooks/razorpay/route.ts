@@ -23,6 +23,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
+import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
 import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
@@ -31,16 +32,26 @@ const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const APP_URL        = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 
-/**
- * Last-resort recipient for the "money received" alert. This used to be the
- * ONLY recipient, hard-coded — so in a multi-tenant product every tenant's
- * payment alert, carrying their customer's name, email and amount, was mailed
- * to one fixed address. The owner of the tenant that made the sale never got it,
- * and someone else did. The tenant's own email is used now; this remains only so
- * that a tenant with no email on file still produces an alert somewhere rather
- * than silently dropping it.
+/*
+ * There is deliberately NO fallback recipient here any more.
+ *
+ * A `FALLBACK_OWNER_EMAIL = "Pardeep@exceltechnologies.in"` used to sit at this
+ * line, reached via `seller.email?.trim() || FALLBACK_OWNER_EMAIL`. Its comment
+ * argued it was better than "silently dropping" the alert. That reasoning does not
+ * survive being written down: the alert was not dropped, it was DELIVERED — to a
+ * third party, on a domain the company no longer uses (CLAUDE.md §1), carrying
+ * another tenant's customer name, email, domain and amount. A misdirected alert is
+ * worse than a missing one, because the missing one gets noticed.
+ *
+ * It also hid from the guard test. `lib/email/no-hardcoded-recipient.test.ts`
+ * scans for a literal at `to:`; this one reached `to:` through a variable, so the
+ * route looked clean while the other four looked guilty. Removing the constant is
+ * what makes the guard true here, not just green.
+ *
+ * The payment itself is already committed by `record_payment` before this point,
+ * so an unaddressable alert loses a notification and never the money. It is
+ * logged loudly and counted in the response instead.
  */
-const FALLBACK_OWNER_EMAIL = "Pardeep@exceltechnologies.in";
 
 interface RazorpayPayment {
   id:         string;
@@ -217,15 +228,13 @@ export async function POST(request: NextRequest) {
   // ── Send confirmation emails (best-effort) ────────────────────────────
   // The alert goes to the tenant that made the sale — resolved from the quote's
   // own tenant_id, so it can never be another tenant's inbox.
-  const { data: sellerTenant } = await admin
-    .from("tenants")
-    .select("name, email, phone, contact_name")
-    .eq("id", quote.tenant_id)
-    .maybeSingle();
-  const seller = (sellerTenant ?? {}) as {
-    name?: string | null; email?: string | null; phone?: string | null; contact_name?: string | null;
-  };
-  const ownerEmail   = seller.email?.trim() || FALLBACK_OWNER_EMAIL;
+  const { alert: owner, tenant: sellerTenant } = await loadOwnerAlert(admin, quote.tenant_id);
+  const seller = sellerTenant ?? {};
+  if (!owner.ok) {
+    /* The payment IS recorded — record_payment committed above. Only the alert has
+       nowhere to go, and that is said out loud rather than redirected. */
+    console.error(`[webhooks/razorpay] payment ${paymentRef} recorded for tenant ${quote.tenant_id}, but no owner alert: ${owner.reason}`);
+  }
   const sellerName   = seller.name?.trim() || "your reseller";
   const sellerPerson = seller.contact_name?.trim() || sellerName;
   const sellerPhone  = seller.phone?.trim() || "";
@@ -239,10 +248,12 @@ export async function POST(request: NextRequest) {
 
   await Promise.allSettled([
     // Customer order confirmation
-    customerEmail && sendEmail({
+    customerEmail && owner.ok && sendEmail({
       to:      customerEmail,
       from:    FROM_EMAIL,
-      replyTo: ownerEmail,
+      replyTo: owner.to,
+      kind:    "razorpay_payment_customer",
+      route:   { tenantId: quote.tenant_id },
       subject: `Payment received · ${quote.id} · ${amountFmt}`,
       text:
 `Hi ${customerName.split(" ")[0] || "there"},
@@ -271,9 +282,11 @@ You'll receive a separate email with your GST tax invoice.${
     }),
 
     // Seller alert — money in the bank
-    sendEmail({
-      to:      ownerEmail,
+    owner.ok && sendEmail({
+      to:      owner.to,
       from:    FROM_EMAIL,
+      kind:    "razorpay_payment_owner",
+      route:   { tenantId: quote.tenant_id },
       subject: `💰 PAYMENT RECEIVED · ${quote.customer_name} · ${amountFmt}`,
       text:
 `A direct-buy payment was just captured by Razorpay.
