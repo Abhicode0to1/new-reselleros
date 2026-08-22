@@ -295,7 +295,28 @@ renewal 2026-08-27. Verify alag run me kiya gaya.
 
 1. **`Q-TEST-2026-27-0008` (ITBUZZ, ₹2,54,361) ka backfill Pardeep ne mana kiya** — "test data hai".
    Chhedna mat jab tak wo dobara na kahein.
-2. **24 Aug 09:00 IST ko `ankit@xyz.com` ko asli renewal email jayega** — `RESEND_API_KEY`
+> ### 🔴 SUDHAAR (22 Aug raat): ye email **23 Aug subah 09:00 IST** ko jayega, 24 ko nahi.
+>
+> Neeche "24 Aug" likha hai. Wo annual ladder ke T-3 par maana gaya tha. Par ye subscription
+> **monthly** hai (`term_months = 1`) aur monthly ladder ki pehli rung **T-7** hai
+> (`MONTHLY_CADENCE_TRIGGERS` — T-7 · T-3 · T-0). Renewal 27 Aug hai, to T-7 already paar ho
+> chuki hai, aur cadence "jo rung paar ho chuki" me se aakhri leti hai.
+>
+> Ab tak kuch gaya nahi (`reminder_count 0`, `renewal_state pending`, `renewal_email_log` 0)
+> **sirf isliye** ki subscription aaj 16:16 IST par bani — aaj 09:00 ka cron use dekh hi nahi
+> paya. Agla run kal 09:00 IST hai aur wahi `notice_sent` bhej dega.
+>
+> Rokna ho to: `update subscriptions set auto_renew = false where id = 'c398e832-0b58-4d78-a5b7-a2fdd1871fc9';`
+>
+> **Aur ye ek email ka mamla nahi hai.** Usi sandbox tenant (`Delfos Technologies`) me `auto_renew`
+> wali paanch aur subscriptions asli lagne wale email par baithi hain —
+> `itadmin@jiva-designs.com` (JIVA DESIGNS PVT LTD, ×3), `sarvesh.k@dcmnvlchem.co.in`
+> (DCM NOUVELLE SPECIALTY CHEMICALS), `ceo@prop.guide` (NS PROPERTY GUIDE ADVISORS),
+> `nationalprinter2016@yahoo.com` (National Printer). Ye `example.com` jaise nakli address
+> nahi hain. Unki renewal 2027 ki hai, to jaldi nahi — par ek test tenant me live Resend key
+> ke saath khade hain. Memory me yahi darj hai: *test tenant se asli email jata hai.*
+
+2. **~~24 Aug~~ 23 Aug 09:00 IST ko `ankit@xyz.com` ko asli renewal email jayega** — `RESEND_API_KEY`
    Cloud Run par live hai aur renewals cron seedha Resend use karta hai. Rokna ho to us ek
    subscription ka `auto_renew` band karna kaafi hai. Pardeep ne abhi tak faisla nahi diya.
    **22 Aug raat ko DB se dobara confirm kiya — ab bhi armed hai:** subscription `c398e832`,
