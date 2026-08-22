@@ -48,6 +48,7 @@ function FormField({
   children,
   htmlFor,
   className,
+  hint,
 }: {
   label: string;
   required?: boolean;
@@ -55,12 +56,27 @@ function FormField({
   htmlFor?: string;
   /** Applied to the field wrapper — e.g. grid column spans. */
   className?: string;
+  /**
+   * Optional right-aligned slot on the label row, for the one thing somebody reaches for
+   * while looking AT this field — "Forgot?" beside Password being the case it was added
+   * for. Omitted, the label row is exactly as it was.
+   */
+  hint?: React.ReactNode;
 }) {
   return (
     <div className={className ? `space-y-1.5 ${className}` : "space-y-1.5"}>
-      <Label htmlFor={htmlFor} required={required}>
-        {label}
-      </Label>
+      {hint ? (
+        <div className="flex items-baseline justify-between gap-2">
+          <Label htmlFor={htmlFor} required={required}>
+            {label}
+          </Label>
+          <span className="text-xs">{hint}</span>
+        </div>
+      ) : (
+        <Label htmlFor={htmlFor} required={required}>
+          {label}
+        </Label>
+      )}
       {children}
     </div>
   );

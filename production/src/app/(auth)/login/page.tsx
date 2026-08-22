@@ -160,7 +160,20 @@ function LoginPageInner() {
           />
         </FormField>
 
-        <FormField label="Password" required htmlFor="password">
+        {/* The label carries the recovery link, because that is where somebody looks when the
+            password will not work — not at the bottom of the page after the sign-up line.
+            Until 22 Aug 2026 there was no such page at all: Settings → Reset data demanded a
+            password the app gave nobody any way to recover (AGENTS.md L15). */}
+        <FormField
+          label="Password"
+          required
+          htmlFor="password"
+          hint={
+            <Link href="/forgot-password" className="text-amber font-medium hover:underline">
+              Forgot?
+            </Link>
+          }
+        >
           <div className="relative">
             <Input
               id="password"
