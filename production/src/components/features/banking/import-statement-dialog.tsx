@@ -27,7 +27,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { useImportBankTransactions, useExistingTxnKeys, bankTxnKey } from "@/lib/queries/bank";
-import { useTxnCategoryRules } from "@/lib/queries/txn-category-rules";
+import { useTxnCategoryRules, useCreateTxnCategoryRule } from "@/lib/queries/txn-category-rules";
+import { proposePatterns } from "@/lib/banking/rule-from-line";
+import { directionOf } from "@/lib/banking/categorise";
 import { EXPENSE_CATEGORIES, suggestCategory } from "@/lib/queries/expenses";
 import { suggestForLine } from "@/lib/banking/categorise";
 import { rupee, formatDate } from "@/lib/utils";
@@ -237,6 +239,11 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
      built-in keyword list lib/queries/expenses.ts already had. Whatever neither answers
      stays EMPTY and says so — see the counter under the table. */
   const { data: rules = [] } = useTxnCategoryRules();
+  const createRule = useCreateTxnCategoryRule();
+
+  /* Rows whose "remember this?" offer has been dealt with — saved or dismissed. Kept per
+     row index so the offer disappears once acted on and never nags twice. */
+  const [ruleDone, setRuleDone] = React.useState<Record<number, true>>({});
 
   /** Suggestion per row index, recomputed when the parse or the rules change. */
   const suggestions = React.useMemo(() => {
@@ -248,7 +255,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
      cannot silently discard a choice somebody made, and so "set to no category" stays
      distinguishable from "never touched". */
   const [override, setOverride] = React.useState<Record<number, string>>({});
-  React.useEffect(() => { setOverride({}); }, [parsed]);
+  React.useEffect(() => { setOverride({}); setRuleDone({}); }, [parsed]);
 
   const categoryFor = (i: number): string | null =>
     override[i] !== undefined ? (override[i] || null) : (suggestions[i]?.category ?? null);
@@ -482,6 +489,55 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                                   {suggestion.layer === "tenant-rule" ? suggestion.reason : "keyword"}
                                 </span>
                               )}
+
+                              {/* ── Phase 4: a correction becomes a rule ─────────────
+                                  Offered only when the operator has actually CHANGED
+                                  something, and only when the narration yields a pattern
+                                  that is not the whole line. The candidates are the
+                                  repeating part — SALARY out of
+                                  "50100784857169-TPT-JULY SALARY-PAWAN" — because a rule
+                                  built from the full narration carries a unique reference
+                                  and matches exactly one line, ever.
+
+                                  Which candidate to use is a bookkeeping decision (all
+                                  wages, or this one person), so both are offered and
+                                  neither is preselected. Nothing is saved until a click. */}
+                              {override[i] !== undefined && override[i] !== "" && !ruleDone[i] && (() => {
+                                const direction = directionOf(r);
+                                const candidates = proposePatterns(r.description, 3);
+                                if (!direction || candidates.length === 0) return null;
+                                return (
+                                  <span className="mt-1 block">
+                                    <span className="block text-[9px] text-ink-3">Always file as {override[i]} when it says:</span>
+                                    <span className="flex flex-wrap items-center gap-1 mt-0.5">
+                                      {candidates.map((c) => (
+                                        <button
+                                          key={c}
+                                          type="button"
+                                          disabled={createRule.isPending}
+                                          onClick={() => {
+                                            createRule.mutate(
+                                              { pattern: c, category: override[i], direction },
+                                              { onSuccess: () => setRuleDone((d) => ({ ...d, [i]: true })) },
+                                            );
+                                          }}
+                                          className="rounded border border-amber/50 bg-amber-soft px-1 py-0.5 text-[9px] font-medium text-amber-ink hover:bg-amber/20 disabled:opacity-50"
+                                        >
+                                          {c}
+                                        </button>
+                                      ))}
+                                      {/* A way to say no. Without it the offer is a nag. */}
+                                      <button
+                                        type="button"
+                                        onClick={() => setRuleDone((d) => ({ ...d, [i]: true }))}
+                                        className="text-[9px] text-ink-3 underline hover:text-ink-2"
+                                      >
+                                        just this once
+                                      </button>
+                                    </span>
+                                  </span>
+                                );
+                              })()}
                             </td>
                           </tr>
                         );
