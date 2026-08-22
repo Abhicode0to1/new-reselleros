@@ -29,11 +29,37 @@ export function EmailThreadPanel({
   thread,
   summary,
   leadEmail,
+  loggedSendsWithoutText = 0,
 }: {
   thread: readonly ThreadMessage[];
   summary: ThreadSummary;
   leadEmail: string | null | undefined;
+  /**
+   * Email sends recorded on the timeline that have no stored text — the old Gmail hand-off
+   * only logged "Emailed x@y · subject" and kept nothing.
+   *
+   * Passed in because this panel would otherwise contradict the screen next to it: the
+   * first real lead after the tab shipped had two such sends, so "Everything" said two
+   * emails went out while this tab said nothing had been exchanged. Both were true and the
+   * pair read as broken.
+   */
+  loggedSendsWithoutText?: number;
 }) {
+  /* Rendered under either state, because it explains a gap the operator can otherwise only
+     see as a contradiction. */
+  const olderSends = loggedSendsWithoutText > 0 && loggedSendsWithoutText > summary.outbound
+    ? loggedSendsWithoutText - summary.outbound
+    : 0;
+
+  const olderSendsNote = olderSends > 0 ? (
+    <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
+      The timeline also records {olderSends} earlier email{olderSends === 1 ? "" : "s"} to
+      this lead with no saved text — {olderSends === 1 ? "it was" : "they were"} sent through
+      Gmail before sending moved into the app, so only the fact of{" "}
+      {olderSends === 1 ? "it" : "them"} was kept.
+    </p>
+  ) : null;
+
   if (thread.length === 0) {
     /* §24 — what, why, and what to do next. A blank panel here would read as "the feature
        is broken", which is exactly the confusion this tab was built to end. */
@@ -47,6 +73,7 @@ export function EmailThreadPanel({
           <> This lead has no email address on it, so there is nothing to send to or receive
           from. Add one with Edit.</>
         )}
+        {olderSendsNote}
       </div>
     );
   }
@@ -129,6 +156,7 @@ export function EmailThreadPanel({
           reply will appear here, and the reply box below becomes usable once it does.
         </p>
       )}
+      {olderSendsNote}
     </div>
   );
 }

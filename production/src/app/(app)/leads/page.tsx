@@ -1785,6 +1785,13 @@ function LeadDetailSheet({
      address would appear, because email was mixed in with calls, quotes and tasks. */
   const emailThread   = React.useMemo(() => buildEmailThread(allInbound, lead?.id), [allInbound, lead?.id]);
   const threadSummary = React.useMemo(() => summariseThread(emailThread), [emailThread]);
+  /* Email sends the timeline recorded but never stored text for — the old Gmail
+     hand-off. Counted so the Email tab can explain the gap instead of contradicting the
+     timeline beside it. */
+  const loggedEmailSends = React.useMemo(
+    () => activities.filter((a) => a.kind === "email").length,
+    [activities],
+  );
 
   const [drawerTab, setDrawerTab] = React.useState<"details" | "followups" | "activity">("details");
   /* Which half of the Conversation tab is showing. Resets with the lead so opening a
@@ -2507,6 +2514,7 @@ function LeadDetailSheet({
                 thread={emailThread}
                 summary={threadSummary}
                 leadEmail={lead.contact_email}
+                loggedSendsWithoutText={loggedEmailSends}
               />
             ) : (
             <>

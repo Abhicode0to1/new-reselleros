@@ -29,10 +29,19 @@ const sent = (over: Partial<ThreadRow> = {}): ThreadRow => ({
   created_at: "2026-08-22T11:00:00Z", ...over,
 });
 
-function renderThread(rows: ThreadRow[], leadEmail: string | null = "ankit@xyz.com") {
+function renderThread(
+  rows: ThreadRow[],
+  leadEmail: string | null = "ankit@xyz.com",
+  loggedSendsWithoutText = 0,
+) {
   const thread = buildEmailThread(rows, "L-1");
   return render(
-    <EmailThreadPanel thread={thread} summary={summariseThread(thread)} leadEmail={leadEmail} />,
+    <EmailThreadPanel
+      thread={thread}
+      summary={summariseThread(thread)}
+      leadEmail={leadEmail}
+      loggedSendsWithoutText={loggedSendsWithoutText}
+    />,
   );
 }
 
@@ -100,5 +109,39 @@ describe("EmailThreadPanel", () => {
   it("shows the subject when there is one", () => {
     renderThread([inbound()]);
     expect(screen.getByText("Need 20 mailboxes")).toBeTruthy();
+  });
+
+  /* ── The contradiction this tab created on its first real lead ──────────────
+     L-MT4HUR6P had two "Emailed test@gmail.com" lines on its timeline and no stored text,
+     because both went through the Gmail hand-off before sending moved into the app. So
+     "Everything" said two emails went out while this tab said nothing had been exchanged.
+     Both were true; the pair read as broken. */
+  it("explains timeline sends that have no stored text, instead of claiming nothing happened", () => {
+    renderThread([], "test@gmail.com", 2);
+    expect(screen.getByText(/No email either way yet/i)).toBeTruthy();
+    expect(screen.getByText(/records 2 earlier emails/i)).toBeTruthy();
+  });
+
+  it("uses the singular for one such send", () => {
+    renderThread([], "test@gmail.com", 1);
+    expect(screen.getByText(/records 1 earlier email .* no saved text/i)).toBeTruthy();
+  });
+
+  it("says nothing extra when every logged send is in the thread", () => {
+    /* One outbound message, one logged send — they are the same event, so there is no gap
+       to explain and no note to show. */
+    renderThread([sent()], "ankit@xyz.com", 1);
+    expect(screen.queryByText(/no saved text/i)).toBeNull();
+  });
+
+  it("counts only the shortfall, not every logged send", () => {
+    /* Three logged, one of them stored → two unexplained, not three. */
+    renderThread([sent()], "ankit@xyz.com", 3);
+    expect(screen.getByText(/records 2 earlier emails/i)).toBeTruthy();
+  });
+
+  it("says nothing extra when no sends were logged at all", () => {
+    renderThread([], "ankit@xyz.com", 0);
+    expect(screen.queryByText(/no saved text/i)).toBeNull();
   });
 });
