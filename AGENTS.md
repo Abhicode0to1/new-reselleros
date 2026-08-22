@@ -597,3 +597,38 @@ reseller's to fix and nobody else's.
   `no_recipient` here — or the difference is unrecoverable from the audit trail afterwards.
 - **Count the silent cases and surface them.** The cron now returns `no_recipient`, so a run
   that reached nobody cannot report itself as a normal night.
+
+## L13. A function whose OUT column shares a name with a table column cannot run
+*22 Aug 2026, from `create_project_direct_invoice`.*
+
+```
+RETURNS TABLE(invoice_id text, project_id uuid)
+...
+select id into v_msid from public.project_milestones where project_id = v_pid order by seq limit 1;
+
+ERROR 42702: column reference "project_id" is ambiguous
+```
+
+An OUT column is a PL/pgSQL variable inside the body, so `project_id` in that WHERE clause
+could be either. Postgres refuses to guess, and it refuses at **runtime**, on every single
+call — there is no compile step to catch it. The function aborts after
+`create_project_quote` and `accept_project_quote` have already run, so the caller gets an
+error naming neither.
+
+**It had never once succeeded.** `project_sales` and `project_milestones` both hold 0 rows,
+while `create-project-quote-dialog.tsx:46` has called it through
+`useCreateProjectDirectInvoice()` since migration 0160. A whole feature, wired to the UI,
+dead the entire time.
+
+**The rules:**
+- **Alias every table in a plpgsql function body and qualify every column** — `pm.project_id`,
+  never bare `project_id`. Cheap habit; the alternative is a landmine that only goes off in
+  production.
+- **An OUT column name is taken.** `RETURNS TABLE(... project_id ...)` reserves that word
+  for the whole body. Prefix locals (`v_`) — this codebase already does — and treat the OUT
+  names as equally dangerous.
+- **0 rows in a feature's table is a finding, not a quiet fact.** Both tables being empty was
+  the visible symptom for months and read as "nobody uses projects yet".
+- **This is what an unrun test costs.** The one file exercising this path had stopped running
+  (deleted customer id) and asserted nothing before that. Fixing the test found the bug in a
+  single run.

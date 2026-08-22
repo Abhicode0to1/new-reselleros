@@ -76,7 +76,40 @@ aging bucket (fresh/warn/urgent/overdue), total, checkbox aur bulk generate.
 Pardeep ka faisla (22 Aug): **invoice automatic nahi banegi** — sirf dikhegi, aur banana insaan
 tay karega. Isliye koi code change nahi kiya. Button dabana baaki hai, 30 din ke andar.
 
-### 🔴🔴 SABSE ZAROORI: har invoice usi din due ho jati hai, aur ek asli customer chase hua
+### 🔴🔴 `create_project_direct_invoice` kabhi chala hi nahi — poora feature mara pada hai
+
+**Naapa hua:** function `RETURNS TABLE(invoice_id text, project_id uuid)` hai, to body ke andar
+`project_id` ek PL/pgSQL variable ban jata hai. Ye line plan hi nahi ho sakti:
+
+```
+select id into v_msid from public.project_milestones where project_id = v_pid order by seq limit 1;
+ERROR 42702: column reference "project_id" is ambiguous
+```
+
+Yaani **har call fail hoti hai** — aur `create_project_quote` + `accept_project_quote` chal
+jaane ke baad, to poora kaam roll back hota hai aur user ko aisi error milti hai jo na project
+ka naam leti hai na milestone ka.
+
+**Saboot ki ye kabhi chala nahi:** `project_sales` **0 rows**, `project_milestones` **0 rows** —
+jabki UI isse migration 0160 se juda hua hai (`create-project-quote-dialog.tsx:46` →
+`useCreateProjectDirectInvoice()`). Mahino se ek poora feature UI me maujood aur mara pada.
+
+**Kisi ko pata kyun nahi chala:** wahi ek test jo is raaste ko chhoota hai, khud band pada tha
+(deleted customer id), aur us se pehle wo assert kuch bhi nahi karta tha. Test theek karte hi
+pehle run me bug saamne aa gaya.
+
+**Fix likh di, apply nahi ki** —
+[20260822200000_fix_project_direct_invoice_ambiguous_column.sql](production/supabase/migrations/20260822200000_fix_project_direct_invoice_ambiguous_column.sql).
+Sirf ek line badli hai (`pm` alias). **Ye surakshit hai** — jo function aaj hamesha throw karta
+hai wo chalne layak ho jata hai, aur migrate karne ko koi data hi nahi hai kyunki iske through
+kuch bana hi nahi. Due-date wale se alag: **isme koi business faisla nahi hai.**
+
+```
+cd production
+node scripts/apply-migration.mjs supabase/migrations/20260822200000_fix_project_direct_invoice_ambiguous_column.sql
+```
+
+### 🔴🔴 Har invoice usi din due ho jati hai, aur ek asli customer chase hua
 
 **Naapa hua:** `generate_invoice` due date aise banata hai —
 `v_today + coalesce(v_quote.payment_terms_days, 0)`. Fallback **0** hai, **30** nahi. Migration
@@ -211,7 +244,7 @@ jayega**.
 
 ### 📓 AGENTS.md me naya section
 
-`# Learned Guidelines` — **L1–L12**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
+`# Learned Guidelines` — **L1–L13**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
 pehle classify phir retry · jo retry jaan-boojh kar mana kiya · naam ke substring se
 authorization mat karo · ek `as any` poore insert ka checking band kar deta hai · config error
 5xx nahi hota · aur **L7**: isolation ka zero-assertion doosre tenant par scoped hona chahiye,
