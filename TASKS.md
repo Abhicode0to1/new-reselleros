@@ -134,10 +134,28 @@ ek active subscription ka `mrr = 0` hai — `6fb7a892`, "AB corprotion", Standar
 `rate: 0, list_rate: 9996` — support **muft diya gaya** hai, aur `list_rate` discount dikhane
 ke liye bacha hua hai. ₹0 line ka MRR 0 hi hona chahiye.
 
-**Baaki 3 asli failures, triage baaki:** `credit_card_liability` ("card spend touched the bank
-(bank=0)"), `customer_dedup` ("expected 1 customer (reuse), got 2"),
-`portal_customer_users_no_self_update` ("last_login_at not stamped by RPC"). Agla session yahan
-se uthaye — teeno assertion tak pahunchti hain, yaani teeno ka kuch matlab hai.
+**Baaki 3 ka bhi triage ho gaya — 11 me se ek bhi ab "pata nahi" nahi hai:**
+
+**🔴 `customer_dedup` — DOOSRA guard bhi `record_payment` me nahi bacha.** Test kehta hai (0064/
+0065) ki same-email customer pehle se ho to reuse karo, duplicate na banao. Function me
+(line ~188) lead se **bina koi lookup** naya customer insert hota hai — `contact_email` par
+koi `select` hi nahi hai. Naapa: nuksaan abhi zero (12 emailed customers, 12 distinct). Par ek
+alag kinara bhi mila: **35 me se 23 customers ka email hi nahi hai**, to email-wala dedup
+do-tihai par kabhi kaam hi nahi karta tha. Ye bhi migration + money faisla = Pardeep ka call.
+
+**🟢 `credit_card_liability` — test-side, product theek hai.** `bank=0` ka matlab "₹5,000 galat
+kat gaya" nahi, "koi row mili hi nahi" hai. `bank_account_current_balance` SECURITY DEFINER aur
+`current_tenant_id()` se scoped hai, aur test sirf `{"role":"service_role"}` set karta hai —
+koi `sub` nahi, to koi tenant nahi. Test ka message hi gumraah karta hai.
+
+**🟢 `portal_customer_users_no_self_update` — test-side, aur iski security assertions PASS hui.**
+Exploit ne 0 row update kiye aur `customer_id` nahi badla — deewar khadi hai. Sirf
+`portal_touch_login()` ne `last_login_at` stamp nahi kiya, kyunki wo `auth.uid()` par chalta hai
+jo us session me set nahi hai.
+
+**11 failures ka final hisaab:** 7 fixture-toote (purana seed data) · 2 test-context (tenant/
+identity set nahi) · **2 asli gayab guard** (`record_payment` me #27 aur 0064/0065). Yaani
+**ek bhi failure aisi nahi jo aaj ke code ne todi ho.**
 
 **Ek trap jo darj karna zaroori hai** (AGENTS.md L7 me poora hai): is folder me **do
 convention** hain. 31 file `rollback;` par khatam hoti hain aur pass par exit 0 deti hain. Baaki
@@ -148,11 +166,11 @@ jayega**.
 
 ### 📓 AGENTS.md me naya section
 
-`# Learned Guidelines` — **L1–L8**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
+`# Learned Guidelines` — **L1–L10**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
 pehle classify phir retry · jo retry jaan-boojh kar mana kiya · naam ke substring se
 authorization mat karo · ek `as any` poore insert ka checking band kar deta hai · config error
 5xx nahi hota · aur **L7**: isolation ka zero-assertion doosre tenant par scoped hona chahiye,
-warna security test jhooth bolne lagta hai · aur **L8**: jis guard ka test koi nahi chalata, wo guard ab aapke paas nahi hai. Naya session ise padh kar shuru kare.
+warna security test jhooth bolne lagta hai · aur **L8**: jis guard ka test koi nahi chalata, wo guard ab aapke paas nahi hai · **L9**: `record_payment` do guard kho chuka hai, migration ke bharose mat raho, live function body grep karo · **L10**: tenant-scoped function 0 de to pehle missing context par shak karo, logic par baad me. Naya session ise padh kar shuru kare.
 
 ### Purana record (17–22 Aug) — neeche waisa hi hai
 

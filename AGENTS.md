@@ -468,3 +468,51 @@ database, so this is an exposure, not an incident.
 - **Two guards with the same shape are not the same guard.** `p_amount <= 0` and
   `quote.amount <= 0` differ by one word and by the entire thing being protected. This is how a
   missing check reads as a present one to anybody skimming.
+
+## L9. `record_payment` has lost TWO guards its tests still prove — check the body, not the migration
+*22 Aug 2026, from finishing the triage L8 started.*
+
+`record_payment` is 26,000 characters and has been rewritten repeatedly. Two separate guards
+that SQL tests in this repo assert are **no longer in it**, and both were found the same
+evening, by running a suite that is in neither CI nor the Stop hook:
+
+| Migration | What the test proves | What the function does today |
+|---|---|---|
+| 0060/0061 (bug #27) | rejects a payment against a ₹0 quote | only checks `p_amount <= 0` — the payment argument. Nothing reads `v_quote.amount`. |
+| 0064/0065 | reuses an existing same-email customer instead of duplicating | inserts a new customer from the lead unconditionally (line ~188). No lookup by `contact_email` at all. |
+
+Neither has caused damage yet, measured: zero ₹0-amount quotes, and 12 emailed customers with
+12 distinct emails. But the dedup one has a second edge worth knowing — **23 of 35 customers
+have no email at all**, so an email-keyed dedup could never have protected two thirds of them
+even when it worked.
+
+**The rules:**
+- **One long function is where guards go to die.** Every rewrite of a 26k-character body is a
+  chance to drop a four-line check, and nothing fails loudly when one goes. If you touch
+  `record_payment`, diff the guard list before and after.
+- **Grep the live body, never the migration.** `pg_get_functiondef(p.oid)` is the only honest
+  answer to "does this guard exist". A merged migration proves it once existed.
+- **A guard-shaped line is not the guard.** `p_amount <= 0` sits where the #27 guard should be
+  and protects something else entirely, which is why nobody noticed for months.
+
+## L10. When a tenant-scoped function returns 0, suspect the missing context before the logic
+*22 Aug 2026, from two of the eleven red SQL tests.*
+
+Two failures looked like product bugs and were neither:
+
+- `credit_card_liability` → `FAIL: card spend touched the bank (bank=0)`. The bank fixture
+  opens at ₹1,00,000, so 0 is not "₹5,000 was wrongly deducted" — it is *no rows found*.
+  `bank_account_current_balance` is SECURITY DEFINER and scoped by `current_tenant_id()`, and
+  the test sets only `{"role":"service_role"}` with no `sub`, so there is no tenant to scope to.
+- `portal_customer_users_no_self_update` → `last_login_at not stamped by RPC`.
+  `portal_touch_login` keys off `auth.uid()`, which that session does not supply, so it updated
+  zero rows. Note what DID pass in the same file: the exploit updated 0 rows and the
+  `customer_id` did not move. **The security half held; only the "does the RPC work" half fell.**
+
+**The rules:**
+- **Distinguish "wrong number" from "no rows".** A tenant-scoped function with no tenant
+  returns 0, ∅ or NULL — which reads exactly like a computation that went wrong.
+- **A test that sets `role` has not set an identity.** `current_tenant_id()` needs a `sub`;
+  `auth.uid()` needs a `sub`. Setting the role alone gets you neither.
+- **Write the failure message about what the query actually checked** (L7 again). "card spend
+  touched the bank" sent me looking at card logic for a value that came from an empty result.
