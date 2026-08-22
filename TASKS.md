@@ -76,12 +76,51 @@ aging bucket (fresh/warn/urgent/overdue), total, checkbox aur bulk generate.
 Pardeep ka faisla (22 Aug): **invoice automatic nahi banegi** — sirf dikhegi, aur banana insaan
 tay karega. Isliye koi code change nahi kiya. Button dabana baaki hai, 30 din ke andar.
 
+### 🔴 Sandbox tenant ka naam badal gaya hai — ab "Delfos Technologies"
+
+Naapa hua, 22 Aug: tenant `7e57e57e-0000-4000-8000-000000000001` ka `name` ab
+**`Delfos Technologies`** hai. Ye wahi tenant hai jo jaan-boojh kar
+`ZZ TESTING SANDBOX — not a real company` naam se banaya gaya tha, aur wajah is file me hi
+likhi hai: *"company jaisa naam wala tenant company jaisa hi padha jata hai"* — usi galti ne
+ek "Excel Technologies" tenant me do din ka asli kaam aur ₹21,240 ka payment chhupa rakha tha.
+
+Ab wo bachaav **hat gaya hai**. Sirf `doc_code = 'TEST'` bacha hai jo batata hai ki ye asli
+nahi hai — aur `doc_code` kisi report ya screen par nahi dikhta. Isi tenant me ₹32,400 MRR aur
+24 Aug ka asli renewal email baitha hai (upar #2), to ise asli customer samajh lena aasan hai.
+
+Maine naam **wapas nahi badla** — ho sakta hai tester ne jaan-boojh kar likha ho, aur ye live
+tenant ka data hai. Faisla Pardeep ka: naam wapas bhadda karna hai ya nahi.
+
+### 🧪 SQL test suite chalayi — 6 red mile, ek bhi live defect nahi
+
+`production/supabase/tests/` **na CI me hai, na Stop hook me** — to yahan ke claim chup-chaap
+purane pad jate hain. Aaj chalayi (pehli baar poori). Teen theek kar diye, teeno
+**mutation se sabit**:
+
+| Test | Kya tha | Ab |
+|---|---|---|
+| `sandbox_tenant_isolation` | "sandbox tester 8 live customers padh sakta hai" — **jhoothi alarm**: assertion bina tenant filter `count(*)` kar raha tha aur tester ke apne 8 rows ko doosre ka bata raha tha | ✅ PASS. Sab counts `tenant_id <> v_sandbox` par scoped. Mutation: tester ko live tenant me daala → `can read 26 customer(s) belonging to another tenant` |
+| `hierarchy_peer_isolation` | **Aaj pehli baar chala** (header khud kehta tha "NOT YET RUN"). Asli auth id "borrow" karta tha; ek id tester ki thi → `users_pkey` duplicate, ek bhi assertion chala hi nahi | ✅ PASS. Ab apne synthetic auth users banata hai (sibling test ka idiom). Mutation: role switch hataya → `expected own + unowned, got [A,B,NULL]`. **Migration `20260818150000` Section 3b pehli baar sabit hua** |
+| `renewal_and_subscription_creation` | "monthly-flex sale creates NO subscription" — aaj ke `85a5d67` ne wo jaan-boojh kar badla, test stale tha | ✅ PASS. Naapa: `n=1, term=1, mrr=3900, renewal=start+1 month`. Mutation: 3900→325 → red |
+
+**Baaki 3 red, triage nahi hua:** `credit_card_liability` ("card spend touched the bank"),
+`customer_dedup` ("expected 1 customer (reuse), got 2"), `portal_customer_users_no_self_update`
+("last_login_at not stamped by RPC"). Agla session yahan se uthaye.
+
+**Ek trap jo darj karna zaroori hai** (AGENTS.md L7 me poora hai): is folder me **do
+convention** hain. 31 file `rollback;` par khatam hoti hain aur pass par exit 0 deti hain. Baaki
+**7 file `raise exception 'TESTRESULT >> …'`** par khatam hoti hain — wahi exception unka
+rollback hai, to wo **pass hone par non-zero exit** deti hain. Naadaan runner un 7 ko "broken"
+batayega, aur koi unka `raise` hata kar "theek" karega to unka test data **prod me commit ho
+jayega**.
+
 ### 📓 AGENTS.md me naya section
 
-`# Learned Guidelines` — **L1–L6**, aaj ke teen bug se nikle niyam: retry/alert har cron par ·
+`# Learned Guidelines` — **L1–L7**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
 pehle classify phir retry · jo retry jaan-boojh kar mana kiya · naam ke substring se
 authorization mat karo · ek `as any` poore insert ka checking band kar deta hai · config error
-5xx nahi hota. Naya session ise padh kar shuru kare.
+5xx nahi hota · aur **L7**: isolation ka zero-assertion doosre tenant par scoped hona chahiye,
+warna security test jhooth bolne lagta hai. Naya session ise padh kar shuru kare.
 
 ### Purana record (17–22 Aug) — neeche waisa hi hai
 

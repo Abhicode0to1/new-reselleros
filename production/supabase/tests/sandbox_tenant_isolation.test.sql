@@ -58,30 +58,46 @@ begin
     raise exception 'SETUP FAIL: auth.uid() is % — the impersonation did not take', auth.uid();
   end if;
 
-  --------------------------------------- 1. THE HEADLINE: none of the real business
-  select count(*) into n from public.customers;
-  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % customer(s) of the live business', n; end if;
+  --------------------------------------- 1. THE HEADLINE: none of ANOTHER tenant's business
+  /* Every count here is scoped `tenant_id <> v_sandbox`, and that scoping is the whole
+     assertion — not tidiness.
 
-  select count(*) into n from public.quotes;
-  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % quote(s)', n; end if;
+     These were bare `count(*)` until 22 Aug 2026, which was correct only for as long as the
+     sandbox stayed empty. The day the tester created their 8th customer the test announced
+     "a sandbox tester can read 8 customer(s) of the live business" — counting the tester's
+     OWN rows and naming them somebody else's. Nothing had leaked: the tester saw 8, the
+     sandbox owned 8, and the live tenant's 26 were not among them.
 
-  select count(*) into n from public.invoices;
-  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % invoice(s) — these are GST documents', n; end if;
+     A security test that cries wolf is worse than no test, because the next reader learns to
+     discount it and then disbelieves it on the day it means something. The `users` line
+     below was already scoped, and case 2 already scopes `items` — so this is the file's own
+     idiom, applied to the seven lines that were missed.
 
-  select count(*) into n from public.payments;
-  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % payment(s)', n; end if;
+     `<> v_sandbox` rather than `= v_live` on purpose: there is a third tenant (Excel
+     Technologies), and "not mine" catches a leak from any of them, not just the big one. */
+  select count(*) into n from public.customers where tenant_id <> v_sandbox;
+  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % customer(s) belonging to another tenant', n; end if;
 
-  select count(*) into n from public.subscriptions;
-  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % subscription(s)', n; end if;
+  select count(*) into n from public.quotes where tenant_id <> v_sandbox;
+  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % quote(s) belonging to another tenant', n; end if;
 
-  select count(*) into n from public.leads;
-  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % lead(s)', n; end if;
+  select count(*) into n from public.invoices where tenant_id <> v_sandbox;
+  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % invoice(s) of another tenant — these are GST documents', n; end if;
 
-  select count(*) into n from public.expenses;
-  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % expense(s)', n; end if;
+  select count(*) into n from public.payments where tenant_id <> v_sandbox;
+  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % payment(s) belonging to another tenant', n; end if;
 
-  select count(*) into n from public.users where tenant_id = v_live;
-  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % live teammate row(s)', n; end if;
+  select count(*) into n from public.subscriptions where tenant_id <> v_sandbox;
+  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % subscription(s) belonging to another tenant', n; end if;
+
+  select count(*) into n from public.leads where tenant_id <> v_sandbox;
+  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % lead(s) belonging to another tenant', n; end if;
+
+  select count(*) into n from public.expenses where tenant_id <> v_sandbox;
+  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % expense(s) belonging to another tenant', n; end if;
+
+  select count(*) into n from public.users where tenant_id <> v_sandbox;
+  if n <> 0 then raise exception 'FAIL 1: a sandbox tester can read % teammate row(s) of another tenant', n; end if;
 
   ---------------------- 2. THE CONTROL: the same session CAN read what it should
   -- Without this, every zero above could be a broken session rather than a wall.
@@ -92,8 +108,17 @@ begin
   select count(*) into n from public.items where tenant_id <> v_sandbox;
   if n <> 0 then raise exception 'FAIL 2: the tester sees % item(s) belonging to another tenant', n; end if;
 
+  /* At LEAST one, not exactly one. This said `<> 1` and broke on 22 Aug 2026 with "sees 2
+     user rows, expected 1" — the synthetic owner this file creates plus the real tester who
+     signed up into the sandbox on 21 Aug. Both belong there.
+
+     Pinning the number added nothing: "only my own tenant" is already proved in case 1
+     (`users where tenant_id <> v_sandbox` = 0). All this control has to establish is that
+     the session is not blocked outright, so that case 1's zeros mean a wall and not a dead
+     session. An exact count here just re-breaks the test every time the sandbox gains a
+     legitimate teammate — the same brittleness case 1 was fixed for. */
   select count(*) into n from public.users;   -- their own tenant's roster
-  if n <> 1 then raise exception 'FAIL 2: the tester sees % user rows in their own tenant, expected 1', n; end if;
+  if n < 1 then raise exception 'FAIL 2: the tester sees no user rows at all, not even their own — this session is blocked, so the zeros above prove nothing'; end if;
 
   ------------------------------------- 3. cannot plant a row in the live tenant
   v_blocked := false;

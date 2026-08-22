@@ -2,10 +2,11 @@
 -- shared manager reaches both, an owner sees everything, and an UNOWNED row stays visible
 -- to all of them. Migration 20260818150000 (Sections 3a + 3b). Self-asserting; rolled back.
 --
--- ⚠️ NOT YET RUN. Written 18 Aug 2026 against a schema whose shape was checked
---    (users.id → auth.users, and the NOT NULL columns below), but never executed: the
---    permission classifier blocked the run and I did not work around it. Treat every claim
---    below as "what this asserts", not "what has passed".
+-- ✅ FIRST RUN 22 Aug 2026 — four days after it was written, and it did not survive it.
+--    (Header until then: "NOT YET RUN … treat every claim below as what this asserts, not
+--    what has passed." That caution was well placed.) The fixture insert died on a duplicate
+--    `users_pkey` before any assertion executed, because it borrowed auth ids that already
+--    had public.users rows — fixed below. Nothing about the POLICIES had ever been exercised.
 --
 --        npx supabase db query --linked -f supabase/tests/hierarchy_peer_isolation.test.sql
 --
@@ -59,24 +60,43 @@
 begin;
 
 -- ── Fixtures ────────────────────────────────────────────────────────────────
--- public.users.id references auth.users(id) — verified against the live schema — so four
--- real auth ids are borrowed, ordered for determinism. auth.users is never written to, and
--- every insert below is rolled back.
-do $$
-declare
-  v_n int;
-begin
-  select count(*) into v_n from (select 1 from auth.users limit 4) s;
-  if v_n < 4 then
-    raise exception 'SKIP: need 4 auth.users rows to borrow ids, found %', v_n;
-  end if;
+-- Four synthetic auth users, created here and rolled back with everything else.
+--
+-- ⚠️ THIS FILE USED TO BORROW REAL AUTH IDS, AND THAT IS WHY IT HAD NEVER PASSED.
+--    First execution, 22 Aug 2026, four days after it was written:
+--
+--    1. Borrowing the four lowest-ordered `auth.users` ids and inserting them into
+--       `public.users` died on `duplicate key value violates unique constraint
+--       "users_pkey"`. The FK the original comment verified (public.users.id →
+--       auth.users(id)) is necessary but not sufficient — an auth id is only free to
+--       borrow if it has no `public.users` row yet, and the sandbox tester's does.
+--    2. Excluding ids that already have a public.users row then reported
+--       `SKIP: need 4 auth.users rows with no public.users row to borrow, found 1`.
+--       On this database almost every auth user is already a member of a tenant, so the
+--       borrowing design cannot work here at all — it depends on spare accounts existing.
+--
+--    So it now creates its own, which is the idiom the sibling test in this folder already
+--    uses (`sandbox_tenant_isolation.test.sql` inserts its own auth row and rolls it back).
+--    Deterministic ids, no dependence on who happens to have signed up, and no way for a
+--    real person's row to collide with a fixture.
+--
+--    The old comment's promise that "auth.users is never written to" no longer holds — it
+--    IS written to, inside the transaction, and rolled back with the rest. That is a
+--    deliberate trade: a fixture that owns its data beats one that borrows a stranger's.
+insert into auth.users (id, email) values
+  ('d1d1d1d1-0000-4000-8000-00000000000a', 'hier-owner@example.test'),
+  ('d1d1d1d1-0000-4000-8000-00000000000b', 'hier-mgr@example.test'),
+  ('d1d1d1d1-0000-4000-8000-00000000000c', 'hier-repa@example.test'),
+  ('d1d1d1d1-0000-4000-8000-00000000000d', 'hier-repb@example.test');
 
+do $$
+begin
   /* Transaction-local GUCs rather than a temp table: `set local role authenticated` cannot
      read a temp table owned by the connection role, but it can read these. */
-  perform set_config('hier.owner', (select id::text from auth.users order by id offset 0 limit 1), true);
-  perform set_config('hier.mgr',   (select id::text from auth.users order by id offset 1 limit 1), true);
-  perform set_config('hier.repa',  (select id::text from auth.users order by id offset 2 limit 1), true);
-  perform set_config('hier.repb',  (select id::text from auth.users order by id offset 3 limit 1), true);
+  perform set_config('hier.owner', 'd1d1d1d1-0000-4000-8000-00000000000a', true);
+  perform set_config('hier.mgr',   'd1d1d1d1-0000-4000-8000-00000000000b', true);
+  perform set_config('hier.repa',  'd1d1d1d1-0000-4000-8000-00000000000c', true);
+  perform set_config('hier.repb',  'd1d1d1d1-0000-4000-8000-00000000000d', true);
 end $$;
 
 insert into public.tenants (id, name, email, state_code, doc_code)
@@ -182,6 +202,13 @@ begin
 end $$;
 
 reset role;
+
+/* A NOTICE is not enough, and 22 Aug 2026 is how we know. Through `supabase db query -f` a
+   notice is invisible: the run came back exit 0 with `"rows": []`, which is exactly what a
+   file that asserted NOTHING would also return. Every assertion above raises on failure, so
+   reaching this line means they all passed — but only a visible row says so out loud.
+   Same device as sandbox_tenant_isolation.test.sql: one row, unmistakable. */
+select 'PASS' as hierarchy_peer_isolation;
 
 -- Fixtures, function and policies all disappear here.
 rollback;
