@@ -12,6 +12,7 @@ import { toastError } from "@/lib/errors/toast-error";
 
 import { useQuote, useDeleteQuote, quoteDeleteBlockReason } from "@/lib/queries/quotes";
 import { isQuoteEditableInPlace } from "@/lib/quotes/editable";
+import { paymentDomainDefault } from "@/lib/quotes/payment-domain";
 import { useGenerateInvoice } from "@/lib/queries/invoices";
 import { quoteMoneyActions } from "@/lib/quotes/money-stage";
 import { orphanState, isOrphan, orphanNote } from "@/lib/subscriptions/orphan-quote";
@@ -1194,7 +1195,14 @@ export default function QuoteDetailPage() {
            operator to guess — which is exactly what a tester hit twice on 22 Aug. */
         lineItems={Array.isArray(quote.line_items) ? quote.line_items : null}
         askDomain={!quote.is_one_off}
-        defaultDomain={customer?.domain ?? lead?.domain ?? undefined}
+        /* The QUOTE first — it is the record being paid and the one the operator typed
+           the domain into. Leaving it out is what made the field open empty on a quote
+           that had the answer written on it (reported 22 Aug from Q-TEST-2026-27-0009). */
+        defaultDomain={paymentDomainDefault({
+          quoteDomain:    quote.domain,
+          customerDomain: customer?.domain,
+          leadDomain:     lead?.domain,
+        })}
       />
 
       {/* Customer-facing quote preview */}
