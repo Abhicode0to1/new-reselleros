@@ -44,7 +44,12 @@ do $$
 declare
   v_tenant  uuid := 'fbb976f1-9090-4f10-9726-0901bd144e42';
   v_name    text;
-  v_backup  uuid;
+  /* jsonb, not uuid — `backup._take` returns the whole snapshot record
+     ({id, bytes, created_at, table_count}). The first run of this script died on
+     `22P02 invalid input syntax for type uuid` here, which aborted the transaction and
+     rolled the snapshot back with it. Nothing was deleted, which is the transaction doing
+     its job. */
+  v_backup  jsonb;
   v_items   int; v_emps int; v_banks int; v_users int;
 begin
   -- ── Guard: this is the tenant we think it is ─────────────────────────────
@@ -55,9 +60,15 @@ begin
 
   -- ── A restore point of its own, before anything is removed ───────────────
   v_backup := backup._take(v_tenant, 'Before clearing ANUTECH test data (22 Aug 2026)', 'manual');
-  if v_backup is null then
-    raise exception 'STOP: the pre-delete snapshot came back null. Nothing changed.';
+  if v_backup is null or (v_backup->>'id') is null then
+    raise exception 'STOP: the pre-delete snapshot came back empty. Nothing changed.';
   end if;
+  /* An empty snapshot is worse than no snapshot, because it looks like one. The reset RPC
+     refuses on the same condition. */
+  if coalesce((v_backup->>'table_count')::int, 0) < 50 then
+    raise exception 'STOP: the pre-delete snapshot holds only % tables — refusing to delete anything.', v_backup->>'table_count';
+  end if;
+  raise notice 'Snapshot taken: % tables, % bytes', v_backup->>'table_count', v_backup->>'bytes';
 
   -- ── Counts to protect ────────────────────────────────────────────────────
   select count(*) into v_items from public.items         where tenant_id = v_tenant;
