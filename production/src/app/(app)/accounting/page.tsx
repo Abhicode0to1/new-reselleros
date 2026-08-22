@@ -38,6 +38,7 @@ import { useBalanceSheetAuto } from "@/lib/queries/balance-sheet";
 import { useUnreconciledExpenses, useUnpaidBillsDue } from "@/lib/queries/expenses";
 import { useBankAccounts, useUnmatchedBankCredits } from "@/lib/queries/bank";
 import { useInvoices } from "@/lib/queries/invoices";
+import { GstHealthCard } from "@/components/features/accounting/gst-health-card";
 import {
   MONEY_FOLDERS, moneyInboxState, totalOpenItems,
   type MoneyDirection, type MoneyFolderMeta, type MoneyFolderState,
@@ -155,6 +156,11 @@ export default function AccountingOverviewPage() {
           </ul>
         </Card>
       )}
+
+      {/* GST health — placed ABOVE the money inbox because a wrong tax head is not a
+          chore in a queue, it is a filing that is already wrong. The inbox is work to do;
+          this is work that was done incorrectly. */}
+      <GstHealthCard />
 
       {/* ── THE MONEY INBOX ─────────────────────────────────────────────────────
           Four folders, four different tables, four different units — so the header
