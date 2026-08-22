@@ -169,7 +169,35 @@ nahi hai — aur `doc_code` kisi report ya screen par nahi dikhta. Isi tenant me
 Maine naam **wapas nahi badla** — ho sakta hai tester ne jaan-boojh kar likha ho, aur ye live
 tenant ka data hai. Faisla Pardeep ka: naam wapas bhadda karna hai ya nahi.
 
-### 🧪 SQL test suite chalayi — 6 red mile, ek bhi live defect nahi
+### 🧪 SQL suite ka FINAL state — 38 me se 32 PASS, 6 FAIL
+
+Suite pehli baar poori chalayi, phir theek ki, phir dobara chalayi. **Ab har failure ek naam
+wale defect par jaati hai — koi mystery nahi bachi:**
+
+| Failing test | Defect | Kiska faisla |
+|---|---|---|
+| `zero_amount_guards` | #27 guard `record_payment` me nahi hai | migration + money → Pardeep |
+| `customer_dedup` | 0064/0065 email-dedup nahi hai | migration + money → Pardeep |
+| `record_payment_one_off_guard` | 0157 one-off guard nahi hai | migration + money → Pardeep |
+| `create_direct_invoice_recurring` | **wahi** 0157 defect, doosra swatantra saboot | ↑ |
+| `generate_invoice_payment_terms` | due-date fallback 0 hai, 30 chahiye | migration likhi hai · **business faisla** |
+| `create_project_direct_invoice` | ambiguous `project_id` — kabhi chala hi nahi | migration likhi hai · **koi faisla nahi, surakshit** |
+
+**6 failure = 5 defect** (0157 do test se pakda gaya). Ek bhi failure aaj ke code ne nahi todi.
+
+**Kya badla (sab mutation se sabit):** saat file jo live tenant ke asli books me chalti thin,
+dobara likhi gayin — apna tenant, apna customer, asli assertion, aur end me dikhne wala
+`select 'PASS'`. Do "test-side" failures (`credit_card_liability`,
+`portal_customer_users_no_self_update`) bhi theek — dono ab poore run me pass hain.
+
+**🔴 Aur usme sabse badi baat:** `portal_customer_users_no_self_update` **green tha aur kuch
+bhi sabit nahi kar raha tha**. Wo `set role authenticated` ke **baad** id padhta tha, RLS use
+NULL kar deta tha, aur exploit wala UPDATE `where auth_user_id = NULL` ban jata tha — zero rows,
+policy se koi lena-dena nahi. Ek cross-customer escalation test, hara, khokhla. Ab teen setup
+guard hain (auth.uid() milta hai · user ko apni 1 row dikhti hai · phir exploit), aur purana
+order wapas daalne par test **pass hone se inkaar** karta hai. AGENTS.md **L14**.
+
+### 🧪 Pehli baar chalane par kya mila tha (record ke liye)
 
 `production/supabase/tests/` **na CI me hai, na Stop hook me** — to yahan ke claim chup-chaap
 purane pad jate hain. Aaj chalayi (pehli baar poori). Teen theek kar diye, teeno
