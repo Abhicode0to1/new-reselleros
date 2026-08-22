@@ -1451,8 +1451,25 @@ function LeadsPageInner() {
           columns visually fill instead of bottom cream area showing. */}
       {!isLoading && !error && leads && leads.length > 0 && effectiveView === "kanban" && (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          {/* Auto-fit Kanban grid stretching 100% of remaining viewport height */}
-          <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-flow-col lg:auto-cols-[minmax(220px,1fr)] lg:grid-rows-1 gap-3 overflow-x-auto overflow-y-hidden pb-1">
+          {/* Auto-fit Kanban grid stretching 100% of remaining viewport height.
+
+              `lg:grid-cols-none` is load-bearing — without it the first two columns
+              collapse to ZERO WIDTH and the board hides most of the pipeline.
+
+              Measured on 22 Aug 2026 at a 1051px viewport, before the reset was added:
+                  grid-template-columns: 0px 0px 220px 220px 220px 220px
+              New (9 leads) and Contacted (26) were the 0px ones — 35 of 37 deals with no
+              width to render in, while the footer read "37 total deals visible". Reported
+              from this screen as "canban view sahi show nahi ho raha hai".
+
+              The mechanism: `sm:grid-cols-2` sets an EXPLICIT two-column template, and
+              nothing used to switch it off further up. With `grid-flow-col`, items 1-2 land
+              in those explicit columns and 3-6 create implicit ones —
+              `auto-cols-[minmax(220px,1fr)]` only ever applies to the IMPLICIT columns. The
+              four implicit columns took 880px of a 779px container, leaving the explicit
+              pair's `1fr` to resolve to 0. Resetting the template makes all six implicit, so
+              every column gets the 220px floor and the row scrolls as intended (1380px). */}
+          <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-none lg:grid-flow-col lg:auto-cols-[minmax(220px,1fr)] lg:grid-rows-1 gap-3 overflow-x-auto overflow-y-hidden pb-1">
             {DEAL_STAGES.map((stage) => {
               const stageLeads = boardLeads.filter((l) => l.stage === stage.id);
               const stageValue = stageLeads.reduce((s, l) => s + (l.value ?? 0), 0);

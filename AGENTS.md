@@ -692,3 +692,42 @@ set a new password), which is not something the app tells anybody.
 - **Do not weaken the guard to work around it.** The password check on that screen is
   protecting a delete that takes 39 payments and 26 lead activities along with the six
   sections it names. The fix is a recovery route, not a softer gate.
+
+## L16. `grid-flow-col` on top of an unreset `grid-cols-N` renders columns at ZERO width
+*22 Aug 2026, from the Kanban board on /leads.*
+
+Reported as *"canban view sahi show nahi ho raha hai"*. The board carried:
+
+```
+grid-cols-1 sm:grid-cols-2 lg:grid-flow-col lg:auto-cols-[minmax(220px,1fr)]
+```
+
+Measured in the browser at a 1051px viewport:
+
+```
+grid-template-columns: 0px 0px 220px 220px 220px 220px
+```
+
+**New (9 leads) and Contacted (26) were the two 0px tracks** — 35 of 37 deals with no width
+to render in, under a footer reading "37 total deals visible". Three empty columns on screen
+and a count of 37 beneath them.
+
+The mechanism: `sm:grid-cols-2` is an **explicit** template and nothing reset it at `lg`. With
+`grid-auto-flow: column`, items 1–2 fill those explicit tracks and 3–6 create **implicit**
+ones — and `grid-auto-columns` applies *only to implicit tracks*. The four implicit columns
+took 4×220px of a 779px container, so the explicit pair's `1fr` resolved to 0. Adding
+`lg:grid-cols-none` makes all six implicit: `220px ×6`, scrollWidth 1380, and the board
+scrolls as designed.
+
+**The rules:**
+- **Reset the template wherever you switch to `grid-flow-col`.** `grid-cols-none` at that
+  breakpoint, every time. A responsive `grid-cols-N` lower down does not stop applying just
+  because a later breakpoint adds column flow.
+- **`grid-auto-columns` never touches explicit tracks.** If some columns obey your minimum and
+  others do not, that is the tell.
+- **A zero-width grid track is invisible, not broken-looking.** No error, no overflow, no gap —
+  the cards simply are not there, which reads as "no data" rather than "bad layout".
+- **jsdom cannot catch this**, so a rendering test is no help: it does not do grid layout, and
+  the columns measure identically before and after. `lib/ui/grid-flow-col-reset.test.ts` scans
+  the source for the class combination instead — the same approach as `route-map.test.ts`, with
+  a guard that it actually scanned 100+ files.
