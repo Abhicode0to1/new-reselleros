@@ -917,3 +917,47 @@ carried across.
   ceiling for a canned reply is to acknowledge that something changed. If the product needs
   to answer "they cut it to 20 Standard, here is the revised quote", that is an LLM reading
   the thread, and it needs the money-guard that `api/ai/draft-followup` already has.
+
+## L23. Check what "pass" means before believing a test count
+*22 Aug 2026, Phase 0 of automating the spine.*
+
+I built a runner for the 38 files in `supabase/tests/` and it reported **12 pass / 26 fail**.
+Twenty of those failures said "exit 0, no PASS row". I almost reported 26 failures.
+
+The detector was wrong, not the suite. These tests signal success with
+`raise notice 'PASS: …'` — a NOTICE, which the CLI's JSON output does not carry at all. A
+real failure `raise exception`s, which exits non-zero. So the correct criterion is the exit
+code, and the honest count is **32 pass / 6 fail**.
+
+**The rule:** before reporting a test count, run one test you believe PASSES and one you
+believe FAILS, and confirm the detector separates them. A pass-detector that looks for
+evidence of success will read a silent success as a failure — and unlike the usual vacuous
+test, this one fails LOUD and sends you fixing things that were never broken. Twenty
+invented failures in the money spine is a full day spent, and it would have ended with a
+"fix" to code that was correct.
+
+Corollary, from the same run: **a suspiciously large number of failures is itself evidence
+about the harness, not the code.** Twenty simultaneous regressions in one folder is a less
+likely story than one wrong grep.
+
+## L24. Verify a DDL fix in a rolled-back transaction, and inject it after EVERY `begin;`
+*22 Aug 2026, same work.*
+
+DDL is transactional in Postgres, so a 26 KB `CREATE OR REPLACE FUNCTION` can be applied
+inside a test's own transaction, asserted against, and rolled back — proving a fix against
+production data without persisting a byte. That is how the three `record_payment` guards were
+confirmed as 32/38 → 36/38 with zero regressions before anything was applied.
+
+Two things that make the difference between proof and theatre:
+
+- **Inject after every `begin;`, not the first one.** Several files here run more than one
+  transaction (`zero_amount_guards` has two). Patch only the first and the later sections run
+  against the UNPATCHED function while the file still reports green — the regression check
+  silently covers less than it claims.
+- **Run the WHOLE suite, not just the tests you meant to fix.** The four target tests going
+  green says nothing about the other 34, and the change was to the function at the centre of
+  the spine. "Zero regressions" is a measurement, not an expectation.
+
+And when merging several test files into one transaction to save time, don't: fixture ids
+collide (`cccccccc-…d1` is used by two of these), and the collision reads as a failure of the
+fix. One transaction per file.
