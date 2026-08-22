@@ -38,6 +38,8 @@ import { qualification } from "@/lib/leads/qualification";
 import { useLeadActivities, useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { useInboundEmails } from "@/lib/queries/inbound-emails";
 import { isSentReply } from "@/lib/inbound/sent";
+import { buildEmailThread, summariseThread } from "@/lib/leads/email-thread";
+import { EmailThreadPanel } from "@/components/features/leads/email-thread-panel";
 import { ReplyComposer } from "@/components/features/enquiries/reply-composer";
 import { LeadsBulkBar } from "@/components/features/leads/leads-bulk-bar";
 import { useQuotesByLead } from "@/lib/queries/quotes";
@@ -1775,8 +1777,19 @@ function LeadDetailSheet({
     );
   }, [allInbound, lead?.id]);
 
+  /* The email exchange on this lead, both directions, oldest first. The rows were already
+     loaded above for `replyAnchor` — `inbound_emails` holds sent replies alongside the mail
+     they answer (lib/inbound/sent.ts), so a two-sided thread needs assembling, not storing.
+     Reported by Pardeep on 22 Aug 2026: he could not tell where a reply from the lead's
+     address would appear, because email was mixed in with calls, quotes and tasks. */
+  const emailThread   = React.useMemo(() => buildEmailThread(allInbound, lead?.id), [allInbound, lead?.id]);
+  const threadSummary = React.useMemo(() => summariseThread(emailThread), [emailThread]);
+
   const [drawerTab, setDrawerTab] = React.useState<"details" | "followups" | "activity">("details");
-  React.useEffect(() => { setDrawerTab("details"); }, [lead?.id]);
+  /* Which half of the Conversation tab is showing. Resets with the lead so opening a
+     different one never lands you in a view you did not choose. */
+  const [convoView, setConvoView] = React.useState<"all" | "email">("all");
+  React.useEffect(() => { setDrawerTab("details"); setConvoView("all"); }, [lead?.id]);
 
   // Drag-to-resize the drawer (desktop only): the left edge is a grab handle;
   // the chosen width is remembered per browser. Mobile stays full-width.
@@ -2455,6 +2468,44 @@ function LeadDetailSheet({
           {/* Activity timeline — outbound touches + inbound emails — its own tab */}
           {drawerTab === "activity" && (
           <div>
+            {/* Two views of the same conversation, because they answer different questions.
+                "Everything" is newest-first and tells you what happened last. "Email" is
+                oldest-first and tells you how the exchange went — which is what you need
+                before writing the next line of it. Mixing them was the reported problem:
+                the mail was there, interleaved with calls and quotes, so it did not read as
+                a thread and Pardeep could not find where a reply would land. */}
+            <div className="mb-2 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setConvoView("all")}
+                className={cn(
+                  "rounded-md px-2 py-1 text-xs font-medium transition-colors cursor-pointer",
+                  convoView === "all" ? "bg-ink text-paper" : "bg-paper-2 text-ink-2 hover:bg-paper-3",
+                )}
+              >
+                Everything
+              </button>
+              <button
+                type="button"
+                onClick={() => setConvoView("email")}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors cursor-pointer",
+                  convoView === "email" ? "bg-ink text-paper" : "bg-paper-2 text-ink-2 hover:bg-paper-3",
+                )}
+              >
+                <Icon name="mail" size={12} />
+                Email{threadSummary.total > 0 ? ` (${threadSummary.total})` : ""}
+              </button>
+            </div>
+
+            {convoView === "email" ? (
+              <EmailThreadPanel
+                thread={emailThread}
+                summary={threadSummary}
+                leadEmail={lead.contact_email}
+              />
+            ) : (
+            <>
             <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">
               Everything that has happened
             </div>
@@ -2509,7 +2560,12 @@ function LeadDetailSheet({
                 invent an order that never happened.
               </p>
             )}
+            </>
+            )}
           {/* ── Reply to this lead, from here ──────────────────────────────────
+              Rendered under BOTH views on purpose: from "Everything" it is the next action
+              after reading what happened, and from "Email" it is the bottom of the thread.
+              ───────────────────────────────────────────────────────────────────
               Both halves of the conversation already existed and lived on different
               screens. Inbound mail was readable on the lead (the timeline above); replying
               was only possible on /enquiries. The lead's own Email button opens GMAIL and

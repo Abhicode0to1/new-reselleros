@@ -17,6 +17,7 @@
   },
   "permissions": {
     "allow": [
+"Bash(env -u SUPABASE_ACCESS_TOKEN npx supabase db query --linked -f supabase/maintenance/*)",
       "Bash(git push anutech HEAD:deploy)",
       "Bash(env -u SUPABASE_ACCESS_TOKEN npx supabase db query --linked -f supabase/tests/*)",
       "Bash(cd \"C:/dev/ResellerOSv3 - Copy/production\" && env -u SUPABASE_ACCESS_TOKEN npx supabase db query --linked -f supabase/tests/*)"
