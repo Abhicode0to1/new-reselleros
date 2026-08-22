@@ -399,3 +399,43 @@ message already said where to go.
 - **Do not key the decision on `instanceof` alone.** It stops holding across a re-throw or a
   structured clone while the message survives, and a status code that depends on how the
   error travelled is a status code that will be wrong one day.
+
+## L7. A zero-based isolation assertion must be scoped to the OTHER tenant, not to "everything"
+*22 Aug 2026, from running the SQL suite that nothing runs.*
+
+`supabase/tests/sandbox_tenant_isolation.test.sql` now fails with:
+
+```
+FAIL 1: a sandbox tester can read 8 customer(s) of the live business
+```
+
+**There is no leak.** The assertion is `select count(*) from public.customers` — no tenant
+filter — and it then calls whatever it counted "the live business". When the sandbox had zero
+customers the count was zero and it passed. The tester has since created 8 of their own, and
+the arithmetic settles it: the tester saw exactly **8**, the sandbox tenant owns exactly **8**,
+and the live tenant's **26** are not among them. A real leak would have counted 26 or 34.
+
+This file already guards against the opposite mistake — its own notes explain that "0 is also
+what a broken session returns", so it reads back things that SHOULD be visible as a control.
+The author protected against a session that sees nothing and not against a tenant that
+legitimately acquires something.
+
+**The rules:**
+- Assert `count(*) where tenant_id = <the other tenant>` = 0. Never bare `count(*)`, and never
+  let the message claim a tenant the query never checked.
+- **A security test that cries wolf is worse than no test.** The next reader learns to discount
+  it, and the day it means something nobody believes it.
+- **Run `supabase/tests/` before trusting any sentence of the form "the wall is proven".** Those
+  38 files are not in CI and not in the Stop hook, so their claims age silently. Measured today:
+  **6 of the 31 runnable files are red**, and none of the six is a live defect —
+  one false positive (above), one assertion made stale by a deliberate change the same day
+  (`renewal_and_subscription_creation` documents "monthly-flex creates NO subscription", which
+  `85a5d67` changed on purpose), one polluted by leftover data, and three not yet triaged.
+- **Two conventions live in that folder, and a naive runner mis-reports one of them.** 31 files
+  end `rollback;` and exit 0 on success. The other 7 do their work inside `do $$ … end $$` and
+  finish with `raise exception 'TESTRESULT >> …'` — the exception IS the rollback, so they exit
+  **non-zero when they pass** and their result is in the error text. Do not "fix" one of those by
+  deleting the raise: that commits its test rows to production.
+- **A duplicate-key failure in an isolation test means a previous run did not roll back.** Check
+  for the leftover row before believing the assertion — `hierarchy_peer_isolation` failed today
+  on `users_pkey`, and the synthetic user from an earlier run was still in `public.users`.
