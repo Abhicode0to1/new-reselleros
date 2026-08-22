@@ -219,7 +219,32 @@ Insert fail hone par report **gayab** ho jaati thi aur reporter ko "thank you" m
 
 **Baaki:** `/admin/feedback` par screenshot re-attach karne ka rasta nahi hai · duplicate detection nahi hai (do log ek hi bug file karein to do rows) · `support_tickets` ki 4 purani rows ka kya karna hai — band karna Pardeep ka call.
 
-### 🔴 HANDOFF — padho pehle (21 Aug 2026)
+### 🔴 HANDOFF — padho pehle (22 Aug 2026)
+
+Branch `session/money-spine-hardening-jun1`, sab commit (`16b0872` tak). ✅ **22 Aug ko DEPLOY HO GAYA** — revision **`resellersos-00301-l75`**, 100% traffic. Remote par push nahi ki (branch bahut aage hai) — wo alag faisla hai.
+
+**22 Aug ko kya gaya live:** partial payment par quote `accepted` (`record_payment` ki ek line) · subscription card par **"Paid"** · **Lifetime paid** clickable → `/payments?customer=<id>` (naam se nahi, **id se** filter — is book me "AB corprotion" aur "abc corporaton" saath-saath hain) · transaction categorisation Phase 1/2/4 · aur ek **open redirect ka fix**.
+
+> **🔴 SECURITY — jo mila aur theek hua (22 Aug).** Login page `window.location.href = searchParams.get("next")` karta tha, **bina validation, bina origin prefix**. `/login?next=https://evil.com` sign-in karte hi operator ko bahar bhej deta — theek us page se jahan usne abhi password daala. Wahi string OAuth `redirectTo` me bhi jaati thi.
+>
+> Ab **ek hi checker**: [`lib/safe-path.ts`](production/src/lib/safe-path.ts), jo login, middleware, OAuth callback aur push — chaaron use karte hain. **Push ki purani private copy me gap tha**: wo `//` par rukti thi aur `/\evil.com` nikal jaata tha, kyunki browser backslash ko slash bana deta hai. **`//` par rukne wala checker poora dikhta hai aur nahi hota.** 10 test, jisme ye bhi ki query string aur fragment **allow** hone chahiye — over-blocking wahi link tod deta jisse ye shuru hua.
+
+**🟢 Categorisation (docs/AI-CATEGORISATION-PLAN.md) — Phase 1, 2, 4 done, AI ka ek bhi call nahi.** Asli coverage: **22 of 39 lines**, 5 seeded rules se. Phase 3 (bache 17 par AI) baaki hai. Do baat yaad rakhne layak:
+
+- **`suggestCategory` pehle se maujood tha** (`lib/queries/expenses.ts`) — 18 category, English+Hinglish keywords. Main uske bagal me doosri list banane wala tha. Wo ab fallback layer hai; tenant rules pehle.
+- **`neft`/`rtgs` us keyword list me Bank Charges hain** — typed note ke liye sahi, bank narration ke liye tabaahi: har transfer "Bank Charges" ban jata. Rail guard isliye hai. Uski keemat: khaali `NEFT CHARGES` line ab null deti hai — **miss sasta hai, galat jawaab mehnga**.
+
+> **🔧 Aaj teen baar ek hi shakl ka jaal mila: bytes alag, screen par same.** (1) Shell ne `\b` ko asli **0x08 backspace byte** bana diya — regex kabhi match nahi hua, aur **grep/reader dono backspace ko render karke pichhla character mita dete hain**, to line har baar sahi dikhti thi. (2) Control-character range literal likhne par file **binary** ban gayi. (3) `middleware.ts` CRLF hai, `login/page.tsx` LF — `\n` wala anchor ek me **zero baar** mila. **Sabak: backslash ya control char wale edit shell se mat karo — script file se karo, aur assert karo ki anchor mila.**
+
+> **🔧 Mutation jo apply na ho, wo "test kamzor hai" jaisa dikhta hai.** Chaar me se do mutation sed ke escaping se lagi hi nahi thi aur maine "coverage gap" samajh liya. Ye vacuous loop ka ulta roop hai. **Mutation script ko assert karna chahiye ki anchor theek ek baar mila.**
+
+**⚠️ Meri chaar galtiyan is session me — sab stale doc/yaad se, code se nahi.** `statement AI nahi hai` (hai), `AI sirf drafting karta hai` (money-guard + audit trail bhi hain), `Razorpay P0 missing` (11 files, dono halves configured, sirf `mode: test`), `0231/0232 anaath hain` (usi din apply ho chuki thin). **`LAUNCH_READINESS.md` bina code khole quote mat karo.** Poora hisaab: [docs/ROAD-TO-TEN.md](docs/ROAD-TO-TEN.md) §1.
+
+**Aage ka kram (ROAD-TO-TEN §5):** Razorpay live → GST e-Invoice (ekmatra P0 jo check me tika: `invoices.gst_irn` column hai, **22 invoice, 0 IRN**, koi IRP code nahi) → **ek aur reseller ko ek mahina** (asli Tier 1, code se nahi hota) → phir Phase 3 / GST mismatch / reconciliation.
+
+---
+
+### HANDOFF — 21 Aug 2026 (purana, reference ke liye)
 
 Branch `session/money-spine-hardening-jun1`, sab commit (`90f6db5` tak). ✅ **21 Aug ko DEPLOY HO GAYA** — revision **`resellersos-00299-pqj`**, 100% traffic. Ab live: web push notifications, attendance reminder ka cron, quote ka in-place draft editor, lead ke saath do-tarfa email, aur approvals queue. Branch remote par **push nahi ki** (ab 34+ commits aage) — wo alag faisla hai.
 
