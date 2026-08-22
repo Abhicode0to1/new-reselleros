@@ -667,3 +667,28 @@ only reason anybody looked, and it was the smaller problem by far.
   `SETUP FAIL: … would match no rows and prove nothing` instead of passing.
 - **Suspect any security test whose every number is 0.** That is the shape both this and
   `sandbox_tenant_isolation` failed in, in two different ways (L7).
+
+## L15. There is no forgot-password page, and a destructive screen demands the password
+*22 Aug 2026, from Pardeep trying to use Settings → Reset data.*
+
+`src/app/(auth)/` contains `login`, `signup`, `callback` and `welcome`. **There is no
+forgot-password or reset-password route anywhere in the app.**
+
+That collides with a real screen: Settings → Reset data requires the operator's login
+password, and the API re-checks it with `signInWithPassword`. So the owner of the business
+could not use it — measured on the live account, `pardeep@anutech.in` has
+`providers = 'email, google'`, meaning he normally signs in with Google and has no reason to
+remember the password that exists on the row.
+
+The only way out is the Supabase dashboard (Authentication → Users → ⋯ → send recovery, or
+set a new password), which is not something the app tells anybody.
+
+**The rules:**
+- **Password recovery is not optional once anything asks for a password.** Any screen that
+  demands re-authentication needs a reachable way to recover that credential — otherwise the
+  guard is a locked door with the key thrown away (CLAUDE.md §24: never a dead end).
+- **Check the auth providers before assuming a password is known.** A Google-first account has
+  a password row it has never used. `auth.identities.provider` is where that shows.
+- **Do not weaken the guard to work around it.** The password check on that screen is
+  protecting a delete that takes 39 payments and 26 lead activities along with the six
+  sections it names. The fix is a recovery route, not a softer gate.
