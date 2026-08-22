@@ -1,0 +1,91 @@
+# Build and deploy ResellerOS from a git push — no credential on anybody's laptop.
+#
+# WHY THIS EXISTS
+#   Deploying used to mean `gcloud auth login` on Pardeep's machine, and that token expires
+#   every few hours — twice in one session on 22 Aug. The alternative usually suggested is a
+#   service-account key file, which never expires and is exactly why it is dangerous: a
+#   permanent production credential sitting in a folder, revocable only by someone who
+#   notices. This does the deploy in Google's own infrastructure instead, so there is no key
+#   to leak.
+#
+# ─── WHICH BRANCH FIRES THIS, AND WHY IT MATTERS MORE THAN THE YAML ──────────
+#   Measured on 22 Aug: the session branch is 166 commits ahead of main, and 39 of those
+#   commits were made in a single day. A trigger on that branch would have deployed to
+#   production THIRTY-NINE TIMES, most of them mid-thought.
+#
+#   So the trigger must NOT watch the branch that is committed to daily. Two sane choices:
+#
+#     deploy branch   `git push anutech HEAD:deploy` when you actually want to ship.
+#                     Committing and shipping stay separate decisions, and nothing about
+#                     the day-to-day workflow changes. Recommended while one person works
+#                     on a long-lived branch.
+#
+#     main            The normal answer for a team, and the right end state — but it needs
+#                     those 166 commits merged into main first, which is a real decision
+#                     and not a setup step.
+#
+# ─── THE BUILD CONTEXT IS production/, NOT THE REPO ROOT ─────────────────────
+#   The Dockerfile lives in production/. Pointing Cloud Build at the repo root makes it fail
+#   to find a Dockerfile and silently fall back to buildpacks, which then errors with "no
+#   buildpack groups passed detection" — the same trap production/deploy.sh guards against
+#   in its pre-flight.
+#
+# ─── THE PUBLIC VAPID KEY IS BAKED AT BUILD TIME, NOT SUPPLIED AT RUNTIME ────
+#   It is already an ENV line inside production/Dockerfile, and it has to be: NEXT_PUBLIC_*
+#   is substituted into the client bundle by `next build`, so a value provided only to the
+#   running container arrives as undefined in the browser. Nothing to add here — but do not
+#   "tidy" it out of the Dockerfile into this file's substitutions, or push will silently
+#   report itself as unconfigured to every user.
+
+steps:
+  # 1. Build the image, exactly as deploy.sh does today.
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    dir: production
+    args:
+      - build
+      - --tag=$_IMAGE:$SHORT_SHA
+      - --tag=$_IMAGE:latest
+      # Reuse the previous image's layers so a typical build is minutes, not tens of them.
+      - --cache-from=$_IMAGE:latest
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, $_IMAGE]
+
+  # 2. Deploy. Pinned to the commit's own tag rather than :latest, so the revision can
+  #    always be traced back to a SHA — "which build is live" should never be a guess.
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - resellersos
+      - --image=$_IMAGE:$SHORT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --quiet
+    # NOTE: no --set-env-vars here, deliberately. That flag REPLACES the whole set, and this
+    # service carries eleven — including SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET and
+    # VAPID_PRIVATE_KEY. Omitting it entirely means `run deploy` keeps what is already
+    # configured. If a variable ever needs adding, do it with
+    # `gcloud run services update --update-env-vars`, never --set-env-vars.
+
+substitutions:
+  _REGION: asia-south1
+  # The same Artifact Registry path the current revision already runs from.
+  _IMAGE: asia-south1-docker.pkg.dev/resellsubsos-prod/cloud-run-source-deploy/resellersos
+
+images:
+  - $_IMAGE:$SHORT_SHA
+  - $_IMAGE:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  # The Next.js build is memory-hungry; the default machine has run out on this project's
+  # size of app before.
+  machineType: E2_HIGHCPU_8
+
+timeout: 1800s
