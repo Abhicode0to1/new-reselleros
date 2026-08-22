@@ -5,6 +5,54 @@
 
 ## Active
 
+---
+
+# 🔵 HANDOFF — 22 Aug 2026 shaam. Naya session yahi se shuru karo.
+
+> **Is block se "kya karna hai" lo. "Kyun" par bharosa mat karo** — 19 Aug ko is file ke
+> teen me se teen kaaran galat nikle the aur ek me ₹8,165 chhupa tha. Har wajah dobara naapo.
+
+**Branch:** `session/money-spine-hardening-jun1` · **HEAD:** `da19166` · working tree saaf.
+
+### 🔴 Sabse pehle: ek commit live par NAHI hai
+
+`da19166` `anutech/deploy` par push nahi hua. Deploy ab Cloud Build trigger se hota hai:
+
+```
+git push anutech HEAD:deploy
+```
+
+### Aaj kya hua (sab naapa hua, commit ke saath)
+
+| | |
+|---|---|
+| `069617e` | Monthly subscriptions renew hote hain — ladder ab `term_months` se chunti hai, `billing_cycle` se nahi |
+| `8f043d1` | Split-billing cron schedule hua (`subscription_billings` me 0 row thi — kabhi chala hi nahi tha) |
+| `da19166` | Rebuild path MRR ka dasva hissa deta tha; ab `lib/subscriptions/rebuild-term.ts` me ek jagah, 10 test |
+
+**Backfill ho chuka:** `Q-TEST-2026-27-0009` → subscription `c398e832`, MRR ₹32,400, term 1,
+renewal 2026-08-27. Verify alag run me kiya gaya.
+
+### Khule faisle — ye Pardeep ke hain, khud mat kar dena
+
+1. **`Q-TEST-2026-27-0008` (ITBUZZ, ₹2,54,361) ka backfill Pardeep ne mana kiya** — "test data hai".
+   Chhedna mat jab tak wo dobara na kahein.
+2. **24 Aug 09:00 IST ko `ankit@xyz.com` ko asli renewal email jayega** — `RESEND_API_KEY`
+   Cloud Run par live hai aur renewals cron seedha Resend use karta hai. Rokna ho to us ek
+   subscription ka `auto_renew` band karna kaafi hai. Pardeep ne abhi tak faisla nahi diya.
+3. **`INBOUND_EMAIL_SECRET` transcript me poora chhap gaya** (22 Aug). Rotate karna hai ya
+   nahi — Pardeep ka faisla.
+
+### Goal ka doc
+
+[docs/ROAD-TO-TEN.md](docs/ROAD-TO-TEN.md) — 22 Aug ko live DB par naap kar likha. §1 me wo
+teen cheezein darj hain jo maine yaad se galat batayi thi aur code ne mana kar diya.
+
+Monthly 10/10 ke liye jo baaki hai: quarterly/half-yearly cadence, monthly renewal ka email
+template, aur ek asli monthly cycle apni aankh se chalta hua dekhna.
+
+---
+
 ### ⌨️ Tooltip me keyboard shortcut (21 Aug 2026) — ✅ DONE, local par verify
 
 `<TooltipContent shortcut="report-bug">` — sirf **id** deni hai, keys `SHORTCUTS` se aati hain. Prop ka type registry se nikalta hai, to **galat id compile hi nahi hoti** (`"report-bugg"` par tsc ne khud sahi naam suggest kiya). Commit `e06401f`.
@@ -19,7 +67,16 @@
 
 > **Ek seekh likh rakhi hai:** registry `as const` karne se `keys` bhi literal tuple ban gaya aur har purana `keys.includes(str)` toot gaya. Har call site par cast lagana matlab **ek type-safety ka faayda barah chhote chhed** me badalna — to const tuple andar rakha, `SHORTCUTS` widened export kiya.
 
-### 🔴 gcloud ka auth EXPIRE ho chuka hai — deploy se pehle isko theek karna padega
+### ✅ ~~gcloud ka auth EXPIRE ho chuka hai~~ — 22 Aug ko khatam, ab trigger se deploy hota hai
+
+> **PURANA. Neeche ka sab 21 Aug ka hai aur ab laagu nahi hota.** 22 Aug ko Cloud Build
+> GitHub trigger lag gaya (`cloudbuild.yaml`, repo root). Deploy ab `git push anutech
+> HEAD:deploy` hai — na `gcloud auth login`, na `deploy.sh`, na koi key jo expire ho.
+> Purana text neeche isliye chhoda hai ki 21 Aug ka record na toote.
+
+<details><summary>21 Aug ka purana note</summary>
+
+### gcloud ka auth EXPIRE ho chuka hai — deploy se pehle isko theek karna padega
 
 21 Aug: `gcloud run services describe` ne `Reauthentication failed. cannot prompt during non-interactive execution` diya. Yaani **main deploy nahi kar sakta** jab tak ye theek na ho, aur live revision bhi query nahi kar sakta (isliye "live par kaun sa build hai" ye TASKS.md ke 19 Aug ke record se maana ja raha hai, naapa hua nahi).
 
@@ -30,6 +87,8 @@ gcloud auth login
 ```
 
 Account pehle se do hain, active `pardeep@anutech.in` (doosra `Pardeep@exceltechnologies.in` — purana). Deploy script `production/deploy.sh` hai.
+
+</details>
 
 **Ye ab zyada maayne rakhta hai** kyunki tester chalu ho gaya hai: aaj ke chaar guard (invoice ka GST guard dono raaste, tooltip shortcut) live par nahi hain — tester ke liye wo cheezein maujood hi nahi hain.
 
