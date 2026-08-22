@@ -44,6 +44,10 @@
 -- scales linearly with it. A guard that is missing at 9 invoices is a data-repair job
 -- at 900.
 
+-- Transactional DDL, so a failure leaves nothing half-applied. scripts/apply-migration.mjs
+-- also splits on these markers (`^begin;` … `^commit;`) to send one batch at a time.
+begin;
+
 CREATE OR REPLACE FUNCTION public.record_payment(p_quote_id text, p_amount integer, p_method text, p_reference text, p_notes text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -607,3 +611,5 @@ begin
 end;
 $function$
 ;
+
+commit;
