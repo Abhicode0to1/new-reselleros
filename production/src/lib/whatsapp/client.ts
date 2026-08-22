@@ -18,6 +18,7 @@
 
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
+import { WhatsAppNotConfiguredError } from "./send-failure";
 import type {
   WhatsAppMessageStatus,
   WhatsAppMessageType,
@@ -111,7 +112,7 @@ export async function sendWhatsApp(opts: {
 }): Promise<WhatsAppSendResult> {
   const creds = await resolveWhatsAppCreds(opts.tenantId);
   if (!creds) {
-    throw new Error("WhatsApp credentials are not configured for this workspace. Settings → Integrations → WhatsApp Business.");
+    throw new WhatsAppNotConfiguredError("WhatsApp credentials are not configured for this workspace. Settings → Integrations → WhatsApp Business.");
   }
 
   const admin = createAdminClient();

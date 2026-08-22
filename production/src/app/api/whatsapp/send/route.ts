@@ -22,6 +22,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendWhatsApp } from "@/lib/whatsapp/client";
+import { classifySendFailure } from "@/lib/whatsapp/send-failure";
 import { renderQuotePDF } from "@/lib/pdf";
 import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
 import { quoteAmountDue } from "@/lib/payments/amount-due";
@@ -210,8 +211,16 @@ export async function POST(req: NextRequest) {
       status: result.status,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("[/api/whatsapp/send] failed:", msg);
-    return NextResponse.json({ ok: false, error: msg }, { status: 502 });
+    /* Not one catch-all any more. A workspace that has not set up WhatsApp is the
+     * caller's to fix (409, warn); Meta being unwell is ours (502, error). Lumping
+     * them together put a settings page nobody filled in into the same error bucket
+     * as a lost nightly backup — see lib/whatsapp/send-failure.ts. */
+    const { status, level, message } = classifySendFailure(e);
+    if (level === "warn") {
+      console.warn("[/api/whatsapp/send] not configured:", message);
+    } else {
+      console.error("[/api/whatsapp/send] failed:", message);
+    }
+    return NextResponse.json({ ok: false, error: message }, { status });
   }
 }

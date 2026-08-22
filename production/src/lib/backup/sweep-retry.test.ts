@@ -147,8 +147,8 @@ describe("runSweepWithRetry", () => {
 
   it("treats a thrown error as a failed attempt, not a crash", async () => {
     /* supabase-js rejects rather than resolving when the transport itself dies, and a
-       cron that throws returns Cloud Run's own 500 with no log line of ours — which is
-       how the 12 Aug /api/whatsapp/send 502 came to have no explanation. */
+       cron that throws returns Cloud Run's own 500 with no log line of ours — so the
+       throw has to be caught here or the failure arrives with no explanation at all. */
     const attempt = vi.fn<() => Promise<SweepAttempt>>()
       .mockRejectedValueOnce(new Error("fetch failed"))
       .mockResolvedValueOnce(OK);

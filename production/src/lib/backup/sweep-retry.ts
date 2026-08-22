@@ -145,10 +145,9 @@ const realSleep = (ms: number) => new Promise<void>((r) => { setTimeout(r, ms); 
  * Run the sweep, retrying only the failures on the retryable list.
  *
  * `attempt` may reject as well as resolve — supabase-js throws when the transport
- * itself dies, and an unhandled throw in a cron route produces Cloud Run's own
- * 500 with none of our log lines, which is exactly why the 12 Aug
- * /api/whatsapp/send 502 has no explanation to this day. A throw is treated as a
- * failed attempt and classified the same way.
+ * itself dies, and an unhandled throw in a cron route produces Cloud Run's own 500
+ * with none of our log lines. A throw is treated as a failed attempt and classified
+ * the same way.
  *
  * A PARTIAL sweep (`data.failed > 0`) is a success as far as this function is
  * concerned and is handed straight back. It must never be retried: the sweep

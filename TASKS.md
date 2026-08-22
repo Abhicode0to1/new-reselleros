@@ -7,20 +7,58 @@
 
 ---
 
-# 🔵 HANDOFF — 22 Aug 2026 shaam. Naya session yahi se shuru karo.
+# 🔵 HANDOFF — 22 Aug 2026 raat. Naya session yahi se shuru karo.
 
 > **Is block se "kya karna hai" lo. "Kyun" par bharosa mat karo** — 19 Aug ko is file ke
 > teen me se teen kaaran galat nikle the aur ek me ₹8,165 chhupa tha. Har wajah dobara naapo.
 
-**Branch:** `session/money-spine-hardening-jun1` · **HEAD:** `da19166` · working tree saaf.
+**Branch:** `session/money-spine-hardening-jun1` · deploy **`anutech/deploy`** se hota hai,
+`main` se NAHI (`cloudbuild.yaml` ka trigger wahi branch dekhta hai; session branch main se
+166 commit aage hai).
 
-### 🔴 Sabse pehle: ek commit live par NAHI hai
+### ✅ Deploy ka bakaya khatam — live ab HEAD par hai
 
-`da19166` `anutech/deploy` par push nahi hua. Deploy ab Cloud Build trigger se hota hai:
+ROAD-TO-TEN §5 step 1 ho gaya. Us doc ka **kaaran purana nikla**: usne likha tha ki 21–22 Aug
+ka UI live par nahi hai, par live revision ka image tag pehle se `8f043d1` tha. `gcloud` ka
+auth bhi chal raha hai — 21 Aug ka "expired" note laagu nahi hota.
 
-```
-git push anutech HEAD:deploy
-```
+Raasta: `git push anutech HEAD:deploy` → Cloud Build trigger → Cloud Run.
+
+### 🔧 Aaj ke teen fix (self-healing loop se) — teeno naape hue
+
+| Commit | Kya theek hua | Saboot |
+|---|---|---|
+| `79996f9` | Nightly backup transient failure par retry karta hai | 18 test · mutation se 8 red · **live par sweep chalaya: 3 tenants, 1,093,631 bytes** |
+| `8b8d6c7` | Advance ki visibility naam ke substring se tay nahi hoti | 20 test · mutation se 5 red |
+| (teesra) | WhatsApp ka config error 502 nahi, 409 hai | 7 test · mutation se 3 red |
+
+**Backup ka asli nuksaan:** `backup.snapshots` me automated rows 17, 18, 19, 20 aur 22 Aug ki
+hain — **21 Aug ki ek bhi nahi**. Us raat `JWT issued at future` aaya, kisi ne retry nahi kiya,
+kisi ko bataya nahi gaya. Chhe me se ek raat, free plan par jahan PITR nahi hai.
+
+**Advance ka bug latent tha, live leak nahi:** poore DB me ek hi advance row hai (`Darshan`,
+₹2,000). 10 asli user par purana aur naya filter trace kiya — dono ka jawab same. Jo hataya wo
+source me likha hua standing grant tha, jo doosre bande ka advance aate hi phat jata.
+
+### 🟡 Do cheezein naapi gayin aur jaan-boojh kar theek NAHI ki gayin
+
+- **`SENTRY_DSN` Cloud Run par set nahi hai.** Teen sentry config file hain, production me init
+  hote hi nahi — yaani error tracking **band** hai. Aaj ke teeno bug Cloud Run ke raw logs se
+  mile, Sentry se nahi. Ek env var ka kaam hai, par production env badalna faisla hai:
+  `gcloud run services update --update-env-vars` use karna, **`--set-env-vars` kabhi nahi** —
+  wo service ke saare gyarah var mita deta hai (`cloudbuild.yaml` me wahi likha hai).
+- **`expenses` me employee ka koi link column nahi hai** — isi liye "ye advance kiska hai" naam
+  se tay hota hai, aur ek hi first name wale do employee alag nahi kiye ja sakte. Asli fix ek id
+  column hai: migration + faisla. Tab tak module header me stopgap likha hua hai.
+
+### 📓 AGENTS.md me naya section
+
+`# Learned Guidelines` — **L1–L6**, aaj ke teen bug se nikle niyam: retry/alert har cron par ·
+pehle classify phir retry · jo retry jaan-boojh kar mana kiya · naam ke substring se
+authorization mat karo · ek `as any` poore insert ka checking band kar deta hai · config error
+5xx nahi hota. Naya session ise padh kar shuru kare.
+
+### Purana record (17–22 Aug) — neeche waisa hi hai
 
 ### Aaj kya hua (sab naapa hua, commit ke saath)
 
@@ -40,8 +78,19 @@ renewal 2026-08-27. Verify alag run me kiya gaya.
 2. **24 Aug 09:00 IST ko `ankit@xyz.com` ko asli renewal email jayega** — `RESEND_API_KEY`
    Cloud Run par live hai aur renewals cron seedha Resend use karta hai. Rokna ho to us ek
    subscription ka `auto_renew` band karna kaafi hai. Pardeep ne abhi tak faisla nahi diya.
+   **22 Aug raat ko DB se dobara confirm kiya — ab bhi armed hai:** subscription `c398e832`,
+   `auto_renew = true`, renewal `2026-08-27`, `reminder_count = 0`. Aur ek baat jo pehle darj
+   nahi thi: iska `tenant_id` **`7e57e57e-…0001` hai, yaani ZZ TESTING SANDBOX** — nakli data,
+   par Resend key asli. 22 Aug ka deploy is behaviour ko **nahi** badalta (`send-now` sirf
+   manual button hai; nightly cron ke paas `term_months` pehle se tha).
 3. **`INBOUND_EMAIL_SECRET` transcript me poora chhap gaya** (22 Aug). Rotate karna hai ya
    nahi — Pardeep ka faisla.
+4. **Backup sweep ko per-night idempotent banana** (ek migration). Ye scheduler par
+   `--max-retry-attempts` lagane ka **enabler** hai, jo maine jaan-boojh kar nahi lagaya:
+   `/api/cron/backup` partial failure par bhi 500 deta hai aur Cloud Scheduler dono me farak
+   nahi kar sakta — to bahar ka retry un tenants ke duplicate snapshot likhta jinka ban chuka
+   hai, aur `backup._take` sirf 30 rakhta hai, yaani asli purane restore point shelf se gir
+   jaate. Poori wajah AGENTS.md **L3** me darj hai.
 
 ### Goal ka doc
 

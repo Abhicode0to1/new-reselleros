@@ -365,3 +365,37 @@ the other twelve fields in the same object.
 fights you, **fix the type** — the missing field took one line in
 `lib/supabase/database.types.ts`, and the route then type-checked clean with no casts at all.
 A missing field in the generated types is a bug in the types, not a reason to opt out of them.
+
+## L6. A config problem is not a server error — one catch-all makes the 5xx log unreadable
+*22 Aug 2026, from `/api/whatsapp/send`.*
+
+The route mapped every throw to `502` in a single catch, so a workspace that had simply
+not filled in its WhatsApp credentials landed in Cloud Run's **ERROR** bucket:
+
+```
+502  [/api/whatsapp/send] failed: WhatsApp credentials are not configured for this
+     workspace. Settings → Integrations → WhatsApp Business.
+```
+
+Production had **four** 5xx events in the fortnight to 22 Aug 2026, and this was one of
+them — a settings page nobody filled in, sitting in the same bucket as a lost nightly
+backup. That is the real cost: the error log is the one signal anybody scans, and every
+non-error in it makes the next reader trust it less. Finding the backup gap meant reading
+past this.
+
+Also: **502 means "retry, the upstream is unwell"** and nothing here would change on a
+retry — Meta was never called. The caller cannot fix a 502; it can fix a 409, and the
+message already said where to go.
+
+**The rules:**
+- **Choose the status by who can fix it.** Tenant configuration → 4xx (this repo uses
+  **409** for "your workspace state conflicts with this request" — see
+  `api/integrations/email-provider`). A missing *deployment* secret is genuinely ours → 503,
+  which is what the cron routes correctly use. Upstream actually failing → 502.
+- **`console.error` is for faults.** A config notice is `console.warn`, or the error bucket
+  becomes a feed.
+- **One catch-all per route is a smell.** Classify, then act — the same shape as L2,
+  `lib/whatsapp/send-failure.ts` and `lib/email/gmail-transport.ts`.
+- **Do not key the decision on `instanceof` alone.** It stops holding across a re-throw or a
+  structured clone while the message survives, and a status code that depends on how the
+  error travelled is a status code that will be wrong one day.
