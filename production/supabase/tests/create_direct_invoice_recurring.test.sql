@@ -1,42 +1,77 @@
--- Rolled-back test for the recurring option on create_direct_invoice (0159).
+-- Regression test for the recurring option on create_direct_invoice (0159).
 --
--- Proves the one-time / recurring choice drives whether a subscription is created
--- when the direct invoice is later paid:
---   RECURRING (p_recurring = true)  → quote.is_one_off = false → paying it creates
---                                     a yearly subscription.
---   ONE-TIME  (p_recurring = false) → quote.is_one_off = true  → paying it creates
---                                     NO subscription.
+-- Proves the one-time / recurring choice drives whether paying the invoice creates a
+-- subscription:
+--   RECURRING (p_recurring = true)  → quotes.is_one_off = false → paying it creates a
+--                                     yearly subscription.
+--   ONE-TIME  (p_recurring = false) → quotes.is_one_off = true  → paying it creates NONE.
 --
--- Runs as service_role inside a DO block that RAISES → full rollback.
+-- ─── REWRITTEN 22 Aug 2026 ──────────────────────────────────────────────────
+-- It borrowed a live customer (`53db44e6…`, since deleted) and did
+-- `update customers set country='India'` on that real row, so it both broke and wrote to
+-- ANUTECH's books; and it asserted nothing, ending `raise exception 'TESTRESULT >> %'` with
+-- the expected values in a header comment. See AGENTS.md L11.
 --
--- Expected:
---   RECURRING: one_off=f subs_after_pay=1
---   ONE-TIME:  one_off=t subs_after_pay=0
+-- ⚠️ THE ONE-TIME HALF IS EXPECTED TO FAIL RIGHT NOW, and that is the point.
+--    `record_payment` does not contain the string `is_one_off` at all — migration 0157's
+--    guard is gone — so paying a one-time direct invoice creates a subscription anyway. This
+--    file reaches that conclusion independently of
+--    `record_payment_one_off_guard.test.sql`, which found it the same evening from the other
+--    direction. Two tests, one missing guard, neither of them run for months.
+--
+--    Restoring the guard is a migration and a money-code decision. Making this test agree
+--    with the code instead would retire the guard in silence — see AGENTS.md L8.
+
+begin;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+insert into public.tenants (id, name, email, state_code, doc_code)
+  values ('c0de0002-0000-4000-8000-000000000001', 'DIRECT INVOICE RECURRING TEST', 'dir@example.in', '07', 'DIR1');
+
+insert into public.customers (id, tenant_id, name, country, state_code, state)
+  values ('c0de0002-0000-4000-8000-0000000000c1', 'c0de0002-0000-4000-8000-000000000001',
+          'AMC Cust', 'India', '07', 'Delhi');
 
 do $$
 declare
-  v_cust uuid := '53db44e6-6e90-4fec-8871-8d2288393a2a';
-  v_li jsonb := '[{"name":"Website AMC","qty":1,"rate":120000}]'::jsonb;   -- subtotal 120000, gross 141600 @18%
-  r_rec record; r_one record;
-  v_rec_subs int; v_one_subs int;
-  v_rec_oneoff boolean; v_one_oneoff boolean;
-  v_msg text := '';
+  v_cust uuid := 'c0de0002-0000-4000-8000-0000000000c1';
+  -- subtotal 120000, gross 141600 @ 18%
+  v_li jsonb := '[{"name":"Website AMC","qty":1,"rate":120000}]'::jsonb;
+  r record; n int; v_oneoff boolean;
 begin
-  perform set_config('request.jwt.claims','{"role":"service_role"}',true);
-  perform set_config('request.jwt.claim.role','service_role',true);
-  update customers set country='India' where id=v_cust;
+  -- ── RECURRING: the flag is false, and paying it DOES create a subscription ──
+  select * into r from public.create_direct_invoice(v_cust, v_li, 'rec', true);
 
-  select * into r_rec from create_direct_invoice(v_cust, v_li, 'rec', true);
-  select is_one_off into v_rec_oneoff from quotes where id=r_rec.quote_id;
-  perform record_payment(r_rec.quote_id, 141600, 'upi', 'REF-REC-1', null);
-  select count(*) into v_rec_subs from subscriptions where quote_id=r_rec.quote_id;
-  v_msg := v_msg || format('RECURRING: one_off=%s subs_after_pay=%s (expect f/1) | ', v_rec_oneoff, v_rec_subs);
+  select is_one_off into v_oneoff from public.quotes where id = r.quote_id;
+  if v_oneoff is not false then
+    raise exception 'FAIL recurring: quote.is_one_off is %, expected false', v_oneoff;
+  end if;
 
-  select * into r_one from create_direct_invoice(v_cust, v_li, 'one', false);
-  select is_one_off into v_one_oneoff from quotes where id=r_one.quote_id;
-  perform record_payment(r_one.quote_id, 141600, 'upi', 'REF-ONE-1', null);
-  select count(*) into v_one_subs from subscriptions where quote_id=r_one.quote_id;
-  v_msg := v_msg || format('ONE-TIME: one_off=%s subs_after_pay=%s (expect t/0)', v_one_oneoff, v_one_subs);
+  perform public.record_payment(r.quote_id, 141600, 'upi', 'REF-REC-1', null);
+  select count(*) into n from public.subscriptions where quote_id = r.quote_id;
+  if n <> 1 then
+    raise exception 'FAIL recurring: expected 1 subscription after payment, got %', n;
+  end if;
 
-  raise exception 'TESTRESULT >> %', v_msg;
+  -- ── ONE-TIME: the flag is true, and paying it must create NOTHING ──────────
+  select * into r from public.create_direct_invoice(v_cust, v_li, 'one', false);
+
+  select is_one_off into v_oneoff from public.quotes where id = r.quote_id;
+  if v_oneoff is not true then
+    raise exception 'FAIL one-time: quote.is_one_off is %, expected true', v_oneoff;
+  end if;
+
+  perform public.record_payment(r.quote_id, 141600, 'upi', 'REF-ONE-1', null);
+  select count(*) into n from public.subscriptions where quote_id = r.quote_id;
+  if n <> 0 then
+    /* A ₹1,20,000 AMC billed once, now sitting in MRR as if it recurred, and in the renewal
+       cron ready to chase the customer next year for something they bought outright. */
+    raise exception 'FAIL one-time: % subscription(s) created for a one-time invoice, expected 0 — migration 0157 guard is missing from record_payment', n;
+  end if;
+
+  raise notice 'PASS: recurring creates a subscription on payment, one-time creates none';
 end $$;
+
+select 'PASS' as create_direct_invoice_recurring;
+
+rollback;

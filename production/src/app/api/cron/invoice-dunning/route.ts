@@ -27,6 +27,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { decideDunning, dunningMessage, dunningRank, type DunningStep } from "@/lib/invoices/dunning";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
+import { dunningLogStatus, reachedNobody } from "@/lib/invoices/dunning-log-status";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { rupee, formatDate } from "@/lib/utils";
 
@@ -39,6 +40,17 @@ interface DunningResult {
   email_mode: "real" | "stub";
   considered: number;
   emails_sent: number;
+  /**
+   * Steps that reached NOBODY because the customer has no email on file.
+   *
+   * Reported separately from `emails_sent` because the two were previously
+   * indistinguishable in the log: `invoice_dunning_log.status` was set from
+   * `isEmailConfigured()`, so a step with no recipient was recorded as "sent". Two such
+   * rows exist for INV-3BBD-2026-27-0002 (19 and 21 Aug 2026) and no email was sent for
+   * either. A missing customer address is the reseller's to fix, and they cannot fix what
+   * the cron reports as done.
+   */
+  no_recipient: number;
   escalations: number;
   suspends: number;
   skipped: number;
@@ -70,7 +82,7 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
     ran_at: asOf.toISOString(),
     dry_run: dryRun,
     email_mode: isEmailConfigured() ? "real" : "stub",
-    considered: 0, emails_sent: 0, escalations: 0, suspends: 0, skipped: 0,
+    considered: 0, emails_sent: 0, no_recipient: 0, escalations: 0, suspends: 0, skipped: 0,
     details: [], errors: [],
   };
 
@@ -199,6 +211,11 @@ automatically. Decide whether to call them, agree a plan, or pause the service.`
         result.escalations++;
       }
 
+      const logStatus = dunningLogStatus({
+        recipient: to, hasMessage: Boolean(msg), emailConfigured: isEmailConfigured(),
+      });
+      if (reachedNobody(logStatus)) result.no_recipient++;
+
       await supabase.from("invoice_dunning_log").insert({
         tenant_id: inv.tenant_id,
         invoice_id: inv.id,
@@ -207,7 +224,11 @@ automatically. Decide whether to call them, agree a plan, or pause the service.`
         action_taken: decision.action,
         recipient_email: to,
         subject: msg?.subject ?? null,
-        status: isEmailConfigured() ? "sent" : "stubbed",
+        /* Truthful, not optimistic. See lib/invoices/dunning-log-status.ts: this used to be
+           isEmailConfigured(), which answers whether Resend is set up rather than whether
+           THIS message reached anybody — so a step with no customer address was logged as
+           "sent". */
+        status: logStatus,
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

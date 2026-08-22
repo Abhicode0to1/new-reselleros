@@ -563,3 +563,37 @@ rows (L7).
 - **Report-style tests are not tests.** `raise exception 'TESTRESULT >> %'` with expected values
   in a header comment means a regression prints a slightly different sentence and passes. Assert,
   then finish with a visible `select 'PASS'`.
+
+## L12. A status field must answer the question its name asks
+*22 Aug 2026, from `invoice_dunning_log`.*
+
+```ts
+status: isEmailConfigured() ? "sent" : "stubbed",
+```
+
+`isEmailConfigured()` answers *"is Resend set up on this server"*. The column is called
+`status` and is read as *"did this message reach the customer"*. Two different questions, and
+the wrong one was cheaper to ask.
+
+The result, on real rows: INV-3BBD-2026-27-0002 (SAHAKAR INFRACON PROJECTS PRIVATE LIMITED,
+₹55,885) has a `reminder` step logged on 19 Aug and a `retry` on 21 Aug, both `status = 'sent'`,
+both `recipient_email = NULL`. **Nothing was sent** — the route only sends when it has an
+address (`if (to && msg)`), and that customer has no `contact_email`.
+
+This is §2 in its most expensive form, because **the wrong value is reassuring**. The reseller
+reads "reminder sent, retry sent, still unpaid" and concludes the customer is stalling. The
+ladder advances on those rows too, so the invoice marches toward an escalation that says "the
+customer has had the full reminder sequence" about somebody who was never contacted. A missing
+customer email is an ordinary state; it only needs to be *visible*, because it is the
+reseller's to fix and nobody else's.
+
+**The rules:**
+- **Log what happened, not what was possible.** Derive a status from the outcome of the action,
+  never from the configuration that would have permitted it.
+- **Check the specific before the general.** `lib/invoices/dunning-log-status.ts` looks at the
+  recipient first and the provider second, because a configured provider says nothing about a
+  message with nowhere to go. Getting that order wrong *is* the bug.
+- **"Nothing to do" and "done" must not share a value.** They need separate states —
+  `no_recipient` here — or the difference is unrecoverable from the audit trail afterwards.
+- **Count the silent cases and surface them.** The cron now returns `no_recipient`, so a run
+  that reached nobody cannot report itself as a normal night.

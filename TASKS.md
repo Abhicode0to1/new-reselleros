@@ -76,6 +76,51 @@ aging bucket (fresh/warn/urgent/overdue), total, checkbox aur bulk generate.
 Pardeep ka faisla (22 Aug): **invoice automatic nahi banegi** — sirf dikhegi, aur banana insaan
 tay karega. Isliye koi code change nahi kiya. Button dabana baaki hai, 30 din ke andar.
 
+### 🔴🔴 SABSE ZAROORI: har invoice usi din due ho jati hai, aur ek asli customer chase hua
+
+**Naapa hua:** `generate_invoice` due date aise banata hai —
+`v_today + coalesce(v_quote.payment_terms_days, 0)`. Fallback **0** hai, **30** nahi. Migration
+0163 net-30 kehta hai aur test bhi wahi assert karta hai (par wo test CI me nahi hai).
+
+**Nateeja:** 53 quotes me `payment_terms_days` null hai, aur **DB ki saari 41 invoices me
+`due_date = invoice_date` hai.** Yaani is business ki har invoice bante hi due thi.
+
+**Aur isse ek asli customer chase hua:** `INV-3BBD-2026-27-0002` — SAHAKAR INFRACON PROJECTS
+PRIVATE LIMITED, ₹55,885, 18 Aug ko bani. `invoice_dunning_log` me 19 Aug par "reminder"
+(`days_overdue = 1`) aur 21 Aug par "retry" (`days_overdue = 3`).
+
+**Migration likh di hai, apply NAHI ki** —
+[20260822190000_invoice_due_date_net30_fallback.sql](production/supabase/migrations/20260822190000_invoice_due_date_net30_fallback.sql).
+Body live function se `pg_get_functiondef` se li gayi hai aur **theek ek expression** badla hai
+(0 → 30); haath se dobara likhna wahi galti hoti jisse `record_payment` ke teen guard gaye.
+Apply karna aapka faisla hai kyunki ye tay karta hai ki customer ko kitne din milte hain:
+
+```
+cd production
+node scripts/apply-migration.mjs supabase/migrations/20260822190000_invoice_due_date_net30_fallback.sql
+```
+
+### ✅ Aur usi khoj me ek doosra bug — jo maine theek kar diya
+
+`invoice_dunning_log` ki wo do rows `status = 'sent'` kehti hain, par **koi email nahi gayi** —
+us customer ka `contact_email` null hai aur route sirf address hone par bhejta hai. Status
+`isEmailConfigured() ? 'sent' : 'stubbed'` se aata tha, yaani "Resend set up hai kya" ka jawab
+"customer tak pahuncha kya" ki jagah likha ja raha tha.
+
+Ye zyada khatarnak hai kyunki **galat value tasalli deti hai**: reseller padhta hai "do baar
+yaad dilaya, phir bhi paisa nahi aaya" aur samajhta hai customer taal raha hai. Ladder bhi aage
+badh jata hai, to invoice "customer ko poora reminder sequence mil gaya" wale escalation ki taraf
+badhti hai — ek aise bande ke baare me jise kabhi kuch nahi bheja gaya.
+
+Fix: [dunning-log-status.ts](production/src/lib/invoices/dunning-log-status.ts) — pehle recipient
+dekhta hai, phir provider; naya status `no_recipient`; aur cron ke response me `no_recipient`
+counter, taaki jis raat kisi tak kuch na pahuncha wo raat normal na dikhe. **9 test, mutation se
+5 red.** AGENTS.md **L12**.
+
+> Ek sudhaar jo maine session me kiya: pehle maine kaha tha "do dunning email sach me bheji
+> gayi". Wo galat tha — log ne wahi jhooth bola tha jo ab theek hua hai. Code padhne par pata
+> chala ki kuch nahi bheja gaya.
+
 ### 🔴 Sandbox tenant ka naam badal gaya hai — ab "Delfos Technologies"
 
 Naapa hua, 22 Aug: tenant `7e57e57e-0000-4000-8000-000000000001` ka `name` ab
@@ -166,7 +211,7 @@ jayega**.
 
 ### 📓 AGENTS.md me naya section
 
-`# Learned Guidelines` — **L1–L11**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
+`# Learned Guidelines` — **L1–L12**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
 pehle classify phir retry · jo retry jaan-boojh kar mana kiya · naam ke substring se
 authorization mat karo · ek `as any` poore insert ka checking band kar deta hai · config error
 5xx nahi hota · aur **L7**: isolation ka zero-assertion doosre tenant par scoped hona chahiye,
