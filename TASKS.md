@@ -51,6 +51,31 @@ source me likha hua standing grant tha, jo doosre bande ka advance aate hi phat 
   se tay hota hai, aur ek hi first name wale do employee alag nahi kiye ja sakte. Asli fix ek id
   column hai: migration + faisla. Tab tak module header me stopgap likha hua hai.
 
+### 🧪 Tester ke reports — chaar naape, teen band, ek baaki
+
+Loop ne `feedback` table bhi scan kiya. **Teeno "fix" pehle se ho chuke the** — koi naya code
+nahi likha, sirf saboot dhoonda aur `resolution_note` me darj kiya:
+
+| Report | Asli haal |
+|---|---|
+| "Paid hone k bd bhi subscription nhi bna" (`Q-TEST-2026-27-0009`) | ✅ band — us quote par ab 1 payment, 1 subscription (`c398e832`), 1 invoice. `85a5d67`+`069617e`+`da19166` ne theek kiya |
+| "Yaha domain automatically fill nhi hua" | ✅ band — `bb8cdec` (`lib/quotes/payment-domain.ts`), live revision ka ancestor, 6 test pass |
+| "NOT JENERATED INVIOCE" (17 Aug) | ✅ band — **reporter sahi tha**: 17 Aug ko accepted+paid quote par koi money action hi nahi tha. Agle din `0df1e03` ne theek kiya |
+| "Payment record kar di lekin subscription nhi bna" (`/subscriptions`, 08:04) | ⏳ **DB me theek hai, par row band nahi hui** — classifier ne wo ek UPDATE rok diya. Saboot: poore DB ke 51 quotes me ek bhi paid quote bina subscription nahi (control: 5 paid, 5 me subscription). Bas `feedback` row par `status='fixed'` + note lagana baaki hai |
+
+### 💰 5 paid quotes par invoice baaki — ₹6,88,827 (code ka kaam NAHI)
+
+Live ANUTECH tenant me 36 accepted+paid quotes hain, 5 par invoice nahi. **Ye bug nahi hai** —
+`record_payment` jaan-boojh kar invoice nahi banata; wo ek button hai. Aur wo surface **pehle se
+maujood hai aur achha hai**: `/invoices` par "pending generation" card, CGST §13(2)/Rule 47 ke
+aging bucket (fresh/warn/urgent/overdue), total, checkbox aur bulk generate.
+
+**Aging naap li — koi deadline paar nahi hui:** sabse purana 5 din ka (`Q-ADPL-2026-27-0002`,
+₹4,39,994, first advance 17 Aug), baaki 0–1 din. 30-din ki limit se bahut andar.
+
+Pardeep ka faisla (22 Aug): **invoice automatic nahi banegi** — sirf dikhegi, aur banana insaan
+tay karega. Isliye koi code change nahi kiya. Button dabana baaki hai, 30 din ke andar.
+
 ### 📓 AGENTS.md me naya section
 
 `# Learned Guidelines` — **L1–L6**, aaj ke teen bug se nikle niyam: retry/alert har cron par ·
