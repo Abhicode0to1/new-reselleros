@@ -60,3 +60,20 @@ export function checkNewPassword(password: string, confirm?: string): PasswordPr
   }
   return null;
 }
+
+/**
+ * Changing a password you already know: the new one must be acceptable AND different.
+ *
+ * The new password is judged FIRST, deliberately. Somebody who typed a weak new password
+ * should be told that, not sent hunting for a typo in the old one — and neither answer
+ * leaks anything, because the rules are public and the account is already proved by the
+ * session before this is reached.
+ */
+export function checkPasswordChange(current: string, next: string): PasswordProblem | null {
+  const problem = checkNewPassword(next);
+  if (problem) return problem;
+  if (next === current) {
+    return { message: "That is the password you already have. Pick a different one." };
+  }
+  return null;
+}

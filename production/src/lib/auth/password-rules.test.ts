@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkNewPassword, PASSWORD_MIN_LENGTH } from "./password-rules";
+import { checkNewPassword, checkPasswordChange, PASSWORD_MIN_LENGTH } from "./password-rules";
 
 const ok = (p: string, c?: string) => checkNewPassword(p, c) === null;
 const msg = (p: string, c?: string) => checkNewPassword(p, c)?.message ?? "";
@@ -60,5 +60,27 @@ describe("checkNewPassword", () => {
     const out = checkNewPassword("aaa");
     expect(out).not.toBeNull();
     expect(Object.keys(out!)).toEqual(["message"]);
+  });
+});
+
+describe("checkPasswordChange", () => {
+  it("accepts a good, different password", () => {
+    expect(checkPasswordChange("old-one-here", "chai-samosa-42")).toBeNull();
+  });
+
+  it("refuses the password they already have", () => {
+    expect(checkPasswordChange("chai-samosa-42", "chai-samosa-42")?.message).toMatch(/already have/i);
+  });
+
+  it("judges the NEW password before comparing, so a weak one is named as weak", () => {
+    /* Both faults at once: too short AND identical. The length message is the one that
+       comes back, because being sent hunting for a typo in the old password when the real
+       problem is the new one is the wrong hint. */
+    expect(checkPasswordChange("abc", "abc")?.message).toMatch(new RegExp(String(PASSWORD_MIN_LENGTH)));
+  });
+
+  it("still applies every new-password rule", () => {
+    expect(checkPasswordChange("whatever-old", "password")?.message).toMatch(/guess list/i);
+    expect(checkPasswordChange("whatever-old", "chai-samosa-42 ")?.message).toMatch(/space/i);
   });
 });

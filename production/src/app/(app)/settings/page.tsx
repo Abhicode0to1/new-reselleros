@@ -34,6 +34,7 @@ import SandboxConfigureDialog  from "@/components/features/integrations/sandbox-
 import WhatsAppConfigureDialog from "@/components/features/integrations/whatsapp-configure-dialog";
 import RazorpayConfigureDialog from "@/components/features/integrations/razorpay-configure-dialog";
 import EmailSendingCard from "@/components/features/integrations/email-sending-card";
+import ChangePasswordCard from "@/components/features/settings/change-password-card";
 import GeminiConfigureDialog from "@/components/features/integrations/gemini-configure-dialog";
 import ApiKeysCard from "@/components/features/integrations/api-keys-card";
 import { useConfirm } from "@/components/providers/confirm-provider";
@@ -60,10 +61,12 @@ const TABS: TabBarItem[] = [
   { id: "integrations",  label: "Integrations"  },
   { id: "branding",      label: "Branding"      },
   /* Notifications earns its tab as of 21 Aug 2026: it turns web push on for this device
-     and chooses what may interrupt you. The note below still holds for Security — a
-     "Coming soon" dead-end reads as half-built to a non-technical owner, so it stays out
-     until it does something. */
+     and chooses what may interrupt you. */
   { id: "notifications", label: "Notifications" },
+  /* Security was held back on the rule that a "Coming soon" dead-end reads as half-built
+     to a non-technical owner — it was to stay out until it did something. As of 22 Aug 2026
+     it does: changing your own password, which had no home anywhere in the app. */
+  { id: "security",      label: "Security"      },
 ];
 
 // ─── Field wrapper ────────────────────────────────────────────────────────────
@@ -930,6 +933,7 @@ export default function SettingsPage() {
       {tab === "integrations"  && <IntegrationsTab />}
       {tab === "branding"      && <BrandingTab />}
       {tab === "notifications" && <NotificationsCard />}
+      {tab === "security"      && <div className="max-w-md"><ChangePasswordCard /></div>}
     </div>
   );
 }

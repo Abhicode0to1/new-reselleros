@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, IconButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SendResetLinkButton } from "@/components/features/team/send-reset-link-button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/avatar";
@@ -187,6 +188,7 @@ export default function TeamPage() {
                 {isOwner && <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Reports to</th>}
                 {isOwner && <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Deals access</th>}
                 <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Status</th>
+                {isOwner && <th className="p-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-3">Password</th>}
               </tr>
             </thead>
             <tbody>
@@ -249,6 +251,16 @@ export default function TeamPage() {
                     </td>
                   )}
                   <td className="p-3"><Badge kind={m.is_active === false ? "muted" : "success"} dot>{m.is_active === false ? "Inactive" : "Active"}</Badge></td>
+                  {/* Owner-side recovery. resetPasswordForEmail is a PUBLIC Supabase call, so
+                      this grants no privilege the owner did not already have — it saves a trip
+                      to the Supabase dashboard, which the app never told anybody about. The
+                      owner still never learns or sets the password: the link goes to the
+                      teammate's own mailbox. */}
+                  {isOwner && (
+                    <td className="p-3">
+                      <SendResetLinkButton email={m.email} />
+                    </td>
+                  )}
                 </tr>
               ))}
 
