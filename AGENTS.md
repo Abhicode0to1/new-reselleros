@@ -961,3 +961,36 @@ Two things that make the difference between proof and theatre:
 And when merging several test files into one transaction to save time, don't: fixture ids
 collide (`cccccccc-…d1` is used by two of these), and the collision reads as a failure of the
 fix. One transaction per file.
+
+## L25. "The data is slow" is usually "the screen never refetches" — check the last hop first
+*22 Aug 2026, reported as "email receive me bahut time lagta hai, real time nahi ho sakta?"*
+
+The instinct is to go looking at ingestion: is the webhook slow, is Gmail forwarding lagging,
+should we poll the Gmail API. All of that was fine. Inbound mail is PUSHED —
+customer → Gmail → forwarding rule → inbound-parse provider →
+`POST /api/webhooks/inbound-email` → `inbound_emails` — and every hop to the database takes
+seconds.
+
+The delay was entirely the last arrow, the one nobody counts as a hop. `useInboundEmails()`
+declared no `refetchInterval`; `query-provider.tsx` sets `refetchOnWindowFocus: false` for the
+whole app; `staleTime` is 30s. So once the page was open, a new email could sit in the
+database **indefinitely** and never appear. The only remedy was a hard reload.
+
+**The rules:**
+- **Walk the chain backwards from the eyeball, not forwards from the source.** The render is a
+  hop. It is the cheapest one to check and the easiest one to forget, because every other hop
+  has a log line and this one has none.
+- **A global default that is right for the app can be wrong for one screen.** That comment —
+  "refetchOnWindowFocus: disabled (annoying for SaaS apps)" — is correct for a settings page
+  and exactly backwards for an inbox, where the commonest motion is reading mail in Gmail then
+  switching tabs to see it. Override locally; do not flip the global.
+- **A poll with the default `staleTime` can still show nothing new.** The refetch is answered
+  from cache. `refetchInterval` without `staleTime: 0` is the same bug wearing a shorter delay.
+- **Look at what the neighbours do.** `lib/queries/whatsapp.ts` already polled at 10-15s and
+  `useNavBadges` at 60s. Inbound email — the one surface with a customer waiting at the other
+  end — had nothing. An inconsistency across sibling modules is a defect report sitting in the
+  codebase for free.
+- **The missing column is why it stayed unexplained.** `inbound_emails` records `created_at`
+  (when the webhook wrote the row) and nothing about when the customer sent it, so "the
+  provider was slow" and "the list is frozen" were indistinguishable from the data. When a
+  latency complaint cannot be attributed, that is a schema gap, not a mystery.

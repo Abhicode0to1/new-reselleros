@@ -10,6 +10,23 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { InboundEmailRow } from "@/lib/supabase/database.types";
 
+/**
+ * How often the inbox looks for new mail.
+ *
+ * Reported 22 Aug 2026 as "email receive me bahut time lagta hai". Inbound mail is
+ * not polled from Gmail — it is PUSHED, customer → Gmail → forwarding rule →
+ * inbound-parse provider → POST /api/webhooks/inbound-email → inbound_emails. Every
+ * hop to the database takes seconds. The delay was entirely in the last one: this
+ * hook declared no refetchInterval, so once the page was open a new email could sit
+ * in the database indefinitely and never appear on screen.
+ *
+ * 20s, between two real limits: above about a minute a customer's reply feels lost,
+ * and below about five seconds this is a database query per open tab for no
+ * perceptible gain. `lib/queries/whatsapp.ts` already sits at 10-15s for the same
+ * reason and is the precedent.
+ */
+const INBOX_REFETCH_MS = 20_000;
+
 export function useInboundEmails() {
   return useQuery({
     queryKey: ["inbound-emails"],
@@ -21,6 +38,19 @@ export function useInboundEmails() {
       }
       return res.json();
     },
+    refetchInterval: INBOX_REFETCH_MS,
+    /* Overridden LOCALLY, not globally. query-provider.tsx turns this off for the
+       whole app and is right to — a settings screen that refetches every time you
+       alt-tab is noise. An inbox is the exception: the commonest real motion is
+       reading mail in Gmail and switching to this tab expecting to see it. */
+    refetchOnWindowFocus: true,
+    /* The global staleTime is 30s, which would let a poll be answered from cache and
+       show nothing new — the same bug wearing a shorter delay. An inbox has no use
+       for a cached answer; that is what the interval above is for. */
+    staleTime: 0,
+    /* Keep polling while the tab is in the background, so switching to it shows mail
+       that arrived while it was hidden rather than starting the wait over. */
+    refetchIntervalInBackground: true,
   });
 }
 
