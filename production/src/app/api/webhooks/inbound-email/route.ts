@@ -10,8 +10,11 @@
  *   3. Claim the messageId in `inbound_emails` (UNIQUE) → idempotent (no dup leads).
  *   4. Gemini extracts { isEnquiry, company, contactName, phone, product, summary }
  *      (stub fallback when GEMINI_API_KEY is absent).
- *   5. Non-enquiry → skip. Enquiry → create a Lead (reuses the buy-page enquiry
- *      pattern), deduping against a recent open lead with the same email.
+ *   5. A reply from somebody who already has an OPEN lead is filed on that
+ *      conversation and is NEVER classified — the classifier is for strangers.
+ *      Only when nobody matches: enquiry → create a Lead, non-enquiry → Spam /
+ *      System. That ORDER is load-bearing; see lib/inbound/disposition.ts for the
+ *      bug it fixes.
  *   6. Notify the reseller owner (best-effort email).
  *
  * Public route — the secret is the only guard (mirrors the Razorpay webhook's
@@ -24,6 +27,7 @@ import { resolveGeminiConfig } from "@/lib/ai/gemini";
 import { sendEmail } from "@/lib/email/send";
 import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
 import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
+import { decideDisposition } from "@/lib/inbound/disposition";
 import { extractAttachments, pickBillAttachment } from "@/lib/inbound/attachments";
 import { readBillWithGemini } from "@/lib/ai/read-bill";
 import { sanitizeExtractedBill } from "@/app/api/ai/extract-bill/sanitize";
@@ -428,9 +432,40 @@ export async function POST(request: NextRequest) {
     summary:     subject || "Email enquiry",
   };
 
-  if (!extracted.isEnquiry) {
+  /* ── Who is this from, before deciding what it is ──────────────────────────
+     This lookup used to sit BELOW the `isEnquiry` gate, and that ordering was the
+     bug reported on 22 Aug 2026 as "message aaya, show nahi ho raha". A mid-thread
+     reply — "actually I need 20 users of Standard, not 50 of Starter" — was handed
+     to Gemini, asked "is this a sales enquiry?", correctly answered no, and filed as
+     `skipped_non_enquiry`, which folders.ts puts under Spam / System. The most
+     important message in the thread went to Spam, and nothing on screen said why.
+
+     A message from somebody we are already talking to is never spam: we know who
+     they are and what it is about, so there is nothing to classify. The classifier
+     is for STRANGERS, which is the only case where the question is open. */
+  const { data: existing } = await admin
+    .from("leads")
+    .select("id, notes, owner_id")
+    .eq("tenant_id", tenantId)
+    .ilike("contact_email", fromEmail)
+    .not("stage", "in", "(won,lost)")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const disposition = decideDisposition({
+    openLeadId: existing?.id ?? null,
+    /* `ai` is null when Gemini did not run. Passing extracted.isEnquiry here would
+       pass the webhook's default-TRUE fallback and hide that distinction — and the
+       difference between "the model said no" and "the model never answered" is the
+       difference between spam and an untriaged customer email. */
+    isEnquiry: ai ? ai.isEnquiry : null,
+  });
+
+  if (disposition.action === "skip") {
+    console.info(`[webhooks/inbound-email] skipping ${fromEmail}: ${disposition.reason}`);
     await finalize("skipped_non_enquiry", null);
-    return NextResponse.json({ received: true, skipped: "non_enquiry" });
+    return NextResponse.json({ received: true, skipped: "non_enquiry", reason: disposition.reason });
   }
 
   const company = extracted.company || fromName || (fromEmail.split("@")[1]?.split(".")[0]) || "Email lead";
@@ -442,18 +477,9 @@ export async function POST(request: NextRequest) {
     text ? `\n--- original ---\n${text.slice(0, 1000)}` : null,
   ].filter(Boolean).join("\n");
 
-  // ── 5. Dedup — recent OPEN lead with the same email? append, don't dup ─
-  const { data: existing } = await admin
-    .from("leads")
-    .select("id, notes, owner_id")
-    .eq("tenant_id", tenantId)
-    .ilike("contact_email", fromEmail)
-    .not("stage", "in", "(won,lost)")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (existing) {
+  // ── 5. Append to the open lead this sender already has ────────────────────
+  //     The lookup itself moved above the classifier gate — see the comment there.
+  if (disposition.action === "append" && existing) {
     await admin.from("leads").update({
       notes: `${existing.notes ? existing.notes + "\n\n" : ""}[New email ${new Date().toISOString().slice(0, 10)}] ${subject || extracted.summary}`,
     }).eq("id", existing.id);

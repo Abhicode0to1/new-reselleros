@@ -994,3 +994,38 @@ database **indefinitely** and never appear. The only remedy was a hard reload.
   (when the webhook wrote the row) and nothing about when the customer sent it, so "the
   provider was slow" and "the list is frozen" were indistinguishable from the data. When a
   latency complaint cannot be attributed, that is a schema gap, not a mystery.
+
+## L26. Ask "who is this from" before "what is this" — a classifier must never judge a reply
+*22 Aug 2026, reported as "kafi time ho gaya message aaye abhi tak show nahi ho raha".*
+
+The message had arrived three minutes earlier, with fifteen more in the preceding two hours.
+It was in the database with status `skipped_non_enquiry`, which `lib/inbound/folders.ts` files
+under **Spam / System**, out of the Inbox. `api/webhooks/inbound-email/route.ts` asked its two
+questions in this order:
+
+```
+line 431   if (!extracted.isEnquiry) -> skipped_non_enquiry, stop
+line 445   is there an open lead with this sender? -> append to it
+```
+
+The skip came first. So a mid-thread reply — *"actually I need 20 users of Standard, not 50 of
+Starter"* — was handed to Gemini, asked "is this a sales enquiry?", and correctly answered
+**no**. It is not an enquiry. It is the most important message in the thread. It went to Spam.
+
+**The rules:**
+- **Identity before classification.** A message from somebody you already have an open
+  conversation with is never spam: you know who they are and what it is about, so there is
+  nothing left to decide. A classifier earns its keep on mail from STRANGERS — that is the only
+  case where the question is open. Reordering two `if`s was the entire fix.
+- **The model was not wrong; the question was.** This is the failure mode to watch for in AI
+  plumbing. Nothing in a log would show a bad classification to go hunting for, because the
+  classification was right. Auditing prompts and model output would have found nothing.
+- **An absent verdict is not a "no".** `isEnquiry: null` means the model never ran (no key,
+  timeout, breaker open) and must resolve to "show the operator", never to "spam". Otherwise a
+  real customer's first email vanishes during an outage — the one time nobody is watching.
+- **Filing something out of sight needs a stated reason.** The row recorded *that* it was
+  skipped and never *why*, so answering "where is my email" took a database query. Every
+  disposition now carries a reason (`lib/inbound/disposition.ts`).
+- **The lesson generalises past email.** Any pipeline that both (a) recognises known entities
+  and (b) classifies unknown ones must run the recognition first. Otherwise the classifier gets
+  asked about things it was never meant to judge, and answers anyway.

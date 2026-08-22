@@ -122,3 +122,64 @@ export function summariseThread(thread: readonly ThreadMessage[]): ThreadSummary
     latest: thread.length > 0 ? thread[thread.length - 1] : null,
   };
 }
+
+/**
+ * Are the lead's stored requirements (seats, product) still trustworthy to repeat
+ * back to the customer?
+ *
+ * ─── WHY THE FIRST ATTEMPT AT THIS WAS WRONG ────────────────────────────────
+ * `customerRepliedToUs` above asks "has the customer written since we last wrote".
+ * Shipped 22 Aug 2026, and the operator's own thread showed the flaw within the
+ * hour (all times UTC, lead L-MT4HUR6P):
+ *
+ *   16:29  customer: "Actually, I need 20 users of Standard, not 50 of Starter"
+ *   17:04  reply:    "Thanks for confirming the details — I am updating…"   ✅
+ *   17:16  reply:    "your enquiry for 50 users of Business Starter"        ❌
+ *
+ * Between those two replies nothing changed except WHO WROTE LAST. Sending the
+ * 17:04 reply made the newest message ours, so the flag went false and the stale
+ * figures came straight back. A condition that clears the moment you act on it is
+ * not a condition, it is a coincidence.
+ *
+ * ─── WHAT THE REAL QUESTION IS ──────────────────────────────────────────────
+ * Not "who spoke last" but "has anyone reconciled this lead with what the customer
+ * said". The lead row still read seats = 50, plan = Starter after two corrections,
+ * because nothing ever wrote 20/Standard into it. While that is true, ANY reply that
+ * quotes the stored figures is wrong, no matter who wrote last.
+ *
+ * ─── AND THE SECOND ATTEMPT WAS WRONG TOO, WHICH IS WORTH RECORDING ─────────
+ * The obvious repair: "is the newest inbound newer than `leads.updated_at`" — has
+ * anybody reconciled this lead since the customer wrote. It reads well and it does
+ * nothing at all. Measured on the same lead BEFORE shipping it:
+ *
+ *   lead.updated_at   16:29:11
+ *   newest inbound    16:29:07      <- four seconds EARLIER
+ *
+ * Ingesting an inbound email touches the lead (it appends to `notes` and logs an
+ * activity), so `updated_at` lands a moment AFTER the very message that should have
+ * invalidated it. The column does not mean "a human reviewed this"; it means "some
+ * write happened", and the arrival is itself a write. A comparison against it can
+ * never be true.
+ *
+ * ─── WHAT THIS ACTUALLY USES ────────────────────────────────────────────────
+ * More than one inbound message. That is the whole rule, and each rejected
+ * alternative is why:
+ *
+ *   - It cannot be cleared by replying, which is what killed attempt 1.
+ *   - It leans on no column whose meaning can drift, which killed attempt 2.
+ *   - A single enquiry — where the stored figures were read from that very email and
+ *     are exactly right to repeat back — is untouched.
+ *
+ * The cost, stated rather than buried: once a customer has written twice this stays
+ * true even after the lead IS corrected, so those threads keep the vaguer wording
+ * ("I am updating the quotation") instead of naming figures. That is a small loss
+ * against never asserting a number the customer has contradicted, and it fails
+ * toward vagueness rather than toward being wrong.
+ *
+ * The real fix is upstream, and it is Phase 1: read the correction out of the message
+ * and write it INTO the lead. Then the stored facts are the current facts and a reply
+ * can state them with confidence. Until something does that, this refuses to guess.
+ */
+export function factsSuperseded(args: { thread: readonly ThreadMessage[] }): boolean {
+  return args.thread.filter((m) => m.direction === "inbound").length >= 2;
+}

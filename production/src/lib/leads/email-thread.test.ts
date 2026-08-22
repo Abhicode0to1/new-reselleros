@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildEmailThread, summariseThread, type ThreadRow } from "./email-thread";
+import { buildEmailThread, summariseThread, factsSuperseded, type ThreadRow } from "./email-thread";
 import { SENT_REPLY_STATUS } from "@/lib/inbound/sent";
 
 /* Shapes taken from the real table. An inbound message carries from_email; a reply we sent
@@ -168,5 +168,75 @@ describe("customerRepliedToUs", () => {
        should behave normally. */
     const t = buildEmailThread([inbound(), sent()], "L-1");
     expect(summariseThread(t).customerRepliedToUs).toBe(false);
+  });
+});
+
+describe("factsSuperseded", () => {
+  /* Decides whether a reply pill may repeat the lead's stored seats/product back at
+     the customer. Two earlier versions of this rule shipped or were nearly shipped and
+     both failed; the cases below are named after how. */
+  const T = {
+    enquiry:  "2026-08-22T15:10:00Z",
+    ourFirst: "2026-08-22T15:18:00Z",
+    theirFix: "2026-08-22T16:29:00Z",
+    ourGood:  "2026-08-22T17:04:00Z",
+  };
+
+  it("is FALSE for a first enquiry — the figures came from that very email", () => {
+    /* The case that makes the pill worth a tap. Breaking this would make every reply
+       vague, which is the opposite failure. */
+    const t = buildEmailThread([inbound({ id: "in-1", created_at: T.enquiry })], "L-1");
+    expect(factsSuperseded({ thread: t })).toBe(false);
+  });
+
+  it("is TRUE once the customer has written a second time", () => {
+    const t = buildEmailThread([
+      inbound({ id: "in-1", created_at: T.enquiry }),
+      sent({    id: "out-1", created_at: T.ourFirst }),
+      inbound({ id: "in-2", created_at: T.theirFix,
+                body_text: "Actually I need 20 users of Standard, not 50 of Starter." }),
+    ], "L-1");
+    expect(factsSuperseded({ thread: t })).toBe(true);
+  });
+
+  it("STAYS true after we reply — attempt 1's bug, which shipped", () => {
+    /* v1 asked "has the customer written since we last wrote". Sending our reply made
+       the newest message ours, the flag cleared, and the next draft restated "50 users
+       of Business Starter" (observed at 17:04 correct, 17:16 wrong). A condition that
+       clears the moment you act on it is a coincidence, not a condition. */
+    const t = buildEmailThread([
+      inbound({ id: "in-1", created_at: T.enquiry }),
+      sent({    id: "out-1", created_at: T.ourFirst }),
+      inbound({ id: "in-2", created_at: T.theirFix }),
+      sent({    id: "out-2", created_at: T.ourGood }),
+    ], "L-1");
+    expect(factsSuperseded({ thread: t })).toBe(true);
+  });
+
+  it("does not depend on leads.updated_at — attempt 2's bug, caught before shipping", () => {
+    /* v2 compared the newest inbound against leads.updated_at. Ingesting an inbound
+       email TOUCHES the lead, so updated_at lands just after the message that should
+       have invalidated it (measured: 16:29:11 vs 16:29:07) and the comparison could
+       never be true. The signature takes no timestamp at all now, so no caller can
+       reintroduce that dependency by passing one. */
+    const t = buildEmailThread([
+      inbound({ id: "in-1", created_at: T.enquiry }),
+      inbound({ id: "in-2", created_at: T.theirFix }),
+    ], "L-1");
+    expect(factsSuperseded({ thread: t })).toBe(true);
+    expect(Object.keys({ thread: t })).toEqual(["thread"]);
+  });
+
+  it("is FALSE on an empty thread", () => {
+    expect(factsSuperseded({ thread: [] })).toBe(false);
+  });
+
+  it("counts only inbound — our own replies never supersede our own record", () => {
+    const manyOutbound = buildEmailThread([
+      inbound({ id: "in-1", created_at: T.enquiry }),
+      sent({    id: "out-1", created_at: T.ourFirst }),
+      sent({    id: "out-2", created_at: T.ourGood }),
+    ], "L-1");
+    expect(factsSuperseded({ thread: manyOutbound })).toBe(false);
   });
 });

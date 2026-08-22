@@ -38,7 +38,7 @@ import { qualification } from "@/lib/leads/qualification";
 import { useLeadActivities, useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { useInboundEmails } from "@/lib/queries/inbound-emails";
 import { isSentReply } from "@/lib/inbound/sent";
-import { buildEmailThread, summariseThread } from "@/lib/leads/email-thread";
+import { buildEmailThread, summariseThread, factsSuperseded } from "@/lib/leads/email-thread";
 import { EmailThreadPanel } from "@/components/features/leads/email-thread-panel";
 import { LeadEmailComposer } from "@/components/features/leads/lead-email-composer";
 import { ReplyComposer } from "@/components/features/enquiries/reply-composer";
@@ -2620,7 +2620,11 @@ function LeadDetailSheet({
                   seats:           lead.seats,
                   hasPhone:        Boolean(lead.contact_phone?.trim()),
                   sellerName:      currentUser?.tenantName ?? null,
-                  factsSuperseded: threadSummary.customerRepliedToUs,
+                  /* NOT threadSummary.customerRepliedToUs — that asked "who wrote last", so
+                     sending a reply cleared it and the very next draft restated the stale
+                     figures (measured on this lead at 17:04 correct, 17:16 wrong). This asks
+                     whether anyone has reconciled the lead with what the customer said. */
+                  factsSuperseded: factsSuperseded({ thread: emailThread }),
                 }}
               />
             </div>
