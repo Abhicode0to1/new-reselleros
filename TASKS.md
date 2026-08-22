@@ -166,7 +166,7 @@ jayega**.
 
 ### 📓 AGENTS.md me naya section
 
-`# Learned Guidelines` — **L1–L10**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
+`# Learned Guidelines` — **L1–L11**, aaj ke kaam se nikle niyam: har cron par retry/alert ·
 pehle classify phir retry · jo retry jaan-boojh kar mana kiya · naam ke substring se
 authorization mat karo · ek `as any` poore insert ka checking band kar deta hai · config error
 5xx nahi hota · aur **L7**: isolation ka zero-assertion doosre tenant par scoped hona chahiye,

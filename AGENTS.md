@@ -480,6 +480,16 @@ evening, by running a suite that is in neither CI nor the Stop hook:
 |---|---|---|
 | 0060/0061 (bug #27) | rejects a payment against a ₹0 quote | only checks `p_amount <= 0` — the payment argument. Nothing reads `v_quote.amount`. |
 | 0064/0065 | reuses an existing same-email customer instead of duplicating | inserts a new customer from the lead unconditionally (line ~188). No lookup by `contact_email` at all. |
+| 0157 | a one-off quote (`is_one_off`) records the payment but creates NO subscription | **the string `is_one_off` does not appear in the function at all.** A direct invoice gets a subscription like anything else. |
+
+**0157 is the worst of the three, because its path is reachable and its damage is silent.**
+`quote-builder.tsx:917` sets `is_one_off: isInvoiceMode ? !invoiceRecurring : false` — so any
+non-recurring direct invoice takes it. The spurious subscription then lands in MRR (a one-time
+sale counted as recurring revenue) and in the renewal cron, which can send a renewal reminder to
+somebody who bought once. Nobody has used the path yet — 0 one-off quotes exist — so it is an
+exposure, not an incident, and the test that would have caught it asserted nothing at all: it
+ended `raise exception 'TESTRESULT >> %'` with the observed values interpolated and the expected
+values in a comment for a human to eyeball.
 
 Neither has caused damage yet, measured: zero ₹0-amount quotes, and 12 emailed customers with
 12 distinct emails. But the dedup one has a second edge worth knowing — **23 of 35 customers
@@ -516,3 +526,40 @@ Two failures looked like product bugs and were neither:
   `auth.uid()` needs a `sub`. Setting the role alone gets you neither.
 - **Write the failure message about what the query actually checked** (L7 again). "card spend
   touched the bank" sent me looking at card logic for a value that came from an empty result.
+
+## L11. Seven SQL tests ran against the live tenant's books — a fixture must own its data
+*22 Aug 2026.*
+
+Seven of the 38 files in `supabase/tests/` hardcode the production tenant and a production
+customer, and create no fixtures of their own:
+
+```sql
+v_tenant uuid := 'fbb976f1-9090-4f10-9726-0901bd144e42';  -- Anutech Digital
+v_cust   uuid := '53db44e6-6e90-4fec-8871-8d2288393a2a';
+```
+
+`accrue_referral_commission`, `create_direct_invoice`, `create_direct_invoice_recurring`,
+`create_project_direct_invoice`, `generate_invoice_payment_terms`,
+`record_payment_billing_cycle_decouple`, `record_payment_one_off_guard`.
+
+They **insert quotes and call `record_payment` inside the real company's books**, and the only
+thing that takes it back out is the closing `rollback` or `raise exception`. That is one deleted
+line away from test quotes and test payments being permanently in ANUTECH's ledger — and
+"delete the raise so the test stops erroring" is a plausible thing for somebody to try (see L7).
+
+They also all broke on 22 Aug for the mundane reason: customer `53db44e6…` was deleted, so every
+one of them died on `quotes_customer_id_fkey` before its first assertion. **A test that borrows
+live ids is a hostage to whatever the operator did last week** — the same failure as
+`hierarchy_peer_isolation` borrowing auth ids (L7) and `sandbox_tenant_isolation` counting live
+rows (L7).
+
+**The rules:**
+- **A fixture owns its data.** Insert your own tenant, your own customer, your own auth user, with
+  literal ids in a reserved-looking range. Never `select … limit 1` from real tables, never a
+  hardcoded production id. AGENTS.md §4 already forbids hardcoding a `tenant_id`; this is that
+  rule applied to tests, where it is easiest to excuse.
+- **Never point a write-path test at the live tenant**, even inside a transaction. Correctness
+  should not depend on one keyword at the bottom of the file.
+- **Report-style tests are not tests.** `raise exception 'TESTRESULT >> %'` with expected values
+  in a header comment means a regression prints a slightly different sentence and passes. Assert,
+  then finish with a visible `select 'PASS'`.
