@@ -36,6 +36,22 @@ export interface PillContext {
   hasPhone?: boolean;
   /** The reseller's own name, for the sign-off. */
   sellerName?: string | null;
+  /**
+   * True when the customer has written back since our last message, so `seats` and
+   * `product` — which come from the LEAD row, i.e. the FIRST enquiry — may have been
+   * overtaken by what they just said.
+   *
+   * Reported 22 Aug 2026: we had written "50 users of Business Starter", the customer
+   * replied "actually I need 20 users of Business Standard, not 50 of Starter", and the
+   * quote pill restated 50/Starter and then invited them to reply if the number changed.
+   * Both sentences read as unread mail.
+   *
+   * When set, the pill stops ASSERTING those facts. It does not attempt to guess the new
+   * ones — `whatTheyAskedFor` is "or nothing, never a guess", and a wrong seat count in a
+   * customer's inbox is worse than no seat count. Reading the correction and acting on it
+   * is a model's job, not a template's.
+   */
+  factsSuperseded?: boolean;
 }
 
 export interface Pill {
@@ -68,8 +84,15 @@ function signOff(ctx: PillContext): string {
   return s ? `\n\nBest regards,\n${s}` : "";
 }
 
-/** What they asked for, in their own terms — or nothing, never a guess. */
+/**
+ * What they asked for, in their own terms — or nothing, never a guess.
+ *
+ * Returns nothing once `factsSuperseded` is set: these fields describe the first
+ * enquiry, and repeating them back at somebody who has just corrected them is the
+ * one thing a reply must not do.
+ */
 function whatTheyAskedFor(ctx: PillContext): string {
+  if (ctx.factsSuperseded) return "";
   const bits: string[] = [];
   if (ctx.seats) bits.push(`${ctx.seats} ${ctx.seats === 1 ? "user" : "users"}`);
   if (ctx.product) bits.push(`of ${ctx.product}`);
@@ -120,6 +143,18 @@ export function pillDraft(id: PillId, ctx: PillContext): string {
 
   switch (id) {
     case "quote":
+      /* Two shapes, because a first enquiry and a reply-to-us are different letters.
+         Repeating the requirement back is what makes the pill worth a tap on a FIRST
+         enquiry — and is exactly what makes it embarrassing once they have written to
+         change it. The second shape says "updating", which acknowledges a change
+         without claiming to know what it is. */
+      if (ctx.factsSuperseded) {
+        return `${hi}
+
+Thanks for confirming the details — I am updating the quotation accordingly and will send it across shortly.
+
+If I have missed anything, just reply here and I will correct it before sending.${end}`;
+      }
       return `${hi}
 
 Thank you for your enquiry${asked ? ` for ${asked}` : ""}. I am preparing the quotation now and will send it across shortly.

@@ -878,3 +878,42 @@ the counter that was supposed to prove the mail went out counts it.
 result before reading it as one (`r.value && r.value.status === "failed"`). Same family as the
 dunning-log defect: a log that reports a send nobody made is worse than no log, because it is
 the thing you will trust later.
+
+## L22. A template fed a stale snapshot reads as unread mail
+*22 Aug 2026, reported from the lead drawer with a screenshot.*
+
+The thread was: we wrote "your enquiry for 50 users of Business Starter"; the customer
+replied "actually I need 20 users of Business **Standard**, not 50 of Starter". The
+"Quote is on the way" pill then filled the composer with **"Thank you for your enquiry for
+50 users of Google Workspace Business Starter … If the number of users changes before then,
+just reply here and I will adjust it."**
+
+Both sentences are wrong in the same way: it restated the figures the customer had just
+corrected, then invited them to do the thing they had just done. Not a badly-written
+template — a correct template fed a stale snapshot. `PillContext.seats`/`.product` come from
+the LEAD row, which records the FIRST enquiry, and nothing told the pill a newer message
+existed.
+
+The module already held the principle it needed. It hides the "Ask for phone number" pill
+when a number is on file, because — its own words — *"a button that asks a customer for
+something already on file makes the reseller look like they did not read the email."*
+Restating superseded seats is that failure exactly; the reasoning was written down and not
+carried across.
+
+**The rules:**
+- **A record built from an event is a snapshot, not the current truth.** Any field copied
+  out of the first contact (seats, product, budget, timeline) must be treated as possibly
+  overtaken the moment a newer message exists. Ask "what is the newest thing the customer
+  said?" before restating anything back to them.
+- **When facts may be stale, stop asserting them — do not guess the new ones.** The reply
+  said 20 of Standard; a template cannot parse that and must not pretend to. Dropping the
+  clause is honest, a guessed seat count in a customer's inbox is not. Same rule as
+  `whatTheyAskedFor`: "or nothing, never a guess."
+- **The stale/fresh distinction needs BOTH halves.** "Newest message is inbound" is not
+  enough — a first enquiry is also inbound-newest, and there the stored facts are exactly
+  right to repeat back. `summariseThread().customerRepliedToUs` requires an inbound newest
+  AND at least one outbound before it.
+- **Reading a correction and acting on it is a model's job, not a template's.** The honest
+  ceiling for a canned reply is to acknowledge that something changed. If the product needs
+  to answer "they cut it to 20 Standard, here is the revised quote", that is an LLM reading
+  the thread, and it needs the money-guard that `api/ai/draft-followup` already has.

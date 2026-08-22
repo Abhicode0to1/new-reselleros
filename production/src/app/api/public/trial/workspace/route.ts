@@ -121,7 +121,11 @@ export async function POST(request: NextRequest) {
     if (leadErr) {
       console.error("[/api/public/trial/workspace] lead insert failed:", leadErr);
       return NextResponse.json(
-        { error: "Could not start your trial. Please WhatsApp Pardeep directly." },
+        /* Was "Please WhatsApp Pardeep directly" — a website visitor is told to contact a
+           person by name, on a storefront that may belong to a different reseller, and with
+           no number given to do it with. A §24 dead-end: it names a next step the reader
+           cannot take. This says what to do with what they actually have in front of them. */
+        { error: "Could not start your trial — nothing was saved, so please try again. If it happens twice, email us using the address on this page and we will set it up by hand." },
         { status: 500 },
       );
     }

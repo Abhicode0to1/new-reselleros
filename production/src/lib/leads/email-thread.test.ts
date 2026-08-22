@@ -124,6 +124,49 @@ describe("summariseThread", () => {
 
   it("is empty and honest when nothing has been exchanged", () => {
     const s = summariseThread([]);
-    expect(s).toEqual({ total: 0, inbound: 0, outbound: 0, awaitingFirstInbound: true, latest: null });
+    expect(s).toEqual({
+      total: 0, inbound: 0, outbound: 0,
+      awaitingFirstInbound: true, latest: null,
+      customerRepliedToUs: false,
+    });
+  });
+});
+
+describe("customerRepliedToUs", () => {
+  /* Feeds PillContext.factsSuperseded. Both halves of the condition matter, and the
+     second one is the easy thing to get wrong — see the FIRST-enquiry case below. */
+
+  it("is false on an empty thread", () => {
+    expect(summariseThread([]).customerRepliedToUs).toBe(false);
+  });
+
+  it("is FALSE for a first enquiry, even though the newest message is inbound", () => {
+    /* The trap. A lead whose only mail is their opening enquiry is inbound-newest, but
+       nothing has been superseded — the lead's seats/product were read from that very
+       email, so repeating them back is correct and is the point of the pill. */
+    const t = buildEmailThread([inbound()], "L-1");
+    expect(t).toHaveLength(1);
+    expect(summariseThread(t).customerRepliedToUs).toBe(false);
+  });
+
+  it("is TRUE once they write back after we have written", () => {
+    const t = buildEmailThread(
+      [
+        inbound({ id: "in-1", created_at: "2026-08-22T10:00:00Z" }),
+        sent({    id: "out-1", created_at: "2026-08-22T11:00:00Z" }),
+        inbound({ id: "in-2", created_at: "2026-08-22T12:00:00Z",
+                  body_text: "Actually I need 20 users of Standard, not 50 of Starter." }),
+      ],
+      "L-1",
+    );
+    expect(t.map((m) => m.id)).toEqual(["in-1", "out-1", "in-2"]);
+    expect(summariseThread(t).customerRepliedToUs).toBe(true);
+  });
+
+  it("is false while the newest message is ours", () => {
+    /* We answered last; nothing new from them has overtaken anything, so the pill
+       should behave normally. */
+    const t = buildEmailThread([inbound(), sent()], "L-1");
+    expect(summariseThread(t).customerRepliedToUs).toBe(false);
   });
 });

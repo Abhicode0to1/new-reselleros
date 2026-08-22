@@ -2605,13 +2605,22 @@ function LeadDetailSheet({
                 formatWhen={formatDate}
                 /* Built from the LEAD, not from the extractor: these fields have been
                    qualified by a human, and the extractor's guesses were only ever a
-                   stand-in for that. */
+                   stand-in for that.
+
+                   But the lead row is a snapshot of the FIRST enquiry. Once the customer
+                   writes back, their newest message is newer information than the row —
+                   reported 22 Aug 2026, when the pill restated "50 users of Business
+                   Starter" to somebody whose reply had just changed it to 20 of Standard,
+                   and then invited them to reply if the number changed. `factsSuperseded`
+                   stops the pill asserting those fields; it does not try to guess the new
+                   ones, because a template cannot read a correction. */
                 context={{
-                  contactName: lead.contact_name,
-                  product:     lead.plan,
-                  seats:       lead.seats,
-                  hasPhone:    Boolean(lead.contact_phone?.trim()),
-                  sellerName:  currentUser?.tenantName ?? null,
+                  contactName:     lead.contact_name,
+                  product:         lead.plan,
+                  seats:           lead.seats,
+                  hasPhone:        Boolean(lead.contact_phone?.trim()),
+                  sellerName:      currentUser?.tenantName ?? null,
+                  factsSuperseded: threadSummary.customerRepliedToUs,
                 }}
               />
             </div>

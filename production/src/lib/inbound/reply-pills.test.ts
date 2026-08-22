@@ -138,3 +138,96 @@ describe("the reply subject", () => {
     expect(replySubject("   ")).toBe("Re: your enquiry");
   });
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Reported 22 Aug 2026 from the lead drawer, with a screenshot.
+
+   The thread was:
+     us       → "your enquiry for 50 users of Google Workspace Business Starter"
+     customer → "Actually, I need the quotation for 20 users of Business
+                 Standard, not 50 users of Starter. Please adjust that."
+
+   And the "Quote is on the way" pill filled the composer with:
+
+     "Thank you for your enquiry for 50 users of Google Workspace Business
+      Starter. I am preparing the quotation now and will send it across shortly.
+      If the number of users changes before then, just reply here and I will
+      adjust it."
+
+   It restated the exact figures the customer had just corrected, and then invited
+   them to do the thing they had already done. Not a wrong template — a template
+   fed a stale snapshot. `PillContext.seats`/`.product` come from the LEAD row,
+   which records the FIRST enquiry; the newest inbound message is newer
+   information and nothing told the pill it existed.
+
+   This module already holds the principle it needed: the phone pill is hidden
+   when a number is on file, because (its words) "a button that asks a customer
+   for something already on file makes the reseller look like they did not read
+   the email." Restating superseded seats is the same failure.
+
+   The fix is NOT to guess the new numbers — this module never guesses (see
+   `whatTheyAskedFor`, "or nothing, never a guess"). It is to stop asserting facts
+   that may have been overtaken.
+   ───────────────────────────────────────────────────────────────────────────── */
+describe("a customer reply supersedes the lead's stored facts", () => {
+  const stale = {
+    contactName: "test",
+    product: "Google Workspace Business Starter",
+    seats: 50,
+    sellerName: "ANUTECH DIGITAL PVT LTD",
+    factsSuperseded: true,
+  };
+
+  it("does not restate seats or product the customer may have just corrected", () => {
+    const d = pillDraft("quote", stale);
+    expect(d).not.toContain("50");
+    expect(d).not.toContain("Business Starter");
+  });
+
+  it("does not invent the corrected figures either", () => {
+    /* The reply said 20 users of Standard. This module cannot parse that and must
+       not pretend to — a guessed seat count in an email is worse than none. */
+    const d = pillDraft("quote", stale);
+    expect(d).not.toContain("20");
+    expect(d).not.toContain("Business Standard");
+  });
+
+  it("stops inviting a correction the customer has already sent", () => {
+    /* The line that made the draft read as unread mail. */
+    expect(pillDraft("quote", stale)).not.toMatch(/if the number of users changes/i);
+  });
+
+  it("acknowledges that they have written, so the reply is not generic", () => {
+    const d = pillDraft("quote", stale);
+    expect(d).toMatch(/Hi test,/);
+    expect(d).toMatch(/quotation/i);
+    /* Still a real reply, not a stub. */
+    expect(d.length).toBeGreaterThan(80);
+  });
+
+  it("still signs off with the reseller's own name", () => {
+    expect(pillDraft("quote", stale)).toContain("ANUTECH DIGITAL PVT LTD");
+  });
+
+  it("leaves the other two pills' behaviour alone", () => {
+    /* "Suggest a call" never restated the seat count as a commitment, and asking
+       for a phone number is unaffected by a change of requirement. Narrow fix. */
+    for (const id of ["phone", "call"] as const) {
+      expect(pillDraft(id, stale).length).toBeGreaterThan(80);
+    }
+  });
+
+  it("behaves exactly as before on a FIRST enquiry, where nothing is superseded", () => {
+    /* The regression risk: a fresh enquiry must keep repeating the facts back,
+       which is what makes the pill worth a tap in the first place. */
+    const fresh = pillDraft("quote", { ...stale, factsSuperseded: false });
+    expect(fresh).toContain("50 users");
+    expect(fresh).toContain("Google Workspace Business Starter");
+    expect(fresh).toMatch(/if the number of users changes/i);
+  });
+
+  it("treats an absent flag as a first enquiry", () => {
+    const { factsSuperseded: _omit, ...noFlag } = stale;
+    expect(pillDraft("quote", noFlag)).toContain("50 users");
+  });
+});

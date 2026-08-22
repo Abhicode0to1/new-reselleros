@@ -26,6 +26,7 @@ import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 import { verifyDraftMoney } from "@/lib/ai/money-guard";
 import { logAiDecision, formatGuardBlock } from "@/lib/ai/audit";
 import { rupee } from "@/lib/utils";
+import { stubDraft, type Draft } from "@/lib/ai/stub-draft";
 
 const bodySchema = z
   .object({
@@ -37,11 +38,6 @@ const bodySchema = z
   .refine((d) => !!d.leadId !== !!d.customerId, {
     message: "Provide exactly one of leadId or customerId.",
   });
-
-interface Draft {
-  subject: string;
-  message: string;
-}
 
 /**
  * Draft via Gemini, then VERIFY the money in what came back.
@@ -140,62 +136,6 @@ async function settle(
   return { ...fallback, mode: "stub" };
 }
 
-/** Deterministic fallback so the feature works before GEMINI_API_KEY is set. */
-function stubDraft(args: {
-  channel: "whatsapp" | "email"; firstName: string; company: string;
-  planLabel: string; purpose: "followup" | "reminder" | "renewal"; outstanding: number;
-  renewalDate?: string | null;
-}): Draft {
-  const { channel, firstName, company, planLabel, purpose, outstanding, renewalDate } = args;
-
-  if (purpose === "renewal") {
-    const on = renewalDate ? new Date(renewalDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "soon";
-    if (channel === "whatsapp") {
-      return {
-        subject: "",
-        message: `Hi ${firstName}, your ${planLabel} for ${company} is up for renewal on ${on}. ` +
-          `Shall I send across the renewal quote so there's no interruption in service?`,
-      };
-    }
-    return {
-      subject: `Renewal due ${on} — ${company}`,
-      message: `Hi ${firstName},\n\nYour ${planLabel} is due for renewal on ${on}. ` +
-        `To keep the service running without interruption, I can share the renewal quote now — just let me know.\n\nThanks,\nExcel Technologies`,
-    };
-  }
-
-  if (purpose === "reminder") {
-    const amt = rupee(outstanding);
-    if (channel === "whatsapp") {
-      return {
-        subject: "",
-        message: `Hi ${firstName}, gentle reminder — there's an outstanding balance of ${amt} on your account with us. ` +
-          `Happy to share a payment link or answer any questions. Thank you!`,
-      };
-    }
-    return {
-      subject: `Payment reminder — ${company}`,
-      message: `Hi ${firstName},\n\nA gentle reminder that there's an outstanding balance of ${amt} on your account. ` +
-        `Do let me know if you'd like a payment link or have any questions.\n\nThanks,\nExcel Technologies`,
-    };
-  }
-
-  // followup / check-in
-  if (channel === "whatsapp") {
-    return {
-      subject: "",
-      message: `Hi ${firstName}, just checking in on ${planLabel} for ${company}. ` +
-        `Everything running smoothly? Happy to help with anything — when's a good time for a quick call?`,
-    };
-  }
-  return {
-    subject: `Checking in — ${company}`,
-    message: `Hi ${firstName},\n\nJust checking in on ${planLabel} for ${company}. ` +
-      `Is everything running smoothly? I'd be glad to help with seats, renewals, or anything else.\n\n` +
-      `Is there a good time this week for a quick call?\n\nThanks,\nExcel Technologies`,
-  };
-}
-
 export async function POST(request: NextRequest) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -212,6 +152,21 @@ export async function POST(request: NextRequest) {
   // the tenant_secrets read to this user's tenant.
   const { data: me } = await supabase.from("users").select("tenant_id").eq("id", user.id).maybeSingle();
   const gemini = await resolveGeminiConfig(supabase, me?.tenant_id ?? null);
+
+  /* Who the draft is FROM. The stub's three email variants used to end
+     "Thanks,\nExcel Technologies" — a hardcoded company in text the operator sends to
+     their own customer, and a company this tenant no longer is (CLAUDE.md §1). Read
+     through the session client, so RLS scopes it to the caller's own tenant.
+
+     An empty name is passed through as empty rather than substituted: stubDraft omits
+     the sign-off line entirely, which is lib/whatsapp.ts's rule — no name beats the
+     wrong name. */
+  const { data: myTenant } = await supabase
+    .from("tenants")
+    .select("name")
+    .eq("id", me?.tenant_id ?? "")
+    .maybeSingle();
+  const signOff = (myTenant as { name?: string | null } | null)?.name?.trim() ?? "";
 
   // ── Lead mode ───────────────────────────────────────────────────────────
   if (parsed.leadId) {
@@ -248,6 +203,7 @@ export async function POST(request: NextRequest) {
       planLabel: lead.plan ? lead.plan.replace(/^google-workspace-/, "Google Workspace ") : "the plan we discussed",
       purpose: "followup",
       outstanding: 0,
+      signOff,
     }), { entity: "leads", entityId: lead.id, allowed, aiConfigured: Boolean(gemini.apiKey) });
     return NextResponse.json(settled);
   }
@@ -309,6 +265,7 @@ export async function POST(request: NextRequest) {
     purpose: parsed.purpose,
     outstanding,
     renewalDate,
+    signOff,
   }), { entity: "customers", entityId: customer.id, allowed, aiConfigured: Boolean(gemini.apiKey) });
   return NextResponse.json(settled);
 }

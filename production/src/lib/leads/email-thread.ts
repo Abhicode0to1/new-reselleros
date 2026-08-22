@@ -94,6 +94,18 @@ export interface ThreadSummary {
   awaitingFirstInbound: boolean;
   /** The newest message, for the tab badge and the "last activity" line. */
   latest: ThreadMessage | null;
+  /**
+   * The customer has written back since we last wrote — so anything the LEAD row
+   * records about what they want is a snapshot that their newest message may have
+   * overtaken.
+   *
+   * Needed by the reply pills: on 22 Aug 2026 the quote pill restated "50 users of
+   * Business Starter" to a customer whose reply had just changed it to 20 of
+   * Standard. Both halves matter — an inbound newest message is not enough on its
+   * own, because a FIRST enquiry is also inbound-newest and there the stored facts
+   * are exactly right to repeat back.
+   */
+  customerRepliedToUs: boolean;
 }
 
 export function summariseThread(thread: readonly ThreadMessage[]): ThreadSummary {
@@ -103,6 +115,10 @@ export function summariseThread(thread: readonly ThreadMessage[]): ThreadSummary
     inbound,
     outbound: thread.length - inbound,
     awaitingFirstInbound: inbound === 0,
+    customerRepliedToUs:
+      thread.length > 0 &&
+      thread[thread.length - 1].direction === "inbound" &&
+      thread.length - inbound > 0,
     latest: thread.length > 0 ? thread[thread.length - 1] : null,
   };
 }
