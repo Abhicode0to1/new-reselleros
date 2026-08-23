@@ -1313,3 +1313,48 @@ genuine per-month rate.
   `annual_yearly`. `record_payment` reads it to decide what subscription to build on the
   way back in, so a one-month renewal labelled annual rebuilds the wrong subscription —
   the error survives the round trip.
+
+## L36. I concluded a money function was wrong. Three existing tests said otherwise, and they were right
+*23 Aug 2026, Phase 3. The most important entry here, because I was about to ship it.*
+
+I traced a 12x MRR error to `record_payment`:
+
+```sql
+round(v_line_amount / case when v_is_monthly then 1.0 else 12.0 end)
+```
+
+and reasoned: `v_line_amount` is `qty * rate`, the quote builder stores rate as ₹/seat/YEAR
+(`updateCommitment` writes `rate: tier.msrp * 12`, commented "store as ₹/seat/year"), so
+dividing by 1 for monthly is the bug. I wrote the migration, wrote a regression test that
+went red for exactly the predicted reason, verified the patch in a rolled-back transaction,
+and it went GREEN.
+
+Then the full suite: **four failures**, three of them asserting the opposite in words:
+
+```
+monthly_subscription            "the line is Rs 38,232 PER MONTH (a /12 would give 3186)"
+record_payment_billing_cycle…   "expected 32400 (the whole month; a twelfth would be 2700)"
+renewal_and_subscription…       "mrr should be 3900 (the full month), got 325"
+```
+
+A `monthly` line's rate IS per-month — it is a separate price tier, not the annual rate
+rebilled. `case when v_is_monthly then 1.0` is correct by design. The real defect was one
+branch further out: `updateCommitment` kept the rate when the catalogue had no tier to
+read, so switching annual → monthly left a per-YEAR rate on a per-MONTH line.
+
+**The rules:**
+- **A green targeted test proves your change does what you meant. It says nothing about
+  whether you meant the right thing.** Mine was red-then-green on a false premise, which is
+  the most convincing possible way to be wrong.
+- **Run the WHOLE suite before believing a money diagnosis** — not after writing the fix,
+  and not only the tests you think are related. The three that caught this were named for
+  subscriptions, billing cycles and renewals; none would have looked relevant.
+- **Existing tests are documentation written by somebody who had the context you lack.**
+  Those assertions carry parenthetical asides — "(a /12 would give 3186)" — put there by
+  someone who had already considered the exact division I was about to change. Read them
+  as an argument, not an obstacle.
+- **Two consistent readings of a comment can still both be wrong about the system.** The
+  builder's "store as ₹/seat/year" is true of the ANNUAL tier and I generalised it. When a
+  convention has families, check the boundary rather than the label.
+- **Delete the wrong artifact.** The migration and its test encoded a false belief; leaving
+  them "for reference" would let a future session apply them.

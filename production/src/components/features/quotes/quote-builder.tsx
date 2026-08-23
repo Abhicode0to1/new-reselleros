@@ -12,6 +12,7 @@
 "use client";
 
 import * as React from "react";
+import { convertRateForCommitment } from "@/lib/quotes/commitment-rate";
 import { useDraftGuard } from "@/lib/hooks/useDraftGuard";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
@@ -810,8 +811,25 @@ export function QuoteBuilder() {
             };
           }
         }
-        // No catalog link OR tier not found — just update commitment, keep current rate
-        return { ...l, commitment };
+        /* No catalogue link, or the item has no price tier for this commitment.
+           "Keep current rate" was right within a family and WRONG across one: a
+           `monthly` line's rate is per seat per MONTH, an `annual_*` line's is per seat
+           per YEAR (database.types.ts:1052, and three SQL tests pin it down). Switching
+           annual → monthly used to leave a per-YEAR rate on a per-MONTH line — a
+           twelvefold overcharge on a quote with nothing on screen to show it.
+
+           Live proof: Q-TEST-2026-27-0009 carries commitment "monthly" with rate 3240
+           and cost 1320 against a ₹270/₹110 catalogue, and its item's `prices` is `{}`
+           — it took exactly this branch.
+
+           This converts the UNIT, it does not choose a price: a real monthly-flex tier
+           usually costs more than a twelfth of the annual rate, which is why the
+           catalogue path above is preferred and untouched. Right unit beats twelve times
+           wrong. */
+        const conv = convertRateForCommitment({
+          rate: l.rate, cost: l.cost, from: l.commitment, to: commitment,
+        });
+        return { ...l, commitment, rate: conv.rate, cost: conv.cost };
       }),
     );
   };
