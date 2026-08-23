@@ -47,7 +47,24 @@ export interface HealthInput {
   backupsYesterday: number;
   /** Rows in renewal_email_log, ever. */
   renewalEmailsEver: number;
-  /** Subscriptions inside the reminder ladder's window with reminder_count = 0. */
+  /**
+   * Subscriptions that have genuinely MISSED a reminder: `reminder_count = 0` while
+   * having existed on or before their own T-15, with that step now in the past.
+   *
+   * ─── ALL THREE CONDITIONS, AND THE THIRD IS THE ONE I MISSED ──────────────
+   * The first version of this check counted "inside the 30-day window with
+   * reminder_count = 0" and raised an ALARM on today's data. It was wrong. The one
+   * subscription it found was created 22 Aug for a 27 Aug renewal — five days apart —
+   * and the ladder opens at T-15, which for that row was 12 Aug, before it existed.
+   * Today is T-4, and T-4 is not a step (the ladder is T-30/15/12/9/6/3/0).
+   *
+   * So the cron was working and the check was crying wolf on its second query of the
+   * day. `renewal_email_log` being empty means "no subscription has yet reached a ladder
+   * step", which in a workspace this young is the correct and quiet answer.
+   *
+   * L38 says absence of evidence needs both halves. It needed three: never reminded, a
+   * step has passed, AND the row existed when it passed.
+   */
   subsDueUnreminded: number;
   /** Rows in attendance_reminder_log for today. */
   attendanceRemindersToday: number;

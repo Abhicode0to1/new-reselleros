@@ -63,10 +63,10 @@ describe("checkHealth — the nightly backup", () => {
 });
 
 describe("checkHealth — the renewal ladder", () => {
-  it("alarms when nothing was ever sent AND something is due", () => {
-    /* The real state on 23 Aug: renewal_email_log empty, and a subscription at T-4 with
-       reminder_count = 0. Either half alone is ambiguous; together they say the job is
-       not running. */
+  it("alarms when nothing was ever sent AND a step was genuinely missed", () => {
+    /* Two halves are still not enough — see the block at the bottom of this file for the
+       third, and for the false alarm that proved it. `subsDueUnreminded` means "missed a
+       ladder step it was present for", NOT "inside the 30-day window". */
     const r = checkHealth({ ...OK, renewalEmailsEver: 0, subsDueUnreminded: 1 });
     const f = r.findings.find((x) => x.id === "renewals-never-ran");
     expect(f?.severity).toBe("alarm");
@@ -141,5 +141,43 @@ describe("checkHealth — every finding is actionable", () => {
       expect(/check|run|read|Set |Run /i.test(f.text), f.id).toBe(true);
     }
     expect(r.verdict).toBe("unknown");
+  });
+});
+
+describe("checkHealth — the renewals alarm I got wrong once", () => {
+  /* On 23 Aug the first version of this check raised an ALARM saying the renewals cron
+     had never run. Measured against Cloud Scheduler it had: the job is ENABLED, ran at
+     03:30 UTC, and returned 200 in 1.4s.
+
+     The subscription it counted was created 22 Aug for a 27 Aug renewal — five days —
+     and the ladder opens at T-15, which for that row was 12 Aug, before it existed.
+     Today is T-4, which is not a step at all (T-30/15/12/9/6/3/0).
+
+     So `subsDueUnreminded` must count only rows that MISSED a step they were present
+     for. The caller enforces that in SQL; these cases pin the arithmetic that made the
+     alarm wrong, so the count can never again mean "inside the window". */
+
+  it("stays SILENT when nothing has reached a ladder step yet", () => {
+    /* Today's real numbers: renewal_email_log empty, and zero subscriptions that existed
+       at their own T-15. A young workspace, not a dead cron. */
+    const r = checkHealth({ ...OK, renewalEmailsEver: 0, subsDueUnreminded: 0 });
+    expect(ids(r)).not.toContain("renewals-never-ran");
+    expect(ids(r)).not.toContain("renewals-behind");
+    expect(r.verdict).toBe("ok");
+  });
+
+  it("alarms only once a step was genuinely missed", () => {
+    const r = checkHealth({ ...OK, renewalEmailsEver: 0, subsDueUnreminded: 3 });
+    const f = r.findings.find((x) => x.id === "renewals-never-ran");
+    expect(f?.severity).toBe("alarm");
+    expect(f?.text).toMatch(/3 subscription/);
+  });
+
+  it("does not treat a healthy ladder with a fresh row as behind", () => {
+    /* The ladder has run before AND nothing has missed a step — the ordinary state of a
+       working system, which must produce no finding at all. */
+    const r = checkHealth({ ...OK, renewalEmailsEver: 40, subsDueUnreminded: 0 });
+    expect(r.findings).toEqual([]);
+    expect(r.verdict).toBe("ok");
   });
 });

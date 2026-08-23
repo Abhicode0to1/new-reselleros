@@ -1433,3 +1433,41 @@ time.
 - **When somebody asks whether your automation works, measure it rather than describing
   it.** I could have listed what the loop does. What was worth having was the count of what
   it had actually caught: none of it.
+
+## L39. My own monitoring cried wolf on its second query. Absence of evidence needed THREE halves
+*23 Aug 2026, an hour after writing L38.*
+
+L38's health check raised an ALARM: "renewal_email_log is empty and 1 subscription inside
+the reminder window has never been reminded — the renewals cron has not done its job."
+
+Then gcloud auth came back and the cron was measured directly:
+
+```
+Cloud Scheduler   resellersos-renewals   0 9 * * *   ENABLED   ran 03:30 UTC today
+Cloud Run         /api/cron/renewals     200         1.475s
+```
+
+Working. The subscription it counted was created **22 Aug** for a **27 Aug** renewal — five
+days apart — and the ladder opens at **T-15**, which for that row was 12 Aug, before it
+existed. Today is T-4, and T-4 is not a step at all: the cadence is T-30/15/12/9/6/3/0. The
+cron had nothing to send and correctly sent nothing.
+
+Zero subscriptions in the whole database have ever existed at their own T-15. `renewal_email_log`
+being empty is the correct, quiet answer for a workspace this young.
+
+**The rules:**
+- **"Inside the window and never reminded" is not a missed reminder.** It needs three
+  conditions: never reminded, a step has passed, AND the row existed when it passed. I wrote
+  L38 saying absence of evidence needs both halves and then shipped a check with two of
+  three.
+- **A monitor is code and gets the same suspicion as code.** I verified this one against
+  hand-written inputs and shipped it without ever asking what its own query would return on
+  real data. Run a new check against production numbers and read every finding before
+  believing any of them.
+- **Delete the comment that records the wrong diagnosis.** A test here carried "together
+  they say the job is not running" as settled fact. Left alone it would teach the next reader
+  the mistake — the same reason the record_payment migration was deleted rather than kept
+  "for reference".
+- **A false alarm on day one is how a check gets muted by day ten.** Two wolf-cries in one
+  session (this, and the record_payment misdiagnosis) both came from reasoning that was
+  internally consistent and never checked against the live rows.
