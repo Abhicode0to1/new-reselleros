@@ -103,3 +103,47 @@ describe("decideDisposition — our own address is never a customer", () => {
     expect(decideDisposition({ openLeadId: null, isEnquiry: true }).action).toBe("create");
   });
 });
+
+describe("the operator testing the pipeline from their own address", () => {
+  /* Task 4 of the money-spine work, 23 Aug 2026. The problem: `senderIsOurs` was added
+     because Pardeep's own forwarded mail became a lead, and he needs to be able to test the
+     enquiry→quote flow from that same address. Same sender, opposite intent.
+
+     Intent is not visible in an address, so lib/inbound/self-test.ts requires it to be
+     stated in the subject. This file only has to prove that saying so gets through and that
+     NOT saying so still does not. */
+
+  it("lets a marked self-test create a lead", () => {
+    const d = decideDisposition({ senderIsOurs: true, isSelfTest: true, openLeadId: null, isEnquiry: true });
+    expect(d.action).toBe("create");
+  });
+
+  it("still skips our own address when it is NOT a self-test", () => {
+    /* The original bug. This assertion is the one that must never flip. */
+    const d = decideDisposition({ senderIsOurs: true, isSelfTest: false, openLeadId: null, isEnquiry: true });
+    expect(d.action).toBe("skip");
+    expect(d.reason).toMatch(/our own addresses/);
+  });
+
+  it("skips our own address when isSelfTest is simply absent", () => {
+    /* Every existing caller omits the flag. Absent must behave exactly as false, or adding
+       the parameter would have silently changed the default for the whole pipeline. */
+    const d = decideDisposition({ senderIsOurs: true, openLeadId: null, isEnquiry: true });
+    expect(d.action).toBe("skip");
+  });
+
+  it("files a self-test onto an open lead when one exists, like any other sender", () => {
+    /* Once past the guard it is an ordinary message, so the identity-before-classification
+       ordering applies unchanged — a second test from the same address lands on the first
+       test's lead rather than making a new one. */
+    const d = decideDisposition({ senderIsOurs: true, isSelfTest: true, openLeadId: "L-1", isEnquiry: true });
+    expect(d.action).toBe("append");
+  });
+
+  it("does not let the self-test flag rescue a message the classifier rejected", () => {
+    /* `isSelfTest` buys passage through the OWN-ADDRESS rule and nothing else. A marked
+       mail that Gemini says is not an enquiry is still not an enquiry. */
+    const d = decideDisposition({ senderIsOurs: true, isSelfTest: true, openLeadId: null, isEnquiry: false });
+    expect(d.action).toBe("skip");
+  });
+});

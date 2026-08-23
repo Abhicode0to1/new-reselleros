@@ -72,13 +72,27 @@ export interface DispositionInput {
    * So this is checked before anything else. Our own address is never a customer.
    */
   senderIsOurs?: boolean;
+  /**
+   * The operator deliberately testing the pipeline from their own address — see
+   * lib/inbound/self-test.ts, which owns the whole definition.
+   *
+   * This is NOT a weakening of `senderIsOurs`. That rule catches ACCIDENTS: a forwarded
+   * copy, an echo of our own send. Nobody meant those to enter the pipeline. A self-test is
+   * the opposite intent from the same address, and intent is not visible in an address, so
+   * it has to be stated in the subject. Everything unmarked still skips exactly as before.
+   */
+  isSelfTest?: boolean;
 }
 
 export function decideDisposition(input: DispositionInput): InboundDisposition {
   /* FIRST, ahead of even the known-lead check. An echo of our own message must not be
      filed onto the conversation either — it would duplicate the thread with a copy of
-     something already recorded as sent. */
-  if (input.senderIsOurs) {
+     something already recorded as sent.
+
+     The self-test escape sits INSIDE this branch rather than before it, and that placement
+     is the point: the only way past `senderIsOurs` is to have been recognised as
+     deliberate, and the ordering that made this rule correct is untouched. */
+  if (input.senderIsOurs && !input.isSelfTest) {
     return {
       action: "skip",
       reason: "sent from one of our own addresses — this is a copy of mail we sent, not an enquiry",

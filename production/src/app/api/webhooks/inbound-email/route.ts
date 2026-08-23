@@ -34,6 +34,7 @@ import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
 import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
 import { decideDisposition } from "@/lib/inbound/disposition";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
+import { isSelfTest } from "@/lib/inbound/self-test";
 import { extractEntities } from "@/lib/inbound/extract";
 import { planQuoteFromEnquiry } from "@/lib/quotes/quote-from-enquiry";
 import { decideAutoSend } from "@/lib/quotes/auto-send-quote";
@@ -508,8 +509,15 @@ export async function POST(request: NextRequest) {
   }
   const senderIsOurs = ourAddresses.has(fromEmail.trim().toLowerCase());
 
+  /* The operator testing the pipeline from their own address. Deliberate, and it has to say
+     so in the subject — lib/inbound/self-test.ts explains why an address cannot carry
+     intent and what accident each rule there is refusing. Unmarked mail from our own
+     addresses skips exactly as it did before this existed. */
+  const selfTest = isSelfTest({ senderIsOurs, subject });
+
   const disposition = decideDisposition({
     senderIsOurs,
+    isSelfTest: selfTest,
     openLeadId: existing?.id ?? null,
     /* `ai` is null when Gemini did not run. Passing extracted.isEnquiry here would
        pass the webhook's default-TRUE fallback and hide that distinction — and the
@@ -693,9 +701,23 @@ export async function POST(request: NextRequest) {
     plan:          matchedItem?.name || extracted.product || null,
     seats:         facts.seats.value,
     stage:         "new",
-    source:        "email-inbound",
+    /* Marked at source, not only in the notes. A self-test produces a real lead in the
+       pipeline — it counts in the board, in stage-age and in the forecast until somebody
+       deletes it — so it has to be FINDABLE by a query, not by reading prose. Anything
+       reporting on real demand can exclude this value; nothing does yet, which is worth
+       knowing rather than assuming. */
+    source:        selfTest ? "email-selftest" : "email-inbound",
     priority:      "medium",
-    notes:         note,
+    /* The self-test banner goes FIRST in the notes, above the captured mail. Whoever opens
+       this lead in a week must know it is scaffolding before they read anything that looks
+       like demand — and must know that deleting the lead does NOT give the quote's document
+       number back, because the CGST Rule 46 series is gapless by design. */
+    notes: selfTest
+      ? `⚠ SELF-TEST LEAD — created deliberately from our own address (${fromEmail}) to ` +
+        `exercise the enquiry→quote→email path. Safe to delete. NOTE: if a quote was drafted ` +
+        `for it, that quote consumed a real document number from the gapless GST series and ` +
+        `deleting the lead does not return it.\n\n${note}`
+      : note,
   });
   if (leadErr) {
     console.error("[inbound-email] lead insert failed:", leadErr);
@@ -813,6 +835,9 @@ export async function POST(request: NextRequest) {
       quoteId:         draftQuoteId,
       emailConfigured: isEmailConfigured(),
       senderIsOurs,
+      /* Lets the send happen to our OWN address on a marked test, which is the point of
+         running one — the loop is closed by the marker having to start the subject. */
+      isSelfTest: selfTest,
     });
 
     if (!sendDecision.send) {

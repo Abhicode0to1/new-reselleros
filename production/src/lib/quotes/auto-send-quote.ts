@@ -39,6 +39,20 @@ export interface AutoSendInput {
    * ourselves in a loop.
    */
   senderIsOurs?: boolean;
+  /**
+   * A marked self-test from our own address — see lib/inbound/self-test.ts.
+   *
+   * Here it does the OPPOSITE of what it might look like: it lets the send happen to our
+   * own address, because seeing exactly what a customer would receive is the entire purpose
+   * of the exercise. A self-test that stops one step short of the send tests everything
+   * except the thing most likely to be wrong.
+   *
+   * The loop this could have been is closed by the marker rule, not by hope: the mail this
+   * sends is subjected "Your quote Q-… — <tenant>", and `isSelfTest` requires the subject to
+   * BEGIN with the marker. So the send cannot re-enter as another test. There is a test for
+   * that exact subject line in self-test.test.ts.
+   */
+  isSelfTest?: boolean;
 }
 
 export type AutoSendDecision =
@@ -46,7 +60,7 @@ export type AutoSendDecision =
   | { send: false; reason: string };
 
 export function decideAutoSend(input: AutoSendInput): AutoSendDecision {
-  if (input.senderIsOurs) {
+  if (input.senderIsOurs && !input.isSelfTest) {
     return { send: false, reason: "the sender is one of our own addresses — nothing is sent back to ourselves" };
   }
 

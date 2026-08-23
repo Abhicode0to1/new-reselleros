@@ -1780,3 +1780,29 @@ fire-and-forget (`void … .catch`), because a send failure must not turn a capt
 into a 500: the provider would retry the whole message, the `inbound_emails` idempotency
 claim would then skip it as a duplicate, and the mail would be lost to protect an email.
 The lead, the message and the draft are all committed before the send is attempted.
+
+**L60 — When a guard blocks the owner too, add a way to STATE intent, not a way to turn the
+guard off.** `senderIsOurs` stops our own addresses becoming leads, and it exists because a
+forwarded copy of our own mail did exactly that. It also blocked Pardeep from testing the
+enquiry→quote→email path from the address he actually uses. The tempting fixes were both
+wrong: an env flag (`ALLOW_SELF_ENQUIRY=1`) turns the guard off for every message and
+reinstates the original bug, and a domain exemption is worse. What separates the two cases
+is not the sender, it is **intent** — the accidents are a forward and an echo, which nobody
+meant to send; a self-test is deliberate. Intent is invisible in an address, so it has to be
+declared: a subject that STARTS with `[selftest]`, and only from one of our own addresses.
+`startsWith` and not `includes`, because "Re:"/"Fwd:" prefixes are precisely the trail an
+accidental resend leaves.
+
+Two things that made it safe rather than merely clever: the marker buys passage through the
+own-address rule and **nothing else** (a marked mail with no term stated still will not
+auto-send, and one the classifier rejects is still rejected), and the loop is closed by
+construction — the quote mail this feature exists to test is subjected "Your quote Q-… —
+<tenant>", which cannot begin with the marker. There is a test asserting that exact subject.
+
+**L61 — A test that writes to production has a cost; put it on the record, in the record.**
+A self-test produces a real lead and, if the mail is complete, a real quote — which takes an
+irreversible number from the gapless CGST Rule 46 series. The lead is marked
+`source = "email-selftest"` so it is findable by a QUERY rather than by reading prose, and
+its notes open with a banner saying the lead is safe to delete **and that deleting it does
+not give the document number back**. Nothing currently excludes that source from pipeline or
+forecast reporting, which is worth writing down rather than assuming.

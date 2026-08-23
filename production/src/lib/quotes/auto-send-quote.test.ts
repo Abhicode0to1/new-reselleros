@@ -88,3 +88,35 @@ describe("decideAutoSend — order of refusals", () => {
     expect(d.reason).not.toMatch(/configured|address|nothing to send/);
   });
 });
+
+describe("decideAutoSend — the operator's own self-test", () => {
+  it("DOES send to our own address when the mail was a marked self-test", () => {
+    /* The point of the exercise is seeing exactly what a customer receives. A self-test
+       that stops one step short of the send tests everything except the thing most likely
+       to be wrong. */
+    const d = decideAutoSend({ ...ok, senderIsOurs: true, isSelfTest: true });
+    expect(d).toEqual({ send: true });
+  });
+
+  it("still refuses our own address when it was NOT a marked self-test", () => {
+    const d = decideAutoSend({ ...ok, senderIsOurs: true, isSelfTest: false });
+    expect(d.send).toBe(false);
+    if (d.send) return;
+    expect(d.reason).toMatch(/our own addresses/);
+  });
+
+  it("does not exempt a self-test from the TERM rule", () => {
+    /* The marker buys passage through the own-address guard and nothing else. A self-test
+       with no term stated must hold, or the test would prove a behaviour the real path does
+       not have — which is worse than not testing it. */
+    const d = decideAutoSend({ ...ok, senderIsOurs: true, isSelfTest: true, termAssumed: true });
+    expect(d.send).toBe(false);
+    if (d.send) return;
+    expect(d.reason).toMatch(/did not say monthly or annual/);
+  });
+
+  it("does not exempt a self-test from the mechanical checks either", () => {
+    expect(decideAutoSend({ ...ok, senderIsOurs: true, isSelfTest: true, quoteId: null }).send).toBe(false);
+    expect(decideAutoSend({ ...ok, senderIsOurs: true, isSelfTest: true, emailConfigured: false }).send).toBe(false);
+  });
+});
