@@ -4,7 +4,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { SeriesState } from "@/lib/invoices/issue-consequences";
+import type { SeriesState } from "@/lib/actions/consequence";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
@@ -314,35 +314,42 @@ export function useCustomerQuotes(customerId: string | undefined) {
 }
 
 /**
- * The tenant's invoice series, for the pre-issue confirmation.
+ * The tenant's document counters, for the pre-action confirmations.
  *
  * Read-only and deliberately so: `next_document_number` is the ONLY thing allowed to
- * allocate a number (CLAUDE.md §17a), so this reads `last_number` to PREDICT the next
- * one and never touches it. A concurrent issue can take the predicted number first,
- * which is why `issueConsequences` reports it as a prediction rather than a promise.
+ * allocate (CLAUDE.md §17a), so this reads `last_number` to PREDICT the next value and
+ * never touches it. A concurrent issue can take the predicted number first, which is why
+ * the dialogs call it a prediction rather than a promise.
  *
- * `invoiceCount` comes back alongside so the confirmation can spot a series with holes
- * — ANUTECH sits at 32 with zero invoices on the books, and an operator about to add
- * to that should see it.
+ * `documentCount` comes back alongside so a confirmation can spot a series with holes —
+ * ANUTECH sits at 32 with zero invoices and at 39 with zero payments, and an operator
+ * about to add to either should see it.
  */
-export function useInvoiceSeries() {
+export interface DocumentSeriesPair {
+  invoice: SeriesState | null;
+  receiptVoucher: SeriesState | null;
+}
+
+/**
+ * Both document counters the pre-action dialogs need.
+ *
+ * Through a route, not the browser client: `document_series` is absent from the generated
+ * Database type, and registering it there took typecheck from 4 errors to 2,722 — see
+ * api/invoices/series/route.ts for why the table stays unregistered.
+ */
+export function useDocumentSeries() {
   return useQuery({
-    queryKey: ["invoice-series"],
-    queryFn: async (): Promise<SeriesState | null> => {
-      /* Through a route, not the browser client: `document_series` is absent from the
-         generated Database type, and registering it there took typecheck from 4 errors
-         to 2,722 (see api/invoices/series/route.ts). */
+    queryKey: ["document-series"],
+    queryFn: async (): Promise<DocumentSeriesPair> => {
       const res = await fetch("/api/invoices/series");
-      if (!res.ok) {
-        /* Null, not a throw. A missing counter must not stop the dialog opening — it
-           degrades to "this opens the series" wording, and the operator still gets the
-           irreversibility warnings, which are the part that matters. */
-        return null;
-      }
-      const json = await res.json() as { series?: SeriesState | null };
-      return json.series ?? null;
+      /* Empty rather than a throw. A missing counter must not stop a dialog opening —
+         it degrades to "this opens the series" wording and the operator still gets the
+         irreversibility warnings, which are the part that matters. */
+      if (!res.ok) return { invoice: null, receiptVoucher: null };
+      const json = await res.json() as Partial<DocumentSeriesPair>;
+      return { invoice: json.invoice ?? null, receiptVoucher: json.receiptVoucher ?? null };
     },
-    /* The number moves whenever anyone issues, so a stale prediction is a wrong one. */
+    /* The numbers move whenever anyone issues, so a stale prediction is a wrong one. */
     staleTime: 15_000,
     refetchOnWindowFocus: true,
   });

@@ -29,19 +29,11 @@
  * a concurrent issue can take it first, and `predictedIsCertain` says as much.
  */
 import { rupee } from "@/lib/utils";
+import {
+  formatDocumentNumber, seriesGap,
+  type Consequence, type SeriesState,
+} from "@/lib/actions/consequence";
 
-export interface SeriesState {
-  /** e.g. "INV" */
-  prefix: string;
-  /** The tenant's document code, e.g. "ADPL". Null when never set. */
-  docCode: string | null;
-  /** e.g. "FY2627" */
-  fiscalYear: string;
-  /** The last number ISSUED. The next one is this + 1. */
-  lastNumber: number;
-  /** How many invoices this tenant actually holds — for the gap check below. */
-  invoiceCount: number;
-}
 
 export interface QuoteToInvoice {
   id: string;
@@ -52,12 +44,6 @@ export interface QuoteToInvoice {
   paymentTermsDays: number | null;
 }
 
-export type ConsequenceTone = "fact" | "warning";
-
-export interface Consequence {
-  tone: ConsequenceTone;
-  text: string;
-}
 
 export interface IssueConsequences {
   /** The number this will most likely take, e.g. "INV-ADPL-2026-27-0033". */
@@ -71,17 +57,6 @@ export interface IssueConsequences {
   consequences: Consequence[];
 }
 
-/**
- * `{PREFIX}-{DOC_CODE}-{YYYY}-{YY}-{NNNN}`, matching live data
- * (`INV-TEST-2026-27-0008`). The doc code is omitted when the tenant has none, which
- * is the shape Excel Technologies' row is in.
- */
-export function formatDocumentNumber(s: SeriesState, n: number): string {
-  const fy = /^FY(\d{2})(\d{2})$/.exec(s.fiscalYear);
-  const years = fy ? `20${fy[1]}-${fy[2]}` : s.fiscalYear;
-  const parts = [s.prefix, s.docCode?.trim() || null, years, String(n).padStart(4, "0")];
-  return parts.filter(Boolean).join("-");
-}
 
 export function issueConsequences(args: {
   quote: QuoteToInvoice;
@@ -143,21 +118,10 @@ export function issueConsequences(args: {
     });
   }
 
-  /* The series-gap alarm. Not a rule being broken — a fact the operator is better off
-     seeing before they add to it. A live GST series is expected to be sequential, and a
-     tenant sitting at 32 with nothing on the books invites the question at audit. */
-  if (series && series.lastNumber > 0 && series.invoiceCount === 0) {
-    out.push({
-      tone: "warning",
-      text: `This series has already used ${series.lastNumber} number${series.lastNumber === 1 ? "" : "s"} but the books hold no invoices — those were issued and deleted. Numbers 1-${series.lastNumber} stay permanently unaccounted for, and an auditor will ask.`,
-    });
-  } else if (series && series.lastNumber > series.invoiceCount) {
-    const gap = series.lastNumber - series.invoiceCount;
-    out.push({
-      tone: "warning",
-      text: `${gap} number${gap === 1 ? "" : "s"} in this series have no invoice against them — issued and later deleted. They cannot be reissued.`,
-    });
-  }
+  /* The series-gap alarm, from the shared helper — the receipt-voucher and quote
+     counters have the same holes, so the wording lives in one place. */
+  const gap = seriesGap(series, "invoice");
+  if (gap) out.push(gap);
 
   return {
     predictedNumber,

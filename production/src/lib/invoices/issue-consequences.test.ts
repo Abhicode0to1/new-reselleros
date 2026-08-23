@@ -2,22 +2,21 @@ import { describe, it, expect } from "vitest";
 import {
   issueConsequences,
   bulkIssueConsequences,
-  formatDocumentNumber,
-  type SeriesState,
   type QuoteToInvoice,
 } from "./issue-consequences";
+import { formatDocumentNumber, type SeriesState } from "@/lib/actions/consequence";
 
 /* ANUTECH's real state, measured 23 Aug 2026: doc_code ADPL, FY2627 series at 32,
    and ZERO invoices on the books. */
 const ANUTECH: SeriesState = {
   prefix: "INV", docCode: "ADPL", fiscalYear: "FY2627",
-  lastNumber: 32, invoiceCount: 0,
+  lastNumber: 32, documentCount: 0,
 };
 
 /* The sandbox, whose numbers and invoices agree — the healthy shape. */
 const HEALTHY: SeriesState = {
   prefix: "INV", docCode: "TEST", fiscalYear: "FY2627",
-  lastNumber: 8, invoiceCount: 8,
+  lastNumber: 8, documentCount: 8,
 };
 
 const QUOTE: QuoteToInvoice = {
@@ -121,7 +120,7 @@ describe("issueConsequences", () => {
   it("raises a partial gap too", () => {
     const c = issueConsequences({
       quote: QUOTE,
-      series: { ...HEALTHY, lastNumber: 10, invoiceCount: 8 },
+      series: { ...HEALTHY, lastNumber: 10, documentCount: 8 },
     });
     expect(c.consequences.some((x) => /2 numbers.*no invoice/i.test(x.text))).toBe(true);
   });

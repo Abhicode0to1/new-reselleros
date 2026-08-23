@@ -1209,3 +1209,63 @@ in New beside the real one. The data showed it exactly: the same sender, `skippe
   An unfiltered read under the admin client pulls every tenant's sending address into
   "ours", and then a genuine enquiry from another reseller gets silently dropped — I
   wrote that filter-less query first and caught it before it shipped.
+
+## L33. Before building a list of "the N dangerous actions", check each one exists
+*23 Aug 2026, Phase 2.*
+
+My own plan named four irreversible taps: issue invoice, send quote, record payment,
+suspend/cancel. Measuring found:
+
+| tap | reality |
+|---|---|
+| issue invoice | a bare `onClick`, plus a BULK loop over every selected quote |
+| send quote | a dialog existed, describing the mechanism and not the commitment |
+| record payment | a dialog existed with a title and nothing else |
+| suspend/cancel | **not an action in this app at all** |
+
+Only one of four was the job I had written down. The nearest thing to the fourth —
+deleting a subscription — already confirms well (what it does, what it is for, and the
+alternative when it is blocked). Building a "suspend" tap would have been inventing a
+feature to satisfy my own list.
+
+**The rules:**
+- **A plan is a hypothesis about the code.** CLAUDE.md §25 says that about docs; it is just
+  as true of a plan written an hour ago by me. Grep for each item before starting.
+- **"Add a confirmation" and "make the existing confirmation honest" are different jobs.**
+  Two of these already had dialogs. The work was not a dialog, it was the sentences —
+  which is a smaller change and a harder one to spot as missing.
+- **Report the count you found, not the count you promised.** Saying "the real work is
+  two, not three, and here is why" is the deliverable; quietly building four would hide
+  that the fourth was fictional.
+
+## L34. A money guard's copy must name the consequence nobody would guess
+*23 Aug 2026, writing the three consequence modules.*
+
+The mechanical description is the one that gets written and the one that helps least.
+"Email a copy of the quote PDF to the customer" is true and tells the operator nothing
+they did not already intend. What each act actually needed was the fact they could NOT
+have inferred:
+
+- **Send quote** — the accept link works without you, so they can commit you at any hour;
+  and a *resend* does not replace the earlier email, so two prices now sit in the thread
+  and the customer picks which to read.
+- **Record payment** — it issues a GST **receipt voucher** under CGST Section 31(3)(d),
+  consuming a serial from the same gapless machinery as an invoice. No screen had ever
+  mentioned this. ANUTECH holds zero payments with that counter at 39.
+- **Issue invoice** — the number is spent either way, because deleting the invoice retires
+  it rather than freeing it (migration 0118).
+
+**The rules:**
+- **Say the recovery as well as the risk.** "Delete the payment in Payments — that unwinds
+  the customer and subscription cleanly. The receipt-voucher number does not come back."
+  An operator who knows the way back acts on a mistake; one who does not, leaves it.
+- **Never build the list from invented figures.** The send dialog renders nothing at all
+  unless the caller passes real amounts. Defaulting to zero would have put "₹0 goes to the
+  customer" on a real quote — a sentence the operator might believe.
+- **Phrase by outcome when you cannot know the cause.** "No subscription and no renewal
+  are created" is true whether the reason is a one-off sale (guard 0157) or line items with
+  no billing commitment. I dropped an `isOneOff` field I could not populate honestly rather
+  than let the caller guess it.
+- **Move a check EARLIER when the earlier act is the exposing one.** The quote-total-vs-GST
+  check lived only on the invoice path. Sending is what actually puts the figure in front
+  of the customer, so it belongs there too — by invoice time the number is already quoted.

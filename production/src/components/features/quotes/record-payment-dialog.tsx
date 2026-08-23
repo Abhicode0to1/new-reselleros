@@ -14,6 +14,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { subscriptionExpectation, type QuoteLine } from "@/lib/subscriptions/orphan-quote";
 import { FeedbackDialog } from "@/components/shared/feedback-dialog";
+import { ConsequenceList } from "@/components/shared/consequence-list";
+import { recordPaymentConsequences } from "@/lib/payments/record-consequences";
+import { useDocumentSeries } from "@/lib/queries/invoices";
 
 import {
   Sheet,
@@ -125,6 +128,8 @@ export function RecordPaymentDialog({
   lineItems,
 }: RecordPaymentDialogProps) {
   const qc = useQueryClient();
+  /* The receipt-voucher counter, so the sheet can name the number it will consume. */
+  const { data: series } = useDocumentSeries();
   const [method, setMethod] = React.useState("upi");
   const [bankAccountId, setBankAccountId] = React.useState<string>("");
   // Optional proof-of-payment file (screenshot / PDF). Uploaded best-effort
@@ -1091,6 +1096,45 @@ export function RecordPaymentDialog({
                   </>
                 )}
               </span>
+            </div>
+          )}
+
+          {/* ── What confirming actually sets in motion ────────────────────────
+              This sheet had a title and nothing else, while record_payment is the
+              widest-reaching write in the app — it can create a customer, convert the
+              lead, create a subscription, roll a renewal, and allocate a GST receipt
+              voucher. That last one no screen has ever mentioned.
+
+              Wording and every rule live in lib/payments/record-consequences.ts,
+              unit-tested there. This only places it above the button. */}
+          {watchedAmount > 0 && (
+            <div className="rounded-md border border-hairline/60 bg-paper-2 p-3">
+              <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+                What this does
+              </div>
+              <ConsequenceList
+                items={recordPaymentConsequences({
+                  payment: {
+                    quoteId,
+                    customerName,
+                    amount: Number(watchedAmount) || 0,
+                    quoteAmount: expectedAmount,
+                    priorReceived: alreadyReceived,
+                    createsCustomer: isProspect,
+                    /* Faithful to what record_payment actually keys off: a subscription is
+                       created only when a line carries a billing commitment. Without
+                       lineItems this is false, so the sheet says "no subscription" rather
+                       than promising one it cannot confirm. */
+                    createsSubscription: (lineItems ?? []).some(
+                      (l) => typeof l?.commitment === "string" && l.commitment.trim() !== "",
+                    ),
+                    planLabel: (lineItems ?? [])[0]?.name ?? null,
+                  },
+                  /* Null once an invoice already exists — a post-invoice payment issues no
+                     new receipt voucher, and claiming a number would be wrong. */
+                  receiptSeries: invoiceId ? null : (series?.receiptVoucher ?? null),
+                })}
+              />
             </div>
           )}
 

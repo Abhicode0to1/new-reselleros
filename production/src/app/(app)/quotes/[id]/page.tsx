@@ -1235,6 +1235,18 @@ export default function QuoteDetailPage() {
         customerName={quote.customer_name}
         defaultRecipient={customer?.contact_email ?? null}
         alreadySent={quote.status === "sent" || quote.status === "viewed"}
+        /* The quote's own figures, so the dialog can state what sending commits you to
+           — the amount that reaches the customer, whether the total matches its own GST,
+           and how long the price stands. Passing null where the quote is genuinely
+           silent, never a zero: an invented figure in that list is worse than no list. */
+        amount={quote.amount}
+        subtotal={quote.subtotal}
+        taxRate={quote.tax_rate}
+        validityDays={
+          quote.expires_date
+            ? Math.max(1, daysBetween(new Date(quote.created_at), quote.expires_date))
+            : null
+        }
       />
 
       {/* Approve / reject drawer */}

@@ -15,7 +15,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SAAS_HSN } from "@/lib/gst/hsn";
-import { useInvoices, useQuotesAwaitingInvoice, useGenerateInvoice, useDeleteProjectInvoice, useDeleteSubscriptionInvoice, useInvoiceSeries } from "@/lib/queries/invoices";
+import { useInvoices, useQuotesAwaitingInvoice, useGenerateInvoice, useDeleteProjectInvoice, useDeleteSubscriptionInvoice, useDocumentSeries } from "@/lib/queries/invoices";
 import { useQuoteByInvoiceId } from "@/lib/queries/quotes";
 import { usePaymentsByQuote, totalReceived } from "@/lib/queries/payments";
 import { RecordPaymentDialog } from "@/components/features/quotes/record-payment-dialog";
@@ -124,7 +124,8 @@ function InvoicesPageInner() {
      quote(s) awaiting confirmation; the dialog states what the click will do. */
   const [confirmSingle, setConfirmSingle] = React.useState<string | null>(null);
   const [confirmBulk, setConfirmBulk] = React.useState<boolean>(false);
-  const { data: invoiceSeries = null } = useInvoiceSeries();
+  const { data: series } = useDocumentSeries();
+  const invoiceSeries = series?.invoice ?? null;
 
   /** A pending quote in the shape `issueConsequences` needs. */
   const toIssuable = React.useCallback(

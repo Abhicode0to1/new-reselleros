@@ -34,6 +34,8 @@ import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
+import { ConsequenceList } from "@/components/shared/consequence-list";
+import { sendQuoteConsequences } from "@/lib/quotes/send-consequences";
 
 const schema = z.object({
   to:      z.string().email("Invalid email"),
@@ -51,6 +53,18 @@ interface SendQuoteDialogProps {
   defaultRecipient?:  string | null;
   /** Toggle button label and toast copy. */
   alreadySent?:       boolean;
+  /**
+   * The quote's own figures, for the "what this will do" list above the send button.
+   *
+   * OPTIONAL so the two existing call sites keep working unchanged — the list simply
+   * does not render without them. Deliberately not defaulted to zeroes: a
+   * consequence list built from invented figures is worse than none, and "₹0 goes to
+   * the customer" on a real quote would be a lie the operator might believe.
+   */
+  amount?:            number | null;
+  subtotal?:          number | null;
+  taxRate?:           number | null;
+  validityDays?:      number | null;
 }
 
 export function SendQuoteDialog({
@@ -60,6 +74,10 @@ export function SendQuoteDialog({
   customerName,
   defaultRecipient,
   alreadySent = false,
+  amount,
+  subtotal,
+  taxRate,
+  validityDays,
 }: SendQuoteDialogProps) {
   const qc = useQueryClient();
 
@@ -67,6 +85,10 @@ export function SendQuoteDialog({
     register,
     handleSubmit,
     reset,
+    /* Read live so the consequence list judges the address the operator can SEE. Using
+       defaultRecipient instead would warn about a recipient they had already
+       corrected, which reads as the app being broken. */
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -207,6 +229,33 @@ export function SendQuoteDialog({
               <div className="pt-1 text-[11px] text-ink-3">
                 <Badge kind="muted">Tip</Badge>{" "}
                 Status flips to <b>Sent</b> on success — downstream automation (reminders, renewals) starts tracking from here.
+              </div>
+            )}
+            {/* ── What sending actually commits you to ──────────────────────
+                Only when the caller supplied the figures — a list built from
+                invented numbers would be worse than none. The wording and every
+                rule behind it live in lib/quotes/send-consequences.ts, unit-tested
+                there; this only places it above the button. */}
+            {amount !== undefined && (
+              <div className="rounded-md border border-hairline/60 bg-paper-2 p-3">
+                <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+                  What this does
+                </div>
+                <ConsequenceList
+                  items={sendQuoteConsequences({
+                    id: quoteId,
+                    customerName,
+                    /* The address as it stands in the form right now, not the default —
+                       the operator can change it, and a warning about a recipient they
+                       have already corrected reads as broken. */
+                    recipientEmail: watch("to") ?? defaultRecipient ?? null,
+                    amount: amount ?? null,
+                    subtotal: subtotal ?? null,
+                    taxRate: taxRate ?? null,
+                    validityDays: validityDays ?? null,
+                    alreadySent,
+                  })}
+                />
               </div>
             )}
           </div>  {/* close scrollable form body */}
