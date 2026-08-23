@@ -19,7 +19,11 @@ import { maskSecret } from "@/lib/crypto/vault";
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+/* Kept in step with lib/ai/gemini.ts, which explains why this is a rolling alias and not
+   a pinned version: gemini-2.5-flash 404d for new keys on 23 Aug 2026 and ListModels still
+   reported it as available. Two DEFAULT_MODELs in one repo is a smell — they are separate
+   today because this route validates a key before any tenant row exists. */
+const DEFAULT_MODEL = "gemini-flash-latest";
 
 const saveSchema = z
   .object({

@@ -23,14 +23,21 @@ interface Props {
   onOpenChange: (v: boolean) => void;
 }
 
-// Current Gemini models on the Generative Language API (1.5 retired 2025–26).
+/* EVERY ONE OF THESE WAS CALLED AND RETURNED 200 on 23 Aug 2026. The previous list was
+   copied from documentation and had gemini-2.5-flash at the top, which 404s for keys created
+   now ("no longer available to new users") — while ListModels cheerfully still reports it.
+   A dropdown of models that do not work is worse than no dropdown: the operator picks one,
+   it fails, and the key looks broken.
+
+   gemini-pro-latest is deliberately absent: it answered 429 (quota), not 200. That is a
+   different problem from unavailability and does not belong in a list of safe choices. */
 const MODEL_OPTIONS = [
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-2.0-flash-lite",
-  "gemini-2.5-pro",
+  "gemini-flash-latest",
+  "gemini-3.6-flash",
+  "gemini-3-flash-preview",
+  "gemini-3.1-flash-lite",
 ];
-const RECOMMENDED_MODEL = "gemini-2.5-flash";
+const RECOMMENDED_MODEL = "gemini-flash-latest";
 
 interface GeminiStatus {
   ok:           boolean;
@@ -186,7 +193,7 @@ export default function GeminiConfigureDialog({ open, onOpenChange }: Props) {
                   <option key={m} value={m}>{m}{m === RECOMMENDED_MODEL ? " — recommended" : ""}</option>
                 ))}
               </select>
-              <p className="text-[10px] text-ink-3 mt-1"><span className="font-mono">gemini-2.5-flash</span> — current + reliable for Hinglish drafts. If a model fails, hit Test to see your key's available models.</p>
+              <p className="text-[10px] text-ink-3 mt-1"><span className="font-mono">gemini-flash-latest</span> — a rolling alias, so it will not go stale the way a pinned version does. If a model fails, hit Test — but note the list it shows comes from Google and is not always accurate about what will actually work.</p>
             </div>
 
             <div className="rounded-md bg-paper-2 p-3 text-xs text-ink-3 leading-relaxed break-words">

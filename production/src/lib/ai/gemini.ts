@@ -22,10 +22,45 @@ export interface GeminiConfig {
   model: string;
 }
 
-// gemini-1.5-* were retired by Google (2025–26). gemini-2.5-flash is current
-// and broadly routable for generateContent (the gemini-2.0-flash alias 404s on
-// some keys/projects even when ListModels reports it).
-const DEFAULT_MODEL = "gemini-2.5-flash";
+/**
+ * MEASURED, not assumed — 23 Aug 2026, against the live API with a working key:
+ *
+ *   gemini-3.6-flash   200  "OK"
+ *   gemini-2.5-flash   404  "This model models/gemini-2.5-flash is no longer available to
+ *                            new users. Please update your code to use models/gemini-3.6-flash"
+ *
+ * gemini-1.5-* went the same way in 2025-26, and 2.5 has now followed for NEW keys. Note the
+ * wording: "no longer available to NEW USERS". An existing key can keep working on a retired
+ * model while a freshly created one 404s, so this line ages silently — nothing breaks until
+ * somebody rotates a key, and then AI stops for a reason that has nothing to do with the
+ * rotation. That is exactly how it was found: a 403 was fixed by a new key and became a 404.
+ *
+ * If AI drafting dies again, curl one model name before touching any code.
+ *
+ * ─── AND `ListModels` LIES, WHICH IS WORSE THAN BEING OUT OF DATE ───────────
+ * Measured in the same sitting, with the same key:
+ *
+ *   ListModels reports  gemini-2.5-flash   →  calling it returns 404
+ *   ListModels omits    gemini-3.6-flash   →  calling it returns 200
+ *
+ * So the discovery endpoint is not a source of truth for what will work, in either
+ * direction. The old comment here already half-knew this ("the gemini-2.0-flash alias 404s
+ * on some keys even when ListModels reports it") and still pinned a version.
+ *
+ * ─── WHY AN ALIAS, AND WHAT IT COSTS ───────────────────────────────────────
+ * `gemini-flash-latest` is a ROLLING alias — verified 200 alongside 3.6-flash,
+ * 3-flash-preview and 3.1-flash-lite. Pinning a version is what caused this outage: the
+ * pin aged, silently, and nothing broke until a key was rotated.
+ *
+ * The cost is real and worth naming: the model behind this can change without a deploy, so
+ * generated prose may shift. That is acceptable HERE and would not be everywhere, because
+ * nothing downstream trusts the model with money or with facts — `verifyDraftMoney` allows
+ * only figures already on the deal, `findPromises` refuses any price, date, discount or
+ * guarantee before an unattended send, and `responseMimeType: application/json` pins the
+ * response CONTRACT rather than the model. A model swap can make a reply read differently;
+ * it cannot make it promise something.
+ */
+const DEFAULT_MODEL = "gemini-flash-latest";
 
 function valid(key: string | null | undefined): string | null {
   const k = key?.trim();

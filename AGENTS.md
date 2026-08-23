@@ -1942,3 +1942,38 @@ so it now imports the real one and the test asserts the real limitation, with th
 token-subset matching would be better and is a SEPARATE change: `samePlan`'s own comment warns
 that "Business Starter" and "Business Standard" must never collapse, and that warning is
 load-bearing.
+
+**L79 — Two faults were wearing one error message.** AI drafting was dead with a 403
+("Your project has been denied access"). A new key fixed the 403 and revealed a **404**
+underneath: `gemini-2.5-flash` is "no longer available to new users". Fixing either alone
+looked like no progress. **When an error clears and a different one appears, that is the
+diagnosis working, not a new bug** — and the corollary is that a single failing call can hide
+an arbitrary number of faults behind whichever one is checked first.
+
+Also worth the two curls: an INVALID key returns `400 INVALID_ARGUMENT / "API key not valid"`
+while a blocked project returns `403 PERMISSION_DENIED`. Comparing those two responses proved
+the key was recognised and the project was refused — which is what ruled out "paste a
+different key from the same account" before anyone spent an afternoon on it.
+
+**L80 — `ListModels` is not a source of truth, in EITHER direction.** Same key, same minute:
+it reported `gemini-2.5-flash` as supporting generateContent (calling it 404s) and omitted
+`gemini-3.6-flash` (calling it 200s). A comment in `lib/ai/gemini.ts` already half-knew this
+and still pinned a version. **Only an actual generateContent call tells you what works**, so
+the model dropdown now lists exactly the four that were called and answered 200 —
+`gemini-pro-latest` is absent because it answered 429, which is a quota problem and does not
+belong in a list of safe choices.
+
+**L81 — Prefer a rolling model alias, and say what it costs.** `gemini-flash-latest` replaces
+a pinned version, because the pin is what aged into an outage — silently, with nothing
+breaking until a key was rotated. The cost is that the model can change without a deploy and
+the prose may shift. Acceptable here specifically because nothing downstream trusts the model
+with money or facts: `verifyDraftMoney` allows only figures already on the deal,
+`findPromises` refuses any price/date/discount/guarantee before an unattended send, and
+`responseMimeType: application/json` pins the response contract rather than the model. A model
+swap can change how a reply reads; it cannot make it promise something.
+
+**L82 — A stored config value beats the code default, so fixing the code fixes nothing.**
+`resolveGeminiConfig` lets `tenant_secrets.gemini_model` override `DEFAULT_MODEL`. The tenant
+row held the retired `gemini-2.5-flash`, so correcting the constant would have left the 404
+exactly where it was. **When a default is wrong, check whether any row is overriding it** —
+and update both in the same breath.
