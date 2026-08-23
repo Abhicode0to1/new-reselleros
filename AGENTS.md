@@ -1029,3 +1029,56 @@ Starter"* — was handed to Gemini, asked "is this a sales enquiry?", and correc
 - **The lesson generalises past email.** Any pipeline that both (a) recognises known entities
   and (b) classifies unknown ones must run the recognition first. Otherwise the classifier gets
   asked about things it was never meant to judge, and answers anyway.
+
+## L27. Postgres block comments NEST — a glob inside one breaks the whole function
+*23 Aug 2026, writing the invoice-immutability trigger.*
+
+The migration would not parse:
+
+```
+ERROR: 42601: unterminated /* comment at or near "/* An escape hatch that has to be…
+```
+
+The comment was closed. What was not closed was the comment *it* opened: the prose said
+"the same shape as `supabase/maintenance/*.sql`", and that path contains a slash-star.
+PostgreSQL follows the SQL standard here and **nests** block comments, unlike C — so the
+inner `/*` opened a second comment and the single `*/` closed only that one, swallowing the
+entire remaining function body.
+
+**The rules:**
+- **Never write a glob path inside a `/* */` block in SQL.** Say "the files under
+  supabase/maintenance", or use `--` line comments, which do not nest.
+- **The error names the OUTER comment, not the glob.** It points at the line where the
+  comment began, which is where you already know the comment is fine. The offending
+  characters can be forty lines further down.
+- **Verifying in a rollback transaction caught it before it reached the operator.** This is
+  the second thing that pattern has paid for (see L24) — a migration that cannot parse is
+  indistinguishable, from the outside, from one that applied.
+
+## L28. A money guard needs its ALLOW list tested as hard as its BLOCK list
+*23 Aug 2026, the same trigger.*
+
+Freezing an issued invoice's particulars is the easy half. The half that decides whether the
+guard survives is what it must still permit, and two of those would have broken a working
+feature outright:
+
+- **`gst_irn`** arrives from the IRP only AFTER the invoice is issued. Freeze it and
+  e-invoicing cannot ever complete — a guard that makes the compliant path impossible.
+- **`adjusted_advances` / `net_payable` / `first_advance_at`** carry a real post-issue
+  settlement (CGST 31(3)(d), migration 0209). Freezing them would have looked correct and
+  silently killed advance adjustment.
+- **A NULL particular must stay fillable.** `taxable_value`/`tax_amount`/`tax_rate`/
+  `inter_state` arrived in a later migration, so older invoices hold nulls. Filling a blank
+  completes the record; replacing a value amends the document. Two tiers, not one.
+
+**The rules:**
+- **Write the ALLOW cases into the test, with the reason each one exists.** Otherwise the
+  next person reading only BLOCK assertions cannot tell a carve-out from an oversight, and
+  "tighten this up" removes a load-bearing exception.
+- **Run the entire suite with the guard active, not just its own test.** 38/39 with it on is
+  the claim worth making; the guard's own test passing says nothing about `record_payment`.
+- **Give a guard a stated-reason escape hatch, not none.** `set local
+  app.invoice_amend_reason = '<why>'` is transaction-scoped, greppable, and reached by no
+  application code path. A guard with no legitimate override is a guard somebody eventually
+  drops — and there IS a legitimate need here: 41 invoices carry a due_date that predates the
+  net-30 fix.
