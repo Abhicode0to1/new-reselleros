@@ -15,6 +15,11 @@
  *      Only when nobody matches: enquiry → create a Lead, non-enquiry → Spam /
  *      System. That ORDER is load-bearing; see lib/inbound/disposition.ts for the
  *      bug it fixes.
+ *   5b. PHASE 1 — a reply that CHANGES what the customer wants (seats, product) is
+ *      written into the lead, with the customer's own sentence recorded as the reason.
+ *      Deterministic, not a model: lib/inbound/extract.ts. The quoted thread is
+ *      stripped first, because a reply carries our previous message — and the numbers
+ *      being corrected — underneath it.
  *   6. Notify the reseller owner (best-effort email).
  *
  * Public route — the secret is the only guard (mirrors the Razorpay webhook's
@@ -28,6 +33,9 @@ import { sendEmail } from "@/lib/email/send";
 import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
 import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
 import { decideDisposition } from "@/lib/inbound/disposition";
+import { stripQuoted } from "@/lib/inbound/strip-quoted";
+import { extractEntities } from "@/lib/inbound/extract";
+import { planCorrections, correctionDetail } from "@/lib/leads/apply-correction";
 import { extractAttachments, pickBillAttachment } from "@/lib/inbound/attachments";
 import { readBillWithGemini } from "@/lib/ai/read-bill";
 import { sanitizeExtractedBill } from "@/app/api/ai/extract-bill/sanitize";
@@ -488,6 +496,93 @@ export async function POST(request: NextRequest) {
       tenant_id: tenantId, lead_id: existing.id, kind: "email_in",
       detail: `Reply from ${fromEmail}${subject ? ` · ${subject}` : ""}`,
     });
+
+    /* ── PHASE 1: write the customer's correction INTO the lead ──────────────
+       Three attempts at fixing the reply DRAFT all missed the point: after a
+       customer said twice that they wanted 20 users of Standard rather than 50 of
+       Starter, `leads.seats` still read 50 and `leads.plan` still read Starter.
+       While that is true, every quote, draft and renewal derived from the row is
+       wrong too. So the record moves, and the reply is then correct because the
+       facts are.
+
+       No model is involved. lib/inbound/extract.ts reads seats and product with
+       tested regexes and returns the sentence each value came from, so nothing can
+       be invented and the audit trail is free. The quoted thread is stripped FIRST:
+       a reply carries our own previous message underneath, containing the very
+       numbers being corrected. Reading the raw body would overwrite 20 with 50 and
+       cite the customer as the source. */
+    const fresh = stripQuoted(text);
+    const { data: catalogue } = await admin
+      .from("items")
+      .select("id, name")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true);
+
+    const { data: leadFacts } = await admin
+      .from("leads")
+      .select("seats, plan")
+      .eq("id", existing.id)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+
+    const plan = planCorrections({
+      current: {
+        seats: (leadFacts as { seats?: number | null } | null)?.seats ?? null,
+        plan:  (leadFacts as { plan?: string | null } | null)?.plan ?? null,
+      },
+      freshText: fresh.text,
+      extracted: extractEntities({
+        fromName, fromEmail, subject,
+        body: fresh.text,
+        catalogue: (catalogue ?? []) as { id: string; name: string }[],
+      }),
+    });
+
+    if (plan.corrections.length > 0) {
+      const patch: { seats?: number; plan?: string } = {};
+      for (const c of plan.corrections) {
+        if (c.field === "seats") patch.seats = c.value as number;
+        if (c.field === "plan")  patch.plan  = c.value as string;
+      }
+      const { error: corrErr } = await admin
+        .from("leads")
+        .update(patch)
+        .eq("id", existing.id)
+        .eq("tenant_id", tenantId);
+
+      if (corrErr) {
+        /* The email is still filed and the reply still readable — only the record
+           did not move. Said out loud rather than swallowed, because a correction
+           that silently failed to apply is the state this whole change exists to
+           remove. */
+        console.error(`[webhooks/inbound-email] lead ${existing.id}: correction failed to apply: ${corrErr.message}`);
+      } else {
+        /* One row per field, each quoting the customer's own sentence. One combined
+           row would make a single change impossible to undo on its own — and "says
+           who?" is the first question anybody asks of an automated write. */
+        await admin.from("lead_activities").insert(
+          plan.corrections.map((c) => ({
+            tenant_id: tenantId,
+            lead_id: existing.id,
+            kind: "correction_in",
+            detail: correctionDetail(c),
+          })),
+        );
+        console.info(
+          `[webhooks/inbound-email] lead ${existing.id}: applied ${plan.corrections.length} correction(s) — ` +
+          plan.corrections.map((c) => `${c.field} ${c.from ?? "(blank)"}->${c.to}`).join(", "),
+        );
+      }
+    } else if (fresh.text.trim()) {
+      /* Nothing to change is the common case and must not fill the log. Recorded at
+         debug volume only, with the reasons, so "why didn't it update?" has an
+         answer without a database query — the gap that made the Spam misfiling take
+         one to diagnose. */
+      console.info(
+         `[webhooks/inbound-email] lead ${existing.id}: no correction — ` +
+         plan.skipped.map((s) => `${s.field}: ${s.reason}`).join("; "),
+      );
+    }
     // A reply on a live deal is the case a follow-up task matters most for --
     // someone is mid-conversation and waiting.
     await createFollowUpTask(admin, existing.id, existing.owner_id ?? null, {

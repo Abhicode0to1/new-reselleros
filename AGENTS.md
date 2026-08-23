@@ -1082,3 +1082,65 @@ feature outright:
   application code path. A guard with no legitimate override is a guard somebody eventually
   drops — and there IS a legitimate need here: 41 invoices carry a due_date that predates the
   net-30 fix.
+
+## L29. Strip the quoted thread BEFORE reading a reply — or you read your own words back
+*23 Aug 2026, building Phase 1.*
+
+A reply carries the whole previous conversation underneath it. The message that started
+all of this was, in full:
+
+```
+Actually, I need the quotation for 20 users of Google Workspace Business
+Standard, not 50 users of Starter. Please adjust that.
+
+On Sat, 22 Aug 2026 at 21:54, <sales@anutech.in> wrote:
+> Thank you for your enquiry for 50 users of Google Workspace Business
+> Starter. …
+```
+
+Both numbers and both product names are in that body. **Only the quoted half is ours.**
+Anything that reads the raw text to learn what the customer wants — a regex, a model —
+is reading our own previous message as if the customer had just said it. For a feature
+that WRITES what it reads, that is not cosmetic: it would overwrite 20 with 50 and
+record the customer as the source.
+
+**The rules:**
+- **Strip first, always** (`lib/inbound/strip-quoted.ts`), and take the EARLIEST marker,
+  not the first pattern in your list — a Gmail quote can contain an Outlook divider
+  further down, and matching by list order keeps the Gmail block.
+- **Fail toward empty, never toward the full text.** The tempting fallback — "if
+  stripping left nothing, use the original" — reinstates the quoted thread in exactly
+  the case where the parse went wrong. Empty means nothing-to-do.
+- **A trailing `>` block is quoted; an inline `>` is not.** A `>` in the middle of fresh
+  text is the customer quoting a phrase to answer it. Cutting there loses their answer.
+- **Test with the bytes from the database, not a transcription.** Three things about the
+  real message are invisible when you retype it tidily: it is CRLF, the catalogue name is
+  WRAPPED mid-phrase ("Google Workspace Business\r\nStandard"), and both figures are
+  present. A hand-written fixture had none of them and passed while the real message
+  would have failed on all three — including a silent miss in `findProduct`, whose exact
+  substring match cannot see its own product across a line break.
+
+## L30. Fix the RECORD, not the sentence that reads from it
+*23 Aug 2026, after three failed attempts at the same bug.*
+
+A customer said twice that they wanted 20 users of Standard, not 50 of Starter. Three
+separate fixes went into the reply DRAFT — stop restating the figures, then a different
+staleness rule, then a third — and every one of them was a fresh coat of paint. The
+actual state was that `leads.seats` was still 50 and `leads.plan` was still Starter,
+because nothing had ever written the correction down.
+
+While that is true, the draft is not the only thing wrong: every quote, every renewal and
+every future reply derived from that row is wrong too, and each is its own bug to be
+reported later.
+
+**The rule:** when a displayed value is wrong, ask whether the STORED value is wrong
+before touching the display. If it is, the display needs no special case at all — it
+becomes correct for free, and so does everything else reading the same row. Three of my
+attempts at this were spent on the reading end because the reading end is where the
+symptom appears.
+
+**Corollary on tools:** this needed no model. `lib/inbound/extract.ts` already read seats
+and product with tested regexes and already returned the source sentence each value came
+from, which is strictly better here — it cannot invent a number, cannot drift between
+runs, and the audit trail is free. Reach for the deterministic thing that exists before
+adding an LLM, a wait, a cost and a failure mode.

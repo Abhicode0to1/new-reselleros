@@ -149,10 +149,17 @@ function findSeats(text: string): Extracted<number> {
  * company, not a SKU.
  */
 function findProduct(text: string, catalogue: readonly CatalogueEntry[]): Extracted<CatalogueEntry> {
-  const hay = text.toLowerCase();
+  /* Whitespace collapsed on BOTH sides before matching. Mail clients hard-wrap, so a
+     real reply arrives as "20 users of Google Workspace Business\nStandard" and an
+     exact substring test misses its own catalogue name — found 23 Aug 2026 while
+     building the Phase 1 write-back, on the very message that prompted it.
+     This is not a loosening of the rule above: the full name is still required, it is
+     just no longer defeated by a line break. */
+  const flatten = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  const hay = flatten(text);
   const byLength = [...catalogue].sort((a, b) => b.name.length - a.name.length);
   for (const item of byLength) {
-    const needle = item.name.trim().toLowerCase();
+    const needle = flatten(item.name);
     if (needle.length >= 4 && hay.includes(needle)) {
       return { value: item, source: item.name };
     }
