@@ -1,0 +1,166 @@
+/**
+ * Does this drafted reply COMMIT us to anything?
+ *
+ * ─── THE RULE STEP 2 RESTS ON ───────────────────────────────────────────────
+ * The app may answer a customer by itself when the answer promises nothing. It may say
+ * "got your enquiry", "which plan did you have in mind?", "when is a good time to call".
+ * It may not say a price, a date, a discount or a guarantee — because those are the
+ * sentences a customer can hold us to, and nobody read them before they left.
+ *
+ * This is the same shape as the auto-quote gate that works today: automation opens on a
+ * FACT, not on a confidence score. "The model is 90% sure this is harmless" is an opinion;
+ * "this text contains no figure, no date, no discount word and no guarantee" is checkable.
+ *
+ * ─── IT FAILS TOWARD HOLDING, AND THAT COSTS AUTOMATION RATE ────────────────
+ * Every rule below is deliberately blunt. Any time word holds the reply, even in "thanks
+ * for writing today", because a rule that tries to tell a commitment from a pleasantry is
+ * the same widening trap the seat-count regex fell into — and there the cost was a missing
+ * number, while here it is a promise nobody checked.
+ *
+ * The consequence is stated rather than hidden: this will hold replies it did not need to,
+ * and the automation rate will be lower than the 60-70% estimate that motivated step 2.
+ * THAT IS NOW MEASURABLE. Every hold is written to `ai_action_log` with the matched phrase
+ * in its facts, so the first question to ask of that table in a week is which rule fires
+ * most and whether its matches are real commitments. Tighten from data; do not guess now.
+ *
+ * ─── MONEY IS NOT RE-IMPLEMENTED HERE ───────────────────────────────────────
+ * `verifyDraftMoney(text, [])` already finds every rupee figure in a string — with an empty
+ * allow-list, every one of them is a violation. That function is tested, understands the
+ * Indian forms (₹, Rs., lakh separators, the `/-` suffix) and is used by the human-facing
+ * drafter. A second money regex here would be a second thing to be wrong.
+ *
+ * Note the difference in strictness from the human path, which is intentional. There,
+ * a figure that IS on the deal is allowed, because a person is about to read the sentence
+ * around it. Here NO figure is allowed at all: a correct number in a sentence the model
+ * wrote can still commit us to something the quote does not say — "that price includes
+ * migration" — and there is nobody to catch it.
+ */
+import { verifyDraftMoney } from "./money-guard";
+
+export interface PromiseFinding {
+  /** Which rule fired — goes into the log, so keep it readable. */
+  kind: "money" | "date" | "discount" | "guarantee" | "percent";
+  /** The words that fired it, so the operator sees WHAT was spotted. */
+  matched: string;
+}
+
+export interface PromiseCheckResult {
+  /** True only when nothing was found. */
+  safe: boolean;
+  findings: PromiseFinding[];
+  /** One sentence for the log and for the operator. */
+  reason: string;
+}
+
+/* ── Dates and deadlines ────────────────────────────────────────────────────
+   A time is a commitment even when it sounds casual: "I'll send it by Friday" is a
+   deadline somebody can miss. Vague futures are deliberately NOT here — "shortly" and
+   "soon" promise nothing anyone can hold a stopwatch to, and they are what makes a safe
+   acknowledgement possible at all. */
+const DATE_RE = new RegExp(
+  [
+    String.raw`\b(?:today|tomorrow|tonight|yesterday)\b`,
+    String.raw`\b(?:mon|tues?|wed(?:nes)?|thur?s?|fri|sat(?:ur)?|sun)day\b`,
+    String.raw`\b(?:eod|cob|end\s+of\s+(?:day|week)|close\s+of\s+business)\b`,
+    String.raw`\b(?:with)?in\s+\d+\s*(?:hour|hr|day|week|month)s?\b`,
+    String.raw`\b(?:next|this|coming)\s+(?:week|month|monday|friday)\b`,
+    /* 25 Aug · 25/08 · 2026-08-25 · 25th */
+    String.raw`\b\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)`,
+    String.raw`\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b`,
+    String.raw`\b\d{4}-\d{2}-\d{2}\b`,
+    String.raw`\bby\s+(?:the\s+)?\d{1,2}\s*(?:st|nd|rd|th)\b`,
+  ].join("|"),
+  "i",
+);
+
+/* ── Discounts and giveaways ────────────────────────────────────────────────
+   "free" is the trap. In this exact context "feel free to call me" is the commonest
+   sentence in the language, so a bare \bfree\b would hold almost every safe reply — the
+   feature would look built and never fire. Excluded by phrase, not by dropping the word:
+   "first month free" has to keep holding. */
+const DISCOUNT_RE = new RegExp(
+  [
+    String.raw`\bdiscount(?:s|ed|ing)?\b`,
+    String.raw`\bwaiv(?:e|ed|er|ing)\b`,
+    String.raw`\bcomplimentary\b`,
+    String.raw`\bno\s+(?:charge|cost|extra)\b`,
+    String.raw`\bat\s+no\s+cost\b`,
+    String.raw`\b(?:special|best|lowest)\s+(?:price|rate|offer)\b`,
+    String.raw`\b\d+\s*%\s*off\b`,
+    String.raw`\bfree\s+of\s+(?:charge|cost)\b`,
+    /* "free" on its own, EXCEPT the idiom. */
+    String.raw`(?<!feel\s)(?<!feel\s{1,3})\bfree\b`,
+  ].join("|"),
+  "i",
+);
+
+/* ── Guarantees ─────────────────────────────────────────────────────────────
+   Not about money or time — about certainty. "I'll make sure it works" is a promise with
+   no number in it at all, and it is the kind a customer quotes back. */
+const GUARANTEE_RE = new RegExp(
+  [
+    String.raw`\bguarantee(?:s|d)?\b`,
+    String.raw`\bassur(?:e|ed|ance)\b`,
+    String.raw`\bpromis(?:e|ed)\b`,
+    String.raw`\bwarrant(?:y|ies)\b`,
+    String.raw`\brefund(?:s|able|ed)?\b`,
+    String.raw`\bmoney[\s-]?back\b`,
+    String.raw`\b(?:we|i)\s+(?:will|'ll)\s+(?:ensure|make\s+sure|guarantee)\b`,
+    String.raw`\bno\s+(?:risk|obligation)\b`,
+  ].join("|"),
+  "i",
+);
+
+/**
+ * Any percentage at all. A rate is a commitment even without a currency symbol.
+ *
+ * NO trailing `\b` on the `%` branch, and that is not a style choice. `%` is a non-word
+ * character, so `\b` after it demands a word character NEXT — which made "GST at 18%
+ * applies" pass, because a space followed. The word forms keep their boundary, since
+ * "percentage" is not "percent".
+ */
+const PERCENT_RE = /\b\d+(?:\.\d+)?\s*(?:%|percent\b|per\s*cent\b)/i;
+
+export function findPromises(text: string): PromiseCheckResult {
+  const body = (text ?? "").replace(/\r\n/g, "\n");
+  const findings: PromiseFinding[] = [];
+
+  /* Empty allow-list: on this path NO figure is authorised. Reusing the tested guard rather
+     than writing a second money regex — see the header. */
+  const money = verifyDraftMoney(body, []);
+  if (!money.ok) {
+    for (const v of money.violations) findings.push({ kind: "money", matched: v });
+  }
+
+  const pct = PERCENT_RE.exec(body);
+  if (pct) findings.push({ kind: "percent", matched: pct[0].trim() });
+
+  const date = DATE_RE.exec(body);
+  if (date) findings.push({ kind: "date", matched: date[0].trim() });
+
+  const disc = DISCOUNT_RE.exec(body);
+  if (disc) findings.push({ kind: "discount", matched: disc[0].trim() });
+
+  const gtee = GUARANTEE_RE.exec(body);
+  if (gtee) findings.push({ kind: "guarantee", matched: gtee[0].trim() });
+
+  if (findings.length === 0) {
+    return {
+      safe: true,
+      findings: [],
+      reason: "the reply promises nothing — no figure, date, discount or guarantee in it",
+    };
+  }
+
+  /* The phrase, not just the category. An operator reading "held: date" learns nothing;
+     "held — it said \"by Friday\"" tells them whether to send it as written. */
+  const first = findings[0];
+  return {
+    safe: false,
+    findings,
+    reason:
+      `the draft commits us to something — it says "${first.matched}"` +
+      (findings.length > 1 ? ` (and ${findings.length - 1} more)` : "") +
+      ". Read it and send it yourself, or edit it first.",
+  };
+}

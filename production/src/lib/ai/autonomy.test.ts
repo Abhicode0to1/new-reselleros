@@ -64,12 +64,23 @@ describe("defaults describe what the app does TODAY", () => {
     expect(resolveAutonomy("quote.send", OPEN).mode).toBe("auto");
   });
 
-  it("keeps the two unbuilt actions off", () => {
-    /* Not a policy choice — a description. Every AI route in this repo drafts and none
-       sends, so "off" is what is true. Wiring the drafter to send arrives with its own
-       fact-gate rather than by flipping this. */
-    expect(resolveAutonomy("reply.send", OPEN).mode).toBe("off");
+  it("keeps the unbuilt action off", () => {
+    /* Not a policy choice — a description. Nothing can send a follow-up nudge, so "off" is
+       what is true. Building it will move this default, the way reply.send's moved. */
     expect(resolveAutonomy("followup.send", OPEN).mode).toBe("off");
+  });
+
+  it("starts reply.send at HOLD, not auto and no longer off", () => {
+    /* `off` used to be a description — nothing could send a reply. Built 23 Aug 2026, so it
+       became untrue and moved to `hold`.
+
+       `hold` and not `auto` is the rollout, not caution for its own sake: this is the first
+       sentence the app would ever write to a customer unattended, and a default of `auto`
+       would have made that a side effect of a deploy rather than a decision somebody made.
+       The drafter runs, the draft lands on the lead's timeline, the decision is logged, and
+       nothing is sent until the dial is moved from /automation. */
+    expect(resolveAutonomy("reply.send", OPEN).mode).toBe("hold");
+    expect(mayActUnattended("reply.send", OPEN)).toBe(false);
   });
 
   it("says the mode came from a default and not from a setting", () => {

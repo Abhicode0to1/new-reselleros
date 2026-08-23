@@ -1871,3 +1871,41 @@ wrote a comment about it. A brake nobody can find is not a brake.
 trial reminders, greetings and auto-quotes. Verified it off, verified the log row, then turned
 it back on and verified `false` again in a separate query. A verification that leaves the
 system in the state it was testing is not a verification, it is an outage with good notes.
+
+**L70 — Automate on a FACT, never on a confidence score.** Step 2 lets the app answer a
+customer by itself, and the gate is not "the model seems sure" — it is "this text contains no
+figure, no date, no discount word and no guarantee". Same shape as the auto-quote gate that
+works ("the customer stated the term"). A price, a deadline, a discount or a guarantee is a
+sentence a customer can hold us to; everything else — an acknowledgement, a question, "which
+plan did you have in mind" — promises nothing and is most of what a first reply should say.
+
+**L71 — `\bfree\b` would have held every safe reply.** "Feel free to call me" is the commonest
+sentence in this business, so the discount rule excludes that idiom by phrase rather than
+dropping the word — "first month free" still has to hold. Two more of the same kind found by
+its own tests: `%` is a non-word character, so a trailing `\b` after it made "GST at 18%
+applies" pass, and `\boff\b` needs the boundary or every reply mentioning an *office* holds.
+**A safety rule that fires on everything is indistinguishable from an unbuilt one** — it looks
+done and never lets anything through.
+
+**L72 — Name the automation rate you are trading away, and make it measurable.** The promise
+check is deliberately blunt: any time word holds the reply, including "thanks for writing
+today". Trying to tell a commitment from a pleasantry is the widening trap the seat-count
+regex fell into, and there the cost was a missing number while here it would be a promise
+nobody checked. So the cost is stated in the file rather than discovered later — and every
+hold is logged with the matched phrase, so the first question to ask `ai_action_log` in a week
+is which rule fires most and whether its matches are real. Tighten from data.
+
+**L73 — Shadow mode has to SHOW something.** `reply.send` ships as `hold`, not `auto`: the
+drafter runs, seven conditions are checked, and nothing is sent. That is only useful if the
+operator can see what WOULD have gone — a held reply that logged "held" and nothing else would
+tell them it happened and never what it said. So the draft is written onto the lead's
+timeline, where they already look, and the decision goes to the audit log. Content on the
+timeline, decisions in the log: `buildAiActionRecord` redacts message bodies by key name
+exactly so the audit table does not become the second place customer mail accumulates.
+
+**L74 — "off" as a default can be a description, and descriptions expire.** `reply.send` was
+declared `off` yesterday because nothing could send a reply — a fact, not a policy. Once the
+code existed that default was a lie, so it moved to `hold` in the same commit. The chokepoint
+scan skips actions declared `off` on the grounds that they are unbuilt; leaving the old value
+would have kept it skipped and left the new send path unasserted. **When a default encodes
+"not built yet", changing the code has to change the default.**

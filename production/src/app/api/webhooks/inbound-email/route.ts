@@ -39,6 +39,7 @@ import { extractEntities } from "@/lib/inbound/extract";
 import { planQuoteFromEnquiry } from "@/lib/quotes/quote-from-enquiry";
 import { decideAutoSend } from "@/lib/quotes/auto-send-quote";
 import { sendAutoQuote } from "@/lib/quotes/send-auto-quote";
+import { runAutoReply } from "@/lib/ai/run-auto-reply";
 import { planCorrections, correctionDetail } from "@/lib/leads/apply-correction";
 import { extractAttachments, pickBillAttachment } from "@/lib/inbound/attachments";
 import { readBillWithGemini } from "@/lib/ai/read-bill";
@@ -652,6 +653,23 @@ export async function POST(request: NextRequest) {
       isReplyToExistingLead: true,
     });
     await finalize("appended_to_lead", existing.id);
+
+    /* STEP 2 — answer them, if the answer promises nothing and the dial allows it.
+       This branch matters more than the create branch below: a REPLY to an ongoing
+       conversation is where a customer is actually waiting, and where a human takes longest
+       to get to. `reply.send` ships as `hold`, so today this prepares the draft, files it on
+       the lead's timeline and logs the decision — Pardeep moves the dial when he believes it.
+
+       Not awaited. A Gemini call inside a webhook the provider is waiting on would trade
+       ingest reliability for latency, and the mail is already committed by here. */
+    void runAutoReply({
+      tenantId: tenantId,
+      leadId: existing.id,
+      recipient: fromEmail,
+      senderIsOurs,
+      fromEmail: FROM_EMAIL,
+    }).catch((err) => console.error("[inbound-email] auto-reply crashed:", err));
+
     return NextResponse.json({ received: true, appendedToLead: existing.id });
   }
 
@@ -871,6 +889,19 @@ export async function POST(request: NextRequest) {
     headers: rawHeaders,
     isReplyToExistingLead: false,
   });
+
+  /* STEP 2 on a brand-new lead. Runs AFTER the quote block above, so if a quote was drafted
+     and sent the reply is written with that already in the thread — a reply that says "I
+     will send a quotation" alongside the quotation is the kind of thing a customer notices.
+
+     Same fire-and-forget shape and the same `hold` default as the append branch. */
+  void runAutoReply({
+    tenantId,
+    leadId,
+    recipient: fromEmail,
+    senderIsOurs,
+    fromEmail: FROM_EMAIL,
+  }).catch((err) => console.error("[inbound-email] auto-reply crashed:", err));
 
   // ── 7. Notify the reseller owner (best-effort) ─────────────────────────
   const { data: tenant } = await admin.from("tenants").select("email, name").eq("id", tenantId).maybeSingle();

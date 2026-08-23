@@ -73,10 +73,20 @@ export const AI_ACTIONS = {
   },
   "reply.send": {
     label: "Send a written reply to a customer",
-    /* Not built. Every AI route drafts and none sends, so `off` is not a policy choice here
-       — it is a description. Wiring the drafter to send is the next step, and it arrives
-       with its own fact-gate rather than with this default flipped. */
-    today: "off",
+    /* WAS `off`, and that was a description rather than a policy: nothing could send a
+       reply. Built on 23 Aug 2026 (lib/ai/run-auto-reply.ts), so `off` stopped being true
+       and the default moved to `hold`.
+
+       `hold`, not `auto`, and this is the whole shape of the rollout. The machinery works:
+       the drafter runs, `decideAutoReply` checks seven conditions, and `findPromises` refuses
+       anything naming a price, a date, a discount or a guarantee. What is missing is not code
+       — it is Pardeep having watched it. So it prepares the reply, files the draft on the
+       lead's timeline where he already looks, logs the decision, and sends nothing. He moves
+       this to `auto` from /automation when he believes it.
+
+       This is the first sentence the app would ever write to a customer unattended. A default
+       of `auto` would have made that a side effect of a deploy instead of a decision. */
+    today: "hold",
     supports: ["off", "hold", "auto"],
   },
   "followup.send": {
