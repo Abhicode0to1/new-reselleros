@@ -1977,3 +1977,18 @@ swap can change how a reply reads; it cannot make it promise something.
 row held the retired `gemini-2.5-flash`, so correcting the constant would have left the 404
 exactly where it was. **When a default is wrong, check whether any row is overriding it** —
 and update both in the same breath.
+
+**L83 — The self-test marker held up under a real attempt, and the right fix was a log line.**
+Pardeep FORWARDED a marked test rather than composing one, so the subject arrived as
+"Fwd: [selftest] …" and `isSelfTest` refused it — `startsWith`, not `includes`. The tempting
+relaxation (strip Re:/Fwd: first, or match anywhere) would open a LOOP, not a convenience: the
+auto-reply's subject is written by Gemini from a thread already subjected "[selftest] …", so a
+plausible generation is "Re: [selftest] …", and our own outbound reply returning through
+ingest would then read as a deliberate test, make a lead, and be answered again. **Do not
+relax a safety rule to make testing easier.**
+
+What WAS wrong was the diagnosis: the log said only "sent from one of our own addresses",
+which is true and says nothing about a marker having been typed. Tracing it cost a five-minute
+poll and a round trip. Now `selfTestMarkerMisplaced` names the deliberate-but-malformed middle
+case in a warning that changes no decision. **When a guard refuses something a human meant,
+the guard is often right and the MESSAGE is the bug.**

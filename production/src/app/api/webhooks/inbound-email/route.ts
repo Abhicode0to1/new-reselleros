@@ -34,7 +34,7 @@ import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
 import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
 import { decideDisposition } from "@/lib/inbound/disposition";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
-import { isSelfTest } from "@/lib/inbound/self-test";
+import { isSelfTest, selfTestMarkerMisplaced, SELF_TEST_MARKER } from "@/lib/inbound/self-test";
 import { extractEntities } from "@/lib/inbound/extract";
 import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
 import { shouldRequoteOnReply } from "@/lib/quotes/requote-on-reply";
@@ -528,6 +528,21 @@ export async function POST(request: NextRequest) {
 
   if (disposition.action === "skip") {
     console.info(`[webhooks/inbound-email] skipping ${fromEmail}: ${disposition.reason}`);
+    /* Deliberate but malformed, named separately from the accidents. Measured 23 Aug 2026: a
+       forwarded self-test arrived as "Fwd: [selftest] …" and the log said only "sent from one
+       of our own addresses" — true, and silent about the fact that a marker had been typed at
+       all. Tracing that cost a five-minute poll and a round trip.
+
+       Diagnostic only; the refusal itself is unchanged and stays unchanged, because relaxing
+       the position rule would let our own AI-written "Re: [selftest] …" reply back in and
+       close a loop. See lib/inbound/self-test.ts. */
+    if (selfTestMarkerMisplaced(subject)) {
+      console.warn(
+        `[webhooks/inbound-email] NOTE: "${SELF_TEST_MARKER}" is in this subject but not at the ` +
+        `START, so it does not count as a self-test. Compose a new mail beginning with the ` +
+        `marker rather than forwarding or replying to one. Subject was: ${subject}`,
+      );
+    }
     await finalize("skipped_non_enquiry", null);
     return NextResponse.json({ received: true, skipped: "non_enquiry", reason: disposition.reason });
   }

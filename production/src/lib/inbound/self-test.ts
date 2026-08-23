@@ -46,8 +46,33 @@ export interface SelfTestInput {
 export function isSelfTest(input: SelfTestInput): boolean {
   if (!input.senderIsOurs) return false;
   const s = (input.subject ?? "").trim().toLowerCase();
-  /* startsWith, not includes. "Re: Fwd: [selftest] …" is a thread ABOUT a test, not a test
-     — the reply prefixes are exactly the trail an accidental forward leaves, and treating
-     one as deliberate would reopen the hole this guards. */
+  /* startsWith, not includes — and this held up when it was tested for real on 23 Aug 2026.
+     Pardeep FORWARDED a marked test instead of composing one, the subject arrived as
+     "Fwd: [selftest] …", and it was refused.
+
+     The rule stays, because relaxing it would open a loop rather than a convenience. The
+     auto-REPLY's subject line is written by Gemini from a thread whose subject is
+     "[selftest] …", so a plausible generation is "Re: [selftest] …". Under `includes` — or
+     under any rule that strips Re:/Fwd: first — our own outbound reply coming back through
+     ingest would read as a deliberate test, create a lead, and be answered again. `startsWith`
+     is what keeps that door shut. The cost is one instruction to a human: compose, do not
+     forward. */
   return s.startsWith(SELF_TEST_MARKER);
+}
+
+/**
+ * The marker is in the subject, but not where it counts.
+ *
+ * DIAGNOSTIC ONLY — it changes no decision. It exists because the live refusal above logged
+ * "sent from one of our own addresses", which is true and told nobody that a marker had been
+ * typed at all. Tracing that cost a five-minute wait and a round trip; a line saying "the
+ * marker is there but not at the start" would have cost nothing.
+ *
+ * The distinction this file is built on is deliberate vs accidental, and the middle case —
+ * deliberate but malformed — deserves to be named rather than silently lumped in with the
+ * accidents.
+ */
+export function selfTestMarkerMisplaced(subject: string | null | undefined): boolean {
+  const s = (subject ?? "").trim().toLowerCase();
+  return s.includes(SELF_TEST_MARKER) && !s.startsWith(SELF_TEST_MARKER);
 }
