@@ -1706,3 +1706,19 @@ top of it as a first-time reader** — the item that moved into first place is n
 weight it never had. Fixed with the existing `stripQuoted`, with a fallback to the raw body
 because that helper fails toward EMPTY by design (right for an AI prompt, wrong for a bubble
 that would read as a lost message).
+
+**L53 — Identify what is on screen before filing a bug about it.** I reported "the sidebar
+avatar overlaps the mobile bottom bar", spun off a task to fix `Sidebar.tsx`, and was wrong:
+the round colour emblem at bottom-left is the **TanStack Query devtools toggle**, whose
+default artwork reads as a profile photo at a glance. `Sidebar` is correctly gated
+`hidden md:flex` and was never rendered at that width — one grep for the component would
+have said so before the task was written. **A visual guess about which component drew a
+pixel is a hypothesis; `grep` is the check.** Same discipline as CLAUDE.md §25.1 for docs,
+applied to screenshots.
+
+The real fix was still worth making. It never reaches a customer (NODE_ENV-gated, verified
+absent from `.next/static`), but it covered a live control at every width — MobileBottomNav
+and the lead drawer's 44px Call button below `md`, the sidebar's user-chip
+`DropdownMenuTrigger` above it. **A debug affordance does not get to outrank an app
+control**, and covering the exact button you are trying to click is how a dev-only overlay
+turns into a wrong bug report.
