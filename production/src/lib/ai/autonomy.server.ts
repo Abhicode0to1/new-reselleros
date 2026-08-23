@@ -104,6 +104,79 @@ export async function loadAutonomyPolicy(tenantId: string): Promise<AutonomyPoli
 }
 
 /**
+ * Writes. Returns false rather than throwing, because every caller has to tell the operator
+ * something either way and "it might have saved" is not something to tell anybody about a
+ * switch whose whole job is to be trusted.
+ *
+ * The caller is responsible for checking role and resolving the tenant from the SESSION.
+ * These use the service role and so bypass RLS — the `ai_autonomy_write` policy protects the
+ * table from anything holding a user session, not from this.
+ */
+export const setAutonomy = {
+  async killSwitch(tenantId: string, on: boolean, byUserId: string): Promise<boolean> {
+    const db = bare();
+    if (!db) { console.error("[autonomy] cannot set the kill switch — Supabase not configured"); return false; }
+    const { error } = await db
+      .from("tenants")
+      .update({ ai_kill_switch: on })
+      .eq("id", tenantId);            // <- the only tenant boundary on this write
+    if (error) { console.error("[autonomy] kill switch write failed:", error, { tenantId, on, byUserId }); return false; }
+    return true;
+  },
+
+  async mode(tenantId: string, action: AiAction, mode: AutonomyMode, byUserId: string): Promise<boolean> {
+    const db = bare();
+    if (!db) { console.error("[autonomy] cannot set a mode — Supabase not configured"); return false; }
+    /* Upsert on (tenant_id, action) — the table's primary key. A second row for the same
+       action would make the resolved mode depend on read order, which is the kind of bug
+       that only appears once there are two of something. */
+    const { error } = await db
+      .from("ai_autonomy")
+      .upsert(
+        { tenant_id: tenantId, action, mode, updated_at: new Date().toISOString(), updated_by: byUserId },
+        { onConflict: "tenant_id,action" },
+      );
+    if (error) { console.error("[autonomy] mode write failed:", error, { tenantId, action, mode }); return false; }
+    return true;
+  },
+};
+
+/** One page of the log, newest first. Read through a route; the tenant comes from a session. */
+export async function readAiActionLog(
+  tenantId: string,
+  opts: { limit?: number; heldOnly?: boolean } = {},
+): Promise<{
+  rows: {
+    id: number; created_at: string; action: string; outcome: string;
+    reason: string; mode: string; entity: string | null; entity_id: string | null;
+    facts: Record<string, unknown>;
+  }[];
+  error: string | null;
+}> {
+  const db = bare();
+  if (!db) return { rows: [], error: "Supabase is not configured on the server." };
+
+  let q = db
+    .from("ai_action_log")
+    .select("id, created_at, action, outcome, reason, mode, entity, entity_id, facts")
+    .eq("tenant_id", tenantId)        // <- the only tenant boundary on this read
+    .order("created_at", { ascending: false })
+    .limit(Math.min(Math.max(opts.limit ?? 100, 1), 500));
+
+  if (opts.heldOnly) q = q.eq("outcome", "held");
+
+  const { data, error } = await q;
+  if (error) {
+    /* Reported, not swallowed into an empty list. "Nothing happened" and "we could not find
+       out what happened" look identical on a screen and mean opposite things — the same
+       distinction lib/ops/health-signals.ts exists to keep. */
+    console.error("[autonomy] could not read the action log:", error);
+    return { rows: [], error: "Could not read the automation log." };
+  }
+  return { rows: (data ?? []) as never[], error: null };
+}
+
+/**
  * Records what happened. Never throws, and never blocks the caller.
  *
  * A failure to WRITE the log must not become a failure to do the work — or to refuse it.

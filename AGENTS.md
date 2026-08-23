@@ -1847,3 +1847,27 @@ must not be read as "carry on", because the moment somebody needs that switch is
 a database blip is least acceptable as a yes. An unreadable per-action dial resolves to
 NOT-CONFIGURED: an empty dial is the normal state, so a read failure there is
 indistinguishable from it and must behave the same rather than stopping five working crons.
+
+**L67 — Click the switch. The kill switch was wired backwards and every test passed.** The
+Automation page shipped with `killSwitch: on` where `on` is what the UI switch reports —
+"automation is on" — so the column that stores `ai_kill_switch` got the OPPOSITE value, and
+the confirmation dialog fired on the wrong direction too. Turning automation off popped
+"Turn automation back on?" and would have written `killSwitch: false`, leaving every cron
+running while the operator believed they had stopped it. 3938 tests were green; the dial,
+the resolver and the log were all individually correct. **A UI boolean and a stored boolean
+that mean opposite things need a named function and a test, not a `!` at the call site** —
+`killSwitchFor()` and `needsConfirmation()` exist for exactly that, and the test asserts the
+round trip through the real resolver so the mapping and the rule cannot each be right about
+a different convention. Found in the first ten seconds of using the page.
+
+**L68 — Register the page in the same commit that creates it.** `npm run test` failed on two
+route-map assertions the moment the Automation page existed without an `APP_ROUTES` entry and
+a `SCREEN_TITLES` breadcrumb. That guard exists because Marketing, Backup and /team were each
+found later as pages the app could render and nobody could click. It caught me the same day I
+wrote a comment about it. A brake nobody can find is not a brake.
+
+**L69 — Put production back the way you found it.** Testing the switch meant setting
+`ai_kill_switch = true` on the live ANUTECH tenant, which really did stop dunning, renewals,
+trial reminders, greetings and auto-quotes. Verified it off, verified the log row, then turned
+it back on and verified `false` again in a separate query. A verification that leaves the
+system in the state it was testing is not a verification, it is an outage with good notes.

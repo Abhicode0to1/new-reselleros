@@ -313,6 +313,11 @@ export const APP_NAV: NavSection[] = [
       { id: "partners",  href: "/partners",             label: "Partners",         icon: "award", roles: ["owner", "manager", "partner_agent"] },
       // owner/manager only — these are customers' admin console passwords, and
       // "billing" has no reason to reach a Google Admin login.
+      /* Added with the page, in the same commit, on purpose. Marketing, Backup and /team
+         were each found later as pages the app could render and nobody could click — /team
+         had a breadcrumb and exactly one link, buried in a dialog's help text. A brake
+         nobody can find is not a brake. */
+      { id: "automation", href: "/automation",          label: "Automation",       icon: "sparkles", roles: ["owner", "manager"], hint: "App khud kya bhejta hai — aur band karne ka switch" },
       { id: "vault",     href: "/vault",                label: "Password Vault",   icon: "lock", roles: ["owner", "manager"] },
       /* The owner's PRIVATE books — personal bank, drawings, net worth. Owner-only here,
          but understand what this line does and does not do: middleware skips its role
@@ -370,6 +375,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/dashboard":       ["Home", "Dashboard"],
   "/leads":           ["Sales", "Leads"],
   "/my-expenses":     ["Me", "My Advance & Expenses"],
+  "/automation":      ["Admin", "Automation"],
   "/vault":           ["Admin", "Password Vault"],
   "/admin/feedback":  ["Admin", "Feedback & AI Fixes"],
   "/vault/personal":  ["Admin", "Private Vault"],

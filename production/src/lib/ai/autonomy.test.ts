@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   resolveAutonomy,
   mayActUnattended,
+  killSwitchFor,
+  needsConfirmation,
   AI_ACTIONS,
   type AiAction,
   type AutonomyPolicy,
@@ -118,5 +120,43 @@ describe("mayActUnattended", () => {
     expect(mayActUnattended("renewal.send", OPEN)).toBe(true);
     expect(mayActUnattended("reply.send", OPEN)).toBe(false);
     expect(mayActUnattended("renewal.send", { killSwitch: false, modes: { "renewal.send": "hold" } })).toBe(false);
+  });
+});
+
+describe("the UI switch versus the stored column — they are opposites", () => {
+  /* THE BUG THIS EXISTS FOR, found 23 Aug 2026 by clicking the switch in a browser rather
+     than by reading the code. The page shows "Automation is on"; the column stores
+     `ai_kill_switch`. The first version got BOTH halves backwards: turning automation off
+     popped a dialog reading "Turn automation back on?", and would then have written
+     killSwitch=false — leaving automation running while the operator believed they had
+     stopped it.
+
+     A kill switch that silently does nothing is worse than no kill switch. */
+
+  it("maps automation-on to kill-switch-off", () => {
+    expect(killSwitchFor(true)).toBe(false);
+    expect(killSwitchFor(false)).toBe(true);
+  });
+
+  it("round-trips, so neither direction can drift alone", () => {
+    for (const on of [true, false]) {
+      expect(!killSwitchFor(on)).toBe(on);
+    }
+  });
+
+  it("confirms turning automation ON, not off", () => {
+    /* Off is the safe move and asking would slow down the emergency the switch exists for.
+       On resumes mail to real customers — that is the half that cannot be taken back. */
+    expect(needsConfirmation(true)).toBe(true);
+    expect(needsConfirmation(false)).toBe(false);
+  });
+
+  it("means the resolved policy actually stops when the switch is flipped off", () => {
+    /* End to end through the real resolver, so the mapping and the rule are checked
+       together rather than each being right about a different convention. */
+    const policy: AutonomyPolicy = { killSwitch: killSwitchFor(false) };
+    expect(resolveAutonomy("renewal.send", policy).mode).toBe("off");
+    const back: AutonomyPolicy = { killSwitch: killSwitchFor(true) };
+    expect(resolveAutonomy("renewal.send", back).mode).toBe("auto");
   });
 });

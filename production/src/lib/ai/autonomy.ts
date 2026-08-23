@@ -182,3 +182,29 @@ export function resolveAutonomy(action: AiAction, policy: AutonomyPolicy): Auton
 export function mayActUnattended(action: AiAction, policy: AutonomyPolicy): boolean {
   return resolveAutonomy(action, policy).mode === "auto";
 }
+
+/* ─── THE INVERSION, NAMED AND TESTED ──────────────────────────────────────
+   The screen shows a switch labelled "Automation is on". The database stores
+   `ai_kill_switch`. Those are OPPOSITES, and the first version of the page got both
+   halves of that backwards — caught 23 Aug 2026 by clicking the switch in a browser:
+   turning automation OFF popped a dialog reading "Turn automation back on?", and would
+   then have written `killSwitch: false`, leaving automation running.
+
+   A kill switch that silently does nothing is worse than no kill switch, because
+   somebody will believe they stopped the mail. Two one-line functions, so the mapping
+   is asserted instead of re-derived at a call site. */
+
+/** UI "automation is on" → the value the `ai_kill_switch` column stores. */
+export function killSwitchFor(automationOn: boolean): boolean {
+  return !automationOn;
+}
+
+/**
+ * Which direction needs confirming: turning automation back ON.
+ *
+ * Off is the safe move and asking would slow down the emergency the switch exists for.
+ * On resumes mail to real customers, which is the half that cannot be taken back.
+ */
+export function needsConfirmation(automationOn: boolean): boolean {
+  return automationOn;
+}
