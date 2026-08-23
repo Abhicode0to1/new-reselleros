@@ -1793,10 +1793,11 @@ function LeadDetailSheet({
     [activities],
   );
 
-  const [drawerTab, setDrawerTab] = React.useState<"details" | "followups" | "activity">("details");
-  /* Which half of the Conversation tab is showing. Resets with the lead so opening a
-     different one never lands you in a view you did not choose. */
-  const [convoView, setConvoView] = React.useState<"all" | "email">("all");
+  const [drawerTab, setDrawerTab] = React.useState<"email" | "details" | "followups" | "activity">("details");
+  /* `convoView` lived here until 23 Aug 2026 — the segmented Everything/Email control
+     inside the old merged Conversation tab. Email is a tab now, so the state went with the
+     control: two ways to be on the email view would have drifted apart, and the tab is the
+     one a URL or a keyboard could ever reach. */
   const [emailComposerOpen, setEmailComposerOpen] = React.useState(false);
   /* ── Which tab a lead opens on ─────────────────────────────────────────────
      Was always "details". Moving the tabs to the top was half the fix for
@@ -1824,7 +1825,6 @@ function LeadDetailSheet({
      tab out from under whoever had just chosen one. */
   const autoPickedFor = React.useRef<string | null>(null);
   React.useEffect(() => {
-    setConvoView("all");
     setEmailComposerOpen(false);
     autoPickedFor.current = null;
   }, [lead?.id]);
@@ -1833,10 +1833,22 @@ function LeadDetailSheet({
     const id = lead?.id;
     if (!id) return;
     if (autoPickedFor.current === id) return;      // already decided for this lead
+    /* Email outranks Activity, now that Email is a tab of its own (23 Aug 2026, asked for
+       as "email conversation ka tab alag hi bana dete hai"). A live exchange with the
+       customer IS what the lead is about; the merged Activity stream is history, and
+       history is not what you open a live thread for.
+
+       Both counts are read, not only the winner's: a lead whose history is two calls and
+       a quote still lands on Activity rather than on an empty Email tab. */
+    if (threadSummary.total > 0) {
+      autoPickedFor.current = id;
+      setDrawerTab("email");
+      return;
+    }
     if (activities.length === 0) return;           // still loading, or nothing to show
     autoPickedFor.current = id;
     setDrawerTab("activity");
-  }, [lead?.id, activities.length]);
+  }, [lead?.id, activities.length, threadSummary.total]);
 
   // Drag-to-resize the drawer (desktop only): the left edge is a grab handle;
   // the chosen width is remembered per browser. Mobile stays full-width.
@@ -2075,8 +2087,43 @@ function LeadDetailSheet({
     if (lead.stage === "won") {
       return { label: "Upsell · new quote", icon: "send", tone: "indigo", onClick: handleSendQuote };
     }
-    if (lead.stage === "new" && lead.contact_phone) {
+    /* THEY WROTE LAST AND NOBODY HAS ANSWERED. Checked before every stage rule below,
+       because it outranks all of them: an unanswered customer is the most expensive thing
+       on this screen and no stage column records it. `latest.direction` is the whole test —
+       if the newest message in the thread came from them, the ball is ours.
+
+       Reported 23 Aug 2026 from a screenshot: a lead with 15 emails in the thread, 7 in
+       and 8 out, showed "Call now · first contact" as its biggest, loudest button. The
+       rules below read `lead.stage` and nothing else, and the stage was still "new" — so
+       the most prominent element in the drawer was telling the operator to introduce
+       themselves to somebody they had been corresponding with all day. */
+    if (threadSummary.latest?.direction === "inbound") {
+      return {
+        label: "Reply — they are waiting",
+        icon: "mail",
+        tone: "amber",
+        onClick: handleEmail,
+        hint: formatDate(threadSummary.latest.at ?? ""),
+        help: "Their message is the newest one in the thread, so the next move is ours. The Email tab has it, and the reply box sits under it.",
+      };
+    }
+    /* "First contact" now means it: nothing sent, nothing received, nothing logged.
+       Without those tests the label was a guess dressed as a fact — the stage a lead sits
+       in is not evidence about whether anyone has spoken to it. Stages get moved by hand,
+       and this one had not been. */
+    if (lead.stage === "new" && lead.contact_phone && threadSummary.total === 0 && activities.length === 0) {
       return { label: "Call now · first contact", icon: "mobile", tone: "amber", onClick: () => { window.location.href = `tel:${lead.contact_phone}`; }, hint: lead.contact_phone ?? undefined };
+    }
+    /* Contact has happened and no quote exists. The gap is the money step, not another
+       hello — which is what the old rule sent you back to do. */
+    if (lead.stage === "new") {
+      return {
+        label: "Send quote",
+        icon: "send",
+        tone: "amber",
+        onClick: handleSendQuote,
+        help: "You have already been in touch and there is no quote yet, so this is the step that is missing.",
+      };
     }
     if (lead.stage === "trial") {
       return { label: "Convert trial · send quote", icon: "send", tone: "amber", onClick: handleSendQuote };
@@ -2163,13 +2210,32 @@ function LeadDetailSheet({
             that is what an operator opens a lead to do; Details last, because it is
             reference. The old order put reference first AND defaulted to it.
 
-            Counts sit side by side, so they must not overlap in what they count:
-            Conversation counts activities (calls, emails, quotes, tasks logged),
-            Follow-ups counts OPEN tasks only. A task appears in both, once as
-            something that happened and once as something outstanding — which is
-            what the two words mean. */}
-        <div className="flex gap-1 border-b border-hairline px-5">
-          {(["activity", "followups", "details"] as const).map((t) => (
+            EMAIL IS ITS OWN TAB as of 23 Aug 2026 — "email conversation ka tab alag hi
+            bana dete hai". It used to be a segmented control INSIDE this tab, and I had
+            argued against promoting it: the same conversation would then live in three
+            places. The screenshot showed that reasoning was backwards. The control did not
+            save a label, it added one — above the first message the reader met
+            "Conversation (16)", then "Everything | Email (15)", then "EMAIL CONVERSATION ·
+            7 in · 8 out". Three headings, and two unequal numbers with nothing saying the
+            15 sat inside the 16. A tab removes the control, one heading and the mismatch
+            together.
+
+            "Activity", not "Conversation", now that Email has taken the conversational
+            meaning: that tab is the merged stream of calls, quotes, tasks and payments,
+            which is history. Two tabs both called Conversation was the confusion.
+
+            Counts sit side by side, so they must not overlap in what they count: Email
+            counts messages in the thread, Activity counts logged activities, Follow-ups
+            counts OPEN tasks only. A task appears in two of them, once as something that
+            happened and once as something outstanding — which is what the words mean.
+
+            The strip SCROLLS rather than trusting arithmetic. Four labels with counts
+            measure ~400px against a 375px phone by my estimate, and an estimate is not a
+            layout guarantee — a wrapped or clipped tab bar is the exact failure this
+            redesign set out to fix. shrink-0 keeps every label whole; the scrollbar is
+            hidden because a 15px overshoot with a visible bar reads as broken. */}
+        <div className="flex gap-1 overflow-x-auto border-b border-hairline px-3 sm:px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {(["email", "activity", "followups", "details"] as const).map((t) => (
             <button
               key={t}
               type="button"
@@ -2178,17 +2244,14 @@ function LeadDetailSheet({
               className={cn(
                 /* min-h-11 = 44px, the touch-target floor (CLAUDE.md §20). The old
                    py-2 gave ~32px, which on a phone is a miss waiting to happen. */
-                "min-h-11 px-3 text-xs font-semibold border-b-2 -mb-px transition-colors",
+                "min-h-11 shrink-0 whitespace-nowrap px-2.5 text-xs font-semibold border-b-2 -mb-px transition-colors",
                 drawerTab === t ? "border-amber text-amber-ink" : "border-transparent text-ink-3 hover:text-ink",
               )}
             >
-              {/* "Conversation", not "Activity". This tab holds every call, email,
-                  quote and task on the lead, and the reply box sits under it — so it
-                  is where you read the thread and answer it, which is what a name
-                  should say. A fourth tab was considered and rejected: the same
-                  conversation would then live in three places. */}
-              {t === "activity"
-                ? `Conversation${activities.length ? ` (${activities.length})` : ""}`
+              {t === "email"
+                ? `Email${threadSummary.total ? ` (${threadSummary.total})` : ""}`
+                : t === "activity"
+                ? `Activity${activities.length ? ` (${activities.length})` : ""}`
                 : t === "followups"
                   ? `Follow-ups${openTasks.length ? ` (${openTasks.length})` : ""}`
                   : "Details"}
@@ -2513,48 +2576,16 @@ function LeadDetailSheet({
               </div>
             </div>
 
-            {/* Two views of the same conversation, because they answer different questions.
-                "Everything" is newest-first and tells you what happened last. "Email" is
-                oldest-first and tells you how the exchange went — which is what you need
-                before writing the next line of it. Mixing them was the reported problem:
-                the mail was there, interleaved with calls and quotes, so it did not read as
-                a thread and Pardeep could not find where a reply would land. */}
-            <div className="mb-2 flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setConvoView("all")}
-                className={cn(
-                  "rounded-md px-2 py-1 text-xs font-medium transition-colors cursor-pointer",
-                  convoView === "all" ? "bg-ink text-paper" : "bg-paper-2 text-ink-2 hover:bg-paper-3",
-                )}
-              >
-                Everything
-              </button>
-              <button
-                type="button"
-                onClick={() => setConvoView("email")}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors cursor-pointer",
-                  convoView === "email" ? "bg-ink text-paper" : "bg-paper-2 text-ink-2 hover:bg-paper-3",
-                )}
-              >
-                <Icon name="mail" size={12} />
-                Email{threadSummary.total > 0 ? ` (${threadSummary.total})` : ""}
-              </button>
-            </div>
+            {/* No segmented control here any more, and no "Everything that has happened"
+                heading either. Email became its own tab on 23 Aug 2026, so the control had
+                nothing left to switch between — and with the tab strip above already
+                reading "Activity (16)", a heading saying the same thing in more words was
+                the third label in a stack of three.
 
-            {convoView === "email" ? (
-              <EmailThreadPanel
-                thread={emailThread}
-                summary={threadSummary}
-                leadEmail={lead.contact_email}
-                loggedSendsWithoutText={loggedEmailSends}
-              />
-            ) : (
-            <>
-            <div className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">
-              Everything that has happened
-            </div>
+                What the old control was FOR is still true and is now the tab split: this
+                list is newest-first and answers "what happened last"; the Email tab is
+                oldest-first and answers "how did the exchange go", which is what you need
+                before writing the next line of it. */}
             {/* One stream, not three lists. The drawer already loaded activities, quotes
                 and tasks; showing them separately made the rep do the interleaving in
                 their head, and get it wrong — each list sorts alone, so a quote sent on
@@ -2606,11 +2637,35 @@ function LeadDetailSheet({
                 invent an order that never happened.
               </p>
             )}
-            </>
-            )}
+          </div>
+          )}
+
+          {/* ── EMAIL — the exchange with the customer, its own tab ──────────────
+              Promoted out of the Activity tab on 23 Aug 2026: "email conversation ka tab
+              alag hi bana dete hai". The reasoning is on the tab strip above.
+
+              WHAT IT COSTS, and it is not nothing: an email no longer sits in the same
+              list as the call that followed it, so "what happened, in order" and "what did
+              we actually say" are two clicks apart instead of one scroll. That is the right
+              split here, because they are two different questions and the mail was always
+              the one being asked — and Activity still lists the mail-shaped entries it
+              logged, so the ORDER is not lost. Only the text lives here.
+
+              It renders after Activity in source rather than before it, so that the reply
+              composer below can stay where it is instead of being lifted over 200 lines of
+              JSX. Tab ORDER is set by the array in the strip, not by this. */}
+          {drawerTab === "email" && (
+          <div>
+            <EmailThreadPanel
+              thread={emailThread}
+              summary={threadSummary}
+              leadEmail={lead.contact_email}
+              loggedSendsWithoutText={loggedEmailSends}
+            />
           {/* ── Reply to this lead, from here ──────────────────────────────────
-              Rendered under BOTH views on purpose: from "Everything" it is the next action
-              after reading what happened, and from "Email" it is the bottom of the thread.
+              Under the thread, which is where a reply belongs — it used to render under
+              both views of the old merged tab, and the half of that which was right is
+              this half.
               ───────────────────────────────────────────────────────────────────
               Both halves of the conversation already existed and lived on different
               screens. Inbound mail was readable on the lead (the timeline above); replying

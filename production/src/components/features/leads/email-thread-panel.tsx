@@ -80,10 +80,13 @@ export function EmailThreadPanel({
 
   return (
     <div>
-      <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-ink-3">
-          Email conversation
-        </span>
+      {/* No "EMAIL CONVERSATION" heading any more. In the lead drawer this panel renders
+          directly under a selected segmented control that already reads "Email (15)", and
+          under a tab that already reads "Conversation (16)" — three labels for one list,
+          stacked, with two nearly-matching numbers among them. The counts stay because
+          they are the one thing those labels do NOT say: which way the traffic went.
+          Right-aligned and alone, they read as a caption rather than a third title. */}
+      <div className="mb-1.5 flex justify-end">
         <span className="font-mono text-[11px] text-ink-3">
           {summary.inbound} in · {summary.outbound} out
         </span>

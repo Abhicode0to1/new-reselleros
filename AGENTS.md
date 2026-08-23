@@ -1652,3 +1652,29 @@ comment-stripped copy of the source to assert code against, keeping the raw text
 asserting the prose — `sentry-client.test.ts` already had this and said why: a blunt scan
 "would push the reasoning out of the file to satisfy the test". **Absence assertions on
 source text need the comments stripped first**, or the test quietly punishes documentation.
+
+**L47 — The loudest element on a screen is the one to check for lies.** A lead drawer's
+biggest, most saturated button read "Call now · first contact" on a lead with 15 emails in
+its thread — 7 in, 8 out, all visible three inches below it. The rule behind it read
+`lead.stage` and nothing else, and the stage was still "new" because stages are moved by
+hand and nobody had. **A stage column is not evidence about whether anyone has spoken to a
+lead**; the conversation is. Nothing was broken in the usual sense — no error, no failing
+test, no wrong number — and it had presumably been telling operators to introduce
+themselves to people they were mid-correspondence with for as long as the rule existed.
+When auditing a screen, read the biggest thing on it against the data next to it.
+
+**L48 — "It would appear in three places" can be backwards.** I rejected promoting the
+email thread to its own tab on the grounds that the same conversation would then live in
+three places, and kept it as a segmented control inside another tab. The screenshot showed
+the control did not save a label, it ADDED one: above the first message the reader met
+"Conversation (16)", then "Everything | Email (15)", then "EMAIL CONVERSATION · 7 in · 8
+out" — three headings and two unequal numbers with nothing saying the 15 sat inside the 16.
+Promoting it deleted the control, one heading and the mismatch together. **Count the labels
+a nesting costs before assuming nesting is cheaper than a peer.**
+
+**L49 — Do not splice JSX with printf.** Rebuilding a tab structure by cutting the file into
+ranges and reassembling with `printf` put a literal backslash into the source (`\&\&`
+survives shell escaping as two characters) and produced 20 cascading TS17008 errors that
+read like a JSX nesting bug rather than a bad byte. `git checkout` the file and redo it with
+the Edit tool: anchored string replacement cannot silently shift a range or mangle an
+escape, and the failure it gives is local instead of a wall.
