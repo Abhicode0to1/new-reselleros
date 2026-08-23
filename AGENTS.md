@@ -2033,3 +2033,25 @@ The ordering is the part that is easy to get backwards and expensive: **deploy t
 understands a list FIRST**, then set "old,new", then update the forwarder, then narrow to
 "new". Setting the list against the old single-value comparison makes every request 401 —
 which is the exact outage the list exists to prevent.
+
+**L88 — There was no retry at all, so one transient 503 lost a customer's reply for good.**
+Traced from the live run: `Gemini HTTP 503` — Google busy for a moment — and the drafter
+reported "the AI did not return a reply", which reads like a model fault and sent me back to
+the model. Three real failures were seen that day and only now are they told apart: **403
+(project denied) and 404 (retired model) are permanent, 503/429 clear in a second.** Treating
+them alike made a transient loss indistinguishable from a misconfiguration. Retried once, not
+in a loop, because this runs inside a webhook a provider is waiting on.
+
+**L89 — A retry is ONE attempt at one thing; count it once.** My first version recorded a
+breaker failure on the way past AND on the retry, so a single logical call cost two and the
+threshold of 3 tripped after one and a half — the breaker opening on transient noise, which
+is the opposite of its purpose. Caught by an EXISTING test ("a success resets the failure
+count") that received null where it expected a draft. **When adding a retry, check what else
+counts attempts** — breakers, quotas, rate limiters and audit logs all do, and each will be
+wrong by a factor of two without being told.
+
+**L90 — `gcloud --update-env-vars` splits on commas, which collides with a comma-separated
+secret list.** Setting `INBOUND_EMAIL_SECRET="old,new"` failed outright — and failing was the
+good outcome, since the alternative is two env vars nobody asked for. The custom-delimiter
+form works: `--update-env-vars "^@^KEY=old,new"`. Do NOT reach for `--env-vars-file`, which
+REPLACES every variable on the service rather than updating one.

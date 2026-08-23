@@ -70,6 +70,13 @@ describe("geminiJson — an AI failure must never break the caller", () => {
   });
 });
 
+/* ── ONE LOGICAL CALL IS NOW TWO FETCHES ON A RETRYABLE STATUS ──────────────
+   A 429 or 5xx is retried once (added 23 Aug 2026, after a live 503 lost a customer reply
+   outright). So the fetch counts below are DOUBLED against a 500-returning stub, while the
+   breaker counts are unchanged: a retry is one attempt at one thing, and recording each of
+   its stages separately made the threshold of 3 trip after one and a half calls. That
+   regression is what the "resets the failure count" test caught — it received null where it
+   expected a draft, because the breaker had already opened. */
 describe("circuit breaker", () => {
   it("stops calling after three consecutive failures", async () => {
     const spy = vi.fn(async () => ({
@@ -78,12 +85,13 @@ describe("circuit breaker", () => {
     vi.stubGlobal("fetch", spy);
 
     for (let i = 0; i < 3; i++) await geminiJson(ARGS);
-    expect(spy).toHaveBeenCalledTimes(3);
+    /* 3 logical calls x (attempt + one retry) = 6 fetches, and 3 breaker failures. */
+    expect(spy).toHaveBeenCalledTimes(6);
 
     // Fourth call short-circuits: when Gemini is down, the caller should not pay
     // the full timeout on every request just to reach the same stub.
     await expect(geminiJson(ARGS)).resolves.toBeNull();
-    expect(spy).toHaveBeenCalledTimes(3);
+    expect(spy).toHaveBeenCalledTimes(6);
   });
 
   it("a success resets the failure count", async () => {
@@ -102,7 +110,8 @@ describe("circuit breaker", () => {
     mode = "fail";
     await geminiJson(ARGS);
     await geminiJson(ARGS);           // only 2 since the reset
-    expect(spy).toHaveBeenCalledTimes(5);   // none skipped
+    /* 4 failing logical calls x 2 fetches + 1 successful call x 1 = 9. None skipped. */
+    expect(spy).toHaveBeenCalledTimes(9);
   });
 
   it("stays closed while failures are below the threshold", async () => {
@@ -112,6 +121,71 @@ describe("circuit breaker", () => {
     vi.stubGlobal("fetch", spy);
     await geminiJson(ARGS);
     await geminiJson(ARGS);
+    /* 2 logical calls x (attempt + retry). Two breaker failures, so still closed. */
+    expect(spy).toHaveBeenCalledTimes(4);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Retrying a transient failure, added 23 Aug 2026 after a live one cost a customer.
+
+   The reply drafter went undrafted because Google answered 503 once. There was no retry at
+   all, so a single upstream blip lost the reply permanently and reported it as "the AI did
+   not return a reply" — which reads like a model problem and sent me looking at the model.
+
+   Three real failures were traced that day: 403 (project denied), 404 (retired model) and
+   503 (busy). The first two are permanent and retrying them is waste; the third clears in a
+   second. Treating them alike is what made a transient loss indistinguishable from a
+   misconfiguration.
+   ───────────────────────────────────────────────────────────────────────────── */
+describe("retrying a transient failure", () => {
+  const fail = (status: number) => ({
+    ok: false, status, text: async () => "boom", json: async () => ({}),
+  } as unknown as Response);
+
+  it.each([429, 500, 502, 503])("retries once on HTTP %i and can then succeed", async (status) => {
+    let first = true;
+    const spy = vi.fn(async () => {
+      if (first) { first = false; return fail(status); }
+      return ok('{"message":"hi"}');
+    });
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson(ARGS)).resolves.toEqual({ message: "hi" });
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([400, 401, 403, 404])("does NOT retry HTTP %i", async (status) => {
+    /* Permanent. A retired model or a denied project answers the same way twice, and the
+       retry would only add a second of latency to a webhook a provider is waiting on. */
+    const spy = vi.fn(async () => fail(status));
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson(ARGS)).resolves.toBeNull();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries at most ONCE, never in a loop", async () => {
+    const spy = vi.fn(async () => fail(503));
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson(ARGS)).resolves.toBeNull();
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("counts a retried call as ONE breaker failure, not two", async () => {
+    /* THE BUG MY OWN CHANGE INTRODUCED, caught by the existing "resets the failure count"
+       test before it shipped. Recording a failure on the way past AND on the retry made a
+       single logical call cost two, so the threshold of 3 tripped after one and a half calls
+       and the breaker opened on transient noise — the opposite of what it is for.
+
+       Two failing calls must leave the breaker CLOSED, so the third still reaches Gemini. */
+    let mode: "fail" | "pass" = "fail";
+    const spy = vi.fn(async () => (mode === "fail" ? fail(503) : ok('{"message":"hi"}')));
+    vi.stubGlobal("fetch", spy);
+
+    await geminiJson(ARGS);                       // 2 fetches, 1 failure
+    await geminiJson(ARGS);                       // 2 fetches, 2 failures
+    mode = "pass";
+    /* If a retry had counted twice, failures would be 4 here and this would be null. */
+    await expect(geminiJson(ARGS)).resolves.toEqual({ message: "hi" });
+    expect(spy).toHaveBeenCalledTimes(5);
   });
 });

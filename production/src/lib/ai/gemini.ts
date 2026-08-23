@@ -7,7 +7,10 @@
  *   2. process.env.GEMINI_API_KEY     (global Cloud Run fallback)
  *   3. null                           → callers use their deterministic stub
  *
- * Model: tenant_secrets.gemini_model → GEMINI_MODEL env → "gemini-1.5-flash".
+ * Model: tenant_secrets.gemini_model → GEMINI_MODEL env → DEFAULT_MODEL below.
+ *   (This line said "gemini-1.5-flash" until 23 Aug 2026 — a model retired in 2025-26 and
+ *    not the constant it was describing. A doc-comment naming a value is a second copy of
+ *    that value, and this one had been wrong for a year.)
  *
  * The raw key never leaves the server — callers use it to call the Gemini REST
  * API directly and only ever surface a masked preview in the integration UI.
@@ -158,6 +161,8 @@ export async function geminiJson<T>(args: {
   timeoutMs?: number;
   /** Prefix for server logs, e.g. "ai/draft-followup". */
   label: string;
+  /** Internal. Set on the single retry so it cannot recurse — see the 5xx branch below. */
+  __isRetry?: boolean;
 }): Promise<T | null> {
   const now = Date.now();
   if (breakerOpen(now)) {
@@ -184,7 +189,37 @@ export async function geminiJson<T>(args: {
     );
 
     if (!res.ok) {
-      console.error(`[${args.label}] Gemini HTTP ${res.status}:`, await res.text().catch(() => ""));
+      const body = await res.text().catch(() => "");
+      console.error(`[${args.label}] Gemini HTTP ${res.status}:`, body);
+      /* RETRYABLE vs NOT, and the distinction was missing entirely until 23 Aug 2026.
+         Measured on the live run: a customer's reply went undrafted because Google answered
+         503 once. No retry existed — one transient upstream blip and the reply was gone,
+         reported as "the AI did not return a reply", which reads like a model problem.
+
+         The three failures traced that day were 403 (project denied), 404 (retired model)
+         and 503 (busy). The first two are permanent and retrying them is a waste; the third
+         clears in a second. Treating them alike is what made a transient loss look
+         identical to a misconfiguration.
+
+         Retried ONCE, not in a loop: this runs inside a webhook a provider is waiting on,
+         and the drafter is not so valuable that it should hold a request open through a
+         second-long backoff twice. 429 is included — a rate limit is by definition
+         temporary — and the breaker still counted the first failure, so a genuine outage
+         still trips it rather than being papered over by retries. */
+      const retryable = res.status === 429 || res.status >= 500;
+      if (retryable && !args.__isRetry) {
+        /* NOT counted as a breaker failure here — the retry records the final outcome.
+           The first version of this recorded one on the way past AND one on the retry, so a
+           single logical call cost TWO failures and the threshold of 3 tripped after one and
+           a half calls. Caught by the existing "a success resets the failure count" test,
+           which then got null where it expected a draft: the breaker had already opened.
+
+           A retry is one attempt at one thing. Counting its stages separately would make the
+           breaker fire on transient noise, which is the opposite of what it is for. */
+        console.warn(`[${args.label}] retrying once after HTTP ${res.status}`);
+        await new Promise((r) => setTimeout(r, 900));
+        return geminiJson<T>({ ...args, __isRetry: true });
+      }
       recordFailure(now);
       return null;
     }
