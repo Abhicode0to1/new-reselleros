@@ -1798,7 +1798,45 @@ function LeadDetailSheet({
      different one never lands you in a view you did not choose. */
   const [convoView, setConvoView] = React.useState<"all" | "email">("all");
   const [emailComposerOpen, setEmailComposerOpen] = React.useState(false);
-  React.useEffect(() => { setDrawerTab("details"); setConvoView("all"); setEmailComposerOpen(false); }, [lead?.id]);
+  /* ── Which tab a lead opens on ─────────────────────────────────────────────
+     Was always "details". Moving the tabs to the top was half the fix for
+     "Follow-ups and Conversation should be first"; this is the other half — the
+     thing an operator opens a lead to DO was one click behind the thing they open
+     it to LOOK UP.
+
+     Not a fixed choice either way, because the right answer depends on the lead:
+     a brand-new one has no conversation, and landing on an empty Conversation tab
+     would be worse than what it replaced. So it opens on the exchange when there
+     IS one, and on Details when there is not — which is also the case where the
+     fields still need filling in.
+
+     `activities.length` rather than the email thread specifically: a lead whose
+     only history is two calls and a quote is still a lead you open to see what
+     happened, not to read its address. */
+  /* `activities` arrives asynchronously, and that detail is the whole difference
+     between this working and looking like it works. Keying the effect on `lead?.id`
+     alone runs it once while the list is still empty, lands on Details, and never
+     re-runs — so every lead WITH a conversation would still have opened on Details
+     and the change would have looked applied.
+
+     So it runs when the count changes too, and `autoPickedFor` makes it fire at most
+     once per lead. A second automatic switch is worse than none: it would move the
+     tab out from under whoever had just chosen one. */
+  const autoPickedFor = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    setConvoView("all");
+    setEmailComposerOpen(false);
+    autoPickedFor.current = null;
+  }, [lead?.id]);
+
+  React.useEffect(() => {
+    const id = lead?.id;
+    if (!id) return;
+    if (autoPickedFor.current === id) return;      // already decided for this lead
+    if (activities.length === 0) return;           // still loading, or nothing to show
+    autoPickedFor.current = id;
+    setDrawerTab("activity");
+  }, [lead?.id, activities.length]);
 
   // Drag-to-resize the drawer (desktop only): the left edge is a grab handle;
   // the chosen width is remembered per browser. Mobile stays full-width.
@@ -2077,11 +2115,61 @@ function LeadDetailSheet({
           <IconButton icon="x" aria-label="Close" onClick={onClose} />
         </SheetHeader>
 
+        {/* ── Tabs, PINNED ─────────────────────────────────────────────────────
+            Asked for on 23 Aug 2026: Follow-ups and Conversation at the top. They
+            used to sit inside the scroll container below four blocks, so switching
+            tabs meant scrolling back up to find them.
+
+            Outside the scroll now, which is more than a reorder: they are reachable
+            from any depth of a long thread. The header above stays put too (it was
+            already outside the scroll), so the company name and stage remain visible
+            while a reply is being written — a reply composed without knowing who it
+            is going to is how the wrong name reaches a customer.
+
+            ORDER IS THE POINT, not just the position. Conversation first, because
+            that is what an operator opens a lead to do; Details last, because it is
+            reference. The old order put reference first AND defaulted to it.
+
+            Counts sit side by side, so they must not overlap in what they count:
+            Conversation counts activities (calls, emails, quotes, tasks logged),
+            Follow-ups counts OPEN tasks only. A task appears in both, once as
+            something that happened and once as something outstanding — which is
+            what the two words mean. */}
+        <div className="flex gap-1 border-b border-hairline px-5">
+          {(["activity", "followups", "details"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setDrawerTab(t)}
+              aria-current={drawerTab === t ? "page" : undefined}
+              className={cn(
+                /* min-h-11 = 44px, the touch-target floor (CLAUDE.md §20). The old
+                   py-2 gave ~32px, which on a phone is a miss waiting to happen. */
+                "min-h-11 px-3 text-xs font-semibold border-b-2 -mb-px transition-colors",
+                drawerTab === t ? "border-amber text-amber-ink" : "border-transparent text-ink-3 hover:text-ink",
+              )}
+            >
+              {/* "Conversation", not "Activity". This tab holds every call, email,
+                  quote and task on the lead, and the reply box sits under it — so it
+                  is where you read the thread and answer it, which is what a name
+                  should say. A fourth tab was considered and rejected: the same
+                  conversation would then live in three places. */}
+              {t === "activity"
+                ? `Conversation${activities.length ? ` (${activities.length})` : ""}`
+                : t === "followups"
+                  ? `Follow-ups${openTasks.length ? ` (${openTasks.length})` : ""}`
+                  : "Details"}
+            </button>
+          ))}
+        </div>
+
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* Contact action card — first thing in the drawer per research
-              (Close.com / Folk pattern). Shows the rep's three primary
-              reach-out actions as big tap targets + a GST badge for B2B
-              context. Replaces the need to scroll for contact info. */}
+          {/* Contact card — who this is, and the buttons that RECORD what happened.
+              It used to also carry Call / Email / WhatsApp as "the rep's three primary
+              reach-out actions", which was true when it was written and stopped being so
+              once the pinned footer grew the same three. It is no longer the first thing
+              in the drawer either: the tabs are, because the question an operator opens a
+              lead with is "what did they say" rather than "what is their number". */}
           {(lead.contact_phone || lead.contact_email || lead.gstin) && (
             <div className="rounded-lg border border-hairline bg-paper-2/40 p-3">
               {/* Top row — contact name + GST badge if present */}
@@ -2108,69 +2196,19 @@ function LeadDetailSheet({
                 )}
               </div>
 
-              {/* Action row — Call / WhatsApp / Email as big buttons.
-                  These are the rep's bread-and-butter — surface them
-                  prominently so 1 tap = action, no scrolling needed. */}
-              <div className="grid grid-cols-3 gap-2">
-                {lead.contact_phone ? (
-                  <a
-                    href={`tel:${lead.contact_phone.replace(/\s+/g, "")}`}
-                    className="inline-flex items-center justify-center gap-1.5 py-2 rounded-md bg-paper border border-hairline hover:bg-emerald-soft/40 text-emerald text-xs font-semibold transition-colors"
-                  >
-                    <Icon name="mobile" size={13} /> Call
-                  </a>
-                ) : (
-                  <div className="inline-flex items-center justify-center gap-1.5 py-2 rounded-md bg-paper-2 border border-hairline text-ink-3 text-xs">
-                    <Icon name="mobile" size={13} /> —
-                  </div>
-                )}
-                {lead.contact_phone ? (
-                  (() => {
-                    const phoneDigits = lead.contact_phone.replace(/\D/g, "");
-                    const waNumber = phoneDigits.startsWith("91") ? phoneDigits : (phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits);
-                    const greeting = lead.contact_name ? `Hi ${lead.contact_name},` : "Hello,";
-                    const ref = lead.plan ? `about ${lead.plan} for ${lead.company}` : `regarding ${lead.company}`;
-                    const waMsg = `${greeting} Following up ${ref}. When's a good time for a quick call?`;
-                    return (
-                      <a
-                        href={`https://wa.me/${waNumber}?text=${encodeURIComponent(waMsg)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          openWhatsApp(waNumber, waMsg);
-                          logActivity.mutate({ leadId: lead.id, kind: "whatsapp", detail: `WhatsApp to ${lead.contact_phone}` });
-                        }}
-                        className="inline-flex items-center justify-center gap-1.5 py-2 rounded-md bg-paper border border-hairline hover:bg-emerald-soft/40 text-emerald text-xs font-semibold transition-colors"
-                      >
-                        <Icon name="whatsapp" size={13} /> WhatsApp
-                      </a>
-                    );
-                  })()
-                ) : (
-                  <div className="inline-flex items-center justify-center gap-1.5 py-2 rounded-md bg-paper-2 border border-hairline text-ink-3 text-xs">
-                    <Icon name="whatsapp" size={13} /> —
-                  </div>
-                )}
-                {lead.contact_email ? (
-                  <a
-                    href={`mailto:${lead.contact_email}`}
-                    onClick={(e) => { e.preventDefault(); handleEmail(); }}
-                    className="inline-flex items-center justify-center gap-1.5 py-2 rounded-md bg-paper border border-hairline hover:bg-indigo-50 text-indigo text-xs font-semibold transition-colors"
-                  >
-                    <Icon name="mail" size={13} /> Email
-                  </a>
-                ) : (
-                  <div className="inline-flex items-center justify-center gap-1.5 py-2 rounded-md bg-paper-2 border border-hairline text-ink-3 text-xs">
-                    <Icon name="mail" size={13} /> —
-                  </div>
-                )}
-              </div>
 
-              {/* Second action row — recording what happened, as opposed to the row above
-                  which starts a conversation. Both matter: a call that is made and never
-                  logged is invisible to the timeline, the stage-age badge and every
-                  forecast built on them. */}
+              {/* LOGGING what happened — as opposed to starting a conversation, which is
+                  what the pinned footer's Call / Email / WhatsApp buttons do.
+
+                  A Call/WhatsApp/Email row used to sit here too, duplicating that footer
+                  exactly. Removed 23 Aug 2026: the footer is outside the scroll and
+                  therefore always visible, so the copy at the very top of the drawer added
+                  height and no capability — in the space the tabs now occupy. Asking for
+                  the tabs at the top turned out to cost nothing.
+
+                  This row stays, because it does something the footer does not: a call
+                  that is made and never logged is invisible to the timeline, the stage-age
+                  badge and every forecast built on them. */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -2314,32 +2352,6 @@ function LeadDetailSheet({
             </div>
           )}
 
-          {/* Tabs — keep the ever-growing Activity log out of the main detail view */}
-          <div className="flex gap-1 border-b border-hairline">
-            {(["details", "followups", "activity"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setDrawerTab(t)}
-                className={cn(
-                  "px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors",
-                  drawerTab === t ? "border-amber text-amber-ink" : "border-transparent text-ink-3 hover:text-ink",
-                )}
-              >
-                {/* "Conversation", not "Activity". This tab already held every call, email,
-                    quote and task on the lead, and the reply box now sits under it — so the
-                    tab is where you read the thread and answer it, which is what a name
-                    should say. A separate third tab was considered and rejected: the same
-                    conversation would then live in three places (the Details preview, the
-                    timeline, and a new tab), and the drawer already had two. */}
-                {t === "activity"
-                  ? `Conversation${activities.length ? ` (${activities.length})` : ""}`
-                  : t === "followups"
-                    ? `Follow-ups${openTasks.length ? ` (${openTasks.length})` : ""}`
-                    : "Details"}
-              </button>
-            ))}
-          </div>
 
           {drawerTab === "details" && (
           <>
