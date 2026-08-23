@@ -29,13 +29,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveGeminiConfig } from "@/lib/ai/gemini";
-import { sendEmail } from "@/lib/email/send";
+import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
 import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
 import { decideDisposition } from "@/lib/inbound/disposition";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { extractEntities } from "@/lib/inbound/extract";
 import { planQuoteFromEnquiry } from "@/lib/quotes/quote-from-enquiry";
+import { decideAutoSend } from "@/lib/quotes/auto-send-quote";
+import { sendAutoQuote } from "@/lib/quotes/send-auto-quote";
 import { planCorrections, correctionDetail } from "@/lib/leads/apply-correction";
 import { extractAttachments, pickBillAttachment } from "@/lib/inbound/attachments";
 import { readBillWithGemini } from "@/lib/ai/read-bill";
@@ -787,9 +789,52 @@ export async function POST(request: NextRequest) {
     await admin.from("lead_activities").insert({
       tenant_id: tenantId, lead_id: leadId, kind: draftQuoteId ? "quote" : "note",
       detail: draftQuoteId
-        ? `Draft quote ${draftQuoteId} auto-created — ${facts.seats.value} × ${matchedItem?.name}. Term assumed annual; check before sending.`
+        ? `Draft quote ${draftQuoteId} auto-created — ${facts.seats.value} × ${matchedItem?.name}. ` +
+          `${quotePlan.termAssumed ? "Term ASSUMED annual" : `Term ${facts.term.value} as stated`}.`
         : `Could not create the draft quote — the lead and the mail are saved, build it by hand`,
     });
+
+    /* ── 6c. Send it, but only when the customer named the term ─────────────
+       Pardeep's rule, chosen from four options with the cost of each on the table: send
+       when the mail said monthly or annual, hold when it did not. Monthly and annual
+       differ by 12×, and a price the app inferred and posted is one the customer can
+       reasonably hold us to — no small print underneath repairs the first number they read.
+
+       The gate is `termAssumed`, computed once in quote-from-enquiry.ts, not a second
+       keyword search here. `decideAutoSend` owns the other four refusals so each one
+       reaches the operator as a sentence rather than as silence.
+
+       NOT AWAITED. Rendering a PDF inside a webhook a provider is waiting on would trade
+       ingest reliability for a few seconds of latency, and the lead, the mail and the draft
+       are all committed by now. Same fire-and-forget shape as the owner alert below. */
+    const sendDecision = decideAutoSend({
+      termAssumed:     quotePlan.termAssumed,
+      recipient:       fromEmail,
+      quoteId:         draftQuoteId,
+      emailConfigured: isEmailConfigured(),
+      senderIsOurs,
+    });
+
+    if (!sendDecision.send) {
+      await admin.from("lead_activities").insert({
+        tenant_id: tenantId, lead_id: leadId, kind: "note",
+        detail: `Quote not sent automatically — ${sendDecision.reason}`,
+      });
+    } else if (draftQuoteId) {
+      void sendAutoQuote(admin, {
+        tenantId,
+        quoteId:   draftQuoteId,
+        leadId,
+        recipient: fromEmail,
+        fromEmail: FROM_EMAIL,
+      }).catch((err) => {
+        /* Swallowed at the boundary and recorded on the lead by the helper itself. A send
+           failure must not turn a captured enquiry into a 500 — the provider would retry
+           the whole message and the idempotency claim would then skip it, losing the mail
+           to protect an email. */
+        console.error("[inbound-email] auto-quote send crashed:", err);
+      });
+    }
   }
   // owner_id is null on a freshly captured email lead, so the task lands in the
   // unassigned bucket for the owner to hand out -- which is what 0007 designed

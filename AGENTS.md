@@ -1760,3 +1760,23 @@ So the term is now extracted as its own field that is **null unless the sender s
 (both terms in one mail also yields null: "monthly and yearly?" is a comparison, not a
 choice), and `termAssumed` on the plan is the gate an auto-send has to read. Build the switch
 before building the thing that needs switching off.
+
+**L58 — "Reuse the existing sender" is the right instinct and can still be the wrong call.**
+The obvious way to email an auto-drafted quote was to refactor `POST /api/quotes/[id]/send`
+so both paths share it. Checked first: that route is 265 lines, touches money, and **has no
+tests** — `send-consequences.test.ts` covers a pure helper beside it, nothing covers the
+route. Extracting a send stack out of an untested money path is how a working feature breaks
+quietly, so the auto-send got its own narrower sender instead, with the narrowing LISTED in
+the header (no cc, no UPI QR, tenant-default GST head) rather than left to be discovered.
+Two facts made the duplication small enough to accept: an auto-drafted quote has no customer
+record, so the GST place-of-supply comparison the operator route does is a no-op there
+anyway, and the arithmetic reads the STORED `quote.amount` rather than recomputing it.
+**Before extracting shared code from a money path, look for its tests. If there are none,
+the refactor is the risky option and the duplicate is the careful one** — and say so in
+writing, or the next reader will "clean it up".
+
+**L59 — Do not render a PDF inside a webhook the provider is waiting on.** The auto-send is
+fire-and-forget (`void … .catch`), because a send failure must not turn a captured enquiry
+into a 500: the provider would retry the whole message, the `inbound_emails` idempotency
+claim would then skip it as a duplicate, and the mail would be lost to protect an email.
+The lead, the message and the draft are all committed before the send is attempted.
