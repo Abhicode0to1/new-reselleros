@@ -1144,3 +1144,68 @@ and product with tested regexes and already returned the source sentence each va
 from, which is strictly better here — it cannot invent a number, cannot drift between
 runs, and the audit trail is free. Reach for the deterministic thing that exists before
 adding an LLM, a wait, a cost and a failure mode.
+
+## L31. Registering ONE more table in the generated Database type can collapse all of it
+*23 Aug 2026, adding `document_series` for the invoice-issue dialog.*
+
+`document_series` was missing from `src/lib/supabase/database.types.ts`, so reading
+`last_number` did not typecheck. The obvious fix — declare the Row type and add one line
+to `Tables` — did this:
+
+```
+without the change:     4 errors
+with the change:    2,722 errors
+```
+
+Every unrelated table collapsed to `never` (`Property 'customer_id' does not exist on
+type 'never'`). supabase-js resolves row types through a large conditional-type chain,
+and a `Database` type this size sits close enough to the instantiation-depth limit that
+one more member tips it over. Nothing in the error output points at the table you added.
+
+**The rules:**
+- **Diagnose by removing, not by reading.** `git stash push -- <the types file>` and
+  re-run typecheck. Four errors versus 2,722 is a one-command answer; staring at the
+  first ten errors tells you nothing, because they are all in files you never touched.
+- **Do not add the table.** Put the one query that needs it behind a route with a
+  deliberately UNTYPED client (`createClient` from `@supabase/supabase-js`, no generic),
+  in a file small enough to read in full — `api/invoices/series/route.ts`. Keep the Row
+  interface as the written record of the shape even though nothing references it from
+  `Tables`.
+- **An untyped client has no tenant checking.** With no generated types, nothing verifies
+  the filter, so an explicit `.eq("tenant_id", …)` IS the entire boundary. Write it on
+  the next line and say so in a comment.
+- **A cast is not the cheaper option here.** It looks smaller and it is worse: L5 —
+  a cast added to get one table through stops checking everything else in the call.
+
+## L32. Fixing "never file it as spam" turned every echo of our own mail into a lead
+*23 Aug 2026. My regression, caught by the operator within the hour: "ye lead kyo bani".*
+
+L26 reordered the inbound webhook so a known sender's reply is never classified, and
+added: an absent verdict (`isEnquiry: null` — Gemini did not run) resolves to `create`
+rather than `skip`, so a real customer's first email cannot vanish during an outage.
+Sound reasoning, and it created a new bug the same day.
+
+Every reply on a thread arrives **twice** — once at the customer-facing address, once at
+the address we send FROM, because that address is in the thread. Those echoes used to be
+filed as spam. Now each one created a lead, named from the domain fallback
+(`fromEmail.split("@")[1].split(".")[0]` → "anutech"), with no seats and no plan, sitting
+in New beside the real one. The data showed it exactly: the same sender, `skipped` at
+514 and 494 minutes ago, `lead_created` at 4.
+
+**The rules:**
+- **Our own address is never a customer.** Check it before everything else, including
+  before the known-lead lookup — appending the echo would duplicate a thread that already
+  records the outgoing message as sent.
+- **Match exact addresses, never the domain.** "Anything @anutech.in is ours" silently
+  drops a reseller buying for itself, and this app's whole first customer is the tenant
+  itself. Collect `tenants.email`, the tenant's `users.email`, and the connected
+  `user_google_tokens.google_email` — that last one is what replies actually leave from
+  and need not equal any user's login (the "Send as" picker exists for that).
+- **When widening a default from "drop" to "surface", ask what ELSE arrives on that
+  path.** The change was correct for the case it was written for and wrong for the case
+  nobody enumerated. "What else reaches this branch?" is the question that would have
+  caught it before the operator did.
+- **`user_google_tokens` has no `tenant_id`.** Scope it through the tenant's user ids.
+  An unfiltered read under the admin client pulls every tenant's sending address into
+  "ours", and then a genuine enquiry from another reseller gets silently dropped — I
+  wrote that filter-less query first and caught it before it shipped.

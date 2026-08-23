@@ -53,9 +53,38 @@ export interface DispositionInput {
    * The model's verdict. `null` means it did not run — an absence, not a "no".
    */
   isEnquiry?: boolean | null;
+  /**
+   * True when the sender is one of OUR OWN addresses — the tenant's contact address,
+   * any of its users, or a connected Google account.
+   *
+   * ─── A REGRESSION I CAUSED, ON 23 AUG 2026 ────────────────────────────────
+   * Every reply on a thread arrives TWICE: once as delivered to the customer-facing
+   * address, and once as delivered to the address we send FROM, because that address is
+   * in the thread. The second copy is our own outgoing mail coming back.
+   *
+   * Before the ordering fix those copies were classified "not an enquiry" and filed as
+   * spam, which was wrong for the right reason. Then I made `isEnquiry: null` resolve to
+   * `create` so a real first email could not vanish during a Gemini outage — and that
+   * turned every echo of our own mail into a NEW LEAD. Measured within the hour: a lead
+   * named "anutech" (from the domain fallback), no seats, no plan, sitting in New beside
+   * the real one.
+   *
+   * So this is checked before anything else. Our own address is never a customer.
+   */
+  senderIsOurs?: boolean;
 }
 
 export function decideDisposition(input: DispositionInput): InboundDisposition {
+  /* FIRST, ahead of even the known-lead check. An echo of our own message must not be
+     filed onto the conversation either — it would duplicate the thread with a copy of
+     something already recorded as sent. */
+  if (input.senderIsOurs) {
+    return {
+      action: "skip",
+      reason: "sent from one of our own addresses — this is a copy of mail we sent, not an enquiry",
+    };
+  }
+
   const leadId = (input.openLeadId ?? "").trim();
 
   /* Asked FIRST, and this ordering IS the fix. Note what is NOT consulted here:

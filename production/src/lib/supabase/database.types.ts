@@ -3844,6 +3844,26 @@ type SitePromoInsert = Partial<SitePromoRow> & {
 };
 type SitePromoUpdate = Partial<Omit<SitePromoInsert, "id" | "tenant_id">>;
 
+/**
+ * document_series — the per-tenant, per-fiscal-year GST document counters
+ * (CLAUDE.md §17a). In the database since migration 0054 and absent from this file
+ * until 23 Aug 2026, so the invoice-issue confirmation could not read `last_number` to
+ * predict the next number without a cast — and AGENTS.md L5 is about exactly that: a
+ * cast added to get one table through stops checking everything else in the call.
+ *
+ * Application code only READS this. `next_document_number()` is the sole allocator and
+ * `set_document_series_start()` the sole way to move the counter, so an Update type
+ * exists for structural completeness rather than as an invitation.
+ */
+export interface DocumentSeriesRow {
+  tenant_id:   string;
+  doc_type:    string;
+  fiscal_year: string;
+  prefix:      string;
+  last_number: number;
+}
+export type DocumentSeriesInsert = DocumentSeriesRow;
+
 // ============================================================
 // Database type (the shape supabase-js expects)
 // ============================================================

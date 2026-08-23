@@ -63,3 +63,43 @@ describe("decideDisposition", () => {
     for (const d of all) expect(d.reason.length).toBeGreaterThan(20);
   });
 });
+
+describe("decideDisposition — our own address is never a customer", () => {
+  /* A regression introduced on 23 Aug 2026 and caught by the operator within the hour:
+     "ye lead kyo bani". Every reply on a thread arrives twice — once at the
+     customer-facing address, once at the address we send FROM, because that address is
+     in the thread. Making an absent classification resolve to `create` (so a real first
+     email could not vanish during an outage) turned every echo of our own mail into a
+     new lead named after our own domain. */
+
+  it("skips mail from our own address even when it looks like an enquiry", () => {
+    const d = decideDisposition({ senderIsOurs: true, openLeadId: null, isEnquiry: true });
+    expect(d.action).toBe("skip");
+    expect(d.reason).toMatch(/our own address/i);
+  });
+
+  it("skips it whatever the classifier says, including when it did not run", () => {
+    /* isEnquiry: null was the exact path that created the lead. */
+    for (const isEnquiry of [true, false, null, undefined]) {
+      expect(decideDisposition({ senderIsOurs: true, isEnquiry }).action, String(isEnquiry)).toBe("skip");
+    }
+  });
+
+  it("does NOT append our own echo onto the open lead either", () => {
+    /* Tempting, and wrong: the outgoing message is already recorded as sent
+       (status reply_sent), so appending the echo duplicates the thread. */
+    const d = decideDisposition({ senderIsOurs: true, openLeadId: "L-MT4HUR6P", isEnquiry: false });
+    expect(d.action).toBe("skip");
+  });
+
+  it("leaves a genuine customer on the same domain alone", () => {
+    /* senderIsOurs is an exact-address decision made by the caller, not a domain guess.
+       A customer whose address merely resembles ours must still be handled normally. */
+    const d = decideDisposition({ senderIsOurs: false, openLeadId: null, isEnquiry: true });
+    expect(d.action).toBe("create");
+  });
+
+  it("treats an absent flag as 'not ours', so no caller silently opts out", () => {
+    expect(decideDisposition({ openLeadId: null, isEnquiry: true }).action).toBe("create");
+  });
+});

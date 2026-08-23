@@ -461,7 +461,52 @@ export async function POST(request: NextRequest) {
     .limit(1)
     .maybeSingle();
 
+  /* ── Is this our own mail coming back? ────────────────────────────────────
+     Every reply on a thread arrives twice: once at the customer-facing address and
+     once at the address we send FROM, because that address is in the thread. Those
+     echoes used to be filed as spam. On 23 Aug 2026 I made an absent classification
+     resolve to `create` so a real first email could not vanish during a Gemini outage
+     — and that turned each echo into a NEW LEAD, named from our own domain
+     ("anutech", no seats, no plan), sitting in New beside the real one. The operator
+     spotted it within the hour.
+
+     Exact addresses, never a domain match: a customer at our own domain is possible
+     (a reseller buying for itself), and "anything @anutech.in is ours" would silently
+     drop them. */
+  const ourAddresses = new Set<string>();
+  {
+    const add = (v: string | null | undefined) => {
+      const s = (v ?? "").trim().toLowerCase();
+      if (s.includes("@")) ourAddresses.add(s);
+    };
+    const { data: t } = await admin
+      .from("tenants").select("email").eq("id", tenantId).maybeSingle();
+    add((t as { email?: string | null } | null)?.email);
+
+    const { data: staff } = await admin
+      .from("users").select("id, email").eq("tenant_id", tenantId);
+    const staffRows = (staff ?? []) as { id: string; email?: string | null }[];
+    for (const u of staffRows) add(u.email);
+
+    /* The connected Google account is the one replies actually leave from, and it need
+       not equal any users.email — that is the point of the "Send as" picker.
+
+       Scoped to THIS tenant's user ids. `user_google_tokens` has no tenant_id column,
+       so an unfiltered read here would pull every tenant's connected address into
+       `ourAddresses` — and then a genuine enquiry from another reseller's sending
+       address would be silently dropped as "ours". This runs under the admin client,
+       so there is no RLS to catch that; the filter IS the boundary. */
+    const staffIds = staffRows.map((u) => u.id).filter(Boolean);
+    if (staffIds.length > 0) {
+      const { data: senders } = await admin
+        .from("user_google_tokens").select("google_email").in("user_id", staffIds);
+      for (const g of (senders ?? []) as { google_email?: string | null }[]) add(g.google_email);
+    }
+  }
+  const senderIsOurs = ourAddresses.has(fromEmail.trim().toLowerCase());
+
   const disposition = decideDisposition({
+    senderIsOurs,
     openLeadId: existing?.id ?? null,
     /* `ai` is null when Gemini did not run. Passing extracted.isEnquiry here would
        pass the webhook's default-TRUE fallback and hide that distinction — and the

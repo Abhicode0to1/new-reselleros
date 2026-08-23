@@ -15,7 +15,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SAAS_HSN } from "@/lib/gst/hsn";
-import { useInvoices, useQuotesAwaitingInvoice, useGenerateInvoice, useDeleteProjectInvoice, useDeleteSubscriptionInvoice } from "@/lib/queries/invoices";
+import { useInvoices, useQuotesAwaitingInvoice, useGenerateInvoice, useDeleteProjectInvoice, useDeleteSubscriptionInvoice, useInvoiceSeries } from "@/lib/queries/invoices";
 import { useQuoteByInvoiceId } from "@/lib/queries/quotes";
 import { usePaymentsByQuote, totalReceived } from "@/lib/queries/payments";
 import { RecordPaymentDialog } from "@/components/features/quotes/record-payment-dialog";
@@ -46,6 +46,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { TabBar, type TabBarItem } from "@/components/ui/tabs";
+import { ConfirmIssueDialog } from "@/components/features/invoices/confirm-issue-dialog";
+import { issueConsequences, bulkIssueConsequences } from "@/lib/invoices/issue-consequences";
 import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
 import { getInvoiceWhatsAppUrl } from "@/lib/whatsapp";
 import { useWhatsAppSender } from "@/lib/hooks/useWhatsAppSender";
@@ -115,6 +117,65 @@ function InvoicesPageInner() {
   const subCount  = React.useMemo(() => (invoices ?? []).filter((i) => !isProjectInv(i.id)).length, [invoices, isProjectInv]);
   const projCount = React.useMemo(() => (invoices ?? []).filter((i) =>  isProjectInv(i.id)).length, [invoices, isProjectInv]);
   const [pendingSelected, setPendingSelected] = React.useState<Set<string>>(new Set());
+
+  /* Issuing an invoice consumes a GST serial and creates a document that cannot be
+     edited (migration 20260823090000). Both used to happen on a bare click — the
+     single "Generate" button and a bulk loop over every selected quote. These hold the
+     quote(s) awaiting confirmation; the dialog states what the click will do. */
+  const [confirmSingle, setConfirmSingle] = React.useState<string | null>(null);
+  const [confirmBulk, setConfirmBulk] = React.useState<boolean>(false);
+  const { data: invoiceSeries = null } = useInvoiceSeries();
+
+  /** A pending quote in the shape `issueConsequences` needs. */
+  const toIssuable = React.useCallback(
+    (q: { id: string; customer_name?: string | null; amount?: number | null; payment_terms_days?: number | null }) => ({
+      id: q.id,
+      customerName: q.customer_name ?? null,
+      amount: q.amount ?? null,
+      paymentTermsDays: q.payment_terms_days ?? null,
+    }),
+    [],
+  );
+
+  const singleQuote = React.useMemo(
+    () => (confirmSingle ? pending?.find((q) => q.id === confirmSingle) ?? null : null),
+    [confirmSingle, pending],
+  );
+  const singleConsequences = React.useMemo(
+    () => (singleQuote ? issueConsequences({ quote: toIssuable(singleQuote), series: invoiceSeries }) : null),
+    [singleQuote, invoiceSeries, toIssuable],
+  );
+  const bulkConsequences = React.useMemo(() => {
+    if (!confirmBulk || !pending) return null;
+    const selected = pending.filter((q) => pendingSelected.has(q.id));
+    if (selected.length === 0) return null;
+    return bulkIssueConsequences({ quotes: selected.map(toIssuable), series: invoiceSeries });
+  }, [confirmBulk, pending, pendingSelected, invoiceSeries, toIssuable]);
+
+  /* Lifted out of the pending-card IIFE so the confirmation can call it. Unchanged
+     otherwise — including that it issues one at a time and counts failures, which is
+     exactly why the dialog warns that a partial failure leaves numbers already used. */
+  const issueSelected = React.useCallback(async () => {
+    if (pendingSelected.size === 0) {
+      toast.error("Select at least one quote");
+      return;
+    }
+    setGenerating(true);
+    let ok = 0, fail = 0;
+    for (const id of pendingSelected) {
+      try {
+        await generateInvoice.mutateAsync(id);
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setGenerating(false);
+    setPendingSelected(new Set());
+    setConfirmBulk(false);
+    if (ok > 0) toast.success(`Generated ${ok} invoice${ok === 1 ? "" : "s"}` + (fail ? ` · ${fail} failed` : ""));
+    if (fail > 0 && ok === 0) toast.error(`${fail} invoice${fail === 1 ? "" : "s"} failed`);
+  }, [pendingSelected, generateInvoice]);
   const [generating, setGenerating] = React.useState(false);
 
   // Strip the ?open param once the invoice list has loaded the target row,
@@ -275,27 +336,6 @@ function InvoicesPageInner() {
           else setPendingSelected(new Set(pending.map((q) => q.id)));
         };
 
-        const generateSelected = async () => {
-          if (pendingSelected.size === 0) {
-            toast.error("Select at least one quote");
-            return;
-          }
-          setGenerating(true);
-          let ok = 0, fail = 0;
-          for (const id of pendingSelected) {
-            try {
-              await generateInvoice.mutateAsync(id);
-              ok++;
-            } catch {
-              fail++;
-            }
-          }
-          setGenerating(false);
-          setPendingSelected(new Set());
-          if (ok > 0) toast.success(`Generated ${ok} invoice${ok === 1 ? "" : "s"}` + (fail ? ` · ${fail} failed` : ""));
-          if (fail > 0 && ok === 0) toast.error(`${fail} invoice${fail === 1 ? "" : "s"} failed`);
-        };
-
         return (
           <Card className="mb-4 border-amber/40 bg-amber-soft/20 p-3 overflow-hidden transition-all">
             <div
@@ -328,7 +368,10 @@ function InvoicesPageInner() {
                     loading={generating}
                     onClick={(e) => {
                       e.stopPropagation();
-                      generateSelected();
+                      /* The dangerous one: this used to loop generateInvoice over every
+                         selected quote with no confirmation, so one click could consume a
+                         run of serial numbers. */
+                      setConfirmBulk(true);
                     }}
                   >
                     Generate {pendingSelected.size}
@@ -382,7 +425,10 @@ function InvoicesPageInner() {
                             {isPartial ? <Badge kind="info" size="sm" dot>Partial</Badge> : <Badge kind="success" size="sm" dot>Fully paid</Badge>}
                             <Badge kind={ageKind === "rose" ? "danger" : ageKind === "amber" ? "warning" : "success"} size="sm" dot>{days}d ago</Badge>
                           </div>
-                          <Button size="sm" variant="primary" icon="receipt" loading={generateInvoice.isPending} onClick={() => generateInvoice.mutate(q.id)}>
+                          {/* Opens the confirmation rather than issuing. The number this
+                              will take, the amount, and the fact that it cannot be edited
+                              afterwards are all things the operator could not see before. */}
+                          <Button size="sm" variant="primary" icon="receipt" loading={generateInvoice.isPending} onClick={() => setConfirmSingle(q.id)}>
                             Generate
                           </Button>
                         </div>
@@ -731,6 +777,33 @@ function InvoicesPageInner() {
 
       {/* Mobile primary — the header "New invoice" scrolls away on a phone. */}
       <FAB icon="plus" label="New invoice" onClick={() => router.push("/quotes" as any)} />
+
+      {/* ── The two taps that issue a GST invoice ────────────────────────────
+          Both used to fire on a bare click. Each states the number it will take,
+          the amount, whose it is, which due date applies, and that the document
+          cannot be edited afterwards — true since migration 20260823090000. */}
+      <ConfirmIssueDialog
+        open={confirmSingle !== null}
+        onOpenChange={(v) => { if (!v) setConfirmSingle(null); }}
+        consequences={singleConsequences}
+        confirmLabel="Issue invoice"
+        busy={generateInvoice.isPending}
+        onConfirm={() => {
+          const id = confirmSingle;
+          if (!id) return;
+          setConfirmSingle(null);
+          generateInvoice.mutate(id);
+        }}
+      />
+
+      <ConfirmIssueDialog
+        open={confirmBulk && bulkConsequences !== null}
+        onOpenChange={(v) => { if (!v) setConfirmBulk(false); }}
+        consequences={bulkConsequences}
+        confirmLabel={`Issue ${pendingSelected.size} invoice${pendingSelected.size === 1 ? "" : "s"}`}
+        busy={generating}
+        onConfirm={() => { void issueSelected(); }}
+      />
     </div>
   );
 }

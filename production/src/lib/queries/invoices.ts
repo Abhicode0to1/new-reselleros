@@ -4,6 +4,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { SeriesState } from "@/lib/invoices/issue-consequences";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
@@ -73,7 +74,7 @@ export function useQuotesAwaitingInvoice() {
       const { data: quotes, error } = await supabase
         .from("quotes")
         .select(
-          "id, customer_id, customer_name, amount, payment_amount, payment_received_at, payment_method, lead_id, payment_status",
+          "id, customer_id, customer_name, amount, payment_amount, payment_received_at, payment_method, lead_id, payment_status, payment_terms_days",
         )
         .in("payment_status", ["partial", "received"])
         .is("invoice_id", null);
@@ -309,5 +310,40 @@ export function useCustomerQuotes(customerId: string | undefined) {
       if (error) throw error;
       return data ?? [];
     },
+  });
+}
+
+/**
+ * The tenant's invoice series, for the pre-issue confirmation.
+ *
+ * Read-only and deliberately so: `next_document_number` is the ONLY thing allowed to
+ * allocate a number (CLAUDE.md §17a), so this reads `last_number` to PREDICT the next
+ * one and never touches it. A concurrent issue can take the predicted number first,
+ * which is why `issueConsequences` reports it as a prediction rather than a promise.
+ *
+ * `invoiceCount` comes back alongside so the confirmation can spot a series with holes
+ * — ANUTECH sits at 32 with zero invoices on the books, and an operator about to add
+ * to that should see it.
+ */
+export function useInvoiceSeries() {
+  return useQuery({
+    queryKey: ["invoice-series"],
+    queryFn: async (): Promise<SeriesState | null> => {
+      /* Through a route, not the browser client: `document_series` is absent from the
+         generated Database type, and registering it there took typecheck from 4 errors
+         to 2,722 (see api/invoices/series/route.ts). */
+      const res = await fetch("/api/invoices/series");
+      if (!res.ok) {
+        /* Null, not a throw. A missing counter must not stop the dialog opening — it
+           degrades to "this opens the series" wording, and the operator still gets the
+           irreversibility warnings, which are the part that matters. */
+        return null;
+      }
+      const json = await res.json() as { series?: SeriesState | null };
+      return json.series ?? null;
+    },
+    /* The number moves whenever anyone issues, so a stale prediction is a wrong one. */
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 }
