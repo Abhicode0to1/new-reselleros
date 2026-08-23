@@ -33,6 +33,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { istNow, decideAttendanceReminder } from "@/lib/attendance/reminders";
+import { isWorkingDay, SIX_DAY_WEEK_SUNDAY_OFF } from "@/lib/attendance/working-day";
 import { sendPushToUsers } from "@/lib/push/send";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,44 @@ async function handle(req: Request) {
 
   const byEmployee = new Map((today ?? []).map((r) => [r.employee_id, r]));
 
+  /* ── Is anybody due a check-in today at all? ──────────────────────────────
+     Reported 23 Aug 2026, a Sunday: nothing in this path knew what a working day was, so
+     the nudge went out every Sunday and on every public holiday — while `public.holidays`
+     had stored them all along.
+
+     Saturday IS a working day here, confirmed by the operator, so the week is six days
+     with Sunday off. That is a business fact rather than a default — Indian SMEs run
+     six-day, five-day and alternate-Saturday weeks — which is why the shape is a named
+     constant and not an inline literal.
+
+     Resolved PER TENANT. The users query above has no tenant filter, by design, since one
+     Scheduler hit must cover all of them — so a single working-day answer would apply one
+     company's holiday calendar to another company's staff. One query for every tenant's
+     holidays today, then a lookup per person. */
+  const tenantIds = [...new Set((users ?? []).map((u) => u.tenant_id).filter(Boolean))];
+  const { data: holidayRows } = tenantIds.length
+    ? await admin
+        .from("holidays")
+        .select("tenant_id, holiday_date")
+        .in("tenant_id", tenantIds)
+        .eq("holiday_date", now.date)
+    : { data: [] as { tenant_id: string; holiday_date: string }[] };
+
+  const holidaysByTenant = new Map<string, string[]>();
+  for (const h of (holidayRows ?? []) as { tenant_id: string; holiday_date: string }[]) {
+    const list = holidaysByTenant.get(h.tenant_id) ?? [];
+    list.push(h.holiday_date);
+    holidaysByTenant.set(h.tenant_id, list);
+  }
+
+  /* Memoised per tenant: isWorkingDay is cheap, but computing it inside the loop would
+     make the reason string differ per user for no reason and read as if it could. */
+  const workingDayFor = (tid: string) => isWorkingDay({
+    date: now.date,
+    weeklyOffDows: SIX_DAY_WEEK_SUNDAY_OFF,
+    holidayDates: holidaysByTenant.get(tid) ?? [],
+  });
+
   const due: Due[] = [];
   const skipped: { userId: string; reason: string }[] = [];
 
@@ -100,6 +139,7 @@ async function handle(req: Request) {
       checkOut: row?.check_out ?? null,
       enabled:  true,
       checkoutReminderAt: u.attendance_checkout_reminder_at ?? null,
+      nonWorkingDayReason: workingDayFor(u.tenant_id).reason,
       /* dismissed / snoozedUntilMin / onAttendanceScreen are localStorage facts on one
          device. The server cannot see them, so it does not pretend to. */
     });

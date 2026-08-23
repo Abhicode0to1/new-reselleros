@@ -107,6 +107,22 @@ export interface ReminderInput {
   snoozedUntilMin?: number | null;
   /** True while the person is already looking at /attendance/me. */
   onAttendanceScreen?: boolean;
+  /**
+   * Why today is not a working day, or null when it is — from
+   * `lib/attendance/working-day.ts`.
+   *
+   * Reported 23 Aug 2026 (a Sunday): this file had NO notion of a working day, so the
+   * nudge went out every Sunday and on every public holiday, even though
+   * `public.holidays` has stored them all along. A notification that arrives on the wrong
+   * day teaches people to dismiss it unread — and then it stops working on the day it is
+   * right, which is the only day it was built for.
+   *
+   * Computed by the CALLER rather than here, because the answer needs the tenant's
+   * holiday rows and its week shape, and this function is deliberately pure — the popup
+   * and the cron share it, and two copies of "is somebody due a nudge" would drift within
+   * a month.
+   */
+  nonWorkingDayReason?: string | null;
 }
 
 /**
@@ -120,6 +136,13 @@ export function decideAttendanceReminder(input: ReminderInput): ReminderDecision
   const { now, linked, checkIn, checkOut, enabled } = input;
 
   if (!enabled) return { kind: null, reason: "Reminders are switched off for this person." };
+
+  /* Before anything about this person: nobody is due a check-in on a day the company is
+     closed. Placed here, with the other "never show" guards, because the order of these
+     is the design — see the note above the function. */
+  if (input.nonWorkingDayReason) {
+    return { kind: null, reason: input.nonWorkingDayReason };
+  }
 
   if (!linked) {
     // A login with no employee row cannot punch at all. Nagging them to do something the

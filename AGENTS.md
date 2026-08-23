@@ -1358,3 +1358,34 @@ read, so switching annual → monthly left a per-YEAR rate on a per-MONTH line.
   convention has families, check the boundary rather than the label.
 - **Delete the wrong artifact.** The migration and its test encoded a false belief; leaving
   them "for reference" would let a future session apply them.
+
+## L37. A reminder that fires on the wrong day teaches people to ignore it on the right one
+*23 Aug 2026, reported on a Sunday: "aaj kya attendance reminder ko aana chahiye kya ye logical hai".*
+
+It should not, and nothing in the path knew what a working day was. Grepping
+`lib/attendance/reminders.ts` for holiday / weekend / sunday / isodow returned exactly one
+hit, and that was the phrase "working day" inside an unrelated message. So the nudge went
+out every Sunday and on every public holiday — while `public.holidays` (tenant_id,
+holiday_date, name) had stored them the whole time and nothing ever read it.
+
+**The rules:**
+- **The cost is not the annoyance, it is the correct reminder that gets ignored later.** A
+  notification arriving on a day off teaches people to dismiss it unread; three weeks on it
+  no longer works on the day it was built for.
+- **A calendar question is a business fact, not a default.** Saturday IS a working day at
+  ANUTECH — six-day week, Sunday off — and Indian SMEs also run five-day and
+  alternate-Saturday weeks. There is no safe default, so `weeklyOffDows` has none and the
+  caller must state it. Getting it wrong the OTHER way is worse: silence on a day everyone
+  is working becomes a payroll query.
+- **Check whether the data already exists before adding a setting.** The holidays table was
+  already there. The gap was a read, not a schema.
+- **Fail closed on an unreadable date.** `isWorkingDay` refuses rather than defaulting to
+  "working" — defaulting is how a nudge goes out on a Sunday because a date string arrived
+  in the wrong format.
+- **Two surfaces sharing a decision must share the INPUTS too.** The cron and the popup
+  already shared `decideAttendanceReminder` precisely so they could not disagree — but
+  resolving the working day server-side only would have made the phone stay quiet while the
+  screen kept nagging. The popup got the same answer, from the same function.
+- **A multi-tenant cron needs the answer per tenant.** That route reads users across every
+  tenant by design (one Scheduler hit covers all), so one working-day answer would apply one
+  company's holiday calendar to another company's staff.

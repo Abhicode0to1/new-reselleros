@@ -10,6 +10,8 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { isWorkingDay, SIX_DAY_WEEK_SUNDAY_OFF } from "@/lib/attendance/working-day";
+import { localDateISO } from "@/lib/leads/outcomes";
 import { toast } from "sonner";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -304,5 +306,37 @@ export function useSetMyReminderPrefs() {
     onError: (err: unknown) => {
       toast.error(err instanceof Error ? err.message : "Reminder setting save nahi hui");
     },
+  });
+}
+
+/**
+ * Is today a day this tenant works?
+ *
+ * Reported 23 Aug 2026, a Sunday: the reminder had no notion of a working day and fired
+ * anyway. The CRON now resolves this server-side per tenant; the popup needs the same
+ * answer or the two disagree about the same day — which is exactly what the cron's own
+ * header warns about ("the phone and the screen would start disagreeing").
+ *
+ * RLS scopes `holidays` to the caller's tenant, so no tenant filter is written here — and
+ * unlike `document_series`, this table IS in the generated types, so the query is checked.
+ *
+ * Saturday is a working day at ANUTECH (operator-confirmed), hence the six-day constant.
+ * When this becomes a tenant setting, this is the one place to read it from.
+ */
+export function useTodayWorkingDay() {
+  return useQuery({
+    queryKey: ["working-day-today"],
+    queryFn: async (): Promise<{ working: boolean; reason: string | null }> => {
+      const supabase = createClient();
+      const date = localDateISO(new Date());
+      const { data, error } = await supabase
+        .from("holidays").select("holiday_date").eq("holiday_date", date);
+      /* On error the weekday rule still applies — a failed holiday lookup must not
+         resurrect the Sunday nudge, and must not silence a real Monday either. */
+      const holidayDates = error ? [] : (data ?? []).map((h) => h.holiday_date);
+      return isWorkingDay({ date, weeklyOffDows: SIX_DAY_WEEK_SUNDAY_OFF, holidayDates });
+    },
+    /* The answer changes at most once a day. */
+    staleTime: 60 * 60 * 1000,
   });
 }

@@ -23,11 +23,17 @@ vi.mock("next/navigation", () => ({
 const currentUser = { data: { userId: "user-1" } };
 const today: { data: unknown } = { data: null };
 const prefs: { data: unknown } = { data: null };
+/* Working by default, so every existing case behaves as it did. The Sunday case sets
+   this and asserts nothing renders. */
+const workingDay: { data: { working: boolean; reason: string | null } } = {
+  data: { working: true, reason: null },
+};
 
 vi.mock("@/lib/hooks/useCurrentUser", () => ({ useCurrentUser: () => currentUser }));
 vi.mock("@/lib/queries/my-attendance", () => ({
   useMyAttendanceToday: () => today,
   useMyReminderPrefs: () => prefs,
+  useTodayWorkingDay: () => workingDay,
 }));
 
 import { AttendanceReminder } from "./attendance-reminder";
@@ -163,5 +169,37 @@ describe("AttendanceReminder", () => {
     atIst("2026-08-19T04:30:00Z");
     render(<AttendanceReminder />);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("a day the company is closed", () => {
+  /* Reported 23 Aug 2026 — a Sunday — as "aaj kya attendance reminder ko aana chahiye
+     kya ye logical hai". It should not. The push cron and this popup share
+     decideAttendanceReminder precisely so they cannot disagree about the same day, so
+     the popup needs the same working-day answer the cron resolves server-side. */
+  beforeEach(() => {
+    atIst("2026-08-19T04:30:00Z"); // 10:00 IST, a Wednesday — the day is set by the mock below
+    today.data = { linked: true, check_in: null, check_out: null };
+    prefs.data = { enabled: true, checkoutAt: "18:00" };
+  });
+
+  it("renders nothing on a weekly off, even with a check-in outstanding", () => {
+    workingDay.data = { working: false, reason: "Sunday is a weekly off." };
+    render(<AttendanceReminder />);
+    expect(screen.queryByText(/check.?in/i)).toBeNull();
+  });
+
+  it("renders nothing on a company holiday", () => {
+    workingDay.data = { working: false, reason: "2026-10-20 is a company holiday." };
+    render(<AttendanceReminder />);
+    expect(screen.queryByText(/check.?in/i)).toBeNull();
+  });
+
+  it("still renders on a working day — the no-regression half", () => {
+    /* Saturday is a working day here, so silencing too much would be the worse bug: a
+       missing check-in nobody was reminded about becomes a payroll query. */
+    workingDay.data = { working: true, reason: null };
+    render(<AttendanceReminder />);
+    expect(screen.queryByText(/check.?in/i)).not.toBeNull();
   });
 });

@@ -31,7 +31,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
-import { useMyAttendanceToday, useMyReminderPrefs } from "@/lib/queries/my-attendance";
+import { useMyAttendanceToday, useMyReminderPrefs, useTodayWorkingDay } from "@/lib/queries/my-attendance";
 import {
   decideAttendanceReminder,
   istNow,
@@ -68,6 +68,8 @@ export function AttendanceReminder() {
 
   const { data: me } = useCurrentUser();
   const { data: today } = useMyAttendanceToday();
+  /* The same working-day answer the cron resolves server-side. */
+  const { data: workingDay } = useTodayWorkingDay();
   const { data: prefs } = useMyReminderPrefs();
 
   // A ticking clock, so the check-out reminder arrives at the configured minute rather
@@ -129,8 +131,12 @@ export function AttendanceReminder() {
       // still be suppressing the reminder at 00:05 the next morning.
       snoozedUntilMin: dismissals.snoozeDate === ist.date ? dismissals.snoozeUntilMin : null,
       onAttendanceScreen: pathname?.startsWith("/attendance") ?? false,
+      /* Same answer the cron uses. Without it the popup would keep appearing on a Sunday
+         while the push correctly stayed quiet — the screen and the phone disagreeing about
+         the same day, which is the thing the shared decision function exists to prevent. */
+      nonWorkingDayReason: workingDay?.reason ?? null,
     });
-  }, [now, userId, today, prefs, pathname, dismissals]);
+  }, [now, userId, today, prefs, pathname, dismissals, workingDay]);
 
   const kind = decision.kind;
 
