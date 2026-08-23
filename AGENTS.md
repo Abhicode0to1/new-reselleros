@@ -1389,3 +1389,47 @@ holiday_date, name) had stored them the whole time and nothing ever read it.
 - **A multi-tenant cron needs the answer per tenant.** That route reads users across every
   tenant by design (one Scheduler hit covers all), so one working-day answer would apply one
   company's holiday calendar to another company's staff.
+
+## L38. "System healthy" from a scan that cannot see is the worst sentence in this file
+*23 Aug 2026, asked directly: "kya wo sahi kaam kar raha hai check to karo ek baar".*
+
+Measured, the self-healing loop had two of three eyes shut:
+
+```
+Cloud Run logs   PRIMARY source — gcloud auth expired mid-session
+Sentry           never worked; SENTRY_DSN is empty (CLAUDE.md §22 already
+                 documents that its init is fragile on this host)
+DB log tables    working — and the only thing that found anything all day
+```
+
+I had reported "System healthy. Waiting for next cycle." repeatedly across that session.
+Each one was true of what the scan could still see and worthless as a statement about the
+system — which is exactly the shape L1 is about, applied to the monitoring rather than the
+monitored.
+
+The evidence that it was not working is stronger than the missing sources. **None of the
+day's real defects came from the scan.** The hardcoded recipients came from reading a
+route while chasing something else; the frozen inbox, the reply filed as spam, the Sunday
+reminder and the 12x MRR all came from the operator asking a question. The scan said zero
+errors throughout.
+
+And the database could have told it. `renewal_email_log` was empty with a subscription at
+T-4; `attendance_reminder_log` held 7 rows for a Sunday. Both were one query away the whole
+time.
+
+**The rules:**
+- **A checker must refuse to say "healthy" when a source is unreadable.** `checkHealth`
+  returns `unknown`, never `ok`, whenever `sourcesUnavailable` is non-empty. "Nobody knows"
+  and "nothing is wrong" are different answers and only one of them is honest.
+- **Prefer the signal that cannot expire.** Cloud Run logs need a token that dies quietly;
+  the tables are reachable with the same credentials as everything else. Build the check on
+  the durable source and treat the rich one as a bonus.
+- **Absence of evidence needs BOTH halves before it means anything.** "No renewal emails
+  ever" is a young workspace or a dead cron, and only "and something is due" separates
+  them. An alarm on the first half alone gets muted, and a muted alarm is not an alarm.
+- **Keep the check for a bug after fixing it.** The Sunday-reminder check stays, because
+  "the fix is not live" and "the fix is wrong" look identical from outside — a deploy that
+  never landed presents exactly as a broken guard.
+- **When somebody asks whether your automation works, measure it rather than describing
+  it.** I could have listed what the loop does. What was worth having was the count of what
+  it had actually caught: none of it.
