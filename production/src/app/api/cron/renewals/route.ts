@@ -321,7 +321,12 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
           daysUntil:       Math.abs(decision.daysUntilRenewal),
           graceDays:       tenant.grace_period_days ?? 0,
           acceptLink:      renewalQuoteId && renewalToken
-            ? quoteAcceptUrl(process.env.NEXT_PUBLIC_APP_URL ?? "", renewalQuoteId, renewalToken)
+            /* `?? undefined` because quoteAcceptUrl now returns null when NEXT_PUBLIC_APP_URL
+               is missing or has no scheme. NO LINK is the right outcome — the template omits
+               it — and it beats the previous behaviour: an empty base produced a RELATIVE
+               path, which in an email no mail client can resolve. Renewal reminders were
+               going out with an unclickable accept link and nothing errored. */
+            ? (quoteAcceptUrl(process.env.NEXT_PUBLIC_APP_URL, renewalQuoteId, renewalToken) ?? undefined)
             : undefined,
         });
 

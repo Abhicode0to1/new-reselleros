@@ -132,6 +132,20 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const linkHost  = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   const linkBase  = linkHost ? `${linkProto}://${linkHost}` : new URL(req.url).origin;
   const customerUrl = quoteAcceptUrl(linkBase, quote.id, quote.public_token);
+  if (!customerUrl) {
+    /* Practically unreachable — `linkBase` comes from the request's own headers, so a real
+       HTTP request always has one. Guarded anyway because of what the alternative looks
+       like: the body below interpolates `${customerUrl}` directly, so a null would mail the
+       customer a line reading "You can review and accept the quote online:" followed by the
+       word "null". Refusing is the smaller failure, and it says which piece is missing.
+
+       quoteAcceptUrl started returning null on 23 Aug 2026, after an empty base was found
+       silently producing a RELATIVE path in renewal emails — unclickable, and unreported. */
+    return NextResponse.json(
+      { error: "Could not build the customer's accept link for this quote, so nothing was sent. The app URL could not be determined from the request." },
+      { status: 500 },
+    );
+  }
   const subject     = body.subject?.trim() ||
                       `Quotation ${quote.id} from ${tenant.name}`;
   const greetName   = customer?.contact_name || quote.customer_name;

@@ -2055,3 +2055,23 @@ secret list.** Setting `INBOUND_EMAIL_SECRET="old,new"` failed outright — and 
 good outcome, since the alternative is two env vars nobody asked for. The custom-delimiter
 form works: `--update-env-vars "^@^KEY=old,new"`. Do NOT reach for `--env-vars-file`, which
 REPLACES every variable on the service rather than updating one.
+
+**L91 — `?? ""` turned a missing host into a dead link in customer email, silently.**
+`NEXT_PUBLIC_APP_URL` was never set on Cloud Run, and the renewals cron called
+`quoteAcceptUrl(process.env.NEXT_PUBLIC_APP_URL ?? "", …)`. With an empty base that returned
+`/quote/Q-…/accept?t=…` — and **in an email a relative path is not a degraded link, it is a
+dead one**: no mail client can resolve it. So renewal reminders reached customers with an
+accept link that could not be clicked. The renewal is the money and the link is how it
+converts. Nothing errored, nothing logged, the cron reported success.
+
+Two halves to the fix, and the second is the durable one. The env var is now set — all uses
+are in server-side route handlers, so a RUNTIME variable works and no rebuild was needed (not
+the `NEXT_PUBLIC_*` build-time trap of L42/L43, which only bites client bundles). And
+`quoteAcceptUrl` returns **null** for a missing base or one with no scheme, so the three call
+sites stopped compiling until each decided what to do — two send the mail without a link, one
+refuses to send. **A function that accepts "" and returns something plausible is what lets a
+`?? ""` through; make the empty case unrepresentable.**
+
+Also worth knowing: the fallback those routes used when the env var was absent —
+`https://resellersos.web.app` — answers **503**. So both paths were broken, and the "safe
+default" was as dead as the missing one.
