@@ -1269,3 +1269,47 @@ have inferred:
 - **Move a check EARLIER when the earlier act is the exposing one.** The quote-total-vs-GST
   check lived only on the invoice path. Sending is what actually puts the figure in front
   of the customer, so it belongs there too — by invoice time the number is already quoted.
+
+## L35. When a feature ships "term-aware", check every place the term is used — not just the one you touched
+*23 Aug 2026, Phase 3.*
+
+On 22 Aug a term-aware reminder ladder shipped so monthly subscriptions renew properly.
+`term_months` appears four times in `api/cron/renewals/route.ts`. It appears **zero**
+times in `lib/renewals/create-renewal-quote.ts`, which priced every renewal as:
+
+```ts
+const annualAmount = Math.round((input.mrr ?? 0) * 12);
+```
+
+So the reminders knew the subscription was monthly and the PRICE did not. The work
+stopped at the thing being changed and never followed the concept.
+
+Measured on the row that renews first — c398e832, "Xyz cloud solutions", 10 seats of
+Business Starter, `term_months = 1`, renewal 27 Aug, `auto_renew = true`:
+
+```
+correct one month     10 × 270      = ₹2,700 ex-GST    → ₹3,186 incl
+what it would quote   32,400 × 12   = ₹3,88,800 ex     → ₹4,58,784 incl
+```
+
+about **144×**, four days out, on a subscription set to renew by itself. Two defects
+compounding: the hardcoded 12-month term, and `mrr` on that row holding an ANNUAL figure
+(₹3,240/seat against a ₹270 catalogue price) where every other subscription stores a
+genuine per-month rate.
+
+**The rules:**
+- **Grep the CONCEPT, not the file.** After making anything term-aware / tenant-aware /
+  currency-aware, grep the whole tree for the field and read every hit. The dangerous one
+  is the file with zero hits that should have had some.
+- **Refuse; do not repair.** The tempting fix for an annual-looking `mrr` is to divide by
+  12. That produces a plausible number from data known to be untrustworthy, and a
+  plausible wrong price on a customer-facing quote is the worst outcome available. Stop and
+  say what to fix.
+- **Set the sanity threshold where it catches the neighbours too.** `suspectAnnualMrr`
+  triggers above 2× the catalogue rate, not at exactly 12×, so a 3× or 6× mistake is
+  caught as well — and a genuine monthly rate slightly above MSRP still passes, which is
+  what stops the guard being deleted as a nuisance.
+- **A derived label is part of the price.** The quote line's `commitment` was hardcoded
+  `annual_yearly`. `record_payment` reads it to decide what subscription to build on the
+  way back in, so a one-month renewal labelled annual rebuilds the wrong subscription —
+  the error survives the round trip.

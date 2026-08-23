@@ -24,6 +24,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, QuoteLineItem } from "@/lib/supabase/database.types";
 import { grossAmount } from "@/lib/quotes/amounts";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
+import { renewalTerm } from "@/lib/renewals/renewal-term";
 
 // The actual typed Supabase client. createAdminClient() returns this shape,
 // so the strict rpc/from overloads stay intact when callers pass it in.
@@ -38,6 +39,15 @@ export interface CreateRenewalQuoteInput {
   plan:            string;
   seats:           number;
   mrr:             number;          // monthly run rate (₹)
+  /**
+   * `subscriptions.term_months`. 1 = monthly, 12 = annual.
+   *
+   * OPTIONAL only so no caller breaks; absent falls back to 12, which is both the
+   * historical behaviour and right for almost all of this data. It exists because this
+   * file used to hardcode `mrr * 12` and quote a MONTHLY subscription for a year — the
+   * term-aware reminder ladder shipped on 22 Aug and never reached the pricing.
+   */
+  termMonths?:     number | null;
   renewalDate:     string;          // ISO date or YYYY-MM-DD
   graceDays:       number;          // tenant.grace_period_days
   /** Existing renewal_quote_id, if any. When present, we just load and return it. */
@@ -100,9 +110,39 @@ export async function createOrGetRenewalQuote(
     if (isExportSupply(cust?.country)) renewalTaxRate = 0;
   }
 
-  const annualAmount = Math.max(0, Math.round((input.mrr ?? 0) * 12)); // ex-GST subtotal
+  /* ── Price the renewal for its OWN term ──────────────────────────────────
+     This was `Math.round(input.mrr * 12)` with `term_months` appearing nowhere in the
+     file, so a monthly subscription was quoted for a year. And on the row that renews
+     first (c398e832, 27 Aug, auto_renew on) `mrr` also held an ANNUAL figure —
+     ₹3,240/seat against a ₹270 catalogue price — so the two compounded to roughly 144x
+     the correct monthly charge. renewalTerm refuses that rather than dividing by 12 to
+     "repair" it: a plausible wrong price on a customer-facing quote is worse than a
+     stop. See lib/renewals/renewal-term.ts. */
+  const { data: catalogItem } = await supabase
+    .from("items")
+    .select("msrp")
+    .eq("tenant_id", input.tenantId)
+    .eq("name", input.plan)
+    .maybeSingle();
+
+  const term = renewalTerm({
+    mrr: input.mrr,
+    termMonths: input.termMonths ?? null,
+    seats: input.seats,
+    catalogPerSeatMonth: (catalogItem as { msrp?: number | null } | null)?.msrp ?? null,
+  });
+
+  if (!term.ok) {
+    /* Loud, and it returns null — the same shape every other failure here uses, so the
+       cron logs it and moves on to the next subscription instead of dying. A renewal
+       nobody quoted is recoverable; a renewal quoted at 144x is not. */
+    console.error(`[renewals] subscription ${input.subscriptionId}: ${term.reason}`);
+    return null;
+  }
+
+  const annualAmount = term.subtotal;                                  // ex-GST subtotal for the term
   const grossAnnual  = grossAmount(annualAmount, renewalTaxRate);      // GST-inclusive payable (or ex-GST for export)
-  const perSeatRate  = Math.round(annualAmount / Math.max(1, input.seats));
+  const perSeatRate  = term.perSeatRate;
   const perSeatCost  = Math.round((annualAmount * 0.83) / Math.max(1, input.seats));
 
   const lineItems: QuoteLineItem[] = [{
@@ -111,7 +151,10 @@ export async function createOrGetRenewalQuote(
     qty:        input.seats,
     rate:       perSeatRate,
     cost:       perSeatCost,
-    commitment: "annual_yearly",
+    /* From the term, not hardcoded: record_payment reads this to decide what
+       subscription to build on the way back in, so calling a one-month renewal an
+       annual commitment produces the wrong one. */
+    commitment: term.commitment,
   }];
 
   const renewalAt   = new Date(input.renewalDate);

@@ -153,6 +153,7 @@ export async function POST(req: Request) {
     plan:            sub.plan,
     seats:           sub.seats,
     mrr:             sub.mrr ?? 0,
+    termMonths:      sub.term_months ?? null,
     renewalDate:     sub.renewal_date,
     graceDays:       tenant.grace_period_days ?? 0,
     existingQuoteId: sub.renewal_quote_id,
