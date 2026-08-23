@@ -14,6 +14,7 @@ import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { WorkspaceTabBar } from "@/components/layout/workspace-tab-bar";
 import { GlobalBugReporter } from "@/components/shared/global-bug-reporter";
 import { AttendanceReminder } from "@/components/features/attendance/attendance-reminder";
+import { SentryBoot } from "@/components/shared/sentry-boot";
 import { ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import { useGlobalKeys } from "@/lib/hooks/useKeyboard";
 
@@ -59,6 +60,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           people who miss a punch are precisely the ones not looking at that page. It
           renders nothing unless a punch is actually outstanding, and never on
           /attendance itself. */}
+      {/* Browser-side Sentry init. Inert until NEXT_PUBLIC_SENTRY_DSN is set — and until
+          it is, every React render error the operator sees goes nowhere, because the two
+          error boundaries call captureException on a client that was never initialised. */}
+      <SentryBoot />
       <AttendanceReminder />
 
       {/* The ? cheat sheet. Rendered from the same registry the handlers read, so it cannot

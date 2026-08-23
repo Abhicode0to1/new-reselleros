@@ -1471,3 +1471,42 @@ being empty is the correct, quiet answer for a workspace this young.
 - **A false alarm on day one is how a check gets muted by day ten.** Two wolf-cries in one
   session (this, and the record_payment misdiagnosis) both came from reasoning that was
   internally consistent and never checked against the live rows.
+
+## L40. Half a monitoring setup reports nothing and looks configured
+*23 Aug 2026, wiring the Sentry DSN for the first time.*
+
+Asked to set `SENTRY_DSN`. Before setting anything, three measurements:
+
+```
+Cloud Run env      no SENTRY var at all
+.env.example       NEXT_PUBLIC_SENTRY_DSN only — the server one was NEVER LISTED
+lib/sentry.ts      reads process.env.SENTRY_DSN, and is the only Sentry.init() anywhere
+```
+
+So the variable the code actually needs had never appeared in the file people copy when
+setting the app up. That is why it was never set, and it is a documentation bug wearing a
+monitoring bug's clothes.
+
+The second half is worse. `app/global-error.tsx` and `app/(app)/error.tsx` both call
+`Sentry.captureException` **from the client**, and no client init existed — `SENTRY_DSN` is
+not exposed to the browser, and nothing read `NEXT_PUBLIC_SENTRY_DSN`. So those calls minted
+event ids locally and dropped them, while the boundaries' own comments said they "report to
+Sentry". Every crash an operator or a customer actually saw went nowhere. This is exactly
+the failure CLAUDE.md §22 documents for the server, repeating one level down, in the file
+that documents it.
+
+**The rules:**
+- **Two runtimes need two inits, and the prefix is the difference.** `SENTRY_DSN` server,
+  `NEXT_PUBLIC_SENTRY_DSN` browser, same value. Setting one leaves half the app silent, and
+  which half depends on which you set — nothing on screen tells you which.
+- **A comment claiming "reports to Sentry" is not evidence that it does.** Both boundaries
+  said so and neither could. Trace the init before trusting a capture call.
+- **`.env.example` is part of the feature.** A variable the code requires and the example
+  omits will not be set, and the resulting silence looks like "no errors".
+- **A browser event carries whatever was on screen.** These screens carry customer names,
+  emails and amounts, so the client init keeps `sendDefaultPii` off and scrubs
+  email-shaped strings from messages, exception values and breadcrumbs. A monitoring tool
+  is not a place to accumulate a copy of the customer list.
+- **What could not be done, and why:** creating the Sentry account and project is signup
+  plus credentials, which is the operator's to do. Everything downstream of the DSN is
+  ready, so the value is the only missing input.
