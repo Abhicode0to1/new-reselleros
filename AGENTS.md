@@ -1623,3 +1623,32 @@ in this app that reliably runs per request.
   a measurement (`record_payment`, the renewals alarm, L42, this). The pattern is always the
   same: a conclusion that explains the evidence, shipped without asking what the live system
   would actually return.
+
+**L44 — Two "primary" buttons in one view is a bug, not a redundancy.** The lead drawer
+had a full-strength stage-aware CTA at the top (`nextAction`) and a *second* full-strength
+stage-aware CTA in the footer, built from separate logic. On a new lead with a phone they
+said different things — "Call now · first contact" and "Send Quote" — and both looked like
+THE answer. Nobody wrote that on purpose: each was correct when added, and the second
+inherited the first's job without the first losing it. **When adding a primary action, grep
+for the primary that already exists.** Two decision-makers do not average out; they cancel.
+Fixed by deleting the footer's copy and keeping only the actions the survivor genuinely does
+not cover — which had to be enumerated case by case, because "delete the duplicate" would
+have quietly dropped "Open accepted quote" and "Revise & resend".
+
+**L45 — A container's gate silently gates everything inside it.** The same drawer's
+next-step CTA lived inside a card wrapped in `lead.contact_phone || lead.contact_email ||
+lead.gstin`. That gate was right for the card's *contact details* and wrong for the CTA that
+happened to sit at the bottom of it, so a lead with no phone, no email and no GSTIN got no
+next-step suggestion at all — the lead that most needs one, since there is nobody to call.
+**When moving a block out of a conditional, check what the conditional was actually for.**
+Found only by asking why the block was nested there, never by reading the block itself.
+
+**L46 — A comment that explains a deletion breaks the test that asserts the deletion.**
+Three of the new drawer tests failed on their first run, all green in the code and red on
+the prose: `expect(page).not.toContain("Generate quote")` matched the comment saying
+*Generate quote → deleted*, and the footer's "no `variant="primary"`" scan matched the
+comment that says `variant="primary"` while explaining its removal. The fix is a
+comment-stripped copy of the source to assert code against, keeping the raw text for
+asserting the prose — `sentry-client.test.ts` already had this and said why: a blunt scan
+"would push the reasoning out of the file to satisfy the test". **Absence assertions on
+source text need the comments stripped first**, or the test quietly punishes documentation.

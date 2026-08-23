@@ -2111,6 +2111,39 @@ function LeadDetailSheet({
             <SheetDescription className="text-xs mt-1">
               {lead.id} · Stage: <b className="text-ink">{stageLabel}</b>
             </SheetDescription>
+
+            {/* Contact identity, moved up here 23 Aug 2026 out of a card at the top of
+                the scroll. The header does not scroll, and this is the one fact that must
+                not scroll away: it is what stops a reply going to the wrong person. Down
+                in the scroll it vanished the moment you opened the thread you were
+                answering. Costs one line permanently, which is the right trade for
+                something always true against something visible only at scroll-top. */}
+            {(lead.contact_name || lead.contact_phone || lead.contact_email || lead.gstin) && (
+              <div className="mt-1.5 flex items-center gap-2 min-w-0">
+                <p className="min-w-0 flex-1 truncate text-xs text-ink-2">
+                  {lead.contact_name && (
+                    <span className="font-medium text-ink">{lead.contact_name}</span>
+                  )}
+                  {lead.contact_name && (lead.contact_phone || lead.contact_email) && " · "}
+                  <span className="font-mono text-[11px] text-ink-3">
+                    {lead.contact_phone}
+                    {lead.contact_phone && lead.contact_email && " · "}
+                    {lead.contact_email}
+                  </span>
+                </p>
+                {lead.gstin && (
+                  /* Full GSTIN in the tooltip. The badge shows the state code only, and
+                     the old title said just "GST Identification Number" — so the number
+                     itself was not readable anywhere in the drawer. */
+                  <span
+                    className="shrink-0 inline-flex items-center gap-1 rounded border border-indigo/20 bg-indigo-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-indigo-ink"
+                    title={`GSTIN ${lead.gstin}`}
+                  >
+                    GST {lead.gstin.slice(0, 2)}…
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <IconButton icon="x" aria-label="Close" onClick={onClose} />
         </SheetHeader>
@@ -2164,193 +2197,101 @@ function LeadDetailSheet({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* Contact card — who this is, and the buttons that RECORD what happened.
-              It used to also carry Call / Email / WhatsApp as "the rep's three primary
-              reach-out actions", which was true when it was written and stopped being so
-              once the pinned footer grew the same three. It is no longer the first thing
-              in the drawer either: the tabs are, because the question an operator opens a
-              lead with is "what did they say" rather than "what is their number". */}
-          {(lead.contact_phone || lead.contact_email || lead.gstin) && (
-            <div className="rounded-lg border border-hairline bg-paper-2/40 p-3">
-              {/* Top row — contact name + GST badge if present */}
-              <div className="flex items-center justify-between gap-2 mb-3 min-w-0">
-                <div className="min-w-0 flex-1">
-                  {lead.contact_name && (
-                    <p className="font-medium text-ink text-sm truncate">{lead.contact_name}</p>
-                  )}
-                  {(lead.contact_phone || lead.contact_email) && (
-                    <p className="text-[11px] text-ink-3 font-mono truncate">
-                      {lead.contact_phone}
-                      {lead.contact_phone && lead.contact_email && " · "}
-                      {lead.contact_email}
-                    </p>
-                  )}
-                </div>
-                {lead.gstin && (
-                  <span
-                    className="shrink-0 inline-flex items-center gap-1 text-[10px] font-mono font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-soft text-indigo-ink border border-indigo/20"
-                    title="GST Identification Number"
-                  >
-                    GST {lead.gstin.slice(0, 2)}…
-                  </span>
-                )}
-              </div>
+          {/* ── WHAT TO DO NOW ───────────────────────────────────────────────────
+              Tab-agnostic on purpose. "What is the next step" does not change with
+              which tab you are reading, so it sits above all three rather than inside
+              one — and it is the first thing in the scroll, where the drawer opens.
 
+              WHAT THIS USED TO BE. A ~300px contact card that carried five unrelated
+              things: the contact's name and number, a Log-call button, a note box, an
+              AI-draft button, and this. It sat above every tab, so pinning the tabs
+              yesterday bought nothing — the thread still began 300px below them. The
+              card was split by what each part is FOR:
 
-              {/* LOGGING what happened — as opposed to starting a conversation, which is
-                  what the pinned footer's Call / Email / WhatsApp buttons do.
+                identity        → the SheetHeader, because it must never scroll away
+                Log call / note → the Conversation tab, because they ARE the thread
+                Generate quote  → deleted; the footer's quote button already calls the
+                                  same handleSendQuote, ~40px away in the same drawer
+                the decision    → here
 
-                  A Call/WhatsApp/Email row used to sit here too, duplicating that footer
-                  exactly. Removed 23 Aug 2026: the footer is outside the scroll and
-                  therefore always visible, so the copy at the very top of the drawer added
-                  height and no capability — in the space the tabs now occupy. Asking for
-                  the tabs at the top turned out to cost nothing.
+              AND IT IS NOW THE ONLY PRIMARY. The footer carried its own stage-aware
+              primary built from separate logic, so the drawer showed two full-strength
+              "the one thing to do" buttons that could disagree — a new lead with a phone
+              showed "Call now · first contact" here and "Send Quote" there. Two primaries
+              is no primary. The footer's copy of that logic is gone; it keeps reach-out
+              and the two secondaries nextAction does not cover.
 
-                  This row stays, because it does something the footer does not: a call
-                  that is made and never logged is invisible to the timeline, the stage-age
-                  badge and every forecast built on them. */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    logActivity.mutate({ leadId: lead.id, kind: "call",
-                      detail: `Call logged${lead.contact_phone ? ` · ${lead.contact_phone}` : ""}` });
-                    toast.success("Call logged");
-                  }}
-                  title="Record a call you made elsewhere — from your phone, or before this lead existed here"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-md border border-hairline bg-paper py-2 text-xs font-semibold text-ink-2 transition-colors hover:bg-paper-2"
-                >
-                  <Icon name="mobile" size={13} /> Log call
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSendQuote}
-                  title="Open the quote builder with this lead's details. The stage moves when the quote actually exists."
-                  className="inline-flex items-center justify-center gap-1.5 rounded-md border border-amber/50 bg-amber-soft/40 py-2 text-xs font-semibold text-amber-ink transition-colors hover:bg-amber-soft/70"
-                >
-                  <Icon name="send" size={13} /> Generate quote
-                </button>
-              </div>
+              A BUG THIS FIXES ON THE WAY. The old card was gated on
+              `lead.contact_phone || lead.contact_email || lead.gstin`, and this block was
+              inside it — so a lead with no phone, no email and no GSTIN got NO next-step
+              CTA at all. Exactly the lead that most needs telling what to do next, since
+              there is nobody to call. The decision does not depend on contact details
+              existing, and is no longer gated on them.
 
-              {/* Note composer, inline rather than behind a dialog — a note nobody can
-                  write in two seconds is a note nobody writes. */}
-              <div className="flex items-start gap-2">
-                <textarea
-                  value={noteDraft}
-                  onChange={(e) => setNoteDraft(e.target.value)}
-                  rows={2}
-                  placeholder="Add a note — what was said, what they asked for…"
-                  aria-label={`Add a note about ${lead.company}`}
-                  className="min-w-0 flex-1 resize-y rounded-md border border-hairline bg-paper px-2 py-1.5 text-xs text-ink placeholder:text-ink-4 focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber"
-                />
-                <button
-                  type="button"
-                  disabled={!noteDraft.trim()}
-                  onClick={() => {
-                    logActivity.mutate({ leadId: lead.id, kind: "note", detail: noteDraft.trim() });
-                    setNoteDraft("");
-                    toast.success("Note added");
-                  }}
-                  className={cn(
-                    "shrink-0 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors",
-                    noteDraft.trim()
-                      ? "border-hairline-strong bg-paper text-ink-2 hover:bg-paper-2"
-                      : "cursor-not-allowed border-hairline text-ink-4",
-                  )}
-                >
-                  Save
-                </button>
-              </div>
-
-              {/* AI draft — the "what do I say?" moat. One tap = a Gemini-drafted
-                  WhatsApp/email follow-up tailored to THIS lead (plan, seats,
-                  stage, notes). Human-in-the-loop: the draft is editable and never
-                  sends itself — the rep copies it or opens WhatsApp. Falls back to
-                  a solid template if no Gemini key is set. */}
-              {(lead.contact_phone || lead.contact_email) && (
-                <AiDraftButton
-                  leadId={lead.id}
-                  channel={lead.contact_phone ? "whatsapp" : "email"}
-                  purpose="followup"
-                  phone={lead.contact_phone}
-                  label="✨ Draft follow-up with AI"
-                  variant="outline"
-                  className="mt-2 w-full justify-center"
-                />
-              )}
-
-              {/* Smart Next-Action CTA — surfaces THE one thing to do based on
-                  lead state + quote age + payment status. Replaces decision
-                  fatigue ("which of these 10 buttons?") with a single ranked
-                  suggestion. Logic in `nextAction` above; color-coded by
-                  urgency (rose = overdue, amber = pending, emerald = success,
-                  indigo = informational). */}
-              {/* When a quote already exists, surface the FULL status-aware quote
-                  action bar right here (Record payment · Mark accepted · Mark
-                  rejected · Open full quote) — the rep never has to leave the
-                  drawer to move the quote forward. Falls back to the single smart
-                  next-action CTA only when there's no quote yet. */}
-              {latestQuoteForAction ? (
-                <div className="mt-3 space-y-1.5">
-                  <QuoteActionBar
-                    quote={latestQuoteForAction}
-                    onOpenFullQuote={() => { onClose(); router.push(`/quotes/${latestQuoteForAction.id}` as any); }}
-                  />
-                  {(() => {
-                    const q = latestQuoteForAction;
-                    const nothingReceivedYet =
-                      !q.payment_status || q.payment_status === "none" || q.payment_status === "awaiting";
-                    const unpaidSent =
-                      (q.status === "sent" || q.status === "viewed") && nothingReceivedYet;
-                    if (!unpaidSent) return null;
-                    const overdue = quoteAgeDays !== null && quoteAgeDays > 7;
-                    const ageText =
-                      quoteAgeDays === null ? "" : quoteAgeDays === 0 ? "Sent today" : `Sent ${quoteAgeDays}d ago`;
-                    return (
-                      <p className="flex items-start gap-1 text-[11px] leading-snug text-ink-3">
-                        <Icon name="info" size={11} className="mt-0.5 shrink-0" />
-                        <span>
-                          {ageText}
-                          {overdue && <span className="text-rose font-medium"> · overdue — chase them</span>}
-                          {ageText && ". "}
-                          Record payment when it lands, or mark accepted to convert the lead into a customer now
-                          (payment can follow). Chase via Call/WhatsApp above.
-                        </span>
-                      </p>
-                    );
-                  })()}
-                </div>
-              ) : nextAction ? (
-                <>
-                <button
-                  type="button"
-                  onClick={nextAction.onClick}
-                  className={cn(
-                    "mt-3 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-semibold transition-colors",
-                    nextAction.tone === "amber"   && "bg-amber text-white hover:bg-amber/90",
-                    nextAction.tone === "rose"    && "bg-rose text-white hover:bg-rose/90",
-                    nextAction.tone === "emerald" && "bg-emerald text-white hover:bg-emerald/90",
-                    nextAction.tone === "indigo"  && "bg-indigo text-white hover:bg-indigo/90",
-                  )}
-                >
-                  <Icon name={nextAction.icon} size={14} />
-                  {nextAction.label}
-                  {nextAction.hint && (
-                    <span className="text-[11px] opacity-90 ml-1">
-                      · {nextAction.hint}
-                    </span>
-                  )}
-                </button>
-                {nextAction.help && (
-                  <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-snug text-ink-3">
+              Logic in `nextAction` above. When a quote exists the full status-aware
+              QuoteActionBar replaces it (Record payment · Mark accepted · Mark rejected ·
+              Open full quote) so the rep never leaves the drawer to move a quote forward —
+              and note that ITS "Record payment" opens the dialog inline while
+              nextAction's only navigates, which is why the two must never both render. */}
+          {latestQuoteForAction ? (
+            <div className="space-y-1.5">
+              <QuoteActionBar
+                quote={latestQuoteForAction}
+                onOpenFullQuote={() => { onClose(); router.push(`/quotes/${latestQuoteForAction.id}` as any); }}
+              />
+              {(() => {
+                const q = latestQuoteForAction;
+                const nothingReceivedYet =
+                  !q.payment_status || q.payment_status === "none" || q.payment_status === "awaiting";
+                const unpaidSent =
+                  (q.status === "sent" || q.status === "viewed") && nothingReceivedYet;
+                if (!unpaidSent) return null;
+                const overdue = quoteAgeDays !== null && quoteAgeDays > 7;
+                const ageText =
+                  quoteAgeDays === null ? "" : quoteAgeDays === 0 ? "Sent today" : `Sent ${quoteAgeDays}d ago`;
+                return (
+                  <p className="flex items-start gap-1 text-[11px] leading-snug text-ink-3">
                     <Icon name="info" size={11} className="mt-0.5 shrink-0" />
-                    {nextAction.help}
+                    <span>
+                      {ageText}
+                      {overdue && <span className="text-rose font-medium"> · overdue — chase them</span>}
+                      {ageText && ". "}
+                      Record payment when it lands, or mark accepted to convert the lead into a customer now
+                      (payment can follow). Chase via Call/WhatsApp above.
+                    </span>
                   </p>
-                )}
-                </>
-              ) : null}
+                );
+              })()}
             </div>
-          )}
+          ) : nextAction ? (
+            <>
+            <button
+              type="button"
+              onClick={nextAction.onClick}
+              className={cn(
+                "w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-semibold transition-colors",
+                nextAction.tone === "amber"   && "bg-amber text-white hover:bg-amber/90",
+                nextAction.tone === "rose"    && "bg-rose text-white hover:bg-rose/90",
+                nextAction.tone === "emerald" && "bg-emerald text-white hover:bg-emerald/90",
+                nextAction.tone === "indigo"  && "bg-indigo text-white hover:bg-indigo/90",
+              )}
+            >
+              <Icon name={nextAction.icon} size={14} />
+              {nextAction.label}
+              {nextAction.hint && (
+                <span className="text-[11px] opacity-90 ml-1">
+                  · {nextAction.hint}
+                </span>
+              )}
+            </button>
+            {nextAction.help && (
+              <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-snug text-ink-3">
+                <Icon name="info" size={11} className="mt-0.5 shrink-0" />
+                {nextAction.help}
+              </p>
+            )}
+            </>
+          ) : null}
 
 
           {drawerTab === "details" && (
@@ -2491,6 +2432,87 @@ function LeadDetailSheet({
           {/* Activity timeline — outbound touches + inbound emails — its own tab */}
           {drawerTab === "activity" && (
           <div>
+            {/* ── ADD TO THE THREAD ────────────────────────────────────────────
+                Moved here 23 Aug 2026 out of a card that sat above all three tabs. These
+                three do one job — put something into the conversation — so they belong to
+                the conversation, not to Details and Follow-ups where they were only
+                height. Above the timeline rather than below it because the timeline is
+                newest-first: the newest entry and the box that creates the next one
+                belong next to each other, and a composer below an unbounded list is a
+                composer you have to scroll to find.
+
+                LOG CALL IS NOT THE FOOTER'S CALL BUTTON. That one starts a call; this one
+                records a call that already happened — from a mobile, or before this lead
+                existed here. A call made and never logged is invisible to the timeline,
+                the stage-age badge and every forecast built on them, which is why this
+                survived the card and "Generate quote" did not.
+
+                The note box stays inline rather than behind a dialog: a note nobody can
+                write in two seconds is a note nobody writes. */}
+            <div className="mb-3 space-y-2 rounded-lg border border-hairline bg-paper-2/40 p-3">
+              <div className="flex items-start gap-2">
+                <textarea
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  rows={2}
+                  placeholder="Add a note — what was said, what they asked for…"
+                  aria-label={`Add a note about ${lead.company}`}
+                  className="min-w-0 flex-1 resize-y rounded-md border border-hairline bg-paper px-2 py-1.5 text-xs text-ink placeholder:text-ink-4 focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber"
+                />
+                <button
+                  type="button"
+                  disabled={!noteDraft.trim()}
+                  onClick={() => {
+                    logActivity.mutate({ leadId: lead.id, kind: "note", detail: noteDraft.trim() });
+                    setNoteDraft("");
+                    toast.success("Note added");
+                  }}
+                  className={cn(
+                    "shrink-0 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors",
+                    noteDraft.trim()
+                      ? "border-hairline-strong bg-paper text-ink-2 hover:bg-paper-2"
+                      : "cursor-not-allowed border-hairline text-ink-4",
+                  )}
+                >
+                  Save
+                </button>
+              </div>
+
+              {/* flex, not a 2-col grid: the AI button is conditional on there being a
+                  phone or an email, and in a fixed grid its absence left Log call sitting
+                  at half width against dead space. */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    logActivity.mutate({ leadId: lead.id, kind: "call",
+                      detail: `Call logged${lead.contact_phone ? ` · ${lead.contact_phone}` : ""}` });
+                    toast.success("Call logged");
+                  }}
+                  title="Record a call you made elsewhere — from your phone, or before this lead existed here"
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md border border-hairline bg-paper text-xs font-semibold text-ink-2 transition-colors hover:bg-paper-2"
+                >
+                  <Icon name="mobile" size={13} /> Log call
+                </button>
+                {/* AI draft — the "what do I say?" moat. One tap = a Gemini-drafted
+                    WhatsApp/email follow-up tailored to THIS lead (plan, seats, stage,
+                    notes). Human-in-the-loop: the draft is editable and never sends
+                    itself. Sits beside Log call because both add to the thread — one
+                    records what was said, the other proposes what to say next. */}
+                {(lead.contact_phone || lead.contact_email) && (
+                  <AiDraftButton
+                    leadId={lead.id}
+                    channel={lead.contact_phone ? "whatsapp" : "email"}
+                    purpose="followup"
+                    phone={lead.contact_phone}
+                    label="✨ Draft with AI"
+                    variant="outline"
+                    className="min-h-11 flex-1 justify-center"
+                  />
+                )}
+              </div>
+            </div>
+
             {/* Two views of the same conversation, because they answer different questions.
                 "Everything" is newest-first and tells you what happened last. "Email" is
                 oldest-first and tells you how the exchange went — which is what you need
@@ -2966,10 +2988,14 @@ function LeadDetailSheet({
             </Button>
           </div>
 
-          {/* Primary row — communication actions
-              Stage-aware so the primary CTA always reflects the actual next
-              step a sales person would take with this lead. Call button
-              is first because that's the most common mobile action. */}
+          {/* Reach-out row — how you contact this lead, plus the quote actions the
+              top-of-drawer decision block does not cover.
+
+              It is NOT the primary row any more, and the old comment here claimed the
+              opposite ("stage-aware so the primary CTA always reflects the actual next
+              step") — which was true when written and became a duplicate once nextAction
+              grew the same responsibility with better inputs. Call is still first: on a
+              phone it is the most common action and this row is the thumb zone. */}
           <div className="flex justify-end gap-2 pt-2 border-t border-hairline flex-wrap">
             {lead.contact_phone && (
               <Button
@@ -2991,61 +3017,39 @@ function LeadDetailSheet({
               </Button>
             )}
 
-            {lead.stage === "won" ? (
-              <>
-                {/* Deal done — money flowed, customer record was auto-created
-                    during record_payment. Natural next moves are upsell (a
-                    fresh quote tied back to this lead) or open the customer
-                    record / accepted quote for context. */}
-                <Button icon="send" onClick={handleSendQuote}>
-                  Upsell · New quote
-                </Button>
-                {latestQuote && (
-                  <Button
-                    variant="primary"
-                    icon="receipt"
-                    onClick={() => {
-                      onClose();
-                      router.push(`/quotes/${latestQuote.id}` as any);
-                    }}
-                  >
-                    Open accepted quote
-                  </Button>
-                )}
-              </>
-            ) : lead.stage === "lost" ? (
-              <>
-                {/* Deal lost — only sensible action is to re-engage with a
-                    fresh quote (potentially with different pricing). The
-                    earlier "revise" of a rejected quote rarely lands. */}
-                <Button variant="primary" icon="send" onClick={handleSendQuote}>
-                  Re-engage · Send new quote
-                </Button>
-              </>
-            ) : hasQuotes ? (
-              latestQuote?.status === "draft" ? (
-                /* Draft quote never sent → the one action is to open & send it. */
-                <Button
-                  variant="primary"
-                  icon="send"
-                  onClick={() => { onClose(); router.push(`/quotes/${latestQuote.id}` as any); }}
-                >
-                  Send draft quote
-                </Button>
-              ) : (
-                <>
-                  <Button icon="send" onClick={handleSendQuote}>
-                    New quote
-                  </Button>
-                  <Button variant="primary" icon="copy" onClick={handleReviseQuote}>
-                    Revise & resend
-                  </Button>
-                </>
-              )
-            ) : (
-              <Button variant="primary" icon="send" onClick={handleSendQuote}>
-                Send Quote
+            {/* WHAT IS DELIBERATELY NOT HERE ANY MORE: a stage-aware `variant="primary"`
+                button. This row used to end in one, built from its own stage logic, while
+                the top of the drawer showed `nextAction` built from different logic — two
+                full-strength primaries that could disagree, and did. A new lead with a
+                phone got "Call now · first contact" up there and "Send Quote" down here.
+                Two primaries is no primary, so this one went and nextAction stayed: it is
+                the better-informed of the two (it reads quote age and payment status) and
+                it already carried the explanatory line underneath.
+
+                These two survive as `default`-variant secondaries because nextAction does
+                NOT cover them, and dropping them would have been a quiet capability loss:
+                nextAction offers "Upsell · new quote" on a won deal but no way to open the
+                accepted quote, and on a sent quote the top block is the QuoteActionBar,
+                which moves the quote's STATUS and cannot revise it. Everything else the
+                old block did — send draft, re-engage a lost deal, upsell, send the first
+                quote — nextAction already says, in the same words. */}
+            {lead.stage === "won" && latestQuote && (
+              <Button
+                icon="receipt"
+                onClick={() => { onClose(); router.push(`/quotes/${latestQuote.id}` as any); }}
+              >
+                Open accepted quote
               </Button>
+            )}
+            {lead.stage !== "won" && lead.stage !== "lost" && hasQuotes && latestQuote?.status !== "draft" && (
+              <>
+                <Button icon="send" onClick={handleSendQuote}>
+                  New quote
+                </Button>
+                <Button icon="copy" onClick={handleReviseQuote}>
+                  Revise &amp; resend
+                </Button>
+              </>
             )}
           </div>
         </SheetFooter>

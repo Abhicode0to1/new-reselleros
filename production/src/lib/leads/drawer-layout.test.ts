@@ -24,6 +24,16 @@ const page = readFileSync(
   "utf8",
 );
 
+/* Comments STRIPPED. Several assertions below are about a token being absent, or
+   about where it sits — and every one of those tokens is also NAMED in a comment
+   explaining why it moved or went. A blunt scan of the raw source failed on the
+   explanation, which would have pushed the reasoning out of the file to satisfy the
+   test. Same guard sentry-client.test.ts uses, for the same reason. Assert prose
+   against `page`, code against `code`. */
+const code = page
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
+
 describe("lead drawer — tab order and position", () => {
   it("lists Conversation first and Details last", () => {
     /* Order IS the request. Conversation is what an operator opens a lead to do;
@@ -84,24 +94,114 @@ describe("lead drawer — which tab a lead opens on", () => {
   });
 });
 
-describe("lead drawer — the duplication that made room for the tabs", () => {
-  it("no longer carries a Call/WhatsApp/Email row at the top of the drawer", () => {
-    /* The pinned footer has all three and is always visible, so the copy at the very
-       top added height and no capability — in exactly the space the tabs now use.
-       Asking for the tabs at the top turned out to cost nothing. */
-    expect(page).not.toContain("Action row — Call / WhatsApp / Email as big buttons");
-    expect(page).not.toContain('<div className="grid grid-cols-3 gap-2">');
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   The card that used to sit above all three tabs, and where its five parts went.
+
+   Asked for as "is section ko bhi kahin adjust karo logically". Measuring it first
+   showed the tab move on its own had bought nothing: a ~300px block still stood
+   between the pinned tabs and the thread. It held five unrelated jobs, and each one
+   has a different correct home — which is why it is asserted here as five separate
+   destinations rather than one "card removed" check.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("the contact card, dissolved by what each part is for", () => {
+  it("puts contact identity in the header, where it cannot scroll away", () => {
+    /* Identity is the guard against a reply reaching the wrong person, and in the
+       scroll it disappeared the moment you opened the thread you were answering. */
+    const header = page.slice(page.indexOf("<SheetHeader"), page.indexOf("</SheetHeader>"));
+    expect(header).toContain("lead.contact_name");
+    expect(header).toContain("lead.contact_phone");
+    expect(header).toContain("lead.gstin");
   });
 
-  it("still lets the operator LOG a call or a WhatsApp", () => {
-    /* Different job from starting one, and the reason that row stayed: a call made
-       and never logged is invisible to the timeline, the stage-age badge and every
+  it("shows the full GSTIN somewhere, not just its first two characters", () => {
+    /* The badge renders `lead.gstin.slice(0, 2)` and the old tooltip said only "GST
+       Identification Number", so the number itself was readable nowhere in the drawer. */
+    expect(page).toMatch(/title=\{`GSTIN \$\{lead\.gstin\}`\}/);
+  });
+
+  it("moves the note box and Log call into the Conversation tab", () => {
+    /* They put things INTO the conversation, so they belong to it. On Details and
+       Follow-ups they were only height. */
+    const convo = code.indexOf('{drawerTab === "activity" && (');
+    const note = code.indexOf('placeholder="Add a note');
+    const logCall = code.indexOf("Log call");
+    expect(convo).toBeGreaterThan(0);
+    expect(note).toBeGreaterThan(convo);
+    expect(logCall).toBeGreaterThan(convo);
+    /* And specifically NOT in the tab-agnostic space above the tab bodies, which is
+       where they used to be — visible on Details and Follow-ups too. */
+    expect(note).toBeGreaterThan(code.indexOf('{drawerTab === "details" && ('));
+  });
+
+  it("keeps Log call, which the footer's Call button does not replace", () => {
+    /* One starts a call, the other records one that already happened elsewhere. A call
+       made and never logged is invisible to the timeline, the stage-age badge and every
        forecast built on them. */
-    expect(page).toContain("LOGGING what happened");
-    expect(page).toContain('<div className="grid grid-cols-2 gap-2">');
+    expect(page).toContain("LOG CALL IS NOT THE FOOTER'S CALL BUTTON");
+    expect(page).toMatch(/kind: "call"/);
+  });
+
+  it("drops the duplicate Generate quote button", () => {
+    /* It called handleSendQuote — the same handler as the footer's quote button, ~40px
+       away in the same drawer. */
+    expect(code).not.toContain("Generate quote");
+  });
+
+  it("lays the two thread buttons out with flex, not a fixed 2-col grid", () => {
+    /* The AI button is conditional on a phone or an email existing; in a fixed grid its
+       absence left Log call at half width against dead space. */
+    const convo = code.slice(code.indexOf('{drawerTab === "activity" && ('));
+    expect(convo.slice(0, 2500)).not.toContain('grid grid-cols-2 gap-2');
+  });
+});
+
+describe("exactly one primary action in the drawer", () => {
+  it("has no variant=\"primary\" button left in the footer", () => {
+    /* THE DEFECT IN THE SCREENSHOT. The footer built its own stage-aware primary while
+       nextAction built another from different logic, so a new lead with a phone showed
+       "Call now · first contact" at the top and "Send Quote" at the bottom, both
+       full-strength. Two primaries is no primary. */
+    const footer = code.slice(code.indexOf("<SheetFooter"), code.indexOf("</SheetFooter>"));
+    expect(footer).not.toMatch(/variant="primary"/);
+  });
+
+  it("keeps the two footer actions nextAction does not cover", () => {
+    /* Deleting the footer's stage block wholesale would have been a quiet capability
+       loss: nextAction offers "Upsell · new quote" on a won deal but no way to open the
+       accepted quote, and on a sent quote the top block is the QuoteActionBar, which
+       moves a quote's status and cannot revise it. */
+    const footer = page.slice(page.indexOf("<SheetFooter"), page.indexOf("</SheetFooter>"));
+    expect(footer).toContain("Open accepted quote");
+    expect(footer).toContain("handleReviseQuote");
   });
 
   it("keeps the footer's three reach-out actions", () => {
     expect(page).toMatch(/<Button icon="mail" onClick=\{handleEmail\}>Email<\/Button>/);
+  });
+
+  it("stops gating the next-step CTA on the lead having contact details", () => {
+    /* A BUG FOUND ON THE WAY. The whole card was wrapped in
+       `lead.contact_phone || lead.contact_email || lead.gstin`, and the CTA was inside
+       it — so a lead with no phone, no email and no GSTIN got no next-step suggestion
+       at all. Exactly the lead that most needs one, since there is nobody to call. */
+    expect(page).not.toMatch(
+      /\{\(lead\.contact_phone \|\| lead\.contact_email \|\| lead\.gstin\) && \(/,
+    );
+  });
+
+  it("renders the decision above the tab bodies, since it does not depend on the tab", () => {
+    const decision = page.indexOf("{latestQuoteForAction ? (");
+    const firstTabBody = page.indexOf('{drawerTab === "details" && (');
+    expect(decision).toBeGreaterThan(0);
+    expect(decision).toBeLessThan(firstTabBody);
+  });
+
+  it("never renders QuoteActionBar and nextAction together", () => {
+    /* Both have a button labelled "Record payment" and they do DIFFERENT things — the
+       bar opens the dialog inline, nextAction navigates to the quote hub. Same label,
+       two behaviours, side by side would be the worst version of this bug. */
+    expect(page).toMatch(/\{latestQuoteForAction \? \([\s\S]{0,6000}?\) : nextAction \? \(/);
   });
 });
