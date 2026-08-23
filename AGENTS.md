@@ -1510,3 +1510,38 @@ that documents it.
 - **What could not be done, and why:** creating the Sentry account and project is signup
   plus credentials, which is the operator's to do. Everything downstream of the DSN is
   ready, so the value is the only missing input.
+
+## L41. A doc claiming something is protected is not a gate. /dev was public for months
+*23 Aug 2026, while adding a browser Sentry test page.*
+
+CLAUDE.md §7 had said since May: dev pages are "NOT included in production builds
+(middleware redirect if NODE_ENV=production)". Grepping `middleware.ts` for `/dev`
+returned nothing. Measured against the live service, no session:
+
+```
+GET /dev            404      (no page at the root — which is why nobody noticed)
+GET /dev/pdf-test   200
+```
+
+`/dev/pdf-test` renders a sample tax invoice from hardcoded fixtures — including the
+fabricated GSTIN `27AABCE9876D1Z3` that `lib/invoices/supplier-identity.ts` exists
+specifically to keep off real documents — served publicly under the company's own domain.
+
+It surfaced only because the next thing I was about to do was add a page that deliberately
+crashes the browser. In a public directory that is a crash-on-demand endpoint for anybody
+who finds it.
+
+**The rules:**
+- **Test the claim, not the sentence.** "Middleware redirect if NODE_ENV=production" is
+  specific enough to grep in five seconds and was never grepped. §25's "docs are hypotheses"
+  applies hardest to the ones that describe a protection.
+- **A 404 at the parent hides an open subtree.** `/dev` returning 404 reads as "gated" and
+  means only "no page at that exact path". Probe a real child.
+- **Gate the subtree and fail closed.** `pathname === "/dev" || startsWith("/dev/")`, and
+  `ALLOW_DEV_PAGES !== "1"` rather than a truthy check, so an empty or misspelled value keeps
+  it shut. The whole point is that it was open by accident.
+- **404, not a redirect to login.** A redirect confirms the path exists and is merely
+  protected. This is not an authorisation question — a dev page should not exist in
+  production for anybody, signed in or not — so it runs before the auth work.
+- **Adding to a directory means inheriting its exposure.** The reason to check was not
+  diligence about old code; it was that my new page would have been the worst thing in there.

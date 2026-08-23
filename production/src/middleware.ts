@@ -82,6 +82,30 @@ const AUTH_PREFIXES = ["/login", "/signup"];
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  /* ── /dev is not for the internet ──────────────────────────────────────────
+     CLAUDE.md §7 has claimed since May that dev pages are "NOT included in production
+     builds (middleware redirect if NODE_ENV=production)". Measured 23 Aug 2026:
+
+         GET https://<prod>/dev/pdf-test   →   200, with no session
+
+     There was no such redirect anywhere in this file. `/dev/pdf-test` renders a sample
+     tax invoice from hardcoded fixtures — including the fabricated GSTIN
+     27AABCE9876D1Z3 that lib/invoices/supplier-identity.ts exists to keep off real
+     documents — served publicly under the company's own domain.
+
+     Placed before the auth work below because this is not an authorisation question: a
+     dev page should not exist in production for anybody, signed in or not. 404 rather
+     than a redirect, so the answer is the same one a nonexistent route gives and the
+     surface is not advertised.
+
+     ALLOW_DEV_PAGES=1 reopens it for a deliberate session — the same shape as
+     ALLOW_SENTRY_TEST, and set the same way: on, use it, off. */
+  if (pathname === "/dev" || pathname.startsWith("/dev/")) {
+    if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEV_PAGES !== "1") {
+      return new NextResponse(null, { status: 404 });
+    }
+  }
+
   // If Supabase isn't configured yet, just let everything pass.
   // (Until the operator pastes real env vars, we don't enforce auth.)
   if (!isSupabaseConfigured()) {

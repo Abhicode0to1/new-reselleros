@@ -230,7 +230,16 @@ Use serif for **moments that matter** (page titles, big numbers, customer-facing
 - Customer-facing under `(public)/`: `/buy/workspace`, `/buy/m365`, `/buy/zoho`, `/quote/[id]/accept`, `/portal`
 - Auth under `(auth)/`: `/login`, `/signup`, `/forgot-password`
 - API under `/api/`: `/api/webhooks/razorpay`, `/api/webhooks/csp`, `/api/cron/renewals`
-- Dev-only under `/dev/`: NOT included in production builds (middleware redirect if NODE_ENV=production)
+- Dev-only under `/dev/`: 404'd in production by `middleware.ts` unless `ALLOW_DEV_PAGES=1`.
+  ⚠️ **This line was false until 23 Aug 2026.** It claimed a "middleware redirect if
+  NODE_ENV=production" that did not exist anywhere in the file. Measured against the live
+  service with no session: `GET /dev/pdf-test` returned **200** — a page rendering a sample
+  tax invoice from hardcoded fixtures, including the fabricated GSTIN `27AABCE9876D1Z3`
+  that `lib/invoices/supplier-identity.ts` exists to keep off real documents, served
+  publicly under the company's own domain. Found while adding a dev page that deliberately
+  crashes the browser, which in a public directory would have been a crash-on-demand
+  endpoint for anybody. The gate is real now, fails closed (`!== "1"`), and runs before the
+  auth work — a dev page should not exist in production for anybody, signed in or not.
 
 ---
 
