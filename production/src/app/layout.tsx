@@ -84,11 +84,14 @@ export default function RootLayout({
           fontMono.variable
         )}
       >
-        {/* Browser Sentry init. The DSN is read HERE, at request time, because this is a
-            Server Component — NEXT_PUBLIC_* would be inlined at build time and the value
-            is a Cloud Run runtime variable. Getting that wrong is what the browser test
-            page caught: dsnPresent false, an event id minted, nothing sent. */}
-        <SentryBoot dsn={process.env.SENTRY_DSN?.trim() || null} />
+        {/* Browser Sentry init. It fetches its own DSN from /api/monitoring/sentry-dsn
+            rather than taking a prop from here — reading process.env in THIS file was the
+            second of two build-time traps: the layout is a Server Component, but the pages
+            under it are statically prerendered, so the read happened at build time and
+            null was baked into the HTML. "On the server" is not the same as "while
+            serving". Mounted in the ROOT layout so (public)/ and (auth)/ crashes report
+            too; (app)/layout.tsx is "use client" and could not have read env at all. */}
+        <SentryBoot />
         <Providers>{children}</Providers>
         <Toaster />
       </body>

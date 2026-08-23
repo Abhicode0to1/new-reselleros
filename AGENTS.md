@@ -1585,3 +1585,41 @@ place.
 - **The whole reason this was caught is that the page reports `flushed`.** Without it the
   crash test would have shown the boundary screen, nothing would have arrived, and both look
   identical. Build the verification before believing the configuration.
+
+## L43. "On the server" is not "while serving". A Server Component under a static page reads env at BUILD time
+*23 Aug 2026, the second build-time trap in a row, on the same value.*
+
+L42 fixed a `NEXT_PUBLIC_SENTRY_DSN` read in a client module by moving it to the ROOT
+layout — a Server Component — and passing it down as a prop. That sounded like the fix. It
+produced the identical symptom:
+
+```
+DSN on the Cloud Run service      present (verified)
+DSN in the served HTML            absent
+```
+
+The pages under that layout are **statically prerendered** — `○` in the build output, which
+I had read aloud two hours earlier without connecting it. So the layout's
+`process.env.SENTRY_DSN` ran during `next build`, when the variable did not exist, and
+`null` was baked into the static HTML. Same class of bug, one level up, and it looked more
+correct than the first version.
+
+The fix is a `force-dynamic` route handler that the client fetches. That is the only thing
+in this app that reliably runs per request.
+
+**The rules:**
+- **Three places can read env, and only one is runtime.** A client module (build), a Server
+  Component under a static route (build), a `force-dynamic` route handler (request). Ask
+  which one you are in before reading anything that is set after `next build`.
+- **`○` vs `ƒ` in the build output is the answer, and it is printed every time.** `○ /dev/…`
+  is prerendered; `ƒ /api/…` is dynamic. I had that output on screen and did not use it.
+- **`force-dynamic` on such a route is load-bearing, not decoration.** Without it a
+  prerender pass folds the value into the build and the bug returns, silently.
+- **Two failures with the identical symptom mean the model of the system is wrong, not the
+  code.** Both attempts were internally sound. What was wrong was believing "Server
+  Component" implies "per request". A third guess would have been cheaper to skip than the
+  two rebuilds it cost to learn that.
+- **This is the fourth time today** that reasoning which was internally consistent lost to
+  a measurement (`record_payment`, the renewals alarm, L42, this). The pattern is always the
+  same: a conclusion that explains the evidence, shipped without asking what the live system
+  would actually return.

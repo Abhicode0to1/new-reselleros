@@ -44,14 +44,26 @@ describe("Sentry is initialised on BOTH sides", () => {
     expect(read("lib/sentry.ts")).toContain("process.env.SENTRY_DSN");
   });
 
-  it("is mounted in the ROOT layout, which can read runtime env", () => {
-    /* (app)/layout.tsx is "use client" and cannot read server env at all. The root
-       layout is a Server Component, and a crash in (public)/ or (auth)/ deserves
-       reporting just as much as one behind the login. */
+  it("is mounted in the ROOT layout, and takes no env prop", () => {
+    /* Reading process.env in the root layout was the SECOND build-time trap: it is a
+       Server Component, but the pages under it are statically prerendered, so the read
+       happened at build time and null was baked into the HTML. "On the server" is not
+       the same as "while serving". */
     const root = read("app/layout.tsx");
-    expect(root).toContain("<SentryBoot");
-    expect(root).toContain("process.env.SENTRY_DSN");
+    expect(root).toContain("<SentryBoot />");
+    expect(root).not.toContain("process.env.SENTRY_DSN");
     expect(read("app/(app)/layout.tsx")).not.toContain("SentryBoot");
+  });
+
+  it("fetches the DSN from a force-dynamic route", () => {
+    /* Only a route handler reliably runs per request. force-dynamic is not optional
+       here — without it a prerender pass would capture the build-time env and
+       reintroduce the exact bug. */
+    expect(read("components/shared/sentry-boot.tsx")).toContain("/api/monitoring/sentry-dsn");
+    const route = read("app/api/monitoring/sentry-dsn/route.ts");
+    expect(route).toContain("force-dynamic");
+    expect(route).toContain("process.env.SENTRY_DSN");
+    expect(route).toMatch(/no-store/);
   });
 
   it("does nothing at all when the DSN is unset", () => {
