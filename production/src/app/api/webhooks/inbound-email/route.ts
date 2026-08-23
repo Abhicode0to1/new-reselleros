@@ -35,6 +35,7 @@ import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
 import { decideDisposition } from "@/lib/inbound/disposition";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { extractEntities } from "@/lib/inbound/extract";
+import { planQuoteFromEnquiry } from "@/lib/quotes/quote-from-enquiry";
 import { planCorrections, correctionDetail } from "@/lib/leads/apply-correction";
 import { extractAttachments, pickBillAttachment } from "@/lib/inbound/attachments";
 import { readBillWithGemini } from "@/lib/ai/read-bill";
@@ -645,6 +646,37 @@ export async function POST(request: NextRequest) {
   }
 
   // ── 6. Create the lead ─────────────────────────────────────────────────
+  /* SEATS AND THE CATALOGUE PRODUCT, read here for the first time on this path.
+     Traced 23 Aug 2026: `extracted` on this branch is the GEMINI result (`ExtractedLead`),
+     and that shape has no `seats` field at all — so a new email lead has always been saved
+     without a seat count, however plainly the mail stated one. The regex extractor that
+     DOES read seats (`extractEntities`) was only ever run on the append branch below, for
+     the Phase 1 correction write-back.
+
+     That was the real break behind "50 Business Starter ka quote email par aa jayega?" —
+     not the wording of the mail. Running it here costs one query and no AI call, and it is
+     deterministic, which the model's answer is not.
+
+     `stripQuoted` first, for the same reason the append path does it: a reply carries our
+     own earlier numbers underneath, and reading THOSE would quote yesterday's figure. */
+  const freshForFacts = stripQuoted(text).text || text;
+  const { data: priceCatalogue } = await admin
+    .from("items")
+    .select("id, name, msrp, wholesale")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true);
+  const catalogueForFacts = (priceCatalogue ?? []) as {
+    id: string; name: string; msrp: number | null; wholesale: number | null;
+  }[];
+  const facts = extractEntities({
+    fromName, fromEmail, subject,
+    body: freshForFacts,
+    catalogue: catalogueForFacts.map((c) => ({ id: c.id, name: c.name })),
+  });
+  const matchedItem = facts.product.value
+    ? catalogueForFacts.find((c) => c.id === facts.product.value?.id) ?? null
+    : null;
+
   const leadId = "L-" + Date.now().toString(36).toUpperCase();
   const { error: leadErr } = await admin.from("leads").insert({
     id:            leadId,
@@ -653,7 +685,11 @@ export async function POST(request: NextRequest) {
     contact_name:  extracted.contactName || null,
     contact_email: fromEmail,
     contact_phone: extracted.phone || null,
-    plan:          extracted.product || null,
+    /* The catalogue's own name when the regex matched one, because that string is what the
+       quote builder and `samePlan` compare against. Gemini's free-text guess stays as the
+       fallback — it is better than nothing when the mail named a product we do not sell. */
+    plan:          matchedItem?.name || extracted.product || null,
+    seats:         facts.seats.value,
     stage:         "new",
     source:        "email-inbound",
     priority:      "medium",
@@ -669,6 +705,92 @@ export async function POST(request: NextRequest) {
     tenant_id: tenantId, lead_id: leadId, kind: "email_in",
     detail: `Email from ${fromEmail}${subject ? ` · ${subject}` : ""}`,
   });
+
+  /* ── 6b. Draft quote, when the mail said enough to build one ───────────────
+     `/buy/workspace` has auto-created a draft quote from a form submission for months;
+     the email path never has. Same idea, same annual term, and the same "draft, never
+     sent" rule — a human opens it before a customer sees it.
+
+     The DECISION is in lib/quotes/quote-from-enquiry.ts, not here. This route is 700
+     lines and has already produced two shipped bugs; money arithmetic inline would make
+     it a third. Four of that planner's five outcomes are refusals, and each carries a
+     reason, so a lead that could not be quoted says WHY on its own timeline instead of
+     looking neglected.
+
+     Failures here never fail the request. The lead is saved and the mail is filed by the
+     time we get this far — losing those to a pricing problem would trade a real record
+     for a convenience. */
+  const quotePlan = planQuoteFromEnquiry({
+    item:  matchedItem,
+    seats: facts.seats.value,
+    /* The sender's own words when they named a term, null when they did not. Null makes the
+       draft an ASSUMED annual one, which is why it is recorded rather than smoothed over. */
+    term:  facts.term.value,
+  });
+  if (!quotePlan.ok) {
+    await admin.from("lead_activities").insert({
+      tenant_id: tenantId, lead_id: leadId, kind: "note",
+      detail: `No quote drafted automatically — ${quotePlan.reason}`,
+    });
+  } else {
+    const today   = new Date();
+    const expires = new Date(today);
+    expires.setDate(expires.getDate() + 7);
+
+    let draftQuoteId: string | null = null;
+    /* Three attempts, matching the form path. `next_document_number` is the sole allocator
+       and a collision means counter drift from older seed data, not a logic error — the
+       next number is the fix. */
+    for (let attempt = 1; attempt <= 3 && !draftQuoteId; attempt++) {
+      const { data: quoteId, error: numErr } = await admin
+        .rpc("next_document_number", { p_doc_type: "quote", p_tenant_id: tenantId });
+      if (numErr || !quoteId) {
+        console.error(`[inbound-email] next_document_number attempt ${attempt} failed:`, numErr);
+        break;
+      }
+      const { error: quoteErr } = await admin.from("quotes").insert({
+        id:            quoteId as string,
+        tenant_id:     tenantId,
+        customer_id:   null,
+        customer_name: company,
+        lead_id:       leadId,
+        plan:          matchedItem?.name ?? null,
+        seats:         facts.seats.value,
+        line_items:    quotePlan.items,
+        subtotal:      quotePlan.subtotal,
+        total_cost:    quotePlan.items.reduce((s, i) => s + i.qty * i.cost, 0),
+        discount_pct:  0,
+        tax_rate:      18,
+        amount:        quotePlan.amount,
+        status:        "draft",
+        owner_id:      null,
+        created_date:  today.toISOString().slice(0, 10),
+        expires_date:  expires.toISOString().slice(0, 10),
+        /* The assumption in words on the document itself. Whoever opens this draft must
+           read "term assumed annual" rather than work it out from the rate. */
+        notes:
+          `Auto-drafted from an inbound email from ${fromEmail}.\n` +
+          `Read from the mail: ${facts.seats.source ?? "seats unknown"} · ` +
+          `${facts.product.source ?? "product unknown"} · ` +
+          `${facts.term.source ? `term "${facts.term.source}"` : "term not stated"}\n` +
+          `${quotePlan.assumption}`,
+      });
+      if (!quoteErr) { draftQuoteId = quoteId as string; break; }
+      if (quoteErr.code === "23505") {
+        console.warn(`[inbound-email] quote id collision on attempt ${attempt}: ${quoteId}`);
+        continue;
+      }
+      console.error("[inbound-email] quote insert failed:", quoteErr);
+      break;
+    }
+
+    await admin.from("lead_activities").insert({
+      tenant_id: tenantId, lead_id: leadId, kind: draftQuoteId ? "quote" : "note",
+      detail: draftQuoteId
+        ? `Draft quote ${draftQuoteId} auto-created — ${facts.seats.value} × ${matchedItem?.name}. Term assumed annual; check before sending.`
+        : `Could not create the draft quote — the lead and the mail are saved, build it by hand`,
+    });
+  }
   // owner_id is null on a freshly captured email lead, so the task lands in the
   // unassigned bucket for the owner to hand out -- which is what 0007 designed
   // that bucket for.

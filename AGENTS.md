@@ -1722,3 +1722,41 @@ and the lead drawer's 44px Call button below `md`, the sidebar's user-chip
 `DropdownMenuTrigger` above it. **A debug affordance does not get to outrank an app
 control**, and covering the exact button you are trying to click is how a dev-only overlay
 turns into a wrong bug report.
+
+**L54 — The AI extraction and the regex extraction were on different code paths, and only
+one of them read seats.** `inbound-email`'s CREATE branch builds its lead from `ExtractedLead`
+— the Gemini result — whose schema has no `seats` field at all. `extractEntities`, the
+deterministic reader that DOES find seat counts, ran only on the APPEND branch, for the
+Phase 1 correction write-back. So every lead ever created from an email was saved without a
+seat count, however plainly the mail stated one, and the "why doesn't a quote come back"
+question had nothing to do with the wording. **When two extractors exist, check which paths
+each one is actually wired to** — the one with the better name is not necessarily the one
+running.
+
+**L55 — Widening a regex lets an EARLIER wrong match win.** Making the seat-count pattern
+tolerate words between the number and the unit ("50 Google Workspace Business Starter users")
+looked like a one-line change. `exec` returns the FIRST match, so the wider pattern turned
+"12 months for 30 users" from 30 into 12, and read 365 out of "Microsoft 365 Business Premium
+licenses". Fix: run the strict pattern first and the tolerant one only when strict found
+NOTHING — then the change can only turn a null into an answer, never alter an answer, which
+is a property of the structure rather than of the test suite. Second lesson from the same
+hour: **ask what stands BEFORE the number, not after it.** A quantity is introduced
+("for 50", "need 50"); a number buried mid-phrase is part of a name, a price or a date. That
+one requirement disposed of "₹270 per user" and "15 percent discount for users" structurally,
+where a blocklist of words would have been a permanent game of catch-up.
+
+**L56 — "Microsoft 365 accounts" was already reading as 365 seats, and had been for months.**
+Found by a test written for something else, then confirmed pre-existing by stashing the new
+file and re-running. "accounts", "licenses" and "mailboxes" are all seat units, so any
+product name ending in a number sits one space from one. The catalogue is the authority for
+what is a name — the same list `findProduct` matches, longest-first — so a number falling
+inside a matched product span is not a count. Worth more than the feature it was found by: a
+365-seat quote off a sentence that was not an order is a five-figure document.
+
+**L57 — Do not let the app send a price it inferred.** An email that says "50 Business
+Starter" does not say monthly or annual, and the two differ by 12×. A DRAFT may assume — a
+human opens it and the term is the first thing on the line — but an unattended send may not.
+So the term is now extracted as its own field that is **null unless the sender said it**
+(both terms in one mail also yields null: "monthly and yearly?" is a comparison, not a
+choice), and `termAssumed` on the plan is the gate an auto-send has to read. Build the switch
+before building the thing that needs switching off.
