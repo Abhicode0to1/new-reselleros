@@ -61,7 +61,11 @@ export default function SentryClientTestPage() {
     const flushed = await Sentry.flush(3000);
     setProbe({
       clientReady: Boolean(Sentry.getClient()),
-      dsnPresent: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN),
+      /* Asked of the CLIENT, not of process.env. The first version read
+         NEXT_PUBLIC_SENTRY_DSN here and reported dsnPresent:false — correctly, because
+         that variable is inlined at build time and the DSN is a runtime one. What matters
+         is whether the SDK ended up with a DSN, which only the client knows. */
+      dsnPresent: Boolean(Sentry.getClient()?.getOptions().dsn),
       eventId: eventId ?? null,
       flushed,
     });

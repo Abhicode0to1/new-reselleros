@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { SentryBoot } from "@/components/shared/sentry-boot";
 import { DM_Serif_Display, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 
 import "@/app/globals.css";
@@ -83,6 +84,11 @@ export default function RootLayout({
           fontMono.variable
         )}
       >
+        {/* Browser Sentry init. The DSN is read HERE, at request time, because this is a
+            Server Component — NEXT_PUBLIC_* would be inlined at build time and the value
+            is a Cloud Run runtime variable. Getting that wrong is what the browser test
+            page caught: dsnPresent false, an event id minted, nothing sent. */}
+        <SentryBoot dsn={process.env.SENTRY_DSN?.trim() || null} />
         <Providers>{children}</Providers>
         <Toaster />
       </body>

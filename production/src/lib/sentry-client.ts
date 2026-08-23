@@ -32,13 +32,31 @@
  */
 import * as Sentry from "@sentry/nextjs";
 
-const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
-
 /**
  * Idempotent, same as the server one: `getClient()` is undefined until an init runs, so a
- * second import is free. Called from a client component mounted in the app layout.
+ * second call is free.
+ *
+ * ─── THE DSN IS PASSED IN, NOT READ FROM process.env ────────────────────────
+ * The first version read `process.env.NEXT_PUBLIC_SENTRY_DSN` here, and the browser test
+ * page immediately reported what that costs:
+ *
+ *     dsnPresent  false
+ *     clientReady false
+ *     flushed     false
+ *     eventId     f489b180579d4c4ca9b01bfb50aa7616   <- minted, and went nowhere
+ *
+ * `NEXT_PUBLIC_*` is inlined by Next.js at BUILD time. The DSN had been set as a Cloud
+ * Run RUNTIME variable, so it was never in the bundle — not in production, and not on
+ * localhost either, where `.env.local` has no such line. Exactly the §22 failure with a
+ * different cause: an event id created locally and no transport behind it.
+ *
+ * So the value now arrives as an argument, read by the ROOT layout (a Server Component)
+ * from `process.env.SENTRY_DSN` at request time and handed down. That means ONE variable
+ * instead of two, no rebuild when it changes, and no way for the build and the runtime to
+ * disagree about whether monitoring is on.
  */
-export function initClientSentry(): void {
+export function initClientSentry(dsn: string | null | undefined): void {
+  const DSN = (dsn ?? "").trim();
   if (!DSN) return;
   if (Sentry.getClient()) return;
 

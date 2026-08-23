@@ -1545,3 +1545,43 @@ who finds it.
   production for anybody, signed in or not — so it runs before the auth work.
 - **Adding to a directory means inheriting its exposure.** The reason to check was not
   diligence about old code; it was that my new page would have been the worst thing in there.
+
+## L42. NEXT_PUBLIC_ is inlined at BUILD time. A runtime env var never reaches the browser
+*23 Aug 2026. The browser test page found this on its first run, which is the only reason I know.*
+
+I set the Sentry DSN as two Cloud Run variables, confirmed both were present on the
+service, proved the server half end-to-end (`clientReady=true`, `flushed=true`, a real
+event id), and called it done. Then the operator opened the new browser test page:
+
+```
+dsnPresent   false
+clientReady  false
+flushed      false
+eventId      f489b180579d4c4ca9b01bfb50aa7616   <- minted, and went nowhere
+```
+
+`NEXT_PUBLIC_*` is substituted into the JS bundle by Next.js at **build** time. Cloud Run
+env vars are **runtime**. The image had been built before the variable existed, so the
+browser bundle contained nothing — and `.env.local` had no such line either, so localhost
+was equally blind. Setting it "correctly" on the service could never have worked, in either
+place.
+
+**The rules:**
+- **A `NEXT_PUBLIC_` variable is a build input, not configuration.** Changing it needs a
+  rebuild. If the value lives in the deployment (Cloud Run, a secret manager, anything set
+  after `next build`), the browser cannot see it — no matter how right the variable name is.
+- **Prefer handing it down from a Server Component.** The root layout reads
+  `process.env.SENTRY_DSN` at request time and passes it as a prop. One variable instead of
+  two, no rebuild when it changes, and no way for the build and the runtime to disagree
+  about whether monitoring is on.
+- **Check which layout you are in.** `(app)/layout.tsx` is `"use client"` and cannot read
+  server env at all — the first attempt mounted there and would have silently kept failing.
+  The root layout is a Server Component, and a crash in `(public)/` or `(auth)/` deserves
+  reporting just as much as one behind the login.
+- **Ask the SDK, never `process.env`, when testing whether a client is configured.** The
+  probe originally read `process.env.NEXT_PUBLIC_SENTRY_DSN` — the very thing that was
+  wrong. `Sentry.getClient()?.getOptions().dsn` answers the question that matters: did the
+  client end up with a DSN.
+- **The whole reason this was caught is that the page reports `flushed`.** Without it the
+  crash test would have shown the boundary screen, nothing would have arrived, and both look
+  identical. Build the verification before believing the configuration.

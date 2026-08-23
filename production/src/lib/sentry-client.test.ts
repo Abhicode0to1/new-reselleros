@@ -21,11 +21,21 @@ const SRC = join(process.cwd(), "src");
 const read = (p: string) => readFileSync(join(SRC, p), "utf8");
 
 describe("Sentry is initialised on BOTH sides", () => {
-  it("the client initialiser reads the NEXT_PUBLIC_ variable", () => {
-    /* Without the prefix Next.js never inlines it, and the init silently no-ops —
-       which is indistinguishable from Sentry being switched off. */
+  it("takes the DSN as an argument, not from process.env", () => {
+    /* The first version read process.env.NEXT_PUBLIC_SENTRY_DSN inside the client module
+       and the browser test page reported dsnPresent:false on its first run — that variable
+       is inlined at BUILD time and the DSN is a Cloud Run RUNTIME one, so it was in
+       neither bundle. An event id was minted and nothing left the tab. */
     const s = read("lib/sentry-client.ts");
-    expect(s).toContain("process.env.NEXT_PUBLIC_SENTRY_DSN");
+    expect(s).toContain("initClientSentry(dsn:");
+    /* Comments stripped before asserting. The file EXPLAINS the old
+       process.env.NEXT_PUBLIC_SENTRY_DSN read at length, and a blunt not.toContain
+       would fail on the explanation — which would push the reasoning out of the file to
+       satisfy the test. What must not exist is a READ. */
+    const code = s
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toContain("NEXT_PUBLIC_SENTRY_DSN");
   });
 
   it("the server initialiser still reads the non-public one", () => {
@@ -34,10 +44,14 @@ describe("Sentry is initialised on BOTH sides", () => {
     expect(read("lib/sentry.ts")).toContain("process.env.SENTRY_DSN");
   });
 
-  it("the client init is mounted where every authenticated page passes", () => {
-    /* Same chokepoint reasoning as CLAUDE.md §22 uses for the server: put the init
-       where every path already goes rather than asking each new file to remember. */
-    expect(read("app/(app)/layout.tsx")).toContain("<SentryBoot />");
+  it("is mounted in the ROOT layout, which can read runtime env", () => {
+    /* (app)/layout.tsx is "use client" and cannot read server env at all. The root
+       layout is a Server Component, and a crash in (public)/ or (auth)/ deserves
+       reporting just as much as one behind the login. */
+    const root = read("app/layout.tsx");
+    expect(root).toContain("<SentryBoot");
+    expect(root).toContain("process.env.SENTRY_DSN");
+    expect(read("app/(app)/layout.tsx")).not.toContain("SentryBoot");
   });
 
   it("does nothing at all when the DSN is unset", () => {
