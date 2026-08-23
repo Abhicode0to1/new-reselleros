@@ -40,6 +40,8 @@ export interface EmailAttachment {
 }
 
 import { recordEmail } from "./log";
+import { resolveAutonomy, type AiAction } from "@/lib/ai/autonomy";
+import { loadAutonomyPolicy, logAiAction } from "@/lib/ai/autonomy.server";
 
 export interface EmailMessage {
   /** Single recipient for now. Cc / Bcc come when needed. */
@@ -69,6 +71,28 @@ export interface EmailMessage {
    *  Never required, because a log that can be skipped by forgetting an
    *  argument is the exact failure this table exists to remove. */
   kind?: string;
+  /**
+   * Marks this send as AUTOMATED, and subjects it to the workspace's autonomy dial and
+   * kill switch. Added 23 Aug 2026.
+   *
+   * ─── WHY IT SITS HERE AND NOT IN FIVE CRONS ─────────────────────────────
+   * The audit that prompted the dial found that five crons — invoice dunning, renewals,
+   * trial expiry, compliance reminders, birthday greetings — email customers unattended
+   * with NO in-app way to stop any of them. Gating each one separately would mean five
+   * places to remember, and the sixth cron somebody adds next year would not be gated at
+   * all. This is the chokepoint every one of them already goes through, for the same
+   * reason the `email_log` write lives here: a guard that can be skipped by forgetting an
+   * argument is not a guard.
+   *
+   * ─── AND WHY IT IS OPT-IN RATHER THAN THE DEFAULT ───────────────────────
+   * A person pressing Send is not automation, and a kill switch that also blocked the
+   * operator's own explicit action would be a surprise at the worst moment — they reach
+   * for the switch precisely so they can take over by hand. So an unmarked send behaves
+   * exactly as it always has, and only callers that declare themselves automated are
+   * gated. The cost, stated: a new automated caller that forgets this is ungated. The
+   * test in autonomy-chokepoint.test.ts scans for that.
+   */
+  automated?: { tenantId: string; action: AiAction };
 }
 
 export interface EmailRoute {
@@ -112,6 +136,58 @@ export interface EmailSendResult {
  * existing per-feature logs ended up with gaps.
  */
 export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
+  /* ── THE BRAKE, BEFORE ANYTHING LEAVES ──────────────────────────────────────
+     Only for callers that declared themselves automated — see `automated` on
+     EmailMessage for why this is opt-in rather than the default.
+
+     It runs BEFORE sendEmailInner, and the refusal is still recorded in `email_log` with
+     status "failed" and a reason. A refused send that left no trace would make the switch
+     indistinguishable from an outage: the operator flips it, mail stops, and nothing
+     anywhere says the app chose to stop.
+
+     Imported at the top, not lazily. The first version of this comment claimed a lazy
+     import was needed to keep `createAdminClient` out of callers that never send automated
+     mail — which was wrong, and checkable: this module already imports `createAdminClient`
+     at line 31 and has since long before today. There is no cycle either, because
+     autonomy.server imports nothing from here. A dynamic import whose stated reason does
+     not hold is just a slower static one with a misleading note attached.
+
+     autonomy.server makes its own bare client rather than taking one: `ai_autonomy` and
+     `ai_action_log` are absent from the generated Database type on purpose (registering one
+     extra table took typecheck from 4 errors to 2,722 — AGENTS.md L31), so they cannot be
+     reached through the typed admin client this module already holds. */
+  if (msg.automated) {
+    const policy  = await loadAutonomyPolicy(msg.automated.tenantId);
+    const verdict = resolveAutonomy(msg.automated.action, policy);
+
+    if (verdict.mode !== "auto") {
+      const refusal: EmailSendResult = {
+        status:       "failed",
+        providerId:   null,
+        errorMessage: `not sent — ${verdict.reason}`,
+        provider:     "stub",
+      };
+      await recordEmail({
+        tenantId:  msg.automated.tenantId,
+        recipient: msg.to,
+        subject:   msg.subject,
+        kind:      msg.kind ?? null,
+        provider:  refusal.provider,
+      }, refusal);
+      await logAiAction({
+        tenantId: msg.automated.tenantId,
+        action:   msg.automated.action,
+        outcome:  verdict.mode === "hold" ? "held" : "skipped",
+        reason:   verdict.reason,
+        mode:     verdict.mode,
+        entity:   "email",
+        entityId: null,
+        facts:    { recipient: msg.to, subject: msg.subject, kind: msg.kind ?? null },
+      });
+      return refusal;
+    }
+  }
+
   const result = await sendEmailInner(msg);
   await recordEmail({
     tenantId: msg.route?.tenantId ?? null,

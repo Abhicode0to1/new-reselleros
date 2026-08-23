@@ -1806,3 +1806,44 @@ irreversible number from the gapless CGST Rule 46 series. The lead is marked
 its notes open with a banner saying the lead is safe to delete **and that deleting it does
 not give the document number back**. Nothing currently excludes that source from pipeline or
 forecast reporting, which is worth writing down rather than assuming.
+
+**L62 — The app could not be told to stop.** Asked whether an AI sales agent was possible;
+the audit found something more urgent than the answer. Five crons — invoice dunning,
+renewals, trial expiry, compliance reminders, birthday greetings — emailed customers
+unattended, and **the only way to stop any of them was disabling a Cloud Scheduler job in a
+Google console.** Grepped for `ai_enabled`, `emails_paused`, `sending_paused`,
+`DISABLE_EMAIL`: nothing. Meanwhile all 13 AI routes only draft and none send, so the risk
+had never come from the AI. **Before automating anything further, check whether the
+automation already running can be stopped from inside the product.**
+
+**L63 — Introducing a brake must not itself change what the car is doing.** The obvious dial
+design — default every action to "hold" and let config opt in — would have silently stopped
+five working crons the moment it was wired, because no tenant has any config. Dunning would
+have quietly stopped chasing money. So each action DECLARES the mode that is live today and
+that declaration is the fallback; turning something off became a separate, visible decision.
+A new action's author writes its own default, which puts the right question in front of them:
+is this safe to do while nobody is looking?
+
+**L64 — A kill switch stops what the app sends OUT, never what it says TO YOU.** Owner alerts
+in the crons are deliberately ungated, and `compliance.send` was declared in the registry and
+then removed once it turned out to be an internal "your GSTR-1 is due" reminder rather than a
+customer send — a switch that muted the filing alarm would turn one bad afternoon into a late
+fee. And a registry entry nobody enforces is worse than no entry: it reads as a control the
+operator does not actually have. There is a scan test asserting every remaining declared
+action is really passed at a call site.
+
+**L65 — Gate at the chokepoint, not at the call sites.** The `automated` flag lives on
+`sendEmail`, the one function all five crons already go through, for the same reason the
+`email_log` write lives there: a guard that can be skipped by forgetting an argument is not a
+guard. It is opt-in rather than default because a person pressing Send is not automation and
+must not be blocked by the switch they flipped in order to take over by hand. That opt-in has
+a real cost — a new automated caller that forgets the flag is ungated — so it is paid for by
+a source scan that fails when a declared action has no call site. Red-checked by deleting one
+cron's flag and watching two assertions fail.
+
+**L66 — Fail closed on "am I switched off?", open on "how am I configured?"** Two reads in the
+same function go opposite ways. An unreadable kill switch resolves to ON: a missing answer
+must not be read as "carry on", because the moment somebody needs that switch is exactly when
+a database blip is least acceptable as a yes. An unreadable per-action dial resolves to
+NOT-CONFIGURED: an empty dial is the normal state, so a read failure there is
+indistinguishable from it and must behave the same rather than stopping five working crons.

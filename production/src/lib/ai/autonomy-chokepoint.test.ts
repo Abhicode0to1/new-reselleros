@@ -1,0 +1,141 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { AI_ACTIONS, type AiAction } from "./autonomy";
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Is the brake actually connected?
+
+   The dial and the log are pure and well tested, and that proves nothing about whether any
+   send goes through them. This file is the part that would catch the real failure: a
+   registry full of actions, a kill switch that resolves correctly, and five crons that
+   never ask.
+
+   A source scan, because the thing being checked is WIRING. Rendering these routes would
+   need Supabase, Resend and Cloud Scheduler stubbed, and would still not answer the
+   question — "does this call site pass `automated`" reads directly in the source and not at
+   all in a mock.
+
+   `send.ts` states the cost of the opt-in design out loud: "a new automated caller that
+   forgets this is ungated. The test in autonomy-chokepoint.test.ts scans for that." This is
+   that test, and the comment is a promise it has to keep.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+const SRC = join(process.cwd(), "src");
+const read = (p: string) => readFileSync(join(SRC, p), "utf8");
+const strip = (s: string) =>
+  s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+describe("the chokepoint itself", () => {
+  it("checks autonomy BEFORE handing anything to the transport", () => {
+    /* Order is the whole guarantee. Resolving after the send would log a refusal for a mail
+       already gone. */
+    const code = strip(read("lib/email/send.ts"));
+    const gate = code.indexOf("resolveAutonomy(");
+    const send = code.indexOf("sendEmailInner(msg)");
+    expect(gate).toBeGreaterThan(0);
+    expect(send).toBeGreaterThan(0);
+    expect(gate).toBeLessThan(send);
+  });
+
+  it("records a refusal in email_log instead of returning silently", () => {
+    /* A refused send that left no trace would make the switch indistinguishable from an
+       outage: mail stops and nothing anywhere says the app chose to stop. */
+    const code = strip(read("lib/email/send.ts"));
+    const gateBlock = code.slice(code.indexOf("resolveAutonomy("), code.indexOf("sendEmailInner(msg)"));
+    expect(gateBlock).toContain("recordEmail(");
+    expect(gateBlock).toContain("logAiAction(");
+  });
+
+  it("distinguishes a hold from a skip when it logs", () => {
+    /* Both refuse the send; only one means "a person still has to do this". Collapsing them
+       would bury the queue of things waiting on the operator. */
+    expect(strip(read("lib/email/send.ts"))).toMatch(/"hold" \? "held" : "skipped"/);
+  });
+});
+
+describe("every gateable action in the registry is actually wired somewhere", () => {
+  /* The failure this catches: declaring an action, shipping the dial, and never asking. A
+     registry entry nobody enforces is worse than no entry — it reads as a control the
+     operator does not have. `compliance.send` was removed for exactly this reason once it
+     turned out to be an internal reminder rather than a customer send. */
+  const ALL_SOURCE = (() => {
+    const out: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) {
+          out.push(readFileSync(p, "utf8"));
+        }
+      }
+    };
+    walk(SRC);
+    return strip(out.join("\n"));
+  })();
+
+  const SENDING_ACTIONS = (Object.keys(AI_ACTIONS) as AiAction[]).filter((a) => a.endsWith(".send"));
+
+  it.each(SENDING_ACTIONS)("%s is passed to sendEmail somewhere", (action) => {
+    const spec = AI_ACTIONS[action];
+    if (spec.today === "off") {
+      /* Not built yet, and `off` says so. Wiring arrives with the feature — asserting a call
+         site now would force a fake one, which is how a green test starts lying. */
+      expect(spec.today).toBe("off");
+      return;
+    }
+    expect(ALL_SOURCE, `${action} is declared "${spec.today}" but nothing passes it`)
+      .toContain(`action: "${action}"`);
+  });
+});
+
+describe("the five unattended crons", () => {
+  const CRON = join(SRC, "app", "api", "cron");
+
+  /* Measured 23 Aug 2026: these are the routes that call sendEmail, and before this change
+     none of them could be stopped from inside the app. */
+  it.each([
+    ["invoice-dunning",    "dunning.send"],
+    ["renewals",           "renewal.send"],
+    ["trial-expiry",       "trial.send"],
+    ["birthday-greetings", "greeting.send"],
+  ])("%s gates its customer send with %s", (dir, action) => {
+    const file = join(CRON, dir, "route.ts");
+    expect(existsSync(file), `${dir} route is missing`).toBe(true);
+    const code = strip(readFileSync(file, "utf8"));
+    expect(code).toContain(`action: "${action}"`);
+  });
+
+  it("leaves compliance-reminders ungated, because it writes to the tenant's own team", () => {
+    /* The line this draws: the dial stops what the app sends OUT to other people, never what
+       it says TO YOU. A kill switch that also muted "your GSTR-1 is due" would turn one bad
+       afternoon into a late fee. */
+    const code = strip(readFileSync(join(CRON, "compliance-reminders", "route.ts"), "utf8"));
+    expect(code).not.toContain("automated:");
+    expect(Object.keys(AI_ACTIONS)).not.toContain("compliance.send");
+  });
+});
+
+describe("the fail-closed direction", () => {
+  it("treats an unreadable kill switch as ON", () => {
+    /* Asserted on the source because the alternative — a Supabase failure injected through
+       a mock — would test the mock. A missing answer to "am I switched off?" must not read
+       as "carry on": that is precisely the moment somebody is trying to stop something. */
+    const code = read("lib/ai/autonomy.server.ts");
+    expect(code).toMatch(/killSwitch: true, modes: \{\} \}/);
+    expect(code).toMatch(/failing CLOSED/);
+  });
+
+  it("treats an unreadable per-action dial as NOT configured", () => {
+    /* The opposite direction, on purpose. An empty dial is the normal state, so a read
+       failure there must behave like "not configured" rather than silently stopping five
+       working crons. */
+    const code = strip(read("lib/ai/autonomy.server.ts"));
+    expect(code).toMatch(/could not read the per-action dial[\s\S]{0,120}return \{ killSwitch, modes: \{\} \}/);
+  });
+
+  it("never lets a logging failure break the work it was recording", () => {
+    const code = strip(read("lib/ai/autonomy.server.ts"));
+    expect(code).toMatch(/catch \(err\)[\s\S]{0,160}console\.error/);
+  });
+});

@@ -166,6 +166,10 @@ async function handle(req: Request): Promise<NextResponse<GreetingResult | { err
         text,
         from:    tenant?.email ?? undefined,
         replyTo: tenant?.email ?? undefined,
+        kind:    "greeting",
+        /* Gated. A greeting is the least urgent thing this app sends and the most
+           embarrassing to have go out during an incident. */
+        automated: { tenantId: c.tenant_id, action: "greeting.send" },
       });
 
       if (send.status === "failed") {

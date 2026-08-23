@@ -154,6 +154,10 @@ async function handle(req: Request) {
             replyTo: owner.to,
             kind:    "trial_expiry_customer",
             route:   { tenantId: lead.tenant_id },
+            /* Customer-facing, so gated by the kill switch + dial. The OWNER copy further
+               down is deliberately NOT: a switch that silenced what the app says to the
+               operator would hide the very thing they flipped it to investigate. */
+            automated: { tenantId: lead.tenant_id, action: "trial.send" },
             subject: `Your Google Workspace trial — ${lead.domain ?? "your domain"} — has ended`,
             text:
 `Hi ${(lead.contact_name ?? "").split(" ")[0] || "there"},

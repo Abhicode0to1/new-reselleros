@@ -173,6 +173,11 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
     replyTo: tenant.email ?? undefined,
     kind:    "auto_quote_from_email",
     route:   { tenantId: args.tenantId },
+    /* Gated by the workspace kill switch + dial. This is the newest automated send in the
+       app and the one carrying a price, so it is the last thing that should be exempt —
+       `decideAutoSend` already checked the FACTS (did the customer state a term), and this
+       checks the PERMISSION. Two different questions, both required. */
+    automated: { tenantId: args.tenantId, action: "quote.send" },
     subject: `Your quote ${quote.id} — ${seller}`,
     text:
 `Thanks for the enquiry. Your quote is attached and summarised below.

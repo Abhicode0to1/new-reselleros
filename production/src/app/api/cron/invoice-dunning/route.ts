@@ -175,8 +175,23 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
       });
 
       if (to && msg) {
-        await sendEmail({ to, subject: msg.subject, text: msg.text });
-        result.emails_sent++;
+        /* `automated` subjects this to the workspace's kill switch and dial (23 Aug 2026).
+           Until then there was no way to stop this cron chasing customers except disabling
+           a Cloud Scheduler job in a Google console.
+
+           `emails_sent` is incremented only on a real send now — a refusal returns status
+           "failed" with the reason, and counting it as sent would make the switch look
+           broken in the very summary somebody checks after flipping it.
+
+           The ESCALATION mail below is deliberately NOT gated: it goes to the reseller, not
+           to a customer, and a switch that silenced the app's own alarms would turn one bad
+           afternoon into a missed suspension. */
+        const r = await sendEmail({
+          to, subject: msg.subject, text: msg.text,
+          kind: "invoice_dunning",
+          automated: { tenantId: inv.tenant_id, action: "dunning.send" },
+        });
+        if (r.status !== "failed") result.emails_sent++;
       }
 
       // ── Reseller-side action ─────────────────────────────────────────────

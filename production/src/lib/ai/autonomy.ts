@@ -1,0 +1,184 @@
+/**
+ * How much the app is allowed to do on a customer's behalf without a person present.
+ *
+ * ─── WHY THIS EXISTS, AND THE MEASUREMENT THAT PROMPTED IT ───────────────────
+ * Asked on 23 Aug 2026: "can an AI sales agent do a real salesperson's job?" The audit that
+ * followed found something more urgent than the answer. **There is no way to stop this app
+ * emailing customers from inside this app.** Five crons — invoice dunning, renewals, trial
+ * expiry, compliance reminders, birthday greetings — send unattended today, and the only
+ * way to stop any of them is to disable a Cloud Scheduler job in a Google console. Grepped
+ * for `ai_enabled`, `emails_paused`, `sending_paused`, `DISABLE_EMAIL`: nothing.
+ *
+ * So this is not scaffolding for a future agent. It is the brake the current app is missing,
+ * and it is worth having before anything else is automated.
+ *
+ * ─── THE MODES, AND WHY THREE ───────────────────────────────────────────────
+ *   auto  — do it, nobody is watching
+ *   hold  — prepare it and wait for a person. NOT the same as off: the work is done, the
+ *           draft exists, and the operator's next action is one tap rather than a blank page
+ *   off   — do not do it at all
+ *
+ * "hold" is the mode that makes a dial useful instead of binary. Every AI route in this repo
+ * today is effectively `hold` — 13 of them draft and none of them send — and that has been
+ * fine. The dial exists so moving one of them to `auto` is a decision somebody makes, in one
+ * place, reversibly.
+ *
+ * ─── THE DEFAULTS ARE "WHAT THE APP DOES TODAY", DELIBERATELY ────────────────
+ * The obvious design — default everything to `hold` and let config opt in — would have
+ * SILENTLY STOPPED five working crons the moment this was wired, because no tenant has any
+ * config yet. Dunning would quietly stop chasing money. So each action declares the mode
+ * that is live right now, and that declaration is the fallback. Introducing the brake must
+ * not itself change behaviour; that is a separate, visible decision.
+ *
+ * A new action added later declares its own default, and the review question for the author
+ * is exactly the right one: is this safe to do while nobody is looking?
+ */
+
+export type AutonomyMode = "off" | "hold" | "auto";
+
+export interface AiActionSpec {
+  /** Shown in the UI and written into the audit log. */
+  label: string;
+  /**
+   * What this action does TODAY, before anyone configures anything. See the header: this is
+   * a record of current behaviour, not an aspiration.
+   */
+  today: AutonomyMode;
+  /**
+   * Which modes make sense for it. Creating a lead cannot be "held" — there is no draft
+   * lead to hold — so a config asking for that is a mistake worth reporting rather than
+   * silently rounding off.
+   */
+  supports: readonly AutonomyMode[];
+}
+
+export const AI_ACTIONS = {
+  "lead.create": {
+    label: "Create a lead from an inbound email",
+    today: "auto",
+    supports: ["off", "auto"],
+  },
+  "quote.draft": {
+    label: "Draft a quote from an enquiry",
+    today: "auto",
+    supports: ["off", "auto"],
+  },
+  "quote.send": {
+    label: "Email a drafted quote to the customer",
+    /* Live since 23 Aug 2026, and already gated on the customer having stated the billing
+       term — see lib/quotes/auto-send-quote.ts. That gate is a FACT check and stays whatever
+       this dial says; the dial can only make it stricter. */
+    today: "auto",
+    supports: ["off", "hold", "auto"],
+  },
+  "reply.send": {
+    label: "Send a written reply to a customer",
+    /* Not built. Every AI route drafts and none sends, so `off` is not a policy choice here
+       — it is a description. Wiring the drafter to send is the next step, and it arrives
+       with its own fact-gate rather than with this default flipped. */
+    today: "off",
+    supports: ["off", "hold", "auto"],
+  },
+  "followup.send": {
+    label: "Send a follow-up nudge to a quiet lead",
+    today: "off",
+    supports: ["off", "hold", "auto"],
+  },
+  "dunning.send": {
+    label: "Chase an overdue invoice",
+    today: "auto",
+    supports: ["off", "hold", "auto"],
+  },
+  "renewal.send": {
+    label: "Send a renewal reminder",
+    today: "auto",
+    supports: ["off", "hold", "auto"],
+  },
+  "trial.send": {
+    label: "Send a trial-expiry reminder",
+    today: "auto",
+    supports: ["off", "hold", "auto"],
+  },
+  /* `compliance.send` was listed here and then removed on the same day, deliberately.
+     Compliance reminders go to the TENANT'S OWN TEAM — "your GSTR-1 is due" — not to a
+     customer. This dial stops what the app sends OUT to other people; it must never be able
+     to silence what the app says TO YOU. A kill switch that also muted the GST filing alarm
+     would turn one bad afternoon into a late fee.
+
+     Owner alerts in the crons are ungated for the same reason, and a registry entry nobody
+     enforces is worse than no entry — so the action is gone rather than declared and
+     ignored. There is a test asserting every remaining action IS wired. */
+  "greeting.send": {
+    label: "Send a birthday or anniversary greeting",
+    today: "auto",
+    supports: ["off", "hold", "auto"],
+  },
+} as const satisfies Record<string, AiActionSpec>;
+
+export type AiAction = keyof typeof AI_ACTIONS;
+
+export interface AutonomyPolicy {
+  /**
+   * ONE switch that stops everything customer-facing, whatever the per-action modes say.
+   *
+   * The thing this app did not have. It outranks every other setting on purpose: the moment
+   * somebody needs it, they need it to work without reading ten rows first — a wrong price
+   * has gone out, or a template is broken, and the question is "how do I make it stop".
+   */
+  killSwitch: boolean;
+  /** Per-action overrides. Anything absent falls back to that action's `today`. */
+  modes?: Partial<Record<AiAction, AutonomyMode>>;
+}
+
+export interface AutonomyVerdict {
+  mode: AutonomyMode;
+  /** Always present, including on `auto` — the audit log records why, not just what. */
+  reason: string;
+}
+
+export function resolveAutonomy(action: AiAction, policy: AutonomyPolicy): AutonomyVerdict {
+  /* Widened to the interface on purpose. `as const satisfies` keeps AI_ACTIONS literal so
+     the registry tests can iterate it, but that also narrows `supports` to a per-action
+     tuple, and `includes` then refuses the wider AutonomyMode. Reading through the
+     interface is the honest fix; a cast at the `includes` call would work and would be a
+     lie about what is being compared. */
+  const spec: AiActionSpec = AI_ACTIONS[action];
+
+  if (policy.killSwitch) {
+    return {
+      mode: "off",
+      reason:
+        `automation is switched off for this workspace — "${spec.label}" did not run. ` +
+        "Turn it back on in Settings when you are ready.",
+    };
+  }
+
+  const configured = policy.modes?.[action];
+
+  if (configured && !spec.supports.includes(configured)) {
+    /* Reported, not rounded off. A config asking to "hold" a lead creation is somebody's
+       misunderstanding, and answering it silently with the default would hide that they
+       believe something untrue about the system. */
+    return {
+      mode: spec.today,
+      reason:
+        `"${configured}" is not a mode "${spec.label}" can be in (it supports ` +
+        `${spec.supports.join(", ")}), so the current default "${spec.today}" was used — ` +
+        "fix the setting",
+    };
+  }
+
+  if (configured) {
+    return { mode: configured, reason: `set to "${configured}" for this workspace` };
+  }
+
+  return {
+    mode: spec.today,
+    reason: `no setting for this action, so its default "${spec.today}" applies`,
+  };
+}
+
+/** Convenience for the common question. Never true when the kill switch is on. */
+export function mayActUnattended(action: AiAction, policy: AutonomyPolicy): boolean {
+  return resolveAutonomy(action, policy).mode === "auto";
+}

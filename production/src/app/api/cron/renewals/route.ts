@@ -377,6 +377,13 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
           from:    tenant.email ?? undefined,
           replyTo: tenant.email ?? undefined,
           attachments,
+          kind:    "renewal_reminder",
+          /* Gated by the workspace kill switch + dial (23 Aug 2026). Before that there was
+             no way to stop this cron mailing customers short of disabling a Cloud Scheduler
+             job in a Google console. A refusal returns status "failed" carrying the reason,
+             and the renewal_email_log write below records it — so a silenced reminder shows
+             up as silenced rather than as absent. */
+          automated: { tenantId: sub.tenant_id, action: "renewal.send" },
         });
 
         // 6. Log + update sub state
