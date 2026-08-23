@@ -2599,6 +2599,8 @@ function LeadDetailSheet({
               </div>
               <ReplyComposer
                 enquiryId={replyAnchor.id}
+                /* Lets the composer offer "Draft with AI", which needs a thread to read. */
+                leadId={lead.id}
                 toEmail={replyAnchor.from_email}
                 originalSubject={replyAnchor.subject}
                 receivedAt={replyAnchor.created_at}

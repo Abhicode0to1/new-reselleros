@@ -40,10 +40,18 @@ export interface ReplyComposerProps {
   /** Facts the extractor read, so a pill's draft is worth the tap. */
   context: PillContext;
   formatWhen: (iso: string) => string;
+  /**
+   * The lead this thread belongs to, when there is one.
+   *
+   * OPTIONAL: /enquiries can show a reply box for an email that has not become a lead
+   * yet, and there is no conversation to read in that case. Absent simply hides the AI
+   * button — a button that always fails is worse than no button.
+   */
+  leadId?: string | null;
 }
 
 export function ReplyComposer({
-  enquiryId, toEmail, originalSubject, receivedAt, context, formatWhen,
+  enquiryId, toEmail, originalSubject, receivedAt, context, formatWhen, leadId = null,
 }: ReplyComposerProps) {
   const [subject, setSubject] = React.useState(() => replySubject(originalSubject));
   const [body, setBody]       = React.useState("");
@@ -75,6 +83,41 @@ export function ReplyComposer({
       if (!window.confirm("Replace what you have written with this reply?")) return;
     }
     setBody(draft);
+  }
+
+  /* ── Draft with AI ────────────────────────────────────────────────────────
+     Asked for as "AI human ki tarah reply de". It sits BESIDE the quick replies rather
+     than replacing them: the pills are deterministic and instant, and on an outage or a
+     money-guard rejection they are what the operator falls back to.
+
+     It fills the box. Sending stays the separate, deliberate act it already is — an email
+     cannot be recalled, and the reason this reply is worth drafting is that the customer
+     has corrected us twice. */
+  const [aiBusy, setAiBusy] = React.useState(false);
+
+  async function draftWithAi() {
+    if (!leadId) return;
+    if (body.trim() && !window.confirm("Replace what you have written with an AI draft?")) return;
+    setAiBusy(true);
+    try {
+      const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/draft-reply`, { method: "POST" });
+      const json = await res.json() as { subject?: string; message?: string; error?: string };
+      if (!res.ok || !json.message) {
+        /* The route's own message names the reason and the fallback — "use a quick reply",
+           "send the revised quotation first". Replacing it with a generic failure would
+           throw away the only part that says what to do (§24). */
+        toast.error(json.error ?? "Could not draft a reply.");
+        return;
+      }
+      setBody(json.message);
+      if (json.subject?.trim()) setSubject(json.subject.trim());
+    } catch {
+      toast.error("Could not reach the drafting service.", {
+        description: "Use one of the quick replies, or write it by hand.",
+      });
+    } finally {
+      setAiBusy(false);
+    }
   }
 
   const canSend = Boolean(toEmail) && subject.trim().length > 0 && body.trim().length > 0;
@@ -134,6 +177,20 @@ export function ReplyComposer({
             {p.label}
           </button>
         ))}
+        {/* Only where there is a lead to read a thread from — on a bare enquiry with no
+            lead there is no conversation to answer, and a button that always fails is
+            worse than no button. */}
+        {leadId && (
+          <button
+            type="button"
+            title="Reads this conversation and writes the reply their last message deserves. It fills the box — you still press Send."
+            onClick={() => void draftWithAi()}
+            disabled={aiBusy}
+            className="rounded-full border border-amber/50 bg-amber-soft/30 px-2.5 py-1 text-[12px] text-amber-ink transition-colors hover:border-amber disabled:opacity-60"
+          >
+            {aiBusy ? "Drafting…" : "✨ Draft with AI"}
+          </button>
+        )}
         {body.trim() && (
           <button
             type="button"
