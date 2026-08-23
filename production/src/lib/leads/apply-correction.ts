@@ -148,7 +148,7 @@ export function planCorrections(args: {
  * reply and rewrite the row endlessly, each write logging a "correction" that
  * corrected nothing.
  */
-function samePlan(next: string, current: string | null): boolean {
+export function samePlan(next: string, current: string | null): boolean {
   const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, "");
   const a = norm(next);
   const b = norm(current ?? "");

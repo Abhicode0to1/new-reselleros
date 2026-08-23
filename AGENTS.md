@@ -1909,3 +1909,36 @@ code existed that default was a lie, so it moved to `hold` in the same commit. T
 scan skips actions declared `off` on the grounds that they are unbuilt; leaving the old value
 would have kept it skipped and left the new send path unasserted. **When a default encodes
 "not built yet", changing the code has to change the default.**
+
+**L75 — A green suite can be entirely about decisions and blind to wiring.** The auto-quote
+never ran on the webhook's APPEND branch. Found only by sending a real self-test mail: it
+appended (correctly), the extractor rewrote the lead — seats 20 → 50, plan Standard →
+Starter — and nothing priced it. `planQuoteFromEnquiry` had 17 assertions,
+`decideAutoSend` 17, the extractor 83, and **not one of them looks at where the functions are
+called**. The auto-reply had been wired to both branches in the same sitting and the
+auto-quote to one. Fixed with a source scan (`auto-quote-wiring.test.ts`) that counts call
+sites per branch, red-checked by deleting one. **When a feature has to run in more than one
+place, assert the call sites, not only the logic** — and prefer moving the block into a shared
+function so there is one thing to call rather than two to remember.
+
+**L76 — The append branch is the more valuable one, and it was the one left out.** A reply
+from somebody already in conversation, naming a seat count and a plan, is the most
+quote-worthy mail this app receives; a first enquiry is usually vaguer. The instinct to build
+the "new lead" path first is right for leads and wrong for quotes.
+
+**L77 — On a re-quote, the expensive answer is "no".** Every quote takes an irreversible
+number from the gapless CGST Rule 46 series, so "draft one whenever a reply mentions seats"
+would mint a document per message in a long thread — five mails about the same fifty seats,
+five documents. `shouldRequoteOnReply` compares the reply's facts against the LATEST quote and
+declines when nothing moved. It re-quotes for a SENT quote too: a customer sent 20 seats who
+now says 50 needs a revised document, not a note on a lead.
+
+**L78 — My test was wrong about `samePlan`, and the function was right.** I asserted that
+"google-workspace-starter" matches "Google Workspace Business Starter". It does not:
+`samePlan` is containment, and the dropped word sits in the MIDDLE. The first version of the
+new file had its own copy of that normalisation — the exact drift this repo keeps recording —
+so it now imports the real one and the test asserts the real limitation, with the cost stated
+(one extra quote on a lead still carrying a buy-page slug, which then settles). Widening it to
+token-subset matching would be better and is a SEPARATE change: `samePlan`'s own comment warns
+that "Business Starter" and "Business Standard" must never collapse, and that warning is
+load-bearing.

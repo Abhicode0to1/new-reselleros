@@ -29,16 +29,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveGeminiConfig } from "@/lib/ai/gemini";
-import { sendEmail, isEmailConfigured } from "@/lib/email/send";
+import { sendEmail } from "@/lib/email/send";
 import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
 import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
 import { decideDisposition } from "@/lib/inbound/disposition";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { isSelfTest } from "@/lib/inbound/self-test";
 import { extractEntities } from "@/lib/inbound/extract";
-import { planQuoteFromEnquiry } from "@/lib/quotes/quote-from-enquiry";
-import { decideAutoSend } from "@/lib/quotes/auto-send-quote";
-import { sendAutoQuote } from "@/lib/quotes/send-auto-quote";
+import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
+import { shouldRequoteOnReply } from "@/lib/quotes/requote-on-reply";
 import { runAutoReply } from "@/lib/ai/run-auto-reply";
 import { planCorrections, correctionDetail } from "@/lib/leads/apply-correction";
 import { extractAttachments, pickBillAttachment } from "@/lib/inbound/attachments";
@@ -569,9 +568,12 @@ export async function POST(request: NextRequest) {
        numbers being corrected. Reading the raw body would overwrite 20 with 50 and
        cite the customer as the source. */
     const fresh = stripQuoted(text);
+    /* msrp and wholesale added 23 Aug 2026: this branch now prices a quote as well as
+       correcting the lead, and it used to select only id+name because correcting was all it
+       did. `extractEntities` ignores the extra columns. */
     const { data: catalogue } = await admin
       .from("items")
-      .select("id, name")
+      .select("id, name, msrp, wholesale")
       .eq("tenant_id", tenantId)
       .eq("is_active", true);
 
@@ -582,17 +584,25 @@ export async function POST(request: NextRequest) {
       .eq("tenant_id", tenantId)
       .maybeSingle();
 
+    /* Hoisted out of the planCorrections call, because the quote block below needs the same
+       entities. Extracting twice would risk the two reading different things from one mail —
+       the correction saying 50 seats while the quote priced 20. */
+    const priced = (catalogue ?? []) as {
+      id: string; name: string; msrp: number | null; wholesale: number | null;
+    }[];
+    const replyFacts = extractEntities({
+      fromName, fromEmail, subject,
+      body: fresh.text,
+      catalogue: priced.map((c) => ({ id: c.id, name: c.name })),
+    });
+
     const plan = planCorrections({
       current: {
         seats: (leadFacts as { seats?: number | null } | null)?.seats ?? null,
         plan:  (leadFacts as { plan?: string | null } | null)?.plan ?? null,
       },
       freshText: fresh.text,
-      extracted: extractEntities({
-        fromName, fromEmail, subject,
-        body: fresh.text,
-        catalogue: (catalogue ?? []) as { id: string; name: string }[],
-      }),
+      extracted: replyFacts,
     });
 
     if (plan.corrections.length > 0) {
@@ -653,6 +663,70 @@ export async function POST(request: NextRequest) {
       isReplyToExistingLead: true,
     });
     await finalize("appended_to_lead", existing.id);
+
+    /* ── RE-QUOTE, when the reply changed what they asked for ─────────────────
+       THE BUG THE 23 AUG SELF-TEST FOUND, and it was mine. A mail asking for "50 Google
+       Workspace Business Starter users on annual billing" landed here, the extractor
+       rewrote the lead (seats 20 → 50, plan Standard → Starter), and nothing priced it —
+       because the quote block lived on the CREATE branch alone. A reply from somebody
+       already in conversation, naming a seat count and a plan, is the most quote-worthy
+       mail this app receives.
+
+       `shouldRequoteOnReply` is asked FIRST and mostly says no. Without it a five-message
+       thread about the same fifty seats would mint five GST documents, each taking an
+       irreversible number from the gapless Rule 46 series.
+
+       The facts come from the lead AFTER the corrections above were applied — the reply's
+       own numbers when it changed them, the stored ones when it did not. */
+    {
+      const { data: freshLead } = await admin
+        .from("leads")
+        .select("company, seats, plan")
+        .eq("id", existing.id)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      const lf = (freshLead ?? {}) as { company?: string | null; seats?: number | null; plan?: string | null };
+
+      const { data: lastQuote } = await admin
+        .from("quotes")
+        .select("id, status, seats, plan")
+        .eq("lead_id", existing.id)
+        .eq("tenant_id", tenantId)
+        .order("created_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const matched = priced.find((c) => c.name === lf.plan) ?? null;
+      const decision = shouldRequoteOnReply({
+        seats:       lf.seats ?? null,
+        productName: matched?.name ?? null,
+        latestQuote: (lastQuote ?? null) as { id: string; status: string | null; seats: number | null; plan: string | null } | null,
+      });
+
+      if (!decision.requote) {
+        await admin.from("lead_activities").insert({
+          tenant_id: tenantId, lead_id: existing.id, kind: "note",
+          detail: `No new quote from this reply — ${decision.reason}`,
+        });
+      } else {
+        void autoQuoteForLead(admin, {
+          tenantId,
+          leadId:        existing.id,
+          company:       lf.company ?? "Customer",
+          item:          matched,
+          seats:         lf.seats ?? null,
+          term:          replyFacts.term.value,
+          seatsSource:   replyFacts.seats.source,
+          productSource: replyFacts.product.source,
+          termSource:    replyFacts.term.source,
+          recipient:     fromEmail,
+          senderIsOurs,
+          isSelfTest:    selfTest,
+          fromEmail:     FROM_EMAIL,
+          notePrefix:    `Re-quoted from a customer reply — ${decision.reason}.`,
+        }).catch((err) => console.error("[inbound-email] re-quote crashed:", err));
+      }
+    }
 
     /* STEP 2 — answer them, if the answer promises nothing and the dial allows it.
        This branch matters more than the create branch below: a REPLY to an ongoing
@@ -748,137 +822,29 @@ export async function POST(request: NextRequest) {
     detail: `Email from ${fromEmail}${subject ? ` · ${subject}` : ""}`,
   });
 
-  /* ── 6b. Draft quote, when the mail said enough to build one ───────────────
-     `/buy/workspace` has auto-created a draft quote from a form submission for months;
-     the email path never has. Same idea, same annual term, and the same "draft, never
-     sent" rule — a human opens it before a customer sees it.
+  /* ── 6b. Draft a quote, and send it if the rules allow ─────────────────────
+     130 lines used to sit here, and they only ran on THIS branch — which is the bug the
+     23 Aug self-test found. See lib/quotes/auto-quote-for-lead.ts: an appended reply
+     naming seats and a plan is the most quote-worthy mail this app gets, and it was the
+     one branch that priced nothing.
 
-     The DECISION is in lib/quotes/quote-from-enquiry.ts, not here. This route is 700
-     lines and has already produced two shipped bugs; money arithmetic inline would make
-     it a third. Four of that planner's five outcomes are refusals, and each carries a
-     reason, so a lead that could not be quoted says WHY on its own timeline instead of
-     looking neglected.
-
-     Failures here never fail the request. The lead is saved and the mail is filed by the
-     time we get this far — losing those to a pricing problem would trade a real record
-     for a convenience. */
-  const quotePlan = planQuoteFromEnquiry({
-    item:  matchedItem,
-    seats: facts.seats.value,
-    /* The sender's own words when they named a term, null when they did not. Null makes the
-       draft an ASSUMED annual one, which is why it is recorded rather than smoothed over. */
-    term:  facts.term.value,
-  });
-  if (!quotePlan.ok) {
-    await admin.from("lead_activities").insert({
-      tenant_id: tenantId, lead_id: leadId, kind: "note",
-      detail: `No quote drafted automatically — ${quotePlan.reason}`,
-    });
-  } else {
-    const today   = new Date();
-    const expires = new Date(today);
-    expires.setDate(expires.getDate() + 7);
-
-    let draftQuoteId: string | null = null;
-    /* Three attempts, matching the form path. `next_document_number` is the sole allocator
-       and a collision means counter drift from older seed data, not a logic error — the
-       next number is the fix. */
-    for (let attempt = 1; attempt <= 3 && !draftQuoteId; attempt++) {
-      const { data: quoteId, error: numErr } = await admin
-        .rpc("next_document_number", { p_doc_type: "quote", p_tenant_id: tenantId });
-      if (numErr || !quoteId) {
-        console.error(`[inbound-email] next_document_number attempt ${attempt} failed:`, numErr);
-        break;
-      }
-      const { error: quoteErr } = await admin.from("quotes").insert({
-        id:            quoteId as string,
-        tenant_id:     tenantId,
-        customer_id:   null,
-        customer_name: company,
-        lead_id:       leadId,
-        plan:          matchedItem?.name ?? null,
-        seats:         facts.seats.value,
-        line_items:    quotePlan.items,
-        subtotal:      quotePlan.subtotal,
-        total_cost:    quotePlan.items.reduce((s, i) => s + i.qty * i.cost, 0),
-        discount_pct:  0,
-        tax_rate:      18,
-        amount:        quotePlan.amount,
-        status:        "draft",
-        owner_id:      null,
-        created_date:  today.toISOString().slice(0, 10),
-        expires_date:  expires.toISOString().slice(0, 10),
-        /* The assumption in words on the document itself. Whoever opens this draft must
-           read "term assumed annual" rather than work it out from the rate. */
-        notes:
-          `Auto-drafted from an inbound email from ${fromEmail}.\n` +
-          `Read from the mail: ${facts.seats.source ?? "seats unknown"} · ` +
-          `${facts.product.source ?? "product unknown"} · ` +
-          `${facts.term.source ? `term "${facts.term.source}"` : "term not stated"}\n` +
-          `${quotePlan.assumption}`,
-      });
-      if (!quoteErr) { draftQuoteId = quoteId as string; break; }
-      if (quoteErr.code === "23505") {
-        console.warn(`[inbound-email] quote id collision on attempt ${attempt}: ${quoteId}`);
-        continue;
-      }
-      console.error("[inbound-email] quote insert failed:", quoteErr);
-      break;
-    }
-
-    await admin.from("lead_activities").insert({
-      tenant_id: tenantId, lead_id: leadId, kind: draftQuoteId ? "quote" : "note",
-      detail: draftQuoteId
-        ? `Draft quote ${draftQuoteId} auto-created — ${facts.seats.value} × ${matchedItem?.name}. ` +
-          `${quotePlan.termAssumed ? "Term ASSUMED annual" : `Term ${facts.term.value} as stated`}.`
-        : `Could not create the draft quote — the lead and the mail are saved, build it by hand`,
-    });
-
-    /* ── 6c. Send it, but only when the customer named the term ─────────────
-       Pardeep's rule, chosen from four options with the cost of each on the table: send
-       when the mail said monthly or annual, hold when it did not. Monthly and annual
-       differ by 12×, and a price the app inferred and posted is one the customer can
-       reasonably hold us to — no small print underneath repairs the first number they read.
-
-       The gate is `termAssumed`, computed once in quote-from-enquiry.ts, not a second
-       keyword search here. `decideAutoSend` owns the other four refusals so each one
-       reaches the operator as a sentence rather than as silence.
-
-       NOT AWAITED. Rendering a PDF inside a webhook a provider is waiting on would trade
-       ingest reliability for a few seconds of latency, and the lead, the mail and the draft
-       are all committed by now. Same fire-and-forget shape as the owner alert below. */
-    const sendDecision = decideAutoSend({
-      termAssumed:     quotePlan.termAssumed,
-      recipient:       fromEmail,
-      quoteId:         draftQuoteId,
-      emailConfigured: isEmailConfigured(),
-      senderIsOurs,
-      /* Lets the send happen to our OWN address on a marked test, which is the point of
-         running one — the loop is closed by the marker having to start the subject. */
-      isSelfTest: selfTest,
-    });
-
-    if (!sendDecision.send) {
-      await admin.from("lead_activities").insert({
-        tenant_id: tenantId, lead_id: leadId, kind: "note",
-        detail: `Quote not sent automatically — ${sendDecision.reason}`,
-      });
-    } else if (draftQuoteId) {
-      void sendAutoQuote(admin, {
-        tenantId,
-        quoteId:   draftQuoteId,
-        leadId,
-        recipient: fromEmail,
-        fromEmail: FROM_EMAIL,
-      }).catch((err) => {
-        /* Swallowed at the boundary and recorded on the lead by the helper itself. A send
-           failure must not turn a captured enquiry into a 500 — the provider would retry
-           the whole message and the idempotency claim would then skip it, losing the mail
-           to protect an email. */
-        console.error("[inbound-email] auto-quote send crashed:", err);
-      });
-    }
-  }
+     Not awaited. A PDF render inside a webhook a provider is waiting on would trade
+     ingest reliability for latency, and the lead and the mail are committed by here. */
+  void autoQuoteForLead(admin, {
+    tenantId,
+    leadId,
+    company,
+    item:          matchedItem,
+    seats:         facts.seats.value,
+    term:          facts.term.value,
+    seatsSource:   facts.seats.source,
+    productSource: facts.product.source,
+    termSource:    facts.term.source,
+    recipient:     fromEmail,
+    senderIsOurs,
+    isSelfTest:    selfTest,
+    fromEmail:     FROM_EMAIL,
+  }).catch((err) => console.error("[inbound-email] auto-quote crashed:", err));
   // owner_id is null on a freshly captured email lead, so the task lands in the
   // unassigned bucket for the owner to hand out -- which is what 0007 designed
   // that bucket for.
