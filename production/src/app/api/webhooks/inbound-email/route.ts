@@ -35,6 +35,7 @@ import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
 import { decideDisposition } from "@/lib/inbound/disposition";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { isSelfTest, selfTestMarkerMisplaced, SELF_TEST_MARKER } from "@/lib/inbound/self-test";
+import { acceptedSecrets, secretMatches } from "@/lib/inbound/verify-secret";
 import { extractEntities } from "@/lib/inbound/extract";
 import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
 import { shouldRequoteOnReply } from "@/lib/quotes/requote-on-reply";
@@ -45,6 +46,9 @@ import { readBillWithGemini } from "@/lib/ai/read-bill";
 import { sanitizeExtractedBill } from "@/app/api/ai/extract-bill/sanitize";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/* May hold SEVERAL secrets, comma-separated, so the value can be rotated without a window
+   in which the forwarder is refused — see lib/inbound/verify-secret.ts for why a window here
+   loses mail rather than merely failing requests. */
 const INBOUND_SECRET = process.env.INBOUND_EMAIL_SECRET?.trim() || "";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const APP_URL        = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
@@ -127,7 +131,17 @@ export async function POST(request: NextRequest) {
   // ── 1. Secret guard (fail closed) ──────────────────────────────────────
   const url = new URL(request.url);
   const provided = (url.searchParams.get("key") ?? request.headers.get("x-inbound-secret") ?? "").trim();
-  if (!INBOUND_SECRET || provided !== INBOUND_SECRET) {
+  /* A LIST, so the secret can be rotated with no window. `INBOUND_EMAIL_SECRET` accepts
+     "old,new" — set that, update the forwarder, then drop the old one.
+
+     Why this matters more here than on a normal endpoint: the Apps Script forwarder labels
+     a Gmail thread `erp-sent` after the POST WITHOUT looking at the response code, so a 401
+     is not retried — the thread is marked done and the enquiry is gone. A rotation window
+     would be minutes of silently dropped customers, not minutes of failed requests.
+
+     Still fails closed on an empty value, and now compares in constant time — see
+     lib/inbound/verify-secret.ts. */
+  if (!secretMatches(provided, acceptedSecrets(INBOUND_SECRET))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

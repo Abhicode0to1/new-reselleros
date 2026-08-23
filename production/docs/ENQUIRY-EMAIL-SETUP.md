@@ -62,6 +62,8 @@ function forwardEnquiries() {
   const threads = GmailApp.search(SEARCH + ' -label:erp-sent', 0, 25);
 
   threads.forEach(function (thread) {
+    var allDelivered = true;                  // ← see the note under this block
+
     thread.getMessages().forEach(function (m) {
       const payload = {
         from:      m.getFrom(),               // "Name <email>"
@@ -78,12 +80,34 @@ function forwardEnquiries() {
           muteHttpExceptions: true,
         }
       );
-      Logger.log(m.getSubject() + ' → ' + res.getResponseCode() + ' ' + res.getContentText());
+      const code = res.getResponseCode();
+      Logger.log(m.getSubject() + ' → ' + code + ' ' + res.getContentText());
+      if (code < 200 || code >= 300) allDelivered = false;
     });
-    thread.addLabel(done);                    // don't re-process this thread
+
+    // ONLY label a thread the app actually accepted. See below for why.
+    if (allDelivered) thread.addLabel(done);
   });
 }
 ```
+
+> ### ⚠️ `addLabel` used to run whatever the app answered — fix this in your copy
+>
+> The version above is corrected. The original labelled the thread immediately after the
+> POST **without looking at the response code**, and `-label:erp-sent` is what stops a
+> thread being picked up again. So any non-2xx — a 401 while the secret was being rotated,
+> a 500, a deploy restart — marked the thread done and **that enquiry was gone from the
+> pipeline for good.** Not delayed: gone. Nothing retries it and nothing reports it.
+>
+> Found on 23 Aug 2026 while planning a secret rotation, which is exactly the moment it
+> would have bitten: a five-minute window of 401s is five minutes of silently dropped
+> customers.
+>
+> The webhook is idempotent on `messageId`, so re-sending a message it already has is
+> harmless — which is what makes "only label on success" safe to do.
+>
+> If your Apps Script still has the old line, replace the whole function with the block
+> above.
 
 ---
 

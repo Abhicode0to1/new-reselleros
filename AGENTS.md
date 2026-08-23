@@ -2016,3 +2016,20 @@ on one branch instead of two (L75), a UI boolean inverted at a call site (L67), 
 return value dropped. Each was caught by a SOURCE SCAN, and each scan was red-checked by
 reintroducing the bug. When a suite tests decisions well, the remaining risk moves to the
 wiring — so put the scans where the wiring is.
+
+**L86 — The Gmail forwarder labels a thread whether or not the app accepted it, so a failed
+POST loses the enquiry permanently.** `docs/ENQUIRY-EMAIL-SETUP.md`'s script called
+`thread.addLabel('erp-sent')` straight after the POST without reading the response code, and
+`-label:erp-sent` is what stops a thread being picked up again. So any non-2xx — a 401, a
+500, a deploy restart — marked the thread done and that customer's mail was **gone, not
+delayed**. Nothing retries it and nothing reports it. Found while planning a secret rotation,
+which is precisely when it would have bitten. Fixed in the doc: label only on 2xx, which is
+safe because the webhook is idempotent on `messageId`.
+
+**L87 — Rotate a shared secret through a LIST, and deploy the reader before the value.**
+`INBOUND_EMAIL_SECRET` now accepts "old,new" so both are valid during a changeover — needed
+because a rotation window on this endpoint drops mail rather than failing requests (L86).
+The ordering is the part that is easy to get backwards and expensive: **deploy the code that
+understands a list FIRST**, then set "old,new", then update the forwarder, then narrow to
+"new". Setting the list against the old single-value comparison makes every request 401 —
+which is the exact outage the list exists to prevent.
