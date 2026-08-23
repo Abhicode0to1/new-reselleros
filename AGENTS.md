@@ -1992,3 +1992,27 @@ which is true and says nothing about a marker having been typed. Tracing it cost
 poll and a round trip. Now `selfTestMarkerMisplaced` names the deliberate-but-malformed middle
 case in a warning that changes no decision. **When a guard refuses something a human meant,
 the guard is often right and the MESSAGE is the bug.**
+
+**L84 — supabase-js does not throw, so an unchecked write reports success.** The live run on
+23 Aug 2026 produced four records telling three different stories: `email_log` said the quote
+was sent (provider gmail), `quote_send_log` was EMPTY, `quotes.status` was still `draft`, and
+the lead's timeline said "emailed automatically … (PDF attached)". Both middle writes were
+`await admin.from(...).insert/update(...)` with the returned `{ error }` never read — so the
+function sailed past both failures and wrote a success line. The file's own header had
+promised "quote_send_log gets a row whatever happens".
+
+The damage is not cosmetic: the customer holds a quote the pipeline calls a draft, so the next
+person to look sends it a second time. **Read the error on every write, or the write is a
+wish.** And the subtle half — **an update matching NO ROWS is a success in supabase-js**, so
+`.select("id")` and a length check are the only way to tell "worked" from "matched nothing".
+
+Both statements succeeded when run by hand inside a rollback, which means the cause is at the
+client and not a constraint. That is exactly why the fix is to REPORT rather than to keep
+diagnosing: an unchecked write hides its own reason, and the next run will name it.
+
+**L85 — Guard the discarded return value, not just the decision.** Three bugs today were
+invisible to a 4,000-assertion suite because all three were about plumbing: a function called
+on one branch instead of two (L75), a UI boolean inverted at a call site (L67), and now a
+return value dropped. Each was caught by a SOURCE SCAN, and each scan was red-checked by
+reintroducing the bug. When a suite tests decisions well, the remaining risk moves to the
+wiring — so put the scans where the wiring is.

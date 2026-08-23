@@ -197,7 +197,26 @@ term — and we will send a revised quote.
     attachments,
   });
 
-  await admin.from("quote_send_log").insert({
+  /* ── THE TWO WRITES BELOW ARE CHECKED NOW, AND WERE NOT ────────────────────
+     Measured on the live run of 23 Aug 2026, and this file's own header promised the
+     opposite: "quote_send_log gets a row whatever happens".
+
+       email_log            → status "sent", provider gmail   (the mail really went)
+       quote_send_log       → EMPTY
+       quotes.status        → still "draft"
+       lead_activities      → "Quote Q-…-0042 emailed automatically … (PDF attached)"
+
+     All four at once, because the two middle writes were `await admin.from(...)` with the
+     `{ error }` never read, and supabase-js does not throw — it hands back an error object
+     nobody looked at. So the function sailed past both and wrote a success line. The
+     pipeline shows a quote as unsent while the customer holds it, which is the exact
+     failure the comment underneath claimed to prevent.
+
+     Note what the DB says about it: both statements succeed when run by hand inside a
+     rollback, so the cause is at the client and not a constraint. That is precisely why
+     these are now REPORTED rather than diagnosed — an unchecked write hides its own reason,
+     and the next run will name it instead of us guessing. */
+  const { error: sendLogErr } = await admin.from("quote_send_log").insert({
     tenant_id:       args.tenantId,
     quote_id:        quote.id,
     recipient_email: args.recipient,
@@ -205,6 +224,16 @@ term — and we will send a revised quote.
     subject:         `Your quote ${quote.id} — ${seller}`,
     status:          result.status,
   });
+  if (sendLogErr) {
+    /* Not fatal — the mail has already gone and `email_log` records that. But an audit trail
+       with a hole in it must announce the hole, or the next person reconciling sends will
+       conclude the quote was never sent. */
+    console.error("[send-auto-quote] quote_send_log insert failed:", sendLogErr);
+    await note(
+      `Quote ${quote.id} WAS emailed to ${args.recipient}, but the send could not be written ` +
+      `to the audit log — ${sendLogErr.message}. The email itself is recorded in email_log.`,
+    );
+  }
 
   if (result.status === "failed") {
     await note(
@@ -215,8 +244,31 @@ term — and we will send a revised quote.
   }
 
   /* Status moves only on a real send. A quote marked sent that never left would make the
-     pipeline lie and stop somebody chasing it. */
-  await admin.from("quotes").update({ status: "sent" }).eq("id", quote.id).eq("tenant_id", args.tenantId);
+     pipeline lie and stop somebody chasing it — and the inverse, which is what happened,
+     leaves a sent quote sitting in the pipeline as a draft somebody will send again.
+
+     `select("id")` so the response carries the rows it touched: an update matching NOTHING
+     is a success in supabase-js, and "matched nothing" is indistinguishable from "worked"
+     without asking. */
+  const { data: updated, error: statusErr } = await admin
+    .from("quotes")
+    .update({ status: "sent" })
+    .eq("id", quote.id)
+    .eq("tenant_id", args.tenantId)
+    .select("id");
+
+  if (statusErr || (updated ?? []).length === 0) {
+    console.error(
+      `[send-auto-quote] could not mark ${quote.id} as sent:`,
+      statusErr ?? "update matched no rows",
+    );
+    await note(
+      `Quote ${quote.id} was emailed to ${args.recipient}, but it is still marked DRAFT — ` +
+      `${statusErr?.message ?? "the status update matched no rows"}. Mark it sent by hand so ` +
+      `nobody sends it twice.`,
+    );
+  }
+
   await admin.from("lead_activities").insert({
     tenant_id: args.tenantId, lead_id: args.leadId, kind: "email_out",
     detail:
