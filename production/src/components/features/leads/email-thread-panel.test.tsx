@@ -145,3 +145,77 @@ describe("EmailThreadPanel", () => {
     expect(screen.queryByText(/no saved text/i)).toBeNull();
   });
 });
+
+describe("EmailThreadPanel — newest message first", () => {
+  it("puts the most recent message at the top of the list", () => {
+    /* Asked for on 23 Aug 2026: "email thread sabse baad wali sabse upar dikhao". With 15
+       messages in a narrow drawer the one that matters was fifteen down, under a CTA
+       saying "Reply — they are waiting" about a message that was off-screen. It also
+       matches the Activity tab, which was already newest-first — one drawer sorting two
+       lists in opposite directions, with nothing on screen saying so. */
+    renderThread([
+      inbound({ id: "in-1", body_text: "oldest",  created_at: "2026-08-22T10:00:00Z" }),
+      sent(   { id: "out-1", body_text: "middle", created_at: "2026-08-22T11:00:00Z" }),
+      inbound({ id: "in-2", body_text: "newest",  created_at: "2026-08-22T12:00:00Z" }),
+    ]);
+    const bodies = screen.getAllByText(/^(oldest|middle|newest)$/).map((n) => n.textContent);
+    expect(bodies).toEqual(["newest", "middle", "oldest"]);
+  });
+
+  it("does not reorder the array it was handed", () => {
+    /* THE TRAP IN THE OBVIOUS VERSION, and the reason the reversal is `[...thread]`.
+       Array.prototype.reverse mutates in place, and `summariseThread` reads `latest` from
+       the LAST element of the same ascending array. A render that reversed it would make
+       "latest" the OLDEST message — so the reply pills would answer the first enquiry
+       instead of the newest one, and the "they are waiting" CTA would read the wrong
+       direction. Ascending stays the one truth; only the render is reversed. */
+    const rows = [
+      inbound({ id: "in-1", created_at: "2026-08-22T10:00:00Z" }),
+      sent(   { id: "out-1", created_at: "2026-08-22T11:00:00Z" }),
+      inbound({ id: "in-2", created_at: "2026-08-22T12:00:00Z" }),
+    ];
+    const thread = buildEmailThread(rows, "L-1");
+    const idsBefore = thread.map((m) => m.id);
+    render(
+      <EmailThreadPanel
+        thread={thread}
+        summary={summariseThread(thread)}
+        leadEmail="ankit@xyz.com"
+        loggedSendsWithoutText={0}
+      />,
+    );
+    expect(thread.map((m) => m.id)).toEqual(idsBefore);
+    /* And the newest is still last, which is where summariseThread looks for it. */
+    expect(summariseThread(thread).latest?.id).toBe("in-2");
+  });
+});
+
+describe("EmailThreadPanel — quoted history", () => {
+  it("hides the quoted block a reply carries", () => {
+    /* Browser-verified 23 Aug 2026, and CREATED by the newest-first reversal in the same
+       change rather than found by it: the top message was a reply whose first visible lines
+       were "> Hi test," and the four lines of ours it answered. Harmless at the bottom of
+       the list; at the top it is the reader's first screenful, spent on text repeated three
+       inches below. */
+    renderThread([
+      inbound({
+        id: "in-1",
+        body_text:
+          "Yes, everything is correct.\n\nOn Sun, 23 Aug 2026 at 07:21, <sales@anutech.in> wrote:\n> Hi test,\n> Thanks for confirming the details.",
+      }),
+    ]);
+    expect(screen.getByText(/Yes, everything is correct\./)).toBeTruthy();
+    expect(screen.queryByText(/Thanks for confirming the details/)).toBeNull();
+  });
+
+  it("shows the raw body when stripping would leave nothing", () => {
+    /* stripQuoted fails toward EMPTY by design — right for the AI reply context it was
+       written for, where an over-long prompt is worse than a short one, and wrong here,
+       where an empty bubble reads as a lost message. A body that is ONLY a quote must still
+       render as itself. */
+    renderThread([
+      inbound({ id: "in-1", body_text: "On Sun, 23 Aug 2026 at 07:21, <a@b.com> wrote:\n> only a quote" }),
+    ]);
+    expect(screen.getByText(/only a quote/)).toBeTruthy();
+  });
+});

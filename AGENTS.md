@@ -1678,3 +1678,31 @@ survives shell escaping as two characters) and produced 20 cascading TS17008 err
 read like a JSX nesting bug rather than a bad byte. `git checkout` the file and redo it with
 the Edit tool: anchored string replacement cannot silently shift a range or mangle an
 escape, and the failure it gives is local instead of a wall.
+
+**L50 — A drawer fed a state snapshot will disagree with the list behind it.** `/leads` kept
+the open lead as `useState<Lead | null>` — the row OBJECT captured at click time. Every
+mutation invalidated `["leads"]` and the board updated correctly, so nothing looked broken
+until the drawer's own button moved a stage: the card slid from New to Contacted three
+inches away while the drawer still said "Stage: New" and still offered the nudge that had
+just worked. Pardeep caught it in one tap. **Store WHICH record is open, derive WHAT it says
+from the query** (`leads?.find(l => l.id === selected.id) ?? selected`). The in-drawer stage
+dropdown had carried the same staleness for as long as it existed and nobody had seen it —
+it sits next to a label it also failed to refresh, so the two agreed with each other while
+both were wrong.
+
+**L51 — `.reverse()` mutates, and something downstream is reading the last element.** Showing
+the email thread newest-first looked like a one-word change. But `summariseThread` takes
+`latest` from `thread[thread.length - 1]`, and `latest` drives the "they are waiting" CTA and
+the reply pills' staleness check — so reversing in place would have made "latest" the OLDEST
+message and had the drafter answer the first enquiry instead of the newest. Reverse a COPY at
+render (`[...thread].reverse()`) and leave the canonical order alone; the test asserts the
+input array is unchanged, not just that the output looks right.
+
+**L52 — A safe change can make a neighbouring flaw expensive.** Quoted reply history
+("> Hi test, …") sat harmlessly at the BOTTOM of an oldest-first thread for weeks. Flipping
+to newest-first made it the reader's first screenful — text repeated three inches below.
+Nothing about the quoting changed; its position did. **After reordering a list, re-read the
+top of it as a first-time reader** — the item that moved into first place is now carrying
+weight it never had. Fixed with the existing `stripQuoted`, with a fallback to the raw body
+because that helper fails toward EMPTY by design (right for an AI prompt, wrong for a bubble
+that would read as a lost message).

@@ -256,6 +256,16 @@ function LeadsPageInner() {
   }, [searchParams]);
   const [selected, setSelected] = React.useState<Lead | null>(null);
 
+  /* WHICH lead the drawer is on stays in `selected`; WHAT that lead currently says comes
+     from the query. Two different questions, and conflating them is what let the drawer
+     show "Stage: New" seconds after moving the same lead to Contacted on the board behind
+     it — see the comment at <LeadDetailSheet>. Resolved by id on every render, so any
+     invalidation of ["leads"] reaches the drawer the same way it reaches the list. */
+  const selectedLive = React.useMemo(
+    () => (selected ? (leads?.find((l) => l.id === selected.id) ?? selected) : null),
+    [selected, leads],
+  );
+
   /* Call-queue dependencies. runOutcome performs whatever lib/leads/outcomes.ts says a
      chip does — one entry point, so the chips on the queue, the row and the mobile card
      cannot drift apart (the same reason use-change-stage.ts exists). */
@@ -1617,9 +1627,28 @@ function LeadsPageInner() {
 
       </div>{/* /flex split */}
 
-      {/* Detail drawer */}
+      {/* Detail drawer.
+
+          `selectedLive`, NOT `selected`. Reported 23 Aug 2026: tapping the drawer's "Move
+          to Contacted" nudge moved the card on the board behind it — New went to 0,
+          Contacted to 1, so the write plainly succeeded — while the drawer kept saying
+          "Stage: New" and kept showing the nudge that had just done its job.
+
+          `selected` is a Lead OBJECT captured in state when the row was clicked, so it is
+          a snapshot frozen at open time. Every mutation in here invalidates ["leads"] and
+          the list re-renders correctly; the drawer alone was reading a copy nobody
+          refreshes. Resolving the row by id on each render means one source of truth for
+          both, which is what made the board and the drawer disagree in the first place.
+
+          This was never specific to the nudge — the in-drawer stage dropdown had the same
+          staleness and nobody had noticed, because it sits next to a stage label it also
+          failed to update. The nudge only made the disagreement loud enough to see.
+
+          Falls back to the snapshot when the id is missing from the list rather than
+          rendering nothing: a deleted row already closes the drawer through its own
+          handler, and a blank drawer mid-refetch would be a worse bug than a stale one. */}
       <LeadDetailSheet
-        lead={selected}
+        lead={selectedLive}
         onClose={() => setSelected(null)}
         onEdit={(l) => {
           setSelected(null);
@@ -2104,7 +2133,12 @@ function LeadDetailSheet({
         tone: "amber",
         onClick: handleEmail,
         hint: formatDate(threadSummary.latest.at ?? ""),
-        help: "Their message is the newest one in the thread, so the next move is ours. The Email tab has it, and the reply box sits under it.",
+        /* NO `help` line, and that is a fix rather than an omission. It read "…the Email
+           tab has it, and the reply box sits under it" — and browser-verified on 23 Aug at
+           375px, this CTA renders ON the Email tab, directly above that very thread, so
+           the sentence was directing the reader to where they already stood. Three lines
+           of grey prose under a two-word instruction is over-explaining even when it is
+           accurate: "Reply — they are waiting" plus the date says the whole thing. */
       };
     }
     /* "First contact" now means it: nothing sent, nothing received, nothing logged.
@@ -2378,10 +2412,16 @@ function LeadDetailSheet({
 
               `stage === "new"` only. Every later stage means somebody has already moved
               it by hand, and second-guessing a human's stage choice is a different and
-              much worse feature. */}
+              much worse feature.
+
+              `basis-full sm:basis-0` on the paragraph, not `flex-1` alone. Browser-verified
+              at 375px on 23 Aug: with only flex-1 the text kept shrinking to make room for
+              the button beside it, wrapping into five narrow lines against a cramped column
+              rather than taking the width and pushing the button underneath. flex-wrap
+              alone cannot do that — a flex item shrinks before it wraps. */}
           {lead.stage === "new" && (threadSummary.total > 0 || activities.length > 0) && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
-              <p className="min-w-0 flex-1 text-[11px] leading-snug text-ink-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
+              <p className="min-w-0 basis-full sm:basis-0 sm:flex-1 text-[11px] leading-snug text-ink-3">
                 Stage still reads <b className="font-semibold text-ink-2">New</b>, but there
                 {threadSummary.total > 0
                   ? ` ${threadSummary.total === 1 ? "is 1 message" : `are ${threadSummary.total} messages`} in the thread`
@@ -2394,7 +2434,7 @@ function LeadDetailSheet({
                   void changeStage(lead, "contact");
                   toast.success(`${lead.company} → Contacted`);
                 }}
-                className="min-h-11 shrink-0 rounded-md border border-hairline-strong bg-paper px-3 text-xs font-semibold text-ink-2 transition-colors hover:bg-paper-2"
+                className="min-h-11 w-full shrink-0 rounded-md border border-hairline-strong bg-paper px-3 text-xs font-semibold text-ink-2 transition-colors hover:bg-paper-2 sm:w-auto"
               >
                 Move to Contacted
               </button>

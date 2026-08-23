@@ -17,6 +17,7 @@ import * as React from "react";
 import { cn, formatDate } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import type { ThreadMessage, ThreadSummary } from "@/lib/leads/email-thread";
+import { stripQuoted } from "@/lib/inbound/strip-quoted";
 
 function fmtTime(at: string | null): string {
   if (!at) return "";
@@ -92,8 +93,30 @@ export function EmailThreadPanel({
         </span>
       </div>
 
+      {/* NEWEST FIRST, reversed here at render and NOT in buildEmailThread. Asked for on
+          23 Aug 2026 — "email thread sabse baad wali sabse upar dikhao yahi to logical hai"
+          — and it is, for two reasons, the second of which I had missed:
+
+            1. With 15 messages in a narrow drawer the one that matters was 15 messages
+               down. The CTA above says "Reply — they are waiting" about a message that was
+               off-screen, which is a strange thing for a screen to do.
+            2. The Activity tab is newest-first. Email being oldest-first meant one drawer
+               sorted two lists in opposite directions, and nothing on screen said so.
+
+          WHAT IT COSTS: a long back-and-forth now reads backwards, which is not how any
+          mail client shows a thread. Acceptable here because this is a sales drawer, not a
+          mail client — the common task is "what did they last say, and reply", and the
+          rarer task of reading the whole exchange in order is still a scroll away. Every
+          message carries its own direction arrow and timestamp, so no line depends on its
+          neighbour to be understood.
+
+          `[...thread]` because Array.prototype.reverse mutates, and `thread` is the array
+          buildEmailThread returned — `summariseThread` takes `latest` from its LAST
+          element, so reversing in place would silently make "latest" the oldest message
+          and hand the reply pills the first enquiry to answer. Reversing a copy at render
+          keeps ascending order as the one truth every caller already relies on. */}
       <ul className="space-y-2">
-        {thread.map((m) => {
+        {[...thread].reverse().map((m) => {
           const out = m.direction === "outbound";
           return (
             <li
@@ -128,7 +151,19 @@ export function EmailThreadPanel({
                 /* whitespace-pre-wrap because a quoted reply's line breaks carry meaning —
                    collapsing them turns a readable message into a paragraph soup. */
                 <div className="whitespace-pre-wrap break-words text-xs leading-relaxed text-ink-2">
-                  {m.body}
+                  {/* QUOTED HISTORY TRIMMED. Browser-verified on 23 Aug 2026, and this is a
+                      problem the newest-first reversal in the same change CREATED rather
+                      than found: the top message was a reply whose first visible lines were
+                      "> Hi test," and the four lines of ours it was answering. At the bottom
+                      of the list that tail was harmless; at the top it is the reader's first
+                      screenful, spent on text repeated three inches below.
+
+                      Falls back to the raw body when nothing is left. stripQuoted fails
+                      toward EMPTY by design — safe for the AI reply context it was written
+                      for, where an over-long prompt is worse than a short one, and wrong
+                      here, where an empty bubble would read as a lost message. So: use the
+                      trim only when it left something. */}
+                  {stripQuoted(m.body).text.trim() || m.body}
                 </div>
               ) : (
                 /* Says which case this is rather than showing an empty bubble. An outbound
