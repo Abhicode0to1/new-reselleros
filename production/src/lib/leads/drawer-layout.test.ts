@@ -296,3 +296,38 @@ describe("exactly one primary action in the drawer", () => {
     expect(code).toMatch(/\{latestQuoteForAction \? \([\s\S]{0,6000}?\) : nextAction \? \(/);
   });
 });
+
+describe("the stage-disagrees-with-history nudge", () => {
+  it("appears only when the stage is New and something has actually happened", () => {
+    /* Every later stage means a human moved it by hand, and second-guessing that is a
+       different and much worse feature. */
+    expect(code).toMatch(
+      /lead\.stage === "new" && \(threadSummary\.total > 0 \|\| activities\.length > 0\)/,
+    );
+  });
+
+  it("offers a tap and writes nothing on its own", () => {
+    /* Pardeep's call, asked with the alternative on the table: auto-advancing on the first
+       logged touch would write to the pipeline without anyone deciding to, move stage-age
+       and forecast for every lead at once, and raise a backfill question about history
+       already recorded. */
+    expect(code).toMatch(/void changeStage\(lead, "contact"\);/);
+    /* And it is not wired into an effect — no automatic write path exists. */
+    expect(code).not.toMatch(/useEffect[\s\S]{0,400}changeStage\(lead, "contact"\)/);
+  });
+
+  it("stays visually quiet, because the drawer has exactly one primary", () => {
+    /* A second amber button here would undo the two-primaries fix on the very screen
+       where it was made. */
+    const nudge = code.slice(code.indexOf('changeStage(lead, "contact")') - 900,
+                             code.indexOf('changeStage(lead, "contact")') + 500);
+    expect(nudge).not.toContain("bg-amber");
+    expect(nudge).not.toMatch(/variant="primary"/);
+  });
+
+  it("says why the mismatch matters, not just that it exists", () => {
+    /* §24: a block or a warning states the consequence and the next step. "Stage is
+       wrong" is not actionable; "the board and the forecast read the stage" is. */
+    expect(code).toContain("The pipeline board and the forecast both read the stage");
+  });
+});

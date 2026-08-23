@@ -2356,6 +2356,50 @@ function LeadDetailSheet({
             </>
           ) : null}
 
+          {/* ── THE STAGE DISAGREES WITH THE HISTORY ──────────────────────────────
+              This is the ROOT of the bug that produced "Call now · first contact" on a
+              lead with 15 emails: the stage said New, the thread said otherwise, and the
+              CTA believed the stage. That CTA now reads the conversation instead, so the
+              lie is gone — but the disagreement is still real, and it is still visible
+              everywhere the stage IS the data: the Kanban board keeps this lead in the New
+              column, stage-age counts from the wrong date, and the forecast weights it at
+              New's win probability.
+
+              A NUDGE, NOT AN AUTO-ADVANCE. Pardeep's call, asked on 23 Aug 2026 with the
+              alternative on the table: moving the stage on the first logged touch would
+              write to the pipeline without anyone deciding to, change stage-age and
+              forecast for every lead at once, and raise a backfill question about history
+              already recorded. So this states the mismatch and offers one tap. Nothing
+              changes until the tap.
+
+              Deliberately quiet — `text-ink-3`, no fill, no icon-in-a-circle. The drawer
+              has exactly one primary action and it took a day to get there; a second
+              amber button here would undo that on the screen where it was fixed.
+
+              `stage === "new"` only. Every later stage means somebody has already moved
+              it by hand, and second-guessing a human's stage choice is a different and
+              much worse feature. */}
+          {lead.stage === "new" && (threadSummary.total > 0 || activities.length > 0) && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
+              <p className="min-w-0 flex-1 text-[11px] leading-snug text-ink-3">
+                Stage still reads <b className="font-semibold text-ink-2">New</b>, but there
+                {threadSummary.total > 0
+                  ? ` ${threadSummary.total === 1 ? "is 1 message" : `are ${threadSummary.total} messages`} in the thread`
+                  : ` ${activities.length === 1 ? "is 1 logged activity" : `are ${activities.length} logged activities`}`}
+                . The pipeline board and the forecast both read the stage, not the history.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  void changeStage(lead, "contact");
+                  toast.success(`${lead.company} → Contacted`);
+                }}
+                className="min-h-11 shrink-0 rounded-md border border-hairline-strong bg-paper px-3 text-xs font-semibold text-ink-2 transition-colors hover:bg-paper-2"
+              >
+                Move to Contacted
+              </button>
+            </div>
+          )}
 
           {drawerTab === "details" && (
           <>
