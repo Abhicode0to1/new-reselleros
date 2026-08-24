@@ -7,6 +7,110 @@
 
 ---
 
+# 🟠 HANDOFF — 24 Aug 2026. AI Sales Agent bana AUR migration lag gayi.
+
+> Pichhla handoff (22 Aug) neeche hai, wo abhi bhi padhne layak hai.
+
+### ✅ Migration prod par lag gayi (24 Aug), aur saabit bhi ho gayi
+
+`20260824120000_ai_sales_agent.sql` **applied + tracked**. Verify alag run me kiya
+(AGENTS.md §5): 2 table · leads par 3 naye column · `leads_tenant_id_key` unique ·
+2 composite FK · 5 policy · 6 index · RLS dono par ON.
+
+**`supabase db push` MAT chalana — wo 5 file chalata, sirf 1 nahi.** Skill `resellersos-env`
+§2 sahi hai. Maine `db query -f` se sirf apni file chalayi, phir `migration repair` se track
+kiya. Push karte to `20260817100000` (GST data-repair) bhi chal jaati — wo idempotent to hai,
+par uska chalna ek paisa-faisla hai, reflex nahi.
+
+Backup pehle liya: `resellersos-data-2026-08-24T12-55-51-662Z.json` — 110 table / 1,432 row,
+9 key table live count se exactly match (skill §5 ka check).
+
+Naya SQL test bhi likha: `supabase/tests/ai_sales_agent_tenant_isolation.test.sql` — 5 test,
+rollback-style, prod par safe. Do mutation chala kar dekha ki sach me kaatta hai.
+
+### 💰 GST wali migration bhi lag gayi — Q-2026-9776 par ₹8,165 theek hua
+
+Pardeep ne 24 Aug ko bola, tab lagayi. `20260817100000_fix_missing_gst_on_onboarded_quotes`
+**applied + tracked**.
+
+`Q-2026-9776` · **SAHAKAR INFRACON PROJECTS PRIVATE LIMITED** · tenant `3bbd2280…` (Excel
+Technologies) · subtotal ₹45,360 · 18% · amount **₹45,360 → ₹53,525**.
+
+Chalane se PEHLE dono UPDATE ka preview liya — statement 1 par 1 row, statement 2 par 0 row
+(us quote ki koi subscription hai hi nahi). Chalane ke BAAD backup se poora diff kiya:
+**20 me se 1 row badla, exactly +₹8,165, na koi row bani na gayi.**
+
+Ab poore table me `quotes_not_gross = 0`.
+
+> ⚠️ `Q-3BBD-2026-27-0001` par quote amount (55,885) aur outstanding (947) alag dikhte hain —
+> **ye bug nahi hai.** Us par ₹54,938 aa chuka hai aur invoice bhi ban chuki hai, to
+> 55,885 − 54,938 = 947 sahi hai. Migration ne use apne guards se sahi tarah chhoda.
+
+### 🔴 Ek kaam BAAKI hai jo code nahi kar sakta
+
+Q-2026-9776 ka status **accepted** hai. Customer ne **₹45,360 par haan** kaha tha, ab quote
+**₹53,525** kehta hai. Data theek ho gaya, **rishta nahi**. Customer ko batana ya naya quote
+bhejna Pardeep ka kaam hai — usse pehle invoice mat banao.
+
+### ✅ Migration drift KHATAM — `db push` ab surakshit hai
+
+24 Aug ko teen migration lagayi (`20260824120000`, `20260817100000`, `20260817210000`) aur do
+jo pehle se lagi hui thin (`20260822200000`, `20260823140000`) unhe track kiya — **track karne
+se pehle verify kiya ki wo sach me lagi hain**, naam par bharosa nahi kiya.
+
+`npx supabase migration list --linked` ab **har local file par `local == remote`** dikhata hai.
+Matlab `db push` ab **zero file** chalayega.
+
+> **Skill `resellersos-env` §2 ab purana ho gaya.** Wo kehta hai "29 local migration remote
+> tracking me nahi hain, push ~28 dobara chala dega". Wo 24 Aug se pehle sach tha. Ab drift 0
+> hai. Skill update karna baaki hai — **par push karne se pehle `migration list` khud dekh lo**,
+> doc ek hypothesis hai (CLAUDE.md §25.1).
+
+`20260817210000_dunning_pre_due_comments` chalane se pehle verify kiya tha ki wo sach me
+comments-only hai: sirf do `comment on column`, aur create/alter/drop/update/insert ka count
+**0**. Header sach bol raha tha.
+
+### Kya bana (sab test-backed, poora gate green)
+
+| Cheez | File |
+|---|---|
+| Schema — transcript, loops, handover flag, composite FK | `supabase/migrations/20260824120000_ai_sales_agent.sql` |
+| Reasoning (pure) — prompt, validation, handover rules | `src/lib/ai/sales-agent.ts` · **37 test** |
+| Follow-up decisions (pure) — nudge karein ya na karein | `src/lib/ai/sales-loops.ts` · **13 test** |
+| Server side — catalogue, thread, Gemini call | `src/lib/ai/sales-agent.server.ts` |
+| Ek inbound message ka poora safar | `src/lib/ai/run-sales-agent.ts` |
+| Reply / quote / handover bhejna | `src/lib/ai/actions/quote-dispatcher.ts` |
+| Follow-up cron (ghante-ghante, 9–19 IST, Mon–Sat) | `src/app/api/cron/ai-sales-loop/route.ts` |
+
+Gate: `typecheck` 0 · `test` **4,203 pass** (227 file) · `lint` 0 · `build` 0 (274 route).
+Teen mutation chala kar dekha ki naye test sach me kaatte hain (seat ceiling, money guard,
+confidence floor — teeno red hue).
+
+### 🔑 Teen faisle jo tumhe pata hone chahiye
+
+**1. Daam kabhi code me nahi likhe.** Spec me Workspace Standard **₹750** likha tha; live
+catalogue me **₹864** hai (wholesale ₹620). Agent har baar `items.msrp` se padhta hai. Agar
+₹750 hardcode kar deta to har Standard deal **₹114/seat/year** kam quote hoti aur pakadne wala
+koi nahi tha — `money-check.yml` isi wajah se bana tha.
+
+**2. Kuch bhi apne aap nahi jaayega jab tak tum dial nahi ghumate.** `followup.send` `off` se
+**`hold`** hua (feature ban gaya, to `off` jhooth ho gaya — wahi jo 23 Aug ko `reply.send` ke
+saath hua tha). `reply.send` pehle se `hold` hai. Matlab abhi agent draft banata hai, lead ki
+timeline par likhta hai, **bhejta kuch nahi**. Tum `/automation` se ghumaoge.
+
+**3. `runAutoReply` ab koi nahi bulata.** Dono webhook branch ab sales agent bulate hain — ye
+**badla gaya hai, joda nahi**: do drafter ek webhook par matlab ek customer ko do reply. Purani
+file `src/lib/ai/run-auto-reply.ts` **rakhi hai** (upar banner laga diya hai) kyunki uske test
+abhi bhi wo logic pin karte hain jo naya rasta reuse karta hai. Use delete karna tumhara faisla.
+
+### 🟡 Do cheezein jo maine jaan-boojh kar NAHI ki
+
+- **Migration prod par nahi lagayi** — upar wala reason.
+- **39 SQL test nahi chalaye** — unke header me likha hai "dev/test DB par chalao, prod par
+  nahi", aur mera connection prod par hai. Wo layer meri taraf se **unverified** hai.
+
+---
+
 # 🔵 HANDOFF — 22 Aug 2026 raat. Naya session yahi se shuru karo.
 
 > **Is block se "kya karna hai" lo. "Kyun" par bharosa mat karo** — 19 Aug ko is file ke
