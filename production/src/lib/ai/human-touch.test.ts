@@ -75,3 +75,54 @@ describe("the app's own writes really are anonymous", () => {
     expect(noteFn).not.toContain("created_by");
   });
 });
+
+describe("the audit log records what the automation DID, not only what it refused", () => {
+  /* Measured 24 Aug 2026, right after a self-test emailed a real quote. The lead's timeline
+     said "Q-ADPL-2026-27-0054 emailed automatically to pardeep@anutech.in — ₹95,580", and
+     `select count(*) from ai_action_log where outcome='did'` returned 0 across the WHOLE
+     table. logAiAction was called only inside the refusal branch of the send chokepoint.
+
+     Backwards for an audit log, and not cosmetic: this table is what /automation shows and
+     what somebody reads before widening a dial. Nothing but "skipped" and "held" makes working
+     automation look like automation that has never fired — which is precisely why Pardeep
+     asked whether his sales agent existed at all. */
+
+  const SEND = strip(readFileSync(join(SRC, "lib", "email", "send.ts"), "utf8"));
+
+  it("logs an outcome after the send, not just before it", () => {
+    /* The refusal log sits before sendEmailInner; this one must sit after, or it is recording
+       an intention rather than a result. */
+    const innerAt = SEND.indexOf("const result = await sendEmailInner(msg)");
+    expect(innerAt).toBeGreaterThan(0);
+    expect(SEND.slice(innerAt)).toContain("logAiAction(");
+  });
+
+  it("distinguishes a send that failed from one that went", () => {
+    /* "did" on a failed send would be the worst possible row in this table: it would report a
+       customer was emailed when the provider rejected it. */
+    const after = SEND.slice(SEND.indexOf("const result = await sendEmailInner(msg)"));
+    expect(after).toMatch(/outcome:\s*result\.status === "failed" \? "failed" : "did"/);
+  });
+
+  it("skips the success row for the one caller that writes its own", () => {
+    /* Otherwise a single auto-reply produces two `did` rows and every count off this table is
+       inflated. Refusals stay unconditional. */
+    expect(SEND).toMatch(/if \(msg\.automated && !msg\.automated\.logsItsOwnOutcome\)/);
+    expect(RUN).toContain("logsItsOwnOutcome: true");
+  });
+
+  it("and that caller really does log its own outcome", () => {
+    /* The flag is a promise about the caller. If run-auto-reply ever stops logging, the flag
+       turns a double row into NO row — a silent hole, which is worse. */
+    expect(RUN).toMatch(/outcome: "did"/);
+  });
+
+  it("no OTHER automated caller sets the opt-out", () => {
+    /* One exception is a documented trade-off; two is the beginning of the chokepoint not
+       being a chokepoint. */
+    /* Comments stripped: the explanatory note above the call names the flag too, and counting
+       prose would make this assert nothing. */
+    const hits = (RUN.match(/logsItsOwnOutcome/g) ?? []).length;
+    expect(hits).toBe(1);
+  });
+});

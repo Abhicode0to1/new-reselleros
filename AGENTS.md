@@ -2260,3 +2260,32 @@ fingerprints in the same place a person does. And **a test that pins the fix is 
 the fix depends on an invariant**: `human-touch.test.ts` also asserts that the webhook's own
 inserts never set `created_by`, because the day somebody gives that client a user id, the
 discriminator inverts and this returns silently.
+
+## L102 — An audit log that records only refusals makes working automation look dead
+
+The self-test on 24 Aug proved the chain end to end: a quote was drafted, emailed with a PDF,
+and the lead moved to Quote Sent — all unattended. Then `select count(*) from ai_action_log
+where outcome='did'` returned **0 across the whole table**.
+
+`logAiAction` was called only inside the refusal branch of the send chokepoint
+(`lib/email/send.ts`). Every "skipped" and "held" was recorded; nothing that actually went out
+was. The reply path logged its own `did`; the chokepoint-mediated actions — quote.send,
+dunning.send, followup.send — were the ones going unrecorded, and **they are the ones that
+reach customers.**
+
+Not a cosmetic gap. That table is what `/automation` renders and what somebody reads before
+widening a dial. A log of nothing but refusals is indistinguishable from automation that has
+never once fired — which is exactly the impression Pardeep had when he asked whether his AI
+sales agent existed at all. The honest answer needed a database query, not the screen built for
+it.
+
+**When you add an audit trail, write the success path first.** Refusals are the interesting
+case while you are building the brake, so they get logged first and feel like enough. They are
+not: the log is read by someone deciding whether to trust the thing, and trust is built on what
+it did.
+
+Two details that came with it. `outcome` is derived from the send result rather than assumed —
+a `did` row for a send the provider rejected would be the worst row this table could hold. And
+the reply path sets `logsItsOwnOutcome: true` so one reply produces one row, not two; the flag
+is an assertion about the caller, so `human-touch.test.ts` also checks that caller still logs,
+because the day it stops, the flag turns a double row into no row at all.

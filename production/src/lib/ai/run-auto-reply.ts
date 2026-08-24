@@ -207,7 +207,9 @@ export async function runAutoReply(args: RunAutoReplyArgs): Promise<void> {
     route:   { tenantId: args.tenantId },
     /* The dial is consulted twice on purpose — here it is the CHOKEPOINT check, which also
         covers the kill switch having been flipped in the seconds since the read above. */
-    automated: { tenantId: args.tenantId, action: "reply.send" },
+    /* logsItsOwnOutcome: this function writes its own did/failed row below, with the
+       promise-check reason the chokepoint does not have. */
+    automated: { tenantId: args.tenantId, action: "reply.send", logsItsOwnOutcome: true },
   });
 
   if (result.status === "failed") {

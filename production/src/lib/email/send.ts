@@ -91,8 +91,17 @@ export interface EmailMessage {
    * exactly as it always has, and only callers that declare themselves automated are
    * gated. The cost, stated: a new automated caller that forgets this is ungated. The
    * test in autonomy-chokepoint.test.ts scans for that.
+   *
+   * ─── logsItsOwnOutcome ──────────────────────────────────────────────────
+   * Marking a send automated also writes its OUTCOME to ai_action_log, both the refusals
+   * and — since 24 Aug 2026 — the sends that actually went. One caller records a richer
+   * decision than this chokepoint can: run-auto-reply logs why the reply was cleared ("it
+   * promised nothing, so it was cleared to send"), which is the sentence somebody reads
+   * when deciding to widen a dial. It sets this flag so its reply gets ONE row instead of
+   * two, because a double-counted audit log is worse than a thin one. Refusals are logged
+   * here regardless of the flag: a caller that never runs cannot log anything.
    */
-  automated?: { tenantId: string; action: AiAction };
+  automated?: { tenantId: string; action: AiAction; logsItsOwnOutcome?: boolean };
 }
 
 export interface EmailRoute {
@@ -196,6 +205,40 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
     kind: msg.kind ?? null,
     provider: result.provider,
   }, result);
+
+  /* AND LOG THE ONES THAT WENT.
+     Until now `logAiAction` was called only in the refusal branch above, so `ai_action_log`
+     recorded what the automation DECLINED to do and never what it did. Measured 24 Aug 2026
+     after a self-test emailed a real quote: `email_out` on the lead's timeline said
+     "Q-ADPL-2026-27-0054 emailed automatically … ₹95,580", and `select count(*) from
+     ai_action_log where outcome='did'` returned **0** across the entire table.
+
+     That is backwards for an audit log, and it is not a cosmetic gap. This table is what
+     /automation shows and what somebody reads to decide whether to widen a dial. A log full
+     of "skipped" and "held" with no successes makes working automation look like automation
+     that has never once fired — which is exactly the impression Pardeep had when he asked
+     whether his sales agent existed at all. The reply path already logged its own `did`
+     (run-auto-reply.ts); the chokepoint-mediated actions — quote.send, dunning.send,
+     followup.send — were the ones going unrecorded, and they are the ones that reach
+     customers.
+
+     `mode: "auto"` is stated rather than re-read: reaching this line is what proves the
+     verdict was auto, and re-resolving could report a dial somebody moved in between. */
+  if (msg.automated && !msg.automated.logsItsOwnOutcome) {
+    await logAiAction({
+      tenantId: msg.automated.tenantId,
+      action:   msg.automated.action,
+      outcome:  result.status === "failed" ? "failed" : "did",
+      reason:   result.status === "failed"
+        ? `send failed — ${result.errorMessage ?? "unknown error"}`
+        : `sent to ${msg.to}`,
+      mode:     "auto",
+      entity:   "email",
+      entityId: result.providerId ?? null,
+      facts:    { recipient: msg.to, subject: msg.subject, kind: msg.kind ?? null },
+    });
+  }
+
   return result;
 }
 
