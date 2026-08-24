@@ -455,3 +455,78 @@ describe("billing term — only when they said it", () => {
     expect(e.term.source).toMatch(/annual/i);
   });
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   A bare generic word is not a product.
+
+   Measured live on 24 Aug 2026. The demo enquiry said "Google Workspace BUSINESS
+   Standard". The live catalogue's own name is "Google Workspace Standard" — no "Business" —
+   so no full name matched, and the longest-first loop fell through to an eight-character
+   HOSTING sku literally called "Standard" (₹125/month). A real draft quote went out at
+   ₹1,500/seat/year for a product the customer had never mentioned, while the covering email
+   named Google Workspace.
+
+   The existing comment claims longest-first prevents exactly this. It does — but only when
+   the catalogue holds the short name as a PREFIX of the long one. It cannot help when the
+   customer's own phrasing matches nothing but a generic word.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+const AMBIGUOUS_CATALOGUE: CatalogueEntry[] = [
+  { id: "GW-STD", name: "Google Workspace Standard" },
+  { id: "MS-BS", name: "Microsoft 365 Business Standard" },
+  { id: "ZW-STD", name: "Zoho Workplace Standard" },
+  { id: "HOST", name: "Standard" },            // the hosting sku that won, live
+  { id: "GW-PLS", name: "Google Workspace Plus" },
+];
+
+describe("an ambiguous one-word catalogue name", () => {
+  it("REFUSES rather than picking the hosting sku — the live failure", () => {
+    const e = run({
+      subject: "Quotation for Business Standard, 12 users",
+      body: "We would like to move 12 users to Google Workspace Business Standard.",
+      catalogue: AMBIGUOUS_CATALOGUE,
+    });
+    /* Null, not HOST. planQuoteFromEnquiry turns a missing product into a readable
+       "build it by hand" note, which is the correct outcome for a phrase we cannot resolve. */
+    expect(e.product.value).toBeNull();
+    /* The seat count is still read — refusing the product must not lose the rest. */
+    expect(e.seats.value).toBe(12);
+  });
+
+  it("still matches a MULTI-word catalogue name exactly", () => {
+    /* The refusal is only about one-word names. "Google Workspace Standard" naming itself is
+       a statement about the product; "Standard" is a statement about the English language. */
+    const e = run({
+      subject: "Quote please",
+      body: "We want 20 users of Google Workspace Standard.",
+      catalogue: AMBIGUOUS_CATALOGUE,
+    });
+    expect(e.product.value?.id).toBe("GW-STD");
+  });
+
+  it("DOES match a one-word name when no other name uses that word", () => {
+    /* A tenant whose catalogue really is one word deep must still work — otherwise the fix
+       would quietly stop resolving products for them. */
+    const e = run({
+      subject: "Hosting",
+      body: "We need 5 users on Standard.",
+      catalogue: [{ id: "HOST", name: "Standard" }, { id: "GW-PLS", name: "Google Workspace Plus" }],
+    });
+    expect(e.product.value?.id).toBe("HOST");
+  });
+
+  it("does not match a name inside a longer word", () => {
+    /* `includes` alone matched "Standard" inside "Standardisation" and "Plus" inside
+       "Surplus". Whole-word boundaries, and a catalogue name may end in a digit. */
+    expect(
+      run({ subject: "", body: "Our Standardisation project needs 9 seats.", catalogue: AMBIGUOUS_CATALOGUE }).product.value,
+    ).toBeNull();
+    expect(
+      run({ subject: "", body: "We have surplus licences for 9 seats.", catalogue: AMBIGUOUS_CATALOGUE }).product.value,
+    ).toBeNull();
+    /* And a name that legitimately ends in a digit still matches. */
+    expect(
+      run({ subject: "", body: "12 users of Microsoft 365 Business Standard please.", catalogue: AMBIGUOUS_CATALOGUE }).product.value?.id,
+    ).toBe("MS-BS");
+  });
+});

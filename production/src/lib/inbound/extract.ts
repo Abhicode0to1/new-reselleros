@@ -313,11 +313,65 @@ function findProduct(text: string, catalogue: readonly CatalogueEntry[]): Extrac
   const byLength = [...catalogue].sort((a, b) => b.name.length - a.name.length);
   for (const item of byLength) {
     const needle = flatten(item.name);
-    if (needle.length >= 4 && hay.includes(needle)) {
-      return { value: item, source: item.name };
-    }
+    if (needle.length < 4 || !containsWord(hay, needle)) continue;
+
+    /* ─── A BARE GENERIC WORD IS NOT A PRODUCT ─────────────────────────────────
+       Measured 24 Aug 2026 on a demo enquiry. The customer wrote "Google Workspace
+       BUSINESS Standard". The catalogue's own name is "Google Workspace Standard" — no
+       "Business" — so the longest-first loop above matched none of the full names and fell
+       through to an eight-character hosting SKU literally called "Standard" (₹125/month).
+       The quote went out priced at ₹1,500/seat/year for a product the customer had not
+       asked about, while the covering email named Google Workspace.
+
+       The comment above says longest-first prevents this, and it does — but only when the
+       catalogue contains the shorter name as a PREFIX of the longer one. It cannot help when
+       the customer's own phrasing matches nothing but a generic word.
+
+       So: a single-word catalogue name is only trusted when no OTHER catalogue name contains
+       that word. Here "Standard" appears in four other names, so it is ambiguous and this
+       refuses rather than guesses — `planQuoteFromEnquiry` already turns a missing product
+       into a readable "build it by hand" note on the lead. Refusing costs one manual quote;
+       guessing sent a real customer the wrong price for the wrong thing. */
+    if (isAmbiguousSingleWord(needle, catalogue, flatten)) continue;
+
+    return { value: item, source: item.name };
   }
   return { ...NONE };
+}
+
+/**
+ * Substring, but only on whole-word boundaries.
+ *
+ * `includes` alone matched "Standard" inside "Standardisation" and "Plus" inside "Surplus".
+ * The boundary characters are deliberately anything-but-a-letter-or-digit rather than `\b`,
+ * because a catalogue name can legitimately end in a digit ("Microsoft 365") and `\b` between
+ * "5" and a following space behaves differently from between "t" and a space.
+ */
+function containsWord(hay: string, needle: string): boolean {
+  const at = hay.indexOf(needle);
+  if (at < 0) return false;
+  const before = at === 0 ? "" : hay[at - 1];
+  const after = hay[at + needle.length] ?? "";
+  const isWordChar = (c: string) => c !== "" && /[\p{L}\p{N}]/u.test(c);
+  return !isWordChar(before) && !isWordChar(after);
+}
+
+/**
+ * Is this a one-word name that other catalogue names also use?
+ *
+ * Only single-word names are suspect. "Google Workspace Standard" matching is a statement
+ * about the product; "Standard" matching is a statement about the English language.
+ */
+function isAmbiguousSingleWord(
+  needle: string,
+  catalogue: readonly CatalogueEntry[],
+  flatten: (s: string) => string,
+): boolean {
+  if (needle.includes(" ")) return false;
+  return catalogue.some((other) => {
+    const n = flatten(other.name);
+    return n !== needle && containsWord(n, needle);
+  });
 }
 
 /* ── Name ──────────────────────────────────────────────────────────────────── */
