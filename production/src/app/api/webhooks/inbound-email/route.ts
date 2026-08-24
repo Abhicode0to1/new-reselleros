@@ -39,7 +39,7 @@ import { acceptedSecrets, secretMatches } from "@/lib/inbound/verify-secret";
 import { extractEntities } from "@/lib/inbound/extract";
 import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
 import { shouldRequoteOnReply } from "@/lib/quotes/requote-on-reply";
-import { runAutoReply } from "@/lib/ai/run-auto-reply";
+import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
 import { planCorrections, correctionDetail } from "@/lib/leads/apply-correction";
 import { extractAttachments, pickBillAttachment } from "@/lib/inbound/attachments";
 import { readBillWithGemini } from "@/lib/ai/read-bill";
@@ -50,6 +50,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
    in which the forwarder is refused — see lib/inbound/verify-secret.ts for why a window here
    loses mail rather than merely failing requests. */
 const INBOUND_SECRET = process.env.INBOUND_EMAIL_SECRET?.trim() || "";
+/* The trading name the AI sales agent signs as. Env-overridable because this route already
+   supports pointing a second reseller's forwarded mail at their own tenant via
+   INBOUND_EMAIL_TENANT_ID — a hardcoded name would have that reseller's customers receiving
+   mail signed by somebody else's company. */
+const SELLER_NAME = process.env.SELLER_LEGAL_NAME?.trim() || "ANUTECH DIGITAL PVT LTD";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const APP_URL        = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 const BUY_PAGE_TENANT_ID =
@@ -763,16 +768,30 @@ export async function POST(request: NextRequest) {
        to get to. `reply.send` ships as `hold`, so today this prepares the draft, files it on
        the lead's timeline and logs the decision — Pardeep moves the dial when he believes it.
 
+       ─── THIS WAS `runAutoReply` UNTIL 24 AUG 2026 ───────────────────────────
+       Now the AI sales agent (lib/ai/run-sales-agent.ts), and it is a SWAP, not an addition.
+       Running both would have meant two drafters answering one customer — two replies on
+       `auto`, two drafts on `hold` — which is the trust failure this repo cares most about.
+
+       The agent is a superset of what it replaced: it reuses `decideAutoReply` unchanged, so
+       the own-address, they-wrote-last, already-replied and human-is-handling-it gates all
+       still apply, and it adds a conversation transcript, an explicit quote decision, a
+       handover for deals over 50 seats or low confidence, and a scheduled follow-up.
+
        Not awaited. A Gemini call inside a webhook the provider is waiting on would trade
        ingest reliability for latency, and the mail is already committed by here. */
-    void runAutoReply({
+    void runSalesAgentForLead({
+      admin,
       tenantId: tenantId,
       leadId: existing.id,
-      recipient: fromEmail,
+      incoming: fresh.text || text,
+      customerContact: fromEmail,
+      channel: "email",
       senderIsOurs,
       isSelfTest: selfTest,
       fromEmail: FROM_EMAIL,
-    }).catch((err) => console.error("[inbound-email] auto-reply crashed:", err));
+      sellerName: SELLER_NAME,
+    }).catch((err) => console.error("[inbound-email] sales agent crashed:", err));
 
     return NextResponse.json({ received: true, appendedToLead: existing.id });
   }
@@ -890,15 +909,22 @@ export async function POST(request: NextRequest) {
      and sent the reply is written with that already in the thread — a reply that says "I
      will send a quotation" alongside the quotation is the kind of thing a customer notices.
 
-     Same fire-and-forget shape and the same `hold` default as the append branch. */
-  void runAutoReply({
+     Same fire-and-forget shape and the same `hold` default as the append branch, and the same
+     swap from `runAutoReply` — see the append branch for why both had to move together. A
+     step wired to one branch and not the other is exactly the 23 Aug auto-quote bug, and
+     lib/quotes/auto-quote-wiring.test.ts pins both call sites for that reason. */
+  void runSalesAgentForLead({
+    admin,
     tenantId,
     leadId,
-    recipient: fromEmail,
+    incoming: freshForFacts,
+    customerContact: fromEmail,
+    channel: "email",
     senderIsOurs,
     isSelfTest: selfTest,
     fromEmail: FROM_EMAIL,
-  }).catch((err) => console.error("[inbound-email] auto-reply crashed:", err));
+    sellerName: SELLER_NAME,
+  }).catch((err) => console.error("[inbound-email] sales agent crashed:", err));
 
   // ── 7. Notify the reseller owner (best-effort) ─────────────────────────
   const { data: tenant } = await admin.from("tenants").select("email, name").eq("id", tenantId).maybeSingle();

@@ -27,6 +27,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyMetaSignature, signatureRefusalReason } from "@/lib/crypto/webhook-signature";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
+import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
+
+/* Envelope sender + trading name for anything the AI sales agent sends off the back of a
+   WhatsApp message. Mirrors the inbound-email webhook so one reseller cannot end up sending
+   mail signed as another. */
+const FROM_EMAIL  = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
+const SELLER_NAME = process.env.SELLER_LEGAL_NAME?.trim()   || "ANUTECH DIGITAL PVT LTD";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -203,6 +210,29 @@ export async function POST(req: NextRequest) {
         });
         // unique constraint on (tenant, wamid) — Meta retries are harmless
         if (!insertErr) messagesStored++;
+
+        /* ── Hand it to the AI sales agent ─────────────────────────────────────
+           GATED ON `!insertErr`, and that single condition is the whole idempotency
+           story. Meta retries a webhook until it gets a 200, and this route always
+           returns 200 — so without the gate a retried delivery would run the agent
+           again and answer the same customer twice. The unique index on
+           (tenant_id, wamid) is what makes the retry detectable at all: the second
+           insert fails, `insertErr` is set, and the agent does not run.
+
+           Text only. An image, a sticker or a reaction has nothing for the model to
+           read, and `text` is already null for those — a reply to "👍" would be the
+           app talking to itself. The message is still STORED, so the Inbox shows it
+           and a person can answer.
+
+           Not awaited, matching the inbound-email webhook: a Gemini call inside a
+           request Meta is waiting on would trade ingest reliability for latency, and
+           the message is committed by here. */
+        if (!insertErr && type === "text" && text && text.trim()) {
+          const phone = `+${m.from}`;
+          const profileName = (v.contacts ?? []).find((c) => c.wa_id === m.from)?.profile?.name ?? "";
+          void handleWhatsAppEnquiry(admin, tenantId, phone, profileName, text.trim())
+            .catch((err) => console.error("[/api/webhooks/whatsapp] sales agent crashed:", err));
+        }
       }
 
       // ── Delivery status updates (for messages WE sent)
@@ -232,4 +262,90 @@ export async function POST(req: NextRequest) {
 
   // Meta retries until 200. Always 200 unless we want to force re-deliver.
   return NextResponse.json({ ok: true, messagesStored, statusesApplied });
+}
+
+/**
+ * Find or create the lead behind a WhatsApp number, then run the AI sales agent on it.
+ *
+ * ─── WHY A LOOKUP BEFORE AN INSERT, AND WHY IT IS NOT AN UPSERT ─────────────
+ * `leads.id` is a text id minted here, not a natural key, so there is nothing for
+ * `on conflict` to match on and an upsert would silently insert a duplicate. The lookup is
+ * therefore explicit: the newest non-junk lead carrying this phone number is the conversation
+ * this message belongs to.
+ *
+ * Junk leads are excluded from the match on purpose. Somebody marked that lead junk; matching
+ * a new message onto it would resurrect a rejected conversation and, worse, feed the agent a
+ * transcript a human had already dismissed.
+ *
+ * ─── AND WHY A LEAD IS CREATED AT ALL ───────────────────────────────────────
+ * A first WhatsApp message from an unknown number is exactly the enquiry this product exists
+ * to capture, and every downstream piece — the transcript's composite FK, the follow-up loop,
+ * the quote, the handover flag — hangs off a lead id. The cost is honest and worth stating: a
+ * wrong number that texts this line becomes a lead in the pipeline. `source` marks it
+ * `whatsapp-inbound` so anything reporting on real demand can tell where it came from, and the
+ * agent's own junk-handling is the next line of defence rather than a filter here that would
+ * also drop real enquiries.
+ */
+async function handleWhatsAppEnquiry(
+  admin: ReturnType<typeof createAdminClient>,
+  tenantId: string,
+  phone: string,
+  profileName: string,
+  message: string,
+): Promise<void> {
+  const { data: existing } = await admin
+    .from("leads")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("contact_phone", phone)
+    .eq("is_junk", false)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let leadId = (existing as { id?: string } | null)?.id ?? null;
+
+  if (!leadId) {
+    /* Same id shape as the inbound-email webhook (route.ts:831). */
+    const fresh = "L-" + Date.now().toString(36).toUpperCase();
+    const { error } = await admin.from("leads").insert({
+      id:            fresh,
+      tenant_id:     tenantId,
+      /* The WhatsApp profile name is a person's name, not a company — but `company` is NOT
+         NULL and it is what every pipeline screen shows, so leaving it blank would render a
+         nameless row. The number is the honest fallback: it is what we actually know, and it
+         is what a person needs in order to ring back. */
+      company:       profileName || phone,
+      contact_name:  profileName || null,
+      contact_email: null,
+      contact_phone: phone,
+      plan:          null,
+      seats:         null,
+      stage:         "new",
+      source:        "whatsapp-inbound",
+      priority:      "medium",
+      notes:         `Created from an inbound WhatsApp message from ${phone}.`,
+    });
+    if (error) {
+      console.error("[/api/webhooks/whatsapp] lead insert failed:", error);
+      return;
+    }
+    leadId = fresh;
+  }
+
+  await runSalesAgentForLead({
+    admin,
+    tenantId,
+    leadId,
+    incoming: message,
+    customerContact: phone,
+    channel: "whatsapp",
+    /* Meta delivers messages FROM customers on this webhook; our own sends come back as
+       status updates, not messages. So an inbound message is never our own address, and there
+       is no self-test marker convention on this channel yet. */
+    senderIsOurs: false,
+    isSelfTest:   false,
+    fromEmail:    FROM_EMAIL,
+    sellerName:   SELLER_NAME,
+  });
 }

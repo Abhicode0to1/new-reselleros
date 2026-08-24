@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { AI_ACTIONS, type AiAction } from "./autonomy";
+import { AI_ACTIONS, type AiAction, type AiActionSpec } from "./autonomy";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Is the brake actually connected?
@@ -77,15 +77,60 @@ describe("every gateable action in the registry is actually wired somewhere", ()
   const SENDING_ACTIONS = (Object.keys(AI_ACTIONS) as AiAction[]).filter((a) => a.endsWith(".send"));
 
   it.each(SENDING_ACTIONS)("%s is passed to sendEmail somewhere", (action) => {
-    const spec = AI_ACTIONS[action];
+    /* Widened deliberately. `AI_ACTIONS` is `as const`, so once no action is declared `off`
+       TypeScript narrows `spec.today` to "auto" | "hold" and the comparison below becomes a
+       compile error rather than a false branch. That happened on 24 Aug 2026 when
+       `followup.send` moved from `off` to `hold`.
+
+       The branch is kept, not deleted, because it is the affordance for the NEXT action
+       somebody declares before building it — deleting it would force the author of that action
+       to either wire a fake call site or edit this test, and both are how a green suite starts
+       lying. */
+    const spec: AiActionSpec = AI_ACTIONS[action];
     if (spec.today === "off") {
       /* Not built yet, and `off` says so. Wiring arrives with the feature — asserting a call
          site now would force a fake one, which is how a green test starts lying. */
       expect(spec.today).toBe("off");
       return;
     }
-    expect(ALL_SOURCE, `${action} is declared "${spec.today}" but nothing passes it`)
-      .toContain(`action: "${action}"`);
+    /* Two accepted shapes, and the second one needed adding on 24 Aug 2026.
+         action: "x.send"      — passed straight to sendEmail, as the five crons do
+         sendAction: "x.send"  — handed to lib/ai/actions/quote-dispatcher.ts, which forwards it
+       The dispatcher is one send path serving two permissions (a reply and a follow-up nudge),
+       so it necessarily passes `automated: { action: args.sendAction }` — a VARIABLE, which a
+       source scan cannot follow. Accepting only the literal would have forced either a
+       duplicated send path or an ungated one.
+
+       Broadening a scan weakens it, so the forwarding is pinned separately in the test below.
+       Without that pair, this could match a `sendAction` that goes nowhere. */
+    const wired =
+      ALL_SOURCE.includes(`action: "${action}"`) ||
+      ALL_SOURCE.includes(`sendAction: "${action}"`);
+    expect(wired, `${action} is declared "${spec.today}" but nothing passes it`).toBe(true);
+  });
+
+  it("the dispatcher really forwards sendAction into the gate", () => {
+    /* The other half of the broadened scan above. `sendAction: "followup.send"` at a call site
+       only proves the gate is reached if the dispatcher actually hands that value to sendEmail
+       and to resolveAutonomy. Pinned on the source for the same reason as everything else in
+       this file: the failure is a missing hand-off, which reads in the source and not in a
+       mock. */
+    const code = strip(read("lib/ai/actions/quote-dispatcher.ts"));
+    expect(code).toContain("automated: { tenantId: args.tenantId, action: args.sendAction }");
+    expect(code).toContain("resolveAutonomy(args.sendAction, policy)");
+  });
+
+  it("the WhatsApp path is gated too, since sendEmail cannot gate it", () => {
+    /* sendEmail is the chokepoint for mail only. sendWhatsApp posts straight to Meta, so an
+       agent that respected the dial on email and ignored it on WhatsApp would be a brake in
+       name only — and the kill switch is what somebody reaches for when a wrong price has
+       already gone out. */
+    const code = strip(read("lib/ai/actions/quote-dispatcher.ts"));
+    const waAt = code.indexOf("sendWhatsApp({");
+    const gateAt = code.indexOf("resolveAutonomy(args.sendAction, policy)");
+    expect(waAt).toBeGreaterThan(0);
+    expect(gateAt).toBeGreaterThan(0);
+    expect(gateAt, "the dial must be resolved BEFORE the message reaches Meta").toBeLessThan(waAt);
   });
 });
 

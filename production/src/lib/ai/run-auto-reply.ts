@@ -1,4 +1,19 @@
 /**
+ * ⚠ SUPERSEDED 24 AUG 2026 — NOTHING CALLS THIS ANY MORE.
+ *
+ * The inbound-email webhook now calls `lib/ai/run-sales-agent.ts` on both branches instead.
+ * That was a swap rather than an addition: two drafters on one webhook means two replies to
+ * one customer. Verified after the change — no non-test file imports this module.
+ *
+ * It is kept, not deleted, for two reasons. Its tests (auto-reply.test.ts, human-touch.test.ts)
+ * still pin behaviour the replacement REUSES — `decideAutoReply` is called unchanged by the new
+ * path, and human-touch.test.ts asserts on this file's source shape to protect the
+ * `created_by IS NOT NULL` fix. And if the agent is rolled back, this is what it rolls back to.
+ *
+ * Deleting it is a decision for Pardeep, not a cleanup. Until then this banner is here so the
+ * next reader does not spend an afternoon debugging a file that cannot run.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
  * Step 2, joined up: draft a reply, decide whether it may go, send it or file it.
  *
  * Called fire-and-forget from the inbound webhook. Nothing here may fail the request — the

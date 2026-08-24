@@ -64,10 +64,25 @@ describe("defaults describe what the app does TODAY", () => {
     expect(resolveAutonomy("quote.send", OPEN).mode).toBe("auto");
   });
 
-  it("keeps the unbuilt action off", () => {
-    /* Not a policy choice — a description. Nothing can send a follow-up nudge, so "off" is
-       what is true. Building it will move this default, the way reply.send's moved. */
-    expect(resolveAutonomy("followup.send", OPEN).mode).toBe("off");
+  it("starts followup.send at HOLD — it was built, so `off` stopped being true", () => {
+    /* This asserted `off` until 24 Aug 2026, with the note "building it will move this
+       default, the way reply.send's moved". It was built that day — `ai_sales_loops` plus
+       api/cron/ai-sales-loop — so the default moved, exactly as predicted.
+
+       `hold` rather than `auto`, and for a sharper reason than the reply path: a reply answers
+       somebody who just wrote to you, while a nudge writes to somebody who chose not to
+       answer. Misjudge the moment and a reply looks clumsy where a nudge looks like
+       pestering. */
+    expect(resolveAutonomy("followup.send", OPEN).mode).toBe("hold");
+  });
+
+  it("keeps followup.send separable from reply.send", () => {
+    /* The two are different permissions and the dial must be able to hold one while the other
+       sends — otherwise "answer my customers automatically" and "chase people who went quiet"
+       become one decision, and an operator who wants the first has to accept the second. */
+    const replyOnly = { ...OPEN, modes: { "reply.send": "auto" as const } };
+    expect(resolveAutonomy("reply.send", replyOnly).mode).toBe("auto");
+    expect(resolveAutonomy("followup.send", replyOnly).mode).toBe("hold");
   });
 
   it("starts reply.send at HOLD, not auto and no longer off", () => {

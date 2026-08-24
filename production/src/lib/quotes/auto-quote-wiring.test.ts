@@ -60,13 +60,30 @@ describe("the auto-quote runs on both branches", () => {
   });
 });
 
-describe("the auto-reply also runs on both branches", () => {
-  it("is called twice", () => {
-    /* Asserted alongside, because the two were wired in the same sitting and only one of
-       them made it to both places. Whatever the next automated step is, it gets a line
-       here. */
-    const calls = code.match(/runAutoReply\(\{/g) ?? [];
-    expect(calls.length).toBe(2);
+describe("the AI sales agent also runs on both branches", () => {
+  /* This described `runAutoReply` until 24 Aug 2026. The webhook now calls
+     `runSalesAgentForLead` instead — a SWAP, not an addition, because two drafters answering
+     one customer means two replies. The assertion follows the step rather than the name, which
+     is what this block's original comment asked for: "whatever the next automated step is, it
+     gets a line here." */
+  it("is called twice, not once", () => {
+    const calls = code.match(/runSalesAgentForLead\(\{/g) ?? [];
+    expect(calls.length, `runSalesAgentForLead is called ${calls.length} time(s) — both branches need it`).toBe(2);
+  });
+
+  it("has fully replaced the old auto-reply — no call site is left behind", () => {
+    /* The failure this catches is the half-done swap: one branch on the agent, one still on
+       runAutoReply, so a customer replying to an existing thread gets a different system than
+       a new enquiry — and on `auto`, one of them gets two emails. */
+    expect(code).not.toMatch(/runAutoReply\(\{/);
+  });
+
+  it("runs on the APPEND branch", () => {
+    expect(code.slice(0, APPEND_END)).toContain("runSalesAgentForLead({");
+  });
+
+  it("runs on the CREATE branch", () => {
+    expect(code.slice(APPEND_END)).toContain("runSalesAgentForLead({");
   });
 });
 

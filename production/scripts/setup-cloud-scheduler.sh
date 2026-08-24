@@ -71,6 +71,20 @@ JOBS=(
   # day that just ended, not of a day already half-modified by the 09:00 renewal
   # cron. Keeps the newest 30 per tenant (0244).
   "resellersos-backup|0 0 * * *|/api/cron/backup|Nightly restore point for every tenant"
+  # HOURLY, and the only job here that is not daily. The AI sales agent schedules its
+  # follow-ups in HOURS (SALES_AGENT_SCHEMA bounds in_hours at 1..720), so a daily sweep
+  # would round every "chase them this afternoon" up to tomorrow and make the shortest
+  # useful follow-up impossible to express.
+  #
+  # Business hours only (09:00–19:00 IST, Mon–Sat). A nudge landing at 03:00 reads as a
+  # machine no matter how well it is written, and Sunday mail to an Indian SME owner is
+  # worse than no mail. The rows do not expire — anything that came due overnight is
+  # picked up by the 09:00 run.
+  #
+  # Safe to enable before anybody trusts it: `followup.send` ships as `hold`, so until
+  # somebody moves that dial from /automation this job drafts onto lead timelines and
+  # sends nothing.
+  "resellersos-ai-sales-loop|0 9-19 * * 1-6|/api/cron/ai-sales-loop|AI sales agent follow-ups that have come due"
 )
 
 echo "Region:  $REGION"

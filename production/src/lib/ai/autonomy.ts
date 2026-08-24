@@ -91,7 +91,17 @@ export const AI_ACTIONS = {
   },
   "followup.send": {
     label: "Send a follow-up nudge to a quiet lead",
-    today: "off",
+    /* WAS `off`, and that was a description rather than a policy: nothing could send a
+       follow-up, so `off` was simply true. Built on 24 Aug 2026 — `ai_sales_loops` plus
+       api/cron/ai-sales-loop — so `off` stopped being true and the default moved to `hold`,
+       exactly as `reply.send`'s did the day before.
+
+       `hold`, not `auto`, and for a sharper reason than the reply path. A reply answers
+       somebody who just wrote to you; a nudge writes to somebody who chose not to answer. If
+       the agent misjudges the moment, a reply looks clumsy and a nudge looks like pestering —
+       so this is the one Pardeep should watch longest before widening. It drafts onto the
+       lead's timeline meanwhile, which is where he already looks. */
+    today: "hold",
     supports: ["off", "hold", "auto"],
   },
   "dunning.send": {
