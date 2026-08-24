@@ -477,6 +477,11 @@ function LeadsPageInner() {
       const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
       if (smartView === "mine") {
         list = list.filter((l) => currentUser && l.owner_id === currentUser.userId);
+      } else if (smartView === "waiting") {
+        /* The agent's own flag, not a guess about it. Open deals only — a handover on a lead
+           somebody has since won or lost is history, and leaving those in the queue is how a
+           queue stops being read. */
+        list = list.filter((l) => l.requires_human_attention === true && l.stage !== "won" && l.stage !== "lost");
       } else if (smartView === "today") {
         // Arrived today (new inbound).
         list = list.filter((l) => l.created_at?.slice(0, 10) === todayStr);

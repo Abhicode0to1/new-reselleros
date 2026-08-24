@@ -45,7 +45,7 @@ import { localDateISO } from "@/lib/leads/outcomes";
 import { staleDeals, STAGE_SLA_DAYS } from "@/lib/leads/velocity";
 import type { Lead } from "@/lib/supabase/database.types";
 
-export type SmartView = "all" | "mine" | "today" | "overdue" | "hot" | "new" | "closing" | "stalled" | "won-mtd" | "duplicates" | "junk";
+export type SmartView = "all" | "mine" | "waiting" | "today" | "overdue" | "hot" | "new" | "closing" | "stalled" | "won-mtd" | "duplicates" | "junk";
 
 interface LeadsSmartViewsProps {
   leads: Lead[];
@@ -85,6 +85,13 @@ export function LeadsSmartViews({
   const mine     = currentUserId ? working.filter((l) => l.owner_id === currentUserId).length : 0;
   // Leads that ARRIVED today (created today) — matches the operator's mental
   // model of "what came in today?". Follow-up due belongs to Overdue.
+  /* Leads the AI sales agent stopped on and asked for a person. Counted from the flag the
+     agent itself sets, so this number IS the queue — not a heuristic about it.
+
+     Until 24 Aug 2026 nothing read that flag: the agent handed a lead over, wrote the
+     reason, and the only way to find it was to open that one lead. A handover nobody can
+     see is a handover that did not happen. */
+  const waiting  = working.filter((l) => l.requires_human_attention === true).length;
   const todayDue = working.filter((l) => l.created_at?.slice(0, 10) === today).length;
   // Overdue = follow-up date in the past, still open. The most actionable bucket
   // for a rep, which is why it also shows on the trigger.
@@ -121,6 +128,14 @@ export function LeadsSmartViews({
       hint: "Every open lead. Won and lost are not open — they have their own folders." },
     ...(currentUserId
       ? [{ id: "mine" as SmartView, label: "Mine", count: mine, tone: "default" as Tone, hint: "Assigned to you" }]
+      : []),
+    /* Placed straight after Mine and toned ROSE, above Today and Overdue. It is the only
+       bucket where a CUSTOMER is already waiting on us and the machine has stopped: an
+       overdue follow-up is late, this is unanswered. Shown only when it has something in
+       it, like Duplicates and Junk — an empty accusing chip trains people to ignore it. */
+    ...(waiting > 0
+      ? [{ id: "waiting" as SmartView, label: "Waiting on you", count: waiting, tone: "rose" as Tone,
+           hint: "The AI stopped and asked for a person — open the lead to see why" }]
       : []),
     { id: "today", label: "Today",   count: todayDue, tone: "amber",   hint: "Arrived today" },
     { id: "overdue", label: "Overdue", count: overdue, tone: "rose",   hint: "Follow-up date has passed" },

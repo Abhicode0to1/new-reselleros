@@ -373,6 +373,26 @@ export default function SupportPage() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* The AI handed this one over. Shown BEFORE the status badge because it is
+                      the more urgent fact: `open` means nobody has answered, this means
+                      nobody has answered AND the machine has already decided it cannot.
+                      `assigned_agent` clears it — once somebody owns the ticket the flag is
+                      history, and a badge that never goes away is one people stop reading.
+                      The reason itself is in the detail panel; the title attribute carries it
+                      here so a hover answers "why" without a click. */}
+                  {t.ai_escalated === true
+                    && !t.assigned_agent
+                    /* AND still needing an answer. Caught by looking at the real screen: the
+                       badge appeared on a CLOSED ticket, which is the same mistake
+                       `shouldAlertUnassigned` had — neither it nor its query looked at status,
+                       so a handover somebody had already dealt with kept shouting. Cosmetic
+                       here rather than an alarm, and the reasoning is identical: a badge that
+                       says "needs you" on finished work trains people to stop reading it. */
+                    && t.status !== "closed" && t.status !== "resolved" && (
+                    <Badge kind="danger" title={t.ai_escalation_reason ?? "No reason was recorded"}>
+                      AI → you
+                    </Badge>
+                  )}
                   <Badge kind={t.status === "open" ? "danger" : t.status === "resolved" ? "success" : "warning"}>
                     {STATUS_LABEL[t.status as SupportTicketStatus] ?? t.status}
                   </Badge>
@@ -430,6 +450,38 @@ export default function SupportPage() {
                 <h2 className="font-serif text-xl md:text-2xl text-ink leading-snug break-words">
                   {selected.subject}
                 </h2>
+
+                {/* WHY THE AI HANDED IT OVER — the sentence, not a badge saying there is one.
+                    The agent writes a reason a non-engineer can act on ("the customer reports
+                    mail has been down for the whole office since 09:00"). Until 24 Aug 2026 it
+                    was stored and rendered nowhere: the rep saw an `open` ticket at `urgent`
+                    priority and had to guess what the machine had already worked out.
+
+                    Kept visible even once somebody is assigned — unlike the list badge. In the
+                    list the badge is a call to action and stops mattering when claimed; here it
+                    is the history of the ticket, and the rep who picks it up second needs it. */}
+                {selected.ai_escalated === true && (
+                  <div className="rounded-md border border-rose/30 bg-rose-soft/50 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-rose">
+                      The AI stopped and asked for a person
+                      {selected.ai_escalated_at
+                        ? ` · ${formatDate(selected.ai_escalated_at, "short")}`
+                        : ""}
+                    </p>
+                    <p className="mt-1 text-sm leading-snug text-ink-2 break-words">
+                      {selected.ai_escalation_reason
+                        /* A flag with no reason should be impossible — the dispatcher writes
+                           both in one update. Named rather than left blank, because an empty
+                           explanation reads as "nothing to worry about". */
+                        ?? "No reason was recorded. Check the ticket's transcript, and tell whoever owns lib/ai/actions/support-dispatcher.ts."}
+                    </p>
+                    {!selected.assigned_agent && (
+                      <p className="mt-1.5 text-[11px] text-ink-3">
+                        Nobody owns this ticket yet — assign it or reply, and the SLA alert stops.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               <button
                 type="button"

@@ -122,6 +122,34 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
       </div>
 
       {/* Bottom row: Value (serif) | Age & Stale Indicator */}
+      {/* WHY THE AI STOPPED — the reason, not a badge saying there is one.
+          The agent already writes a sentence a non-engineer can act on ("38 seats is above
+          the 50-seat ceiling for automatic quoting"). Until 24 Aug 2026 that sentence lived
+          only in the database, and the rep's only route to it was opening the lead and
+          reading its timeline. A queue you have to open to triage is not a queue.
+          Rendered above the value line and clamped to two lines: it is the reason this card
+          is in front of you, so it outranks the money. */}
+      {lead.requires_human_attention === true && (
+        <div className="mt-2 rounded-md bg-rose-soft/60 px-2 py-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-rose">
+            AI stopped — needs you
+          </p>
+          {lead.human_attention_reason ? (
+            <p className="mt-0.5 text-[11px] leading-snug text-ink-2 line-clamp-2"
+               title={lead.human_attention_reason}>
+              {lead.human_attention_reason}
+            </p>
+          ) : (
+            /* Flagged with no reason should not happen — the dispatcher writes both together.
+               Said plainly rather than rendered as an empty box, because a blank explanation
+               reads as "no reason to worry" when it means the opposite. */
+            <p className="mt-0.5 text-[11px] leading-snug text-ink-3">
+              No reason was recorded — open the lead&apos;s timeline.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-hairline">
         <span className={cn("font-serif tabular-nums text-sm font-bold inline-flex items-center gap-1", isHighValue ? "text-emerald" : "text-amber-ink")}>
           {isHighValue && <span aria-hidden className="text-[10px]">★</span>}

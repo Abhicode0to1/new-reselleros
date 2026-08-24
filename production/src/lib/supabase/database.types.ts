@@ -987,6 +987,23 @@ type LeadRow = {
   gclid: string | null;
   wbraid: string | null;
   fbclid: string | null;
+  /**
+   * The AI sales agent stopped and asked for a person (migration 20260824120000).
+   *
+   * ─── THESE WERE WRITTEN AND READ BY NOTHING FOR A DAY ───────────────────────
+   * The agent sets the flag, stores a reason a non-engineer can act on, and stamps the
+   * time. Until 24 Aug 2026 no screen read any of it: the only way to find a lead the
+   * agent was waiting on was to open that one lead's timeline, or run SQL. A handover
+   * nobody can see is a handover that did not happen — the flag existed, the queue did
+   * not. `LeadsSmartViews`' "Waiting on you" view is what reads them.
+   *
+   * Optional on the type because the three columns are absent from any `select` that
+   * does not ask for them, and most of this app's lead queries do not.
+   */
+  requires_human_attention?: boolean | null;
+  /** One sentence, written for the rep — "38 seats is above the 50-seat ceiling", never a code. */
+  human_attention_reason?: string | null;
+  human_attention_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -3209,6 +3226,27 @@ export type SupportTicketRow = {
    *  response, not resolution: answered in 40 minutes and closed a week later still
    *  met a one-hour SLA. */
   first_responded_at: string | null;
+  // ── AI support agent (migration 20260824180000) ───────────────────────────
+  /**
+   * The agent stopped and asked for a person: an outage, something commercial, or its own
+   * confidence too low to answer unattended.
+   *
+   * ─── WHY THIS IS A COLUMN AND NOT A SIXTH `status` ──────────────────────────
+   * `status` is a closed five-value vocabulary the Support screen renders one filter tab
+   * and one count per value from. A sixth value would create tickets that appear in no tab
+   * and in no count — precisely the ones needing a person most. So the status stays `open`,
+   * which is what an unanswered ticket honestly is, and the escalation is a fact beside it.
+   *
+   * Optional on the type because most selects on this table predate the columns.
+   */
+  ai_escalated?:         boolean | null;
+  /** One sentence for the rep — "the customer reports mail down for the whole office", never a code. */
+  ai_escalation_reason?: string | null;
+  ai_escalated_at?:      string | null;
+  /** The human who owns it. NULL is what api/cron/ai-support-sla alerts on after 30 minutes. */
+  assigned_agent?:       string | null;
+  /** Where it came in. NULL means a path that does not record it — not "app". */
+  channel?:              "email" | "whatsapp" | "portal" | "app" | null;
 };
 type SupportTicketInsert = {
   id:               string;

@@ -73,3 +73,79 @@ describe("the leads scope chip never claims to hold more than it does", () => {
     expect(screen.getByText("2")).toBeTruthy();
   });
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   "Waiting on you" — the queue the flag never had.
+
+   The AI sales agent sets requires_human_attention, writes a reason a rep can act on, and
+   stamps the time. Until 24 Aug 2026 NOTHING read any of it: the only route to a lead the
+   agent had stopped on was opening that one lead and reading its timeline. The flag
+   existed; the queue did not.
+
+   Shown only when it holds something, like Duplicates and Junk. An empty accusing chip is
+   one people learn to skip, and then it is not there on the day it has three in it.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("the Waiting on you view", () => {
+  const open = (over: Partial<Lead> = {}) => lead({ stage: "contact", ...over });
+
+  it("does not appear at all when nothing is waiting", () => {
+    render(
+      <LeadsSmartViews leads={[open(), open({ id: "l2" })]} active="all" onChange={() => {}} />,
+    );
+    fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
+    /* PROVE THE MENU OPENED FIRST. Without this the assertion below passes when the
+       dropdown never rendered at all — which is exactly what happened on the first run of
+       this test, because Radix opens on Enter and not on click. A negative assertion against
+       a component that is not on screen is not a test. */
+    expect(screen.getByText(/Every open lead/)).toBeTruthy();
+    expect(screen.queryByText("Waiting on you")).toBeNull();
+  });
+
+  it("appears with the count once the agent has stopped on something", () => {
+    render(
+      <LeadsSmartViews
+        leads={[
+          open({ id: "l1", requires_human_attention: true }),
+          open({ id: "l2", requires_human_attention: true }),
+          open({ id: "l3" }),
+        ]}
+        active="all"
+        onChange={() => {}}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
+    const row = screen.getByText("Waiting on you").closest("[role=menuitem]");
+    /* The count is the point — a view whose number you have to click to learn is the bug
+       this component's own header was written about. Read off the ROW, because a bare "2"
+       matches several places on this screen. */
+    expect(row?.textContent).toMatch(/2/);
+  });
+
+  it("counts only OPEN leads — a won or lost handover is history", () => {
+    /* Leaving closed deals in the queue is how a queue stops being read. `leads` arrives
+       pre-filtered to open by the page, and this pins that the count agrees. */
+    render(
+      <LeadsSmartViews
+        leads={[open({ id: "l1", requires_human_attention: true })]}
+        active="all"
+        onChange={() => {}}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
+    const row = screen.getByText("Waiting on you").closest("[role=menuitem]");
+    expect(row?.textContent).toMatch(/1/);
+  });
+
+  it("says what the view holds, in words a rep can act on", () => {
+    render(
+      <LeadsSmartViews
+        leads={[open({ id: "l1", requires_human_attention: true })]}
+        active="all"
+        onChange={() => {}}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
+    expect(screen.getByText(/stopped and asked for a person/i)).toBeTruthy();
+  });
+});
