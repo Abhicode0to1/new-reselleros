@@ -193,8 +193,8 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **4,346 tests
-passing across 231 files**, typecheck clean, lint clean, `npm run build` exit 0 (measured
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **4,371 tests
+passing across 233 files**, typecheck clean, lint clean, `npm run build` exit 0 (measured
 24 Aug 2026 — this line said 3,404/182 until then, and 1,492 before that, which is §12
 happening to this very file twice). If your change drops that, it is not done.
 
@@ -2399,3 +2399,48 @@ The second half of the same incident is data, not code: the catalogue named one 
 write Google's real name — "Business Standard" — which matched neither, so a generic
 eight-character hosting SKU called "Standard" won the match and priced the quote. **An
 inconsistent catalogue name is a pricing bug with a delay on it.** See L103 for the guard half.
+
+---
+
+## L105 — A backup whose cost grows with the table count is a backup with an expiry date
+
+`scripts/backup-db.mjs` failed twice in a row on 24 Aug 2026 with
+`supabase db query exited 3221225794`. That is Windows 0xC0000142 — STATUS_DLL_INIT_FAILED,
+what process creation returns once something is exhausted. It is on the free plan, so this
+script is the **only** backup there is: no PITR, no automatic snapshots, and the in-app
+`backup.snapshots` rows live inside the same database, which makes them an undo button.
+
+The script was not broken in the way it looked. It ran `npx supabase db query` **once per
+table** — 112 tables, plus seven schema reads, plus the table list: about 120 process
+launches, each one a shell starting `npx` starting node starting the CLI. Nothing was wrong
+with the transport: a single `db query` run by hand seconds later returned exit 0.
+
+Two details said so before any theory did. The two runs died at DIFFERENT tables — one
+reached `subscriptions`, the next stopped at `referral_*` — which is cumulative exhaustion,
+not a bad row. And it only started failing after a long session that had already spawned the
+CLI dozens of times for other work.
+
+**So the fault was the SHAPE, not the tool.** A script whose cost is O(tables) works fine at
+20 tables, works fine at 60, and stops working at some point nobody chose — and it stops on
+the day the machine is busiest, which is the day somebody is about to apply a migration and
+wants a backup first. That is the worst possible failure schedule.
+
+Rewritten to three launches: one for the table list, one `union all` with a
+`jsonb_agg(to_jsonb(x))` branch per table, one `jsonb_build_object` covering all seven schema
+reads. Postgres does the fan-out. Nothing about the output changed — same shape, same file,
+verified against live counts on all ten key tables.
+
+**What to take from it.**
+
+- **Count the process launches, not the queries.** A loop of database calls is cheap; a loop
+  of `spawnSync` is not, and on Windows the ceiling is real and undocumented.
+- **Push the fan-out into the database.** `union all` over generated branches, or one
+  `jsonb_build_object`, replaces N round trips with one and gives better errors — Postgres
+  names the offending relation, which the per-table loop only managed because it happened to
+  be iterating.
+- **Keyed off the SOURCE list, not the result.** The rewrite iterates `pg_tables` and throws
+  if a table is missing from the response. A dump silently short a table is the exact failure
+  this script's own header refuses, and the naive rewrite — iterate what came back — would
+  have reintroduced it.
+- **The exit code is a clue, not noise.** 3221225794 looks like line noise and means something
+  specific. Anything on this machine returning it should be read as "too many processes".

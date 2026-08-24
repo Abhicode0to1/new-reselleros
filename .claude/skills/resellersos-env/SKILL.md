@@ -144,9 +144,17 @@ It ran on the MCP server until 19 Aug 2026 and was **silently broken for six day
 malformed token above meant `Unauthorized`, and the parser degraded that to an empty result.
 It now runs on the CLI (no token) and **throws on any unparseable response**.
 
-Last known-good: **112 tables / 1,434 rows** (24 Aug 2026, before the AI-SUPPORT-agent
-migration; all 9 key tables matched live exactly). Earlier markers: 110 / 1,432 (24 Aug,
-before the AI-sales-agent migration) and 96 / 933 (19 Aug).
+Last known-good: **114 tables / 1,645 rows** (24 Aug 2026, after the AI-support-agent and
+draft-feedback migrations; all 10 key tables matched live exactly). Earlier markers:
+112 / 1,434 and 110 / 1,432 (24 Aug), 96 / 933 (19 Aug).
+
+**And the script was rewritten that night, because it had stopped working.** It ran one
+`npx supabase db query` PER TABLE — about 120 process launches — and after a heavy session
+Windows refuses to start them: `supabase db query exited 3221225794` (0xC0000142,
+STATUS_DLL_INIT_FAILED). It failed twice in a row, at DIFFERENT tables, while a single query
+by hand returned exit 0. It is now three launches total: one for the table list, one
+`union all` covering every table, one `jsonb_build_object` covering all seven schema reads.
+If you see that exit code from anything else on this machine, suspect process count first.
 
 Note what the table count does: it goes UP when a migration adds tables, so a jump of two is
 a migration and not a bug. It is the per-table row comparison that tells you whether coverage
