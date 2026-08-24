@@ -117,13 +117,35 @@ export async function runAutoReply(args: RunAutoReplyArgs): Promise<void> {
 
   /* Has a PERSON touched this thread since the customer wrote? A call logged, a note added,
      a draft opened. Somebody is on it, and a machine chiming in over a colleague mid-
-     conversation is worse than silence. */
+     conversation is worse than silence.
+
+     ─── A PERSON. NOT THIS APP'S OWN FOOTPRINTS ──────────────────────────────
+     `created_by IS NOT NULL` is the whole fix, and without it this check answered a different
+     question than it asks. Every automated write here leaves it NULL — the bare service-role
+     client cannot know a user — while anything a human does goes through the
+     `log_lead_activity` RPC, which stamps `auth.uid()`. Verified against live data before
+     relying on it: call ×5, email ×3 and note ×6 all carry a `created_by`; note ×9,
+     email_in ×14, email_out and quote are all NULL.
+
+     What it cost: the inbound webhook writes its own `note` a fraction of a second after
+     filing the customer's email — "No new quote from this reply — …" when the requote rule
+     declines (route.ts:737) — or an `email_out` row when the auto-quote DOES go. Both land
+     newer than the inbound message, both were counted, and both are this app. So on the
+     second enquiry in a thread the reply would hold saying "a person has picked this thread
+     up" when nobody had. Worse than a wrong outcome: a wrong REASON, which is what somebody
+     reads when deciding whether to trust the automation at all — the same failure as
+     AGENTS.md L97.
+
+     It stayed hidden because the own-address rule is checked first and always fired first on
+     the self-tests. Found by reading this path before asking Pardeep to re-run one, which
+     would have produced exactly that misleading reason. */
   const { data: humanTouch } = await db
     .from("lead_activities")
     .select("id")
     .eq("tenant_id", args.tenantId)
     .eq("lead_id", args.leadId)
     .in("kind", ["call", "whatsapp", "note", "email_out"])
+    .not("created_by", "is", null)
     .gt("created_at", lastIn?.created_at ?? "1970-01-01")
     .limit(1);
   const humanIsHandlingIt = (humanTouch ?? []).length > 0;

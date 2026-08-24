@@ -2232,3 +2232,31 @@ Two details worth keeping:
   two successful writes and the operator would press it again.
 - It goes through the `log_lead_activity` RPC, not a client-side insert, so `tenant_id` comes
   from the server rather than from a React component (CLAUDE.md §4).
+
+## L101 — "Has a person touched this?" must not count the app's own footprints
+
+Before asking Pardeep to re-run a self-test, I read the path it would take. `run-auto-reply`
+asks whether a colleague has picked the thread up, and answered it by counting
+`lead_activities` of kind call / whatsapp / note / email_out newer than the customer's message.
+**The inbound webhook writes its own `note` a fraction of a second after filing that message**
+— "No new quote from this reply — …" when the requote rule declines (route.ts:737) — or an
+`email_out` row when the auto-quote does go. Both matched. Both are this app.
+
+So the second enquiry in any thread would have held the reply saying *"a person has picked this
+thread up"* when nobody had. **A wrong reason is worse than a wrong outcome**: the outcome was
+right by luck, and the reason is the sentence somebody reads when deciding whether to trust the
+automation. Exactly L97 again, and it was invisible because the own-address rule fires first and
+always fired first on the self-tests.
+
+`created_by` fixed it with no migration, and the discriminator was **checked against live data
+before being relied on**: `call` ×5, `email` ×3 and `note` ×6 all carry a `created_by`, while
+`note` ×9, `email_in` ×14, `email_out` and `quote` are all NULL. Humans go through the
+`log_lead_activity` RPC, which stamps `auth.uid()`; the bare service-role client cannot know a
+user, so every automated write is anonymous.
+
+**Two things to carry forward.** When a check reads a shared table that the app itself writes
+to, ask which rows are the app's before trusting the count — a service-role client leaves
+fingerprints in the same place a person does. And **a test that pins the fix is not enough when
+the fix depends on an invariant**: `human-touch.test.ts` also asserts that the webhook's own
+inserts never set `created_by`, because the day somebody gives that client a user id, the
+discriminator inverts and this returns silently.
