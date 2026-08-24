@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { decideAutoReply, type AutoReplyInput } from "./auto-reply";
+
+/** Repo src root, for the source-shape assertion at the bottom of this file. */
+const SRC = join(process.cwd(), "src");
 
 /** Everything true, nothing promised — the one shape that sends. */
 const ok: AutoReplyInput = {
@@ -203,5 +208,75 @@ describe("the operator's own self-test", () => {
     expect(decideAutoReply({ ...ok, senderIsOurs: true, isSelfTest: true, alreadyReplied: true }).send).toBe(false);
     expect(decideAutoReply({ ...ok, senderIsOurs: true, isSelfTest: true, humanIsHandlingIt: true }).send).toBe(false);
     expect(decideAutoReply({ ...ok, senderIsOurs: true, isSelfTest: true, draftIsForThisLead: false }).send).toBe(false);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   `promisesAlreadyChecked` — the escape hatch for a caller with a stricter guard.
+
+   Written 24 Aug 2026 from a live measurement. The AI sales agent's first real reply was
+   held here because it named Rs 864 — the tenant's own catalogue price. findPromises runs
+   its money check with an EMPTY allow-list, which is correct for an acknowledgement and
+   wrong for a sales reply whose job is to name a price.
+
+   And this gate sits UPSTREAM of the autonomy dial: when it refuses, run-sales-agent files
+   the draft and returns without reaching the dispatcher. So the feature's main path was
+   closed at EVERY dial setting, while looking open.
+
+   These tests pin the exemption from both ends: it must work, it must be off by default,
+   and it must not weaken any of the other six conditions.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+const PRICED_DRAFT = {
+  subject: "Re: Google Workspace Business Standard pricing",
+  message:
+    "Thanks for writing in. Business Standard is Rs 864 per seat per year. Could you tell " +
+    "me how many users you need, and I will send a formal quotation?",
+};
+
+describe("a draft that names an authorised price", () => {
+  it("is HELD by default — the acknowledgement path must keep promising nothing", () => {
+    /* The behaviour every existing caller has and must keep. If this ever flips, the
+       acknowledgement path has silently gained permission to quote prices. */
+    const d = decideAutoReply({ ...ok, draft: PRICED_DRAFT });
+    expect(d.send).toBe(false);
+    if (d.send) return;
+    expect(d.findings?.some((f) => f.kind === "money")).toBe(true);
+  });
+
+  it("SENDS when the caller has already checked money against the catalogue", () => {
+    const d = decideAutoReply({ ...ok, draft: PRICED_DRAFT, promisesAlreadyChecked: true });
+    expect(d.send).toBe(true);
+    /* A different sentence, because the reason lands on the lead's timeline and on
+       /automation: "promises nothing" would be a false statement about a priced reply. */
+    expect(d.reason).toMatch(/own money and promise guards cleared/);
+  });
+
+  it("does NOT exempt the flag-bearer from the other six conditions", () => {
+    /* The flag turns off ONE rule. The six that fail quietly — the loop, nobody waiting,
+       answered twice, a person on it, an empty draft, a generic template — are exactly why
+       the sales path calls this function at all, and none of them may be bought off. */
+    const flagged = { ...ok, draft: PRICED_DRAFT, promisesAlreadyChecked: true };
+    expect(decideAutoReply({ ...flagged, senderIsOurs: true }).send).toBe(false);
+    expect(decideAutoReply({ ...flagged, theyWroteLast: false }).send).toBe(false);
+    expect(decideAutoReply({ ...flagged, alreadyReplied: true }).send).toBe(false);
+    expect(decideAutoReply({ ...flagged, humanIsHandlingIt: true }).send).toBe(false);
+    expect(decideAutoReply({ ...flagged, draft: null }).send).toBe(false);
+    expect(decideAutoReply({ ...flagged, draftIsForThisLead: false }).send).toBe(false);
+    expect(
+      decideAutoReply({ ...flagged, draft: { subject: "Re: hi", message: "Noted." } }).send,
+    ).toBe(false);
+  });
+
+  it("the acknowledgement path does NOT pass the flag", () => {
+    /* Pinned on the SOURCE, because the failure is an absence and would read as normal in a
+       mock. run-auto-reply.ts writes a generic acknowledgement with no catalogue behind it —
+       if it ever passes this flag, it has switched the money rule off with nothing in its
+       place. run-sales-agent.ts is the only caller entitled to it. */
+    const ack = readFileSync(join(SRC, "lib/ai/run-auto-reply.ts"), "utf8");
+    expect(ack).not.toContain("promisesAlreadyChecked");
+
+    const agent = readFileSync(join(SRC, "lib/ai/run-sales-agent.ts"), "utf8");
+    expect(agent).toContain("promisesAlreadyChecked: true");
   });
 });

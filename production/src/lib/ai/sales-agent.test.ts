@@ -4,6 +4,10 @@ import {
   buildSalesAgentPrompt,
   parseSalesAgentDecision,
   quoteIsWarranted,
+  maskAuthorisedSellingPoints,
+  perSeatPerYear,
+  isBelowCost,
+  authorisedTotalsFor,
   HANDOVER_SEAT_CEILING,
   MIN_AUTONOMOUS_CONFIDENCE,
   MAX_CONTEXT_TURNS,
@@ -11,6 +15,8 @@ import {
   type SalesAgentDecision,
   type SalesCatalogEntry,
 } from "./sales-agent";
+import { planQuoteFromEnquiry } from "@/lib/quotes/quote-from-enquiry";
+import { findPromises } from "./promise-check";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    The AI sales agent's decisions.
@@ -20,6 +26,14 @@ import {
    reach a customer. So the tests that matter are the refusals.
    ───────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * Every figure here is ₹ per seat per YEAR, which is what `SalesCatalogEntry` holds.
+ *
+ * They are round numbers chosen for readable assertions, NOT the live catalogue's — the live
+ * `items.msrp` is per MONTH and `loadSalesCatalog` multiplies it by 12 (see MONTHS_PER_YEAR).
+ * Said here because reading "270" in a per-year field is exactly the misreading that produced
+ * a twelve-times under-quote on 24 Aug 2026.
+ */
 const CATALOGUE: SalesCatalogEntry[] = [
   {
     sku: "gw-starter",
@@ -504,5 +518,421 @@ describe("quoteIsWarranted", () => {
 
   it("is false for zero seats", () => {
     expect(quoteIsWarranted(decision({ action_required: "GENERATE_QUOTE_AND_SEND" }), 0)).toBe(false);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   The prompt's own promise list, and the guard that used to refuse it.
+
+   Written 24 Aug 2026 from a live probe: the first real enquiry this agent ever saw was
+   read correctly (confidence 0.95) and then blocked by its own guard, because the prompt
+   authorises "24/7 support" and "Free migration" and findPromises flags both — `24/7`
+   as a date (it reads as 24 July) and bare `free` as a giveaway. Every reply using the
+   company's actual selling points handed over.
+
+   These tests pin BOTH sides of the exemption. The false-positive half is why the feature
+   works at all; the still-caught half is why the guard is still a guard.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("the two claims the prompt authorises", () => {
+  it("the prompt really does authorise them — if this fails, the exemption below is wrong", () => {
+    /* The exemption is only defensible while the prompt still says these are allowed. If
+       somebody removes them from the promise list, this test fails FIRST and points at the
+       mask, rather than the mask silently permitting something no longer authorised. */
+    expect(SALES_AGENT_SYSTEM_PROMPT).toContain("24/7 support from a named local team");
+    expect(SALES_AGENT_SYSTEM_PROMPT).toContain("Free migration of existing mail and data");
+  });
+
+  it("does NOT hand over on 24/7 support", () => {
+    const r = applyHandoverRules({
+      decision: decision({
+        generated_response: {
+          email_subject: "Quote",
+          body_text:
+            "Starter is ₹270 per seat per year. You also get 24/7 support from a named local team.",
+          whatsapp_summary: "₹270 per seat per year, with 24/7 support.",
+        },
+      }),
+      seats: 10,
+      allowedMoney: ALLOWED,
+    });
+    expect(r.overruled).toBe(false);
+    expect(r.decision.action_required).toBe("REPLY");
+  });
+
+  it("does NOT hand over on free migration, however the model phrases it", () => {
+    for (const line of [
+      "Migration of your existing mail and data is free.",
+      "We include free migration of your existing mailboxes.",
+      "Migration is free of charge.",
+    ]) {
+      const r = applyHandoverRules({
+        decision: decision({
+          generated_response: {
+            email_subject: "Quote",
+            body_text: `Starter is ₹270 per seat per year. ${line}`,
+            whatsapp_summary: "₹270 per seat per year.",
+          },
+        }),
+        seats: 10,
+        allowedMoney: ALLOWED,
+      });
+      expect(r.overruled, `"${line}" should not have handed over`).toBe(false);
+    }
+  });
+
+  it("STILL hands over on a giveaway that is not migration", () => {
+    /* The boundary. "free" is exempt only in a sentence about migration — this is the case
+       the discount rule exists for, and a mask wide enough to let it through would have
+       removed the rule rather than exempted a phrase. */
+    const r = applyHandoverRules({
+      decision: decision({
+        generated_response: {
+          email_subject: "Quote",
+          body_text: "Starter is ₹270 per seat per year. The first month is free.",
+          whatsapp_summary: "₹270 per seat per year.",
+        },
+      }),
+      seats: 10,
+      allowedMoney: ALLOWED,
+    });
+    expect(r.decision.action_required).toBe("HANDOVER_TO_HUMAN");
+  });
+
+  it("STILL hands over on a date, even in a migration sentence", () => {
+    /* The mask hides `free`, not the whole sentence. A migration DEADLINE is exactly the
+       kind of promise a person has to make. */
+    const r = applyHandoverRules({
+      decision: decision({
+        generated_response: {
+          email_subject: "Quote",
+          body_text:
+            "Starter is ₹270 per seat per year. Migration is free and we will finish it by Friday.",
+          whatsapp_summary: "₹270 per seat per year.",
+        },
+      }),
+      seats: 10,
+      allowedMoney: ALLOWED,
+    });
+    expect(r.decision.action_required).toBe("HANDOVER_TO_HUMAN");
+    expect(r.reason).toContain("Friday");
+  });
+
+  it("the mask rewrites nothing else — same text, character for character", () => {
+    /* It splits on sentence punctuation and rejoins. A mask that reflowed the body would
+       change what the promise check reads in every OTHER sentence, which is a guard failing
+       for a reason nobody would look for. */
+    const body =
+      "Hello.\nStarter is ₹270 per seat per year!\nShall I raise a quotation? Thanks.\n";
+    expect(maskAuthorisedSellingPoints(body)).toBe(body);
+  });
+
+  it("masks 24x7 and 24 * 7 too, because a model writes all three", () => {
+    expect(maskAuthorisedSellingPoints("24/7 support")).not.toContain("24/7");
+    expect(maskAuthorisedSellingPoints("24x7 support")).not.toContain("24x7");
+    expect(maskAuthorisedSellingPoints("24 * 7 support")).not.toMatch(/24\s*\*\s*7/);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   The unit of `items.msrp`, pinned across BOTH paths that price from it.
+
+   Found live on 24 Aug 2026. `loadSalesCatalog` copied `items.msrp` into a field named
+   `msrpPerSeatPerYear` without the × 12, so the agent's covering email said "12 seats of
+   Google Workspace Standard at Rs 864 per seat per year" while the quote it referenced by
+   number said ₹1,500/seat/year and the truth was ₹10,368. Two of those three numbers were
+   below our own cost — and verifyDraftMoney APPROVED it, because its allow-list came from
+   the same wrong figures.
+
+   The cross-path test is the important one. A test that only checked `perSeatPerYear(864)`
+   would have passed on the day the bug shipped, because the bug was a belief about the
+   column, not an arithmetic slip.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("items.msrp is per MONTH, and both paths must agree", () => {
+  /* AGENTS.md §1's own example, and the live row behind it. */
+  const STARTER = { msrpPerMonth: 270, wholesalePerMonth: 110 };
+  const STANDARD = { msrpPerMonth: 864, wholesalePerMonth: 620 };
+
+  it("converts to per-year", () => {
+    expect(perSeatPerYear(STARTER.msrpPerMonth)).toBe(3240);
+    expect(perSeatPerYear(STANDARD.msrpPerMonth)).toBe(10368);
+  });
+
+  it("agrees with the QUOTE path's annual rate for the same item", () => {
+    /* The guard that matters. planQuoteFromEnquiry has always been right; this asserts the
+       agent's figure is the SAME number, so the two cannot drift apart again. If somebody
+       removes the × 12 from either side, this fails and names both files. */
+    const plan = planQuoteFromEnquiry({
+      item: {
+        id: "GW-STD",
+        name: "Google Workspace Standard",
+        msrp: STANDARD.msrpPerMonth,
+        wholesale: STANDARD.wholesalePerMonth,
+      },
+      seats: 12,
+      term: "annual",
+      newLineId: () => "line-1",
+    });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.items[0].rate).toBe(perSeatPerYear(STANDARD.msrpPerMonth));
+  });
+
+  it("the per-year retail is ABOVE the per-year cost — the bug made it far below", () => {
+    /* With the unit wrong, the agent stated ₹864/year against a ₹7,440/year cost. Stated as
+       an assertion so the shape of the failure is recorded, not just the fix. */
+    expect(perSeatPerYear(STANDARD.msrpPerMonth)).toBeGreaterThan(
+      perSeatPerYear(STANDARD.wholesalePerMonth),
+    );
+    expect(STANDARD.msrpPerMonth).toBeLessThan(perSeatPerYear(STANDARD.wholesalePerMonth));
+  });
+});
+
+describe("a SKU priced below its own cost is withheld from the agent", () => {
+  it("flags retail under cost", () => {
+    expect(isBelowCost({ msrpPerSeatPerYear: 5000, wholesalePerSeatPerYear: 7440 })).toBe(true);
+  });
+
+  it("allows retail above cost", () => {
+    expect(isBelowCost({ msrpPerSeatPerYear: 10368, wholesalePerSeatPerYear: 7440 })).toBe(false);
+  });
+
+  it("treats an unrecorded cost as unknown, not as free", () => {
+    /* A missing cost must not remove a real product from the catalogue — the same call
+       loadSalesCatalog already made about margin being context-only. */
+    expect(isBelowCost({ msrpPerSeatPerYear: 1200, wholesalePerSeatPerYear: 0 })).toBe(false);
+  });
+
+  it("allows retail exactly at cost", () => {
+    /* Zero margin is a commercial decision somebody may have made on purpose. Below cost is
+       not. The boundary is asserted so a later `<=` does not quietly withhold real SKUs. */
+    expect(isBelowCost({ msrpPerSeatPerYear: 7440, wholesalePerSeatPerYear: 7440 })).toBe(false);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Totals the APP works out, so the agent can state the amount it is writing about.
+
+   Found the moment the unit bug was fixed, 24 Aug 2026. The agent computed the correct
+   annual total and was refused for it:
+
+     "The draft's email names a price we did not authorise (Rs 1,24,416)"
+
+   ₹1,24,416 is 12 × ₹10,368 — right, and not in the allow-list, because a total is
+   arithmetic and the model is not trusted with arithmetic. Correct rule, fatal consequence:
+   a covering email for a quote must say the amount, so every quote email handed over.
+
+   The answer is not to trust the model with sums. It is for the app to do them.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("authorised totals", () => {
+  const CATALOG = [
+    { sku: "GW-STD", name: "Google Workspace Business Standard", vendor: "google", msrpPerSeatPerYear: 10368, wholesalePerSeatPerYear: 7440 },
+    { sku: "GW-PLS", name: "Google Workspace Business Plus", vendor: "google", msrpPerSeatPerYear: 16560, wholesalePerSeatPerYear: 13800 },
+  ];
+
+  it("works out seats × price for the product on the lead", () => {
+    expect(
+      authorisedTotalsFor(CATALOG, { plan: "Google Workspace Business Standard", seats: 12 }),
+    ).toEqual([124416]);
+  });
+
+  it("authorises NOTHING when a fact is missing", () => {
+    /* Empty means "state no total", which is the strict direction — the agent falls back to
+       the per-seat price, which is always authorised. */
+    expect(authorisedTotalsFor(CATALOG, { plan: "Google Workspace Business Standard", seats: null })).toEqual([]);
+    expect(authorisedTotalsFor(CATALOG, { plan: null, seats: 12 })).toEqual([]);
+    expect(authorisedTotalsFor(CATALOG, { plan: "Google Workspace Business Standard", seats: 0 })).toEqual([]);
+  });
+
+  it("refuses to guess when the product is not in the catalogue", () => {
+    /* No fuzzy matching — the rule quote-dispatcher's resolveItem follows. A near-miss would
+       authorise a figure computed from the WRONG product's price, which is worse than
+       authorising nothing. */
+    expect(authorisedTotalsFor(CATALOG, { plan: "Standard", seats: 12 })).toEqual([]);
+  });
+
+  it("the prompt carries them, and the money guard accepts a draft that states one", () => {
+    const p = buildSalesAgentPrompt({
+      lead: { ...LEAD, plan: "Google Workspace Business Standard", seats: 12 },
+      history: [],
+      incoming: "Please send the quotation.",
+      catalog: CATALOG,
+      sellerName: "ANUTECH DIGITAL PVT LTD",
+      sellerEmail: "sales@anutech.in",
+      authorisedTotals: authorisedTotalsFor(CATALOG, { plan: "Google Workspace Business Standard", seats: 12 }),
+    });
+
+    expect(p.user).toContain("AUTHORISED TOTALS");
+    expect(p.allowedMoney).toContain(124416);
+    expect(p.allowedMoney).toContain(10368);
+
+    /* End to end: the exact sentence that was refused live must now pass. */
+    const r = applyHandoverRules({
+      decision: decision({
+        generated_response: {
+          email_subject: "Your quotation",
+          body_text:
+            "12 seats of Google Workspace Business Standard comes to Rs 1,24,416 per year, " +
+            "plus 18% GST.",
+          whatsapp_summary: "Rs 1,24,416 per year plus 18% GST.",
+        },
+      }),
+      seats: 12,
+      allowedMoney: p.allowedMoney,
+    });
+    expect(r.overruled, `reason: ${r.reason}`).toBe(false);
+  });
+
+  it("STILL refuses a total the app did not work out", () => {
+    /* The boundary. Authorising one computed figure must not open the door to any figure —
+       a model that adds a "setup fee" or rounds the total up is the case this catches. */
+    const p = buildSalesAgentPrompt({
+      lead: { ...LEAD, plan: "Google Workspace Business Standard", seats: 12 },
+      history: [],
+      incoming: "Please send the quotation.",
+      catalog: CATALOG,
+      sellerName: "A",
+      sellerEmail: "sales@anutech.in",
+      authorisedTotals: authorisedTotalsFor(CATALOG, { plan: "Google Workspace Business Standard", seats: 12 }),
+    });
+
+    const r = applyHandoverRules({
+      decision: decision({
+        generated_response: {
+          email_subject: "Your quotation",
+          body_text: "12 seats comes to Rs 1,30,000 per year all inclusive.",
+          whatsapp_summary: "Rs 1,30,000 per year.",
+        },
+      }),
+      seats: 12,
+      allowedMoney: p.allowedMoney,
+    });
+    expect(r.decision.action_required).toBe("HANDOVER_TO_HUMAN");
+    expect(r.reason).toContain("1,30,000");
+  });
+
+  it("says plainly when no total is authorised", () => {
+    const p = buildSalesAgentPrompt({
+      lead: { ...LEAD, plan: null, seats: null },
+      history: [],
+      incoming: "What do you charge?",
+      catalog: CATALOG,
+      sellerName: "A",
+      sellerEmail: "sales@anutech.in",
+    });
+    expect(p.user).toContain("you may not state a total");
+    expect(p.authorisedTotals).toEqual([]);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   The system prompt's rules, pinned.
+
+   Rewritten 24 Aug 2026 after reading what the model ACTUALLY wrote on four live
+   enquiries. Every assertion below is a real observed behaviour, not a hypothetical:
+
+     · it signed off as "ResellerOS" — the software's name, because FROM_EMAIL's default
+       carries it and the prompt said "signing as <that>"
+     · it never once asked monthly-or-annual, which is the ONE fact that decides whether a
+       quotation may go out at all (`termAssumed` in lib/quotes/quote-from-enquiry.ts)
+     · it recited all four selling points in every mail, so the second one reads as a brochure
+     · it wrote "Rs 864" with no unit — and a bare number is exactly how a twelve-times
+       error stayed invisible for a day
+
+   These are string assertions, which is a blunt instrument. They earn their place because a
+   prompt is the one part of this module with no other test: nothing else notices when a rule
+   is quietly dropped during an edit.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("the system prompt keeps the rules that were learned the hard way", () => {
+  const P = SALES_AGENT_SYSTEM_PROMPT;
+
+  it("demands the unit beside every price", () => {
+    expect(P).toContain("per seat per year");
+    expect(P).toMatch(/bare number/i);
+  });
+
+  it("forbids the model doing its own arithmetic, and points at AUTHORISED TOTALS", () => {
+    expect(P).toMatch(/NEVER multiply, add or total anything yourself/i);
+    expect(P).toContain("AUTHORISED TOTALS");
+  });
+
+  it("chases the billing term, because a quotation cannot go out without it", () => {
+    /* The highest-value line in the whole prompt: monthly and annual differ by 12x, and
+       `termAssumed` blocks the auto-send. The agent used to never ask. */
+    expect(P).toMatch(/MONTHLY OR ANNUAL/i);
+    expect(P).toMatch(/differ by 12x/i);
+  });
+
+  it("asks for one missing fact at a time, in a stated order", () => {
+    expect(P).toMatch(/one thing at a time/i);
+    expect(P).toContain("1. which product");
+    expect(P).toContain("3. monthly or annual");
+  });
+
+  it("caps the selling points, so a second mail does not read as a brochure", () => {
+    expect(P).toMatch(/AT MOST TWO/);
+    expect(P).toMatch(/brochure/i);
+  });
+
+  it("refuses to sign as a product or platform name", () => {
+    /* Observed: "Warm regards, ResellerOS, ANUTECH DIGITAL PVT LTD". The envelope string is
+       plumbing and the customer should never see it. */
+    expect(P).toMatch(/SIGNING OFF/);
+    expect(P).toMatch(/never sign as, or mention, any product or platform name/i);
+  });
+
+  it("refuses to claim it did something in the customer's account", () => {
+    expect(P).toMatch(/cannot log into their account/i);
+    expect(P).toMatch(/Never say a document was 'sent' or 'attached'/i);
+  });
+
+  it("requires a concrete next step, never a bare 'let me know'", () => {
+    /* CLAUDE.md §24 applied to a sales reply: a message that does not say what to do next is
+       one somebody has to think about before answering, and they will not. */
+    expect(P).toMatch(/ONE THING YOU NEED/);
+    expect(P).toMatch(/never a bare 'let me know'/i);
+  });
+
+  it("still keeps every money refusal it had before", () => {
+    /* The rewrite must not have traded an old guard for a new one. */
+    expect(P).toContain("Never invent");
+    expect(P).toContain("Never promise a discount");
+    expect(P).toMatch(/wholesale figures are OUR cost/);
+    expect(P).toMatch(/HANDOVER_TO_HUMAN/);
+  });
+
+  it("requires the term for a quote, not just the seat count", () => {
+    expect(P).toMatch(/the product, the seat count AND the term/i);
+  });
+});
+
+describe("the prompt's own examples must survive its own guards", () => {
+  it("contains no date word that findPromises would refuse", () => {
+    /* Measured 24 Aug 2026, one probe after this prompt was rewritten. The next-step example
+       read "I will send the quotation TODAY". The model copied the word, findPromises' DATE
+       rule caught it, and the whole reply handed over — over one word, in an example I had
+       just added to stop replies being vague.
+
+       This is L103 turning up inside the prompt itself: a guard firing on text the prompt
+       told the model to produce. So the prompt is now checked against the guard that polices
+       its output, which is the only way an example cannot quietly disagree with a rule. */
+    /* Through the same mask the real path uses — otherwise this fails on "24/7", which IS
+       authorised and IS exempted at runtime. Checking the raw prompt would be checking a
+       pipeline that does not exist. */
+    const findings = findPromises(
+      maskAuthorisedSellingPoints(SALES_AGENT_SYSTEM_PROMPT),
+    ).findings.filter((f) => f.kind === "date");
+    expect(
+      findings.map((f) => f.matched),
+      "a date word in the prompt is a date word in the reply",
+    ).toEqual([]);
+  });
+
+  it("tells the model explicitly that the next step carries no date", () => {
+    expect(SALES_AGENT_SYSTEM_PROMPT).toMatch(/NO DATE and NO DEADLINE/);
+    expect(SALES_AGENT_SYSTEM_PROMPT).toMatch(/Say WHAT you will do\s+and never WHEN/);
   });
 });

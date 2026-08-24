@@ -35,6 +35,9 @@ import {
   type SalesCatalogEntry,
   type SalesChannel,
   type SalesTurnRole,
+  isBelowCost,
+  perSeatPerYear,
+  authorisedTotalsFor,
 } from "./sales-agent";
 
 /**
@@ -99,15 +102,33 @@ export async function loadSalesCatalog(
   const rows = (data ?? []) as CatalogRow[];
   return rows.flatMap((r): SalesCatalogEntry[] => {
     if (!r.id || !r.name || typeof r.msrp !== "number" || r.msrp <= 0) return [];
-    return [
-      {
-        sku: r.id,
-        name: r.name,
-        vendor: r.vendor ?? "other",
-        msrpPerSeatPerYear: Math.round(r.msrp),
-        wholesalePerSeatPerYear: typeof r.wholesale === "number" ? Math.round(r.wholesale) : 0,
-      },
-    ];
+
+    /* × 12. `items.msrp` is ₹/seat/MONTH (AGENTS.md §1) and this field is per YEAR — the
+       conversion was missing until 24 Aug 2026, so the agent quoted a twelfth of every
+       price. See perSeatPerYear for the measurement. */
+    const entry: SalesCatalogEntry = {
+      sku: r.id,
+      name: r.name,
+      vendor: r.vendor ?? "other",
+      msrpPerSeatPerYear: perSeatPerYear(r.msrp),
+      wholesalePerSeatPerYear:
+        typeof r.wholesale === "number" ? perSeatPerYear(r.wholesale) : 0,
+    };
+
+    /* Dropped, not corrected and not passed through. The agent can only quote what it can
+       see, so removing the SKU is the strongest available refusal — and it is loud, because
+       a product silently missing from a quote is the next bug. */
+    if (isBelowCost(entry)) {
+      console.error(
+        `[sales-agent] "${entry.name}" (${entry.sku}) is priced BELOW COST — ` +
+          `Rs ${entry.msrpPerSeatPerYear}/seat/year retail against Rs ` +
+          `${entry.wholesalePerSeatPerYear}/seat/year cost. Withheld from the agent's ` +
+          "catalogue so it cannot be quoted. Fix the item's msrp under Items.",
+      );
+      return [];
+    }
+
+    return [entry];
   });
 }
 
@@ -245,6 +266,12 @@ export async function runSalesAgent(args: {
   incoming: string;
   sellerName: string;
   sellerEmail: string;
+  /**
+   * Totals the CALLER already knows are real — a live quote's own subtotal and amount.
+   * Folded in alongside the seats × price figure this function works out itself. See
+   * BuildPromptArgs.authorisedTotals for why a total has to be authorised at all.
+   */
+  extraAuthorisedTotals?: readonly number[];
 }): Promise<SalesAgentRun> {
   const cfg = await resolveGeminiConfig(args.admin, args.tenantId);
   if (!cfg.apiKey) {
@@ -274,8 +301,19 @@ export async function runSalesAgent(args: {
     customerContact: args.lead.customerContact,
   });
 
+  /* The app does the arithmetic, not the model. Deduplicated because the seats × price
+     figure and a quote subtotal for the same deal are usually the same number, and a repeated
+     line in the prompt reads as two different authorised amounts. */
+  const authorisedTotals = [
+    ...new Set([
+      ...authorisedTotalsFor(catalog, args.lead),
+      ...(args.extraAuthorisedTotals ?? []),
+    ]),
+  ];
+
   const prompt = buildSalesAgentPrompt({
     lead: args.lead,
+    authorisedTotals,
     history,
     incoming: args.incoming,
     catalog,

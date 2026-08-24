@@ -124,6 +124,8 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
   });
 
   /* ── 3. Understand it ── */
+  const quote = await latestQuote(args.admin, args.tenantId, args.leadId);
+
   const run = await runSalesAgent({
     admin: args.admin,
     tenantId: args.tenantId,
@@ -135,11 +137,12 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
       plan: leadPlan,
       customerContact: args.customerContact,
       channel: args.channel,
-      existingQuoteId: await latestQuoteId(args.admin, args.tenantId, args.leadId),
+      existingQuoteId: quote.id,
     },
     incoming: args.incoming,
     sellerName: args.sellerName,
     sellerEmail: args.fromEmail,
+    extraAuthorisedTotals: quote.totals,
   });
 
   if (!run.ok) {
@@ -248,21 +251,39 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
   }
 }
 
-/** The newest quote on this lead, so the agent does not offer a second one. */
-async function latestQuoteId(
+/**
+ * The newest quote on this lead — its id, so the agent does not offer a second one, and its
+ * FIGURES, so the agent may state the amount it is writing a covering email about.
+ *
+ * The figures matter as much as the id. Until 24 Aug 2026 the agent could name the quote by
+ * number and not say what it was for: a total is arithmetic, arithmetic is not authorised, and
+ * every quote email handed over. These two numbers come from the quote row itself — computed by
+ * planQuoteFromEnquiry, not by the model — so they are facts, not guesses.
+ */
+async function latestQuote(
   admin: Admin,
   tenantId: string,
   leadId: string,
-): Promise<string | null> {
+): Promise<{ id: string | null; totals: number[] }> {
   const { data } = await admin
     .from("quotes")
-    .select("id")
+    .select("id, subtotal, amount")
     .eq("tenant_id", tenantId)
     .eq("lead_id", leadId)
     .order("created_date", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return (data as { id?: string } | null)?.id ?? null;
+
+  const row = data as { id?: string; subtotal?: number | null; amount?: number | null } | null;
+  if (!row?.id) return { id: null, totals: [] };
+
+  /* Both, because a covering email legitimately says either the pre-GST subtotal or the gross.
+     Zero and null are dropped rather than authorised: "0" is already always allowed by the
+     money guard, and a null figure is a quote that was not priced. */
+  const totals = [row.subtotal, row.amount].flatMap((n) =>
+    typeof n === "number" && n > 0 ? [Math.round(n)] : [],
+  );
+  return { id: row.id, totals };
 }
 
 /**
@@ -336,6 +357,17 @@ async function checkReplyGates(args: {
        fallback is exactly what `runSalesAgent` refuses to produce: with no key or no
        catalogue it returns `ok: false` and this function is never reached. */
     draftIsForThisLead: true,
+    /* `applyHandoverRules` has already checked this draft's money against the CATALOGUE and
+       its promises against the three kinds no price list can excuse, and would have overruled
+       the model to HANDOVER_TO_HUMAN on any failure — so a draft that reaches here has passed
+       a stricter check than `findPromises` can make.
+
+       Without this the gate refused every priced reply, and because it sits UPSTREAM of the
+       dispatcher it did so at ANY dial setting: `reply.send = auto` would have changed
+       nothing. Measured on the first live enquiry, 24 Aug 2026 — see the field's own comment
+       in auto-reply.ts. The other six conditions in `decideAutoReply` still run, and they are
+       the ones this path needs it for. */
+    promisesAlreadyChecked: true,
   });
 
   return { send: decision.send, reason: decision.reason };

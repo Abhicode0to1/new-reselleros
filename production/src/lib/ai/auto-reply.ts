@@ -55,6 +55,39 @@ export interface AutoReplyInput {
   /** The drafted subject and body, exactly as they would be sent. */
   draft: { subject: string; message: string } | null;
   /**
+   * The caller has ALREADY adjudicated promises with a stricter, better-informed check, so this
+   * gate must not judge them a second time. Default false — every existing caller is unchanged.
+   *
+   * ─── WHY THIS EXISTS, MEASURED ON A LIVE MESSAGE (24 Aug 2026) ──────────────
+   * `findPromises` runs its money check with an EMPTY allow-list, because on the path it was
+   * written for — an acknowledgement — no figure is authorised at all. That is right there and
+   * wrong for a SALES reply, whose entire job is to name a price.
+   *
+   * Measured, not reasoned: the first real enquiry the AI sales agent ever answered was held
+   * here with `the draft commits us to something — it says "Rs 864" (and 2 more)`. Rs 864 is
+   * the tenant's own catalogue price, read from `items.msrp` at call time; the "2 more" were
+   * the 3.5% card-loading figure and the round-the-clock support line. Every one of them is a
+   * thing the agent's own prompt authorises.
+   *
+   * The consequence was worse than a held reply. This gate sits UPSTREAM of the dial: when it
+   * refuses, `run-sales-agent.ts` files the draft and returns without ever reaching the
+   * dispatcher. So moving `reply.send` to `auto` would have changed nothing — no priced reply
+   * could ever be sent, at any setting, and the feature's main path was closed while looking
+   * open.
+   *
+   * ─── WHY IT IS SAFE FOR THE SALES PATH AND NOWHERE ELSE ─────────────────────
+   * `applyHandoverRules` (lib/ai/sales-agent.ts) has already, by the time this is reached:
+   *   · run `verifyDraftMoney` against the CATALOGUE figures on BOTH customer-visible surfaces
+   *     — a stricter check than this one, because it knows which figures are real
+   *   · refused any date, discount or guarantee, minus the two phrases the prompt authorises
+   *   · overruled the model to HANDOVER_TO_HUMAN on any failure, so a failing draft never
+   *     arrives here at all
+   * A caller that passes this flag WITHOUT such a check has switched the rule off. There is a
+   * test asserting `run-auto-reply.ts` — the acknowledgement path, which must keep promising
+   * nothing — does not pass it.
+   */
+  promisesAlreadyChecked?: boolean;
+  /**
    * False when the drafter produced a generic template rather than writing for this lead —
    * e.g. Gemini was unreachable. A template is fine for a person to adapt and wrong to send
    * unattended, because it is not an answer to what they actually asked.
@@ -134,14 +167,21 @@ export function decideAutoReply(input: AutoReplyInput): AutoReplyDecision {
   }
 
   /* THE RULE. Subject AND body: a promise in a subject line is the part they read before
-     opening anything. */
-  const promises = findPromises(`${subject}\n${message}`);
-  if (!promises.safe) {
-    return { send: false, reason: promises.reason, findings: promises.findings };
+     opening anything.
+
+     SKIPPED only when the caller has already run a STRICTER, allow-list-aware version of the
+     same check — see `promisesAlreadyChecked`. The other six conditions above always run. */
+  if (!input.promisesAlreadyChecked) {
+    const promises = findPromises(`${subject}\n${message}`);
+    if (!promises.safe) {
+      return { send: false, reason: promises.reason, findings: promises.findings };
+    }
   }
 
   return {
     send: true,
-    reason: "they wrote last, nobody has picked it up, and the reply promises nothing",
+    reason: input.promisesAlreadyChecked
+      ? "they wrote last, nobody has picked it up, and the caller's own money and promise guards cleared the draft"
+      : "they wrote last, nobody has picked it up, and the reply promises nothing",
   };
 }
