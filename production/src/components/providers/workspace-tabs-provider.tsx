@@ -229,6 +229,39 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
     return () => window.removeEventListener("popstate", onPop);
   }, [dispatch, router]);
 
+  /**
+   * The address as it actually is, QUERY STRING INCLUDED.
+   *
+   * ─── WHY THIS FUNCTION EXISTS ─────────────────────────────────────────────────
+   * Both effects below used to record `pathname` alone. The URL-sync effect above then
+   * replaced the address bar with whatever they had recorded — so **every query string in
+   * the app was silently deleted a moment after arriving.** Not ignored: deleted, by a
+   * `router.replace` the user never asked for.
+   *
+   * The damage was invisible because it looked like a form that had not been filled in.
+   * `/quotes/new?leadId=L-MT6S9CNF` became `/quotes/new`, so the builder's `isLeadMode` was
+   * false, `lead_id` was written as NULL, and the quote was never attached to the lead at
+   * all. That is the true cause of Darshan's report on 24 Aug: not the stage rule (which was
+   * genuinely missing at three of four senders and is now fixed), but that there was no lead
+   * on the quote for any stage rule to move. Measured, not reasoned: the network log shows
+   * `GET /quotes/new?leadId=L-MT6S9CNF&company=Saroj%20Tech → 200` with no redirect, and
+   * `window.location.href` reading `/quotes/new` immediately afterwards.
+   *
+   * ─── WHY window.location AND NOT useSearchParams() ────────────────────────────
+   * `Providers` is mounted in the ROOT layout (app/layout.tsx:95), which wraps the static
+   * marketing page as well as the app. `useSearchParams()` there would force that page
+   * dynamic and fail the build. Both callers are effects gated on `hydrated.current`, so
+   * they only ever run in a browser, where window.location is the more direct truth anyway.
+   *
+   * The popstate handler at line ~206 already did this correctly — `pathname + search`. One
+   * of the three readers of the current URL got it right and the other two did not, which is
+   * the same shape as the bug this was found while fixing (AGENTS.md L98).
+   */
+  const fullPath = React.useCallback(
+    () => (typeof window === "undefined" ? pathname : pathname + window.location.search),
+    [pathname],
+  );
+
   // ── Adopt the page you are already on ───────────────────────────────────
   // Without this the workspace starts empty: tabs only appeared via Ctrl+click, so
   // the very first one had nothing to sit beside and the strip never showed. The
@@ -236,18 +269,18 @@ export function WorkspaceTabsProvider({ children }: { children: React.ReactNode 
   React.useEffect(() => {
     if (!hydrated.current || !pathname) return;
     if (stateRef.current.tabs.length > 0) return;
-    dispatch({ type: "open", url: pathname, title: titleForPath(pathname), at: Date.now() });
-  }, [pathname, dispatch]);
+    dispatch({ type: "open", url: fullPath(), title: titleForPath(pathname), at: Date.now() });
+  }, [pathname, dispatch, fullPath]);
 
   // ── Record navigation inside the active tab ─────────────────────────────
   React.useEffect(() => {
     if (!hydrated.current || !state.activeId || !pathname) return;
     const id = state.activeId;
     setHistories((h) => {
-      const next = pushUrl(h[id] ?? emptyHistory, pathname);
+      const next = pushUrl(h[id] ?? emptyHistory, fullPath());
       return next === h[id] ? h : { ...h, [id]: next };
     });
-  }, [pathname, state.activeId]);
+  }, [pathname, state.activeId, fullPath]);
 
   // ── Warn before the browser window closes with unsaved work ─────────────
   React.useEffect(() => {

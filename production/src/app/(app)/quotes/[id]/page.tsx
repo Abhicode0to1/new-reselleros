@@ -56,7 +56,8 @@ import { quoteEconomics, quoteApprovalRecord } from "@/lib/quotes/approval-econo
 import { useRequestApproval } from "@/lib/queries/quotes";
 import { usePaymentsByQuote, totalReceived as sumReceived } from "@/lib/queries/payments";
 import { useCustomer } from "@/lib/queries/customers";
-import { useLead } from "@/lib/queries/leads";
+import { useLead, useUpdateLeadStage } from "@/lib/queries/leads";
+import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { rupee, formatDate, daysBetween, toWhatsAppDigits } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -98,6 +99,7 @@ export default function QuoteDetailPage() {
   // Prospect quotes have no customer yet — fall back to the lead's phone so the
   // WhatsApp recipient still prefills (quotes usually go to that same contact).
   const { data: lead } = useLead(quote?.lead_id ?? undefined);
+  const updateLeadStage = useUpdateLeadStage();
   const recipientPhone = React.useMemo(() => {
     const raw = customer?.contact_phone || lead?.contact_phone || "";
     const d = raw.replace(/\D/g, "");
@@ -225,16 +227,54 @@ export default function QuoteDetailPage() {
   };
 
   // ────────── Mutations ──────────
+  /**
+   * "Mark as sent" — THE FOURTH SEND PATH, and the likeliest one behind Darshan's report.
+   *
+   * It is deliberately not the emailing route (`/api/quotes/[id]/send`): this button means "I
+   * already sent it myself, on WhatsApp or by hand — just record it". So it cannot be folded
+   * into that route, and it therefore needs its own copy of the stage rule.
+   *
+   * Which is exactly how the bug survived a fix. The scan added with `stageAfterQuoteSent`
+   * searched for writes of `stage: "quote"` and for the two server senders by name — and this
+   * path writes neither. It writes `status: "sent"`, from the browser, and moved no stage at
+   * all. A scan is only as wide as the thing it greps for; this one was too narrow, and the
+   * most obvious operator action in the whole app fell through it.
+   */
   const sendQuote = useMutation({
     mutationFn: async () => {
       const supabase = createClient();
-      const { error } = await supabase.from("quotes").update({ status: "sent" }).eq("id", params.id);
+      /* `.select("id")` because supabase-js counts "matched no rows" as success — an RLS
+         refusal or a stale id would otherwise toast "marked as sent" over a quote that never
+         changed status, which is the same class of lie as AGENTS.md L84. */
+      const { data, error } = await supabase
+        .from("quotes").update({ status: "sent" }).eq("id", params.id).select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("The quote was not updated — reopen this page and try again.");
+      }
+
+      /* Forward-only, same single rule as the other three senders. Runs through
+         useUpdateLeadStage rather than a raw update so the lost-reason hygiene and the
+         no-rows-matched throw come along with it. */
+      const move = stageAfterQuoteSent(lead?.stage);
+      if (quote?.lead_id && move.nextStage) {
+        await updateLeadStage.mutateAsync({ id: quote.lead_id, stage: move.nextStage });
+      }
+      return move;
     },
-    onSuccess: () => {
+    onSuccess: (move) => {
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["quotes", params.id] });
-      toast.success("Quote marked as sent");
+      /* The lead board reads the stage this just changed. Without this the operator marks a
+         quote sent, walks to the pipeline, and sees the lead still sitting in Contacted —
+         which is the exact symptom that was reported. */
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      toast.success(
+        move.nextStage ? "Quote marked as sent · lead moved to Quote Sent" : "Quote marked as sent",
+        /* The refusal reason, shown rather than swallowed: on a Won deal the lead deliberately
+           does NOT move, and silence there looks identical to the bug being fixed. */
+        move.nextStage ? undefined : { description: move.reason },
+      );
     },
     onError: (e) => toastError(e),
   });

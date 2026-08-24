@@ -2165,3 +2165,45 @@ fourth tab, not the one that opens. Each gate was individually defensible and th
 had no door. My own comment in that footer asserted "nextAction already says send the first
 quote, in the same words" — true in every branch but that one. **An in-code claim of full
 coverage is worth exactly as much as the branch you did not enumerate.**
+
+## L99 — The fix that revealed the real bug: a provider was deleting every query string
+
+L98 above is correct as far as it goes, and it does not go far enough. Having wired the stage
+rule into all four senders, I went to the browser to watch it work — and it did not. The toast
+said "the lead has no stage recorded, so nothing was moved", and the database said why:
+`lead_id` was **NULL** on a quote raised from a lead's own drawer.
+
+`workspace-tabs-provider.tsx` keeps the address bar in step with the active tab by calling
+`router.replace(<the tab's recorded url>)`. Two effects recorded that url as `pathname` alone.
+**So every query string in the application was deleted a moment after arriving**, by a
+navigation nobody asked for. `/quotes/new?leadId=L-MT6S9CNF` became `/quotes/new`, the
+builder's lead mode switched off, and the quote saved attached to no lead. A third reader of
+the current URL, the popstate handler twenty lines up, had `pathname + search` — right in one
+place, wrong in two, the same shape as L98 itself.
+
+Measured, not reasoned: the network log shows `GET /quotes/new?leadId=…&company=… → 200` with
+no redirect, `window.location.href` reads `/quotes/new` immediately after, and two quotes on
+the same lead bracket the fix — Q-ADPL-2026-27-0048 `lead_id` null, Q-ADPL-2026-27-0049
+`lead_id` L-MT6S9CNF.
+
+**Three things to take from it:**
+
+**Reproduce in the browser before believing a diagnosis, even a well-evidenced one.** The
+stage rule genuinely was missing from three of four senders; every test I wrote about it
+passed and was red-checked; and it was still not the bug the user reported. Reading code finds
+the bugs that are in the code. It does not find the ones caused by two correct-looking
+components interacting.
+
+**A silent `router.replace` is a data-loss bug, not a routing bug.** It presents as an empty
+form — the most ignorable symptom there is. Nobody files "the form was blank" as corruption,
+they just retype it, and the row goes to the database wrong.
+
+**When a component holds a copy of browser state, count its readers.** Three effects read the
+current URL here and one of them was right.
+
+*Also found on the way, same root:* the builder resolved the lead from the URL only, so EDIT
+and DUPLICATE saw no lead at all — the prospect fields loaded empty on a quote that had them,
+and duplicating dropped `lead_id` even with the provider fixed. `linkedLeadId` now falls back
+to the source quote. It did not delete contact details, because the writes were gated on the
+same missing id that emptied the fields; two bugs from one cause cancelled each other's worst
+outcome. Say that plainly rather than claiming the scarier version.

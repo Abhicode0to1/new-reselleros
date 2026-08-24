@@ -141,11 +141,31 @@ export function QuoteBuilder() {
   // navigate to /quotes/new?lead=L-XXX with JUST the ID — we fill in the
   // rest from the lead row. This makes the URL bookmarkable / shareable
   // and unblocks the "type URL" workflow that was hitting "No customers yet".
+  /**
+   * Which lead this quote belongs to, however we arrived here.
+   *
+   * `leadId` is the URL only. On the EDIT and DUPLICATE paths there is no `?leadId=` — the
+   * link lives on the quote being copied — so `leadId` was null while `isLeadMode` was true
+   * (it reads sourceQuote.lead_id). Two things went wrong with that split, both found by
+   * opening a lead-linked draft on 24 Aug 2026:
+   *
+   *   1. `leadFromQuery` was null, so the prospect Company / Contact / Phone / Email fields
+   *      loaded EMPTY on a quote that had them — the operator retypes what the app already
+   *      knows, or sends a quote with the contact blank. It did NOT delete anything: the
+   *      contact-sync writes are gated on `isLeadMode && leadId`, and the same null `leadId`
+   *      that emptied the fields also skipped the write. Worth stating plainly because the
+   *      first read of this looked like silent data loss and it is not; the two bugs share a
+   *      cause and cancelled each other's worst outcome.
+   *   2. Duplicating a prospect quote wrote `lead_id: null` (line ~911 falls back to the
+   *      source only when `editOf`), producing exactly the orphan quotes that started this
+   *      whole investigation — a quote for a lead, attached to no lead.
+   */
   const { data: allLeads } = useLeads();
+  const linkedLeadId = leadId ?? sourceQuote?.lead_id ?? null;
   const leadFromQuery = React.useMemo(() => {
-    if (!leadId || !allLeads) return null;
-    return allLeads.find((l) => l.id === leadId) ?? null;
-  }, [leadId, allLeads]);
+    if (!linkedLeadId || !allLeads) return null;
+    return allLeads.find((l) => l.id === linkedLeadId) ?? null;
+  }, [linkedLeadId, allLeads]);
 
   // Effective lead fields — URL param wins, lead row fills in the rest.
   // Stays null until the lead has loaded OR all URL params are present.
@@ -908,7 +928,7 @@ export function QuoteBuilder() {
            of the row while `leadId` was null, and `isLeadMode ? leadId : …` therefore still
            resolved to null. An untouched Save would have detached the draft from its lead.
            Found by running it, not by reading it. */
-        lead_id:       leadId ?? (editOf ? (sourceQuote?.lead_id ?? null) : null),
+        lead_id:       linkedLeadId,
         // Quote-level domain = the first line's domain (the primary subscription).
         // record_payment stamps this on the subscription it creates today; per-line
         // domains also live on each line_item for the coming multi-sub fan-out.
@@ -951,7 +971,7 @@ export function QuoteBuilder() {
       // is actually being quoted — otherwise a raw lead would end up in
       // stage='quote' with plan=NULL, looking like a Quote Sent lead in the
       // Leads (raw) tab forever.
-      if (isLeadMode && leadId && status === "sent") {
+      if (isLeadMode && linkedLeadId && status === "sent") {
         try {
           const totalSeats = lineItems.reduce((s, l) => s + l.qty, 0);
           // Forward-only, through the same rule the two server-side send paths use. This line
@@ -961,7 +981,7 @@ export function QuoteBuilder() {
           // three, which is the actual lesson of this whole bug.
           const move = stageAfterQuoteSent(leadFromQuery?.stage);
           await updateLead.mutateAsync({
-            id: leadId,
+            id: linkedLeadId,
             patch: {
               ...(move.nextStage !== null && { stage: move.nextStage }),
               plan:  lineItems[0]?.name ?? null,
@@ -984,7 +1004,7 @@ export function QuoteBuilder() {
         } catch {
           // Don't block the redirect if stage update fails; quote is saved.
         }
-      } else if (isLeadMode && leadId && status === "draft") {
+      } else if (isLeadMode && linkedLeadId && status === "draft") {
         // For drafts: still persist contact-info edits to the lead so they
         // don't get lost when the user comes back. Stage stays as-is.
         const contactPatch = {
@@ -998,7 +1018,7 @@ export function QuoteBuilder() {
         };
         if (Object.keys(contactPatch).length > 0) {
           try {
-            await updateLead.mutateAsync({ id: leadId, patch: contactPatch });
+            await updateLead.mutateAsync({ id: linkedLeadId, patch: contactPatch });
           } catch {
             /* don't block redirect */
           }

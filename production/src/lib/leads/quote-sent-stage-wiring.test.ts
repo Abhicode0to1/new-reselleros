@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Every path that emails a quote must also move the lead into "Quote Sent".
@@ -124,5 +124,128 @@ describe("the builder — the third copy, folded in", () => {
        argument would satisfy the assertion above while silently never moving any lead again.
        That failure is invisible: no error, no log, just a column that stays empty. */
     expect(BUILDER).toMatch(/stageAfterQuoteSent\(leadFromQuery\?\.stage\)/);
+  });
+});
+
+describe("every writer of a sent quote is accounted for", () => {
+  /* THE SCAN ABOVE WAS TOO NARROW, AND THIS IS THE REPLACEMENT.
+     It looked for writes of `stage: "quote"` and for the two server senders by name. The
+     "Mark as sent" button on the quote page writes neither: it sets `status: "sent"` from the
+     BROWSER and moved no stage at all — the fourth send path, the most obvious operator action
+     in the app, and almost certainly the one Darshan actually used. A scan is only as wide as
+     the thing it greps for.
+
+     So this asks the question the other way round. Enumerate everything that writes a quote to
+     `sent`, and require each file to either apply the stage rule or appear below with a reason.
+     A NEW sender fails this test on the day it is written, which is the whole point — the
+     failure is what makes somebody think about the lead. */
+
+  const ALLOWED: Record<string, string> = {
+    /* Customer-side. Verified by reading each: all three set `customer_id` and never
+       `lead_id`, because a renewal, an extension and an add-seats upsell all belong to a
+       customer who stopped being a lead long ago. There is no stage to move. */
+    "create-renewal-quote.ts":   "renewal quote for an existing customer — sets customer_id, never lead_id",
+    "create-extension-quote.ts": "extension quote for an existing customer — no lead_id",
+    "add-seats.ts":              "add-seats upsell for an existing customer — no lead_id",
+    /* Creates the lead AND the quote together, so it sets the stage at insert time. There is
+       no prior stage for a forward-only rule to move forward from. */
+    "route.ts:checkout":         "public buy-page checkout — sets the stage at insert",
+    /* Not quote senders at all — the string is an email/message delivery status or a type. */
+    "send-quote-dialog.tsx":     "response type from the send API; the ROUTE does the writing",
+    "send.ts":                   "email delivery status, not a quote",
+    "client.ts":                 "WhatsApp message status, not a quote",
+    "database.types.ts":         "generated types",
+  };
+
+  it("no unaccounted-for path marks a quote sent without moving the lead", () => {
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) files.push(p);
+      }
+    };
+    walk(SRC);
+
+    const unaccounted = files.filter((f) => {
+      const code = strip(readFileSync(f, "utf8"));
+      if (!/status:\s*"sent"/.test(code)) return false;
+      if (code.includes("stageAfterQuoteSent(")) return false;
+      /* basename() rather than a hand-rolled split. The first version of this line split on a
+         regex character class, a heredoc ate one of its backslashes, and it then split on
+         forward slashes only — so on a Windows absolute path `base` was the ENTIRE path, every
+         allow-list lookup missed, and the test failed listing seven files it had been told
+         about. The scan looked broken; the string handling was. */
+      const base = basename(f);
+      if (ALLOWED[base]) return false;
+      /* compliance-reminders and the checkout both end in route.ts, so the bare basename is
+         not enough to tell them apart. */
+      return !Object.keys(ALLOWED).some((k) => k.includes(":") && f.includes(k.split(":")[1]));
+    });
+
+    /* compliance-reminders declares a local `status` variable for an email send. Named here
+       rather than in ALLOWED because it is not a quote writer in any sense. */
+    const real = unaccounted.filter((f) => !f.includes("compliance-reminders"));
+
+    expect(
+      real,
+      `these mark a quote "sent" without applying stageAfterQuoteSent. Either call the rule, ` +
+      `or add the file to ALLOWED with the reason it has no lead to move: ${real.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("the Mark-as-sent button applies the rule and refreshes the board", () => {
+    const page = strip(readFileSync(join(SRC, "app", "(app)", "quotes", "[id]", "page.tsx"), "utf8"));
+    expect(page).toContain("stageAfterQuoteSent(lead?.stage)");
+    /* Moving the stage and not invalidating the leads cache reproduces the reported symptom
+       exactly — the write lands, the board the operator walks to still shows the old column. */
+    expect(page).toMatch(/invalidateQueries\(\{ queryKey: \["leads"\] \}\)/);
+  });
+
+  it("the Mark-as-sent write is row-count checked", () => {
+    /* Without .select("id") an RLS refusal toasts success over an unchanged quote — L84. */
+    const page = strip(readFileSync(join(SRC, "app", "(app)", "quotes", "[id]", "page.tsx"), "utf8"));
+    expect(page).toMatch(/update\(\{ status: "sent" \}\)\.eq\("id", params\.id\)\.select\("id"\)/);
+  });
+});
+
+describe("a quote for a lead stays attached to that lead", () => {
+  /* The stage rule is worthless if the quote is not linked in the first place, and orphan
+     quotes were being produced by two separate routes:
+
+       1. the workspace tab provider deleted the `?leadId=` from the URL after arrival
+          (fixed in workspace-tabs-provider.tsx, see url-query-preserved.test.ts)
+       2. the builder read the lead ONLY from that URL, so on the EDIT and DUPLICATE paths —
+          where the link lives on the quote being copied, not in the address — it was null
+
+     Both produced the same row: a quote raised for a lead with `lead_id` NULL, which can
+     never appear in a column defined by the lead's stage. Verified on live data before and
+     after: Q-ADPL-2026-27-0048 lead_id null, Q-ADPL-2026-27-0049 lead_id L-MT6S9CNF. */
+
+  const BUILDER_SRC = strip(
+    readFileSync(join(SRC, "components", "features", "quotes", "quote-builder.tsx"), "utf8"),
+  );
+
+  it("resolves the lead from the URL OR from the quote being edited/duplicated", () => {
+    expect(BUILDER_SRC).toMatch(/const linkedLeadId = leadId \?\? sourceQuote\?\.lead_id \?\? null/);
+  });
+
+  it("persists that resolved id, so duplicating a prospect quote keeps the lead", () => {
+    /* The old expression fell back to the source only when `editOf` — so DUPLICATE dropped
+       the link while EDIT kept it, which is why the same operator action produced an orphan
+       on one route and not the other. */
+    expect(BUILDER_SRC).toMatch(/lead_id:\s+linkedLeadId,/);
+    expect(BUILDER_SRC).not.toMatch(/lead_id:\s+leadId \?\? \(editOf/);
+  });
+
+  it("guards AND addresses the lead writes with the same id", () => {
+    /* A guard on one identifier and a write on another is how this file ends up with a
+       mutation aimed at `id: null`: the branch opens because the quote has a lead, then the
+       update targets the URL's missing one. Both must be the resolved id. */
+    expect(BUILDER_SRC).not.toMatch(/isLeadMode && leadId &&/);
+    expect(BUILDER_SRC).not.toMatch(/id: leadId,/);
+    expect(BUILDER_SRC).toMatch(/isLeadMode && linkedLeadId && status === "sent"/);
+    expect(BUILDER_SRC).toMatch(/isLeadMode && linkedLeadId && status === "draft"/);
   });
 });
