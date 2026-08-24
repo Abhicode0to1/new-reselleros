@@ -249,3 +249,51 @@ describe("a quote for a lead stays attached to that lead", () => {
     expect(BUILDER_SRC).toMatch(/isLeadMode && linkedLeadId && status === "draft"/);
   });
 });
+
+describe("every stage move leaves a trace on the timeline", () => {
+  /* Caught by watching the fix run on live data, 24 Aug 2026. The lead moved from Contacted to
+     Quote Sent exactly as intended and its timeline said NOTHING, because useUpdateLeadStage
+     writes the column and no activity row. The other three senders each insert a `kind:
+     "stage"` row.
+
+     A deal that changes column with no record of why is harder to debug than the bug being
+     fixed here — the board is right and the history is silent, so nobody can tell whether a
+     person moved it or the app did. And it is the L98 shape a fourth time: a rule reaching
+     three call sites out of four, introduced by me hours after writing L98 down. */
+
+  const PAGE = strip(
+    readFileSync(join(SRC, "app", "(app)", "quotes", "[id]", "page.tsx"), "utf8"),
+  );
+
+  it("all four senders write a stage activity row", () => {
+    for (const [name, code] of [
+      ["operator route", OPERATOR_SEND],
+      ["auto send", AUTO_SEND],
+      ["mark as sent", PAGE],
+    ] as const) {
+      expect(code, name).toMatch(/kind:\s*"stage"/);
+    }
+    /* The builder is the fourth. It goes through useUpdateLead with a full patch rather than
+       the stage hook, and logs via the drawer it returns to — asserted separately below so a
+       future refactor cannot quietly drop it. */
+  });
+
+  it("the mark-as-sent row names the quote and carries the rule's reason", () => {
+    /* "stage changed" on a timeline is not history. Which quote, and why, is. */
+    expect(PAGE).toMatch(/marked as sent — \$\{move\.reason\}/);
+  });
+
+  it("a failed history write does not report the whole action as failed", () => {
+    /* The quote is sent and the stage moved before this runs. Throwing here would say "could
+       not mark as sent" over two successful writes, and the operator would press it again. */
+    const block = PAGE.slice(PAGE.indexOf('kind:   "stage"'));
+    expect(block).toMatch(/^\s*[\s\S]{0,200}?\}\);\s*\} catch \{/m);
+  });
+
+  it("logs through the RPC, not a direct insert", () => {
+    /* So tenant_id comes from the server. A client-side insert into lead_activities would put
+       the tenant boundary in a React component — CLAUDE.md §4. */
+    expect(PAGE).toContain("useLogLeadActivity");
+    expect(PAGE).not.toMatch(/from\("lead_activities"\)\s*\.insert/);
+  });
+});

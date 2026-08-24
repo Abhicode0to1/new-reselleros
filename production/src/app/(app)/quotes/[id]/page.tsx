@@ -57,6 +57,7 @@ import { useRequestApproval } from "@/lib/queries/quotes";
 import { usePaymentsByQuote, totalReceived as sumReceived } from "@/lib/queries/payments";
 import { useCustomer } from "@/lib/queries/customers";
 import { useLead, useUpdateLeadStage } from "@/lib/queries/leads";
+import { useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { rupee, formatDate, daysBetween, toWhatsAppDigits } from "@/lib/utils";
@@ -100,6 +101,7 @@ export default function QuoteDetailPage() {
   // WhatsApp recipient still prefills (quotes usually go to that same contact).
   const { data: lead } = useLead(quote?.lead_id ?? undefined);
   const updateLeadStage = useUpdateLeadStage();
+  const logActivity     = useLogLeadActivity();
   const recipientPhone = React.useMemo(() => {
     const raw = customer?.contact_phone || lead?.contact_phone || "";
     const d = raw.replace(/\D/g, "");
@@ -259,6 +261,30 @@ export default function QuoteDetailPage() {
       const move = stageAfterQuoteSent(lead?.stage);
       if (quote?.lead_id && move.nextStage) {
         await updateLeadStage.mutateAsync({ id: quote.lead_id, stage: move.nextStage });
+        /* And SAY so on the timeline.
+           Caught by watching this run on live data, 24 Aug 2026: the lead moved from Contacted
+           to Quote Sent correctly and its timeline said nothing at all, because
+           useUpdateLeadStage writes the column and no activity row. The other three senders
+           each insert a `kind: "stage"` row — so this path moved a deal between columns with no
+           record of why, which is the version of the reported bug that is HARDER to debug than
+           the original: the board is right and the history is silent.
+
+           That is the L98 shape again — a rule reaching three call sites out of four — and I
+           introduced it hours after writing L98 down. Logged through the RPC rather than a
+           direct insert so tenant_id comes from the server, not from this component. */
+        try {
+          await logActivity.mutateAsync({
+            leadId: quote.lead_id,
+            kind:   "stage",
+            detail: `Quote ${params.id} marked as sent — ${move.reason}`,
+          });
+        } catch {
+          /* Swallowed on purpose, and it is the last statement for that reason. The quote is
+             already sent and the stage already moved; letting a failed HISTORY row throw here
+             would show "could not mark as sent" over two writes that both succeeded, and the
+             operator would press it again. The hook raises its own toast, so the failure is
+             still visible — it just does not masquerade as the action failing. */
+        }
       }
       return move;
     },

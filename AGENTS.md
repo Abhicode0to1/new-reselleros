@@ -2207,3 +2207,28 @@ and duplicating dropped `lead_id` even with the provider fixed. `linkedLeadId` n
 to the source quote. It did not delete contact details, because the writes were gated on the
 same missing id that emptied the fields; two bugs from one cause cancelled each other's worst
 outcome. Say that plainly rather than claiming the scarier version.
+
+## L100 — A stage move with a silent timeline is worse than no move
+
+Watched L98/L99's fix run on live data and it worked: Rohit Tech went from Contacted to Quote
+Sent, the chips went `In Talks 5 → 4` and `Quote Sent 0 → 1`. Then I looked at the lead's
+timeline and it said nothing at all.
+
+`useUpdateLeadStage` writes the column and no activity row. The other three senders each insert
+a `kind: "stage"` row, so "Mark as sent" moved a deal between columns with **no record of
+why** — and that is harder to debug than the bug being fixed, because the board is right and
+the history is silent. Nobody can tell whether a person moved it or the app did.
+
+**That is the L98 shape a fourth time, and I introduced it myself hours after writing L98
+down.** The lesson clearly is not "remember to check call sites" — I did remember, wrote a scan
+for it, and still shipped it, because the scan asked "does this path apply the rule" and not
+"does this path leave the same trace as its siblings". **When you add a scan for a rule, assert
+every EFFECT the other call sites produce, not just the call.** A partially-implemented rule
+passes a scan aimed at the function name.
+
+Two details worth keeping:
+- The history write is the LAST statement and its failure is swallowed. The quote is already
+  sent and the stage already moved by then; throwing would report "could not mark as sent" over
+  two successful writes and the operator would press it again.
+- It goes through the `log_lead_activity` RPC, not a client-side insert, so `tenant_id` comes
+  from the server rather than from a React component (CLAUDE.md §4).
