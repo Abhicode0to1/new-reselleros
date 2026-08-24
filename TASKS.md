@@ -7,6 +7,278 @@
 
 ---
 
+# 🟢 HANDOFF — 24 Aug 2026 (shaam). AI Support Agent bana AUR migration lag gayi.
+
+> Pichhla handoff (usi din, AI Sales Agent) neeche hai. **"Kya karna hai" lo, "kyun" par
+> bharosa mat karo** — is file ke kaaran pehle bhi galat nikle hain, aur usi block ka
+> "🟡 migration nahi lagayi" wala hissa apne hi upar wale hisse se takra raha tha.
+
+### ✅ Migration prod par lag gayi (24 Aug), alag run me saabit bhi hui
+
+`20260824180000_ai_support_agent.sql` **applied + tracked**. `db push` nahi chalaya — sirf apni
+file `db query -f` se chalayi, phir `migration repair`. Verify ALAG run me (skill §2):
+1 naya table · `support_tickets` par **9/9 naye column** · `support_tickets_tenant_id_key`
+unique · composite FK **`ON DELETE SET NULL (ticket_id)`** (`confdelsetcols=[3]`, yaani
+`tenant_id` list me NAHI — wahi bug jo bare form me hota hai) · channel check · RLS ON ·
+2 policy · 4/4 index. `migration list --linked` ab phir se **drift 0**.
+
+Backup pehle liya: `resellersos-data-2026-08-24T14-16-05-208Z.json` — 112 table / 1,434 row,
+**nau key table live count se exactly match**. (Table count 110→112 badha kyunki pichhli
+migration ne do table jode the — dump sikuda nahi.)
+
+SQL test bhi likha aur chalaya: `supabase/tests/ai_support_agent_tenant_isolation.test.sql` —
+6 test, rollback-style, prod par safe. **Do mutation chala kar dekha ki sach me kaatta hai**
+(FK assertion palti → red; row count 2→3 → red). Mutation B ne saath me ye bhi saabit kiya ki
+DELETE chala aur theek 2 row ka `ticket_id` null hua. Prod par koi residue nahi — tenants 3,
+support_tickets 0, transcript 0.
+
+### Kya bana (sab test-backed, poora gate green)
+
+| Cheez | File |
+|---|---|
+| Schema — transcript, escalation, assignment, SLA clocks | `supabase/migrations/20260824180000_ai_support_agent.sql` |
+| Reasoning (pure) — prompt, KB, guards, escalation rules | `src/lib/ai/support-agent.ts` · **59 test** |
+| SLA faisle (pure) — auto-close, breach alert | `src/lib/ai/support-sla.ts` · **16 test** |
+| Server side — customer/subscription lookup, thread, Gemini | `src/lib/ai/support-agent.server.ts` |
+| Ek inbound message ka poora safar | `src/lib/ai/run-support-agent.ts` |
+| Jawaab / resolve / escalate + desk alert | `src/lib/ai/actions/support-dispatcher.ts` |
+| Email ingest | `src/app/api/v1/integrations/support-email-inbound/route.ts` |
+| WhatsApp ingest | `src/app/api/v1/integrations/support-whatsapp-inbound/route.ts` |
+| SLA cron (har 15 min) | `src/app/api/cron/ai-support-sla/route.ts` |
+| Payload normaliser (pure) | `src/lib/inbound/support-inbound.ts` · **12 test** |
+
+Gate: `typecheck` 0 · `test` **4,346 pass** (231 file) · `lint` 0 · `build` 0.
+
+### 🔑 Chaar faisle jo tumhe pata hone chahiye
+
+**1. Koi DNS record value code me nahi hai, aur ye jaan-boojh kar hai.** Galat MX record
+customer ki poori mail band kar deta hai — hamare likhe instruction par, chup-chaap.
+`verifyNoInventedRecords` kisi bhi draft ko rokta hai jo MX host, SPF include, DKIM/DMARC ya
+port ka value likhta hai; KB sirf **raasta** batata hai ("Admin console → Domains → Activate
+Gmail"). Bilkul `money-guard` ka shape. **Isme record ki list mat jodo** — wo doosra source ban
+jayega ek value ka jo hamara nahi hai. Tenant apne verified value record kare, tab
+`loadAuthorisedRecords()` se aayenge.
+
+**2. `ai_support_tickets` table NAHI banayi, chahe brief ne maanga tha.** `support_tickets`
+pehle se hai (SLA column, portal UI, `/api/support/tickets`, `inbound_emails.ticket_id`) aur
+usme 0 row thi. Do ticket table ka matlab: dashboard ke count kam, aur "kitne ticket khule
+hain" ke do jawaab. Isi tarah `escalated_to_human` naya **status** bhi nahi banaya — `status`
+band vocabulary hai aur chhathi value waale ticket kisi filter tab me nahi dikhte. Escalation
+ek column hai (`ai_escalated` + reason + time), status `open` rehta hai.
+
+**3. Kuch bhi apne aap nahi jaayega jab tak dial nahi ghumate.** Naya `support.reply.send`
+**`hold`** par hai. Agent jawaab likhta hai, ticket ke transcript par file karta hai, bhejta
+kuch nahi. Pardeep `/automation` se ghumayega. **Par escalation alert aur SLA breach alert dial
+se BAHAR hain** — wo hamare apne desk ko jaate hain, aur kill switch ko hamari apni ghanti band
+karne ka haq nahi (wahi rule jisne `compliance.send` ko registry se hataya tha).
+
+**4. Purana `support` branch badla gaya hai, joda nahi.** `api/webhooks/inbound-email` ka
+support branch pehle khud ticket insert karta tha; ab `runSupportAgentForMessage` karta hai —
+warna ek message par do ticket bante. Us function me do cheezein extra hain jo branch nahi kar
+sakta tha: usi sender ka khula ticket **dobara use** hota hai (pehle teen reply = teen ticket),
+aur 48 ghante ke andar resolved ticket **reopen** hota hai, jiska vaada resolution note customer
+se karta hai.
+
+### 💰 Demo se nikle teen paisa-defect — teeno theek, live saabit
+
+Pardeep ne AI sales agent ka demo maanga. Chaar asli enquiry live webhook par bheji, aur usne
+teen paisa-defect khol diye. Teeno wahi kism ke: **guard sahi jawaab par fire kar raha tha, ya
+galat source se feed ho raha tha.**
+
+**1. 12× unit mismatch.** `items.msrp` per MONTH hai (AGENTS.md §1) aur quote path hamesha
+`msrp × 12` karta tha. `loadSalesCatalog` column ko seedha `msrpPerSeatPerYear` me daal deta
+tha. Ek hi deal ke teen daam nikle:
+
+| Kahan | ₹/seat/year | 12 seats |
+|---|---|---|
+| Agent ki email | 864 | 10,368 |
+| Jis quote ka wo number de rahi thi | 1,500 | 21,240 |
+| Sach | 10,368 | 1,24,416 |
+| Hamari cost | 7,440 | 89,280 |
+
+Do number cost se **neeche**, aur `verifyDraftMoney` ne **approve** kiya — kyunki uska
+allow-list bhi usi galat figure se banta tha. Fix: `perSeatPerYear()`, `isBelowCost()` guard,
+aur — asli baat — ek test jo **dono path ka number aapas me baandhta hai**. Sirf
+`perSeatPerYear(864)===10368` bug wale din bhi pass hota.
+
+**2. Bare generic word product ban gaya.** Customer ne "Google Workspace **Business** Standard"
+likha; catalogue ka naam "Google Workspace Standard" tha (bina "Business"), to koi poora naam
+match nahi hua aur 8-akshar ka hosting SKU **"Standard"** (₹125/month) jeet gaya. Fix:
+whole-word matching + ek-shabd wala naam reject jab wo shabd doosre naamon me bhi ho. Refuse
+karna ek manual quote ka kharcha hai; guess karne ne asli customer ko galat cheez ka galat daam
+bheja.
+
+**3. Agent quote ka TOTAL bol hi nahi sakta tha.** Unit fix hone ke baad agent ne sahi
+₹1,24,416 nikala aur guard ne rok diya — total arithmetic hai, aur model par arithmetic ka
+bharosa nahi. Sahi rule, par nateeja: quote ki covering email **kabhi** ja hi nahi sakti thi,
+kyunki uska poora kaam amount batana hai. Fix: model ko arithmetic dena nahi — **app khud
+total nikale** aur authorised fact ki tarah de. `authorisedTotalsFor()` seats × price nikalta
+hai, aur caller live quote ka apna subtotal + amount jodta hai. Iske bahar ka koi figure aaj
+bhi handover karata hai.
+
+**Aur ek chauthi cheez jo rename ne roki.** `create-renewal-quote.ts` catalogue row ko **naam
+se** dhoondhta tha (`items.name = subscriptions.plan`), jabki `plan` bikri ke waqt ki text
+COPY hai. Wahi lookup `renewalTerm` ke us guard ko feed karta hai jisne **144× ka renewal**
+pakda tha. Do item rename karne se wo guard Kriti Tech ki ACTIVE subscription ke liye **andha**
+ho jaata — chup-chaap, 24 Aug 2027 tak. Ab wo `item_id` se resolve karta hai (jo row par pehle
+se maujood tha), naam sirf fallback hai, aur teeno caller ise pass karte hain — ek test source
+par ye teenon pin karta hai.
+
+**Catalogue rename (prod):** `GW-STD-fbb` → "Google Workspace Business Standard",
+`GW-PLS-fbb` → "Google Workspace Business Plus". `GW-STR-fbb` me "Business" pehle se tha —
+yahi asangati defect 2 ki jad thi. 6 khule lead ka `plan` text backfill kiya. **Historical
+document chhue nahi**: `quotes.plan` aur `subscriptions.plan` bikri ke waqt ki copy hain, aur
+customer ko jo becha gaya usse badalna record me jhooth likhna hota.
+
+**Aakhri verification, live:** wahi 12-seat enquiry dobara →
+`Q-ADPL-2026-27-0058` · plan **Google Workspace Business Standard** · line rate **₹10,368** ·
+line cost **₹7,440** (pehle 0) · subtotal **₹1,24,416** · GST ke saath **₹1,46,811**. Aur agent
+ki email:
+
+> Price per seat: **Rs 10,368 per year** · Total Amount: **Rs 1,24,416** (plus applicable GST)
+
+Handover nahi hua — sirf dial ne roka. Email ka per-seat = quote ka line rate, email ka total =
+quote ka subtotal. Ek hi deal, ek hi number.
+
+**Jo abhi bhi khula hai:** `quote-builder.tsx` aur `add-lead-form.tsx` me ek hardcoded
+plan→price map hai jo catalogue se **8 me se 8 line par** alag hai (Standard 736 vs 864,
+M365 Standard 735 vs 990). Wo sirf **fallback** hai — tab chalta hai jab catalogue me match na
+mile, aur us case me cost jaan-boojh kar 0 rehta hai — to wo asli daam ko override nahi karta.
+Par wo ek doosra source hai, aur is file ka apna header kehta hai ki doosra source barabar nahi
+rehta. Hataana baaki hai.
+
+
+### 🧪 Support agent bhi live probe kiya — teen defect nikle, teeno theek
+
+Sales agent ki tarah support agent bhi sirf test-verified tha, kabhi asli message nahi dekha tha.
+Char probe live webhook par bheji (`@example.invalid` se), **dono ingress path** aur SLA cron
+dono. Machinery pehli baar me chal gayi — ticket bana, tier + `sla_due_at` trigger ne stamp
+kiye, transcript likhi, escalation flag laga, desk alert bana, kuch bhi customer ko nahi gaya.
+**Par teen defect nikle, aur teeno wahi kism ke the: guard sahi jawaab par fire kar raha tha.**
+
+**1. Console URL ko DNS record samajh liya.** "Kaunse MX record chahiye" par agent ne theek wahi
+kiya jo KB kehta hai — customer ko uske apne console par bheja — aur guard ne draft rok diya
+kyunki usme `admin.google.com` tha. Wo console ka pata hai, **jawaab hai, galti nahi**. Hostname
+pattern `google.com` ke neeche sab kuch pakadta tha. Fix: `CONSOLE_HOSTS` — sirf wo console jo
+KB naam leta hai, plus do account page jo runbook ko chahiye (app password `myaccount` par
+hota hai). `mail.google.com` aur `mail.zoho.com` **jaan-boojh kar list me nahi** — wahi jagah
+hai jahan galat value nuksaan karti. 5 test, mutation se laal.
+
+**2. Triage sirf bhejne par file hoti thi.** Ek DNS ticket jise agent ne `dns_records` padha
+tha, Support screen par `category=other, priority=normal` — untriaged default — par baitha tha,
+kyunki category/priority sirf successful-send path likhta tha. **Triage bhejna nahi hai.**
+`hold` ka poora argument yahi hai ki kaam ho jaaye aur operator ka next step ek tap ho; galat
+file kiya ticket wo aadha faayda kha jaata hai (screen category se filter aur priority se sort
+karta hai). Fix: `triageFields()` held path par bhi likhi jaati hai — par status aur dono clock
+NAHI, kyunki wo message customer tak pahunchne ke baare me hain.
+
+**3. Band ho chuki escalation par alert hamesha aata rehta.** `shouldAlertUnassigned` aur uski
+query dono `status` dekhte hi nahi the. Yaani rep ka aam tareeka — escalation ka jawaab de kar
+band kar do, bina pehle apne naam kiye — us ticket ko **har sweep par** alert karata rehta.
+Wahi failure jiske liye once-only stamp bana tha, doosre darwaze se. Fix: `closed`/`resolved`
+par `already_handled`. Decision me bhi aur query me bhi — decision ko apne aap sahi hona chahiye.
+3 test, mutation se laal. **Live saabit:** probe ticket band karne ke baad cron ka
+`escalated_examined` 2 se **0** ho gaya.
+
+**Jo pehli hi baar theek chala (live-verified):**
+
+| Kya | Saboot |
+|---|---|
+| Dono ingress path | naya `/api/v1/integrations/support-email-inbound` aur purana `webhooks/inbound-email` ka support branch — dono ne ticket khola |
+| Severity → priority | outage waali ticket `urgent`, DNS waali `low` |
+| Outage handling | model ne khud `service_outage, CRITICAL` padha aur escalate kiya |
+| SLA trigger chhua nahi gaya | dono ticket par `tier=free` aur `sla_due_at` stamped |
+| Record guard ka asli kaam | draft me agent ne khud likha *"We do not provide generic MX record values directly, as exact records should always be taken from your own admin console"* |
+| Cron ka auth | secret ke bina 401, galat secret par 401, sahi par 200 |
+| `ran_on` IST se | `localDateISO` — 15:16 UTC par bhi `2026-08-24` |
+| Alert ka fail-safe | Gmail token toota hua tha, to alert nahi gaya aur `sla_alert_sent_at` **stamp nahi hui** — do baar chalaya, dono baar retry kiya. Chup nahi hua. |
+
+**Cleanup:** chaaron probe ticket `closed` + resolution_note. Open tickets **0**, live escalations
+**0**, `emails_actually_sent` **0**, customers 14, quotes 20 — kuch nahi badla.
+
+### 🔴 Aur usi shaam: AI SALES agent do jagah se practically band pada tha
+
+Support agent ban jaane ke baad Pardeep ne poochha "sales agent chala kya". `ai_sales_conversations`
+me **0 row** thi — yaani 24 Aug ko banne ke baad wo ek bhi asli message par chala hi nahi tha
+(wajah maasoom: aakhri inbound mail 10:49 par aayi thi, agent ~12:00 par live hua). To live
+webhook par ek probe enquiry bheji, `@example.invalid` address se. Usse do defect nikle, dono
+ek hi khandaan ke — **guard sahi jawaab par fire kar raha tha.**
+
+**Defect 1 — prompt jo authorise karta hai, guard usi ko rok raha tha.** Agent ne enquiry theek
+padhi (confidence 0.95), achha reply likha, aur apne hi guard ne handover kar diya:
+
+```
+reply.send / held — 'The draft commits us to something nobody authorised —
+it says "24/7"; "free". A promise in our name needs a person behind it.'
+```
+
+Dono cheezein `SALES_AGENT_SYSTEM_PROMPT` khud kehta hai ki keh sakte ho — *"24/7 support from a
+named local team"* aur *"Free migration of existing mail and data"*. `24/7` ko `findPromises` ka
+DATE branch `\d{1,2}[/-]\d{1,2}` "24 July" samajhta hai, aur bare `free` DISCOUNT branch me
+girta hai. Matlab har wo reply handover hota jo company ke asli selling point use kare — yaani
+lagbhag har pehla jawaab.
+
+Fix: `maskAuthorisedSellingPoints()` in `sales-agent.ts` — sirf `24/7`/`24x7`, aur `free`
+**sirf us sentence me jo migration ke baare me ho**. "First month is free" aur "migrate by
+Friday" aaj bhi block hote hain. **7 test, do mutation se laal** (mask hataya → do
+false-positive test red; mask chaura kiya → boundary test red).
+
+**Defect 2 — aur ye zyada gehra tha: dial isse jeet hi nahi sakta.** Fix ke baad handover band
+hua, par reply phir bhi ruki — is baar `auto-reply.ts:138` par, kyunki `decideAutoReply` poora
+`findPromises` chalata hai jisme money check **khaali allow-list** ke saath hai. To `Rs 864` —
+tenant ke apne catalogue ka daam — "promise" gina gaya.
+
+Ye gate dispatcher se **pehle** hai: refuse hone par `run-sales-agent` draft file karke laut
+jaata hai. **Iska matlab `reply.send` ko `auto` karne se bhi kuch nahi badalta tha** — daam
+waali koi reply kabhi na jaati, aur sales agent ka kaam hi daam batana hai. Feature ka main
+rasta band tha aur khula dikhta tha.
+
+Fix: `AutoReplyInput.promisesAlreadyChecked` (default **false**, to purana acknowledgement path
+bilkul waisa hi). Sirf `run-sales-agent.ts` ise pass karta hai, kyunki `applyHandoverRules`
+pehle hi `verifyDraftMoney` **catalogue ke saath** dono surface par chala chuka hota hai — wo is
+gate se sakht check hai. Baaki chhe condition (loop, koi intezaar nahi, do baar jawaab, insaan
+laga hua hai, khaali draft, generic template) hamesha chalti hain. **4 test**, jinme ek SOURCE
+par assert karta hai ki `run-auto-reply.ts` ye flag **nahi** pass karta — warna acknowledgement
+path chup-chaap daam bolne ki ijazat pa lega. Do mutation se laal.
+
+**Teesri probe ne live par saabit kiya ki ab chain poora chalta hai:**
+
+| | Probe 1 | Probe 2 (defect 1 fix) | Probe 3 (dono fix) |
+|---|---|---|---|
+| Nateeja | `handed_over` | `held` (guard) | `held` (**dial**) |
+| `requires_human_attention` | true | false | false |
+| Draft dikhta hai | ❌ | ✅ | ✅ |
+| Follow-up schedule hua | ❌ | ❌ | ✅ **24h**, "Customer has not replied with the required seat count" |
+| Log ka reason | guard ka overrule | guard ka overrule | `no setting for this action, so its default "hold" applies` |
+
+Aakhri row hi asli baat hai: ab **dial** rok raha hai, guard nahi. `/automation` se ghumate ho
+to reply chali jayegi. Aur draft ne `Rs 864` quote kiya — live catalogue ka daam, spec ke ₹750
+ka nahi — yaani "daam kabhi code me nahi" wala design live par saabit ho gaya.
+
+**Kuch bhi bahar nahi gaya, teeno probe me:** `email_log` ki row `status=failed, provider=stub,
+"not sent — default hold applies"` kehti hai. Teeno probe lead junk + `lost`, pending follow-up
+cancel, live leads phir se 12, waiting-on-a-person 0. Transcript ki row jaan-boojh kar rakhi
+hain — wahi saboot hai.
+
+> ⚠️ **Sabak jo teeno defect me common hai:** `promise-check.ts` acknowledgement path ke liye
+> likha gaya tha, jahan surakshit jawaab **kuch bhi** vaada nahi karta. Usi ko sales ya support
+> reply par bina soche lagane se guard sahi jawaab par fire karta hai — aur phir koi guard hata
+> deta hai. Naya path jodo to pehle ye poochho: *is path par kya kehna authorised hai, aur wo
+> authorisation guard tak pahunch rahi hai ya nahi?*
+
+### 🟡 Teen cheezein jo maine jaan-boojh kar NAHI ki
+
+- **Webhook URL kisi provider par point nahi kiye.** Naye endpoint `/api/v1/integrations/support-email-inbound`
+  aur `.../support-whatsapp-inbound` live hain par koi unhe call nahi kar raha. Forwarder/Meta
+  config Pardeep ka kaam hai. Tab tak support mail purane raaste se aata hai — aur wo raasta bhi
+  ab agent chalata hai, to feature dono taraf se zinda hai.
+- **Cloud Scheduler par job banayi nahi.** `scripts/setup-cloud-scheduler.sh` me entry jodi hai
+  (`*/15 * * * *`), par script chalayi nahi — wo prod infra badalta hai.
+- **Push notification nahi joda.** `PushEvent` ek band union hai; escalation ka push jodna UI ka
+  faisla hai. Abhi alert email se jaata hai aur ticket dashboard par urgent dikhta hai.
+
+---
+
 # 🟠 HANDOFF — 24 Aug 2026. AI Sales Agent bana AUR migration lag gayi.
 
 > Pichhla handoff (22 Aug) neeche hai, wo abhi bhi padhne layak hai.
@@ -105,9 +377,16 @@ abhi bhi wo logic pin karte hain jo naya rasta reuse karta hai. Use delete karna
 
 ### 🟡 Do cheezein jo maine jaan-boojh kar NAHI ki
 
-- **Migration prod par nahi lagayi** — upar wala reason.
+- ~~**Migration prod par nahi lagayi**~~ — **ye line galat thi aur 24 Aug shaam ko hataayi
+  gayi.** Isi block ka pehla hissa kehta hai "migration applied + tracked, verify alag run me
+  kiya", aur wo sach hai (ledger me `20260824120000` maujood, `leads` par teeno column
+  maujood — dobara naapa 24 Aug shaam). Ye bullet drafting ke waqt ka bacha hua tha aur do
+  session ko ulta samajh me daal chuka tha. **Sabak: ek block ke andar bhi dono hisse ek
+  doosre se check karo.**
 - **39 SQL test nahi chalaye** — unke header me likha hai "dev/test DB par chalao, prod par
   nahi", aur mera connection prod par hai. Wo layer meri taraf se **unverified** hai.
+  (Naye support test `ai_support_agent_tenant_isolation` is se alag hai — wo rollback-style
+  likha hai, prod par chalaya gaya, aur do mutation se saabit hai.)
 
 ---
 

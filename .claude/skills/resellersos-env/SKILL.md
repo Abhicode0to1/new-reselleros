@@ -144,8 +144,13 @@ It ran on the MCP server until 19 Aug 2026 and was **silently broken for six day
 malformed token above meant `Unauthorized`, and the parser degraded that to an empty result.
 It now runs on the CLI (no token) and **throws on any unparseable response**.
 
-Last known-good: **110 tables / 1,432 rows** (24 Aug 2026, before the AI-sales-agent
-migration). Previous marker was 96 / 933 (19 Aug).
+Last known-good: **112 tables / 1,434 rows** (24 Aug 2026, before the AI-SUPPORT-agent
+migration; all 9 key tables matched live exactly). Earlier markers: 110 / 1,432 (24 Aug,
+before the AI-sales-agent migration) and 96 / 933 (19 Aug).
+
+Note what the table count does: it goes UP when a migration adds tables, so a jump of two is
+a migration and not a bug. It is the per-table row comparison that tells you whether coverage
+is intact.
 
 If a dump comes back smaller, do not assume either way — compare per-table counts against a
 live `count(*)` through a different connection. A shrinking dump and a broken dump look

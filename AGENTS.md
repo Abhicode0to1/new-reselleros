@@ -193,10 +193,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **3,404 tests
-passing across 182 files**, typecheck clean, lint clean, `npm run build` exit 0 (measured
-22 Aug 2026 — this line said 1,492 until then, which is §12 happening to this very file).
-If your change drops that, it is not done.
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **4,346 tests
+passing across 231 files**, typecheck clean, lint clean, `npm run build` exit 0 (measured
+24 Aug 2026 — this line said 3,404/182 until then, and 1,492 before that, which is §12
+happening to this very file twice). If your change drops that, it is not done.
 
 - CI runs on **pull requests** and on pushes to `main`. It does **not** run on feature
   branches — on a long-lived branch the local gate is the only gate. This is exactly how
@@ -2289,3 +2289,113 @@ a `did` row for a send the provider rejected would be the worst row this table c
 the reply path sets `logsItsOwnOutcome: true` so one reply produces one row, not two; the flag
 is an assertion about the caller, so `human-touch.test.ts` also checks that caller still logs,
 because the day it stops, the flag turns a double row into no row at all.
+
+---
+
+## L103 — A guard borrowed from a stricter path fires on the RIGHT answer, and then somebody deletes it
+
+Measured 24 Aug 2026, on the first real message the AI sales agent ever answered. It read the
+enquiry correctly — confidence 0.95 — wrote a good reply, and its own guards refused to send it
+**twice, for two different reasons, both wrong.**
+
+**First:** `applyHandoverRules` handed it to a human because the draft said `"24/7"` and
+`"free"`. Both are phrases `SALES_AGENT_SYSTEM_PROMPT` explicitly authorises — "24/7 support
+from a named local team", "Free migration of existing mail and data". `findPromises` reads
+`24/7` as a DATE (its `\d{1,2}[/-]\d{1,2}` branch — 24 July) and bare `free` as a DISCOUNT.
+
+**Second, after that was fixed:** `decideAutoReply` held it for naming `Rs 864` — the tenant's
+own catalogue price, which the agent is not merely allowed but *required* to state.
+
+The reason both happened is one design fact: **`promise-check.ts` was written for the
+acknowledgement path, where the safe reply promises NOTHING AT ALL.** It runs its money check
+with an empty allow-list, on purpose, and that is correct there. Reused unchanged on a path
+whose whole job is to quote a price, it refuses every correct answer.
+
+That is the failure mode to fear, and it is not "the guard was too weak":
+
+> **A guard that fires on the right answer gets switched off within a week** — and then it is
+> not there for the wrong one.
+
+The second one was worse than a held reply, and this is the part worth remembering. That gate
+sits **upstream of the autonomy dial**: when it refuses, `run-sales-agent.ts` files the draft
+and returns without ever reaching the dispatcher. So moving `reply.send` to `auto` would have
+changed nothing. **The feature's main path was closed at every dial setting while looking
+open**, and no test could see it because every test was about the guard working.
+
+**What to do when you put an existing guard on a new path.** Ask the question the guard cannot:
+*what is this path authorised to say, and does that authorisation reach the guard?* Then:
+
+- **Exempt by PHRASE or by ALLOW-LIST, never by dropping the rule.** `maskAuthorisedSellingPoints`
+  hides `24/7` and — only inside a sentence about migration — `free`. "The first month is free"
+  and "we'll migrate by Friday" still hold, and there is a test on each side of that boundary.
+- **Default to the strict behaviour.** `AutoReplyInput.promisesAlreadyChecked` defaults to
+  false, so every existing caller is untouched; the one caller entitled to it is the one whose
+  own guard is *stricter* (it checks money against the real catalogue).
+- **Pin the entitlement on the SOURCE.** A test asserts `run-auto-reply.ts` does NOT pass that
+  flag. The failure would be an absence, and an absence reads as normal in a mock.
+- **Probe it end to end before believing any of it.** All three findings came from one POST to
+  the live webhook from an `@example.invalid` address — not from reading code. Two of them
+  contradicted what the tests said the feature did.
+
+Same shape appeared the same day on the support side, where `free up space` — the correct answer
+to a full mailbox — and a customer's own renewal date both tripped the identical rule. See
+`maskSupportIdioms` and `maskAuthorisedDates` in `lib/ai/support-agent.ts`.
+
+**And the same day it happened three more times, in code written that afternoon.** A support
+agent probe found: a CONSOLE URL (`admin.google.com`) refused as if it were a DNS record — the
+guard blocking the exact reply the knowledge base tells the agent to write; a ticket the agent had
+correctly triaged left filed as `other/normal` because triage was only written on the send path;
+and an escalation somebody closed without assigning still alerting on every sweep, because
+neither the decision nor its query looked at `status`. Six findings in one afternoon, all the
+same shape, none of them visible to a test — every test was about the guard working. **Probe the
+path end to end before you believe any of it.**
+
+---
+
+## L104 — Reading a price live protects you from a stale number, not from a wrong UNIT
+
+`lib/ai/sales-agent.ts` opens with a long, correct argument against hardcoding prices: read
+`items.msrp` at call time, because a constant goes stale silently. The argument is right and it
+was followed. The module still under-quoted every deal by **twelve times**, below its own cost,
+for the whole of its first day.
+
+`items.msrp` is **₹ per seat per MONTH** — AGENTS.md §1 says so, and
+`lib/quotes/quote-from-enquiry.ts` has always honoured it (`rate = msrp × 12`).
+`loadSalesCatalog` copied the column straight into a field named `msrpPerSeatPerYear`. The
+header even quoted the live figure — "₹864 (wholesale ₹620)" — while describing it as annual.
+
+Measured on a demo enquiry, 24 Aug 2026. One deal, three different numbers:
+
+| Where | ₹/seat/year | 12 seats |
+|---|---|---|
+| What the agent's email said | 864 | 10,368 |
+| What the quote it referenced BY NUMBER said | 1,500 | 21,240 |
+| The truth | 10,368 | 1,24,416 |
+| Our own cost | 7,440 | 89,280 |
+
+**And `verifyDraftMoney` approved it.** Its allow-list was built from the same wrong figures, so
+the money guard was checking the draft against the bug. A guard fed by the thing it is meant to
+police is decoration.
+
+**What to do.**
+
+- **Name the unit beside every number, in the type and in the comment.** `msrp` alone is a
+  trap; `msrpPerSeatPerMonth` cannot be copied into a per-year field by accident.
+- **Convert through a named function, never a bare `* 12`** — `perSeatPerYear`. A named
+  conversion is something a test can point at.
+- **Pin the unit ACROSS the paths that share the column.** The test that matters is not
+  `perSeatPerYear(864) === 10368` — that would have passed on the day the bug shipped, because
+  the bug was a belief about the column, not an arithmetic slip. It is the one asserting the
+  agent's figure equals `planQuoteFromEnquiry`'s annual rate for the SAME item. Two places
+  computing one figure is exactly what this module's header warns about, and the warning came
+  true inside the module.
+- **Add the cheap sanity check anyway.** `isBelowCost` withholds a SKU whose retail is under
+  its own cost, at the point of use. It would not have caught this particular bug (both figures
+  were un-multiplied, so they stayed in proportion) — and it is still worth having, because
+  `money-check.yml` exists for the version that is not in proportion.
+
+The second half of the same incident is data, not code: the catalogue named one SKU
+"Google Workspace **Business** Starter" and its sibling "Google Workspace Standard". Customers
+write Google's real name — "Business Standard" — which matched neither, so a generic
+eight-character hosting SKU called "Standard" won the match and priced the quote. **An
+inconsistent catalogue name is a pricing bug with a delay on it.** See L103 for the guard half.
