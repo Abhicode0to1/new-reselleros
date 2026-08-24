@@ -148,6 +148,73 @@ Par wo ek doosra source hai, aur is file ka apna header kehta hai ki doosra sour
 rehta. Hataana baaki hai.
 
 
+### 🟢 Usi din raat: handover ka queue, insaan ka edit capture, aur backup theek
+
+**Handover ka queue bana.** Dono agent handover ka flag set karte the aur reason bhi likhte the —
+aur **koi screen use padhta hi nahi tha** (`requires_human_attention` sirf follow-up cron me tha,
+`ai_escalated` kahin nahi). Ab: leads par **"Waiting on you"** view (Mine ke baad, rose, sirf tab
+jab kuch ho) aur card par poori **wajah**; support par **"AI → you"** badge aur detail panel me
+poora reason. **Browser me khud dekha**, screenshot liye. Do asli lead + ek probe ticket sirf
+photo ke liye flag kiye the, turant revert.
+
+> Badge pehle **closed ticket par bhi** dikh raha tha — wahi galti jo subah `shouldAlertUnassigned`
+> me thi (na wo, na uski query `status` dekhti thi). Screen dekhne se mila, test se nahi.
+
+**Insaan ka edit capture** (`ai_draft_feedback`, migration lagi hui hai). Agent **self-learning
+nahi karta** — outcome se kuch nahi seekhta, har naya lead zero se. Aaj ke nau prompt rule
+maine uske asli draft padh kar likhe. Ab jab rep AI ka draft bhej-ta hai, jodi save hoti hai:
+draft, jo gaya, aur verdict (`sent_unchanged` / `lightly_edited` / `rewritten`). Rewrites hi
+padhne layak rows hain. **Ye training data NAHI hai** — koi weight nahi badalta; ye batata hai ki
+agli baar prompt me kya theek karna hai.
+
+**Backup toota hua tha aur theek ho gaya.** `npm run backup:db` do baar fail —
+`exited 3221225794` (Windows 0xC0000142). Wajah tool nahi, **shape** thi: har table ke liye ek
+`npx supabase` process, ~120 launch. Ab **3** launch (table list · ek `union all` · ek
+`jsonb_build_object`). Do baar lagatar chala, aur dump ke counts **dason key table par live se
+match**. AGENTS.md **L105**.
+
+### 🔴 Do faisle KHULE hain — agli session inhi se shuru kare
+
+**1. DEPLOY — aur ye aaj ka asli khatra hai.**
+Aaj ke 8 commit **live par nahi** hain. Live par abhi bhi:
+- galat-product wala quote bug (bare "Standard" → hosting SKU, ₹1,500/seat/year)
+- `quote.send` dial **`auto`** par
+- Gmail token ab **chalu** hai (24 Aug shaam reconnect hua, row DB me hai to Cloud Run bhi bhej sakta hai)
+
+Yaani ek asli enquiry par galat daam wali quote **apne aap ja sakti hai**. **Deploy risk nahi,
+risk hatana hai.** Raasta: `git push anutech HEAD:deploy` → Cloud Build → Cloud Run.
+`main` se nahi.
+
+**2. `isEmailConfigured()` galat sawaal poochta hai.**
+```
+isEmailConfigured() → Boolean(RESEND_API_KEY)      ← Resend ke baare me
+sendAutoQuote       → route: { tenantId }           ← asli send GMAIL se
+```
+Quote apne aap jaaye ya nahi, ye gate **Resend** ki key dekhta hai — jabki bhejta **Gmail** se
+hai. Pardeep ne 24 Aug ko bataya ki Resend **testing wala** use hoga; **usse ye surakshit nahi
+hota** — test key bhi gate khol degi aur mail asli Gmail se asli customer ko jayegi. AGENTS.md
+**L12** (naam jo sawaal poochta hai, field usi ka jawaab de). Aadha notice pehle bhi hua tha:
+`api/cron/invoice-dunning/route.ts:243` par comment maujood hai.
+Fix chhota hai: async helper jo *resolved route* dekhe, phir `autoQuoteForLead` me use + test.
+**Paisa-adjacent hai — CLAUDE.md §0.4, Pardeep ki haan chahiye.**
+
+### ❓ Ek sawaal jiska jawaab nahi mila (teen baar poochha)
+
+**Cloud Run par `RESEND_API_KEY` set hai ya nahi?** Local par nahi hai (isliye probe me quote
+nahi gayi). Cloud Run ka pata nahi — `gcloud` chala kar ya console → Service → Variables se
+dekhna padega. Ye tay karta hai ki upar wala risk **aaj** khula hai ya nahi.
+
+### Aur teen cheezein jo abhi bhi baaki hain
+
+- **Webhook URL kisi provider par point nahi.** Naye support endpoint live hain par koi call
+  nahi kar raha. Purana raasta chal raha hai aur wo bhi ab agent chalata hai.
+- **Cloud Scheduler par SLA job banayi nahi** — entry `scripts/setup-cloud-scheduler.sh` me hai
+  (`*/15 * * * *`), script chalayi nahi.
+- **Dial abhi bhi `hold`** — `reply.send` aur `support.reply.send` dono. 20 draft padh kar hi
+  ghumana. `/automation` par `Waiting` rows aur har lead ki timeline par poora draft hai.
+
+---
+
 ### 🧪 Support agent bhi live probe kiya — teen defect nikle, teeno theek
 
 Sales agent ki tarah support agent bhi sirf test-verified tha, kabhi asli message nahi dekha tha.
