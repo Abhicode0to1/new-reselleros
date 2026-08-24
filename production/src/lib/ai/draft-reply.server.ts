@@ -138,6 +138,12 @@ export async function draftReplyForLead(args: {
     return { ok: false, reason: "AI drafting is not configured for this workspace" };
   }
 
+  /* Google says WHY in every failure body, and until 24 Aug 2026 we threw it away and wrote
+     "the AI did not return a reply" instead. That one sentence stood for four different
+     faults in a single day — billing disabled, model retired, upstream busy, daily quota
+     exhausted — and it pointed at none of them. Captured now and passed through, so the
+     lead timeline and ai_action_log carry the actionable reason. */
+  let failure: string | null = null;
   const parsed = await geminiJson<{ subject?: string; message?: string }>({
     apiKey: gemini.apiKey,
     model: gemini.model,
@@ -145,10 +151,11 @@ export async function draftReplyForLead(args: {
     user: ctx.contextText,
     temperature: 0.6,
     label: "ai/auto-reply",
+    onFailure: (why) => { failure = why; },
   });
 
   if (!parsed?.message) {
-    return { ok: false, reason: "the AI did not return a reply" };
+    return { ok: false, reason: failure ?? "the AI returned nothing, and gave no reason" };
   }
 
   return {

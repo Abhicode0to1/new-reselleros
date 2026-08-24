@@ -2075,3 +2075,29 @@ refuses to send. **A function that accepts "" and returns something plausible is
 Also worth knowing: the fallback those routes used when the env var was absent —
 `https://resellersos.web.app` — answers **503**. So both paths were broken, and the "safe
 default" was as dead as the missing one.
+
+**L92 — One sentence stood for four different faults, and cost most of a day.** Every failure
+path in `geminiJson` returned bare `null`, so every caller reported "the AI did not return a
+reply". On 23–24 Aug 2026 that covered: **403** (the GCP project had billing disabled), **404**
+(`gemini-2.5-flash` retired for new keys), **503** (Google momentarily overloaded) and **429**
+(free tier — 20 requests/day/model — exhausted). Google stated all four plainly in the response
+body; we threw the body away and wrote a guess. The fixes are a billing console, a config
+field, one second, and a day — and that sentence points at none of them. It sent me to the
+model three times.
+
+`onFailure` now hands the caller an actionable sentence, including Google's own `retryDelay`
+when it supplies one. **A failure that reports "it didn't work" is barely better than a silent
+one** — when a third party tells you why, pass it on.
+
+**L93 — Google's own retry hint made my retry useless, and that is worth reading.** The 429
+body carried `retryDelay: "16s"`; the retry waits 900ms. So the retry that fixed the 503 case
+cannot fix a 429 — and for a DAILY quota no delay helps at all. The delay is now surfaced in
+the message rather than obeyed blindly, because a 16-second hold inside a webhook a provider
+is waiting on is the wrong trade. **Check whether the upstream told you how long to wait before
+deciding your own backoff.**
+
+**L94 — The free Gemini tier is 20 requests per day PER MODEL, which a day of testing exhausts.**
+Worth knowing before diagnosing: the quota is per model, so switching models resets nothing
+that matters and `gemini-flash-latest` pointing at `gemini-3.7-flash` on a given day means the
+quota belongs to that resolved model. The app's own dialog already recommends the paid tier —
+for privacy — and this is the second reason.

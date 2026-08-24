@@ -146,6 +146,60 @@ function recordFailure(now: number) {
 }
 
 /**
+ * Turn a Gemini failure into a sentence somebody can act on.
+ *
+ * ─── WHY THIS EXISTS, MEASURED IN WASTED HOURS ──────────────────────────────
+ * Every failure path in geminiJson returned bare `null`, so every caller reported the same
+ * thing: "the AI did not return a reply". On 23-24 Aug 2026 that one sentence stood for FOUR
+ * completely different problems, and it sent me to the wrong place three times:
+ *
+ *   403 PERMISSION_DENIED   the GCP project had billing disabled
+ *   404 NOT_FOUND           gemini-2.5-flash retired for new keys
+ *   503 UNAVAILABLE         Google momentarily overloaded
+ *   429 RESOURCE_EXHAUSTED  free tier, 20 requests/day/model, exhausted
+ *
+ * Google said all four plainly in the response body. We threw the body away and wrote a
+ * guess. The first is fixed in a billing console, the second in a config field, the third by
+ * waiting a second, the fourth by waiting a day or paying — and "the AI did not return a
+ * reply" points at none of them.
+ */
+function failureReason(status: number, body: string): string {
+  let msg = "";
+  let retryDelay: string | null = null;
+  try {
+    const j = JSON.parse(body) as { error?: { message?: string; details?: Array<Record<string, unknown>> } };
+    /* First line only. Google's 429 message runs to several lines including a full URL and
+       a usage-dashboard link; the first line is the part a person needs. */
+    msg = (j.error?.message ?? "").split(/\r?\n/)[0].trim();
+    for (const d of j.error?.details ?? []) {
+      if (typeof d.retryDelay === "string") retryDelay = d.retryDelay;
+    }
+  } catch { /* a non-JSON body is still worth reporting by status */ }
+
+  const tail = retryDelay ? ` Google says retry in ${retryDelay}.` : "";
+  if (status === 429) {
+    return `Gemini quota or rate limit reached — ${msg || "too many requests"}.${tail} ` +
+      "A free-tier key allows only a few requests per day per model; a paid key removes this.";
+  }
+  if (status === 403) {
+    return `Gemini refused the project — ${msg || "permission denied"}. Check that billing is ` +
+      "enabled on the Google Cloud project the key belongs to.";
+  }
+  if (status === 404) {
+    return `Gemini does not have that model — ${msg || "not found"}. Change the model in ` +
+      "Settings → Integrations → Gemini.";
+  }
+  if (status === 400) {
+    return `Gemini rejected the request — ${msg || "bad request"}. Usually the API key is wrong.`;
+  }
+  if (status >= 500) {
+    return `Gemini is temporarily unavailable — ${msg || "upstream error"}.${tail} Nothing is ` +
+      "misconfigured; it clears on its own.";
+  }
+  return `Gemini returned HTTP ${status}${msg ? ` — ${msg}` : ""}.`;
+}
+
+/**
  * Call Gemini and parse a JSON response.
  *
  * Returns null on EVERY failure path — timeout, HTTP error, unparseable body,
@@ -161,12 +215,19 @@ export async function geminiJson<T>(args: {
   timeoutMs?: number;
   /** Prefix for server logs, e.g. "ai/draft-followup". */
   label: string;
+  /**
+   * Called with a human-readable reason on every failure path. Optional so existing callers
+   * are unchanged — but any caller that shows a failure to a person should pass it, because
+   * `null` alone is what made four different faults read identically.
+   */
+  onFailure?: (reason: string) => void;
   /** Internal. Set on the single retry so it cannot recurse — see the 5xx branch below. */
   __isRetry?: boolean;
 }): Promise<T | null> {
   const now = Date.now();
   if (breakerOpen(now)) {
     console.warn(`[${args.label}] Gemini circuit breaker open — using stub`);
+    args.onFailure?.("Gemini failed repeatedly just now, so calls are paused for a minute. It retries on its own.");
     return null;
   }
 
@@ -221,12 +282,17 @@ export async function geminiJson<T>(args: {
         return geminiJson<T>({ ...args, __isRetry: true });
       }
       recordFailure(now);
+      args.onFailure?.(failureReason(res.status, body));
       return null;
     }
 
     const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) { recordFailure(now); return null; }
+    if (!raw) {
+      recordFailure(now);
+      args.onFailure?.("Gemini answered but the reply was empty.");
+      return null;
+    }
 
     // Models still fence JSON in ```json blocks despite responseMimeType.
     const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();

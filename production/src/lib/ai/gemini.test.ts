@@ -189,3 +189,107 @@ describe("retrying a transient failure", () => {
     expect(spy).toHaveBeenCalledTimes(5);
   });
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Saying WHY, added 24 Aug 2026 after the cost of not saying it.
+
+   Every failure path returned bare null, so every caller reported the same sentence: "the AI
+   did not return a reply". In a single day that one sentence stood for FOUR different faults
+   and sent me to the wrong place three times:
+
+     403  the GCP project had billing disabled
+     404  gemini-2.5-flash retired for new keys
+     503  Google momentarily overloaded
+     429  free tier, 20 requests/day/model, exhausted
+
+   Google stated all four plainly in the response body. We threw the body away and wrote a
+   guess. Each has a different fix — a billing console, a config field, one second, or a day —
+   and "the AI did not return a reply" points at none of them.
+   ───────────────────────────────────────────────────────────────────────────── */
+describe("the failure reason reaches the caller", () => {
+  const failWith = (status: number, body: string) => ({
+    ok: false, status, text: async () => body, json: async () => ({}),
+  } as unknown as Response);
+
+  /** The real 429 body Google returned on 24 Aug 2026, trimmed. */
+  const QUOTA_BODY = JSON.stringify({
+    error: {
+      code: 429,
+      status: "RESOURCE_EXHAUSTED",
+      message:
+        "You exceeded your current quota, please check your plan and billing details.\n" +
+        "* Quota exceeded for metric: generate_content_free_tier_requests, limit: 20",
+      details: [{ "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "16s" }],
+    },
+  });
+
+  it("names a quota problem AND quotes Google's retry delay", async () => {
+    let why = "";
+    vi.stubGlobal("fetch", vi.fn(async () => failWith(429, QUOTA_BODY)));
+    await geminiJson({ ...ARGS, onFailure: (r) => { why = r; } });
+    expect(why).toMatch(/quota or rate limit/i);
+    expect(why).toContain("retry in 16s");
+    /* The actionable half: a free key is the cause, and a paid one is the fix. */
+    expect(why).toMatch(/free-tier/i);
+  });
+
+  it("points a 403 at billing, which is where it actually was", async () => {
+    let why = "";
+    const body = JSON.stringify({ error: { code: 403, status: "PERMISSION_DENIED", message: "Your project has been denied access. Please contact support." } });
+    vi.stubGlobal("fetch", vi.fn(async () => failWith(403, body)));
+    await geminiJson({ ...ARGS, onFailure: (r) => { why = r; } });
+    expect(why).toMatch(/billing/i);
+  });
+
+  it("points a 404 at the model setting", async () => {
+    let why = "";
+    const body = JSON.stringify({ error: { code: 404, message: "This model models/gemini-2.5-flash is no longer available to new users." } });
+    vi.stubGlobal("fetch", vi.fn(async () => failWith(404, body)));
+    await geminiJson({ ...ARGS, onFailure: (r) => { why = r; } });
+    expect(why).toMatch(/model/i);
+    expect(why).toMatch(/Settings/);
+  });
+
+  it("says a 5xx is nobody's misconfiguration", async () => {
+    /* This one matters because it is the failure most likely to be chased. It clears on its
+       own, and an hour spent checking keys and models is an hour wasted. */
+    let why = "";
+    const body = JSON.stringify({ error: { code: 503, message: "This model is currently experiencing high demand." } });
+    vi.stubGlobal("fetch", vi.fn(async () => failWith(503, body)));
+    await geminiJson({ ...ARGS, onFailure: (r) => { why = r; } });
+    expect(why).toMatch(/temporarily unavailable/i);
+    expect(why).toMatch(/Nothing is misconfigured/i);
+  });
+
+  it("survives a body that is not JSON at all", async () => {
+    /* An HTML error page from a proxy, for instance. Still reports the status rather than
+       throwing inside the error handler. */
+    let why = "";
+    vi.stubGlobal("fetch", vi.fn(async () => failWith(502, "<html>Bad Gateway</html>")));
+    await geminiJson({ ...ARGS, onFailure: (r) => { why = r; } });
+    expect(why).toMatch(/temporarily unavailable/i);
+  });
+
+  it("reports an empty answer differently from an HTTP failure", async () => {
+    let why = "";
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true, status: 200, text: async () => "", json: async () => ({ candidates: [] }),
+    } as unknown as Response)));
+    await geminiJson({ ...ARGS, onFailure: (r) => { why = r; } });
+    expect(why).toMatch(/answered but the reply was empty/i);
+  });
+
+  it("reports the open breaker as self-healing, not as a fault to chase", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => failWith(403, "{}")));
+    for (let i = 0; i < 3; i++) await geminiJson(ARGS);
+    let why = "";
+    await geminiJson({ ...ARGS, onFailure: (r) => { why = r; } });
+    expect(why).toMatch(/paused for a minute/i);
+    expect(why).toMatch(/retries on its own/i);
+  });
+
+  it("stays optional, so existing callers are untouched", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => failWith(500, "{}")));
+    await expect(geminiJson(ARGS)).resolves.toBeNull();
+  });
+});
