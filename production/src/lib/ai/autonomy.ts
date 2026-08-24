@@ -104,6 +104,32 @@ export const AI_ACTIONS = {
     today: "hold",
     supports: ["off", "hold", "auto"],
   },
+  "support.reply.send": {
+    label: "Answer a customer's support request",
+    /* WAS not declared at all, because nothing could answer a support request: inbound mail to
+       support@ opened a ticket and stopped there (api/webhooks/inbound-email, the `support`
+       branch). Built on 24 Aug 2026 — lib/ai/support-agent.ts plus the two inbound routes — so
+       the action exists now and has to be declarable.
+
+       `hold`, and this is the one to watch longest of the three. A sales reply that misreads
+       the customer loses a deal; a SUPPORT reply that misreads the customer is a set of
+       instructions somebody follows, in their own DNS zone or their own admin console. The
+       guards are real — no record value the tenant has not verified, no credential request, no
+       price, and an outage backstop that overrules the model's own severity — but none of them
+       is Pardeep having read twenty of these first. He moves this to `auto` from /automation
+       when he believes it.
+
+       Meanwhile the answer is drafted, filed on the ticket's transcript and visible on the
+       Support screen, so the desk is faster even at `hold`. */
+    today: "hold",
+    supports: ["off", "hold", "auto"],
+  },
+  /* There is deliberately NO entry for the escalation notice or the SLA breach alert, and it
+     is the same rule that removed `compliance.send`: those go to OUR OWN support desk — "this
+     ticket has waited 40 minutes and nobody has taken it" — not to a customer. This dial stops
+     what the app sends OUT to other people; it must never be able to silence what the app says
+     TO US. A kill switch that also muted the unassigned-escalation alarm would turn one busy
+     morning into a customer discovering we never answered. */
   "dunning.send": {
     label: "Chase an overdue invoice",
     today: "auto",

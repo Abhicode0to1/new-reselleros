@@ -85,6 +85,24 @@ JOBS=(
   # somebody moves that dial from /automation this job drafts onto lead timelines and
   # sends nothing.
   "resellersos-ai-sales-loop|0 9-19 * * 1-6|/api/cron/ai-sales-loop|AI sales agent follow-ups that have come due"
+  # EVERY 15 MINUTES, and ROUND THE CLOCK — the only job here that is both.
+  #
+  # The frequency is set by the cheaper of its two halves, not the more important one. The
+  # 48-hour auto-close would be happy running daily; the "an escalated ticket has been
+  # nobody's for 30 minutes" alert cannot be kept by an hourly sweep, because the alert
+  # would land anywhere between 30 and 90 minutes late and the number in it would be a
+  # fiction. A support promise people learn to distrust is worse than no promise.
+  #
+  # No business-hours window, unlike the sales follow-up above. Both halves are INTERNAL:
+  # closing a ticket for silence is a state change on our own row, and the breach alert goes
+  # to our own desk. Nothing here mails a customer, so there is no 03:00 message to be
+  # embarrassed by — and a Saturday-night outage escalation nobody was told about until
+  # Monday is exactly the failure this job exists to prevent.
+  #
+  # Safe to enable immediately, and it is NOT gated by the autonomy dial for the reason
+  # above: the dial stops what the app sends OUT to other people, and must never be able to
+  # silence what the app says TO US.
+  "resellersos-ai-support-sla|*/15 * * * *|/api/cron/ai-support-sla|Close silent support tickets; alert on unassigned escalations"
 )
 
 echo "Region:  $REGION"

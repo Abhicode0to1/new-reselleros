@@ -31,7 +31,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolveGeminiConfig } from "@/lib/ai/gemini";
 import { sendEmail } from "@/lib/email/send";
 import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
-import { decideInboundRoute, newTicketId } from "@/lib/inbound/routing";
+import { decideInboundRoute } from "@/lib/inbound/routing";
 import { decideDisposition } from "@/lib/inbound/disposition";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { isSelfTest, selfTestMarkerMisplaced, SELF_TEST_MARKER } from "@/lib/inbound/self-test";
@@ -40,6 +40,7 @@ import { extractEntities } from "@/lib/inbound/extract";
 import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
 import { shouldRequoteOnReply } from "@/lib/quotes/requote-on-reply";
 import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
+import { runSupportAgentForMessage } from "@/lib/ai/run-support-agent";
 import { planCorrections, correctionDetail } from "@/lib/leads/apply-correction";
 import { extractAttachments, pickBillAttachment } from "@/lib/inbound/attachments";
 import { readBillWithGemini } from "@/lib/ai/read-bill";
@@ -56,6 +57,10 @@ const INBOUND_SECRET = process.env.INBOUND_EMAIL_SECRET?.trim() || "";
    mail signed by somebody else's company. */
 const SELLER_NAME = process.env.SELLER_LEGAL_NAME?.trim() || "ANUTECH DIGITAL PVT LTD";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
+/* The address the AI support agent signs as. Env-overridable for the same reason SELLER_NAME
+   is: this route can point a second reseller's mail at their own tenant, and a hardcoded
+   support@anutech.in would have that reseller's customers replying to somebody else's desk. */
+const SUPPORT_EMAIL  = process.env.SUPPORT_EMAIL?.trim() || "support@anutech.in";
 const APP_URL        = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
@@ -283,34 +288,65 @@ export async function POST(request: NextRequest) {
   }
 
   if (routing.route === "support") {
-    const ticketId = newTicketId();
-    // customer_id stays null — the sender may not be a known customer, and
-    // guessing one would attach a stranger's ticket to a real account. The
-    // support page shows raised_by_email, so nothing is lost by not guessing.
-    const { error: tErr } = await admin.from("support_tickets").insert({
-      id:              ticketId,
-      tenant_id:       tenantId,
-      customer_id:     null,
-      customer_name:   fromName || fromEmail,
-      raised_by_email: fromEmail,
-      raised_by_user:  null,
-      category:        "other",
-      // "normal", not "medium" — the enum is low|normal|high|urgent. An email
-      // nobody has triaged has no claim to being urgent.
-      priority:        "normal",
-      subject:         subject || "(no subject)",
-      body:            text || html || "(no body)",
-      status:          "open",
+    /* Handed to the AI support agent, which opens (or reuses) the ticket and then answers,
+       asks, or escalates. Added 24 Aug 2026.
+     *
+     * ─── THE TICKET INSERT MOVED, IT WAS NOT DUPLICATED ─────────────────────
+     * This branch used to insert the ticket itself. `runSupportAgentForMessage` now does it,
+     * with two behaviours this branch could not have: an existing OPEN ticket from the same
+     * sender is REUSED rather than duplicated (a customer replying three times used to get
+     * three tickets), and a ticket resolved in the last 48 hours is reopened, which is what
+     * the resolution note tells the customer will happen. Leaving the insert here as well
+     * would mean two tickets per message — the same "two drafters on one webhook" mistake
+     * `run-sales-agent.ts`'s header describes for replies.
+     *
+     * customer_id still stays null there, for the same reason it did here: the sender may not
+     * be a known customer and guessing one would attach a stranger's ticket to a real account.
+     *
+     * AWAITED, unlike the sales branch's fire-and-forget agent call. The response carries the
+     * ticket id and the ticket is created inside this call, so returning first would mean
+     * reporting a ticket that does not exist yet. */
+    const stripped = stripQuoted(text || html || "");
+    const incoming = stripped.text.trim() || (text || html || "").trim();
+
+    if (!incoming) {
+      /* No readable text, so there is nothing for the agent to read — but the customer did try
+         to reach us, so the message is recorded rather than dropped. No ticket is opened: one
+         with no question in it would be escalated and land on somebody's queue saying nothing. */
+      await finalize("received_empty", null, null);
+      return NextResponse.json({
+        received: true, route: "support",
+        note: "Recorded. The message had no readable text, so no ticket was opened.",
+      });
+    }
+
+    const support = await runSupportAgentForMessage({
+      admin,
+      tenantId,
+      incoming,
+      customerContact: fromEmail,
+      channel: "email",
+      subject,
+      senderName: fromName,
+      fromEmail: FROM_EMAIL,
+      sellerName: SELLER_NAME,
+      supportEmail: SUPPORT_EMAIL,
+      appUrl: APP_URL,
     });
-    if (tErr) {
-      console.error("[inbound-email] ticket insert failed:", tErr.message);
+
+    if (!support.ticketId) {
+      console.error("[inbound-email] support ticket could not be opened:", support.detail);
       await finalize("error", null, null);
       // 500 so the provider retries — a support request must not be lost
       // because one insert failed.
       return NextResponse.json({ error: "Could not open a ticket" }, { status: 500 });
     }
-    await finalize("ticket_created", null, ticketId);
-    return NextResponse.json({ received: true, route: "support", ticketId });
+
+    await finalize("ticket_created", null, support.ticketId);
+    return NextResponse.json({
+      received: true, route: "support", ticketId: support.ticketId,
+      outcome: support.outcome, detail: support.detail,
+    });
   }
 
   if (routing.route === "billing") {
