@@ -37,6 +37,25 @@ export interface CreateRenewalQuoteInput {
   customerId:      string | null;
   customerName:    string;
   plan:            string;
+  /**
+   * `subscriptions.item_id` — the catalogue row this subscription was sold from.
+   *
+   * ─── WHY THE ID AND NOT JUST THE NAME (added 24 Aug 2026) ─────────────────
+   * The catalogue lookup below used to match on `items.name = input.plan`, and `plan` is a
+   * TEXT COPY taken when the subscription was created. The two drift the moment anybody
+   * renames a product — and they were about to: the catalogue said "Google Workspace
+   * Standard" while customers write Google's real name, "Google Workspace Business
+   * Standard".
+   *
+   * A failed lookup here is not a cosmetic miss. `catalogPerSeatMonth` is what `renewalTerm`
+   * checks the stored `mrr` against, and that check is the only thing that caught a 144x
+   * renewal on a live subscription (see the comment at the call site). Renaming an item would
+   * have blinded the guard for every subscription sold under the old name, silently, until the
+   * renewal date.
+   *
+   * Optional so no caller breaks; when absent the name lookup still runs.
+   */
+  itemId?:         string | null;
   seats:           number;
   mrr:             number;          // monthly run rate (₹)
   /**
@@ -118,12 +137,32 @@ export async function createOrGetRenewalQuote(
      the correct monthly charge. renewalTerm refuses that rather than dividing by 12 to
      "repair" it: a plausible wrong price on a customer-facing quote is worse than a
      stop. See lib/renewals/renewal-term.ts. */
-  const { data: catalogItem } = await supabase
-    .from("items")
-    .select("msrp")
-    .eq("tenant_id", input.tenantId)
-    .eq("name", input.plan)
-    .maybeSingle();
+  /* By ID first — it survives a rename, the name does not. See CreateRenewalQuoteInput.itemId.
+     The name lookup is kept as the fallback for rows written before item_id existed. */
+  const catalogItem = await (async () => {
+    if (input.itemId) {
+      const { data } = await supabase
+        .from("items")
+        .select("msrp")
+        .eq("tenant_id", input.tenantId)
+        .eq("id", input.itemId)
+        .maybeSingle();
+      if (data) return data;
+      /* Loud: an item_id that resolves to nothing means the catalogue row was deleted under a
+         live subscription, which is a bigger problem than this renewal. */
+      console.error(
+        `[renewals] subscription ${input.subscriptionId} points at item ${input.itemId}, ` +
+          "which no longer exists — falling back to matching on the plan NAME",
+      );
+    }
+    const { data } = await supabase
+      .from("items")
+      .select("msrp")
+      .eq("tenant_id", input.tenantId)
+      .eq("name", input.plan)
+      .maybeSingle();
+    return data;
+  })();
 
   const term = renewalTerm({
     mrr: input.mrr,

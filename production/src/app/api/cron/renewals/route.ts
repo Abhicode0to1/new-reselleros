@@ -152,7 +152,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
   const { data: subs, error: subsErr } = await supabase
     .from("subscriptions")
     .select(`
-      id, tenant_id, customer_id, customer_name, plan, vendor, seats, mrr,
+      id, tenant_id, customer_id, customer_name, plan, item_id, vendor, seats, mrr,
       renewal_date, status, renewal_state, reminder_count, renewal_quote_id, term_months
     `)
     .eq("status", "active")
@@ -259,6 +259,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
           customerId:      sub.customer_id,
           customerName:    sub.customer_name,
           plan:            sub.plan,
+          itemId:            sub.item_id ?? null,
           seats:           sub.seats,
           mrr:             sub.mrr ?? 0,
           termMonths:      sub.term_months ?? null,
