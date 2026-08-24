@@ -110,12 +110,29 @@ export default function GeminiConfigureDialog({ open, onOpenChange }: Props) {
     onError: (err) => toast.error((err as Error).message),
   });
 
+  /**
+   * Tests the SAVED key, never what is typed above.
+   *
+   * The route takes no body and resolves the key through resolveGeminiConfig, so a key pasted
+   * into the field and not saved is NOT what gets tested. That caught Pardeep on 24 Aug 2026:
+   * he pasted a new paid-tier key, hit Test, saw green, and closed the dialog — while the row
+   * still held yesterday's free-tier key, whose daily quota had merely reset. The
+   * toast now says which key it tested, because "Connected" next to an unsaved field reads as
+   * confirmation of the thing you just typed.
+   */
   async function testConnection() {
     setTesting(true);
     try {
       const res = await fetch("/api/integrations/gemini/test", { method: "POST" });
       const json = await res.json();
-      if (json.ok) toast.success(`Connected ✓ — model ${json.model} responded`);
+      if (json.ok) {
+        toast.success(
+          `Connected ✓ — model ${json.model} responded`,
+          { description: apiKey.trim().length >= 20
+              ? "This tested the SAVED key, not the one you just typed. Press Save to store it."
+              : "This tested the key already saved for this workspace." },
+        );
+      }
       else toast.error(json.error ?? "Test failed");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Network error");

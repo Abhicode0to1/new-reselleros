@@ -2101,3 +2101,26 @@ Worth knowing before diagnosing: the quota is per model, so switching models res
 that matters and `gemini-flash-latest` pointing at `gemini-3.7-flash` on a given day means the
 quota belongs to that resolved model. The app's own dialog already recommends the paid tier —
 for privacy — and this is the second reason.
+
+**L95 — "Connected ✓" was testing the SAVED key while a new one sat unsaved in the field.**
+The Gemini dialog's Test posts an empty body and the route resolves the key through
+`resolveGeminiConfig`, so it exercises what is STORED, never what is typed. On 24 Aug 2026
+Pardeep pasted a new paid-tier key, pressed Test, saw green, and closed the dialog — the row
+still held yesterday's free-tier key, whose daily quota had simply reset at midnight. Two
+independent things looked like one success.
+
+Proved by `updated_at`, not by argument: it still read `2026-08-23 15:49` while the clock said
+24 Aug. **When a UI reports success, check WHICH object it succeeded against** — and I had this
+backwards first, suspecting Test used the typed value. Reading the route settled it in one grep.
+
+The toast now says "This tested the SAVED key, not the one you just typed. Press Save to store
+it." **A success message next to an unsaved input reads as confirmation of that input**, whatever
+it technically means.
+
+**L96 — Two of today's mysteries were one cause: the project's billing was disabled.** The
+403 `PERMISSION_DENIED` "your project has been denied access" on the old Gemini key, and Cloud
+Run answering 503 with "billing is disabled for this project", were the same fault. I had
+diagnosed the 403 as a wrong key FORMAT — claiming an `AQ.`-prefixed key was not a valid API
+key — and Pardeep was right that AI Studio issues them. **A platform-level fault presents as
+several unrelated application faults**, so when two subsystems fail on the same day, check the
+account before the code. Restoring billing fixed both, and the old key started working again.
