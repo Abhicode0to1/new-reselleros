@@ -770,6 +770,7 @@ export async function POST(request: NextRequest) {
       leadId: existing.id,
       recipient: fromEmail,
       senderIsOurs,
+      isSelfTest: selfTest,
       fromEmail: FROM_EMAIL,
     }).catch((err) => console.error("[inbound-email] auto-reply crashed:", err));
 
@@ -895,6 +896,7 @@ export async function POST(request: NextRequest) {
     leadId,
     recipient: fromEmail,
     senderIsOurs,
+    isSelfTest: selfTest,
     fromEmail: FROM_EMAIL,
   }).catch((err) => console.error("[inbound-email] auto-reply crashed:", err));
 

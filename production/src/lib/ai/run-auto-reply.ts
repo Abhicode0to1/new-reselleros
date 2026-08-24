@@ -43,6 +43,8 @@ export interface RunAutoReplyArgs {
   /** Where the enquiry came from, and where a reply would go. */
   recipient: string;
   senderIsOurs: boolean;
+  /** A marked self-test — lets the reply reach our own address, which is the point of one. */
+  isSelfTest?: boolean;
   /** Envelope sender for this deployment. */
   fromEmail: string;
 }
@@ -128,6 +130,7 @@ export async function runAutoReply(args: RunAutoReplyArgs): Promise<void> {
 
   const decision = decideAutoReply({
     senderIsOurs:       args.senderIsOurs,
+    isSelfTest:         args.isSelfTest,
     theyWroteLast:      drafted.draft.theyWroteLast,
     alreadyReplied,
     humanIsHandlingIt,

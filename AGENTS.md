@@ -2124,3 +2124,14 @@ diagnosed the 403 as a wrong key FORMAT — claiming an `AQ.`-prefixed key was n
 key — and Pardeep was right that AI Studio issues them. **A platform-level fault presents as
 several unrelated application faults**, so when two subsystems fail on the same day, check the
 account before the code. Restoring billing fixed both, and the old key started working again.
+
+**L97 — The self-test escape was added to one gate and not its twin.** `isSelfTest` reached
+`decideDisposition` and `decideAutoSend` (quotes) in the same sitting, and **not**
+`decideAutoReply`. So a marked self-test exercised the whole chain except the single step it
+existed to prove — the first successful AI draft came back `held` reading "the sender is one of
+our own addresses" instead of "replies are set to hold for this workspace". Right outcome,
+wrong reason, and the wrong reason is what stops somebody trusting the next result.
+
+**When a flag has to be honoured by more than one gate, add it to all of them in one edit and
+list them in the comment.** Same shape as L75 (a function wired to one webhook branch instead
+of two): the logic was right everywhere and the wiring was right in two places out of three.

@@ -31,6 +31,15 @@ export interface AutoReplyInput {
   /** From the disposition guard — never reply to our own address. */
   senderIsOurs: boolean;
   /**
+   * A marked self-test from our own address — see lib/inbound/self-test.ts.
+   *
+   * Buys passage through the own-address rule and NOTHING else: a self-test with a promise
+   * in it is still held, one where they did not write last is still held, and the workspace
+   * dial still applies. Otherwise the test would prove a behaviour the real path does not
+   * have, which is worse than not testing it.
+   */
+  isSelfTest?: boolean;
+  /**
    * True when the newest message in the thread came FROM the customer. If our own message is
    * newest, nobody is waiting and a reply is us talking to ourselves in public.
    */
@@ -61,9 +70,22 @@ export type AutoReplyDecision =
 const MIN_MESSAGE_CHARS = 40;
 
 export function decideAutoReply(input: AutoReplyInput): AutoReplyDecision {
-  if (input.senderIsOurs) {
+  if (input.senderIsOurs && !input.isSelfTest) {
     /* First, and the worst one to get wrong: a reply to ourselves that lands back in the
-       inbox is a loop with a customer-facing mailbox in the middle of it. */
+       inbox is a loop with a customer-facing mailbox in the middle of it.
+
+       The self-test escape sits INSIDE this branch, exactly as it does in
+       lib/inbound/disposition.ts and lib/quotes/auto-send-quote.ts. It was MISSING here and
+       that was an oversight, not a decision: I added it to the quote sender in the same
+       sitting and not to this one, so a marked self-test could exercise the whole chain
+       except the one step it was written to prove. Found on 24 Aug 2026 when the first
+       successful AI draft came back `held` for the wrong reason — "the sender is one of our
+       own addresses" rather than "replies are set to hold for this workspace".
+
+       The loop this could open is closed by the marker rule, not by this check: `isSelfTest`
+       requires the subject to BEGIN with the marker, and a reply we send is subjected either
+       from the model or as "Re: your enquiry" — neither can start with it. There is a test
+       for that exact subject in lib/inbound/self-test.test.ts. */
     return { send: false, reason: "the sender is one of our own addresses — nothing is answered automatically" };
   }
 

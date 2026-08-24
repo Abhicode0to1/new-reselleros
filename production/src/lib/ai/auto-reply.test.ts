@@ -156,3 +156,52 @@ describe("order of refusals", () => {
     expect(d.reason).toMatch(/discount/);
   });
 });
+
+describe("the operator's own self-test", () => {
+  /* THE OVERSIGHT THIS FIXES, found 24 Aug 2026 on the first successful AI draft. The escape
+     was added to lib/quotes/auto-send-quote.ts in the same sitting and NOT here, so a marked
+     self-test exercised the whole chain except the one step it existed to prove: the draft
+     came back `held` reading "the sender is one of our own addresses" instead of "replies are
+     set to hold for this workspace". Right outcome, wrong reason, and the wrong reason is what
+     stops somebody trusting the next result. */
+
+  it("lets a marked self-test past the own-address rule", () => {
+    const d = decideAutoReply({ ...ok, senderIsOurs: true, isSelfTest: true });
+    expect(d.send).toBe(true);
+  });
+
+  it("still refuses our own address when it is NOT a marked self-test", () => {
+    const d = decideAutoReply({ ...ok, senderIsOurs: true, isSelfTest: false });
+    expect(d.send).toBe(false);
+    if (d.send) return;
+    expect(d.reason).toMatch(/our own addresses/);
+  });
+
+  it("behaves as false when the flag is absent", () => {
+    /* Every existing caller omitted it before today. Absent must mean "not a self-test", or
+       adding the parameter would have quietly opened the loop for the whole pipeline. */
+    const d = decideAutoReply({ ...ok, senderIsOurs: true });
+    expect(d.send).toBe(false);
+  });
+
+  it("does NOT exempt a self-test from the promise rule", () => {
+    /* The marker buys passage through one rule. A self-test that could send a price would
+       prove a behaviour the real path does not have — worse than not testing it. */
+    const d = decideAutoReply({
+      ...ok,
+      senderIsOurs: true,
+      isSelfTest: true,
+      draft: { subject: "Re: enquiry", message: "Thanks — the total for fifty seats is ₹1,62,000 including GST." },
+    });
+    expect(d.send).toBe(false);
+    if (d.send) return;
+    expect(d.findings?.some((f) => f.kind === "money")).toBe(true);
+  });
+
+  it("does NOT exempt a self-test from the other mechanical checks", () => {
+    expect(decideAutoReply({ ...ok, senderIsOurs: true, isSelfTest: true, theyWroteLast: false }).send).toBe(false);
+    expect(decideAutoReply({ ...ok, senderIsOurs: true, isSelfTest: true, alreadyReplied: true }).send).toBe(false);
+    expect(decideAutoReply({ ...ok, senderIsOurs: true, isSelfTest: true, humanIsHandlingIt: true }).send).toBe(false);
+    expect(decideAutoReply({ ...ok, senderIsOurs: true, isSelfTest: true, draftIsForThisLead: false }).send).toBe(false);
+  });
+});
