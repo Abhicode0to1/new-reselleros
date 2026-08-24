@@ -24,6 +24,7 @@ import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { renderQuotePDF } from "@/lib/pdf";
+import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
 import { quoteAmountDue } from "@/lib/payments/amount-due";
 import { rupee } from "@/lib/utils";
@@ -66,13 +67,24 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const supabase = createAdminClient();
 
-  // ── 3. Load quote (scoped to tenant) ─────────────────────────────
+  /* ── 3. Load quote (scoped to tenant) ─────────────────────────────
+     `lead_id` was added to this select on 24 Aug 2026 and its absence is part of why
+     Darshan's bug lasted: this route had no idea which lead it was quoting for, so it could
+     not have moved the stage even if somebody had thought to.
+
+     NOTE the comment lives out here. A block comment inside the select STRING breaks
+     supabase-js's type-level parser — it reads that string to derive the row type, and the
+     first attempt turned every field on `quote` into a ParserError.
+
+     Second lesson from the same two minutes: writing the words for a block comment INSIDE a
+     block comment closes it early. That is what the four TS1005 errors after the first fix
+     were. */
   const { data: quote, error: qErr } = await supabase
     .from("quotes")
     .select(`
       id, tenant_id, customer_id, customer_name, plan, seats, amount,
       status, payment_status, line_items, subtotal, discount_pct, tax_rate,
-      created_date, expires_date, notes, is_renewal, public_token
+      created_date, expires_date, notes, is_renewal, public_token, lead_id
     `)
     .eq("id", params.id)
     .single();
@@ -260,10 +272,59 @@ ${tenant.name}${tenant.phone ? `\n${tenant.phone}` : ""}${tenant.email ? `\n${te
   // ── 10. Flip quote.status draft → sent on success ────────────────
   if (sendResult.status === "sent" || sendResult.status === "stubbed") {
     if (quote.status === "draft") {
-      await supabase
+      const { error: statusErr } = await supabase
         .from("quotes")
         .update({ status: "sent" })
         .eq("id", quote.id);
+      /* Checked now. An unchecked write here is the same fault found in send-auto-quote.ts
+         hours earlier: supabase-js does not throw, so the quote stays `draft` while the
+         customer holds it and the next person sends it again. */
+      if (statusErr) console.error(`[quotes/send] could not mark ${quote.id} sent:`, statusErr);
+    }
+
+    /* ── AND MOVE THE LEAD INTO "Quote Sent" ─────────────────────────────────
+       Darshan's report, 24 Aug 2026: "Customer ko quotation sent kar di lekin Quote sent
+       mein show nahi kar raha." He was right — "Quote Sent" is a lead STAGE
+       (folders.ts: `l.stage === "quote"`), and the ONLY place that ever set it was the
+       public buy-page checkout. This route, the auto-quote and renewals all left it alone,
+       so the quote went and the column named after that act stayed empty.
+
+       This does not contradict the morning's decision that the app should nudge rather than
+       advance stages. It is the same rule: automation opens on a FACT. "An activity was
+       logged" is a guess about what it meant; "a quote was emailed to this customer" is
+       exactly what the words Quote Sent describe.
+
+       Forward only — stageAfterQuoteSent refuses to drag a Won or Lost lead back. Failures
+       are logged and never fail the response: the mail has gone, and a stage that did not
+       move is a reporting problem, not a reason to tell the operator the send failed. */
+    if (quote.lead_id) {
+      const { data: leadRow } = await supabase
+        .from("leads")
+        .select("stage")
+        .eq("id", quote.lead_id)
+        .eq("tenant_id", me.tenant_id)
+        .maybeSingle();
+
+      const move = stageAfterQuoteSent((leadRow as { stage?: string | null } | null)?.stage);
+      if (move.nextStage) {
+        const { error: stageErr } = await supabase
+          .from("leads")
+          .update({ stage: move.nextStage })
+          .eq("id", quote.lead_id)
+          .eq("tenant_id", me.tenant_id);
+        if (stageErr) {
+          console.error(`[quotes/send] could not move lead ${quote.lead_id} to Quote Sent:`, stageErr);
+        } else {
+          await supabase.from("lead_activities").insert({
+            tenant_id: me.tenant_id,
+            lead_id:   quote.lead_id,
+            kind:      "stage",
+            detail:    `Moved to Quote Sent — ${quote.id} was emailed to ${recipient}.`,
+          });
+        }
+      } else {
+        console.info(`[quotes/send] lead ${quote.lead_id} stage unchanged — ${move.reason}`);
+      }
     }
   }
 

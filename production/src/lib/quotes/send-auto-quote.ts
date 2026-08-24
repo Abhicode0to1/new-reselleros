@@ -32,6 +32,7 @@
 import { sendEmail } from "@/lib/email/send";
 import { renderQuotePDF } from "@/lib/pdf";
 import { rupee } from "@/lib/utils";
+import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import type { createAdminClient } from "@/lib/supabase/server";
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
 
@@ -276,4 +277,40 @@ term — and we will send a revised quote.
       `${attachments ? " (PDF attached)" : " (PDF failed to render; figures in the body)"}. ` +
       `Term was stated in their mail.`,
   });
+
+  /* ── AND MOVE THE LEAD INTO "Quote Sent" ───────────────────────────────────
+     Wired here AND in api/quotes/[id]/send in the same edit, deliberately. Two of today's
+     bugs were exactly this shape — a rule applied to one of its call sites and not the
+     others (L75: the auto-quote wired to one webhook branch; L97: the self-test flag reaching
+     two gates of three). Darshan's report is the third, and it is the same disease at the
+     data layer: only the public buy-page checkout ever set `stage = "quote"`.
+
+     Forward only. stageAfterQuoteSent refuses to drag a Won or Lost lead backwards, and its
+     reason is logged either way so a lead that did NOT move is explicable. */
+  const { data: leadRow } = await admin
+    .from("leads")
+    .select("stage")
+    .eq("id", args.leadId)
+    .eq("tenant_id", args.tenantId)
+    .maybeSingle();
+
+  const move = stageAfterQuoteSent((leadRow as { stage?: string | null } | null)?.stage);
+  if (move.nextStage) {
+    const { error: stageErr } = await admin
+      .from("leads")
+      .update({ stage: move.nextStage })
+      .eq("id", args.leadId)
+      .eq("tenant_id", args.tenantId);
+    if (stageErr) {
+      console.error(`[send-auto-quote] could not move lead ${args.leadId} to Quote Sent:`, stageErr);
+      await note(`Quote ${quote.id} was sent but the lead did not move to Quote Sent — ${stageErr.message}. Move it by hand so the board is right.`);
+    } else {
+      await admin.from("lead_activities").insert({
+        tenant_id: args.tenantId, lead_id: args.leadId, kind: "stage",
+        detail: `Moved to Quote Sent — ${quote.id} was emailed to ${args.recipient}.`,
+      });
+    }
+  } else {
+    console.info(`[send-auto-quote] lead ${args.leadId} stage unchanged — ${move.reason}`);
+  }
 }

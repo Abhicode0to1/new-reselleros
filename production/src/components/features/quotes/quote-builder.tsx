@@ -38,6 +38,7 @@ import { AddCustomerForm } from "@/components/features/customers/add-customer-fo
 import { useCreateQuote, useQuote } from "@/lib/queries/quotes";
 import { useGenerateInvoice } from "@/lib/queries/invoices";
 import { useUpdateLead, useLeads } from "@/lib/queries/leads";
+import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import { useItems } from "@/lib/queries/items";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { isInterStateSupply, isExportSupply } from "@/lib/gst/place-of-supply";
@@ -953,10 +954,16 @@ export function QuoteBuilder() {
       if (isLeadMode && leadId && status === "sent") {
         try {
           const totalSeats = lineItems.reduce((s, l) => s + l.qty, 0);
+          // Forward-only, through the same rule the two server-side send paths use. This line
+          // was `stage: "quote"` unconditionally — which, on an upsell quote to a WON customer,
+          // dragged them back into the pipeline and restarted their stage age. The judgement
+          // now lives in exactly one file (lib/leads/stage-after-quote-sent.ts) instead of
+          // three, which is the actual lesson of this whole bug.
+          const move = stageAfterQuoteSent(leadFromQuery?.stage);
           await updateLead.mutateAsync({
             id: leadId,
             patch: {
-              stage: "quote",
+              ...(move.nextStage !== null && { stage: move.nextStage }),
               plan:  lineItems[0]?.name ?? null,
               seats: totalSeats > 0 ? totalSeats : null,
               value: total > 0     ? total     : null,

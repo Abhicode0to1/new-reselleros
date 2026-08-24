@@ -331,3 +331,34 @@ describe("the stage-disagrees-with-history nudge", () => {
     expect(code).toContain("The pipeline board and the forecast both read the stage");
   });
 });
+
+describe("a pre-quote lead always has a route to a quote", () => {
+  /* Pardeep, 24 Aug 2026: "new stage me quote bhejne ka option hi nahi aata hai."
+     He was right. Three things had to line up, and on a new lead with a phone they did:
+       1. nextAction returns "Call now · first contact" for that exact shape
+       2. the footer's quote buttons all required `hasQuotes`, which a new lead has none of
+       3. the pre-quote stage rail that carries a quote button sits inside the `details` tab
+          — the FOURTH tab, and not the one that opens
+     Individually each is defensible. Together they left the money step with no door, and the
+     tab split from the day before is what closed the last one. */
+
+  it("the footer offers a quote when there is none yet", () => {
+    expect(code).toMatch(/!hasQuotes &&[\s\S]{0,80}nextAction\?\.onClick !== handleSendQuote/);
+  });
+
+  it("and suppresses it when the big CTA is already that action", () => {
+    /* Otherwise this fix re-creates the two-competing-primaries bug that the removed footer
+       primary was deleted for. Gated on the HANDLER, not on the stage: the stage is not what
+       collides, being told to call is. */
+    expect(code).toContain("nextAction?.onClick !== handleSendQuote");
+  });
+
+  it("the pre-quote quote button is still inside the details tab, so the footer is the fix", () => {
+    /* If somebody later moves that rail out of the tab, this test should fail and make them
+       reconsider whether the footer button is still needed — rather than leaving two. */
+    const detailsAt = code.indexOf('drawerTab === "details"');
+    const railAt = code.indexOf("isPreQuote && (");
+    expect(detailsAt).toBeGreaterThan(0);
+    expect(railAt).toBeGreaterThan(detailsAt);
+  });
+});

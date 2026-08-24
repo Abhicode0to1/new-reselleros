@@ -2135,3 +2135,33 @@ wrong reason, and the wrong reason is what stops somebody trusting the next resu
 **When a flag has to be honoured by more than one gate, add it to all of them in one edit and
 list them in the comment.** Same shape as L75 (a function wired to one webhook branch instead
 of two): the logic was right everywhere and the wiring was right in two places out of three.
+
+## L98 — A column named after an act must be written by that act
+
+Darshan, 24 Aug 2026: "Customer ko quotation sent kar di lekin Quote sent mein show nahi kar
+raha." He was right. `folders.ts` defines that column as `stage === "quote"`, and grepping the
+whole codebase, **the only place that ever set it was the public buy-page checkout.** Sending a
+quote from inside the app — the operator's Send button, the auto-quote from an inbound email, a
+renewal — never touched the stage. The quote genuinely went out; the column named after that
+exact act stayed empty.
+
+Then the scan written to prove the fix found a **third** writer on its first run:
+`quote-builder.tsx` set `stage: "quote"` inline with no Won/Lost guard, so an upsell quote to a
+won customer dragged them back into the pipeline. One decision, three copies, and the newest
+was the only correct one.
+
+**When a UI element is named after an event, find every code path that performs that event and
+check each one writes the field — the count is the finding, not the logic.** Three of this
+week's bugs are this same shape (L75 one webhook branch of two, L97 two gates of three, this
+one one send path of three). A unit test cannot see it; a source scan that counts call sites
+can, which is why `quote-sent-stage-wiring.test.ts` is a scan rather than only a unit test.
+
+**The corollary that cost a second bug in the same hour:** moving a control behind a tab can
+remove the only route to an action without removing any code. Pardeep, minutes later: "new
+stage me quote bhejne ka option hi nahi aata hai." A new lead with a phone got the CTA "Call
+now · first contact"; the footer's quote buttons all required `hasQuotes`, which it had none
+of; and the pre-quote stage rail carrying a quote button lived inside the `details` tab — the
+fourth tab, not the one that opens. Each gate was individually defensible and the money step
+had no door. My own comment in that footer asserted "nextAction already says send the first
+quote, in the same words" — true in every branch but that one. **An in-code claim of full
+coverage is worth exactly as much as the branch you did not enumerate.**

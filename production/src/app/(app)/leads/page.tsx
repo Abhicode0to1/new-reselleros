@@ -3180,6 +3180,26 @@ function LeadDetailSheet({
                 Open accepted quote
               </Button>
             )}
+            {/* THE ONE CASE THE COMMENT ABOVE GOT WRONG. It claims nextAction already says
+                "send the first quote" in the same words, so a footer button would be the
+                duplicate primary that was just removed. True in every branch but one: a NEW
+                lead WITH a phone and nothing logged yet gets "Call now · first contact", and
+                then there is no route to a quote anywhere in the drawer — the pre-quote stage
+                rail that carries one lives inside the `details` TAB, which is the fourth tab
+                and not the one that opens. Reported by Pardeep, 24 Aug 2026: "new stage me
+                quote bhejne ka option hi nahi aata hai." He was right, and the tab split I
+                built the day before is what buried it.
+
+                Gated on nextAction's own handler rather than on the stage, because the stage
+                is not what causes the collision — being told to call is. When nextAction IS
+                already send-quote this renders nothing, so the two-primaries mistake cannot
+                come back through the very fix for its side effect. */}
+            {lead.stage !== "won" && lead.stage !== "lost" && !hasQuotes &&
+             nextAction?.onClick !== handleSendQuote && (
+              <Button icon="send" onClick={handleSendQuote}>
+                Send quote
+              </Button>
+            )}
             {lead.stage !== "won" && lead.stage !== "lost" && hasQuotes && latestQuote?.status !== "draft" && (
               <>
                 <Button icon="send" onClick={handleSendQuote}>
