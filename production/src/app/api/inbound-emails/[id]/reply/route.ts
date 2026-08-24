@@ -33,6 +33,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
+import { recordDraftFeedback } from "@/lib/ai/draft-feedback.server";
 import { SENT_REPLY_STATUS } from "@/lib/inbound/sent";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,23 @@ const bodySchema = z.object({
   subject: z.string().trim().min(1).max(300),
   /* Long enough for a real reply, bounded so a paste-bomb cannot be relayed. */
   body:    z.string().trim().min(1).max(20_000),
+  /**
+   * The AI draft this send STARTED from, if it did — sent back by the composer, unedited.
+   *
+   * ─── WHY THE CLIENT SENDS IT AND THE SERVER DOES NOT LOOK IT UP ─────────────
+   * The server cannot know. The draft was handed to the browser by /draft-reply and never
+   * stored, and even if it had been, "the newest draft on this lead" is not the same thing
+   * as "the text this person was editing" — a rep who drafted, went for lunch, and typed
+   * something else would be recorded as having rewritten a draft they never saw.
+   *
+   * Nothing downstream trusts it: it is stored and compared, never sent, and never used to
+   * decide anything. A client that lies here corrupts one row of hindsight and can do
+   * nothing else, which is why the honest source is acceptable.
+   *
+   * Optional, so the existing composer and any other caller keep working untouched.
+   */
+  ai_draft_subject: z.string().trim().max(300).optional(),
+  ai_draft_body:    z.string().trim().max(20_000).optional(),
 });
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -117,6 +135,33 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
      Only a real send is filed. A stubbed attempt reached nobody, and a Sent folder that
      lists mail nobody received is the same lie in a different place. */
+  /* ─── WHAT THE PERSON CHANGED, KEPT ─────────────────────────────────────────
+     Only when this send started from an AI draft, and only after a real send. The agent does
+     not learn from outcomes; a human reads these rows and edits the prompt. See
+     lib/ai/draft-feedback.ts for why that is the whole loop.
+
+     Awaited but never fatal — recordDraftFeedback swallows its own failures, because the
+     customer has the email by now and a missing row of hindsight must not become a duplicate
+     send. */
+  if (sent.status === "sent" && parsed.ai_draft_body?.trim()) {
+    await recordDraftFeedback({
+      tenantId:     me.tenant_id,
+      /* The dial this draft belonged to. /draft-reply is the operator-invoked drafter on the
+         enquiry thread, which is the same permission the agent's own reply uses. */
+      action:       "reply.send",
+      entity:       "lead",
+      /* The LEAD, not the enquiry: a thread can carry several enquiries and the thing being
+         learned about is how the agent writes to this customer. Falls back to the enquiry id
+         when the enquiry was never linked to a lead, so the row is still readable. */
+      entityId:     enquiry.lead_id ?? enquiry.id,
+      draftSubject: parsed.ai_draft_subject ?? null,
+      draftBody:    parsed.ai_draft_body,
+      sentSubject:  parsed.subject,
+      sentBody:     parsed.body,
+      sentBy:       user.id,
+    });
+  }
+
   let logged = false;
   if (sent.status === "sent") {
     const { error: logErr } = await admin.from("inbound_emails").insert({

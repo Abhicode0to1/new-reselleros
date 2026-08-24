@@ -184,7 +184,20 @@ export function useSendEnquiryReply() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { id: string; subject: string; body: string }) => {
+    mutationFn: async (input: {
+      id: string;
+      subject: string;
+      body: string;
+      /**
+       * The AI draft this send started from, when it did.
+       *
+       * Passed straight through to the route, which stores the pair so somebody can later
+       * read what reps keep changing. Nothing downstream trusts it — see the route's own
+       * comment on ai_draft_body — and omitting it simply means no row is recorded.
+       */
+      ai_draft_subject?: string;
+      ai_draft_body?: string;
+    }) => {
       const { id, ...body } = input;
 
       let res: Response;

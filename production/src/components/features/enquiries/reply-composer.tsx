@@ -94,6 +94,20 @@ export function ReplyComposer({
      cannot be recalled, and the reason this reply is worth drafting is that the customer
      has corrected us twice. */
   const [aiBusy, setAiBusy] = React.useState(false);
+  /**
+   * The draft the AI produced, kept EXACTLY as it came back.
+   *
+   * ─── WHY THE COMPONENT REMEMBERS IT AND THE SERVER DOES NOT ─────────────────
+   * The comparison this feeds is "what did the person change", and only this component knows
+   * the answer: it holds the text that was put in the box and the text that leaves it. The
+   * server could look up the newest draft on the lead, and that is a different question — a
+   * rep who drafted, went for lunch and then typed something else would be recorded as having
+   * rewritten a draft they never read.
+   *
+   * Cleared whenever the box is emptied after a successful send, so the NEXT reply — typed
+   * from scratch — is not measured against a draft from the last one.
+   */
+  const [aiDraft, setAiDraft] = React.useState<{ subject: string; body: string } | null>(null);
 
   async function draftWithAi() {
     if (!leadId) return;
@@ -111,6 +125,7 @@ export function ReplyComposer({
       }
       setBody(json.message);
       if (json.subject?.trim()) setSubject(json.subject.trim());
+      setAiDraft({ subject: json.subject?.trim() ?? "", body: json.message });
     } catch {
       toast.error("Could not reach the drafting service.", {
         description: "Use one of the quick replies, or write it by hand.",
@@ -131,12 +146,20 @@ export function ReplyComposer({
       return;
     }
     send.mutate(
-      { id: enquiryId, subject: subject.trim(), body: body.trim() },
+      {
+        id: enquiryId,
+        subject: subject.trim(),
+        body: body.trim(),
+        /* Only when this send actually started from a draft. Sending it unconditionally would
+           record rows for replies the agent never touched, and every "how often was the draft
+           good enough" number would be quietly wrong. */
+        ...(aiDraft ? { ai_draft_subject: aiDraft.subject, ai_draft_body: aiDraft.body } : {}),
+      },
       {
         /* Cleared only when mail actually LEFT. A box that empties on click would, on a
            failed send, look exactly like a successful one — and on a stubbed send the
            toast says "send it again", which is impossible if the text is gone. */
-        onSuccess: (result) => { if (!result.stub) setBody(""); },
+        onSuccess: (result) => { if (!result.stub) { setBody(""); setAiDraft(null); } },
       },
     );
   }
