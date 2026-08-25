@@ -41,6 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { BulkActionBar, BulkBarButton } from "@/components/ui/bulk-action-bar";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -612,53 +613,58 @@ function InvoicesPageInner() {
         </div>
       )}
 
-      {/* World-Class Floating Batch Operations Bar */}
-      {selected.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-ink text-paper rounded-full px-5 py-2.5 shadow-2xl flex items-center gap-3 border border-hairline animate-in fade-in slide-in-from-bottom-3">
-          <span className="text-xs font-semibold">{selected.size} selected</span>
-          <div className="h-4 w-px bg-paper/20" />
-          <Button
-            size="sm"
-            variant="outline"
-            className="bg-paper/10 text-paper border-paper/20 hover:bg-paper/20 text-xs h-7 gap-1"
-            icon="whatsapp"
-            onClick={() => {
-              const selectedInvoices = rows.filter((r) => selected.has(r.id));
-              const first = selectedInvoices[0];
-              if (first) window.open(getInvoiceWhatsAppUrl(first, null, waSender), "_blank");
-            }}
-          >
-            Bulk WhatsApp
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="bg-paper/10 text-paper border-paper/20 hover:bg-paper/20 text-xs h-7 gap-1"
-            icon="download"
-            onClick={() => {
-              toast.success(`Exporting CSV for ${selected.size} selected invoices`);
-              const selectedInvoices = rows.filter((r) => selected.has(r.id));
-              const csv = "Invoice ID,Customer,Amount,Status,Date\n" + selectedInvoices.map(i => `${i.id},"${i.customer_name}",${i.amount},${i.status},${i.created_at || ""}`).join("\n");
-              const blob = new Blob([csv], { type: "text/csv" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `selected-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
-              a.click();
-            }}
-          >
-            Export CSV
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-paper/70 hover:text-paper text-xs h-7 px-2"
-            onClick={() => setSelected(new Set())}
-          >
-            Deselect
-          </Button>
-        </div>
-      )}
+      {/* Floating batch operations bar.
+          Moved onto the shared <BulkActionBar> (components/ui/bulk-action-bar.tsx) — this page
+          and the leads table had grown two bars with the same intent and different padding,
+          button styling and dismiss wording. No action's behaviour changed here except the
+          WhatsApp one, which was mislabelled; see below. */}
+      <BulkActionBar count={selected.size} noun="invoice" onClear={() => setSelected(new Set())}>
+        <BulkBarButton
+          icon="whatsapp"
+          onClick={() => {
+            const selectedInvoices = rows.filter((r) => selected.has(r.id));
+            const first = selectedInvoices[0];
+            if (!first) return;
+            window.open(getInvoiceWhatsAppUrl(first, null, waSender), "_blank");
+            /* ── THE BUTTON USED TO SAY "Bulk WhatsApp" AND SEND ONE ─────────
+               It opened `selectedInvoices[0]` and nothing else, so selecting twelve invoices
+               and clicking it messaged one customer while the label said it had done all
+               twelve. Nothing in the UI contradicted that.
+
+               Not "fixed" by looping: wa.me opens a browser tab per chat, and a loop of
+               window.open past the first is swallowed by every popup blocker — which would
+               turn a visible wrong into an invisible one. So the label now says what it does,
+               and the toast says what was NOT done, with the count. */
+            if (selectedInvoices.length > 1) {
+              toast.info(
+                `Opened WhatsApp for ${first.id} only`,
+                { description: `WhatsApp opens one chat at a time — the other ${selectedInvoices.length - 1} are still selected.` },
+              );
+            }
+          }}
+        >
+          {selected.size > 1 ? "WhatsApp first" : "WhatsApp"}
+        </BulkBarButton>
+
+        <BulkBarButton
+          icon="download"
+          onClick={() => {
+            const selectedInvoices = rows.filter((r) => selected.has(r.id));
+            const csv = "Invoice ID,Customer,Amount,Status,Date\n" + selectedInvoices.map(i => `${i.id},"${i.customer_name}",${i.amount},${i.status},${i.created_at || ""}`).join("\n");
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `selected-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            /* Toast AFTER the download is triggered, not before. It used to fire first and
+               say "Exporting…" whether or not anything followed. */
+            toast.success(`Exported ${selectedInvoices.length} invoice${selectedInvoices.length === 1 ? "" : "s"} to CSV`);
+          }}
+        >
+          Export CSV
+        </BulkBarButton>
+      </BulkActionBar>
 
       {/* Error */}
       {error && (

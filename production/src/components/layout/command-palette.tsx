@@ -3,8 +3,14 @@
  *
  * Includes:
  * - Navigate to any page
- * - Search customers / leads / quotes / invoices (stub data — to be wired to Supabase)
+ * - Search customers / leads / quotes / invoices / subscriptions / contacts / payments
  * - Run quick actions (new lead, new quote, etc.)
+ *
+ * ⚠️ The line above used to read "(stub data — to be wired to Supabase)" and was FALSE —
+ * corrected 25 Aug 2026. The seven `use*` query hooks imported below have been real Supabase
+ * reads for some time. It is left visible rather than quietly deleted because a stale comment
+ * costs more than a wrong one: anybody opening this file to add search believed the feature
+ * was a mock and would have built it a second time.
  *
  * @example consumer-side
  * const { open, isOpen, setOpen } = useCommandPalette();
