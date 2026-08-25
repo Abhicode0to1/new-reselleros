@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "backup:code": "node scripts/backup-code.mjs",
     "backup:db": "node scripts/backup-db.mjs ../../resellersos-backups",
+    "backup:prune": "node scripts/prune-backups.mjs ../../resellersos-backups",
     "backup:check": "node scripts/restore-check.mjs",
     "migrations:verify": "node scripts/migration-drift-check.mjs",
     "org:sync": "node scripts/org-chart-sync.mjs",
