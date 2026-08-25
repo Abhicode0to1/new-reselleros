@@ -163,6 +163,10 @@ export function ImportCsvDialog({ open, onOpenChange, onImportComplete }: Import
         source:        "csv",
         priority:      "medium" as const,
         owner_id:      me.userId || null,
+        /* The third create path, and it needs this as much as the other two: an imported
+           batch is exactly the kind a colleague reassigns in bulk afterwards, which is when
+           owner_id stops answering who brought the leads in. */
+        created_by:    me.userId || null,
       }));
 
       const { error } = await supabase.from("leads").insert(payload);

@@ -1008,6 +1008,26 @@ type LeadRow = {
   /** One sentence, written for the rep — "38 seats is above the 50-seat ceiling", never a code. */
   human_attention_reason?: string | null;
   human_attention_at?: string | null;
+  /**
+   * The user who ADDED this lead (migration 20260825230000).
+   *
+   * ─── NOT THE SAME AS owner_id, AND THAT IS THE WHOLE POINT ──────────────────
+   * `owner_id` is whose lead it is NOW. The create form defaults it to whoever is adding the
+   * lead, so on day one the two agree — and they part company on the first reassignment, at
+   * which point who added it was gone and nothing in the schema had ever known.
+   *
+   * NULL IS AN ANSWER, NOT A GAP. Measured when the column was added: 15 of 29 leads came in
+   * through the inbound email webhook, with no person involved and no owner either. Those are
+   * correctly NULL, and `source` says what created them — the UI reads the pair and shows
+   * "added by X" or "arrived by email" rather than a blank.
+   *
+   * Existing rows were deliberately NOT backfilled; the migration header has the two inferences
+   * that were available and why both would have credited the wrong person.
+   *
+   * Optional on the type for the same reason as the three above: most lead queries in this app
+   * do not select it.
+   */
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1023,6 +1043,12 @@ type LeadInsert = {
   value?: number | null;
   stage?: "new" | "contact" | "demo" | "trial" | "quote" | "won" | "lost";
   owner_id?: string | null;
+  /**
+   * Who is ADDING this lead. Set from the session, never from a form field — a creator the user
+   * can choose is not a creator, and every path that writes it has `me.userId` to hand.
+   * Left absent by the webhook and AI paths, where no person is adding anything.
+   */
+  created_by?: string | null;
   source?: string | null;
   domain?: string | null;
   notes?: string | null;

@@ -107,6 +107,8 @@ import { cn } from "@/lib/utils";
 import { useConfirm } from "@/components/providers/confirm-provider";
 import type { Lead } from "@/lib/supabase/database.types";
 import { useBreakpoint } from "@/lib/hooks/useBreakpoint";
+import { useUserNames } from "@/lib/hooks/useUserNames";
+import { addedByLabel } from "@/lib/leads/added-by";
 import { WhatsAppActionDialog } from "@/components/shared/whatsapp-action-dialog";
 
 // ============================================================
@@ -1797,6 +1799,9 @@ function LeadDetailSheet({
   onClose: () => void;
   onEdit: (lead: Lead) => void;
 }) {
+  /* Ids → names for the "Added by" row. Five-minute cache: a colleague's name changes about
+     never, and re-fetching per drawer open would be a request per click. */
+  const { data: userNames } = useUserNames();
   const router      = useRouter();
   const { changeStage } = useChangeLeadStage();
   const deleteLead  = useDeleteLead();
@@ -2534,6 +2539,24 @@ function LeadDetailSheet({
             <Fact label="Email" value={lead.contact_email} mono />
             <Fact label="Phone" value={lead.contact_phone} mono />
             <Fact label="Created" value={formatDate(lead.created_at)} />
+            {/* ─── WHO ADDED IT, AND WHAT ADDED IT WHEN NOBODY DID ─────────────
+                Beside Source and Created because all three answer "where did this come from".
+
+                NULL is not a blank here. Measured when the column landed: 15 of 29 leads arrived
+                through the inbound email webhook with no person involved, so `created_by` is
+                correctly empty and `source` is the answer. Showing "—" would read as missing
+                data; "Arrived by email" is the fact.
+
+                Rows created before the column existed say so outright rather than implying
+                nobody added them — the migration deliberately did not backfill, because both
+                available inferences would have credited the wrong person. */}
+            <Fact
+              label="Added by"
+              value={addedByLabel(
+                { createdBy: lead.created_by, source: lead.source, createdAt: lead.created_at },
+                userNames,
+              )}
+            />
           </div>
 
           {/* Recent communication — surfaced right here on the main Details view

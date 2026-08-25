@@ -559,7 +559,12 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
       } else {
         // ─── Create new lead ───
         const id = "L-" + Date.now().toString(36).toUpperCase();
-        await createLead.mutateAsync({ id, ...sharedPatch });
+        /* `created_by` goes HERE and deliberately NOT into `sharedPatch`, which is also the
+           update payload. In there it would rewrite the creator on every edit — turning the one
+           column that remembers who added a lead into a second copy of "who touched it last",
+           which is the exact failure it was added to prevent. Written once, at creation, from
+           the session rather than from `data`: a creator the user can pick is not a creator. */
+        await createLead.mutateAsync({ id, ...sharedPatch, created_by: me?.userId ?? null });
 
         // ─── Contextual toast (replaces the hook's generic "Lead created") ───
         // The split between Leads (raw) and Deals (qualified) confused users:

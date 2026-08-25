@@ -137,6 +137,9 @@ export function QuickAddLeadForm({ open, onOpenChange }: QuickAddLeadFormProps) 
         source:         "manual",
         priority:       "medium",
         owner_id:       me?.userId || null,
+        /* WHO ADDED IT, which owner_id stops answering the moment somebody reassigns. Same
+           value today, different question — see database.types.ts on the Lead type. */
+        created_by:     me?.userId || null,
       });
 
       toast.dismiss();
