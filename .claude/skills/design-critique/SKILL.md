@@ -156,7 +156,20 @@ Also from §20, each worth one line:
   grep -rn "FAB" $F | grep -iE "no fab|deliberate|removed|on purpose"
   ```
 - touch targets ≥ 44px on anything tappable
-- sticky elements → `pb-[env(safe-area-inset-bottom)]`
+- sticky elements → `pb-[env(safe-area-inset-bottom)]`. **A count of zero is not a finding until you
+  have checked the hazard exists.** On /leads the safe-area count is 0 and the screen is correct:
+  every sticky in scope is `sticky top-*`, and the notch rule is about BOTTOM-anchored elements.
+  The ones that are bottom-anchored live outside a screen's scope — `MobileBottomNav.tsx:111`,
+  `bulk-action-bar.tsx:69`, `dialog.tsx:220`, `fab.tsx:88` — and all four already carry it.
+
+  ```bash
+  # Comment-strip FIRST (see §6) — every one of the 5 hits this returned on /leads was prose:
+  # four comments explaining the sticky header, one JSDoc about the right rail. Third time
+  # running this skill that a grep read documentation as code.
+  node -e 'const fs=require("fs");for(const f of process.argv.slice(1)){fs.readFileSync(f,"utf8")
+    .replace(/\/\*[\s\S]*?\*\//g,"").replace(/^\s*\/\/.*$/gm,"").split("\n")
+    .forEach((l,i)=>{if(/sticky|fixed bottom|fixed inset-x/.test(l)&&!/top-/.test(l))console.log(f+":"+(i+1)+l);});}' $F
+  ```
 
 ---
 
@@ -168,26 +181,59 @@ Two real bugs found this way on `/leads`, both from one mechanism:
 absorbs **all** of it, so `justify-between` has none left — the first two children go flush and the
 last one slams right. It was filed as two separate audit findings.
 
-**⚠️ STRIP COMMENTS FIRST. This check cried wolf on its own first run** (25 Aug 2026): it matched
-`justify-between` and `ml-auto` inside the comment written to explain that *both had been
-removed*. A grep that reads prose as code will flag every bug anybody documented.
+**⚠️ THIS CHECK HAS NOW PRODUCED FOUR FALSE POSITIVES, EACH FROM A DIFFERENT DEFECT.** Every one of
+them said "bug" about correct code, and the first three were in the *tooling*, not the screen. Read
+them before trusting any number this section prints.
 
-```bash
-# Comments out, then look. Node rather than sed+perl: the escaping in a shell one-liner has
-# already eaten the backslashes in this very file once.
-node -e '
-const fs=require("fs");
-for (const f of process.argv.slice(1)) {
-  const src = fs.readFileSync(f,"utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")   // block comments, JSX {/* */} included
-    .replace(/^\s*\/\/.*$/gm, "");      // line comments
-  src.split("\n").forEach((l,i) => {
-    if (l.includes("justify-between")) console.log(`${f}:${i+1}`);
+1. **It read a COMMENT as code.** It matched `justify-between` and `ml-auto` inside the comment at
+   `page.tsx:942` written to explain that *both had been removed*. A grep that reads prose as code
+   flags every bug anybody documented.
+2. **Stripping block comments SHIFTED EVERY LINE NUMBER AFTER THEM.** `.replace(/\/\*[\s\S]*?\*\//g, "")`
+   deletes the newlines inside the comment too. Measured on `leads/page.tsx`: the first hit came
+   back as line **454**; the real line is **773** — off by 319, pointing at unrelated code.
+   Replace each comment with its own newlines instead of with nothing.
+3. **`^\s*//` ATE 275 LINES.** `\s` matches `\n`, so `^\s*` chews backwards through every blank
+   line above a comment. 4,166 lines became 3,891. Use `[ \t]*`.
+4. **A fixed line window crossed into a NESTED flex.** `page.tsx:2886` was flagged for the
+   `ml-auto` at `:2904` — but that sits inside `<div className="text-right flex-shrink-0">` opened
+   at `:2900`, its own flex context and none of the outer row's business. Only DIRECT children
+   matter, so walk by indentation rather than counting lines.
+
+Write the corrected check to a FILE and run it as `node /tmp/spacing.js $F`. As a `node -e`
+one-liner the backslashes get eaten — that has happened five times in this session, and a mangled
+regex fails SILENTLY as "0 findings". Note `slice(2)`: in a script file `argv[1]` is the script
+itself, and `slice(1)` reported the script as a source file, adding a phantom finding under /tmp.
+With `node -e` it would be `slice(1)`.
+
+```js
+const fs = require("fs");
+const strip = (s) => s
+  .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))  // keep the newlines
+  .replace(/^[ \t]*\/\/.*$/gm, "");                               // NOT \s* — see defect 3
+const indent = (l) => l.match(/^[ \t]*/)[0].replace(/\t/g, "  ").length;
+
+for (const f of process.argv.slice(2)) {
+  const L = strip(fs.readFileSync(f, "utf8")).split("\n");
+  L.forEach((l, i) => {
+    if (!/justify-between/.test(l)) return;
+    const base = indent(l);
+    let childDepth = null;
+    for (let j = i + 1; j < L.length; j++) {
+      if (!L[j].trim()) continue;
+      const d = indent(L[j]);
+      if (d <= base) break;                    // the row has closed
+      if (childDepth === null) childDepth = d;  // first line in = the direct-child level
+      if (d !== childDepth) continue;           // deeper: a nested flex, not ours
+      const m = L[j].match(/\b(ml-auto|mr-auto)\b/);
+      if (m) console.log(f + ":" + (j + 1) + " direct child has " + m[1] + " (row opens " + (i + 1) + ")");
+    }
   });
-}' $F
+}
 ```
 
-Then read the CHILDREN of each match for `ml-auto` / `mr-auto`.
+Measured on `/leads` with all four defects fixed: **29 `justify-between` rows, 0 real findings, 1
+grandchild `ml-auto` correctly ignored. §6 is CLEAN** — but it also read CLEAN before any of this,
+for the wrong reasons. A green light from a broken instrument is not a green light.
 
 Measure gaps in the browser rather than reading them: `getBoundingClientRect()` on adjacent
 children, and report the pixel numbers. Uneven gaps in one row are a finding.
