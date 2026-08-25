@@ -97,6 +97,7 @@ export function MergeLeadsDialog({
                 key={l.id}
                 type="button"
                 onClick={() => setPrimaryId(l.id)}
+                aria-pressed={isPrimary}
                 className={cn(
                   "w-full text-left rounded-lg border p-3 flex items-start gap-3 transition-colors",
                   isPrimary

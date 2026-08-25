@@ -66,6 +66,7 @@ export function BattlecardDrawer({ open, onClose, plan }: {
               key={v.vendor}
               type="button"
               onClick={() => setVendor(v.vendor)}
+              aria-pressed={vendor === v.vendor}
               className={cn(
                 "px-3 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors",
                 vendor === v.vendor ? "border-amber text-amber-ink" : "border-transparent text-ink-3 hover:text-ink",

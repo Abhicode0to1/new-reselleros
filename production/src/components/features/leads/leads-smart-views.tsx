@@ -240,7 +240,12 @@ function ViewRow({ view, active, onSelect }: { view: ViewDef; active: boolean; o
     : "text-ink-2";
 
   return (
-    <DropdownMenuItem onSelect={onSelect} className="gap-2 py-1.5">
+    <DropdownMenuItem
+      onSelect={onSelect}
+      role="menuitemradio"
+      aria-checked={active}
+      className="gap-2 py-1.5"
+    >
       {/* Fixed-width slot so labels line up whether or not a row is checked. */}
       <span className="w-3.5 shrink-0">
         {active && <Icon name="check" size={13} className="text-amber" />}

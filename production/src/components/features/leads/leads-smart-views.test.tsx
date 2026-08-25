@@ -115,7 +115,7 @@ describe("the Waiting on you view", () => {
       />,
     );
     fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
-    const row = screen.getByText("Waiting on you").closest("[role=menuitem]");
+    const row = screen.getByText("Waiting on you").closest("[role^=menuitem]");
     /* The count is the point — a view whose number you have to click to learn is the bug
        this component's own header was written about. Read off the ROW, because a bare "2"
        matches several places on this screen. */
@@ -133,8 +133,40 @@ describe("the Waiting on you view", () => {
       />,
     );
     fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
-    const row = screen.getByText("Waiting on you").closest("[role=menuitem]");
+    const row = screen.getByText("Waiting on you").closest("[role^=menuitem]");
     expect(row?.textContent).toMatch(/1/);
+  });
+
+  it("tells a screen reader WHICH view is in force, not just which row has a tick", () => {
+    /* ─── A GLYPH IS NOT A STATE ─────────────────────────────────────────────
+       The chosen row was marked by a check icon and nothing else, so the whole menu
+       announced as seven identical `menuitem`s and the rep's own current filter was
+       unreadable without sight. One of these rows is ALWAYS in force, which is
+       `menuitemradio` + `aria-checked` — there is no DropdownMenuRadioItem in this
+       app's dropdown-menu.tsx, so the role is set at the call site.
+
+       Asserted through getByRole so the ROLE is pinned too: the sibling tests reach
+       the row with a `[role^=menuitem]` prefix match, which would keep passing if the
+       role silently went back to plain `menuitem`. */
+    render(
+      <LeadsSmartViews
+        leads={[open({ id: "l1", requires_human_attention: true })]}
+        active="waiting"
+        onChange={() => {}}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
+
+    const chosen = screen.getByRole("menuitemradio", { name: /Waiting on you/ });
+    expect(chosen.getAttribute("aria-checked")).toBe("true");
+
+    /* And the ones NOT in force say so, rather than omitting the attribute — an absent
+       aria-checked on a radio role is "not applicable", which reads as a broken group. */
+    const others = screen
+      .getAllByRole("menuitemradio")
+      .filter((el) => el !== chosen);
+    expect(others.length).toBeGreaterThan(0);
+    expect(others.every((el) => el.getAttribute("aria-checked") === "false")).toBe(true);
   });
 
   it("says what the view holds, in words a rep can act on", () => {

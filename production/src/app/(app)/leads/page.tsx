@@ -619,6 +619,12 @@ function LeadsPageInner() {
     setSmartView("junk");
     setFolder("all");
   }, []);
+  /* The All-open chip's `selected` test, named once.
+     `folder` alone is not enough — the Junk view leaves `folder` at "all" — so this
+     expression was already written out three times (the boardLeads memo, the chip's
+     className, and the chip's icon). aria-pressed would have been the fourth copy, and
+     a fourth copy is how a chip ends up SAYING pressed while looking unpressed. */
+  const allOpenActive = folder === "all" && smartView !== "junk";
   /* The Smart Views dropdown is the OTHER filter surface, and it used to stack on top of
      whatever chip was lit. Selecting from it now releases the folder, so exactly one of
      the two is ever in force. */
@@ -806,6 +812,7 @@ function LeadsPageInner() {
           <button
             type="button"
             onClick={selectJunk}
+            aria-pressed={smartView === "junk"}
             title="Binned as spam, fake or non-commercial — kept, never deleted"
             className={cn(
               "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
@@ -826,6 +833,7 @@ function LeadsPageInner() {
           <button
             type="button"
             onClick={() => selectFolder("all")}
+            aria-pressed={allOpenActive}
             /* The second sentence exists because the first one was not enough. Won and
                Lost sit in the SAME chip strip as the four open folders but are not part of
                this total, and on a narrow window they scroll out of sight — so a strip
@@ -837,12 +845,12 @@ function LeadsPageInner() {
               /* `folder` alone is not enough: the Junk view leaves folder at "all", and
                  checking only folder lit this chip AND Junk together — two highlighted
                  chips over one list. Browser-caught, not reasoned. */
-              folder === "all" && smartView !== "junk"
+              allOpenActive
                 ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
                 : "text-ink-2 hover:text-ink hover:bg-paper/50"
             )}
           >
-            <Icon name="inbox" size={13} className={folder === "all" && smartView !== "junk" ? "text-amber-ink" : "text-ink-3"} />
+            <Icon name="inbox" size={13} className={allOpenActive ? "text-amber-ink" : "text-ink-3"} />
             <span>All open</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
               {openLeads.length}
@@ -862,6 +870,7 @@ function LeadsPageInner() {
                 key={f.id}
                 type="button"
                 onClick={() => selectFolder(f.id)}
+                aria-pressed={folder === f.id}
                 title={count === 0 ? f.hint : undefined}
                 className={cn(
                   "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
@@ -901,6 +910,7 @@ function LeadsPageInner() {
                 key={f.id}
                 type="button"
                 onClick={() => selectFolder(f.id)}
+                aria-pressed={folder === f.id}
                 title={count === 0
                   ? f.hint
                   : "A filter, not a folder — these leads also sit in one of the folders on the left."}
@@ -1018,6 +1028,7 @@ function LeadsPageInner() {
                   key={id ?? "all"}
                   type="button"
                   onClick={() => setPipelineFilter(id)}
+                  aria-pressed={active}
                   title={def?.hint ?? "Every sales motion"}
                   className={cn(
                     "rounded-md px-2 py-0.5 text-[11px] font-semibold transition-colors",
@@ -1135,6 +1146,7 @@ function LeadsPageInner() {
               <button
                 type="button"
                 onClick={() => setView("kanban")}
+                aria-pressed={effectiveView === "kanban"}
                 className={cn(
                   "px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors cursor-pointer",
                   effectiveView === "kanban" ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-paper-2"
@@ -1146,6 +1158,7 @@ function LeadsPageInner() {
               <button
                 type="button"
                 onClick={() => setView("list")}
+                aria-pressed={effectiveView === "list"}
                 className={cn(
                   "px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-hairline cursor-pointer",
                   effectiveView === "list" ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-paper-2"
@@ -3057,6 +3070,7 @@ function LeadDetailSheet({
                         }
                       }}
                       disabled={s.id === lead.stage}
+                      aria-current={s.id === lead.stage ? "true" : undefined}
                       className={cn(
                         "text-xs px-2.5 py-1 rounded-full border transition-colors",
                         s.id === lead.stage

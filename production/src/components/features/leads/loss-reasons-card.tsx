@@ -131,6 +131,7 @@ function WindowPicker({
           key={w.id}
           type="button"
           onClick={() => onChange(w.id)}
+          aria-pressed={value === w.id}
           className={cn(
             "px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-amber",
             value === w.id ? "bg-paper text-ink shadow-2xs" : "text-ink-3 hover:text-ink",

@@ -159,6 +159,7 @@ export default function StartTrialDialog({ open, onOpenChange }: Props) {
               key={t.id}
               type="button"
               onClick={() => setTierId(t.id)}
+              aria-pressed={tierId === t.id}
               className={cn(
                 "border rounded-md p-2 text-left transition-colors",
                 tierId === t.id
