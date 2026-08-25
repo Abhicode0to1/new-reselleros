@@ -578,6 +578,23 @@ function LeadsPageInner() {
     () => salesFolderCounts(searched, folderToday),
     [searched, folderToday],
   );
+
+  /* ─── THE SIX FOLDERS THE VIEW MENU DID NOT ALREADY HAVE ────────────────
+     The chip strip is gone; these move into <LeadsSmartViews/> so there is ONE place
+     a list gets narrowed. All open and Junk are deliberately absent — the menu already
+     carries both, and repeating them here would move the duplication instead of
+     removing it. */
+  const folderRows = React.useMemo(
+    () =>
+      SALES_FOLDERS.map((f) => ({
+        id: f.id as string,
+        label: f.label,
+        count: folderCounts[f.id],
+        /* Only when it IS empty — see the note above the memo. */
+        hint: folderCounts[f.id] === 0 ? f.hint : "",
+      })),
+    [folderCounts],
+  );
   const filtered = smartView === "junk"
     ? searched
     : folder === "all"
@@ -617,23 +634,6 @@ function LeadsPageInner() {
     setFolder(f);
     setSmartView("all");
   }, []);
-  const selectJunk = React.useCallback(() => {
-    setSmartView("junk");
-    setFolder("all");
-  }, []);
-  /* The All-open chip's `selected` test, named once.
-     `folder` alone is not enough — the Junk view leaves `folder` at "all" — so this
-     expression was already written out three times (the boardLeads memo, the chip's
-     className, and the chip's icon). aria-pressed would have been the fourth copy, and
-     a fourth copy is how a chip ends up SAYING pressed while looking unpressed.
-
-     `!== "junk"` was not tight enough either, and the ARIA made it audible: with a smart view
-     in force ("View: Mine") the chip stayed lit AND announced aria-pressed=true, so the strip
-     and the dropdown both claimed to be the active filter — the exact thing the ONE SELECTION
-     AT A TIME note above forbids. `=== "all"` means the chip lights only when nothing else is
-     narrowing the list. Decided by Pardeep, 25 Aug 2026, after seeing it on screen.
-     */
-  const allOpenActive = folder === "all" && smartView === "all";
   /* The Smart Views dropdown is the OTHER filter surface, and it used to stack on top of
      whatever chip was lit. Selecting from it now releases the folder, so exactly one of
      the two is ever in force. */
@@ -805,116 +805,6 @@ function LeadsPageInner() {
           </Button>
         </div>
 
-        {/* Row 2 — 1-Click Segmented View Switcher. Scrolls sideways rather
-            than wrapping, so it can never push the CTA out of the corner. */}
-        <div className="flex items-center gap-1 bg-paper-2 p-1 rounded-lg border border-hairline w-fit max-w-full overflow-x-auto">
-          {/* "All open" plus one chip per folder. Every count comes from the same
-              inSalesFolder() the list filters with, so a chip can never advertise a
-              number the list then contradicts — which is exactly what the old
-              "Qualified Deals 1" did above a list of 9. Empty folders stay visible,
-              greyed: their absence would read as a missing feature, and "0 overdue"
-              is worth knowing. */}
-          {/* Junk sits FIRST so the row reads the funnel in order: Junk → Inbox →
-              Hot → Quote Sent. It is a smart view rather than a folder because junk
-              is the one bucket deliberately excluded from every working list — the
-              folders filter WITHIN the open pipeline, and junk is outside it. */}
-          <button
-            type="button"
-            onClick={selectJunk}
-            aria-pressed={smartView === "junk"}
-            title="Binned as spam, fake or non-commercial — kept, never deleted"
-            className={cn(
-              /* `border border-transparent` in the BASE, not just on the selected variant.
-                 Measured: a selected chip was 26px tall and an idle one 24px, because only
-                 the selected variant carried a border — so every click nudged the whole row
-                 2px and the strip twitched under the cursor. The transparent border reserves
-                 the space; twMerge lets the selected variant's border-hairline win the colour. */
-              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border border-transparent",
-              smartView === "junk"
-                ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
-                : junkCount === 0
-                ? "text-ink-3 hover:text-ink-2 hover:bg-paper/50"
-                : "text-ink-2 hover:text-ink hover:bg-paper/50"
-            )}
-          >
-            <span aria-hidden>🚫</span>
-            <span>Junk</span>
-            <span className="px-1.5 py-0.2 rounded-full text-3xs bg-paper-2 text-ink-2 font-mono tabular-nums">
-              {junkCount}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => selectFolder("all")}
-            aria-pressed={allOpenActive}
-            /* The second sentence exists because the first one was not enough. Won and
-               Lost sit in the SAME chip strip as the four open folders but are not part of
-               this total, and on a narrow window they scroll out of sight — so a strip
-               reading 17 next to nothing else looks like every lead there is. Asked on
-               21 Aug about exactly this: 19 leads, 17 shown, the 2 won ones off-screen. */
-            title={`Inbox + In Talks + Quote Sent + Demo/Trial. Every open lead is in exactly one of those four. Won (${folderCounts.won}) and Lost (${folderCounts.lost}) are closed, so they are not counted here — scroll the strip to reach them.`}
-            className={cn(
-              /* `border border-transparent` in the BASE, not just on the selected variant.
-                 Measured: a selected chip was 26px tall and an idle one 24px, because only
-                 the selected variant carried a border — so every click nudged the whole row
-                 2px and the strip twitched under the cursor. The transparent border reserves
-                 the space; twMerge lets the selected variant's border-hairline win the colour. */
-              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border border-transparent",
-              /* `folder` alone is not enough: the Junk view leaves folder at "all", and
-                 checking only folder lit this chip AND Junk together — two highlighted
-                 chips over one list. Browser-caught, not reasoned. */
-              allOpenActive
-                ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
-                : "text-ink-2 hover:text-ink hover:bg-paper/50"
-            )}
-          >
-            <Icon name="inbox" size={13} className={allOpenActive ? "text-amber-ink" : "text-ink-3"} />
-            <span>All open</span>
-            <span className="px-1.5 py-0.2 rounded-full text-3xs bg-paper-2 text-ink-2 font-mono tabular-nums">
-              {openLeads.length}
-            </span>
-          </button>
-
-          {/* ── THE FOLDERS — every open lead in exactly ONE, so the numbers ADD UP ──
-              Redesigned 17 Aug 2026 after Pardeep read "All open 8 · Inbox 7 · Hot 2",
-              added 7+2, got 9, and asked how that could be right. The overlap was
-              defensible and it does not matter: numbers sitting side by side WILL be
-              added, and a row the owner has to ask three questions about has failed.
-              Inbox + In Talks + Quote Sent + Demo/Trial = All open, visibly. */}
-          {SALES_FOLDERS.map((f) => {
-            const count = folderCounts[f.id];
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => selectFolder(f.id)}
-                aria-pressed={folder === f.id}
-                title={count === 0 ? f.hint : undefined}
-                className={cn(
-                  /* `border border-transparent` in the BASE, not just on the selected variant.
-                 Measured: a selected chip was 26px tall and an idle one 24px, because only
-                 the selected variant carried a border — so every click nudged the whole row
-                 2px and the strip twitched under the cursor. The transparent border reserves
-                 the space; twMerge lets the selected variant's border-hairline win the colour. */
-              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border border-transparent",
-                  folder === f.id
-                    ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
-                    : count === 0
-                    ? "text-ink-3 hover:text-ink-2 hover:bg-paper/50"
-                    : "text-ink-2 hover:text-ink hover:bg-paper/50"
-                )}
-              >
-                <span aria-hidden>{f.icon}</span>
-                <span>{f.label}</span>
-                <span className="px-1.5 py-0.2 rounded-full text-3xs bg-paper-2 text-ink-2 font-mono tabular-nums">
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-
-        </div>
 
       </div>
 
@@ -1110,6 +1000,9 @@ function LeadsPageInner() {
             junkSuspectCount={junkSuspectCount}
             active={smartView}
             onChange={selectSmartView}
+            folders={folderRows}
+            activeFolder={folder}
+            onFolder={(id) => selectFolder(id as typeof folder)}
           />
 
           <div className="flex items-center gap-2 shrink-0">

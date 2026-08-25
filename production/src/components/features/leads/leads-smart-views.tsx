@@ -60,9 +60,29 @@ interface LeadsSmartViewsProps {
   junkSuspectCount?: number;
   active: SmartView;
   onChange: (view: SmartView) => void;
+  /* ─── THE STAGE FOLDERS LIVE HERE NOW ────────────────────────────────────
+     They were a strip of eight chips above this control: a whole band of the page,
+     and two of them — All open and Junk — repeated rows this menu already had, a few
+     centimetres apart. Pardeep asked for the row to go into the view.
+
+     Only the six the menu did NOT already carry come across. All open stays the `all`
+     view and Junk stays in the cleanup group, so the merge removes the duplication
+     rather than moving it. */
+  folders?: readonly FolderRow[];
+  /** The folder in force, or "all". Separate state from `active`, on purpose. */
+  activeFolder?: string;
+  onFolder?: (id: string) => void;
 }
 
 type Tone = "default" | "amber" | "rose";
+
+/** A stage folder, shaped for the same row renderer the views use. */
+export interface FolderRow {
+  id: string;
+  label: string;
+  count: number;
+  hint: string;
+}
 
 interface ViewDef {
   id: SmartView;
@@ -75,6 +95,7 @@ interface ViewDef {
 
 export function LeadsSmartViews({
   leads, currentUserId, duplicateCount = 0, junkCount = 0, junkSuspectCount = 0, active, onChange,
+  folders = [], activeFolder = "all", onFolder,
 }: LeadsSmartViewsProps) {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -169,6 +190,12 @@ export function LeadsSmartViews({
   const activeDef = [...views, ...cleanup].find((v) => v.id === active);
   // Fallback covers "won-mtd", which the page can set but this menu doesn't list.
   const activeLabel = activeDef?.label ?? "Custom view";
+  /* A folder in force is what the list is showing, so it is what the trigger says.
+     Otherwise the control reads "All open" over a list of six Quote Sent leads. */
+  const activeFolderRow = folders.find((f) => f.id === activeFolder);
+  const triggerLabel = activeFolderRow?.label ?? activeLabel;
+  const triggerCount = activeFolderRow?.count ?? activeDef?.count;
+  const narrowed = active !== "all" || activeFolder !== "all";
 
   // The signal that must not be lost to the collapse. Suppressed while the user
   // is already in Overdue — telling someone what they are looking at is noise.
@@ -181,7 +208,7 @@ export function LeadsSmartViews({
             filtered from across the room — the old chip bar signalled that with
             an amber active chip, and losing it would let someone read a filtered
             list as the whole pipeline. */}
-        <Button size="sm" variant={active === "all" ? "ghost" : "outline"} className="shrink-0">
+        <Button size="sm" variant={narrowed ? "outline" : "ghost"} className="shrink-0">
           <Icon name="eye" size={13} className="text-ink-3" />
           {/* ─── "View:" IS LOAD-BEARING, NOT DECORATION ────────────────────────
               This trigger and the folder chip on the leads page both said "All open", a few
@@ -191,9 +218,9 @@ export function LeadsSmartViews({
               Hidden below `sm` because the label is already tight on a phone and the eye icon
               carries the same meaning there. */}
           <span className="hidden text-ink-3 sm:inline">{"View: "}</span>
-          <span className="font-medium">{activeLabel}</span>
-          {activeDef?.count !== undefined && (
-            <span className="text-3xs tabular-nums opacity-70">{activeDef.count}</span>
+          <span className="font-medium">{triggerLabel}</span>
+          {triggerCount !== undefined && (
+            <span className="text-3xs tabular-nums opacity-70">{triggerCount}</span>
           )}
           {showOverdueAlert && (
             <span
@@ -208,6 +235,22 @@ export function LeadsSmartViews({
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-64">
+        {folders.length > 0 && onFolder && (
+          <>
+            <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
+              Folders — every open lead is in exactly one
+            </DropdownMenuLabel>
+            {folders.map((f) => (
+              <ViewRow
+                key={f.id}
+                view={{ label: f.label, count: f.count, tone: "default", hint: f.hint }}
+                active={f.id === activeFolder}
+                onSelect={() => onFolder(f.id)}
+              />
+            ))}
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
           Views
         </DropdownMenuLabel>
@@ -230,7 +273,7 @@ export function LeadsSmartViews({
   );
 }
 
-function ViewRow({ view, active, onSelect }: { view: ViewDef; active: boolean; onSelect: () => void }) {
+function ViewRow({ view, active, onSelect }: { view: Omit<ViewDef, "id">; active: boolean; onSelect: () => void }) {
   // Zero is stated rather than hidden: "Overdue 0" is a useful, reassuring fact,
   // and a row whose count vanishes reads as broken.
   const countTone =
@@ -254,7 +297,9 @@ function ViewRow({ view, active, onSelect }: { view: ViewDef; active: boolean; o
         <span className={cn("block text-xs", active ? "font-semibold text-ink" : "text-ink-2")}>
           {view.label}
         </span>
-        <span className="block text-3xs text-ink-3">{view.hint}</span>
+        {view.hint ? (
+          <span className="block text-3xs text-ink-3">{view.hint}</span>
+        ) : null}
       </span>
       {view.count !== undefined && (
         <span className={cn("text-xs font-semibold tabular-nums shrink-0", countTone)}>
