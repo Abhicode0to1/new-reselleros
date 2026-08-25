@@ -3049,8 +3049,8 @@ function LeadDetailSheet({
 // ============================================================
 // RowActions — the sticky trailing cell for a lead row. A persistent ⋯ that
 // opens a clean, LABELLED action menu (coloured icon + name), so every action
-// is unambiguous — no colour-guessing, the two green actions read clearly as
-// "Call" vs "WhatsApp". Radix renders it in a portal, so it's never clipped by
+// is unambiguous. Call, WhatsApp and Send quote were loose glyphs in this cell until
+// 26 Aug 2026 — three coloured icons a rep had to decode — and are labelled rows now.
 // the cell (which is why the old hover-slide panel needed a JS hover-intent).
 // ============================================================
 function RowActions({
@@ -3073,11 +3073,6 @@ function RowActions({
   const [junkOpen, setJunkOpen] = React.useState(false);
 
   const itemCls = "gap-2.5 py-2 cursor-pointer";
-  // Primary quick actions inline (Call · WhatsApp · Quote) — ALWAYS fully visible
-  // (not faint / hover-only) so they read as tappable buttons at a glance and stay
-  // reachable on touch tablets (no hover). Each has a subtle bordered chip so the
-  // hit-area is obvious; colour brightens on hover.
-  const iconBtn = "flex h-7 w-7 items-center justify-center rounded-md border border-hairline bg-paper text-ink-2 transition-colors hover:bg-paper-2 hover:border-hairline-strong";
 
   return (
     <td
@@ -3085,44 +3080,6 @@ function RowActions({
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-end gap-0.5">
-        {hasPhone && (
-          <a
-            href={`tel:${lead.contact_phone}`}
-            title={`Call ${lead.contact_phone}`}
-            aria-label={`Call ${lead.company}`}
-            className={cn(iconBtn, "hover:text-emerald")}
-            onClick={() => logActivity.mutate({ leadId: lead.id, kind: "call", detail: `Called ${lead.contact_phone}` })}
-          >
-            <Icon name="call" size={16} />
-          </a>
-        )}
-        {hasPhone && (
-          <button
-            type="button"
-            title="WhatsApp"
-            aria-label={`WhatsApp ${lead.company}`}
-            className={cn(iconBtn, "hover:text-emerald")}
-            onClick={() => {
-              if (onWhatsApp) {
-                onWhatsApp(lead);
-              } else {
-                openWhatsApp(waNumber);
-              }
-              logActivity.mutate({ leadId: lead.id, kind: "whatsapp", detail: `WhatsApp to ${lead.contact_phone}` });
-            }}
-          >
-            <Icon name="whatsapp" size={16} />
-          </button>
-        )}
-        <button
-          type="button"
-          title="Send quote"
-          aria-label={`Send quote to ${lead.company}`}
-          className={cn(iconBtn, "hover:text-amber")}
-          onClick={() => onSendQuote(lead)}
-        >
-          <Icon name="quote" size={16} />
-        </button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -3136,6 +3093,32 @@ function RowActions({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[13rem]">
             <DropdownMenuLabel>More actions</DropdownMenuLabel>
+            {hasPhone && (
+              <DropdownMenuItem asChild className={itemCls}>
+                <a
+                  href={`tel:${lead.contact_phone}`}
+                  onClick={() => logActivity.mutate({ leadId: lead.id, kind: "call", detail: `Called ${lead.contact_phone}` })}
+                >
+                  <Icon name="call" size={20} className="text-emerald" /> Call
+                  <span className="ml-auto max-w-[9rem] truncate text-2xs text-ink-3">{lead.contact_phone}</span>
+                </a>
+              </DropdownMenuItem>
+            )}
+            {hasPhone && (
+              <DropdownMenuItem
+                className={itemCls}
+                onClick={() => {
+                  if (onWhatsApp) { onWhatsApp(lead); } else { openWhatsApp(waNumber); }
+                  logActivity.mutate({ leadId: lead.id, kind: "whatsapp", detail: `WhatsApp to ${lead.contact_phone}` });
+                }}
+              >
+                <Icon name="whatsapp" size={20} className="text-emerald" /> WhatsApp
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem className={itemCls} onClick={() => onSendQuote(lead)}>
+              <Icon name="quote" size={20} className="text-amber" /> Send quote
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem className={itemCls} onClick={() => onFollowUp(lead)}>
             <Icon name="reminder" size={20} /> Schedule follow-up
           </DropdownMenuItem>
