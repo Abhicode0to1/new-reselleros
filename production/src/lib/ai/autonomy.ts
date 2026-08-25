@@ -138,6 +138,24 @@ export const AI_ACTIONS = {
     today: "hold",
     supports: ["off", "hold", "auto"],
   },
+  "agreement.esign.send": {
+    label: "Send an agreement to a customer for digital signature",
+    /* `off`, and like `provisioning.activate` this is a description rather than caution: there
+       is nothing to switch on. Aadhaar eSign is not a link you can mint — under the IT Act 2000
+       s.3A and its Second Schedule it runs through an eSign Service Provider licensed by the
+       CCA, against a contract, with UIDAI authentication of the signer. No such provider is
+       configured for any tenant here.
+
+       It also stays off after one is. A signature is the most binding thing this application
+       could ever cause: the moment it lands, the obligations exist, and nobody can un-sign it.
+       Every other irreversible action here — a payment link, a provisioning activation — waits
+       for a person, and `decideSignatureRequest` refuses at ANY dial setting unless somebody has
+       read the specific rendered document. That check is deliberately not a config, for the same
+       reason the test-key gate on provisioning is not: the dial answers "may we act unattended",
+       and reading a contract before sending it is not a preference. */
+    today: "off",
+    supports: ["off", "hold"],
+  },
   "provisioning.activate": {
     label: "Activate a customer's seats after payment",
     /* `off`, and unlike every other entry here that is not caution — it is a description.
