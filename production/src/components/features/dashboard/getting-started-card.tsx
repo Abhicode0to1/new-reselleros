@@ -1,10 +1,31 @@
 /**
  * GettingStartedCard — first-run onboarding for a new reseller.
  *
- * A new tenant lands on an empty dashboard with no idea what to do first. This
- * card gives a clear, 4-step guided path — each step checks off from REAL data
- * (no fake ticks), routes to the right screen, and the whole card auto-hides once
- * the reseller is set up. Momentum by design: every ✓ is a small win.
+ * A new tenant lands on an empty dashboard with no idea what to do first. This card gives a
+ * guided path — each step checks off from REAL data (no fake ticks), routes to the right
+ * screen, and the whole card auto-hides once the reseller is set up.
+ *
+ * ─── THE GST STEP IS SEPARATE, AND THAT IS A BUG FIX ────────────────────────
+ * It used to be one row: "Set up your business & GST profile", ticked by `setupDone` — which
+ * is `tenants.setup_completed_at`, stamped by the final Continue of the setup wizard.
+ *
+ * GSTIN IS OPTIONAL IN THAT WIZARD. Nothing blocks Continue with the field empty
+ * (app/(app)/setup/page.tsx — the GSTIN Field has no required rule and no gate on the
+ * button). So a reseller could run the wizard, skip GSTIN, and get a green tick with a line
+ * through the words "GST profile" while holding no GSTIN at all. Every invoice this app
+ * issues is a GST tax invoice; that tick was the app telling somebody they were compliant
+ * when the one field that makes them compliant was blank.
+ *
+ * The fix is not a longer label. The two facts are separate and are checked separately: the
+ * organisation exists when its legal name is saved, and GST is set when a GSTIN passes
+ * `isValidGstin` — format AND checksum, the same function Settings → Company uses. A
+ * mistyped GSTIN now leaves the step open rather than ticking it.
+ *
+ * ─── WHY FIVE STEPS AND NOT FOUR ────────────────────────────────────────────
+ * The brief asked for four, ending at "issue first quote". The payment step is kept anyway:
+ * a quote that nobody paid proves the app can draft, not that the money-spine works, and
+ * this card's whole job is to walk somebody to their first real sale. Splitting the GST row
+ * out is what took it from four to five.
  */
 "use client";
 
@@ -13,6 +34,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
+import { isValidGstin } from "@/lib/utils";
 
 interface Step {
   id:    string;
@@ -24,19 +46,24 @@ interface Step {
 }
 
 export function GettingStartedCard({
-  setupDone, hasCustomer, hasQuote, hasSale, workspaceName,
+  setupDone, hasCustomer, hasQuote, hasSale, workspaceName, gstin,
 }: {
   setupDone:    boolean;
   hasCustomer:  boolean;
   hasQuote:     boolean;
   hasSale:      boolean;
   workspaceName: string;
+  /** `tenants.gstin`. Null or malformed leaves the GST step open — see the header. */
+  gstin?:       string | null;
 }) {
+  const gstDone = isValidGstin((gstin ?? "").trim());
+
   const steps: Step[] = [
-    { id: "setup",    label: "Set up your business & GST profile", hint: "GSTIN, state, logo — makes every invoice compliant.", href: "/setup",       cta: "Set up",      done: setupDone },
-    { id: "customer", label: "Add your first customer",            hint: "Or import from CSV — takes a minute.",               href: "/customers",   cta: "Add customer", done: hasCustomer },
-    { id: "quote",    label: "Create your first quote",            hint: "Pick from your catalog, send on WhatsApp/email.",     href: "/quotes/new",  cta: "New quote",    done: hasQuote },
-    { id: "sale",     label: "Record your first payment",          hint: "When a customer pays, the sale + invoice happen here.", href: "/quotes",      cta: "View quotes",  done: hasSale },
+    { id: "org",      label: "Add your organisation",              hint: "Legal name, address and state — these print on every document.", href: "/setup",     cta: "Set up",       done: setupDone },
+    { id: "gst",      label: "Add your GSTIN",                     hint: "Without it an invoice cannot be a valid tax invoice.",           href: "/setup",     cta: "Add GSTIN",    done: gstDone },
+    { id: "customer", label: "Add your first customer",            hint: "Or import from CSV — takes a minute.",                           href: "/customers", cta: "Add customer", done: hasCustomer },
+    { id: "quote",    label: "Create your first quote",            hint: "Pick from your catalog, send on WhatsApp/email.",                href: "/quotes/new", cta: "New quote",   done: hasQuote },
+    { id: "sale",     label: "Record your first payment",          hint: "When a customer pays, the sale + invoice happen here.",          href: "/quotes",    cta: "View quotes",  done: hasSale },
   ];
 
   const doneCount = steps.filter((s) => s.done).length;

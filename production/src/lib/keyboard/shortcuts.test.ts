@@ -6,7 +6,7 @@ import {
   SHORTCUTS, shortcutGroups, isTypingTarget, shouldIgnore,
   chordStep, CHORD_IDLE, CHORD_WINDOW_MS, GO_TO,
   moveIndex, listAction,
-  findShortcut, matchesShortcut, shortcutText, type ShortcutId,
+  findShortcut, matchesShortcut, shortcutText, actionRoute, type ShortcutId,
 } from "./shortcuts";
 
 /** A DOM-ish stand-in, so these rules are testable without a browser. */
@@ -379,5 +379,93 @@ describe("the cheat sheet shows the newly-registered shortcuts", () => {
   it("puts every registered shortcut in exactly one group", () => {
     expect(flat.length).toBe(SHORTCUTS.length);
     expect(new Set(flat).size).toBe(SHORTCUTS.length);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Single-letter ACTION keys — n / q / i.
+
+   These are the letters most likely to be typed by accident, and unlike j/k they take the
+   operator off the page they are on. Every test below is a way that goes wrong.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("actionRoute", () => {
+  const key = (
+    k: string,
+    over: Partial<Pick<KeyboardEvent, "ctrlKey" | "metaKey" | "altKey" | "repeat">> = {},
+  ) => ({ key: k, ctrlKey: false, metaKey: false, altKey: false, repeat: false, ...over });
+
+  it("opens the Add Lead dialog on n", () => {
+    expect(actionRoute(CHORD_IDLE, key("n"))).toBe("/leads?action=add");
+  });
+
+  it("opens the quote builder on q", () => {
+    expect(actionRoute(CHORD_IDLE, key("q"))).toBe("/quotes/new");
+  });
+
+  it("sends i to Quotes, because there is no create-invoice screen", () => {
+    /* An invoice is generated from a PAID quote — the "New invoice" button on /invoices
+       routes to /quotes for the same reason. Sending the operator to the invoice LIST would
+       show them what they already have and no way to make a new one. */
+    expect(actionRoute(CHORD_IDLE, key("i"))).toBe("/quotes");
+  });
+
+  it("never fires mid-chord — g then q is 'go to Quotes', not 'new quote'", () => {
+    /* THE COLLISION THAT MATTERS. `q` is both the second key of `g q` and an action key.
+       Firing here would make the two-key shortcut permanently unreachable. */
+    const armed = { armed: true as const, at: 1_000 };
+    expect(actionRoute(armed, key("q"))).toBeNull();
+    expect(actionRoute(armed, key("n"))).toBeNull();
+    expect(actionRoute(armed, key("i"))).toBeNull();
+  });
+
+  it("never fires with a modifier", () => {
+    /* Ctrl+N opens a browser window; Alt+I may be an OS key. Hijacking either makes the app
+       feel broken in a way the user blames on us. */
+    for (const mod of ["ctrlKey", "metaKey", "altKey"] as const) {
+      expect(actionRoute(CHORD_IDLE, key("n", { [mod]: true }))).toBeNull();
+    }
+  });
+
+  it("never fires on an auto-repeat", () => {
+    /* Leaning on the key would otherwise queue one navigation per repeat. */
+    expect(actionRoute(CHORD_IDLE, key("n", { repeat: true }))).toBeNull();
+  });
+
+  it("ignores every other letter, including the g that arms the chord", () => {
+    for (const k of ["g", "j", "k", "o", "x", "1", "Enter", "Escape"]) {
+      expect(actionRoute(CHORD_IDLE, key(k)), `${k} must not be an action`).toBeNull();
+    }
+  });
+
+  it("accepts the shifted letter, because Shift+N is still N", () => {
+    expect(actionRoute(CHORD_IDLE, key("N"))).toBe("/leads?action=add");
+  });
+
+  it("routes only to screens — no action key can mutate anything", () => {
+    /* CGST Rule 46: next_document_number allocates from a gapless per-tenant series, and a
+       hole in that series cannot be undone by deleting the row. A stray keystroke must never
+       be able to consume a document number. This asserts the SHAPE — every action resolves
+       to a path, so there is nowhere for a mutation to hide. */
+    for (const k of ["n", "q", "i"]) {
+      const route = actionRoute(CHORD_IDLE, key(k));
+      expect(route, `${k} should resolve to a route`).toBeTruthy();
+      expect(route!.startsWith("/"), `${k} must resolve to a path`).toBe(true);
+    }
+  });
+
+  it("is listed in the cheat sheet, so it is discoverable", () => {
+    /* The registry IS the documentation in this file. A working, invisible shortcut is what
+       happened to report-bug for as long as it existed. */
+    const actions = SHORTCUTS.filter((s) => s.group === "Actions").map((s) => s.id);
+    expect(actions).toContain("new-lead");
+    expect(actions).toContain("new-quote");
+    expect(actions).toContain("new-invoice");
+  });
+
+  it("tells the operator WHY i goes to Quotes", () => {
+    /* A label reading just "New invoice" sends somebody hunting for a form that does not
+       exist in this app. */
+    expect(findShortcut("new-invoice").label).toContain("paid quote");
   });
 });

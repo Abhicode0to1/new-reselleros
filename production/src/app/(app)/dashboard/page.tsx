@@ -578,6 +578,10 @@ export default function DashboardPage() {
         hasQuote={(quotes?.length ?? 0) > 0}
         hasSale={(subscriptions?.length ?? 0) > 0}
         workspaceName={currentUser?.tenantName ?? ""}
+        /* The GSTIN itself, not a boolean derived here. The card validates it (format AND
+           checksum) so there is one rule, in one place — a `hasGstin` computed at this call
+           site would be a second, looser definition of "GST is set up". */
+        gstin={currentUser?.tenantGstin ?? null}
       />
 
       {/* Priority Action Hub for actionable alerts */}

@@ -90,6 +90,27 @@ const SHORTCUT_DEFS = [
   { id: "tab-prev",   keys: ["Ctrl", "Alt", "←"],   label: "Previous workspace tab",    scope: "global", group: "Move around" },
   { id: "tab-close",  keys: ["Ctrl", "Alt", "W"],   label: "Close the workspace tab",   scope: "global", group: "Move around" },
 
+  /* ── The three single-letter action keys ──────────────────────────────────
+     `n`, `q` and `i` are the letters most likely to be typed by accident, so every guard in
+     this file matters more for them than for anything above: isTypingTarget, the no-modifier
+     rule, the mid-chord rule (a `g` already armed means `q` is "go to Quotes", never "new
+     quote"), and the open-dialog rule in useGlobalKeys.
+
+     ─── AND NONE OF THEM CREATES ANYTHING ──────────────────────────────────
+     Each one OPENS the screen or dialog where the thing is made. That is not timidity about
+     shortcuts, it is CGST Rule 46: `next_document_number` allocates from a gapless
+     per-tenant series, and a series with a hole in it is a compliance problem that cannot be
+     undone by deleting the row. A stray keystroke must never be able to consume a document
+     number. Same reasoning as the two-step confirm on a bulk delete — the cost of the two
+     mistakes is not symmetric. */
+  { id: "new-lead",  keys: ["n"], label: "New lead",  scope: "global", group: "Actions" },
+  { id: "new-quote", keys: ["q"], label: "New quote", scope: "global", group: "Actions" },
+  /* The label carries a fact about the app, not just a key. There is no "create invoice"
+     screen in ResellerOS — an invoice is generated from a PAID quote, which is why the
+     "New invoice" button on /invoices also routes to /quotes. A cheat sheet entry saying
+     "New invoice" alone would send somebody hunting for a form that does not exist. */
+  { id: "new-invoice", keys: ["i"], label: "Raise an invoice — opens Quotes, because an invoice is generated from a paid quote", scope: "global", group: "Actions" },
+
   { id: "help",            keys: ["?"],         label: "Show this list",      scope: "global", group: "Help" },
 ] as const satisfies readonly Shortcut[];
 
@@ -220,6 +241,64 @@ export const GO_TO: Readonly<Record<string, string>> = {
   s: "/subscriptions",
   a: "/accounting",
 };
+
+/* ── Single-letter actions ──────────────────────────────────────────────────── */
+
+/**
+ * Where each action letter goes. Keyed by shortcut id, so the cheat sheet and the handler
+ * cannot describe different keys — the keys live in the registry above and only the
+ * DESTINATION lives here.
+ *
+ * Every value is a screen, never a mutation. See the registry entries for why.
+ */
+const ACTION_ROUTES: Readonly<Record<string, string>> = {
+  /* Opens the Add Lead dialog on the leads page — the page reads `?action=` and the param
+     is stripped afterwards, so a refresh does not re-open it. */
+  "new-lead": "/leads?action=add",
+  "new-quote": "/quotes/new",
+  /* /quotes, not /invoices. An invoice comes from a paid quote; landing the operator on the
+     invoice LIST would show them the thing they already have and no way to make a new one. */
+  "new-invoice": "/quotes",
+};
+
+/**
+ * Where a bare action key should take the operator, or null if it should not fire.
+ *
+ * Pure, and it refuses in four situations — each one a way a shortcut turns into a
+ * complaint rather than a convenience:
+ *
+ *   1. MID-CHORD. `g` is armed, so `q` means "go to Quotes". Firing "new quote" here would
+ *      make the two-key shortcut unusable, because its second key is also an action key.
+ *   2. WITH A MODIFIER. `Ctrl+N` opens a browser window and `Alt+I` may be an OS key.
+ *      Hijacking either makes the app feel broken in a way the user blames on us.
+ *   3. NOT AN ACTION KEY — every other letter, including the `g` that arms the chord.
+ *   4. REPEAT. Holding a key down fires keydown continuously; without this, leaning on `n`
+ *      queues a navigation per repeat.
+ *
+ * Typing targets and open dialogs are handled by the caller, because both need the DOM.
+ */
+export function actionRoute(
+  state: ChordState,
+  e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "repeat">,
+): string | null {
+  if (state.armed) return null;
+  if (e.ctrlKey || e.metaKey || e.altKey) return null;
+  if (e.repeat) return null;
+
+  const k = (e.key ?? "").toLowerCase();
+  if (k.length !== 1) return null;
+
+  const hit = SHORTCUTS.find(
+    (s) =>
+      s.group === "Actions" &&
+      s.scope === "global" &&
+      s.keys.length === 1 &&
+      s.keys[0].toLowerCase() === k,
+  );
+  if (!hit) return null;
+
+  return ACTION_ROUTES[hit.id] ?? null;
+}
 
 /**
  * How long a `g` stays armed, in milliseconds.

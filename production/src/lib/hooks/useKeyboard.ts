@@ -12,9 +12,30 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  chordStep, CHORD_IDLE, shouldIgnore, listAction, moveIndex,
+  chordStep, CHORD_IDLE, shouldIgnore, listAction, moveIndex, actionRoute,
   type ChordState,
 } from "@/lib/keyboard/shortcuts";
+
+/**
+ * Is a modal open right now?
+ *
+ * Lives here rather than in the pure module because it needs the DOM, and it exists because
+ * `isTypingTarget` is not enough on its own: inside a dialog the focused element is often a
+ * BUTTON, not an input. Without this, pressing `q` while the Add Lead dialog is open — with
+ * focus resting on Cancel — navigates away and takes whatever was typed with it.
+ *
+ * Radix marks its open dialogs with `data-state="open"`, and every dialog in this app is a
+ * Radix one (components/ui/dialog.tsx). `role="alertdialog"` is checked too, since a confirm
+ * is the worst possible thing to navigate out of.
+ */
+function isDialogOpen(): boolean {
+  if (typeof document === "undefined") return false;
+  return Boolean(
+    document.querySelector(
+      '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]',
+    ),
+  );
+}
 
 /**
  * `g` then a letter jumps between pages, and `?` opens the cheat sheet.
@@ -40,6 +61,18 @@ export function useGlobalKeys(onShowHelp: () => void): void {
       if (e.key === "?") {
         e.preventDefault();
         helpRef.current();
+        return;
+      }
+
+      /* Single-letter actions, BEFORE chordStep — `chord.current` is still the state as it
+         was before this key, which is exactly what actionRoute needs to tell "new quote"
+         from the `q` of a `g q`. Running it after would read the state this key just
+         produced and get the answer backwards. */
+      const action = actionRoute(chord.current, e);
+      if (action && !isDialogOpen()) {
+        e.preventDefault();
+        chord.current = CHORD_IDLE;
+        router.push(action as never);
         return;
       }
 
