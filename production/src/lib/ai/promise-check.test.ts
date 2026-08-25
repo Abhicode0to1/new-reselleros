@@ -209,3 +209,64 @@ describe("Hinglish durations — the hole found on 25 Aug 2026", () => {
     expect(findPromises("Someone from the team will call you soon.").safe).toBe(true);
   });
 });
+
+/* ══ Minutes and seconds — the hole found 25 Aug 2026 ════════════════════════
+   The hour-and-upward patterns came out of a brief about migration, where hours is the natural
+   unit. A brief about "instant 10-minute setup" arrived the next day and every one of these came
+   back safe. Two briefs, two holes in the same rule, each in whatever unit that brief used. */
+
+describe("a duration in minutes or seconds is still a promise", () => {
+  it.each([
+    ["We can have your email running in 10 minutes.", "the preposition-first English form"],
+    ["10 minute mein setup ho jayega.", "number-first Hinglish"],
+    ["Setup in 30 seconds.", "seconds"],
+    ["5 min mein ho jayega", "the abbreviated unit"],
+    [
+      "Our round-the-clock phone support SLA is a 15 minute response.",
+      "the SLA figure that slipped through in production shape",
+    ],
+  ])("catches %s (%s)", (line, why) => {
+    /* The last case is the one that had already got past. A draft goes through
+       maskAuthorisedSellingPoints BEFORE this runs, which rewrites "24/7" to "round-the-clock"
+       because round-the-clock support is an authorised claim — so the only token being caught
+       disappeared and the response-time figure went with the mail. Round-the-clock support is
+       a promise we keep; a number beside it is a contract nobody signed. */
+    expect(findPromises(line).safe, `should catch: ${why}`).toBe(false);
+  });
+
+  it.each([
+    ["Our minimum order is one seat.", "minimum is not min"],
+    ["A second opinion is always welcome.", "a second opinion is not seconds"],
+    ["Migration takes 2 days depending on mailbox size.", "'takes' is somebody else's process"],
+    ["DNS changes can take up to 48 hours to propagate.", "'up to' is a bound, not a deadline"],
+  ])("still lets %s through (%s)", (line, why) => {
+    /* Word boundaries are what separate the first two: `\bmin\b` and `\bsec\b` never the bare
+       prefixes. The last two are the lookbehinds added the day before, re-asserted here
+       because widening the unit list is exactly when they could have been lost. */
+    expect(findPromises(line).safe, `should allow: ${why}`).toBe(true);
+  });
+});
+
+describe("Hindi day-words are the same commitment as the English ones", () => {
+  it.each([
+    ["Aaj hi chalu kar denge.", "aaj"],
+    ["Kal tak ho jayega.", "kal"],
+    ["Parson tak kar denge.", "parson"],
+    ["Abhi kar dete hain.", "abhi"],
+  ])("catches %s", (line) => {
+    /* `today`, `tomorrow` and `yesterday` have been unconditional since this rule was written.
+       These were safe purely because the list was in English, while the agent writes Hinglish —
+       the same shape of gap as the duration units above. */
+    expect(findPromises(line).safe).toBe(false);
+  });
+
+  it.each([
+    ["Abhi tak koi jawaab nahi mila hai.", "'abhi tak' describes the present, it commits to nothing"],
+    ["Abhi bhi wahi problem hai.", "'abhi bhi' is 'still'"],
+  ])("still lets %s through (%s)", (line, why) => {
+    /* The negative lookahead. Without it a complaint about the past reads as a promise about
+       the future, and holding a reply over that word would be the guard misfiring on the
+       customer's own idiom. */
+    expect(findPromises(line).safe, `should allow: ${why}`).toBe(true);
+  });
+});

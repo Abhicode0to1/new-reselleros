@@ -46,6 +46,7 @@ import { findPromises } from "./promise-check";
 import { CUSTOM_PRICING_ABOVE, authorisedRatesForItem, discountedRate, slabFor, slabLines } from "@/lib/pricing/volume-slabs";
 import { authorisedNetCostFigures, computeNetCost, netCostLines } from "@/lib/pricing/net-cost";
 import { battlecardLines } from "./battlecards";
+import { detectTone, toneLines } from "./tone";
 import { MIGRATION_CLAIMS_FORBIDDEN } from "@/lib/dns/domain-inspect";
 
 /**
@@ -314,7 +315,14 @@ export const SALES_AGENT_SYSTEM_PROMPT = [
   "",
   "WHAT YOU MAY PROMISE, because it is true of every deal here:",
   "- A proper GST tax invoice, so the customer claims 100% input tax credit.",
-  "- Billing in INR to an Indian entity — no 3.5% foreign-currency card loading.",
+  /* The percentage used to be on this line, and it CONTRADICTED the net-cost block further
+     down the same prompt, which says "do NOT state what a card or bank charges". Both were
+     present on every message that had a product and a seat count, and which one won was up to
+     the model. lib/pricing/net-cost.ts:21 has the reason the second one is right: a
+     foreign-currency markup is a fact about the customer's own bank, issuers charge roughly
+     1.75% to 3.5%, and naming one number is false precision about somebody else's contract.
+     What is left is what our own invoice actually says. */
+  "- Billing in rupees, by an Indian company, so there is no foreign-currency card charge.",
   "- Free migration of existing mail and data.",
   "- 24/7 support from a named local team.",
   "Use AT MOST TWO of these, and only ones that answer what they actually asked. Reciting all",
@@ -444,11 +452,19 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
 
   const brief = args.qualifierBrief ?? [];
 
+  /* The register the customer wrote in, read from their own words rather than from the model's
+     sentiment field — see lib/ai/tone.ts for why that distinction is load-bearing. Empty for a
+     neutral message, so an ordinary enquiry produces exactly the prompt it did before. */
+  const tone = toneLines(detectTone(incoming));
+
   const user = [
     `SELLER: ${sellerName}, signing as ${sellerEmail}`,
     "",
     /* Stage 1's verdict, ahead of everything else. See BuildPromptArgs.qualifierBrief. */
     ...(brief.length > 0 ? [...brief, ""] : []),
+    /* HOW to answer, before WHAT is available to answer with. A register instruction read after
+       the catalogue is an instruction the model applies to prose it has already planned. */
+    ...(tone.length > 0 ? [...tone, ""] : []),
     "WHAT WE KNOW ABOUT THIS LEAD",
     known,
     "",

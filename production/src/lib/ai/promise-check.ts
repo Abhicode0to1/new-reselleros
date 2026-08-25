@@ -90,8 +90,40 @@ const DATE_RE = new RegExp(
        ("vague futures are deliberately NOT here"), and the fix is to keep drawing it: a
        duration introduced by "up to" or "takes" is describing somebody else's process, while
        "2 ghante mein kar denge" has us as the actor. The lookbehinds are what separate them. */
-    String.raw`(?<!\bup\s+to\s)(?<!\btakes?\s)(?<!\btaking\s)\b\d+\s*(?:ghante?a?|din|haft[ae]|mahin[ae])\b`,
-    String.raw`(?<!\bup\s+to\s)(?<!\btakes?\s)(?<!\btaking\s)\b\d+\s*(?:working|business)?\s*(?:hour|hr|day|week|month)s?\b(?=[^\w]*(?:me?in|me|within|and|,|\.|$|\s))`,
+    /* ── AND MINUTES WERE MISSING, FOUND 25 AUG 2026 ─────────────────────────
+       The block above covers hours upward. It came out of a brief about migration, where hours
+       is the natural unit, and the unit one step SMALLER was left open — so every one of these
+       came back safe:
+
+           "We can have your email running in 10 minutes."
+           "10 minute mein setup ho jayega."
+           "Setup in 30 seconds."
+           "Response within 15 minutes, always."
+
+       Two days, two briefs, two holes in the same rule, each in whatever unit that brief
+       happened to use. The lesson recorded here for the next one: when a duration guard is
+       widened, widen it across the whole ladder rather than to the example in hand.
+
+       The last of those four is the one that had already slipped past in production shape. A
+       draft is passed through `maskAuthorisedSellingPoints` BEFORE this runs, which rewrites
+       "24/7" to "round-the-clock" because round-the-clock support is an authorised claim — so
+       "our 24/7 phone support SLA is a 15 minute response" lost the only token being caught and
+       went through with the SLA figure intact. Round-the-clock support is a promise we keep; a
+       number next to it is a contract nobody signed.
+
+       `\bmin\b` and `\bsec\b` only, never the bare prefixes: "minimum" and "second opinion"
+       must not match, and a word boundary is what separates them. */
+    String.raw`(?<!\bup\s+to\s)(?<!\btakes?\s)(?<!\btaking\s)\b\d+\s*(?:ghante?a?|din|haft[ae]|mahin[ae]|minute?s?|mins?|second?s?|secs?)\b`,
+    String.raw`(?<!\bup\s+to\s)(?<!\btakes?\s)(?<!\btaking\s)\b\d+\s*(?:working|business)?\s*(?:hour|hr|day|week|month|minute|min|second|sec)s?\b(?=[^\w]*(?:me?in|me|within|and|,|\.|$|\s))`,
+    /* Hindi day-words. `today`/`tomorrow`/`yesterday` are already unconditional on the first
+       line of this list, and "aaj hi chalu kar denge" is the same commitment in the language
+       this agent actually writes in — it was safe until now purely because the list was
+       English. `parson` covers both day-after and day-before, as the word does.
+       `abhi` is included but not when it is part of "abhi tak" or "abhi bhi", which describe
+       the present state rather than commit to anything ("abhi tak nahi mila" is a complaint,
+       not a promise). */
+    String.raw`\b(?:aaj|kal|parson)\b`,
+    String.raw`\babhi\b(?!\s+(?:tak|bhi))`,
     String.raw`\b(?:next|this|coming)\s+(?:week|month|monday|friday)\b`,
     /* 25 Aug · 25/08 · 2026-08-25 · 25th */
     String.raw`\b\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)`,
