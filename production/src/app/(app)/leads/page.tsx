@@ -68,7 +68,7 @@ import { useItems } from "@/lib/queries/items";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
 import { isHotLead, isHighValueLead, intentMeta, staleWarning } from "@/lib/leads/heat";
-import { SALES_FOLDERS, SALES_FLAGS, inSalesFolder, salesFolderCounts, type SalesFolder } from "@/lib/leads/folders";
+import { SALES_FOLDERS, inSalesFolder, salesFolderCounts, type SalesFolder } from "@/lib/leads/folders";
 import { SwipeLeadCard } from "@/components/features/leads/swipe-lead-card";
 import { ImportCsvDialog } from "@/components/features/leads/import-csv-dialog";
 import { ShareFormSheet, ENQUIRY_SHARE } from "@/components/features/leads/share-form-sheet";
@@ -286,19 +286,21 @@ function LeadsPageInner() {
     [leads],
   );
 
-  /* How many follow-ups are not merely due but LATE — the red sub-badge on the Follow-Up
-     Needed chip. The due count itself is no longer computed here: it is the `followup`
-     folder's own count, so the chip's two numbers cannot disagree.
-     `<` and not `<=`: due today is on time. */
-  const overdueNowCount = React.useMemo(() => {
-    const today = localDateISO(new Date());
-    let late = 0;
-    for (const l of leads ?? []) {
-      if (l.is_junk || l.stage === "won" || l.stage === "lost") continue;
-      if (l.follow_up_date && l.follow_up_date < today) late++;
-    }
-    return late;
-  }, [leads]);
+  /* ─── A FILTER WITH ONE POSSIBLE VALUE IS NOT A FILTER ────────────────────
+     Measured on the live workspace, 25 Aug 2026: all 29 leads carry
+     `pipeline = 'new_logo'`, so the motion row read "All motions 14 · New Logo 14 ·
+     Migrations 0 · Renewals & Expansion 0" — two chips over the SAME fourteen leads
+     and two over nothing. Whichever you pressed, the list did not change, and the row
+     charged a band of vertical space for a choice with one option.
+
+     Gated, not deleted: the first migration or renewal deal brings it back with no
+     code change. Pardeep asked for the page to stop showing the same thing twice, and
+     this row was showing the same fourteen leads twice on its own. */
+  const motionsInUse = React.useMemo(
+    () => Object.values(motionCounts).filter((n) => n > 0).length,
+    [motionCounts],
+  );
+
 
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null);
   // Row "Follow-up" quick action → opens AddTaskDialog scoped to this lead.
@@ -912,63 +914,6 @@ function LeadsPageInner() {
             );
           })}
 
-          {/* ── THE FLAGS — a different KIND of chip, and dressed as one ────────────
-              ⚡ Hot and ⏰ Due overlap the folders on purpose: a hot lead is still in
-              Inbox — that is the whole point of a flag. The divider, the "FILTER"
-              label and the amber tint all say the same thing three ways: these are
-              lenses over the folders above, not places beside them. Do not add them
-              to anything. */}
-          <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-hairline" />
-          {/* ink-3, not ink-4. This is a content label, and ink-4 is the placeholder tone:
-              on paper-2 it measures 2.17:1 where AA wants 4.5. ink-3 reads 4.79. The other
-              ink-4 uses on this page are genuine placeholders and em-dashes, and keep it. */}
-          <span className="shrink-0 text-3xs font-bold uppercase tracking-wider text-ink-3 select-none">
-            Filter
-          </span>
-          {SALES_FLAGS.map((f) => {
-            const count = folderCounts[f.id];
-            /* Only ⏰ Due carries a second badge, and only when something is genuinely
-               LATE — nine days late is a different problem from due at 4pm. */
-            const late = f.id === "followup" ? overdueNowCount : 0;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => selectFolder(f.id)}
-                aria-pressed={folder === f.id}
-                title={count === 0
-                  ? f.hint
-                  : "A filter, not a folder — these leads also sit in one of the folders on the left."}
-                className={cn(
-                  "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border",
-                  /* Amber ONLY when selected. The first cut tinted unselected flags too,
-                     to say "different species" — and Pardeep read both as permanently
-                     highlighted, because a fill means "chosen" everywhere else on the
-                     page. The species distinction is already carried by the divider and
-                     the FILTER label; highlight keeps its one meaning. */
-                  folder === f.id
-                    ? "bg-amber-soft text-amber-ink shadow-xs border-amber/50 font-bold"
-                    : count === 0
-                    ? "text-ink-3 border-transparent hover:text-ink-2 hover:bg-paper/50"
-                    : "text-ink-2 border-transparent hover:text-ink hover:bg-paper/50"
-                )}
-              >
-                <span aria-hidden>{f.icon}</span>
-                <span>{f.label}</span>
-                {late > 0 && (
-                  <span
-                    title={`${late} already overdue, not just due today`}
-                    className="px-1.5 py-0.2 rounded-full text-3xs bg-rose-soft text-rose-ink font-mono tabular-nums font-bold"
-                  >
-                    {late} late
-                  </span>
-                )}
-                <span className="px-1.5 py-0.2 rounded-full text-3xs bg-paper-2 text-ink-2 font-mono tabular-nums">
-                  {count}
-                </span>
-              </button>
-            );
-          })}
         </div>
 
       </div>
@@ -1043,6 +988,7 @@ function LeadsPageInner() {
               already filtered would hide deals from anyone who does not know the filter
               exists. Counts come from the UNFILTERED set so they answer "how much is
               there", not "how much survives what I already picked". */}
+          {motionsInUse > 1 && (
           <div className="flex shrink-0 items-center gap-1">
             {([null, ...PIPELINES.map((p) => p.id)] as (Pipeline | null)[]).map((id) => {
               const def = id ? PIPELINES.find((p) => p.id === id)! : null;
@@ -1067,6 +1013,7 @@ function LeadsPageInner() {
               );
             })}
           </div>
+          )}
           <button
             type="button"
             onClick={() => setKpiOpen((o) => !o)}
