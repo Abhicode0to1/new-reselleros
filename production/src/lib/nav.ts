@@ -165,7 +165,7 @@ export const APP_NAV: NavSection[] = [
     items: [
       { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: "home", roles: ["owner", "manager", "billing"] },
       { id: "my-attendance", href: "/attendance/me", label: "My Attendance", icon: "calendar", roles: ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"], hint: "Apni attendance khud mark karo — login hi identity proof hai." },
-      { id: "my-expenses", href: "/my-expenses", label: "My Advance & Expenses", icon: "wallet", roles: ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"], hint: "Advance cash balances & mobile expense entries." },
+      { id: "my-expenses", href: "/my-expenses", label: "Advances & Expenses", icon: "wallet", roles: ["owner", "manager", "sales", "sales_senior", "accountant", "support", "billing", "delivery"], hint: "Advance cash balances & mobile expense entries." },
     ],
   },
   {
@@ -194,7 +194,7 @@ export const APP_NAV: NavSection[] = [
       // reach. The id must still differ: the command palette flattens every
       // section into one list and indexes on id, so two entries sharing one id
       // silently drop to a single result.
-      { id: "my-expenses-sales", href: "/my-expenses",    label: "My Advance & Expenses", icon: "wallet", roles: ["owner", "manager", "sales"] },
+      { id: "my-expenses-sales", href: "/my-expenses",    label: "Advances & Expenses", icon: "wallet", roles: ["owner", "manager", "sales"] },
       { id: "customers",       href: "/customers",        label: "Customers",     icon: "users",  roles: ["owner", "manager", "billing"] },
       { id: "customer-groups", href: "/customers/groups", label: "Parent Accounts", icon: "layout", roles: ["owner", "manager"] },
       { id: "contacts",        href: "/contacts",         label: "Contacts",      icon: "user",   roles: ["owner", "manager", "billing"] },
@@ -374,7 +374,7 @@ export const CUSTOMER_NAV: NavSection[] = [
 export const SCREEN_TITLES: Record<string, string[]> = {
   "/dashboard":       ["Home", "Dashboard"],
   "/leads":           ["Sales", "Leads"],
-  "/my-expenses":     ["Me", "My Advance & Expenses"],
+  "/my-expenses":     ["Me", "Advances & Expenses"],
   "/automation":      ["Admin", "Automation"],
   "/vault":           ["Admin", "Password Vault"],
   "/admin/feedback":  ["Admin", "Feedback & AI Fixes"],

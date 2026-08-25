@@ -183,6 +183,14 @@ export function LeadsSmartViews({
             list as the whole pipeline. */}
         <Button size="sm" variant={active === "all" ? "ghost" : "outline"} className="shrink-0">
           <Icon name="eye" size={13} className="text-ink-3" />
+          {/* ─── "View:" IS LOAD-BEARING, NOT DECORATION ────────────────────────
+              This trigger and the folder chip on the leads page both said "All open", a few
+              centimetres apart, so which one governed the list was a guess. The chip keeps its
+              bare label — it sits in a row of folders with an inbox icon, which says what it is —
+              and the scope goes here, on the control whose whole job is choosing a view.
+              Hidden below `sm` because the label is already tight on a phone and the eye icon
+              carries the same meaning there. */}
+          <span className="hidden text-ink-3 sm:inline">{"View: "}</span>
           <span className="font-medium">{activeLabel}</span>
           {activeDef?.count !== undefined && (
             <span className="text-[10px] tabular-nums opacity-70">{activeDef.count}</span>

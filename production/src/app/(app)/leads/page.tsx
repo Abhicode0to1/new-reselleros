@@ -937,8 +937,15 @@ function LeadsPageInner() {
       </div>
 
       {/* Revenue Intelligence Pill Strip */}
+      {/* ─── `justify-between` REMOVED, AND `ml-auto` WITH IT ────────────────
+          Two audit findings, one bug, in opposite directions. With three flex children,
+          `justify-between` distributes the free space across the two gaps — and an `ml-auto`
+          on the third child absorbs ALL of it, so `justify-between` has none left to give.
+          The result was the metrics and the motion filters flush against each other while
+          "View Breakdown" sat alone at the far right. Plain `gap-3` spaces both gaps
+          evenly, which is what the row wanted in the first place. */}
       {!isLoading && leads && leads.length > 0 && (
-        <div className="shrink-0 mb-2.5 bg-paper-2/60 border border-hairline rounded-lg px-3 py-1 flex items-center justify-between gap-3 text-xs overflow-x-auto">
+        <div className="shrink-0 mb-2.5 bg-paper-2/60 border border-hairline rounded-lg px-3 py-1 flex items-center gap-3 text-xs overflow-x-auto">
           <div className="flex items-center gap-2.5 text-ink-2 shrink-0">
             <span className="flex items-center gap-1 font-semibold text-ink">
               <Icon name="bar_chart" size={14} className="text-amber-ink" />
@@ -999,7 +1006,7 @@ function LeadsPageInner() {
               already filtered would hide deals from anyone who does not know the filter
               exists. Counts come from the UNFILTERED set so they answer "how much is
               there", not "how much survives what I already picked". */}
-          <div className="ml-3 flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             {([null, ...PIPELINES.map((p) => p.id)] as (Pipeline | null)[]).map((id) => {
               const def = id ? PIPELINES.find((p) => p.id === id)! : null;
               const n = id ? motionCounts[id] : workspaceLeads.filter((l) => !l.is_junk).length;
@@ -1025,7 +1032,7 @@ function LeadsPageInner() {
           <button
             type="button"
             onClick={() => setKpiOpen((o) => !o)}
-            className="text-[11px] font-semibold text-amber-ink hover:underline shrink-0 ml-auto"
+            className="text-[11px] font-semibold text-amber-ink hover:underline shrink-0"
           >
             {kpiOpen ? "Hide Breakdown" : "View Breakdown"}
           </button>
@@ -1317,8 +1324,12 @@ function LeadsPageInner() {
                       {topHot ? `Call ${topHot.company.split(/\s+/)[0]}` : "Call top lead"}
                     </Button>
                     <Button size="sm" icon="mail" disabled={!topHot} onClick={handleSendNudge}>Send nudge</Button>
-                    <Button size="sm" variant="ghost" icon="chevron_up" aria-label="Hide tips" onClick={toggleTips} />
                   </>
+                }
+                /* Out of the action row and into the corner. It was reading as a third action
+                   next to "Call" and "Send nudge", which left it unclear what it collapsed. */
+                collapse={
+                  <Button size="sm" variant="ghost" icon="chevron_up" aria-label="Hide tips" onClick={toggleTips} />
                 }
               >
                 <b className="text-ink">{hotLeads.length} hot lead{hotLeads.length === 1 ? "" : "s"} worth focusing today.</b>{" "}

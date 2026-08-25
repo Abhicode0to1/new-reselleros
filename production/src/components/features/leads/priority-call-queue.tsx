@@ -200,7 +200,16 @@ export function PriorityCallQueue({
         onClick={toggle}
         aria-expanded={open}
         aria-controls={PANEL_ID}
-        className="flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-paper-2/60"
+        /* ─── WEIGHT, BECAUSE THIS IS A PRIMARY TASK CONTAINER ─────────────────
+           A thin border on the page background put this behind the high-contrast "Call" button
+           above it, so the one bar naming today's work receded. `bg-amber/5` plus a left rule in
+           the brand accent — existing tokens, no new colour (CLAUDE.md §5) — is enough to make it
+           read as a container rather than a divider.
+
+           `py-3` rather than `py-2.5` for the second finding in the same element: the "N of M
+           due" line sat squeezed against the bottom edge. It is the count a rep keeps seeing when
+           the panel is folded, so it gets room. */
+        className="flex w-full items-center gap-2 border-l-2 border-amber bg-amber/5 px-4 py-3 text-left transition-colors hover:bg-amber/10"
       >
         <Icon
           name="chevron_right"

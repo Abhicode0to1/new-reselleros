@@ -115,7 +115,11 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                 className="flex items-center gap-2 rounded-lg border border-hairline bg-amber-soft/40 px-3 py-2.5 text-sm font-semibold text-ink hover:bg-amber-soft active:bg-amber-soft/70"
               >
                 <Icon name={m.icon} size={16} className="text-amber shrink-0" />
-                <span className="truncate">{m.label}</span>
+                {/* Same reason as the two below: a label clipped to an ellipsis has hidden part
+                    of itself, and `title` is the cheapest way to make it readable again. These
+                    four are short enough not to clip today, and the shortcut list is edited
+                    often enough that "today" is not the guarantee it sounds like. */}
+                <span className="truncate" title={m.label}>{m.label}</span>
               </Link>
             ))}
           </div>
@@ -155,7 +159,7 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                 {child
                   ? <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", isActive ? "bg-amber" : "bg-ink-3/40")} />
                   : <Icon name={it.icon} size={15} className={cn("flex-shrink-0", isActive ? "text-amber" : "text-ink-3 group-hover:text-ink-2")} />}
-                {!collapsed && <span className="flex-1 truncate">{it.label}</span>}
+                {!collapsed && <span className="flex-1 truncate" title={it.label}>{it.label}</span>}
                 {!collapsed && it.external && <Icon name="external" size={12} className="flex-shrink-0 text-ink-3" />}
                 {b && (collapsed ? (
                   <span className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-amber" />
@@ -186,7 +190,7 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                       aria-current={active ? "page" : undefined}
                     >
                       <Icon name={item.icon} size={15} className={cn("flex-shrink-0", active ? "text-amber" : "text-ink-3 group-hover:text-ink-2")} />
-                      <span className="flex-1 truncate">{item.label}</span>
+                      <span className="flex-1 truncate" title={item.label}>{item.label}</span>
                     </Link>
                     <button
                       type="button"

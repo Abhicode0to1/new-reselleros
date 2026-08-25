@@ -26,6 +26,17 @@ interface GeminiCardProps {
   title?: string;
   children?: React.ReactNode;
   actions?: React.ReactNode;
+  /**
+   * A section-level control, pinned to the card's top-right corner.
+   *
+   * Separate from `actions` because they are different kinds of thing: `actions` are what to DO
+   * about the content, and this is what to do about the CARD. A collapse chevron sitting in the
+   * action row reads as a third action and leaves the scope of the collapse ambiguous — the
+   * conventional place for it is the corner, and this is that corner.
+   *
+   * Optional, so the ten existing call sites are untouched.
+   */
+  collapse?: React.ReactNode;
   compact?: boolean;
   /** Streaming mode — show typewriter animation */
   streaming?: boolean;
@@ -38,6 +49,7 @@ export function GeminiCard({
   title = "Gemini AI suggests",
   children,
   actions,
+  collapse,
   compact = false,
   streaming = false,
   streamedText,
@@ -58,6 +70,10 @@ export function GeminiCard({
           compact ? "px-3 py-2.5" : "px-4 py-3.5"
         )}
       >
+        {/* Section-level control, top-right. `z-10` because the gradient border wrapper paints
+            over the corner otherwise, and the title row is allowed to run under it. */}
+        {collapse && <div className="absolute right-2.5 top-2.5 z-10">{collapse}</div>}
+
         {/* Title row */}
         <div className={cn("flex items-center gap-1.5", compact ? "mb-1" : "mb-2")}>
           <GeminiSpark size={14} />
