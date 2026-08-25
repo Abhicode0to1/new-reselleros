@@ -28,6 +28,9 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { verifyMetaSignature, signatureRefusalReason } from "@/lib/crypto/webhook-signature";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
+import { downloadWhatsAppMedia } from "@/lib/whatsapp/media";
+import { transcribeVoiceNote } from "@/lib/voice/stt";
+import { decideVoiceNote, isTranscribable, voiceContextNote } from "@/lib/voice/voice-note";
 
 /* Envelope sender + trading name for anything the AI sales agent sends off the back of a
    WhatsApp message. Mirrors the inbound-email webhook so one reseller cannot end up sending
@@ -230,8 +233,28 @@ export async function POST(req: NextRequest) {
         if (!insertErr && type === "text" && text && text.trim()) {
           const phone = `+${m.from}`;
           const profileName = (v.contacts ?? []).find((c) => c.wa_id === m.from)?.profile?.name ?? "";
-          void handleWhatsAppEnquiry(admin, tenantId, phone, profileName, text.trim())
+          void handleWhatsAppEnquiry(admin, tenantId, phone, profileName, text.trim(), false)
             .catch((err) => console.error("[/api/webhooks/whatsapp] sales agent crashed:", err));
+        }
+
+        /* ── A VOICE NOTE ────────────────────────────────────────────────────
+           Indian B2B customers talk rather than type, and until now this branch did not
+           exist: the comment above said "an image, a sticker or a reaction has nothing for
+           the model to read", which was true of those and never true of audio. The message
+           was stored and nothing answered it.
+
+           Gated on `!insertErr` for the same idempotency reason as the text branch — Meta
+           retries until it gets a 200, and a retried delivery must not transcribe and answer
+           the same voice note twice.
+
+           Not awaited, matching the text branch: a media download plus a transcription inside
+           a request Meta is waiting on would trade ingest reliability for latency, and every
+           failure inside already resolves to "leave it in the Inbox for a person". */
+        if (!insertErr && isTranscribable(type, mediaId)) {
+          const phone = `+${m.from}`;
+          const profileName = (v.contacts ?? []).find((c) => c.wa_id === m.from)?.profile?.name ?? "";
+          void handleVoiceNote(admin, tenantId, phone, profileName, mediaId as string, mediaMime, m.id)
+            .catch((err) => console.error("[/api/webhooks/whatsapp] voice note crashed:", err));
         }
       }
 
@@ -286,12 +309,68 @@ export async function POST(req: NextRequest) {
  * agent's own junk-handling is the next line of defence rather than a filter here that would
  * also drop real enquiries.
  */
+/**
+ * A customer sent a voice note: fetch it, transcribe it, and treat the words as the enquiry.
+ *
+ * Every step degrades to the same safe place — the message is already stored, so a failure
+ * here leaves an ordinary unanswered voice note in the Inbox for a person to play. That is
+ * why nothing below throws and why `decideVoiceNote` collapses all the upstream failures into
+ * one outcome: from the customer's side they are identical.
+ *
+ * The transcript is filed on the lead's timeline BEFORE the agent runs, so a person can
+ * always see what the machine heard next to what it then said — which is the only way to
+ * catch a mis-heard number after the fact.
+ */
+async function handleVoiceNote(
+  admin: ReturnType<typeof createAdminClient>,
+  tenantId: string,
+  phone: string,
+  profileName: string,
+  mediaId: string,
+  mediaMime: string | null,
+  wamid: string | null,
+): Promise<void> {
+  const media = await downloadWhatsAppMedia(tenantId, mediaId);
+  const stt = media ? await transcribeVoiceNote(media.bytes, media.mime ?? mediaMime) : null;
+  const outcome = decideVoiceNote(stt);
+
+  /* The transcript goes on the message row, never into `text_body` — that column means "what
+     the customer typed", and a machine's reading of speech is a different fact. An Inbox that
+     blurred the two would show a transcription as though the customer had written it. */
+  if (wamid && stt) {
+    await admin
+      .from("whatsapp_messages")
+      .update({ transcript: stt.transcript, transcript_lang: stt.languageCode })
+      .eq("tenant_id", tenantId)
+      .eq("wamid", wamid)
+      .then(
+        () => undefined,
+        (err: unknown) => console.error("[/api/webhooks/whatsapp] transcript save failed:", err),
+      );
+  }
+
+  if (outcome.kind === "file_only") {
+    console.warn(`[/api/webhooks/whatsapp] voice note from ${phone}: ${outcome.note}`);
+    return;
+  }
+
+  await handleWhatsAppEnquiry(admin, tenantId, phone, profileName, outcome.text, true);
+}
+
 async function handleWhatsAppEnquiry(
   admin: ReturnType<typeof createAdminClient>,
   tenantId: string,
   phone: string,
   profileName: string,
   message: string,
+  /**
+   * True when `message` is a transcription rather than the customer's typing.
+   *
+   * Carried all the way to `decideAutoSend`, which refuses to send a quote whose seat count
+   * was heard rather than written — see lib/voice/voice-note.ts for why that is a rule and
+   * not a confidence threshold.
+   */
+  heardNotWritten: boolean,
 ): Promise<void> {
   const { data: existing } = await admin
     .from("leads")
@@ -337,7 +416,11 @@ async function handleWhatsAppEnquiry(
     admin,
     tenantId,
     leadId,
-    incoming: message,
+    /* A spoken enquiry reaches the model wrapped in `voiceContextNote`, which tells it the
+       numbers were HEARD and to read the seat count back before anything is priced. The
+       customer is the only correction loop this feature has. */
+    incoming: heardNotWritten ? voiceContextNote(message) : message,
+    heardNotWritten,
     customerContact: phone,
     channel: "whatsapp",
     /* Meta delivers messages FROM customers on this webhook; our own sends come back as

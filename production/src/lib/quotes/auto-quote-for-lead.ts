@@ -43,6 +43,8 @@ export interface AutoQuoteArgs {
   term: "monthly" | "annual" | null;
   /** What the extractor matched, quoted on the draft so a reader can check it. */
   seatsSource: string | null;
+  /** True when the seat count came out of a voice-note transcription, not the customer. */
+  heardNotWritten?: boolean;
   productSource: string | null;
   termSource: string | null;
   /** Where the mail came from, and where a quote would go. */
@@ -93,7 +95,11 @@ export async function autoQuoteForLead(admin: Admin, args: AutoQuoteArgs): Promi
       line_items:    plan.items,
       subtotal:      plan.subtotal,
       total_cost:    plan.items.reduce((s, i) => s + i.qty * i.cost, 0),
-      discount_pct:  0,
+      /* From the volume rate card, not a literal 0 any more. The planner decides it — it is
+         the only place that knows the seat count, the list rate AND the vendor cost, and the
+         floor has to see all three. Every screen renders this as its own "Discount (n%)" row
+         off the subtotal, so the discount must NOT also be in the line rate. */
+      discount_pct:  plan.discountPct,
       tax_rate:      18,
       amount:        plan.amount,
       status:        "draft",
@@ -136,9 +142,13 @@ export async function autoQuoteForLead(admin: Admin, args: AutoQuoteArgs): Promi
      sentence rather than as silence. */
   const sendDecision = decideAutoSend({
     termAssumed:     plan.termAssumed,
+    /* The seat count the quote was actually priced at, so the volume review band judges the
+       same number the customer would read on the document. */
+    seats:           args.seats,
     recipient:       args.recipient,
     quoteId:         draftQuoteId,
     emailConfigured: isEmailConfigured(),
+    seatsHeardNotWritten: args.heardNotWritten,
     senderIsOurs:    args.senderIsOurs,
     isSelfTest:      args.isSelfTest,
   });

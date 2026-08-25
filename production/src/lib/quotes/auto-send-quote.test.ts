@@ -120,3 +120,89 @@ describe("decideAutoSend — the operator's own self-test", () => {
     expect(decideAutoSend({ ...ok, senderIsOurs: true, isSelfTest: true, emailConfigured: false }).send).toBe(false);
   });
 });
+
+describe("the volume review band", () => {
+  const sendable = {
+    termAssumed: false,
+    recipient: "buyer@acme.in",
+    quoteId: "Q-ADPL-2026-27-0001",
+    emailConfigured: true,
+  };
+
+  it("still sends a small deal by itself", () => {
+    expect(decideAutoSend({ ...sendable, seats: 20 }).send).toBe(true);
+    expect(decideAutoSend({ ...sendable, seats: 50 }).send).toBe(true);
+  });
+
+  it("holds a 51-seat deal even though the quote is fully priced", () => {
+    /* The band the rate card opened. It used to be a flat handover with no quote attached; it
+       now produces a finished 5% quote that a person reads before it leaves. A ~₹8 lakh deal
+       on a discount policy that has never been exercised is not where this app acts alone. */
+    const d = decideAutoSend({ ...sendable, seats: 51 });
+    expect(d.send).toBe(false);
+    if (!d.send) {
+      expect(d.reason).toContain("51 seats");
+      expect(d.reason, "the operator must be told the quote IS ready").toContain("drafted and priced");
+    }
+  });
+
+  it("holds a deal above the rate card too", () => {
+    expect(decideAutoSend({ ...sendable, seats: 500 }).send).toBe(false);
+  });
+
+  it("leaves the older refusals ahead of it, so the sharper reason wins", () => {
+    /* A 60-seat enquiry that also named no term must report the TERM problem — that one is
+       about a price the customer could hold us to, and it is fixable in one reply. Ordering
+       the reasons is the difference between an operator who knows what to do and one who
+       fixes the wrong thing. */
+    const d = decideAutoSend({ ...sendable, seats: 60, senderIsOurs: true });
+    expect(d.send).toBe(false);
+    if (!d.send) expect(d.reason).toContain("our own addresses");
+  });
+
+  it("behaves exactly as before when no seat count is supplied", () => {
+    /* Every call site passes it, but the field is optional in shape — a caller that forgets
+       must not silently gain a new refusal. */
+    expect(decideAutoSend(sendable).send).toBe(true);
+  });
+});
+
+describe("heard, not written — a transcribed voice note", () => {
+  const sendable = {
+    termAssumed: false,
+    seats: 15,
+    recipient: "buyer@acme.in",
+    quoteId: "Q-ADPL-2026-27-0002",
+    emailConfigured: true,
+  };
+
+  it("sends a typed enquiry that named its term", () => {
+    expect(decideAutoSend(sendable).send).toBe(true);
+  });
+
+  it("HOLDS the same enquiry when the seat count was heard", () => {
+    /* "Bhaiya 15 log ke liye…" heard as "50 log" is 3.3× the quantity — and since the volume
+       rate card landed it also moves the deal from the 0% band into the 3% one. One mis-heard
+       syllable, two wrong numbers, on a document the customer can hold us to. */
+    const d = decideAutoSend({ ...sendable, seatsHeardNotWritten: true });
+    expect(d.send).toBe(false);
+    if (!d.send) {
+      expect(d.reason).toContain("transcribed voice note");
+      expect(d.reason, "the operator must know the quote is ready").toContain("drafted and priced");
+      expect(d.reason).toContain("confirm the number");
+    }
+  });
+
+  it("holds it even when everything else about the enquiry is perfect", () => {
+    /* No confidence threshold anywhere in this path, on purpose: the provider reports how sure
+       it is about the LANGUAGE, not the words, and Hinglish is where language confidence is
+       lowest and least meaningful. The rule is categorical instead. */
+    const d = decideAutoSend({ ...sendable, seats: 5, termAssumed: false, seatsHeardNotWritten: true });
+    expect(d.send).toBe(false);
+  });
+
+  it("is unaffected when the flag is absent, so typed enquiries behave exactly as before", () => {
+    expect(decideAutoSend({ ...sendable, seatsHeardNotWritten: undefined }).send).toBe(true);
+    expect(decideAutoSend({ ...sendable, seatsHeardNotWritten: false }).send).toBe(true);
+  });
+});

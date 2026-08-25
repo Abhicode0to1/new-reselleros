@@ -69,6 +69,14 @@ export interface RunSalesAgentArgs {
   isSelfTest: boolean;
   fromEmail: string;
   sellerName: string;
+  /**
+   * The enquiry arrived as a VOICE NOTE and `incoming` is a machine transcription.
+   *
+   * Threaded all the way to decideAutoSend rather than handled at the edge, because the
+   * fact it changes is about the QUOTE — a seat count nobody typed — and the quote is built
+   * four calls away from here. See lib/voice/voice-note.ts.
+   */
+  heardNotWritten?: boolean;
 }
 
 /**
@@ -238,6 +246,7 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
     fromEmail: args.fromEmail,
     senderIsOurs: args.senderIsOurs,
     isSelfTest: args.isSelfTest,
+    heardNotWritten: args.heardNotWritten,
   });
 
   /* ── 6. Plan the next touch ── */

@@ -67,6 +67,8 @@ export interface DispatchArgs {
   fromEmail: string;
   senderIsOurs: boolean;
   isSelfTest: boolean;
+  /** True when the enquiry was a transcribed voice note — see lib/voice/voice-note.ts. */
+  heardNotWritten?: boolean;
 }
 
 export interface DispatchResult {
@@ -330,6 +332,7 @@ export async function dispatchSalesDecision(args: DispatchArgs): Promise<Dispatc
         recipient: args.customerContact,
         senderIsOurs: args.senderIsOurs,
         isSelfTest: args.isSelfTest,
+        heardNotWritten: args.heardNotWritten,
         fromEmail: args.fromEmail,
         notePrefix: `Quoted by the AI sales agent — it read the enquiry as: ${decision.customer_intent}`,
       });

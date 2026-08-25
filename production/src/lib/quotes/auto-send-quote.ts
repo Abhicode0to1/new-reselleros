@@ -22,10 +22,26 @@
  * the lead — which is the difference between "the app did nothing" and "the app is waiting
  * on you for the term".
  */
+import { maySendUnattended, REVIEW_ABOVE_SEATS } from "@/lib/pricing/volume-slabs";
+
 
 export interface AutoSendInput {
   /** From the quote plan. True when nobody stated monthly or annual. */
   termAssumed: boolean;
+  /**
+   * Seat count on the quote, or null when there is no quantity to judge.
+   *
+   * Optional in shape but not in spirit: a caller that forgets it gets the OLD behaviour
+   * (no volume review), which is why every existing call site was updated in the same
+   * change rather than left to default. See the review-band refusal below.
+   */
+  seats?: number | null;
+  /**
+   * True when the enquiry was a voice note, so every figure in it was HEARD by a machine
+   * rather than typed by the customer. See the refusal below for why that is its own rule
+   * and not a confidence threshold.
+   */
+  seatsHeardNotWritten?: boolean;
   /** The address the enquiry arrived from. */
   recipient: string | null | undefined;
   /** Whether a draft was actually created — no quote, nothing to send. */
@@ -78,6 +94,49 @@ export function decideAutoSend(input: AutoSendInput): AutoSendDecision {
 
   if (!input.emailConfigured) {
     return { send: false, reason: "email sending is not configured on this deployment" };
+  }
+
+  /* ── THE VOLUME REVIEW BAND ───────────────────────────────────────────────
+     Above REVIEW_ABOVE_SEATS the quote is fully priced — the rate card's discount is applied
+     and the draft is built — and it still does not leave the building unread.
+
+     This is the band the rate card opened up. It used to be a flat handover at 50 seats with
+     no quote attached; now the operator gets the whole thing priced and one decision to make.
+     What it is NOT is an automatic send: a deal this size on a discount policy that has never
+     been exercised is the largest thing this app would ever do unattended. Same shape as
+     reply.send, support.reply.send and telecall.place, and for the same measured reason —
+     each of those caught real defects on first live contact. */
+  if (input.seats != null && !maySendUnattended(input.seats)) {
+    return {
+      send: false,
+      reason:
+        `${input.seats} seats is above the ${REVIEW_ABOVE_SEATS}-seat line for sending without ` +
+        "a person — the quote is drafted and priced at the volume rate, read it and send it, " +
+        "or widen the band once you have seen a few",
+    };
+  }
+
+  /* ── HEARD, NOT WRITTEN ───────────────────────────────────────────────────
+     The enquiry arrived as a voice note and the seat count came out of a transcription.
+
+     This is the same class of fact as `termAssumed` below — something the app worked out
+     rather than something the customer put in writing — so it gets the same answer. It is
+     worth its own refusal because the failure is sharper: "15 log" heard as "50 log" is 3.3×
+     the quantity, and since the volume rate card landed it also moves the deal from the 0%
+     band into the 3% one. One mis-heard syllable, two wrong numbers, on a document the
+     customer can hold us to.
+
+     There is deliberately no confidence threshold here. The provider reports how sure it is
+     about the LANGUAGE, not about the words — and Hinglish, being code-mixed by definition,
+     is exactly where language confidence is lowest and least meaningful. So the correction
+     loop is the customer: the agent reads the seat count back, and a person sends. */
+  if (input.seatsHeardNotWritten) {
+    return {
+      send: false,
+      reason:
+        "the seat count came from a transcribed voice note, not from anything the customer " +
+        "typed — the quote is drafted and priced; confirm the number with them and send it",
+    };
   }
 
   if (input.termAssumed) {

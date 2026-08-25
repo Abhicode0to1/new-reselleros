@@ -414,6 +414,10 @@ export type WhatsAppMessageRow = {
   media_id:            string | null;
   media_mime:          string | null;
   media_filename:      string | null;
+  /** What a speech-to-text model heard in a voice note. NOT what the customer typed —
+   *  `text_body` is that. See migration 20260825160000. */
+  transcript:          string | null;
+  transcript_lang:     string | null;
   status:              WhatsAppMessageStatus;
   error_code:          string | null;
   error_message:       string | null;
