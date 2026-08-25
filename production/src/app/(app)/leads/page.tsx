@@ -59,6 +59,7 @@ import { winRate } from "@/lib/leads/forecast";
 import { rowStageOptions, isStageLocked } from "@/lib/leads/stage-options";
 import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
 import { stageAge, staleDeals } from "@/lib/leads/velocity";
+import { shortPlan, planWasShortened } from "@/lib/leads/short-plan";
 import { dealHealth } from "@/lib/leads/deal-health";
 import { DealHealthCard } from "@/components/features/leads/deal-health-card";
 import { BattlecardDrawer } from "@/components/features/leads/battlecard-drawer";
@@ -3704,7 +3705,12 @@ function LeadListView({
                 {/* Plan + seats folded together — saves a column, keeps both
                     facts. Seats bold so quantity reads at a glance. */}
                 <td className="px-3 py-2 text-sm text-ink-2">
-                  <span className="block truncate" title={lead.plan ?? undefined}>{lead.plan ?? "—"}</span>
+                  {/* Vendor shortened, never dropped: this catalogue has a Google, a Microsoft AND a
+                      Zoho "Standard", so stripping the vendor would print the same label for three
+                      different products on a page of rupee figures. See short-plan.ts. */}
+                  <span className="block truncate" title={planWasShortened(lead.plan) ? (lead.plan ?? undefined) : undefined}>
+                    {shortPlan(lead.plan) || "—"}
+                  </span>
                   {lead.seats != null && (
                     <span className="text-2xs text-ink-3"><span className="font-semibold text-ink-2 tabular-nums">{lead.seats}</span> seats</span>
                   )}
@@ -3723,7 +3729,7 @@ function LeadListView({
                     onSave={(v) => updateLead.mutate({ id: lead.id, patch: { value: v } })}
                     display={
                       lead.value
-                        ? <span className="inline-flex items-baseline gap-1.5">
+                        ? <span className="inline-flex flex-col items-end gap-0.5">
                             <span className={cn("font-serif text-[15px] font-semibold", isHighValue ? "text-emerald" : "text-ink")}>{rupee(lead.value)}</span>
                             {/* Gross margin, right beside the value it is a margin ON.
                                 A separate column would let a rep read the deal size
@@ -3738,7 +3744,7 @@ function LeadListView({
                                 <span
                                   title={b.title}
                                   className={cn(
-                                    "shrink-0 rounded px-1 py-px text-3xs font-semibold tabular-nums leading-none",
+                                    "rounded px-1 py-px text-3xs font-semibold tabular-nums leading-none",
                                     b.kind === "danger"  && "bg-rose-soft text-rose-ink",
                                     b.kind === "warning" && "bg-amber-soft text-amber-ink",
                                     b.kind === "success" && "bg-paper-2 text-ink-3",
