@@ -124,6 +124,36 @@ export const AI_ACTIONS = {
     today: "hold",
     supports: ["off", "hold", "auto"],
   },
+  "payment.link.send": {
+    label: "Send a customer a payment link",
+    /* `hold`. The link itself is harmless — it collects the amount already on a quote the
+       customer has seen — but it is a customer-facing message asking for money, and this
+       deployment's Razorpay key is a TEST key (measured 25 Aug 2026). A test link takes a
+       payment and settles nothing, so an unattended one would ask a real customer to pay into
+       a sandbox and then tell them it worked.
+
+       At `hold` the link is CREATED and filed on the quote's timeline, so the operator copies
+       it into their own reply. Useful at hold, which is the bargain every dial in this file
+       has made. */
+    today: "hold",
+    supports: ["off", "hold", "auto"],
+  },
+  "provisioning.activate": {
+    label: "Activate a customer's seats after payment",
+    /* `off`, and unlike every other entry here that is not caution — it is a description.
+       There is nothing to switch on: `src/lib/google-csp/` does not exist, the Google Workspace
+       Reseller API needs an approved reseller agreement plus OAuth, and the setup wizard's own
+       step 4 calls it "a preview of the 5–7 day application" — an application that has not been
+       made. `off` is what this file's header asks for: the mode that is live right now.
+
+       And even once it exists, `decideProvisioning` will refuse to activate against a test-mode
+       payment at ANY dial setting. That gate is deliberately not a config: the dial answers
+       "may we act unattended", and the test-key check answers "is there anything real to act
+       on". Turning this to `auto` today would mean giving seats away to anybody who reaches a
+       sandbox checkout. */
+    today: "off",
+    supports: ["off", "hold", "auto"],
+  },
   "telecall.place": {
     label: "Ring a customer with the AI voice agent",
     /* WAS not declared at all, because nothing could ring anybody. Built on 25 Aug 2026 —

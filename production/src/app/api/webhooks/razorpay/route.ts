@@ -25,6 +25,10 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
+import { razorpayMode } from "@/lib/payments/razorpay-readiness";
+import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
+import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
+import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
 import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
 
@@ -81,6 +85,23 @@ interface RazorpayWebhookBody {
   created_at: number;
 }
 
+/**
+ * Which vendor's console these seats live in, read off the plan name.
+ *
+ * By NAME and not by an items lookup, deliberately: `quotes.plan` is the text COPY made at the
+ * time of sale, and the catalogue row it came from may have been renamed since — that is the
+ * defect `create-renewal-quote.ts` was fixed for on 24 Aug. Here the plan text is the right
+ * source precisely because it records what was sold, and `other` is a safe landing: it queues
+ * with "activated in the vendor's own console" rather than guessing at an API.
+ */
+function vendorFromPlan(plan: string | null | undefined): ProvisioningVendor {
+  const p = (plan ?? "").toLowerCase();
+  if (p.includes("google") || p.includes("workspace")) return "google";
+  if (p.includes("microsoft") || p.includes("365")) return "microsoft";
+  if (p.includes("zoho")) return "zoho";
+  return "other";
+}
+
 /** Verify Razorpay's HMAC SHA256 signature header against a given secret. */
 function verifySignature(rawBody: string, signature: string | null, secret: string): boolean {
   if (!secret || !signature) return false;
@@ -108,16 +129,20 @@ export async function POST(request: NextRequest) {
   // stored webhook secret. Fall back to a global env secret for legacy setups.
   const tenantParam = request.nextUrl.searchParams.get("tenant");
   let signingSecret = WEBHOOK_SECRET;
+  let keyIdForMode: string | null = null;
   if (tenantParam) {
     const { data: ts } = await admin
       .from("tenant_secrets")
-      .select("razorpay_webhook_secret")
+      .select("razorpay_webhook_secret, razorpay_key_id")
       .eq("tenant_id", tenantParam)
       .maybeSingle();
     // Decrypt before use — an envelope string would never match the HMAC and the
     // failure would look like Razorpay sending bad signatures.
     const tsPlain = decryptTenantSecrets(ts);
     if (tsPlain?.razorpay_webhook_secret) signingSecret = tsPlain.razorpay_webhook_secret;
+    /* The KEY, not a stored mode column. Razorpay encodes live-vs-test in the key prefix and a
+       separate column can drift from the key it describes — razorpay-readiness.ts says so. */
+    keyIdForMode = tsPlain?.razorpay_key_id ?? null;
   }
 
   if (!verifySignature(rawBody, signature, signingSecret)) {
@@ -223,6 +248,49 @@ export async function POST(request: NextRequest) {
   if (rpcErr) {
     console.error("[webhooks/razorpay] record_payment RPC failed:", rpcErr);
     return NextResponse.json({ error: "Payment processing failed", detail: rpcErr.message }, { status: 500 });
+  }
+
+  /* ── QUEUE THE ACTIVATION ────────────────────────────────────────────────
+     Placed after `record_payment` has committed, on purpose: the money being recorded is the
+     fact this depends on, and a provisioning row written before it could outlive a failed RPC.
+
+     `decideProvisioning` decides whether this may activate itself, and today it never can —
+     the Google reseller API is not connected and this deployment's Razorpay key is a TEST key,
+     which settles zero rupees while looking identical to a real payment. Auto-activating
+     against that would hand out seats for free at machine speed. So the seats are QUEUED with
+     the blocker in words, and the desk gets "paid, awaiting activation" instead of the nothing
+     it sees today. See lib/provisioning/provisioning.ts. */
+  const provisioning = decideProvisioning({
+    paymentMode: razorpayMode(keyIdForMode),
+    /* The signature verified and the amount was checked above — those two together are what
+       "verified" means here, and nothing weaker reaches this line. */
+    paymentVerified: true,
+    amountPaid: paymentAmount,
+    amountExpected: quote.amount ?? paymentAmount,
+    vendor: vendorFromPlan(quote.plan),
+    seats: Number(quote.seats ?? 0),
+    /* No adapter exists — `src/lib/google-csp/` is absent. Hardcoded false rather than a
+       config read, because a config that could say "true" would be a config that can lie. */
+    vendorApiConfigured: false,
+    dialMode: (await loadAutonomyPolicy(quote.tenant_id)).modes?.["provisioning.activate"] ?? "off",
+  });
+
+  if (provisioning.action !== "refuse") {
+    const queued = await queueProvisioning({
+      tenantId:    quote.tenant_id,
+      quoteId:     quote.id,
+      vendor:      vendorFromPlan(quote.plan),
+      seats:       Number(quote.seats ?? 0) || 1,
+      domain:      (notes.domain as string | undefined) ?? null,
+      plan:        quote.plan ?? null,
+      amountPaid:  paymentAmount,
+      paymentMode: razorpayMode(keyIdForMode),
+      blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
+      note:        provisioning.reason,
+    });
+    console.log(`[webhooks/razorpay] provisioning ${queued} for ${quote.id} — ${provisioning.reason}`);
+  } else {
+    console.warn(`[webhooks/razorpay] not provisioning ${quote.id} — ${provisioning.reason}`);
   }
 
   // ── Send confirmation emails (best-effort) ────────────────────────────
