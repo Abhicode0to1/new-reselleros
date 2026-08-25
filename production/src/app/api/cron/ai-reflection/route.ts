@@ -1,0 +1,165 @@
+/**
+ * GET /api/cron/ai-reflection — last night's two questions, answered for a person.
+ *
+ * Local dev: `curl -H "Authorization: Bearer $CRON_SECRET" localhost:3000/api/cron/ai-reflection`.
+ *
+ * ─── WHAT THIS ROUTE DELIBERATELY DOES NOT DO ───────────────────────────────
+ * It does not write to any prompt, it does not call a model, and it does not store a summary
+ * anywhere the agent reads. The brief asked for the output to be "prompt context mein
+ * automatically inject" — see the header of lib/ai/reflection.ts for why that single sentence is
+ * the most dangerous request in this system: the reflection reads CUSTOMER MESSAGES and the
+ * prompt holds the GUARDS, so wiring one into the other hands every customer a writable channel
+ * into the agent's own instructions.
+ *
+ * So the answer comes back in the response, is logged, and is read by a human. A test asserts
+ * that no file on the prompt-building path imports the reflection module at all.
+ *
+ * ─── AND IT CALLS NO MODEL, WHICH IS ALSO THE POINT ─────────────────────────
+ * Both of the brief's questions are answerable by counting: which objection appeared on the most
+ * stalled leads, and which seat bands accepted. `detectObjections` is the same function the
+ * prompt uses to pick a battlecard, so what gets COUNTED here and what gets ANSWERED there
+ * cannot drift. A model in this path would add a paraphrase and a cost and nothing else — and a
+ * paraphrase is exactly the artefact that could carry a customer's instruction forward.
+ */
+import { NextResponse } from "next/server";
+import { createClient as createBareClient } from "@supabase/supabase-js";
+import type { NextRequest } from "next/server";
+import { timingSafeEqual } from "node:crypto";
+import { reflect, type ReflectionInput } from "@/lib/ai/reflection";
+import "@/lib/sentry";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+/** How far back the reflection looks. One day, because it runs nightly. */
+const WINDOW_HOURS = 24;
+
+/** Constant-time compare, so a wrong secret cannot be found a character at a time. */
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
+export async function GET(req: NextRequest) {
+  /* ── Auth — FAIL CLOSED ──
+     503 rather than 401 when the secret is absent: "this deployment has no cron secret" is a
+     missing-infrastructure fact, and reporting it as unauthorized sends whoever is deploying to
+     look for a wrong credential instead of an unset one. Matches the fourteen existing crons. */
+  const expected = process.env.CRON_SECRET?.trim();
+  if (!expected) return NextResponse.json({ error: "cron not configured" }, { status: 503 });
+
+  const provided = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!timingSafeEqualStr(provided, expected)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) {
+    /* 503 for the same reason: with no service-role key this would read zero rows and report a
+       quiet night, which is an absence dressed as a success. */
+    return NextResponse.json(
+      { error: "SUPABASE_SERVICE_ROLE_KEY is not set — the reflection cannot read its own rows" },
+      { status: 503 },
+    );
+  }
+
+  const db = createBareClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (u, o) => fetch(u, { ...o, cache: "no-store" }) },
+  });
+
+  const since = new Date(Date.now() - WINDOW_HOURS * 3_600_000).toISOString();
+
+  /* Per tenant, because a reflection that mixed two resellers' pipelines would be worse than
+     none — and because every table below is tenant-scoped with nothing generated to check it. */
+  const { data: tenantRows } = await db.from("tenants").select("id");
+  const tenantIds = ((tenantRows ?? []) as { id: string }[]).map((t) => t.id);
+
+  const reports: { tenantId: string; leadsSeen: number; topStall: string | null; withheld: string }[] = [];
+
+  for (const tenantId of tenantIds) {
+    const [turns, actions] = await Promise.all([
+      db
+        .from("ai_sales_conversations")
+        .select("lead_id, content")
+        .eq("tenant_id", tenantId)
+        .eq("role", "user")
+        .gte("created_at", since)
+        .limit(2000),
+      db
+        .from("ai_action_log")
+        .select("action, outcome, reason")
+        .eq("tenant_id", tenantId)
+        .gte("created_at", since)
+        .limit(2000),
+    ]);
+
+    const messages = ((turns.data ?? []) as { lead_id: string | null; content: string | null }[])
+      .flatMap((t) => (t.lead_id && t.content ? [{ leadId: t.lead_id, content: t.content }] : []));
+
+    const leadIds = [...new Set(messages.map((m) => m.leadId))];
+
+    /* Outcome per lead, from the quote table. `accepted` when any quote on it was accepted;
+       `stalled` when a quote went out and none was. Anything else is still open — and calling an
+       open thread stalled would report a customer who has not replied yet as a loss. */
+    const { data: quoteRows } = leadIds.length
+      ? await db
+          .from("quotes")
+          .select("lead_id, status")
+          .eq("tenant_id", tenantId)
+          .in("lead_id", leadIds)
+      : { data: [] as { lead_id: string | null; status: string | null }[] };
+
+    const { data: leadRows } = leadIds.length
+      ? await db.from("leads").select("id, seats").eq("tenant_id", tenantId).in("id", leadIds)
+      : { data: [] as { id: string; seats: number | null }[] };
+
+    const seatsOf = new Map(
+      ((leadRows ?? []) as { id: string; seats: number | null }[]).map((l) => [l.id, l.seats]),
+    );
+    const quotesOf = new Map<string, string[]>();
+    for (const q of (quoteRows ?? []) as { lead_id: string | null; status: string | null }[]) {
+      if (!q.lead_id) continue;
+      quotesOf.set(q.lead_id, [...(quotesOf.get(q.lead_id) ?? []), q.status ?? ""]);
+    }
+
+    const input: ReflectionInput = {
+      customerMessages: messages,
+      leads: leadIds.map((leadId) => {
+        const statuses = quotesOf.get(leadId) ?? [];
+        const outcome = statuses.includes("accepted")
+          ? "accepted"
+          : statuses.length > 0
+            ? "stalled"
+            : "open";
+        return { leadId, seats: seatsOf.get(leadId) ?? null, outcome };
+      }),
+      blocks: ((actions.data ?? []) as { action: string | null; outcome: string | null; reason: string | null }[])
+        .flatMap((a) =>
+          a.action && a.outcome ? [{ action: a.action, outcome: a.outcome, reason: a.reason }] : [],
+        ),
+    };
+
+    const report = reflect(input);
+
+    /* Logged for a person and returned in the response. NOT stored anywhere the agent reads —
+       see this file's header and lib/ai/reflection.ts. */
+    console.info(
+      `[ai-reflection] tenant ${tenantId}: ${report.leadsSeen} leads · ` +
+        `${report.stalls.length ? `worst stall ${report.stalls[0].objection} (${report.stalls[0].stalled})` : report.unavailable || "nothing ranked"} · ` +
+        `${report.topBlock ? `top block: ${report.topBlock.reason}` : "nothing blocked"}`,
+    );
+
+    reports.push({
+      tenantId,
+      leadsSeen: report.leadsSeen,
+      topStall: report.stalls[0]?.objection ?? null,
+      withheld: report.unavailable,
+    });
+  }
+
+  return NextResponse.json({ ok: true, windowHours: WINDOW_HOURS, tenants: reports.length, reports });
+}
