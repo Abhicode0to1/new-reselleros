@@ -32,6 +32,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { reconstructWaterfall, type MrrWaterfall } from "@/lib/accounting/mrr-waterfall";
+import {
+  mrrTrend, trendCaveats, retentionCurve, retentionVelocity,
+  type MrrPoint, type RetentionPoint, type RetentionVelocity,
+} from "@/lib/accounting/saas-charts";
+import { MrrTrendChart, RetentionVelocityChart } from "@/components/features/accounting/saas-metrics-charts";
 import { downloadCSV } from "@/lib/csv";
 import { printReport, reportFilename } from "@/lib/reports/print";
 import { rupee } from "@/lib/utils";
@@ -91,7 +96,16 @@ interface MetricsData {
 
   // Cohort retention
   cohorts:          CohortRow[];
+
+  /** Charts. Computed by lib/accounting/saas-charts.ts, never in the component. */
+  mrrTrend:         MrrPoint[];
+  trendCaveats:     string[];
+  retentionCurve:   RetentionPoint[];
+  retentionVelocity: RetentionVelocity;
 }
+
+/** How far back the trend looks. Twelve months is the reseller's renewal cycle. */
+const TREND_MONTHS = 12;
 
 function vendorLabel(v: string | null): string {
   if (!v) return "Other";
@@ -334,6 +348,19 @@ function useSaasMetrics() {
         }))
         .sort((a, b) => b.monthKey.localeCompare(a.monthKey));
 
+      /* ── Chart series ──────────────────────────────────────────────────
+         Built from `all` and `cohorts`, the same rows every figure above comes from, so a
+         chart cannot disagree with the number printed beside it. The arithmetic lives in
+         lib/accounting/saas-charts.ts with tests — see its header for what a reconstructed
+         trend can and cannot see, and for why `mrr_snapshots` was not used. */
+      const lifespans = all.map((s) => ({
+        startDate: s.start_date,
+        mrr: s.mrr,
+        status: s.status,
+        updatedAt: s.updated_at,
+      }));
+      const curve = retentionCurve(cohorts, now);
+
       return {
         mrr, arr, activeCustomers, arpc,
         newMRR30d,
@@ -347,6 +374,10 @@ function useSaasMetrics() {
         mrrByVendor,
         mrrByTier,
         cohorts,
+        mrrTrend: mrrTrend(lifespans, TREND_MONTHS, now),
+        trendCaveats: trendCaveats(lifespans),
+        retentionCurve: curve,
+        retentionVelocity: retentionVelocity(curve),
       };
     },
   });
@@ -508,6 +539,18 @@ export default function SaasMetricsPage() {
 
           <WaterfallCard w={data.waterfall} />
 
+          {/* The two charts. Placed after the waterfall and before the breakdowns, because
+              the waterfall answers "what moved last month" and these answer "what has been
+              happening" — the reader needs the recent fact before the trend it sits in.
+
+              Both take data computed in useSaasMetrics; neither computes anything itself.
+              See lib/accounting/saas-charts.ts for why the trend is reconstructed from
+              `subscriptions` rather than read from the (empty) `mrr_snapshots` table. */}
+          <div className="grid grid-cols-1 gap-6 mb-6 xl:grid-cols-2">
+            <MrrTrendChart points={data.mrrTrend} caveats={data.trendCaveats} />
+            <RetentionVelocityChart curve={data.retentionCurve} velocity={data.retentionVelocity} />
+          </div>
+
           {/* MRR breakdown */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <BreakdownCard title="MRR by vendor"  rows={data.mrrByVendor.map((v) => ({ key: v.vendor, label: v.vendor, mrr: v.mrr, count: v.count, pct: v.pct }))} />
@@ -581,10 +624,25 @@ export default function SaasMetricsPage() {
                     Monthly churn is {data.monthlyChurnRate.toFixed(1)}% — the SaaS benchmark is below 3%/mo. Review your renewal automation.
                   </li>
                 )}
+                {/* "Excellent retention" needs something to have been retained THROUGH.
+                    This line used to fire on `churn <= 3%` alone, so a book whose every
+                    subscription started this month — 0% churn because nothing has had time
+                    to leave — was congratulated on its retention. The retention-velocity
+                    chart directly above refuses to draw a number in exactly that case, and
+                    a page that says "not measurable yet" in one card and "excellent" in the
+                    next has told the owner nothing. */}
                 {data.monthlyChurnRate <= 3 && data.activeCustomers > 0 && (
-                  <li className="text-emerald">
-                    Churn {data.monthlyChurnRate.toFixed(1)}%/mo — excellent retention.
-                  </li>
+                  data.retentionVelocity.pointsPerMonth !== null ? (
+                    <li className="text-emerald">
+                      Churn {data.monthlyChurnRate.toFixed(1)}%/mo — excellent retention.
+                    </li>
+                  ) : (
+                    <li className="text-ink-2">
+                      Churn is {data.monthlyChurnRate.toFixed(1)}%/mo, but nothing has been on
+                      the book long enough to churn yet — that is a young book, not proven
+                      retention. Come back once there are two months of cohorts.
+                    </li>
+                  )
                 )}
                 <li>
                   At current ARPC + churn, average customer ka lifetime value <b>{rupee(data.ltvEstimate)}</b> hai.
