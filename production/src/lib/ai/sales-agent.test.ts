@@ -121,9 +121,20 @@ describe("the prompt carries the catalogue and nothing it should not", () => {
        GST, ₹3,823 payable. Same reasoning as the slab rates — a figure the app told the agent
        to state must not then be flagged by the guard measuring what it said.
 
-       The rule this test is named for is unchanged and is what the two assertions below check:
-       our buying price is still absent. */
-    expect(p.allowedMoney).toEqual([270, 261, 256, 864, 838, 820, 3823, 583, 3240]);
+       And the last two arrived with the cross-sell block: the upgrade's own price (864) and the
+       step up from what they asked for (864 - 270 = 594). Same reasoning again — a price the
+       app told the agent to offer must not be flagged by the guard reading what it wrote.
+
+       ─── AND A STEP-UP IS A DIFFERENCE, WHICH CAN LAND ON OUR COST ────────────
+       594 is one retail price minus another, and nothing about that arithmetic stops it coming
+       out equal to a WHOLESALE figure in the same catalogue. It does not here — but
+       "unlikely to collide" is not "cannot", and this list is exactly where a collision would
+       do damage. So authorisedOfferFigures subtracts the catalogue's own cost figures from its
+       result, and the two assertions below are what that protects.
+
+       The rule this test is named for is unchanged and is what those assertions check: our
+       buying price is still absent. */
+    expect(p.allowedMoney).toEqual([270, 261, 256, 864, 838, 820, 3823, 583, 3240, 864, 594]);
     expect(p.allowedMoney).not.toContain(110);
     expect(p.allowedMoney).not.toContain(620);
   });

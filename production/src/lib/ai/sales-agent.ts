@@ -46,6 +46,7 @@ import { findPromises } from "./promise-check";
 import { findDisparagement } from "./disparagement";
 import { CUSTOM_PRICING_ABOVE, authorisedRatesForItem, discountedRate, slabFor, slabLines } from "@/lib/pricing/volume-slabs";
 import { authorisedNetCostFigures, computeNetCost, netCostLines } from "@/lib/pricing/net-cost";
+import { authorisedOfferFigures, offerCandidates, offerLines } from "@/lib/pricing/cross-sell";
 import { battlecardLines } from "./battlecards";
 import { detectTone, toneLines } from "./tone";
 import { MIGRATION_CLAIMS_FORBIDDEN } from "@/lib/dns/domain-inspect";
@@ -427,6 +428,18 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
      are noise the model has to read past. */
   const battlecards = battlecardLines({ message: incoming, catalogue: catalog });
 
+  /* What else this customer could be offered — from the catalogue and nowhere else. Null when
+     we do not yet know what they are buying, because "you could also add X" to somebody who has
+     not chosen a product is a pitch before a conversation. See lib/pricing/cross-sell.ts. */
+  const currentItem = lead.plan ? catalog.find((c) => c.name === lead.plan) : undefined;
+  const offers = currentItem
+    ? offerCandidates(catalog, {
+        name: currentItem.name,
+        vendor: currentItem.vendor,
+        pricePerSeatPerYear: currentItem.msrpPerSeatPerYear,
+      })
+    : [];
+
   const catalogueLines = catalog.map(
     (c) =>
       `- ${c.name} (${c.vendor}) — customer pays ${rupees(c.msrpPerSeatPerYear)} per seat per year` +
@@ -517,6 +530,7 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
        free migration at ₹15,000. Those are claims about a competitor's tax treatment, about
        the customer's own bank, and about a product with no SKU. See lib/pricing/net-cost.ts.
        The model gets what our own invoice says and nothing else. */
+    ...(offers.length > 0 ? [...offerLines({ candidates: offers, seats: lead.seats }), ""] : []),
     ...(netCostBlock
       ? [
           "WHAT THIS COSTS THEM, NET (state these sentences as written, or not at all)",
@@ -556,6 +570,10 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
          guard that flagged the payable amount it had just told the agent to state would hand
          over every quote that mentioned it. */
       ...(netCost?.figures ?? []),
+      /* The cross-sell figures, from the SAME call that wrote the lines above. A guard that
+         flagged the upgrade price it had just told the agent to state would hand over every
+         reply that mentioned one — the "24/7"/"free" failure, in money. */
+      ...authorisedOfferFigures(offers, catalog),
     ],
     authorisedTotals: [...totals],
   };
