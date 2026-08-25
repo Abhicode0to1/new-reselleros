@@ -34,6 +34,8 @@
  * that no human checked would reach the customer. Revisit here first.
  */
 
+import { slabFor, discountedRate } from "@/lib/pricing/volume-slabs";
+
 /** ₹ per seat per MONTH, as the `items` table stores them (whole rupees — AGENTS.md). */
 export interface CatalogueItemPrice {
   id: string;
@@ -58,10 +60,27 @@ export type EnquiryQuotePlan =
   | {
       ok: true;
       items: EnquiryQuoteLine[];
-      /** ex-GST, whole rupees. */
+      /** ex-GST and BEFORE the volume discount, whole rupees. */
       subtotal: number;
-      /** incl-GST at 18%, whole rupees. */
+      /** incl-GST at 18%, AFTER the volume discount, whole rupees. */
       amount: number;
+      /**
+       * Whole percent off, from the volume rate card — goes onto `quotes.discount_pct`.
+       *
+       * ─── WHY THE DISCOUNT IS HERE AND NOT IN THE LINE RATE ────────────────
+       * `discount_pct` is applied to the SUBTOTAL by every screen that renders a quote
+       * (quotes/[id]:404, quotes:1138, invoices:1202 — all `subtotal − round(subtotal × pct)`).
+       * Baking the discount into `rate` as well would hand the customer the same discount
+       * twice, and the second one would be invisible on the document.
+       *
+       * Keeping it at quote level also means the document reads the way a real quote reads —
+       * a list rate, a named discount line, a total — instead of a mystery per-seat number the
+       * customer cannot check. The existing UI already renders "Discount (3%) −₹X"; nothing
+       * new had to be drawn.
+       */
+      discountPct: number;
+      /** Set when the rate card's discount was refused — the cost floor. Null when it applied. */
+      discountNote: string | null;
       /** For the draft's notes, so the assumption is readable and not inferred. */
       assumption: string;
       /** False when the mail named the term. The auto-send gate reads THIS, not the text. */
@@ -142,21 +161,54 @@ export function planQuoteFromEnquiry(input: PlanQuoteInput): EnquiryQuotePlan {
   }];
 
   const subtotal = items.reduce((s, i) => s + i.qty * i.rate, 0);
+
+  /* ── The volume rate card ────────────────────────────────────────────────
+     Applied HERE, in the one function both the form path and the AI path price through, so
+     an agent-built quote and a hand-built quote for the same seat count cannot come out at
+     different money.
+
+     The floor is checked against the LINE's own rate and cost — not against a global rupee
+     figure. See lib/pricing/volume-slabs.ts for why that distinction is the whole guard. */
+  const slab = slabFor(seats);
+  const priced =
+    slab.kind === "slab"
+      ? discountedRate(items[0].rate, slab.slab.percent, items[0].cost)
+      : { rate: items[0].rate, appliedPercent: 0, note: null };
+
+  const discountPct = priced.appliedPercent;
+  /* Rounded the same way every screen that renders a quote rounds it, so the stored `amount`
+     and the figure the customer reads on the document are the same number. */
+  const discountValue = Math.round(subtotal * (discountPct / 100));
+
   /* One rounding, at the end, on the ex-GST total — the same single-rounding rule
      buildWorkspaceLines follows, so the two paths cannot disagree by a rupee on the same
      product and seat count. */
-  const amount = Math.round(subtotal * 1.18);
+  const amount = Math.round((subtotal - discountValue) * 1.18);
+
+  /* The rate card, in words, on the draft's own notes. Whoever opens this quote must READ
+     why the price is what it is rather than reverse-engineer it from the total — the same
+     reason `assumption` states the term instead of leaving it to be inferred. */
+  const slabNote =
+    priced.note ??
+    (discountPct > 0 && slab.kind === "slab"
+      ? `${slab.slab.label}: ${discountPct}% off list for ${seats} seats (volume rate card).`
+      : slab.kind === "slab"
+        ? `${seats} seats is inside the ${slab.slab.minSeats}–${slab.slab.maxSeats} band — list price, no discount.`
+        : null);
 
   return {
     ok: true,
     items,
     subtotal,
     amount,
+    discountPct,
+    discountNote: priced.note,
     termAssumed,
-    assumption: termAssumed
-      ? `Term ASSUMED annual (₹${monthlyMsrp}/seat/month × 12). The mail did not say ` +
-        "monthly or annual — check this line before sending."
-      : `Term ${term.toUpperCase()}, as stated in the mail (₹${monthlyMsrp}/seat/month` +
-        `${annual ? " × 12" : ""}).`,
+    assumption:
+      (termAssumed
+        ? `Term ASSUMED annual (₹${monthlyMsrp}/seat/month × 12). The mail did not say ` +
+          "monthly or annual — check this line before sending."
+        : `Term ${term.toUpperCase()}, as stated in the mail (₹${monthlyMsrp}/seat/month` +
+          `${annual ? " × 12" : ""}).`) + (slabNote ? `\n${slabNote}` : ""),
   };
 }

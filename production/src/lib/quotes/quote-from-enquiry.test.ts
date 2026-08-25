@@ -24,10 +24,47 @@ describe("planQuoteFromEnquiry — the arithmetic", () => {
     expect(p.items[0].cost).toBe(1320);
     expect(p.items[0].qty).toBe(50);
     expect(p.items[0].commitment).toBe("annual_yearly");
-    /* 50 × 3,240 = ₹1,62,000 ex-GST. */
+    /* 50 × 3,240 = ₹1,62,000 ex-GST, BEFORE the volume discount. The line rate stays at list
+       and the discount lives at quote level, because every screen renders it as its own
+       "Discount (n%)" row off the subtotal — putting it in `rate` as well would give the
+       customer the same discount twice. */
     expect(p.subtotal).toBe(162_000);
-    /* × 1.18 = ₹1,91,160 incl-GST. */
-    expect(p.amount).toBe(191_160);
+    /* 50 seats is in the 21–50 band: 3% off. Changed 25 Aug 2026 when the volume rate card
+       landed — this expectation used to be ₹1,91,160, which was subtotal × 1.18 with no
+       discount at all. */
+    expect(p.discountPct).toBe(3);
+    /* ₹1,62,000 − 3% (₹4,860) = ₹1,57,140, × 1.18 = ₹1,85,425.2 → ₹1,85,425 incl-GST. */
+    expect(p.amount).toBe(185_425);
+  });
+
+  it("gives a small deal no discount at all", () => {
+    /* The 1–20 band is full list price. A rate card that quietly discounted everything would
+       be a price cut, not a volume incentive. */
+    const p = planQuoteFromEnquiry({ item: STARTER, seats: 10, newLineId: id });
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.discountPct).toBe(0);
+    expect(p.amount).toBe(Math.round(p.subtotal * 1.18));
+  });
+
+  it("gives 51–100 seats the 5% band, and still prices it in full", () => {
+    /* The band that used to produce NOTHING — 51 seats was a flat handover with no quote
+       attached. It is priced now; whether it may be SENT is decided separately, by
+       decideAutoSend's review band. */
+    const p = planQuoteFromEnquiry({ item: STARTER, seats: 60, newLineId: id });
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.discountPct).toBe(5);
+    expect(p.items[0].rate, "the line stays at list — the discount is at quote level").toBe(3240);
+  });
+
+  it("says on the draft's own notes why the price is what it is", () => {
+    /* CLAUDE.md §24 and the reason `assumption` states the term: whoever opens this quote
+       must READ the discount rather than reverse-engineer it from the total. */
+    const p = planQuoteFromEnquiry({ item: STARTER, seats: 30, newLineId: id });
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.assumption).toContain("3% off list");
   });
 
   it("keeps whole rupees — never paise, in or out", () => {

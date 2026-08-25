@@ -43,15 +43,25 @@
 import { z } from "zod";
 import { verifyDraftMoney } from "./money-guard";
 import { findPromises } from "./promise-check";
+import { CUSTOM_PRICING_ABOVE, authorisedRatesForItem, slabLines } from "@/lib/pricing/volume-slabs";
 
 /**
- * Deals at or above this many seats are not auto-quoted, whatever the model thinks.
+ * Deals above this many seats are not auto-quoted, whatever the model thinks.
  *
- * 50 is a business ceiling, not a technical one: below it a wrong quote is an embarrassment
- * and a credit note, above it the discount conversation is the deal and a machine that
- * skips it loses money that was available. Pardeep's number to move.
+ * ─── MOVED FROM 50 TO 100 ON 25 AUG 2026, AND THE OLD REASON IS WHY ─────────
+ * This used to be 50, and the comment said: "above it the discount conversation is the deal
+ * and a machine that skips it loses money that was available." That was correct — while the
+ * machine had no discount to give. It now has one: a published volume rate card
+ * (lib/pricing/volume-slabs.ts) that says exactly what 21–50 and 51–100 seats earn. Applying
+ * a published rate is not a negotiation, so the objection stops holding at 100, where the
+ * card stops and the answer really does become "it depends on what the vendor will fund".
+ *
+ * The 50-seat line did not disappear, it changed job. It is now REVIEW_ABOVE_SEATS: 51–100
+ * seats are priced and drafted in full, and held for a person rather than sent. So the band
+ * that used to produce nothing now produces a finished quote, and still nobody's money moves
+ * without a human seeing it.
  */
-export const HANDOVER_SEAT_CEILING = 50;
+export const HANDOVER_SEAT_CEILING = CUSTOM_PRICING_ABOVE;
 
 /**
  * Below this, the agent does not speak to the customer unattended.
@@ -398,6 +408,15 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
     "CATALOGUE (the only prices you may use)",
     catalogueLines.length > 0 ? catalogueLines.join("\n") : "(empty — you may not name any price)",
     "",
+    /* The rate card, rendered from lib/pricing/volume-slabs.ts rather than written here, so
+       the model can never be shown a slab the quote path does not apply. Same rule the
+       telecaller's price block follows, and the same reason the catalogue is read at call
+       time instead of pasted: a second copy of a money rule stops matching the first. */
+    "VOLUME RATE CARD (the ONLY discounts you may offer — the quote applies these itself)",
+    slabLines().join("\n"),
+    "You do not decide a discount; you read it off this table by seat count. Never invent a",
+    "percentage, never round one up, and never offer a discount to win an argument.",
+    "",
     "AUTHORISED TOTALS (already worked out for you — state these, never your own arithmetic)",
     totalLines,
     "",
@@ -413,7 +432,20 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
     user,
     // Retail per-seat figures PLUS the app-computed totals — see BuiltPrompt.allowedMoney
     // and BuildPromptArgs.authorisedTotals. Wholesale is deliberately absent from both.
-    allowedMoney: [...catalog.map((c) => c.msrpPerSeatPerYear), ...totals],
+    /* List rate AND every rate the volume card can produce for that item, from
+       `authorisedRatesForItem` — the same function the quote path prices through.
+
+       Both directions matter and both have burned this file before. A discounted rate the
+       agent quotes CORRECTLY must not be flagged as unauthorised (that would hand over every
+       21+ seat deal). And a rate the quote could never produce must not be authorised — 24 Aug
+       is the whole reason: the guard's list was built from a different source than the draft
+       and approved a below-cost figure. One function, both lists. */
+    allowedMoney: [
+      ...catalog.flatMap((c) =>
+        authorisedRatesForItem(c.msrpPerSeatPerYear, c.wholesalePerSeatPerYear),
+      ),
+      ...totals,
+    ],
     authorisedTotals: [...totals],
   };
 }

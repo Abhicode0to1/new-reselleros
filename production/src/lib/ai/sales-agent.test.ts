@@ -111,9 +111,31 @@ describe("the prompt carries the catalogue and nothing it should not", () => {
       sellerName: "ANUTECH",
       sellerEmail: "sales@anutech.in",
     });
-    expect(p.allowedMoney).toEqual([270, 864]);
+    /* Was `toEqual([270, 864])` until 25 Aug 2026. The list grew on purpose when the volume
+       rate card landed: it now carries each item's list rate AND the rates its slabs can
+       produce (270 → 261 at 3%, 256 at 5%), because a discounted figure the agent quotes
+       CORRECTLY must not be flagged as unauthorised — that would hand over every 21+ seat
+       deal. The rule this test exists for is unchanged and is asserted below: our own buying
+       price is still absent, and `discountedRate` refuses any discount that would land on it. */
+    expect(p.allowedMoney).toEqual([270, 261, 256, 864, 838, 820]);
     expect(p.allowedMoney).not.toContain(110);
     expect(p.allowedMoney).not.toContain(620);
+  });
+
+  it("never authorises a discounted rate that equals our cost", () => {
+    /* The hole the growth above could have opened. For an SKU whose margin happens to equal a
+       slab, `floor(list × (1 − pct))` lands exactly on wholesale — and our buying price would
+       have entered the allow-list silently, on the one product where it matters. */
+    const p = buildSalesAgentPrompt({
+      lead: LEAD,
+      history: [],
+      incoming: "How much?",
+      /* 5% off 100 is exactly 95, which is this item's cost. */
+      catalog: [{ sku: "X", name: "Thin", vendor: "other", msrpPerSeatPerYear: 100, wholesalePerSeatPerYear: 95 }],
+      sellerName: "ANUTECH",
+      sellerEmail: "sales@anutech.in",
+    });
+    expect(p.allowedMoney).not.toContain(95);
   });
 
   it("tells the model our cost is internal", () => {
