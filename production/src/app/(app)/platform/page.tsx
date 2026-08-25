@@ -200,7 +200,7 @@ export default function PlatformSignupsPage() {
         </Card>
         <Card className="p-3">
           <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Setup Pending</div>
-          <div className="font-serif text-2xl font-bold text-amber-dark">{q.data ? q.data.count - activatedCount : "—"}</div>
+          <div className="font-serif text-2xl font-bold text-amber-ink">{q.data ? q.data.count - activatedCount : "—"}</div>
         </Card>
       </div>
 
@@ -244,7 +244,7 @@ export default function PlatformSignupsPage() {
                       {t.email ? (
                         <a
                           href={`mailto:${t.email}`}
-                          className="text-xs text-amber-dark hover:underline flex items-center gap-1 mt-0.5"
+                          className="text-xs text-amber-ink hover:underline flex items-center gap-1 mt-0.5"
                         >
                           <Icon name="mail" size={12} />
                           <span>{t.email}</span>
@@ -394,8 +394,8 @@ export default function PlatformSignupsPage() {
                   onClick={() => setEditForm({ ...editForm, activated: !editForm.activated })}
                   className={`px-3 py-1 text-xs font-semibold rounded-full border transition-colors ${
                     editForm.activated
-                      ? "bg-emerald/15 border-emerald text-emerald-dark"
-                      : "bg-amber/15 border-amber text-amber-dark"
+                      ? "bg-emerald/15 border-emerald text-emerald-ink"
+                      : "bg-amber/15 border-amber text-amber-ink"
                   }`}
                 >
                   {editForm.activated ? "Activated" : "Setup Pending"}

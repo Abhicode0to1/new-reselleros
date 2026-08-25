@@ -102,7 +102,7 @@ export default function MyExpensesPage() {
         <Card className="p-5 md:p-6 bg-gradient-to-br from-paper to-paper-2 border border-hairline shadow-sm space-y-4 rounded-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="h-9 w-9 rounded-full bg-amber-soft flex items-center justify-center text-amber-dark">
+              <div className="h-9 w-9 rounded-full bg-amber-soft flex items-center justify-center text-amber-ink">
                 <Icon name="wallet" size={18} />
               </div>
               <div>
@@ -127,7 +127,7 @@ export default function MyExpensesPage() {
 
             <div>
               <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Balance Left</p>
-              <p className="font-serif text-base text-amber-dark font-bold mt-0.5">{rupee(totalAvailable)}</p>
+              <p className="font-serif text-base text-amber-ink font-bold mt-0.5">{rupee(totalAvailable)}</p>
             </div>
           </div>
 

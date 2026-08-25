@@ -75,7 +75,7 @@ export default function EmployeeAdvancesPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-5 border-l-4 border-l-amber">
           <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Advance Money in Hands of Employees</p>
-          <p className="font-serif text-3xl text-amber-dark mt-1">{rupee(totalOutstandingBalance)}</p>
+          <p className="font-serif text-3xl text-amber-ink mt-1">{rupee(totalOutstandingBalance)}</p>
           <p className="text-xs text-ink-3 mt-1">{activeAdvances.length} active employee advances</p>
         </Card>
 
@@ -161,7 +161,7 @@ export default function EmployeeAdvancesPage() {
 
                   <div>
                     <p className="text-3xs uppercase tracking-wider text-ink-3">Remaining Advance in Hand</p>
-                    <p className="font-serif text-lg text-amber-dark font-bold">{rupee(adv.remaining_balance)}</p>
+                    <p className="font-serif text-lg text-amber-ink font-bold">{rupee(adv.remaining_balance)}</p>
                   </div>
                 </div>
 
@@ -450,7 +450,7 @@ function RecordAdvanceExpenseDialog({ advance, open, onOpenChange }: { advance: 
         </DialogHeader>
 
         <div className="p-3 bg-amber-soft/30 border border-amber/30 rounded-lg text-xs space-y-1 my-1">
-          <p className="font-semibold text-amber-dark">Advance Balance Available: {rupee(advance.remaining_balance)}</p>
+          <p className="font-semibold text-amber-ink">Advance Balance Available: {rupee(advance.remaining_balance)}</p>
           <p className="text-ink-3">Total Disbursed: {rupee(advance.disbursed_amount)} · Total Spent: {rupee(advance.total_spent)}</p>
         </div>
 
@@ -537,7 +537,7 @@ function SettleAdvanceDialog({ advance, open, onOpenChange }: { advance: Employe
           <div className="p-3 bg-paper-2 rounded-lg border border-hairline space-y-1">
             <div className="flex justify-between"><span>Disbursed Advance:</span><span className="font-bold">{rupee(advance.disbursed_amount)}</span></div>
             <div className="flex justify-between"><span>Expenses Booked:</span><span className="font-bold text-emerald">{rupee(advance.total_spent)}</span></div>
-            <div className="flex justify-between border-t border-hairline pt-1 font-semibold text-amber-dark">
+            <div className="flex justify-between border-t border-hairline pt-1 font-semibold text-amber-ink">
               <span>Remaining Advance Balance:</span>
               <span>{rupee(advance.remaining_balance)}</span>
             </div>

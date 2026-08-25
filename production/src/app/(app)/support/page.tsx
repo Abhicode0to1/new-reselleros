@@ -358,7 +358,7 @@ export default function SupportPage() {
                     {t.priority && (
                       <>
                         <span>·</span>
-                        <span className={`capitalize font-semibold ${t.priority === "urgent" || t.priority === "high" ? "text-rose" : "text-amber-dark"}`}>
+                        <span className={`capitalize font-semibold ${t.priority === "urgent" || t.priority === "high" ? "text-rose" : "text-amber-ink"}`}>
                           Priority: {t.priority}
                         </span>
                       </>

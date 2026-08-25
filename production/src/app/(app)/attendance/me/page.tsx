@@ -498,7 +498,7 @@ function CheckInCard({
         <div className="mt-5">
           {noCamDetected ? (
             <div className="p-3.5 rounded-xl border border-amber/30 bg-amber/5 text-xs text-ink-2 space-y-1 my-2">
-              <div className="flex items-center justify-center gap-1.5 font-semibold text-amber-dark">
+              <div className="flex items-center justify-center gap-1.5 font-semibold text-amber-ink">
                 <Icon name="laptop" size={16} />
                 <span>Desktop PC (No Webcam) Mode</span>
               </div>

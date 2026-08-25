@@ -69,13 +69,19 @@ const config: Config = {
           ink: "hsl(var(--amber-ink) / <alpha-value>)",
         },
         // Status colors
+        /* `ink` is the readable text colour on the matching `soft` fill. Amber and indigo had
+           one; these two did not — while `text-rose-ink` (10 uses) and `text-emerald-ink`
+           (8 uses) were already written in the app and rendering nothing at all, because
+           Tailwind emits no rule for a colour the config never declares. */
         emerald: {
           DEFAULT: "hsl(var(--emerald) / <alpha-value>)",
           soft: "hsl(var(--emerald-soft) / <alpha-value>)",
+          ink: "hsl(var(--emerald-ink) / <alpha-value>)",
         },
         rose: {
           DEFAULT: "hsl(var(--rose) / <alpha-value>)",
           soft: "hsl(var(--rose-soft) / <alpha-value>)",
+          ink: "hsl(var(--rose-ink) / <alpha-value>)",
         },
         indigo: {
           DEFAULT: "hsl(var(--indigo) / <alpha-value>)",

@@ -27,8 +27,30 @@
     /* Status colors */
     --emerald:         142 71% 28%;      /* #166534 */
     --emerald-soft:    138 50% 92%;      /* #DCFCE7 */
+    --emerald-ink:     142 71% 22%;      /* text ON emerald-soft — see the note below */
     --rose:            0 76% 50%;        /* #DC2626 */
     --rose-soft:       0 86% 96%;        /* #FEE2E2 */
+    --rose-ink:        0 74% 37%;        /* text ON rose-soft — see the note below */
+
+    /* ─── WHY -ink EXISTS, AND WHY THESE TWO WERE MISSING ──────────────────────
+       Every soft surface needs a text colour dark enough to read on it. Amber and indigo
+       already had one; rose and emerald did not, so `text-rose` got used on `bg-rose-soft`
+       and lands at 4.20:1 — under the 4.5:1 AA floor for small text, everywhere that pair
+       appears. Computed, not eyeballed:
+
+         rose on rose-soft ......... 4.20  FAIL   →  rose-ink on rose-soft ...... 6.69
+         amber on amber-soft ....... 4.30  FAIL   →  amber-ink on amber-soft .... 6.36
+         emerald on emerald-soft ... 4.74  passes, but by a quarter of a point
+
+       AND THESE NAMES WERE ALREADY IN USE BEFORE THEY EXISTED. `text-rose-ink` appears 10
+       times and `text-emerald-ink` 8 — written by someone reasoning correctly from the amber
+       pattern, and silently doing NOTHING, because Tailwind generates no rule for a colour
+       that is not in the config. Those elements inherited whatever colour surrounded them.
+       Two of them are money: the outstanding total on /invoices and the advance balance on
+       /accounting/advances both asked to be red or amber and rendered in plain ink.
+
+       Also note `amber on paper = 4.52`. It passes by two hundredths, so neither token can
+       be nudged without re-running the numbers. */
     --indigo:          240 65% 42%;      /* #3730A3 */
     --indigo-soft:     232 100% 95%;     /* #E0E7FF */
     --indigo-ink:      244 55% 32%;      /* #2D2873 */
@@ -65,8 +87,10 @@
 
     --emerald:         142 71% 50%;
     --emerald-soft:    142 30% 15%;
+    --emerald-ink:     142 70% 75%;      /* light on dark, as --amber-ink is here */
     --rose:            0 86% 65%;
     --rose-soft:       0 40% 18%;
+    --rose-ink:        0 90% 80%;        /* light on dark, as --amber-ink is here */
     --indigo:          240 65% 65%;
     --indigo-soft:     232 30% 18%;
     --indigo-ink:      232 50% 80%;
