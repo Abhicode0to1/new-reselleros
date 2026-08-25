@@ -2444,3 +2444,130 @@ verified against live counts on all ten key tables.
   have reintroduced it.
 - **The exit code is a clue, not noise.** 3221225794 looks like line noise and means something
   specific. Anything on this machine returning it should be read as "too many processes".
+
+---
+
+## L106 — A price in a prompt is a second source, and a price spoken aloud cannot be corrected
+
+Written 25 Aug 2026, building the AI telecalling agent. The brief specified the persona's
+price list in the brief itself: *"Google Workspace (Starter Rs 270/mo, Standard Rs 750/mo)"*.
+Both halves of that instruction were wrong, in two different ways, and the second is the one
+worth remembering.
+
+**The measurable half.** Checked against `items` for tenant `fbb976f1…` before writing a line:
+Starter is `msrp = 270` — correct. Standard is **864**, not 750. Pasting 750 into the prompt
+would have had an automated voice quote Rs 114 per seat per month below the real price. On a
+12-seat deal that is Rs 16,416 a year given away, per call, with nobody in the room.
+
+**The half that matters more.** Even if 750 had been right that morning, it would have been a
+SECOND SOURCE for a number the catalogue already owns — and a hardcoded figure agrees with
+itself forever, so no test can notice it going stale. `GW-STD-fbb` has already changed once.
+This is the same defect family as 24 Aug's twelfth-of-every-price bug, where
+`loadSalesCatalog` copied a monthly figure into a field named per-year and `verifyDraftMoney`
+**approved** the result because its allow-list was built from the same wrong source. It is
+also `quote-builder.tsx`'s hardcoded plan→price map, which disagrees with the catalogue on 8
+of 8 lines and survives only because it is unreachable.
+
+So `lib/ai/telecaller-prompt.ts` contains **no number at all**. There is a test that reads its
+own source, strips comments, and fails on any 3-or-more-digit literal. Mutating a `750` back
+in turns it red — checked, not assumed. The one allowance is `Microsoft 365`, named explicitly
+in the test rather than handled by loosening the pattern, because an allow-list of one is
+reviewable and a relaxed regex lets 750 back in.
+
+**And then the part that is new with voice.**
+
+Every rule this codebase has about automated messages assumes the message is TEXT. A wrong
+price in an email can be followed by a correction the customer reads next to the original; a
+draft exists before it is sent, so a person can read it; and `hold` means a human sees the
+words first. **A phone call has none of those properties.** It interrupts, it cannot be
+edited, it cannot be recalled, and the first draft anybody sees is a transcript of something
+the customer has already heard and written down.
+
+That changes what a guard can even be. `verifyCallMoney` runs on the transcript AFTER the
+call, so it cannot refuse anything — its entire value is that a person finds out in seconds
+instead of when the customer quotes it back. It is written down as a **detector, not a
+guard**, in those words, because dressing it up as a guard would be the more comfortable lie.
+It has a real blind spot too: speech-to-text renders "ten thousand three hundred and
+sixty-eight rupees" as words and `verifyDraftMoney` matches digits, so a clean pass here is
+weaker evidence than a clean pass on an email draft. Stated in the docstring rather than
+discovered later.
+
+**What to take from it.**
+
+- **A number in a prompt file is a hardcoded price wearing a costume.** Read the catalogue at
+  call time and pass it in. If the module has no numbers, a test can say so.
+- **Build the allow-list and the prompt from the SAME array**, in one function. 24 Aug proved
+  what a guard fed from a different source is worth; the inverse — a guard that flags the
+  agent for saying exactly what it was told — is just as bad and looks like a bug in the agent.
+- **The agent gets rates; the app computes totals.** `authorisedCallFigures` deliberately does
+  not contain seats × price. A model that multiplies can multiply wrongly, and on a call it
+  does so out loud.
+- **When a new channel is irreversible, say so in the default.** `telecall.place` ships `hold`,
+  and the reason is written in the registry next to it: not caution in general, but the
+  specific fact that none of the properties the other dials rely on hold for voice. `hold` is
+  built to be USEFUL — it files the number, the script and the authorised figures so the
+  operator can ring by hand — precisely so nobody moves the dial merely to get value out of
+  the feature.
+- **Never infer intent from a transcript.** Whether the customer wanted a quotation is read
+  from the vendor's structured post-call analysis, never from searching the words. *"No, please
+  don't send me a quote"* contains the word. A keyword match there does not produce a slightly
+  worse decision — it emails a quotation to somebody who explicitly declined one.
+
+---
+
+## L107 — A CHECK says "always". Most rules you write actually mean "when it is written"
+
+Found 25 Aug 2026, by the SQL test, on its first run against production, before a single row
+existed. Two constraints shipped in the same migration — one page apart — and they fight:
+
+```sql
+constraint ai_telecall_logs_has_subject
+  check (lead_id is not null or subscription_id is not null)
+
+constraint ai_telecall_logs_lead_fk
+  foreign key (tenant_id, lead_id) references public.leads (tenant_id, id)
+  on delete set null (lead_id)
+```
+
+Delete a lead that has been rung. Postgres runs `UPDATE ai_telecall_logs SET lead_id = NULL`.
+For a call that was about a lead and not a subscription, that leaves BOTH subject columns
+null, the CHECK fires, and **the DELETE is refused outright**:
+
+```
+23514: new row for relation "ai_telecall_logs" violates check constraint
+       "ai_telecall_logs_has_subject"
+CONTEXT: SQL statement "UPDATE ONLY ... SET lead_id = NULL"
+```
+
+Which is precisely the failure the column list on `SET NULL` exists to prevent — the same
+shape, arriving through a different door, one screen below the comment explaining it. The
+comment was right, the FK was right, and the row above it undid both.
+
+**The mistake is a category error, not a typo.** The requirement was *"do not WRITE a call
+that is about nothing"* — a statement about the moment of insertion. A `CHECK` is a statement
+about the row for the rest of its life. Those are the same sentence right up until something
+else legitimately changes the row, and then they are not. And here the post-delete state is
+not a mistake at all: it is the **intended end state**, designed on purpose two paragraphs
+earlier — *"a record of a phone call placed to a real person is not deletable bookkeeping"* —
+with `phone_number` and `transcript` still on the row.
+
+Fixed by moving the rule to a `BEFORE INSERT` trigger. **UPDATE is deliberately not covered**,
+and that is the whole point: the FK's SET NULL *is* an UPDATE, so covering it would recreate
+the bug exactly. The trigger's own comment says so, because the next person's instinct will be
+to "complete" it with `OR UPDATE`.
+
+**What to take from it.**
+
+- **Before writing a CHECK, ask what changes this row later.** Cascades, `SET NULL`, triggers,
+  and repair scripts all produce rows the original author never pictured. If any of them can
+  legitimately produce a state the CHECK forbids, the rule belongs at INSERT.
+- **A constraint that fights another constraint fails at DELETE time, not at migration time.**
+  Both applied cleanly. Exit 0 said nothing. It would have surfaced months later as "why can't
+  I delete this lead", with the error naming a table nobody was thinking about.
+- **This is what the rollback-style SQL tests are FOR.** The pattern in the environment skill
+  §3 says to assert that a DELETE *succeeds*, not merely that a bad insert is refused — and
+  that specific assertion, which looks like the boring one, is the only thing in the suite that
+  could have caught this. It caught it on production, cost nothing, and left no residue.
+- **And the harness has to be shown failing.** Green here means exit 0, which is also what a
+  file that silently did nothing returns. One assertion was flipped, the run went exit 1 with
+  `FAIL 1: ...` on screen, and only then was the green worth anything.

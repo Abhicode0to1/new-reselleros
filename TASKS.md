@@ -7,6 +7,181 @@
 
 ---
 
+# 🟢 HANDOFF — 25 Aug 2026. AI Telecalling agent bana, migration lagi, aur auto-quote ka brake laga.
+
+> Neeche 24 Aug ka handoff hai. **"Kya karna hai" lo, "kyun" par bharosa mat karo** — is file
+> ke kaaran pehle bhi galat nikle hain. Aaj bhi do dawe naapne par galat nikle, dono neeche
+> likhe hain.
+
+### ✅ Migration prod par lag gayi (25 Aug), aur SQL test ne ek asli bug pakda
+
+`20260825120000_ai_telecalling.sql` **applied + tracked**. `db push` nahi chalaya — sirf apni
+file `db query -f` se, phir `migration repair`. Verify **ALAG run** me (skill §2): 1 naya table ·
+19 column · 6 index · 2 policy · RLS ON · `subscriptions` par additive unique key ·
+1 trigger. Dono composite FK par **`confdelsetcols` sahi** — `{lead_id}` aur
+`{subscription_id}` akele, `tenant_id` list me **nahi** (wahi bug jo bare form me hota hai).
+`migration list --linked` ab phir se **drift 0**.
+
+Backup pehle liya: `resellersos-data-2026-08-25T03-31-03-386Z.json` — **114 table / 1,652 row**
+(pichhla known-good 114/1,645; table count wahi, 7 row zyada).
+
+**🔴 Aur phir isolation test ne wo pakda jo maine khud likha tha aur khud tod diya tha.**
+Ek hi migration me do guard the jo aapas me ladte hain:
+
+```
+check (lead_id is not null or subscription_id is not null)   -- has_subject
+foreign key ... on delete set null (lead_id)                 -- lead_fk
+```
+
+Jis lead ko call kiya gaya ho use delete karo → Postgres `SET lead_id = NULL` chalata hai →
+lead-only row me **dono null** ho jate hain → CHECK fire → **DELETE hi refuse ho jata hai**
+(`23514 ... CONTEXT: UPDATE ONLY ... SET lead_id = NULL`). Yaani **bilkul wahi failure jise
+rokne ke liye column list likha tha**, doosre darwaze se, usi comment ke ek screen neeche.
+
+Fix `20260825140000_ai_telecall_subject_check_on_insert.sql` — CHECK hataya, rule **BEFORE
+INSERT trigger** me daala. UPDATE jaan-boojh kar cover nahi kiya, kyunki FK ka SET NULL ek
+UPDATE hi hai. Sabak: **CHECK "hamesha" kehta hai, requirement "likhte waqt" ki thi.** Lead
+delete hone ke baad dono null hona galti nahi, wahi intended end state hai — `phone_number`
+aur `transcript` row par bache rehte hain.
+
+Test ab poora green (exit 0), aur green sach hai: ek assertion palat kar dekha → exit 1 aur
+`FAIL 1: a call log was allowed to point at ANOTHER TENANT'S lead` screen par aaya.
+Prod par residue zero — `ai_telecall_logs` **0 row**, tenants 3, quotes 20, leads 27, subs 16.
+
+### Kya bana
+
+| Cheez | File |
+|---|---|
+| Schema — call log, composite FK, RLS, retry guard | `supabase/migrations/20260825120000_ai_telecalling.sql` |
+| Schema fix — subject rule INSERT par, CHECK me nahi | `supabase/migrations/20260825140000_ai_telecall_subject_check_on_insert.sql` |
+| Persona + script + dynamic variables (pure) | `src/lib/ai/telecaller-prompt.ts` · **21 test** |
+| Call ke faisle — number, ghanti, outcome (pure) | `src/lib/ai/telecall.ts` · **47 test** |
+| DB side — row likhna, history padhna | `src/lib/ai/telecall.server.ts` |
+| **Chokepoint** — dial pehle, vendor baad me | `src/lib/ai/actions/telecall-dispatcher.ts` · **21 test** |
+| Retell / Vapi client (ek darwaza) | `src/lib/telecall/provider.ts` |
+| Post-call payload normaliser (pure) | `src/lib/telecall/inbound.ts` · **20 test** |
+| Lead/subscription loader (ek jagah) | `src/lib/telecall/subject.server.ts` |
+| Outbound trigger API | `src/app/api/v1/telecalling/make-call/route.ts` |
+| Post-call webhook | `src/app/api/v1/telecalling/webhook/route.ts` |
+| Renewal cron (roz 10:30 IST, Mon–Fri) | `src/app/api/cron/ai-telecall-renewals/route.ts` |
+| SQL isolation test (7) | `supabase/tests/ai_telecalling_tenant_isolation.test.sql` |
+| Scheduler entry + env docs | `scripts/setup-cloud-scheduler.sh` · `.env.example` |
+
+Gate: `typecheck` 0 · `test` **4,483 pass** (237 file, +137) · `lint` 0 error · `build` 0.
+Teeno route build me dikhte hain. Do mutation se laal karke dekha (neeche).
+
+### 🔑 Chaar faisle jo tumhe pata hone chahiye
+
+**1. Brief ne daam maange the, aur unme se ek GALAT tha.** Brief kehta tha "Standard
+₹750/mo". Live catalogue me `GW-STD-fbb` ka `msrp` **864** hai. 750 bolna matlab ₹114/seat/
+month kam — 12 seat par saal ka **₹16,416** — aur wo bhi **phone par, bolkar**.
+
+Par asli baat wo nahi. Agar 750 sahi bhi hota, tab bhi wo **doosra source** hota, aur hardcoded
+number apne aap se hamesha sahmat rehta hai — koi test use baasi hote hue nahi pakad sakta.
+Isliye `telecaller-prompt.ts` me **ek bhi number nahi** hai; catalogue call ke waqt padha jaata
+hai. Ek test uski apni source padhta hai aur 3+ digit ka koi bhi literal mile to laal ho jaata
+hai. **750 wapas daal kar dekha — laal hua.** Sirf `Microsoft 365` ki chhoot hai, aur wo test
+me naam lekar likhi hai (regex dheela karne se 750 phir ghus jata).
+
+**2. Awaaz wapas nahi li ja sakti — aur isse guard ka matlab hi badal jata hai.** Is codebase
+ke saare rule maante hain ki message TEXT hai: galat daam ke baad correction bheji ja sakti
+hai, draft pehle se maujood hota hai, aur `hold` ka matlab hai insaan pehle padhega. **Call me
+ye teeno nahi hain.** Isliye `verifyCallMoney` transcript par call ke BAAD chalta hai — wo kuch
+rok nahi sakta. Uska poora faayda itna hai ki insaan ko seconds me pata chal jaye, aur wo
+docstring me **"detector, not a guard"** likha hai. Uska blind spot bhi likha hai: speech-to-
+text "das hazaar teen sau" shabdon me deta hai, aur `verifyDraftMoney` **digit** dhoondta hai.
+
+**3. `telecall.place` dial `hold` par hai, aur `hold` khaali nahi hai.** Number nikalta hai,
+catalogue padhta hai, poori script aur dynamic variables banata hai, `ai_telecall_logs` me
+`status='held'` likhta hai — aur ghanti nahi bajata. Operator wahi row kholkar dekh sakta hai
+ki kya bola jaata aur kise, phir haath se call kar le. Yahi wo saudaa hai jo kisi ko dial
+sirf "faayda lene ke liye" ghumane se rokta hai — wahi shape jo `support.reply.send` ne liya tha.
+
+**4. Call se bani quote purane hi darwaze se jaati hai.** Webhook `dispatchSalesDecision` ko
+bulata hai, apna doosra quote path nahi banata. Matlab phone se aayi quote par bhi `reply.send`
+ka dial, seat ceiling, aur `next_document_number` wahi lagte hain — telecalling on karna
+customer ko likhne wale brake ka rasta nahi ban sakta.
+
+### ✅ Aur teen defect jo design me hi band kiye (test-backed)
+
+- **Transcript se intent NAHI padha jaata.** "No, please don't send me a quote" me "quote"
+  shabd hai. Keyword match thoda kharaab faisla nahi deta — wo us insaan ko quote bhej deta hai
+  jisne saaf mana kiya. Isliye sirf vendor ki structured analysis padhi jaati hai; na ho to
+  `action_taken = none` aur record par likha jaata hai ki analysis nahi aayi.
+- **Webhook tenant BODY se nahi leta.** Signature payload ko *authentic* banata hai, *sahi*
+  nahi. Row hum khud likhte hain, isliye tenant wahi se aata hai (`findTelecallByProviderCallId`).
+- **Retry se do quote nahi banti.** `(tenant_id, provider_call_id)` par unique index + row-level
+  `alreadyFinished` check. Dono vendor slow response par dobara POST karte hain.
+
+### 📌 Jo BAAKI hai
+
+1. **Koi vendor account nahi hai.** `RETELL_*` / `VAPI_*` kahin set nahi. Bina inke bhi cron
+   chalta hai aur har call ka record banta hai — dial nahi karta, wajah likh deta hai.
+2. **Vendor agent par 5 analysis field configure karne padenge** — naam `.env.example` ke
+   aakhir me exact likhe hain. Inke bina quote-trigger kabhi nahi chalega.
+3. **Cloud Scheduler par job banayi nahi** — entry `scripts/setup-cloud-scheduler.sh` me hai
+   (`30 10 * * 1-5`), script chalayi nahi.
+4. **`doNotCall` abhi hamesha `false`** — customer record par flag hai hi nahi. Guard maujood
+   hai aur chalta hai; use khilane wala column banana baaki hai. Dono route me ye baat likhi hai.
+5. **Koi UI nahi.** `held` row aur `ai_telecall_logs` sirf DB me hain. Lead timeline par note
+   jaata hai, par "Waiting on you" jaisi screen telecall ke liye nahi bani.
+
+### ⚠️ Do dawe jo naapne par galat nikle (24 Aug ke handoff me)
+
+- **"Aaj ke 8 commit live par nahi hain"** — `anutech/deploy` se HEAD **12 commit** aage tha,
+  aur usme AI sales agent aur support agent bhi hain. Yaani wo deploy sirf daam theek nahi
+  karta, do agent ko pehli baar asli inbound mail par chaalu karta hai.
+- **"`quote.send` dial `auto` par hai"** — nateeja sahi, wajah galat. Prod ke `ai_autonomy` me
+  **0 row** thi. `quote.send` `auto` isliye tha kyunki `autonomy.ts` ka code default
+  `today: "auto"` hai — **kisi ne on nahi kiya tha**. Do baat: deploy isse nahi badalta, aur
+  ise `hold` karna ek naya row banana hai — code chhue bina lagne wala sabse sasta brake.
+  (Wo row aaj daal diya gaya — neeche.)
+
+### 🔴 Teen baar poochha gaya sawaal ab band hai — aur jawaab bura hai
+
+**`RESEND_API_KEY` Cloud Run par SET hai.** 36 character, prefix `re_`, secret-ref nahi seedha
+env var, aur wo bhi us revision par jispe **100% traffic** hai (`resellersos-00391-lqn`).
+Service `resellersos`, region **asia-south1** — `gcloud config` ka default region
+`asia-northeast2` hai, jo galat hai; region galat dene par service "exist hi nahi karti" lagti hai.
+
+Yaani `isEmailConfigured()` live par **true** deta tha, aur wo gate **khula** tha. Poori chain
+naapi gayi, har kadi live:
+
+| Kadi | Haalat | Kaise naapa |
+|---|---|---|
+| `isEmailConfigured()` | khula | `RESEND_API_KEY` serving revision par maujood |
+| `quote.send` dial | tha `auto` | `ai_autonomy` 0 row → code default |
+| Kill switch | off | teeno tenant par `ai_kill_switch=false` |
+| Gmail bhej sakta hai | haan | ANUTECH `email_provider=gmail` + `gmail.send` token |
+| Galat-product bug | **live** | `containsWord`/`isAmbiguousSingleWord` `anutech/deploy` me 0 match |
+| Live code | 24 Aug 16:19 IST | revision creation ≈ `20275ef` (16:12 IST); saare fix 18:47 ke baad |
+
+Ek hi brake bacha tha: `termAssumed` — quote tabhi apne aap jaati hai jab customer ne khud
+"monthly"/"annual" likha ho.
+
+**Ek sudhaar:** 12× wala msrp bug live **nahi** tha — wo `loadSalesCatalog` me hai, jo AI sales
+agent ka hissa hai, aur wo agent hi live nahi hai. Live bug sirf galat-product wala tha.
+
+### ✅ Brake laga diya (25 Aug) — ek row, deploy nahi
+
+`ai_autonomy` me pehla row daala: ANUTECH · `quote.send` · **`hold`**. Verify alag connection se.
+Aur — asli check — **live branch ye row padhta hai**: `autonomy.server.ts` me
+`from("ai_autonomy")`, `send.ts` me `resolveAutonomy(`, `send-auto-quote.ts` me
+`automated: { ... action: "quote.send" }`, aur live ka `quote.send` `supports` me `"hold"`
+maujood hai (warna dial "ye mode nahi chalta" kehkar default par laut jata). `loadAutonomyPolicy`
+`cache: "no-store"` par hai, to stale bhi nahi milega.
+
+Wapas kholna ek row hatana hai:
+```sql
+delete from public.ai_autonomy where tenant_id='fbb976f1-9090-4f10-9726-0901bd144e42' and action='quote.send';
+```
+
+**Deploy ab bhi baaki hai** (12 commit) — par ab wo jaldi ka kaam nahi, aaram se ho sakta hai.
+Dhyaan rahe: wahi deploy AI sales agent aur support agent ko pehli baar asli inbound mail par
+chaalu bhi kar dega.
+
+---
+
 # 🟢 HANDOFF — 24 Aug 2026 (shaam). AI Support Agent bana AUR migration lag gayi.
 
 > Pichhla handoff (usi din, AI Sales Agent) neeche hai. **"Kya karna hai" lo, "kyun" par
