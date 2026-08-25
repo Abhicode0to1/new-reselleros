@@ -90,11 +90,31 @@ App-wide there are **11** uses of `aria-pressed`. On `/leads` there is **one**, 
 while that screen has folder chips, motion filters, a view toggle and a status row, all of which
 hold state.
 
-**⚠️ THE CANDIDATE DETECTOR MUST BE WIDE, and the first version was not.** `active ? "…"` is only
-one shape. On `/leads` the folder chips branch on `folder === "all" && smartView !== "junk"`, and
-the status chips on `smartView === "junk"` — neither matches that pattern, so the first run counted
-2 candidates where the screen has at least 5. **For accessibility, under-reporting is the worse
-error**: an over-report wastes a minute, an under-report ships the bug with a clean bill.
+**⚠️ WIDE IS NOT THE SAME AS RIGHT, AND THIS SECTION HAS NOW ERRED BOTH WAYS.** The first version
+said "under-reporting is the worse error", which is true, and it produced a detector that matched
+any `className` holding a selection-shaped ternary. On /leads that returned **42 sites**, and
+roughly half were `<span>`, `<td>`, `<th>`, `<p>` and `<li>` — status pills, table cells and
+message rows that style themselves conditionally and are **not interactive**. The reported figure
+of "19 missing `aria-pressed`" came from that pass and was wrong; the real count is **13**.
+
+`aria-pressed` is only valid on a button role. On a `<span>` it does not fix anything — it asserts
+the element is a toggle when it is text. So the detector stays wide, and then a HUMAN READ narrows
+it, in this order:
+
+1. **Is it interactive?** `<button>`, `<a>`, or `role="button"`. A conditional class on a `<span>`
+   is a §6 colour-only question, not this one.
+2. **Is the ternary a SELECTION, or something else?** Measured misses on /leads:
+   `outcome-chips.tsx:40` matched on `size === "sm" ? …` — a sizing ternary on a one-shot action
+   chip. `page.tsx`'s note button matched on enabled-vs-disabled styling. Neither holds a state,
+   and `aria-pressed` on either announces something that does not exist.
+3. **Then pick the right attribute, because it is not always `aria-pressed`:**
+   - a toggle, or one of a single-select group → `aria-pressed`
+   - a **current** item that is not pressable → `aria-current`. The /leads stage chips are this:
+     the current stage is `disabled`, and disabled announces "unavailable", never "current".
+   - a menu row where one is always in force → `role="menuitemradio"` + `aria-checked`. There is
+     no `DropdownMenuRadioItem` in `components/ui/dropdown-menu.tsx`, so the role goes on the call
+     site — and a test asserting `.closest("[role=menuitem]")` will break, which is the test being
+     coupled to the role rather than the change being wrong.
 
 ```bash
 grep -c "aria-pressed" $F | grep -v ":0"
