@@ -27,6 +27,22 @@ next-env.d.ts
 .env*.bak-*
 .env*.local
 
+# ===== Database backups =====
+# Written by production/scripts/backup-db.mjs before every migration. Measured on the
+# 25 Aug 2026 backup: 117 tables, 1,793 rows, and 25 of those tables carry personal
+# data -- 64 contacts with addresses, emails and phones; 29 leads with GSTINs; 25
+# customers; 93 inbound emails.
+#
+# And one column is worse than personal data: `quotes.public_token`. That is the
+# capability token in a quote's public accept URL, so a committed backup is a list of
+# links anybody can open without logging in. The file also names the prod project ref.
+#
+# The script takes its output directory as an argument, so BOTH patterns are here --
+# the directory used today, and the filename wherever somebody points it next.
+backups/
+**/backups/
+resellersos-data-*.json
+
 # ===== Logs =====
 *.log
 npm-debug.log*
