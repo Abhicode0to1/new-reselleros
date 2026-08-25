@@ -34,6 +34,7 @@ import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { runSalesAgent, loadSalesCatalog } from "@/lib/ai/sales-agent.server";
 import { dispatchSalesDecision } from "@/lib/ai/actions/quote-dispatcher";
 import { shouldNudge } from "@/lib/ai/sales-loops";
+import { CADENCE, decideStep, expiryFact, nextStep, nextStepAt } from "@/lib/ai/cadence";
 import {
   closeLoop,
   lastCustomerMessageAt,
@@ -55,6 +56,93 @@ const FROM_EMAIL =
 interface LoopOutcome {
   lead_id: string;
   result: string;
+}
+
+type Admin = ReturnType<typeof createAdminClient>;
+
+/**
+ * The reseller's own day-4 write-up, or null.
+ *
+ * Cached per sweep. Null covers both "no row" and "column empty", which are the same thing
+ * here: nobody has written one, so `decideStep` skips that step rather than letting the model
+ * invent a case study. See lib/ai/cadence.ts.
+ */
+async function valueDropFor(
+  admin: Admin,
+  tenantId: string,
+  cache: Map<string, string | null>,
+): Promise<string | null> {
+  const hit = cache.get(tenantId);
+  if (hit !== undefined) return hit;
+
+  const { data } = await admin
+    .from("tenants")
+    .select("followup_value_drop")
+    .eq("id", tenantId)
+    .maybeSingle();
+
+  const text = (data as { followup_value_drop?: string | null } | null)?.followup_value_drop ?? null;
+  const value = text && text.trim() ? text.trim() : null;
+  cache.set(tenantId, value);
+  return value;
+}
+
+/**
+ * When this lead was quoted, and when that quote runs out.
+ *
+ * The cadence is anchored to the quote date so a slipped cron cannot compress the tail, and
+ * the expiry step needs the real date rather than an assertion — the window is seven days
+ * today and an asserted "tomorrow" would become a lie the moment somebody changed it.
+ */
+async function latestQuoteFor(
+  admin: Admin,
+  tenantId: string,
+  leadId: string,
+): Promise<{ createdAt: Date | null; expiresOn: string | null }> {
+  const { data } = await admin
+    .from("quotes")
+    .select("created_date, expires_date")
+    .eq("tenant_id", tenantId)
+    .eq("lead_id", leadId)
+    .order("created_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const row = data as { created_date?: string | null; expires_date?: string | null } | null;
+  const created = row?.created_date ? new Date(`${row.created_date}T00:00:00Z`) : null;
+  return {
+    createdAt: created && !Number.isNaN(created.getTime()) ? created : null,
+    expiresOn: row?.expires_date ?? null,
+  };
+}
+
+/**
+ * Write the next step of the cadence, or nothing when the sequence is finished.
+ *
+ * Safe to call after the current row has been closed — that is the point. One pending row per
+ * lead is enforced by a unique partial index, and the cadence being a step counter rather than
+ * four rows written on day one is what keeps that index intact. See lib/ai/cadence.ts.
+ */
+async function chainNextStep(
+  loop: { tenantId: string; leadId: string; step: number },
+  quotedAt: Date,
+  agentReason: string | null = null,
+): Promise<void> {
+  const next = nextStep(loop.step);
+  const at = nextStepAt(quotedAt, loop.step);
+  if (!next || !at) return; // cadence finished
+
+  const hours = Math.max(1, Math.round((at.getTime() - Date.now()) / 3_600_000));
+  await scheduleSalesLoop({
+    tenantId: loop.tenantId,
+    leadId: loop.leadId,
+    inHours: hours,
+    step: next.step,
+    channel: next.channel,
+    /* The agent's own words when it offered some — "you said you needed the 20-seat figure
+       before Thursday" beats anything a fixed schedule can produce. Its intent otherwise. */
+    triggerCondition: agentReason ?? next.intent,
+  });
 }
 
 interface CronResult {
@@ -113,6 +201,9 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
   /* Catalogue per tenant, fetched once and reused — the due list is usually one workspace and
      re-reading `items` per lead would be a query per follow-up for no new information. */
   const catalogueByTenant = new Map<string, CatalogueItemPrice[]>();
+  /* Cached per sweep for the same reason the catalogue is: a run usually touches one or two
+     tenants and this is one row each. */
+  const valueDropByTenant = new Map<string, string | null>();
 
   for (const loop of due) {
     try {
@@ -140,15 +231,28 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
 
       const lead = read.lead;
 
+      /* Read once and reused by decideStep, shouldNudge and the WhatsApp window check. Three
+         separate reads of "when did they last write" could disagree inside one iteration. */
+      const lastFromCustomer = await lastCustomerMessageAt({
+        tenantId: loop.tenantId,
+        leadId: loop.leadId,
+      });
+
+      /* The cadence is anchored to the QUOTE so a slipped cron cannot compress the tail — see
+         nextStepAt. Falls back to when the loop row was written, which is what the pre-cadence
+         rows have and is never later than the quote. */
+      const quoteRow = await latestQuoteFor(admin, loop.tenantId, loop.leadId);
+      const quotedAt = quoteRow.createdAt ?? loop.createdAt;
+      const quoteExpiresOn = quoteRow.expiresOn;
+
+      const valueDrop = await valueDropFor(admin, loop.tenantId, valueDropByTenant);
+
       const verdict = shouldNudge({
         stage: lead.stage,
         isJunk: lead.isJunk,
         requiresHumanAttention: lead.requiresHumanAttention,
         scheduledFrom: loop.createdAt,
-        lastCustomerMessageAt: await lastCustomerMessageAt({
-          tenantId: loop.tenantId,
-          leadId: loop.leadId,
-        }),
+        lastCustomerMessageAt: lastFromCustomer,
       });
 
       if (!verdict.nudge) {
@@ -170,11 +274,47 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
         continue;
       }
 
-      const channel = lead.contactEmail ? "email" : "whatsapp";
-      const contact = lead.contactEmail ?? lead.contactPhone;
-      if (!contact) {
+      /* ── WHICH STEP OF THE CADENCE, AND CAN IT GO? ─────────────────────────
+         `channel` used to be "email if there is an address, else WhatsApp". The cadence asks
+         for a specific channel per step, and WhatsApp has a rule that a ternary cannot express:
+         a free-form message more than 24 hours after the customer's last one is refused by
+         Meta unless it is an approved template. `decideStep` owns all of that, plus the
+         value-drop content check. See lib/ai/cadence.ts. */
+      const outcome = decideStep({
+        step: loop.step,
+        valueDropContent: valueDrop,
+        lastCustomerMessageAt: lastFromCustomer,
+        now,
+        /* No approved WhatsApp template exists on this deployment yet. When one does, this
+           becomes a lookup and WhatsApp goes back to being primary for step 2 without the
+           cadence changing. */
+        templateApproved: false,
+        hasEmail: Boolean(lead.contactEmail),
+        hasPhone: Boolean(lead.contactPhone),
+      });
+
+      if (!outcome.fire) {
         result.skipped++;
-        result.outcomes.push({ lead_id: loop.leadId, result: "skipped — no email or phone on the lead" });
+        result.outcomes.push({ lead_id: loop.leadId, result: `skipped — ${outcome.reason}` });
+        await closeLoop({ id: loop.id, tenantId: loop.tenantId, outcome: `no follow-up sent — ${outcome.reason}` });
+        await admin.from("lead_activities").insert({
+          tenant_id: loop.tenantId, lead_id: loop.leadId, kind: "note",
+          detail: `Follow-up step ${loop.step} not sent — ${outcome.reason}`,
+        });
+        /* A SKIP still advances the cadence — an empty value-drop slot costs the lead one
+           touch, not the rest of its sequence. A stop does not, because nothing can reach
+           this lead and a rescheduled row would cycle forever. */
+        if (outcome.skip) await chainNextStep(loop, quotedAt);
+        continue;
+      }
+
+      const channel = outcome.channel;
+      const contact = channel === "email" ? lead.contactEmail : lead.contactPhone;
+      if (!contact) {
+        /* Unreachable despite decideStep saying otherwise — belt and braces, because the two
+           reads happen at different moments and a contact can be cleared in between. */
+        result.skipped++;
+        result.outcomes.push({ lead_id: loop.leadId, result: "skipped — no contact for the chosen channel" });
         await closeLoop({
           id: loop.id,
           tenantId: loop.tenantId,
@@ -213,9 +353,20 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
           channel,
           existingQuoteId: null,
         },
-        incoming:
+        /* The brief now carries the STEP's intent as well as the loop's own reason, plus —
+           for the expiry step — the quote's real date. Nothing here asserts a date or a
+           price: `expiryFact` reads `quotes.expires_date`, and the volume rate is a published
+           rate card that does not expire. See cadence.ts for why both matter. */
+        incoming: [
           `[INTERNAL FOLLOW-UP BRIEF — the customer has not written since. Write a short, ` +
-          `useful follow-up. Do not pretend they replied.] ${loop.triggerCondition}`,
+            `useful follow-up. Do not pretend they replied.]`,
+          `Step ${outcome.step.step} of ${CADENCE.length}, going out on ${channel}.`,
+          outcome.step.intent,
+          outcome.channelNote ? `Channel note: ${outcome.channelNote}` : "",
+          outcome.step.kind === "value" && valueDrop ? `Our own write-up, use it as given:\n${valueDrop}` : "",
+          outcome.step.kind === "expiry" ? expiryFact(quoteExpiresOn, now) ?? "" : "",
+          loop.triggerCondition,
+        ].filter(Boolean).join("\n"),
         sellerName: "ANUTECH DIGITAL PVT LTD",
         sellerEmail: FROM_EMAIL,
       });
@@ -268,16 +419,17 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
         outcome: `follow-up ${dispatched.outcome} — ${dispatched.detail}`,
       });
 
-      /* Chain the next one only if the agent asked for it. It closed the previous row itself,
-         so there is no pending row to collide with the unique index. */
-      if (dispatched.followUp) {
-        await scheduleSalesLoop({
-          tenantId: loop.tenantId,
-          leadId: lead.id,
-          inHours: dispatched.followUp.inHours,
-          triggerCondition: dispatched.followUp.triggerCondition,
-        });
-      }
+      /* ── ADVANCE THE CADENCE ────────────────────────────────────────────────
+         The row above was closed, so there is no pending row to collide with the unique
+         index — which is the whole reason the cadence is a step counter rather than four rows
+         written on day one. See cadence.ts.
+
+         The CADENCE decides the next step, not the model. The agent's own `followUp` request
+         used to be the only source, and a model that forgot to ask meant the sequence silently
+         ended after one touch. Its trigger_condition is still used when it offered one, because
+         "you said you needed the 20-seat figure before Thursday" is better context than
+         anything a fixed schedule can produce. */
+      await chainNextStep(loop, quotedAt, dispatched.followUp?.triggerCondition ?? null);
     } catch (err) {
       /* One bad lead must not end the sweep. Twenty-four other customers are waiting behind
          it, and a throw here would leave every one of them pending until the next hour. */

@@ -28,6 +28,11 @@ export interface DueLoop {
   leadId: string;
   triggerCondition: string;
   createdAt: Date;
+  /** Which step of the cadence this row is — see lib/ai/cadence.ts. Defaults to 1 for every
+   *  row written before the cadence existed, which is exactly what those rows were. */
+  step: number;
+  /** The channel the step ASKED for. What actually carried it is decided at send time. */
+  channel: "email" | "whatsapp";
 }
 
 /**
@@ -49,6 +54,9 @@ export async function scheduleSalesLoop(args: {
   inHours: number;
   triggerCondition: string;
   now?: Date;
+  /** Cadence step this row represents. Omitted means the first — the pre-cadence behaviour. */
+  step?: number;
+  channel?: "email" | "whatsapp";
 }): Promise<boolean> {
   const db = bare();
   if (!db) return false;
@@ -70,6 +78,8 @@ export async function scheduleSalesLoop(args: {
     scheduled_at: loopDueAt(now, args.inHours).toISOString(),
     status: "pending",
     trigger_condition: args.triggerCondition,
+    step: args.step ?? 1,
+    channel: args.channel ?? "email",
   });
 
   if (error) {
@@ -119,6 +129,8 @@ interface DueRow {
   lead_id: string | null;
   trigger_condition: string | null;
   created_at: string | null;
+  step: number | null;
+  channel: string | null;
 }
 
 /**
@@ -135,7 +147,7 @@ export async function loadDueLoops(limit: number, now?: Date): Promise<DueLoop[]
 
   const { data, error } = await db
     .from("ai_sales_loops")
-    .select("id, tenant_id, lead_id, trigger_condition, created_at")
+    .select("id, tenant_id, lead_id, trigger_condition, created_at, step, channel")
     .eq("status", "pending")
     .lte("scheduled_at", (now ?? new Date()).toISOString())
     .order("scheduled_at", { ascending: true })
@@ -156,6 +168,10 @@ export async function loadDueLoops(limit: number, now?: Date): Promise<DueLoop[]
         leadId: r.lead_id,
         triggerCondition: r.trigger_condition ?? "no reason recorded",
         createdAt: r.created_at ? new Date(r.created_at) : new Date(0),
+        /* 1 and "email" for anything written before the cadence existed — which is what those
+           rows were: a single email nudge. */
+        step: typeof r.step === "number" && r.step >= 1 ? r.step : 1,
+        channel: r.channel === "whatsapp" ? "whatsapp" : "email",
       },
     ];
   });
