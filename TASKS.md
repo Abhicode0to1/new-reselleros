@@ -7,6 +7,130 @@
 
 ---
 
+# 🟢 HANDOFF — 25 Aug 2026 (शाम). Satrah feature, ek bhi migration nahi, aur chaar cheezein jo LIVE tooti hui hain.
+
+> Neeche isi din ka subah ka handoff hai, phir 24 Aug ka. **Yahan se "kya karna hai" lo. "Kyun"
+> par bharosa mat karo** — is file ke kaaran teen baar galat nateeje nikle hain, aur aaj bhi
+> mere hi do dawe naapne par galat nikle. Wo neeche `MAINE JO GALAT KAHA` me hain.
+>
+> **Sabse zaroori do minute:** seedha `🔴 LIVE TOOTA HUA` par jao. Baaki baad me padho.
+
+## 🔴 LIVE TOOTA HUA — inhe chhune se pehle jaan lo
+
+**1. `quoteIsWarranted` bina digit wale message par 30-seat quote paas karta hai.**
+`leads.seats` null ho aur model `seats_discussed: 30` de — *"poori team ke liye chahiye"* par,
+jis message me **ek bhi ank nahi hai** — to `quoteIsWarranted` **true** deta hai.
+[`quote-dispatcher.ts:313`](production/src/lib/ai/actions/quote-dispatcher.ts) model ke padhe
+number par gir jaata hai, aur neeche ka ek hi likhawat-guard `seatsHeardNotWritten` hai — jo
+**sirf voice note** ke liye hai. Naap kar dekha, andaza nahi.
+**Ab kam hai, khatam nahi:** `lib/ai/pipeline.ts` ka qualifier ise `HANDOVER` bana deta hai —
+**jab wo chalta hai.** Qualifier fail ho (Gemini null de) to purana raasta wapas aa jaata hai.
+👉 **Poora band karne ka matlab hai dispatcher ka seat resolution har channel ke liye badalna.
+Wo money code hai — CLAUDE.md §0.4 ke tehat plan + Pardeep ki haan chahiye. Maine jaan-boojh
+kar nahi chhua.**
+
+**2. Resend ka sending domain verified NAHI hai.**
+25 Aug ko `dunning.send` fail hua: `Resend 403 — "You can only send testing emails to your own
+email address (pardeep@anutech.in). To send emails to other recipients, please verify a
+domain"`. Key **set hai**, domain **nahi**. Iska matlab: customer ko koi bhi automated mail
+**jaata hi nahi, fail hota hai**.
+👉 Ye us baat ko sudhaarta hai jo maine aaj subah kahi thi (neeche dekho).
+
+**3. `leads.domain` webhook path par HAMESHA khaali hai.**
+28 lead, **har ek par NULL**. Wo column sirf trial aur public-checkout route bharte hain (form
+me poochha jaata hai). AI sales agent **inbound email/WhatsApp webhook** se bane leads par
+chalta hai, jo use kabhi nahi bharte.
+**Ek line se theek kiya** (`businessDomainFromEmail(args.customerContact)`) — par jaan lo ki
+**do "poore" feature do din andhere me thay**: domain observation aur switch/trade-in block.
+Dono ke test green thay. Test us line ko cover hi nahi karte thay.
+
+**4. Aath block sirf "dial set nahi hai" ki wajah se hain.**
+`ai_action_log` me 90 din: **33 drafted, 0 sent**, 23 held + 8 failed. Sabse aam rukawat —
+`no setting for this action, so its default "hold" applies`, **31 me 8 baar**.
+👉 Ye guard nahi hai. Ye **anset setting** hai. `/automation` par jaakar dial tay karo.
+
+## MAINE JO GALAT KAHA — aaj, aur naapne par pakda gaya
+
+**"RESEND_API_KEY set hai, isliye galat-price wala auto-quote ka risk live hai."**
+Aadha sach. Key set hai — par **domain verified nahi hai**, to wo quote customer tak *jaata
+hi nahi, 403 par marta*. Risk utna live nahi tha jitna maine kaha. `quote.send = hold` phir
+bhi sahi faisla hai, par wajah alag hai.
+
+**"`ai_autonomy` ke dials ke liye UI hi nahi hai."** — ye likhne se pehle grep ne galat sabit
+kar diya. Page hai: `/automation` (`src/app/(app)/automation/page.tsx`) + `/api/ai/autonomy`.
+**`/settings/automation` nahi hai** — maine wahi link likha tha aur `typedRoutes` ne typecheck
+par pakda.
+
+## Aaj kya bana — satrah commit, `anutech/deploy` se 32 aage
+
+Test **4,346 → 5,046** (+700), 256 file. **Koi migration nahi lagi** (kal chha lagi thi,
+drift 0 hai). Har commit par gate: typecheck 0 · test green · lint 0 · build exit 0.
+
+| Feature | File | Sabse zaroori baat |
+|---|---|---|
+| **3-stage pipeline** (SDR → price → close) | `lib/ai/pipeline.ts` | **Price stage `kind: "code"` hai aur test use wahan rokta hai.** Pricing agent chha guard ek saath paar karta hai |
+| Tone switching | `lib/ai/tone.ts` | Tone **kram badalta hai, dawa nahi jodta** — `leadWith ⊆ AUTHORISED_CLAIMS` test |
+| Trade-in / switch | `lib/ai/trade-in.ts` | Offer pehle se authorised tha ("free migration"); bas kabhi lead nahi kiya jaata tha |
+| **Disparagement guard** | `lib/ai/disparagement.ts` | *"Your legacy GoDaddy setup is outdated"* **har guard se nikal jaata tha** |
+| AI performance panel | `lib/ai/performance.ts` + `components/features/dashboard/ai-performance-card.tsx` | **0 send = `null`, `0%` nahi.** "Touched", "generated" nahi |
+| Lead grading | `lib/leads/grading.ts` | **Free mailbox negative signal NAHI hai** — wo customer hai jisne hamara product khareeda hi nahi |
+| Guard: minutes/seconds + Hindi din | `lib/ai/promise-check.ts` | "10 minutes", "aaj hi", "10 seconds" — sab pehle **safe** thay |
+
+### Prompt ke do virodh jo aaj theek hue (dono mere hi chhode hue)
+
+1. `WHAT YOU MAY PROMISE` me `no 3.5% foreign-currency card loading` tha, aur **usi prompt** me
+   net-cost block kehta tha `do NOT state what a card or bank charges`. Dono har us message par
+   maujood thay jisme product + seats thay. `3.5%` hataya (`net-cost.ts:21` — issuers
+   1.75%–3.5% lete hain, ek number jhoothi precision hai). `100%` ITC **bacha hai** — wo kanooni
+   haq hai, kisi aur ke bank ka andaza nahi.
+2. Trade-in block khud kehta tha `"runs on GoDaddy TODAY"` aur `"you MAY PROMISE"` — **dono
+   token `findPromises` refuse karta hai.** Wo **har switcher ki reply rok deta**.
+
+## 👉 PARDEEP KE LIYE — jo sirf tum kar sakte ho
+
+| # | Kaam | Kyun rukas hai |
+|---|---|---|
+| 1 | **Resend par domain verify karo** | Iske bina koi automated mail customer tak nahi jaata (403) |
+| 2 | **`/automation` par dial tay karo** | 8 block sirf "setting nahi hai" ki wajah se. `quote.send` abhi `hold` hai — jaan-boojh kar |
+| 3 | **Add-on catalogue banao** | Cross-sell ke liye — 25 item hain, **add-on ZERO**. Neeche dekho |
+| 4 | `tenants.followup_value_drop` ka paragraph likho | Cadence ka Day-4 step iske bina skip hota hai |
+| 5 | Razorpay **live** keys | Abhi `rzp_test_` hai; `decideProvisioning` test key par mana karta hai |
+| 6 | `SARVAM_API_KEY` | Voice note transcription |
+| 7 | Google CSP application | **Shuru bhi nahi hui.** Iska matlab: AI **"official Google Partner" nahi keh sakta** (guard lagaya hai) |
+| 8 | Cloud Scheduler jobs | `ai-support-sla`, `ai-telecall-renewals` |
+| 9 | Telephony partner email | Exotel / Plivo / Ozonetel — draft ban chuka hai |
+| 10 | **Deploy** | 32 commit aage |
+
+## Catalogue ki do gadbad jo cross-sell rokti hain
+
+**Add-on ek bhi nahi.** 25 item, **saare `kind='main'`**. `loadSalesCatalog` `kind='main'` par
+filter karta hai *taki add-on bahar rahein* — aur add-on hai hi nahi, to filter abhi no-op hai.
+Par wajah asli hai: **add-on per-seat priced nahi hote**, to unhe per-seat quote karna wahi
+barah-guna class ki galti hai.
+
+**Aur saat item ke naam bare tier hain:** `Basic` ₹250, `Free` ₹0, `Moderate` ₹667, `Premium`
+₹1667, `Standard` ₹125 (hosting), `Starter` ₹50 (hosting), `Plus` ₹187 (hosting) — sab
+`kind='main'`. **`Starter` ₹50 (hosting) theek `Google Workspace Business Starter` ₹270 ke
+paas baitha hai**, aur `resolveItem` **exact name match** karta hai. Agar kisi lead ka
+`plan` bas `"Starter"` hua, wo ₹50 wale hosting item se match karega.
+👉 **Ye jaancha jaana chahiye.** Maine naam nahi badle — item ke naam badalna commercial
+faisla hai, cleanup nahi.
+
+## Aaj ka pattern — agli session ke liye
+
+**Satrah feature me se pandrah me kuch aisa mila jo theek dikhta tha aur theek nahi tha.** Ye
+sanyog nahi. Teen baar ka dohraav:
+
+1. **Prompt ka nirdesh guard nahi hota.** `MIGRATION_CLAIMS_FORBIDDEN` "current provider bad"
+   mana karta tha — aur wo vaakya har check se nikal jaata tha.
+2. **Green test ka matlab "chal raha hai" nahi hota.** Do feature do din andhere me thay, saare
+   test green.
+3. **Mutation test me green ke do matlab hote hain** — guard theek hai, *ya* mutation lagi hi
+   nahi. Aaj teen baar sed/perl/`node -e` ne backslash kha kar chup-chaap kuch nahi badla.
+   **Har mutation ke baad `diff` se naapo, test se pehle.**
+
+---
+
 # 🟢 HANDOFF — 25 Aug 2026. AI Telecalling agent bana, migration lagi, aur auto-quote ka brake laga.
 
 > Neeche 24 Aug ka handoff hai. **"Kya karna hai" lo, "kyun" par bharosa mat karo** — is file
