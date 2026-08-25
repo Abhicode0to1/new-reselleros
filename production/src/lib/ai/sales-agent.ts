@@ -43,7 +43,8 @@
 import { z } from "zod";
 import { verifyDraftMoney } from "./money-guard";
 import { findPromises } from "./promise-check";
-import { CUSTOM_PRICING_ABOVE, authorisedRatesForItem, slabLines } from "@/lib/pricing/volume-slabs";
+import { CUSTOM_PRICING_ABOVE, authorisedRatesForItem, discountedRate, slabFor, slabLines } from "@/lib/pricing/volume-slabs";
+import { authorisedNetCostFigures, computeNetCost, netCostLines } from "@/lib/pricing/net-cost";
 
 /**
  * Deals above this many seats are not auto-quoted, whatever the model thinks.
@@ -160,6 +161,13 @@ export interface SalesAgentLeadFacts {
   channel: SalesChannel;
   /** Quote id already on this lead, if any. Stops the agent quoting twice. */
   existingQuoteId: string | null;
+  /**
+   * `leads.gstin`. Decides whether the input-tax-credit line may be stated AT ALL.
+   *
+   * Measured on production 25 Aug 2026: 16 of 28 leads have none. ITC is worth nothing to an
+   * unregistered business, so this is not a nicety — see lib/pricing/net-cost.ts.
+   */
+  gstin?: string | null;
 }
 
 /**
@@ -365,6 +373,12 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
 
   const history = args.history.slice(-MAX_CONTEXT_TURNS);
 
+  /* Computed once and used twice — the sentences go in the prompt, the figures go in
+     allowedMoney. Null when there is nothing to price yet (no product or no seat count), in
+     which case the block is omitted entirely rather than rendered empty. */
+  const netCost = netCostFactsFor(catalog, lead, sellerName);
+  const netCostBlock = netCost?.lines ?? null;
+
   const catalogueLines = catalog.map(
     (c) =>
       `- ${c.name} (${c.vendor}) — customer pays ${rupees(c.msrpPerSeatPerYear)} per seat per year` +
@@ -420,6 +434,22 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
     "AUTHORISED TOTALS (already worked out for you — state these, never your own arithmetic)",
     totalLines,
     "",
+    /* The net-cost block. Finished SENTENCES, not figures for the model to assemble — the same
+       discipline as the totals above, and for a sharper reason: the brief for this asked the
+       agent to compare us with buying direct from Google, quote a 3.5% card fee and price a
+       free migration at ₹15,000. Those are claims about a competitor's tax treatment, about
+       the customer's own bank, and about a product with no SKU. See lib/pricing/net-cost.ts.
+       The model gets what our own invoice says and nothing else. */
+    ...(netCostBlock
+      ? [
+          "WHAT THIS COSTS THEM, NET (state these sentences as written, or not at all)",
+          netCostBlock.join("\n"),
+          "Do NOT compare this with buying direct from any vendor, do NOT state what a card or",
+          "bank charges, and do NOT put a rupee value on anything we include for free. You do",
+          "not know their bank, their vendor's invoicing entity, or what migration is worth.",
+        ]
+      : []),
+    "",
     "CONVERSATION SO FAR (oldest first)",
     transcript,
     "",
@@ -445,6 +475,10 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
         authorisedRatesForItem(c.msrpPerSeatPerYear, c.wholesalePerSeatPerYear),
       ),
       ...totals,
+      /* The net-cost figures, from the SAME computation that wrote the sentences above. A
+         guard that flagged the payable amount it had just told the agent to state would hand
+         over every quote that mentioned it. */
+      ...(netCost?.figures ?? []),
     ],
     authorisedTotals: [...totals],
   };
@@ -705,4 +739,47 @@ export function authorisedTotalsFor(
   const item = catalog.find((c) => c.name === lead.plan);
   if (!item) return [];
   return [item.msrpPerSeatPerYear * lead.seats];
+}
+
+/**
+ * What this lead would actually pay, and what they could reclaim of it.
+ *
+ * ─── ONE COMPUTATION, THREE CONSUMERS ───────────────────────────────────────
+ * The sentences the agent may state, the figures the money guard authorises, and the
+ * arithmetic behind both come from here. Building the allow-list separately from the prose is
+ * how 24 Aug happened: the guard measured a draft against numbers from a different source and
+ * approved one below our own cost.
+ *
+ * The seat count and product come off the LEAD, the rate comes off the catalogue read at call
+ * time, and the discount comes off the volume rate card. So the net-cost block cannot disagree
+ * with the quote the same lead would produce — they are the same three inputs.
+ *
+ * Returns null when there is nothing to price yet: no product, no seat count, or a product
+ * that is not in this tenant's catalogue. A "net cost" for a deal whose shape nobody knows
+ * would be a confident number about nothing.
+ */
+export function netCostFactsFor(
+  catalog: readonly SalesCatalogEntry[],
+  lead: { plan: string | null; seats: number | null; gstin?: string | null },
+  sellerName: string,
+): { lines: string[]; figures: number[] } | null {
+  if (!lead.plan || lead.seats === null || lead.seats <= 0) return null;
+  const item = catalog.find((c) => c.name === lead.plan);
+  if (!item) return null;
+
+  const slab = slabFor(lead.seats);
+  const priced =
+    slab.kind === "slab"
+      ? discountedRate(item.msrpPerSeatPerYear, slab.slab.percent, item.wholesalePerSeatPerYear)
+      : { appliedPercent: 0 };
+
+  const net = computeNetCost({
+    subtotal: item.msrpPerSeatPerYear * lead.seats,
+    discountPct: priced.appliedPercent,
+    /* 18% — SaaS under HSN 998313 (CLAUDE.md §13), the same rate the quote writes. */
+    taxRate: 18,
+    buyerGstin: lead.gstin,
+  });
+
+  return { lines: netCostLines(net, sellerName), figures: authorisedNetCostFigures(net) };
 }

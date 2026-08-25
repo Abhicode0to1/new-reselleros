@@ -98,7 +98,7 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
      values. */
   const { data: leadRow } = await args.admin
     .from("leads")
-    .select("company, contact_name, seats, plan")
+    .select("company, contact_name, seats, plan, gstin")
     .eq("id", args.leadId)
     .eq("tenant_id", args.tenantId)
     .maybeSingle();
@@ -108,6 +108,7 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
     contact_name?: string | null;
     seats?: number | null;
     plan?: string | null;
+    gstin?: string | null;
   };
   const company = lead.company ?? "Customer";
   const contactName = lead.contact_name ?? "";
@@ -146,6 +147,7 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
       customerContact: args.customerContact,
       channel: args.channel,
       existingQuoteId: quote.id,
+      gstin: lead.gstin ?? null,
     },
     incoming: args.incoming,
     sellerName: args.sellerName,

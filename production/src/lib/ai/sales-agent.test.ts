@@ -117,9 +117,78 @@ describe("the prompt carries the catalogue and nothing it should not", () => {
        CORRECTLY must not be flagged as unauthorised — that would hand over every 21+ seat
        deal. The rule this test exists for is unchanged and is asserted below: our own buying
        price is still absent, and `discountedRate` refuses any discount that would land on it. */
-    expect(p.allowedMoney).toEqual([270, 261, 256, 864, 838, 820]);
+    /* The tail three arrived with the net-cost block: 12 seats × ₹270 = ₹3,240 taxable, ₹583
+       GST, ₹3,823 payable. Same reasoning as the slab rates — a figure the app told the agent
+       to state must not then be flagged by the guard measuring what it said.
+
+       The rule this test is named for is unchanged and is what the two assertions below check:
+       our buying price is still absent. */
+    expect(p.allowedMoney).toEqual([270, 261, 256, 864, 838, 820, 3823, 583, 3240]);
     expect(p.allowedMoney).not.toContain(110);
     expect(p.allowedMoney).not.toContain(620);
+  });
+
+  it("authorises no ITC figure for a lead with no GSTIN", () => {
+    /* 16 of 28 production leads have none, and this fixture is one of them. An unregistered
+       business cannot claim input tax credit, so there must be nothing in the allow-list that
+       would let the agent state a claimable amount for them. */
+    const p = buildSalesAgentPrompt({
+      lead: LEAD,
+      history: [],
+      incoming: "How much?",
+      catalog: CATALOGUE,
+      sellerName: "ANUTECH",
+      sellerEmail: "sales@anutech.in",
+    });
+    expect(p.user).toContain("Share your GSTIN");
+    expect(p.user).not.toContain("claim back as input tax credit");
+  });
+
+  it("states the claimable GST once a valid GSTIN is on the lead", () => {
+    const p = buildSalesAgentPrompt({
+      lead: { ...LEAD, gstin: "07ABDCA0298H1ZP" },
+      history: [],
+      incoming: "How much?",
+      catalog: CATALOGUE,
+      sellerName: "ANUTECH",
+      sellerEmail: "sales@anutech.in",
+    });
+    expect(p.user).toContain("claim back as input tax credit");
+    expect(p.user).toContain("Rs 583");
+    /* Net of the reclaimable GST, 3,823 − 583. */
+    expect(p.allowedMoney).toContain(3_240);
+  });
+
+  it("forbids the comparison the brief asked for, in the prompt itself", () => {
+    /* The block was specified as "Direct Google se … Reverse Charge GST … ITC claim nahi
+       milta" plus a 3.5% card fee and a ₹15,000 migration value. Those are claims about a
+       competitor's invoicing entity, about the customer's bank, and about a product with no
+       SKU — so the prompt tells the model not to make any of them. */
+    const p = buildSalesAgentPrompt({
+      lead: { ...LEAD, gstin: "07ABDCA0298H1ZP" },
+      history: [],
+      incoming: "How much?",
+      catalog: CATALOGUE,
+      sellerName: "ANUTECH",
+      sellerEmail: "sales@anutech.in",
+    });
+    expect(p.user).toContain("Do NOT compare this with buying direct from any vendor");
+    expect(p.user).toContain("do NOT state what a card or");
+    expect(p.user).toContain("do NOT put a rupee value on anything we include for free");
+  });
+
+  it("omits the block entirely when there is nothing to price yet", () => {
+    /* No seat count means no deal shape, and a "net cost" for a deal nobody has described
+       would be a confident number about nothing. */
+    const p = buildSalesAgentPrompt({
+      lead: { ...LEAD, seats: null },
+      history: [],
+      incoming: "How much?",
+      catalog: CATALOGUE,
+      sellerName: "ANUTECH",
+      sellerEmail: "sales@anutech.in",
+    });
+    expect(p.user).not.toContain("WHAT THIS COSTS THEM, NET");
   });
 
   it("never authorises a discounted rate that equals our cost", () => {
