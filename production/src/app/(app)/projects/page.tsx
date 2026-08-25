@@ -192,7 +192,7 @@ function ProjectCard({ project, onOpen }: { project: ProjectSaleWithTotals; onOp
               {project.start_date ? formatDate(project.start_date) : "—"} → {project.target_date ? formatDate(project.target_date) : "—"}
             </span>
             {project.target_date && !done && daysLeft != null && (
-              <span className={`text-3xs font-medium rounded-full px-1.5 py-0.5 ${daysLeft < 0 ? "bg-rose-soft text-rose" : daysLeft <= 7 ? "bg-amber-soft text-amber-ink" : "bg-emerald-soft text-emerald"}`}>
+              <span className={`text-3xs font-medium rounded-full px-1.5 py-0.5 ${daysLeft < 0 ? "bg-rose-soft text-rose-ink" : daysLeft <= 7 ? "bg-amber-soft text-amber-ink" : "bg-emerald-soft text-emerald"}`}>
                 {daysLeft < 0 ? `${-daysLeft}d overdue` : daysLeft === 0 ? "due today" : `${daysLeft}d left`}
               </span>
             )}

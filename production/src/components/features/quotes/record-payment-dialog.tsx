@@ -784,7 +784,7 @@ export function RecordPaymentDialog({
 
           {/* Warning for over-payment */}
           {willBeOverpaid && (
-            <div className="rounded-md bg-rose-soft border border-rose/30 px-3 py-2 text-xs text-rose flex items-start gap-2">
+            <div className="rounded-md bg-rose-soft border border-rose/30 px-3 py-2 text-xs text-rose-ink flex items-start gap-2">
               <Icon name="alert" size={13} className="flex-shrink-0 mt-0.5" />
               <span>
                 Amount exceeds remaining ({rupee(remaining)}). You're recording an excess payment —

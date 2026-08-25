@@ -441,7 +441,7 @@ export default function SupportPage() {
                   <SlaBadge tier={selected.tier} dueAt={selected.sla_due_at} respondedAt={selected.first_responded_at} />
                   {selected.priority && (
                     <span className={`text-xs font-semibold capitalize px-2 py-0.5 rounded ${
-                      selected.priority === "urgent" || selected.priority === "high" ? "bg-rose-soft text-rose" : "bg-amber-soft text-amber-ink"
+                      selected.priority === "urgent" || selected.priority === "high" ? "bg-rose-soft text-rose-ink" : "bg-amber-soft text-amber-ink"
                     }`}>
                       Priority: {selected.priority}
                     </span>

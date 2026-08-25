@@ -220,14 +220,14 @@ function PortalLoginInner() {
         </div>
 
         {(error === "no_customer" || preNoCustomer) && (
-          <div className="mb-4 p-3 bg-rose-soft border border-rose/30 rounded-md text-xs text-rose">
+          <div className="mb-4 p-3 bg-rose-soft border border-rose/30 rounded-md text-xs text-rose-ink">
             We couldn&apos;t find a customer account with that email. Please use the
             same email address you provided when ordering. If you&apos;re sure it&apos;s
             right, contact the business you purchased from.
           </div>
         )}
         {error === "auth_failed" && step === "email" && (
-          <div className="mb-4 p-3 bg-rose-soft border border-rose/30 rounded-md text-xs text-rose">
+          <div className="mb-4 p-3 bg-rose-soft border border-rose/30 rounded-md text-xs text-rose-ink">
             Your sign-in session expired. Please request a new code below.
           </div>
         )}

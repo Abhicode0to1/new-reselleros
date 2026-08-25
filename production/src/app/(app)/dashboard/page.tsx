@@ -693,7 +693,7 @@ function FocusRow({
           tone === "indigo"  && "bg-indigo-soft text-indigo",
           tone === "amber"   && "bg-amber-soft text-amber-ink",
           tone === "emerald" && "bg-emerald-soft text-emerald",
-          tone === "rose"    && "bg-rose-soft text-rose",
+          tone === "rose"    && "bg-rose-soft text-rose-ink",
         )}
       >
         <Icon name={icon} size={14} />
@@ -727,7 +727,7 @@ function ChaseRow({
         "w-7 h-7 rounded-md grid place-items-center",
         tone === "emerald" && "bg-emerald-soft text-emerald",
         tone === "amber"   && "bg-amber-soft text-amber-ink",
-        tone === "rose"    && "bg-rose-soft text-rose",
+        tone === "rose"    && "bg-rose-soft text-rose-ink",
       )}>
         <Icon name={icon} size={14} />
       </div>
@@ -751,7 +751,7 @@ function ActivityRow({ icon, tone, title, time }: { icon: string; tone: string; 
         tone === "indigo"  && "bg-indigo-soft text-indigo",
         tone === "amber"   && "bg-amber-soft text-amber-ink",
         tone === "emerald" && "bg-emerald-soft text-emerald",
-        tone === "rose"    && "bg-rose-soft text-rose",
+        tone === "rose"    && "bg-rose-soft text-rose-ink",
         tone === "slate"   && "bg-slate-soft text-slate",
       )}>
         <Icon name={icon} size={12} />

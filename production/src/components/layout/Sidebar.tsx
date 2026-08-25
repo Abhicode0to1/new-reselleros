@@ -161,10 +161,15 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                   : <Icon name={it.icon} size={15} className={cn("flex-shrink-0", isActive ? "text-amber" : "text-ink-3 group-hover:text-ink-2")} />}
                 {!collapsed && <span className="flex-1 truncate" title={it.label}>{it.label}</span>}
                 {!collapsed && it.external && <Icon name="external" size={12} className="flex-shrink-0 text-ink-3" />}
+                {/* The expanded badge reads text-amber-ink, matching every other `bg-amber/15` badge
+                    in the app (dashboard:865, mobile:404, platform:398). This one was the exception:
+                    it measured 4.30:1 against the active row's amber-soft, under the 4.5 AA floor at
+                    10px — and actually worse than that, because the badge's own 15% amber tint darkens
+                    the very surface the measurement stopped at. */}
                 {b && (collapsed ? (
                   <span className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-amber" />
                 ) : (
-                  <span className={cn("text-3xs px-1.5 py-0.5 rounded-full tabular-nums flex-shrink-0", isActive ? "bg-amber/15 text-amber" : "bg-paper-2 text-ink-3")}>
+                  <span className={cn("text-3xs px-1.5 py-0.5 rounded-full tabular-nums flex-shrink-0", isActive ? "bg-amber/15 text-amber-ink" : "bg-paper-2 text-ink-3")}>
                     {b}
                   </span>
                 ))}

@@ -51,9 +51,9 @@ export function ActivityTimeline({ events, compact = false, className }: Activit
                 "absolute -left-7 top-0.5 w-6 h-6 rounded-full",
                 "grid place-items-center ring-2 ring-paper",
                 kind === "indigo" && "bg-indigo-soft text-indigo",
-                kind === "amber" && "bg-amber-soft text-amber",
+                kind === "amber" && "bg-amber-soft text-amber-ink",
                 kind === "emerald" && "bg-emerald-soft text-emerald",
-                kind === "rose" && "bg-rose-soft text-rose",
+                kind === "rose" && "bg-rose-soft text-rose-ink",
                 kind === "slate" && "bg-slate-soft text-slate"
               )}
             >

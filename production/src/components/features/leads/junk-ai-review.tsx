@@ -97,7 +97,7 @@ export function JunkAIReview({ leads }: { leads: Lead[] }) {
                     <span
                       className={cn(
                         "shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-3xs font-semibold",
-                        v.suspect ? "bg-rose-soft text-rose" : "bg-emerald-soft text-emerald",
+                        v.suspect ? "bg-rose-soft text-rose-ink" : "bg-emerald-soft text-emerald",
                       )}
                     >
                       {v.suspect ? "Junk" : "Genuine"}

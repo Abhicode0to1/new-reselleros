@@ -1729,7 +1729,7 @@ function BucketTile({ label, count, amount, tone }: {
     tone === "emerald"   ? "bg-emerald-soft border-emerald/30 text-emerald" :
     tone === "amber"     ? "bg-amber-soft border-amber/30 text-amber-ink" :
     tone === "rose-soft" ? "bg-rose-soft border-rose/30 text-amber-ink" :
-                           "bg-rose-soft border-rose/40 text-rose";
+                           "bg-rose-soft border-rose/40 text-rose-ink";
   return (
     <div className={`rounded-md border ${styles} p-3`}>
       <div className="text-3xs uppercase tracking-wider font-semibold opacity-80">{label}</div>

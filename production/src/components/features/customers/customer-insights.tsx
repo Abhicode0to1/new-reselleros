@@ -303,7 +303,7 @@ export function CustomerMetricBar({ insights, customerId }: {
 
 const NBA_TONE: Record<Nba["tone"], { wrap: string; icon: string }> = {
   danger:  { wrap: "border-rose/30 bg-rose/5",         icon: "text-rose" },
-  warning: { wrap: "border-amber/30 bg-amber-soft/40", icon: "text-amber" },
+  warning: { wrap: "border-amber/30 bg-amber-soft/40", icon: "text-amber-ink" },
   info:    { wrap: "border-indigo/30 bg-indigo/5",     icon: "text-indigo" },
   success: { wrap: "border-emerald/30 bg-emerald/5",   icon: "text-emerald" },
 };

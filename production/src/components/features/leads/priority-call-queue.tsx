@@ -235,8 +235,13 @@ export function PriorityCallQueue({
             {queue.overdueCount} late
           </Badge>
         )}
+        {/* amber-ink, not `text-primary`. That alias resolves to --amber, and this row sits
+            on `bg-amber/5` over paper — composited, rgb(248,240,233) — where amber reads
+            4.22:1 at 11px against a 4.5 floor. Worth knowing: `text-primary` is a
+            shadcn-compat alias for the same colour under another name, which is why a grep
+            for `text-amber` never found this, and there is no `primary-ink` to reach for. */}
         {!open && (
-          <span className="shrink-0 text-2xs font-semibold text-primary">Show</span>
+          <span className="shrink-0 text-2xs font-semibold text-amber-ink">Show</span>
         )}
       </button>
 

@@ -1137,7 +1137,7 @@ export function QuoteBuilder() {
 
       {/* Loss-making quote guardrail */}
       {lineItems.length > 0 && margin.margin < 0 && (
-        <div className="mb-3 p-3.5 bg-rose-soft border border-rose/60 rounded-lg text-xs font-medium text-rose flex items-center gap-2.5 shadow-sm">
+        <div className="mb-3 p-3.5 bg-rose-soft border border-rose/60 rounded-lg text-xs font-medium text-rose-ink flex items-center gap-2.5 shadow-sm">
           <Icon name="alert" size={18} className="shrink-0 text-rose" />
           <div>
             <b>⚠️ LOSS-MAKING QUOTE WARNING:</b> Your total quote price ({fmtDispC(taxable)}) is lower than wholesale cost ({fmtDispC(totalCost)}). Net Loss: {fmtDispC(Math.abs(margin.margin))}. Please review line item pricing before sending.

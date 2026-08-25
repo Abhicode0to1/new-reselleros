@@ -219,8 +219,8 @@ export function NotificationPanel({
                       "w-8 h-8 rounded-full grid place-items-center flex-shrink-0",
                       n.tone === "emerald" && "bg-emerald-soft text-emerald",
                       n.tone === "indigo" && "bg-indigo-soft text-indigo",
-                      n.tone === "amber" && "bg-amber-soft text-amber",
-                      n.tone === "rose" && "bg-rose-soft text-rose",
+                      n.tone === "amber" && "bg-amber-soft text-amber-ink",
+                      n.tone === "rose" && "bg-rose-soft text-rose-ink",
                       n.tone === "slate" && "bg-slate-soft text-slate",
                     )}
                   >

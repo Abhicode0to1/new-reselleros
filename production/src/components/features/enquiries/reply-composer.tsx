@@ -178,7 +178,7 @@ export function ReplyComposer({
         <p className={cn(
           "mb-2.5 rounded-md border px-2.5 py-1.5 text-[12px] leading-snug",
           repliedIsProblem(state)
-            ? "border-rose bg-rose-soft text-rose"
+            ? "border-rose bg-rose-soft text-rose-ink"
             : "border-hairline bg-paper text-ink-2",
         )}>
           {note}

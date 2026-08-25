@@ -449,7 +449,7 @@ export default function TdsYearEndPage() {
               <span className="text-xs px-2.5 py-1 rounded-full bg-amber-soft text-amber-ink font-semibold">
                 {matchResults.filter((r) => r.status === "amount-mismatch").length} amount mismatch
               </span>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-rose-soft text-rose font-semibold">
+              <span className="text-xs px-2.5 py-1 rounded-full bg-rose-soft text-rose-ink font-semibold">
                 {matchResults.filter((r) => r.status === "no-match-in-system").length} not in system
               </span>
               <div className="ml-auto">

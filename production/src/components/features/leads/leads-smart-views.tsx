@@ -197,7 +197,7 @@ export function LeadsSmartViews({
           )}
           {showOverdueAlert && (
             <span
-              className="ml-0.5 inline-flex items-center gap-1 rounded-full bg-rose-soft px-1.5 py-0.5 text-3xs font-semibold text-rose tabular-nums"
+              className="ml-0.5 inline-flex items-center gap-1 rounded-full bg-rose-soft px-1.5 py-0.5 text-3xs font-semibold text-rose-ink tabular-nums"
               title={`${overdue} lead${overdue === 1 ? "" : "s"} past their follow-up date`}
             >
               {overdue} overdue

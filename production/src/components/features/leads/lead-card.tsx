@@ -78,7 +78,7 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
               title={`${intent.label} — ${intent.reason}`}
               className={cn(
                 "px-1 py-0.5 rounded text-3xs font-bold leading-none",
-                intent.tier === "hot"  && "bg-rose-soft text-rose",
+                intent.tier === "hot"  && "bg-rose-soft text-rose-ink",
                 intent.tier === "warm" && "bg-amber-soft text-amber-ink",
                 intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
               )}

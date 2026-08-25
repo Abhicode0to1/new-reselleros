@@ -822,7 +822,12 @@ function LeadsPageInner() {
             aria-pressed={smartView === "junk"}
             title="Binned as spam, fake or non-commercial — kept, never deleted"
             className={cn(
-              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
+              /* `border border-transparent` in the BASE, not just on the selected variant.
+                 Measured: a selected chip was 26px tall and an idle one 24px, because only
+                 the selected variant carried a border — so every click nudged the whole row
+                 2px and the strip twitched under the cursor. The transparent border reserves
+                 the space; twMerge lets the selected variant's border-hairline win the colour. */
+              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border border-transparent",
               smartView === "junk"
                 ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
                 : junkCount === 0
@@ -848,7 +853,12 @@ function LeadsPageInner() {
                21 Aug about exactly this: 19 leads, 17 shown, the 2 won ones off-screen. */
             title={`Inbox + In Talks + Quote Sent + Demo/Trial. Every open lead is in exactly one of those four. Won (${folderCounts.won}) and Lost (${folderCounts.lost}) are closed, so they are not counted here — scroll the strip to reach them.`}
             className={cn(
-              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
+              /* `border border-transparent` in the BASE, not just on the selected variant.
+                 Measured: a selected chip was 26px tall and an idle one 24px, because only
+                 the selected variant carried a border — so every click nudged the whole row
+                 2px and the strip twitched under the cursor. The transparent border reserves
+                 the space; twMerge lets the selected variant's border-hairline win the colour. */
+              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border border-transparent",
               /* `folder` alone is not enough: the Junk view leaves folder at "all", and
                  checking only folder lit this chip AND Junk together — two highlighted
                  chips over one list. Browser-caught, not reasoned. */
@@ -880,7 +890,12 @@ function LeadsPageInner() {
                 aria-pressed={folder === f.id}
                 title={count === 0 ? f.hint : undefined}
                 className={cn(
-                  "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap",
+                  /* `border border-transparent` in the BASE, not just on the selected variant.
+                 Measured: a selected chip was 26px tall and an idle one 24px, because only
+                 the selected variant carried a border — so every click nudged the whole row
+                 2px and the strip twitched under the cursor. The transparent border reserves
+                 the space; twMerge lets the selected variant's border-hairline win the colour. */
+              "px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border border-transparent",
                   folder === f.id
                     ? "bg-paper text-ink shadow-xs border border-hairline font-bold"
                     : count === 0
@@ -904,7 +919,10 @@ function LeadsPageInner() {
               lenses over the folders above, not places beside them. Do not add them
               to anything. */}
           <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-hairline" />
-          <span className="shrink-0 text-3xs font-bold uppercase tracking-wider text-ink-4 select-none">
+          {/* ink-3, not ink-4. This is a content label, and ink-4 is the placeholder tone:
+              on paper-2 it measures 2.17:1 where AA wants 4.5. ink-3 reads 4.79. The other
+              ink-4 uses on this page are genuine placeholders and em-dashes, and keep it. */}
+          <span className="shrink-0 text-3xs font-bold uppercase tracking-wider text-ink-3 select-none">
             Filter
           </span>
           {SALES_FLAGS.map((f) => {
@@ -940,7 +958,7 @@ function LeadsPageInner() {
                 {late > 0 && (
                   <span
                     title={`${late} already overdue, not just due today`}
-                    className="px-1.5 py-0.2 rounded-full text-3xs bg-rose-soft text-rose font-mono tabular-nums font-bold"
+                    className="px-1.5 py-0.2 rounded-full text-3xs bg-rose-soft text-rose-ink font-mono tabular-nums font-bold"
                   >
                     {late} late
                   </span>
@@ -3879,7 +3897,7 @@ function LeadListView({
                           title={`${intent.label} — ${intent.reason}`}
                           className={cn(
                             "shrink-0 inline-flex items-center gap-0.5 rounded-full text-3xs font-semibold px-1.5 py-0.5 leading-none cursor-help",
-                            intent.tier === "hot"  && "bg-rose-soft text-rose",
+                            intent.tier === "hot"  && "bg-rose-soft text-rose-ink",
                             intent.tier === "warm" && "bg-amber-soft text-amber-ink",
                             intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
                           )}
@@ -3915,7 +3933,7 @@ function LeadListView({
                         return (
                           <span className={cn(
                             "mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium",
-                            tk.overdue ? "bg-rose-soft text-rose" : "bg-amber-soft text-amber-ink",
+                            tk.overdue ? "bg-rose-soft text-rose-ink" : "bg-amber-soft text-amber-ink",
                           )}>
                             <Icon name="clock" size={10} />
                             {tk.overdue ? "Task overdue" : "Task"} · {formatDate(tk.due)}
@@ -3972,7 +3990,7 @@ function LeadListView({
                           title={a.title}
                           className={cn(
                             "shrink-0 rounded px-1 py-px text-3xs font-semibold tabular-nums leading-none",
-                            a.stale ? "bg-rose-soft text-rose" : "text-ink-4",
+                            a.stale ? "bg-rose-soft text-rose-ink" : "text-ink-4",
                           )}
                         >
                           {a.days}d
@@ -4033,7 +4051,7 @@ function LeadListView({
                                   title={b.title}
                                   className={cn(
                                     "shrink-0 rounded px-1 py-px text-3xs font-semibold tabular-nums leading-none",
-                                    b.kind === "danger"  && "bg-rose-soft text-rose",
+                                    b.kind === "danger"  && "bg-rose-soft text-rose-ink",
                                     b.kind === "warning" && "bg-amber-soft text-amber-ink",
                                     b.kind === "success" && "bg-paper-2 text-ink-3",
                                   )}

@@ -150,7 +150,7 @@ function IdentifyStep({
         </FormField>
 
         {err && (
-          <div className="rounded-md border border-rose/40 bg-rose-soft px-3 py-2 text-sm text-rose">{err}</div>
+          <div className="rounded-md border border-rose/40 bg-rose-soft px-3 py-2 text-sm text-rose-ink">{err}</div>
         )}
 
         <Button type="submit" variant="primary" className="w-full" loading={busy}>Continue</Button>
@@ -359,7 +359,7 @@ function LogStep({
           )}
 
           {err && (
-            <div className="rounded-md border border-rose/40 bg-rose-soft px-3 py-2 text-sm text-rose">{err}</div>
+            <div className="rounded-md border border-rose/40 bg-rose-soft px-3 py-2 text-sm text-rose-ink">{err}</div>
           )}
           {flash && (
             <div className="rounded-md border border-emerald/30 bg-emerald-soft px-3 py-2 text-sm text-emerald">{flash} ✓</div>

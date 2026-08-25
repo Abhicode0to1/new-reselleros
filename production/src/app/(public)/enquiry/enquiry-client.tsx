@@ -205,7 +205,7 @@ export function EnquiryClient({
                 </FormField>
 
                 {serverError && (
-                  <div className="rounded-md border border-rose/40 bg-rose-soft px-3 py-2 text-sm text-rose">
+                  <div className="rounded-md border border-rose/40 bg-rose-soft px-3 py-2 text-sm text-rose-ink">
                     {serverError}
                   </div>
                 )}

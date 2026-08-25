@@ -1980,7 +1980,7 @@ function LeaveDialog({ employees, onClose }: { employees: Employee[]; onClose: (
             </div>
           )}
           {wouldExceed && (
-            <div className="rounded-md bg-rose-soft border border-rose/30 px-3 py-2 text-2xs text-rose flex items-start gap-2">
+            <div className="rounded-md bg-rose-soft border border-rose/30 px-3 py-2 text-2xs text-rose-ink flex items-start gap-2">
               <Icon name="alert" size={13} className="flex-shrink-0 mt-0.5" />
               <span>
                 This is <b>{usage.paidTaken + daysN - allowance} day(s) over</b> the {allowance}-day paid allowance.

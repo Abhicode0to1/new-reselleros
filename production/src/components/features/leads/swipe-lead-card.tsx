@@ -269,7 +269,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                     `\n\nAct-now signal: ${intent.label} — ${intent.reason}`}
                   className={cn(
                     "shrink-0 inline-flex items-center gap-0.5 rounded-full text-3xs font-semibold px-1.5 py-0.5 leading-none tabular-nums",
-                    heat.band === "hot"  && "bg-rose-soft text-rose",
+                    heat.band === "hot"  && "bg-rose-soft text-rose-ink",
                     heat.band === "warm" && "bg-amber-soft text-amber-ink",
                     heat.band === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
                   )}
@@ -297,7 +297,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               {task && (
                 <span className={cn(
                   "mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium",
-                  task.overdue ? "bg-rose-soft text-rose" : "bg-amber-soft text-amber-ink",
+                  task.overdue ? "bg-rose-soft text-rose-ink" : "bg-amber-soft text-amber-ink",
                 )}>
                   <Icon name="clock" size={10} />
                   {task.overdue ? "Task overdue" : "Task"} · {formatDate(task.due)}
@@ -365,7 +365,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                 <span
                   className={cn(
                     "text-3xs font-medium rounded-full px-1.5 py-0.5 shrink-0 inline-flex items-center gap-1",
-                    followUp.tone === "rose"  && "bg-rose-soft text-rose",
+                    followUp.tone === "rose"  && "bg-rose-soft text-rose-ink",
                     followUp.tone === "amber" && "bg-amber-soft text-amber-ink",
                     followUp.tone === "ink-3" && "bg-paper-2 text-ink-3",
                   )}

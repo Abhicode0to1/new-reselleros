@@ -33,7 +33,7 @@ export function Toaster() {
           title: "font-medium text-sm",
           description: "text-xs text-ink-3",
           success: "!bg-emerald-soft !text-emerald !border-emerald/20",
-          error: "!bg-rose-soft !text-rose !border-rose/20",
+          error: "!bg-rose-soft !text-rose-ink !border-rose/20",
           warning: "!bg-amber-soft !text-amber-ink !border-amber/20",
           info: "!bg-indigo-soft !text-indigo-ink !border-indigo/20",
         },

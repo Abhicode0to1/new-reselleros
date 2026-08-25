@@ -372,7 +372,7 @@ export default function CustomersPage() {
                     <span className={cn(
                       "rounded-full px-1.5 tabular-nums text-2xs",
                       active ? "bg-amber/25 text-amber-ink"
-                        : isDebt && viewCounts[v.id] > 0 ? "bg-rose-soft text-rose"
+                        : isDebt && viewCounts[v.id] > 0 ? "bg-rose-soft text-rose-ink"
                         : "bg-paper-2 text-ink-3",
                     )}>{viewCounts[v.id]}</span>
                   </button>
@@ -417,7 +417,7 @@ export default function CustomersPage() {
               onClick={() => toggleSort("receivables")}
               className={cn(
                 "px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
-                sort.key === "receivables" ? "bg-rose-soft border-rose text-rose" : "border-hairline hover:bg-paper-2 text-ink-2",
+                sort.key === "receivables" ? "bg-rose-soft border-rose text-rose-ink" : "border-hairline hover:bg-paper-2 text-ink-2",
               )}
             >
               🚨 Highest Debtors {sort.key === "receivables" ? (sort.dir === "desc" ? "↓" : "↑") : ""}

@@ -209,7 +209,7 @@ export default function ProjectDetailPage() {
               </div>
             )}
             {project.target_date && !isDone && daysLeft != null && (
-              <span className={`text-xs font-medium rounded-full px-2.5 py-1 ${daysLeft < 0 ? "bg-rose-soft text-rose" : daysLeft <= 7 ? "bg-amber-soft text-amber-ink" : "bg-emerald-soft text-emerald"}`}>
+              <span className={`text-xs font-medium rounded-full px-2.5 py-1 ${daysLeft < 0 ? "bg-rose-soft text-rose-ink" : daysLeft <= 7 ? "bg-amber-soft text-amber-ink" : "bg-emerald-soft text-emerald"}`}>
                 {daysLeft < 0 ? `${-daysLeft} days overdue` : daysLeft === 0 ? "Due today" : `${daysLeft} days left`}
               </span>
             )}
