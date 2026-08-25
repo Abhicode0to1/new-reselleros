@@ -27,6 +27,7 @@ import { resolveGeminiConfig, geminiJson } from "./gemini";
 import { lookupDomainMx } from "@/lib/dns/domain-inspect.server";
 import { identifyProvider, inspectionFacts } from "@/lib/dns/domain-inspect";
 import { switchProfile, tradeInFacts } from "./trade-in";
+import { recallFacts } from "./unified-memory";
 import {
   applyHandoverRules,
   buildSalesAgentPrompt,
@@ -352,6 +353,22 @@ async function runQualifier(args: {
   return parsed.ok ? parsed.value : null;
 }
 
+/**
+ * The seat count a call heard, read back out of the note the webhook wrote.
+ *
+ * Parsed from our own sentence rather than stored in a column, because the note IS the record
+ * and a second column holding the same number is a second thing that can disagree with it. The
+ * pattern is pinned by a test on both sides — callTurnFor writes it, this reads it.
+ */
+function seatsHeardIn(history: readonly SalesAgentTurn[]): number | null {
+  for (const t of [...history].reverse()) {
+    if (t.role !== "system") continue;
+    const m = /Seat count HEARD on the call: (d+)/.exec(t.content);
+    if (m) return Number(m[1]);
+  }
+  return null;
+}
+
 export async function runSalesAgent(args: {
   admin: SupabaseClient<Database>;
   tenantId: string;
@@ -445,6 +462,26 @@ export async function runSalesAgent(args: {
      fields and an inline await in one of them would leave the other reading a stale value. */
   const observed = await observeDomain(args.domain);
 
+  /* ── Did we already speak to them on the phone? ──
+     Read off the thread we just loaded rather than a second query: the call turn is written
+     into ai_sales_conversations as a system note (see the telecall webhook), so the transcript
+     we have in hand already answers this. One read, one source.
+
+     The seat count is deliberately taken from the LEAD only. A number heard on a call is in the
+     note as "HEARD ... NOT confirmed in writing", and recallFacts turns that into an instruction
+     to confirm rather than a figure to restate — which is the clause the brief's own example
+     message got wrong. */
+  const hadCall = history.some((t) => t.role === "system" && t.content.startsWith("Phone call —"));
+  const recall = hadCall
+    ? recallFacts({
+        hadCall: true,
+        writtenProduct: args.lead.plan,
+        writtenSeats: args.lead.seats,
+        seatsHeardOnly: args.lead.seats === null ? seatsHeardIn(history) : null,
+        quoteExists: args.lead.existingQuoteId !== null,
+      })
+    : [];
+
   const prompt = buildSalesAgentPrompt({
     lead: args.lead,
     authorisedTotals,
@@ -456,6 +493,7 @@ export async function runSalesAgent(args: {
     domainFacts: observed?.facts,
     tradeInFacts: observed?.tradeIn,
     qualifierBrief: merged ? qualifierBriefing(merged) : undefined,
+    recallFacts: recall,
   });
 
   let failure = "";

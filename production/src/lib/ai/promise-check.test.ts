@@ -270,3 +270,38 @@ describe("Hindi day-words are the same commitment as the English ones", () => {
     expect(findPromises(line).safe, `should allow: ${why}`).toBe(true);
   });
 });
+
+/* ══ A duration in the past is a report; "we will take" is not ═══════════════ */
+
+describe("past-tense durations are reports, not promises", () => {
+  it.each([
+    ["Lasted about 4 minutes.", "the app's own note about a finished call"],
+    ["The migration took 3 days for a similar customer.", "the most useful honest timeline answer"],
+    ["We spent 2 hours on it.", "past tense, us as the actor, already done"],
+    ["The call ran for 10 minutes.", "a length, not a deadline"],
+    ["A migration can take 2 days.", "a possibility after a modal"],
+    ["It may take 3 working days.", "the same, with 'may'"],
+  ])("lets %s through (%s)", (line, why) => {
+    /* ─── FOUND BY THIS APP REFUSING ITS OWN NOTE ─────────────────────────────
+       `callTurnFor` writes "Lasted about 4 minutes" into the shared transcript, and the guard
+       held it. A duration in the past describes something that has already happened, so it
+       cannot be a commitment in any reading — and blocking it would make the honest answer
+       about a timeline unsendable. */
+    expect(findPromises(line).safe, `should allow: ${why}`).toBe(true);
+  });
+
+  it.each([
+    ["We will take 3 days.", "will + bare take"],
+    ["We shall take 2 hours.", "shall + bare take"],
+    ["We will take about 3 days.", "'about' must not rescue a commitment"],
+  ])("still catches %s (%s)", (line, why) => {
+    /* ─── AND THIS WAS A HOLE FROM THE DAY THE RULE WAS WRITTEN ───────────────
+       The exemption was spelled `takes?`, which also matches the BARE form — so every "we will
+       take N days" was exempt and had been all along. `takes` and `taking` describe a process;
+       bare `take` does not. It is now exempt only after a modal ("can take", "may take"), which
+       states a possibility rather than a commitment.
+
+       Measured, not reasoned: this sentence came back SAFE before the fix. */
+    expect(findPromises(line).safe, `should catch: ${why}`).toBe(false);
+  });
+});

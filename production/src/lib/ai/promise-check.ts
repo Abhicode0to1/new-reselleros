@@ -89,7 +89,29 @@ const DATE_RE = new RegExp(
        the thing this rule is for. The original comment on this block already drew that line
        ("vague futures are deliberately NOT here"), and the fix is to keep drawing it: a
        duration introduced by "up to" or "takes" is describing somebody else's process, while
-       "2 ghante mein kar denge" has us as the actor. The lookbehinds are what separate them. */
+       "2 ghante mein kar denge" has us as the actor. The lookbehinds are what separate them.
+
+       ─── AND A DURATION IN THE PAST IS A REPORT, NOT A PROMISE ────────────
+       Found 25 Aug 2026 the same way the others were: a note this app writes about a FINISHED
+       phone call — "Lasted about 4 minutes" — was refused by its own guard. It describes
+       something that has already happened, so it cannot be a commitment in any reading. Same
+       for "the migration took 3 days for a similar customer", which is the most useful honest
+       thing the agent could say about a timeline.
+
+       So `lasted`, `took`, `spent`, `ran for` and a bare `about` join the exemptions. The
+       exemption is always on the word that makes the duration a REPORT, never on the number.
+
+       A bare `about` is NOT one of those words, and the first version of this made it one — so
+       "we will take about 3 days" walked straight through. `about` is exempt only when it
+       follows a past-tense verb ("lasted about", "took about"). Caught by its own test.
+
+       ─── AND `takes?` WAS EXEMPTING A COMMITMENT ──────────────────────────
+       Measured while adding the above: "We will take 3 days." came back SAFE, and had done
+       since this rule was written. The exemption was spelled `takes?`, which also matches the
+       bare form — so every "we will take N days" was exempt. `takes` and `taking` describe a
+       process; bare `take` does not. It is now exempt only after a modal ("can take", "may
+       take"), which states a possibility. The honest DNS answer still goes out; the promise
+       does not. */
     /* ── AND MINUTES WERE MISSING, FOUND 25 AUG 2026 ─────────────────────────
        The block above covers hours upward. It came out of a brief about migration, where hours
        is the natural unit, and the unit one step SMALLER was left open — so every one of these
@@ -113,8 +135,8 @@ const DATE_RE = new RegExp(
 
        `\bmin\b` and `\bsec\b` only, never the bare prefixes: "minimum" and "second opinion"
        must not match, and a word boundary is what separates them. */
-    String.raw`(?<!\bup\s+to\s)(?<!\btakes?\s)(?<!\btaking\s)\b\d+\s*(?:ghante?a?|din|haft[ae]|mahin[ae]|minute?s?|mins?|second?s?|secs?)\b`,
-    String.raw`(?<!\bup\s+to\s)(?<!\btakes?\s)(?<!\btaking\s)\b\d+\s*(?:working|business)?\s*(?:hour|hr|day|week|month|minute|min|second|sec)s?\b(?=[^\w]*(?:me?in|me|within|and|,|\.|$|\s))`,
+    String.raw`(?<!\bup\s+to\s)(?<!\btakes\s)(?<!\b(?:can|may|could|might)\s+take\s)(?<!\btaking\s)(?<!\blasted\s)(?<!\blasted\s+about\s)(?<!\btook\s)(?<!\btook\s+about\s)(?<!\bspent\s)(?<!\bspent\s+about\s)(?<!\bran\s+for\s)(?<!\bran\s+for\s+about\s)\b\d+\s*(?:ghante?a?|din|haft[ae]|mahin[ae]|minute?s?|mins?|second?s?|secs?)\b`,
+    String.raw`(?<!\bup\s+to\s)(?<!\btakes\s)(?<!\b(?:can|may|could|might)\s+take\s)(?<!\btaking\s)(?<!\blasted\s)(?<!\blasted\s+about\s)(?<!\btook\s)(?<!\btook\s+about\s)(?<!\bspent\s)(?<!\bspent\s+about\s)(?<!\bran\s+for\s)(?<!\bran\s+for\s+about\s)\b\d+\s*(?:working|business)?\s*(?:hour|hr|day|week|month|minute|min|second|sec)s?\b(?=[^\w]*(?:me?in|me|within|and|,|\.|$|\s))`,
     /* Hindi day-words. `today`/`tomorrow`/`yesterday` are already unconditional on the first
        line of this list, and "aaj hi chalu kar denge" is the same commitment in the language
        this agent actually writes in — it was safe until now purely because the list was

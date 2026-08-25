@@ -22,6 +22,7 @@
  * the lead — which is the difference between "the app did nothing" and "the app is waiting
  * on you for the term".
  */
+import { heardNotWrittenReason, type HeardSource } from "@/lib/ai/unified-memory";
 import { maySendUnattended, REVIEW_ABOVE_SEATS } from "@/lib/pricing/volume-slabs";
 
 
@@ -42,6 +43,15 @@ export interface AutoSendInput {
    * and not a confidence threshold.
    */
   seatsHeardNotWritten?: boolean;
+  /**
+   * WHERE the heard figure came from, so the refusal names the right channel.
+   *
+   * The reason below used to say "a transcribed voice note" unconditionally. Once the telecall
+   * path started setting seatsHeardNotWritten there was a second source, and a held quote whose
+   * reason names a voice note nobody left sends the operator looking for the wrong thing.
+   * Defaults to voice_note, which is what every pre-existing caller means.
+   */
+  heardSource?: HeardSource;
   /** The address the enquiry arrived from. */
   recipient: string | null | undefined;
   /** Whether a draft was actually created — no quote, nothing to send. */
@@ -133,9 +143,7 @@ export function decideAutoSend(input: AutoSendInput): AutoSendDecision {
   if (input.seatsHeardNotWritten) {
     return {
       send: false,
-      reason:
-        "the seat count came from a transcribed voice note, not from anything the customer " +
-        "typed — the quote is drafted and priced; confirm the number with them and send it",
+      reason: heardNotWrittenReason(input.heardSource ?? "voice_note"),
     };
   }
 

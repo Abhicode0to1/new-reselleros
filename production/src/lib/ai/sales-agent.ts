@@ -237,6 +237,14 @@ export interface BuildPromptArgs {
    * describe, for the same reason identifyProvider refuses to guess one.
    */
   tradeInFacts?: readonly string[];
+  /**
+   * What we may bring up from an earlier PHONE CALL, from lib/ai/unified-memory.ts.
+   *
+   * Rendered near the top, with the qualifier's briefing, because it changes how the reply
+   * OPENS — a recall placed after the catalogue is a fact the model reads once it has already
+   * decided what to say. Empty when there has been no call, which is the ordinary case.
+   */
+  recallFacts?: readonly string[];
 }
 
 export interface BuiltPrompt {
@@ -475,6 +483,7 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
       : totals.map((t) => `- ${rupees(t)}`).join("\n");
 
   const brief = args.qualifierBrief ?? [];
+  const recall = args.recallFacts ?? [];
 
   /* The register the customer wrote in, read from their own words rather than from the model's
      sentiment field — see lib/ai/tone.ts for why that distinction is load-bearing. Empty for a
@@ -489,6 +498,9 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
     /* HOW to answer, before WHAT is available to answer with. A register instruction read after
        the catalogue is an instruction the model applies to prose it has already planned. */
     ...(tone.length > 0 ? [...tone, ""] : []),
+    /* The earlier call. Above the catalogue because it changes the opening line, not the
+       pricing — see BuildPromptArgs.recallFacts. */
+    ...(recall.length > 0 ? [...recall, ""] : []),
     "WHAT WE KNOW ABOUT THIS LEAD",
     known,
     "",

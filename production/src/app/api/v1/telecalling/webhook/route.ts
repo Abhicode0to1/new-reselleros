@@ -34,9 +34,10 @@ import {
 } from "@/lib/crypto/webhook-signature";
 import { normalisePostCall, sentimentOf } from "@/lib/telecall/inbound";
 import { classifyCall, verifyCallMoney } from "@/lib/ai/telecall";
+import { callTurnFor } from "@/lib/ai/unified-memory";
 import { findTelecallByProviderCallId, recordTelecallOutcome } from "@/lib/ai/telecall.server";
 import { logAiAction } from "@/lib/ai/autonomy.server";
-import { flagLeadForHumanAttention } from "@/lib/ai/sales-agent.server";
+import { recordSalesTurn, flagLeadForHumanAttention } from "@/lib/ai/sales-agent.server";
 import { loadSalesCatalog } from "@/lib/ai/sales-agent.server";
 import { dispatchSalesDecision } from "@/lib/ai/actions/quote-dispatcher";
 import { TELECALLER_NAME } from "@/lib/ai/telecaller-prompt";
@@ -132,6 +133,46 @@ export async function POST(req: NextRequest) {
        of a call where the wrong price was spoken would put the wrong figure in writing too. */
     actionTaken: money.ok ? classification.action : "handed_to_human",
   });
+
+  /* ── THE CALL GOES INTO THE SHARED TRANSCRIPT ──
+     Written here, immediately after the call row, and BEFORE any quote decision — so that if
+     anything below fails the conversation still knows the call happened. Same ordering rule
+     run-sales-agent.ts follows for an inbound message, and for the same reason.
+
+     Until now a transcript lived only in `ai_telecall_logs` while the sales agent reads
+     `ai_sales_conversations`, so a customer who spoke on the phone in the morning and messaged
+     on WhatsApp in the evening met an agent that had never heard of the call. `loadSalesThread`
+     already ignores channel — email and WhatsApp have always shared one thread — so the phone
+     was the one channel missing from a memory that otherwise worked.
+
+     Filed as `system` (a NOTE in the prompt), never `user`: a transcript is not something the
+     customer typed, and the qualifier's `seats_source: "written"` rule turns on exactly that
+     distinction. Fire-and-forget on failure — losing a transcript note must not cost the
+     customer their reply. */
+  if (recorded.ok && recorded.row && row.leadId) {
+    try {
+      await recordSalesTurn({
+        tenantId: row.tenantId,
+        leadId: row.leadId,
+        channel: "whatsapp",
+        customerContact: row.phoneNumber ?? "",
+        role: "system",
+        content: callTurnFor({
+          transcript: call.signals.transcript || null,
+          outcome: classification.status,
+          seatsHeard: call.signals.seatsDiscussed ?? null,
+          /* Null, always. `PostCallSignals` has no product field — the vendor reports seats,
+             a disposition and a transcript, and nothing else. Deriving a product name from the
+             transcript here would be the app inventing a fact about the call. */
+          productHeard: null,
+          durationSeconds: call.signals.durationSec ?? null,
+        }),
+      });
+    } catch {
+      /* Deliberately swallowed. The call row is already written and it is the record that
+         matters; a missing thread note degrades the next reply rather than losing anything. */
+    }
+  }
 
   if (!recorded.ok || !recorded.row) {
     /* 500 on purpose — this one IS worth retrying. Our database failed, the vendor still holds
@@ -236,8 +277,14 @@ export async function POST(req: NextRequest) {
       customer_intent: `asked for a quotation on a phone call with ${TELECALLER_NAME}`,
       perceived_sentiment: sentimentOf(parsed) ?? "unknown",
       /* 1 is not flattery. The customer said this out loud to a person-shaped agent and the
-         app is not guessing at intent from prose — the uncertainty in this path is the seat
-         count, and that is checked above rather than smuggled into a confidence score. */
+         app is not guessing at intent from prose.
+
+         ─── AND THE SENTENCE THAT USED TO BE HERE WAS FALSE ───────────────────
+         It said "the uncertainty in this path is the seat count, and that is checked above".
+         Nothing above checked it. `verifyCallMoney` checks MONEY figures in the transcript and
+         `classifyCall` checks how the call ended; the seat count went to the quote path
+         unguarded, from a live phone line, where "twenty" and "twelve" are one syllable apart.
+         `heardNotWritten` is now passed below, which is the guard the comment claimed. */
       confidence_score: 1,
       action_required: "GENERATE_QUOTE_AND_SEND",
       generated_response: {
@@ -286,6 +333,12 @@ export async function POST(req: NextRequest) {
         wholesale: c.wholesalePerSeatPerYear,
       })),
       leadPlan: lead.data?.plan ?? null,
+      /* THE SEAT COUNT CAME OFF A PHONE LINE. Strictly less reliable than the voice note this
+         flag was built for — crosstalk, accents, line quality — so the same refusal applies and
+         with more reason. It can only HOLD a quote, never send one: decideAutoSend drafts and
+         prices it in full and asks a person to confirm the number. Absent until 25 Aug 2026,
+         while a comment four lines up claimed the check existed. */
+      heardNotWritten: true,
       fromEmail: FROM_EMAIL,
       senderIsOurs: false,
       isSelfTest: false,
