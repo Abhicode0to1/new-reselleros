@@ -26,6 +26,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { resolveGeminiConfig, geminiJson } from "./gemini";
 import { lookupDomainMx } from "@/lib/dns/domain-inspect.server";
 import { identifyProvider, inspectionFacts } from "@/lib/dns/domain-inspect";
+import { switchProfile, tradeInFacts } from "./trade-in";
 import {
   applyHandoverRules,
   buildSalesAgentPrompt,
@@ -282,17 +283,25 @@ export type SalesAgentRun =
  * lib/dns/domain-inspect.ts for why reading back what a customer HAS is safe while prescribing
  * what they should switch TO is not.
  */
-async function observeDomain(domain: string | null | undefined): Promise<string[] | undefined> {
+async function observeDomain(
+  domain: string | null | undefined,
+): Promise<{ facts: string[]; tradeIn: string[] } | undefined> {
   if (!domain?.trim()) return undefined;
   const lookup = await lookupDomainMx(domain);
   if (!lookup.domain) return undefined;
+
+  const verdict = identifyProvider(lookup.mx);
+
   /* A failed lookup still produces the "probably a typo, ask them" line, which is useful — so
      only a domain we could not even parse is dropped. */
-  return inspectionFacts({
-    domain: lookup.domain,
-    verdict: identifyProvider(lookup.mx),
-    mx: lookup.mx,
-  });
+  return {
+    facts: inspectionFacts({ domain: lookup.domain, verdict, mx: lookup.mx }),
+    /* ONE lookup, TWO consumers, and that is the point of computing both here. The facts say
+       what their MX is; the trade-in block says which authorised claim to lead with because of
+       it. Deriving the switch situation somewhere else would mean a second read of the same
+       record and two answers that can disagree about the same domain. */
+    tradeIn: tradeInFacts(switchProfile(verdict)),
+  };
 }
 
 /**
@@ -432,6 +441,10 @@ export async function runSalesAgent(args: {
       )
     : null;
 
+  /* Awaited before the prompt is assembled rather than inline, because it now feeds TWO
+     fields and an inline await in one of them would leave the other reading a stale value. */
+  const observed = await observeDomain(args.domain);
+
   const prompt = buildSalesAgentPrompt({
     lead: args.lead,
     authorisedTotals,
@@ -440,7 +453,8 @@ export async function runSalesAgent(args: {
     catalog,
     sellerName: args.sellerName,
     sellerEmail: args.sellerEmail,
-    domainFacts: await observeDomain(args.domain),
+    domainFacts: observed?.facts,
+    tradeInFacts: observed?.tradeIn,
     qualifierBrief: merged ? qualifierBriefing(merged) : undefined,
   });
 

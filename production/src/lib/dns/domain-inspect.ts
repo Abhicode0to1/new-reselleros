@@ -96,6 +96,31 @@ export function normaliseDomain(raw: string | null | undefined): string | null {
   return d;
 }
 
+/**
+ * The provider BRAND NAMES this module can recognise, for guards that need to spot one in prose.
+ *
+ * Derived from PROVIDER_SIGNATURES rather than written out again, because two lists of
+ * competitor names do not stay equal — add a signature and the disparagement guard would go on
+ * being blind to the brand it now recognises. The parenthetical qualifiers ("(filtering)",
+ * "(consumer)") are stripped and the generic "a cPanel host" is reduced to the word that
+ * actually appears in a sentence.
+ *
+ * "Webmail" is appended by hand: it is not an MX signature — no MX record says "webmail" — but
+ * it is what customers and briefs call this whole category, so a guard reading prose needs it.
+ */
+export const PROVIDER_BRANDS: readonly string[] = [
+  ...new Set(
+    PROVIDER_SIGNATURES.map((p) =>
+      p.name
+        .replace(/\s*\([^)]*\)\s*/g, "")
+        .replace(/^an?\s+/i, "")
+        .replace(/\s+host$/i, "")
+        .trim(),
+    ),
+  ),
+  "webmail",
+].filter((n) => n.length > 2);
+
 export interface MxRecord {
   exchange: string;
   priority: number;

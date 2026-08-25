@@ -43,6 +43,7 @@
 import { z } from "zod";
 import { verifyDraftMoney } from "./money-guard";
 import { findPromises } from "./promise-check";
+import { findDisparagement } from "./disparagement";
 import { CUSTOM_PRICING_ABOVE, authorisedRatesForItem, discountedRate, slabFor, slabLines } from "@/lib/pricing/volume-slabs";
 import { authorisedNetCostFigures, computeNetCost, netCostLines } from "@/lib/pricing/net-cost";
 import { battlecardLines } from "./battlecards";
@@ -226,6 +227,15 @@ export interface BuildPromptArgs {
    * quotation — it produces a handover.
    */
   qualifierBrief?: readonly string[];
+  /**
+   * The switch conversation, from lib/ai/trade-in.ts.
+   *
+   * Rendered next to the domain observation it was derived from, because the two are one
+   * thought: "their mail is on GoDaddy today" and "so lead with migration being included".
+   * Empty when we could not identify a provider — an unrecognised MX is not a switch we can
+   * describe, for the same reason identifyProvider refuses to guess one.
+   */
+  tradeInFacts?: readonly string[];
 }
 
 export interface BuiltPrompt {
@@ -401,6 +411,7 @@ function rupees(n: number): string {
  */
 export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
   const { lead, catalog, incoming, sellerName, sellerEmail, domainFacts } = args;
+  const tradeIn = args.tradeInFacts ?? [];
 
   const history = args.history.slice(-MAX_CONTEXT_TURNS);
 
@@ -489,6 +500,7 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
           "",
         ]
       : []),
+    ...(tradeIn.length > 0 ? [...tradeIn, ""] : []),
     ...(battlecards
       ? [
           "THIS MESSAGE RAISED AN OBJECTION. Handle it as follows.",
@@ -764,6 +776,17 @@ export function applyHandoverRules(input: HandoverInput): HandoverResult {
       `The draft commits us to something nobody authorised — it says ${what}. A promise in our name needs a person behind it.`,
     );
   }
+
+  /* ── Does the draft run down what the customer already has? ──
+     LAST in the chain and NOT masked, unlike the promise check above. Nothing in this agent's
+     authorised list contains a word from the pejorative set, so there is no equivalent of the
+     "24/7"/"free" problem to exempt — and masking here would be masking the only signal.
+
+     It runs on the raw body for the same reason: `maskAuthorisedSellingPoints` rewrites "free"
+     to "included" inside migration sentences, and a sentence about migration is exactly where
+     a jab at the old provider is most likely to sit. */
+  const runDown = findDisparagement(decision.generated_response.body_text);
+  if (!runDown.clean) return handover(runDown.reason);
 
   return { decision, overruled: false, reason: "" };
 }
