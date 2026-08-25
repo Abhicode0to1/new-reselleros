@@ -623,8 +623,15 @@ function LeadsPageInner() {
      `folder` alone is not enough — the Junk view leaves `folder` at "all" — so this
      expression was already written out three times (the boardLeads memo, the chip's
      className, and the chip's icon). aria-pressed would have been the fourth copy, and
-     a fourth copy is how a chip ends up SAYING pressed while looking unpressed. */
-  const allOpenActive = folder === "all" && smartView !== "junk";
+     a fourth copy is how a chip ends up SAYING pressed while looking unpressed.
+
+     `!== "junk"` was not tight enough either, and the ARIA made it audible: with a smart view
+     in force ("View: Mine") the chip stayed lit AND announced aria-pressed=true, so the strip
+     and the dropdown both claimed to be the active filter — the exact thing the ONE SELECTION
+     AT A TIME note above forbids. `=== "all"` means the chip lights only when nothing else is
+     narrowing the list. Decided by Pardeep, 25 Aug 2026, after seeing it on screen.
+     */
+  const allOpenActive = folder === "all" && smartView === "all";
   /* The Smart Views dropdown is the OTHER filter surface, and it used to stack on top of
      whatever chip was lit. Selecting from it now releases the folder, so exactly one of
      the two is ever in force. */
