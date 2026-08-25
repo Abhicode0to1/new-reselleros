@@ -55,7 +55,7 @@ import { LeadsSmartViews, type SmartView } from "@/components/features/leads/lea
 import { PriorityCallQueue } from "@/components/features/leads/priority-call-queue";
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { localDateISO } from "@/lib/leads/outcomes";
-import { buildForecast, stageProbability, winRate } from "@/lib/leads/forecast";
+import { stageProbability, winRate } from "@/lib/leads/forecast";
 import { rowStageOptions, isStageLocked } from "@/lib/leads/stage-options";
 import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
 import { stageAge, staleDeals } from "@/lib/leads/velocity";
@@ -63,7 +63,6 @@ import { dealHealth } from "@/lib/leads/deal-health";
 import { DealHealthCard } from "@/components/features/leads/deal-health-card";
 import { BattlecardDrawer } from "@/components/features/leads/battlecard-drawer";
 import { buildTimeline, timelineMeta } from "@/lib/leads/timeline";
-import { PIPELINES, pipelineCounts, type Pipeline } from "@/lib/leads/pipelines";
 import { useItems } from "@/lib/queries/items";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
@@ -274,32 +273,8 @@ function LeadsPageInner() {
   const runOutcome = useLeadOutcome();
   const queueLog   = useLogLeadActivity();
 
-  /* Which sales motion is being worked. `null` = all of them, which is the default:
-     opening the page to a filtered subset would hide deals from someone who does not
-     know the filter exists. */
-  const [pipelineFilter, setPipelineFilter] = React.useState<Pipeline | null>(null);
 
-  /* Counts from the UNFILTERED set. A badge that shrinks as you filter answers a
-     question nobody asked — it should say how much work exists in each motion. */
-  const motionCounts = React.useMemo(
-    () => pipelineCounts((leads ?? []).filter((l) => !l.is_junk)),
-    [leads],
-  );
 
-  /* ─── A FILTER WITH ONE POSSIBLE VALUE IS NOT A FILTER ────────────────────
-     Measured on the live workspace, 25 Aug 2026: all 29 leads carry
-     `pipeline = 'new_logo'`, so the motion row read "All motions 14 · New Logo 14 ·
-     Migrations 0 · Renewals & Expansion 0" — two chips over the SAME fourteen leads
-     and two over nothing. Whichever you pressed, the list did not change, and the row
-     charged a band of vertical space for a choice with one option.
-
-     Gated, not deleted: the first migration or renewal deal brings it back with no
-     code change. Pardeep asked for the page to stop showing the same thing twice, and
-     this row was showing the same fourteen leads twice on its own. */
-  const motionsInUse = React.useMemo(
-    () => Object.values(motionCounts).filter((n) => n > 0).length,
-    [motionCounts],
-  );
 
 
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null);
@@ -523,20 +498,13 @@ function LeadsPageInner() {
        view is active instead of replacing it.
        `<= today` deliberately: overdue is MORE urgent than due-today, and a pill showing
        only exactly-today would hide the promises broken last week. */
-    /* Sales-motion cut. Applies to Kanban and list alike, because they read the same
-       `filtered` array — one filter, not two implementations that drift. */
-    if (pipelineFilter) {
-      list = list.filter((l) => (l.pipeline ?? "new_logo") === pipelineFilter);
-    }
 
     /* No follow-up cut here any more — that is the `followup` FOLDER's job, applied once
        where every other folder is applied. It used to be filtered in this memo as well,
        so a follow-up chip and a folder chip could both be narrowing the same list from
        two different places. */
     return list;
-    // pipelineFilter joins the deps — without it the list keeps the previous motion's
-    // rows until some other input happens to change.
-  }, [workspaceLeads, search, stageFilter, priorityFilter, smartView, pipelineFilter, currentUser, dup]);
+  }, [workspaceLeads, search, stageFilter, priorityFilter, smartView, currentUser, dup]);
   const activeFilterCount = stageFilter.length + priorityFilter.length;
 
   // A lead is "raw" (Leads inbox) only while it's early — New or Contacted with
@@ -704,16 +672,13 @@ function LeadsPageInner() {
     () => openDeals.reduce((s, l) => s + (l.value ?? 0), 0),
     [openDeals]
   );
-  /* Weighted forecast — the same open deals, each multiplied by what its stage has
-     earned. Built from dealUniverse rather than openDeals so buildForecast applies its
-     own open/closed rule in one place; feeding it a pre-filtered list would mean two
-     definitions of "open" that can drift. */
-  const forecast = React.useMemo(() => buildForecast(dealUniverse), [dealUniverse]);
+  /* Kept when the metrics band went: the breakdown tiles read wonCount, decidedCount
+     and conversion out of this. Only `lost` was band-only. */
+  const rate = React.useMemo(() => winRate(dealUniverse), [dealUniverse]);
   /* Win rate over DECIDED deals only — won ÷ (won + lost). It used to divide by every
      deal including the open ones, which counts "not finished yet" as "not won"; the rule
      and the reasoning now live in lib/leads/forecast.ts with its tests. */
-  const rate = React.useMemo(() => winRate(dealUniverse), [dealUniverse]);
-  const { won: wonCount, lost: lostCount, decided: decidedCount, pct: conversion } = rate;
+  const { won: wonCount, decided: decidedCount, pct: conversion } = rate;
 
   // Drag handlers
   const handleDrop = async (toStage: Lead["stage"]) => {
@@ -790,7 +755,6 @@ function LeadsPageInner() {
             <h1 className="font-serif text-xl sm:text-2xl font-bold leading-none text-ink truncate">
               Sales & Pipeline
             </h1>
-            <span className="text-xs text-ink-3 hidden md:inline-block">· Unified inquiry queue & deal stage pipeline</span>
           </div>
 
           {/* Primary action — top-right, and sticky with this bar. */}
@@ -808,111 +772,6 @@ function LeadsPageInner() {
 
       </div>
 
-      {/* Revenue Intelligence Pill Strip */}
-      {/* ─── `justify-between` REMOVED, AND `ml-auto` WITH IT ────────────────
-          Two audit findings, one bug, in opposite directions. With three flex children,
-          `justify-between` distributes the free space across the two gaps — and an `ml-auto`
-          on the third child absorbs ALL of it, so `justify-between` has none left to give.
-          The result was the metrics and the motion filters flush against each other while
-          "View Breakdown" sat alone at the far right. Plain `gap-3` spaces both gaps
-          evenly, which is what the row wanted in the first place. */}
-      {!isLoading && leads && leads.length > 0 && (
-        <div className="shrink-0 mb-2.5 bg-paper-2/60 border border-hairline rounded-lg px-3 py-1 flex items-center gap-3 text-xs overflow-x-auto">
-          <div className="flex items-center gap-2.5 text-ink-2 shrink-0">
-            <span className="flex items-center gap-1 font-semibold text-ink">
-              <Icon name="bar_chart" size={14} className="text-amber-ink" />
-              <span>Pipeline Intelligence:</span>
-            </span>
-            <span className="font-mono">Open Pipeline: <b className="text-amber-ink">{rupee(totalValue, { compact: true })}</b></span>
-            <span className="text-ink-3 font-mono">·</span>
-            {/* Weighted sits next to Open on purpose. Open Pipeline answers "how much is
-                in play"; on its own it flatters, because a ₹5L deal at `new` counts the
-                same as a ₹5L deal at `quote`. Weighted is what those stages have earned.
-                The tooltip carries the undated count — a forecast missing dates is still
-                a forecast, but the reader should know how much of it has no timing. */}
-            <span
-              className="font-mono"
-              title={
-                `Each open deal × its stage's win probability (new 10% → quote 80%).\n` +
-                `Won and lost are excluded — a forecast is what is still to come.` +
-                (forecast.confidencePct !== null ? `\nConfidence: ${forecast.confidencePct}% of open pipeline.` : "") +
-                (forecast.undatedCount > 0
-                  ? `\n\n${forecast.undatedCount} open deal${forecast.undatedCount === 1 ? "" : "s"} (${rupee(forecast.undatedValue, { compact: true })}) have no expected close date, so they cannot be placed in a month.`
-                  : "")
-              }
-            >
-              Weighted: <b className="text-emerald">{rupee(forecast.weighted, { compact: true })}</b>
-              {forecast.undatedCount > 0 && (
-                <span className="text-ink-3"> ({forecast.undatedCount} undated)</span>
-              )}
-            </span>
-            <span className="text-ink-3 font-mono">·</span>
-            {/* ONE count, not two. "Active Deals" and "Open leads" used to sit side by
-                side; after the merge they describe the same thing, and two labels for
-                one number invite the reader to hunt for the difference. */}
-            <span
-              className="font-mono"
-              title="Every lead that is neither won, lost nor junk — whatever stage it reached."
-            >
-              Open deals: <b className="text-ink">{openDeals.length}</b>
-            </span>
-            <span className="text-ink-3 font-mono">·</span>
-            <span
-              className="font-mono"
-              title={
-                decidedCount > 0
-                  ? `${wonCount} won and ${lostCount} lost — ${wonCount} of ${decidedCount} decided.\n` +
-                    `${openDeals.length} still open and NOT counted: undecided is not lost.`
-                  : `Nothing has closed either way yet, so there is no rate to show.\n` +
-                    `${openDeals.length} deals are still open.`
-              }
-            >
-              Win Rate: <b className="text-emerald">{conversion === null ? "—" : `${conversion}%`}</b>
-              {decidedCount > 0 && (
-                <span className="text-ink-3"> ({wonCount}/{decidedCount})</span>
-              )}
-            </span>
-          </div>
-
-          {/* Sales-motion switcher. "All" is first and is the default — opening the page
-              already filtered would hide deals from anyone who does not know the filter
-              exists. Counts come from the UNFILTERED set so they answer "how much is
-              there", not "how much survives what I already picked". */}
-          {motionsInUse > 1 && (
-          <div className="flex shrink-0 items-center gap-1">
-            {([null, ...PIPELINES.map((p) => p.id)] as (Pipeline | null)[]).map((id) => {
-              const def = id ? PIPELINES.find((p) => p.id === id)! : null;
-              const n = id ? motionCounts[id] : workspaceLeads.filter((l) => !l.is_junk).length;
-              const active = pipelineFilter === id;
-              return (
-                <button
-                  key={id ?? "all"}
-                  type="button"
-                  onClick={() => setPipelineFilter(id)}
-                  aria-pressed={active}
-                  title={def?.hint ?? "Every sales motion"}
-                  className={cn(
-                    "rounded-md px-2 py-0.5 text-2xs font-semibold transition-colors",
-                    active ? "bg-paper text-ink shadow-xs border border-hairline"
-                           : "text-ink-2 hover:bg-paper/60",
-                  )}
-                >
-                  {def?.label ?? "All motions"}
-                  <span className="ml-1 font-mono tabular-nums text-ink-3">{n}</span>
-                </button>
-              );
-            })}
-          </div>
-          )}
-          <button
-            type="button"
-            onClick={() => setKpiOpen((o) => !o)}
-            className="text-2xs font-semibold text-amber-ink hover:underline shrink-0"
-          >
-            {kpiOpen ? "Hide Breakdown" : "View Breakdown"}
-          </button>
-        </div>
-      )}
 
       {/* Expanded Intelligence Drawer */}
       {kpiOpen && !isLoading && leads && leads.length > 0 && (
@@ -1104,6 +963,11 @@ function LeadsPageInner() {
                   <Button variant="default" size="sm" icon="more_h">More</Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
+                  {/* The numbers that used to sit in a permanent band above every lead: same
+                      tiles, one click away instead of always on screen. */}
+                  <DropdownMenuItem className="gap-2 cursor-pointer" onSelect={() => setKpiOpen((o) => !o)}>
+                    <Icon name="bar_chart" size={14} /> {kpiOpen ? "Hide the numbers" : "Show the numbers"}
+                  </DropdownMenuItem>
                   <DropdownMenuItem className="gap-2 cursor-pointer" onSelect={() => setCsvImportOpen(true)}>
                     <Icon name="download" size={14} className="text-ink-3" /> Import CSV
                   </DropdownMenuItem>
