@@ -157,6 +157,11 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
     /* The customer own domain, so the agent can observe what their mail runs on today. The
        lookup and its guard live in sales-agent.server.ts — see observeDomain there. */
     domain: lead.domain ?? null,
+    /* Now needed TWICE and by two different guards. decideAutoSend uses it to refuse a quote
+       built on a transcribed seat count; the qualifier uses it to refuse trusting one in the
+       first place. Threading it here rather than only at the dispatcher means the doubt reaches
+       the stage that could have prevented the draft, not just the one that stops it going. */
+    heardNotWritten: args.heardNotWritten,
   });
 
   if (!run.ok) {

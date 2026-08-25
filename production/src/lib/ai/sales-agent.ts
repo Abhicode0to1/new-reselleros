@@ -212,6 +212,19 @@ export interface BuildPromptArgs {
    * the migration claims the model must not attach to them.
    */
   domainFacts?: readonly string[];
+  /**
+   * Stage 1's binding briefing, from `qualifierBriefing` in lib/ai/pipeline.ts.
+   *
+   * Rendered FIRST, ahead of the catalogue, because it is an instruction rather than context:
+   * a line saying no quotation goes out on this message has to be read before ten prices are,
+   * not after. Empty or absent when the qualifier found nothing worth constraining — which is
+   * the ordinary case, and leaves this prompt exactly as it was.
+   *
+   * "Binding" is not only a word in the prompt. `narrowByQualification` applies the same
+   * verdict to the ACTION after the model answers, so ignoring this block cannot produce a
+   * quotation — it produces a handover.
+   */
+  qualifierBrief?: readonly string[];
 }
 
 export interface BuiltPrompt {
@@ -429,9 +442,13 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
       ? "(none — you may not state a total or a multiplied figure, only the per-seat prices above)"
       : totals.map((t) => `- ${rupees(t)}`).join("\n");
 
+  const brief = args.qualifierBrief ?? [];
+
   const user = [
     `SELLER: ${sellerName}, signing as ${sellerEmail}`,
     "",
+    /* Stage 1's verdict, ahead of everything else. See BuildPromptArgs.qualifierBrief. */
+    ...(brief.length > 0 ? [...brief, ""] : []),
     "WHAT WE KNOW ABOUT THIS LEAD",
     known,
     "",

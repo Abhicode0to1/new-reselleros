@@ -41,6 +41,15 @@ import {
   perSeatPerYear,
   authorisedTotalsFor,
 } from "./sales-agent";
+import {
+  QUALIFIER_SYSTEM_PROMPT,
+  mergeQualification,
+  narrowByQualification,
+  parseQualification,
+  qualifierBriefing,
+  qualifierUserPrompt,
+  type Qualification,
+} from "./pipeline";
 
 /**
  * `no-store` is not optional (CLAUDE.md §17). A cached thread read is a stale transcript,
@@ -286,6 +295,54 @@ async function observeDomain(domain: string | null | undefined): Promise<string[
   });
 }
 
+/**
+ * Stage 1. Read the conversation and report what we actually know — with no prices in scope.
+ *
+ * A SECOND model call per inbound message, which is a real cost, so here is what it buys:
+ * the judgement "do we know enough to price this?" gets its own small prompt instead of
+ * competing with eleven thousand characters of catalogue, rate card, battlecards and style
+ * rules. And it makes a guarantee the single prompt cannot: this stage has never seen a price,
+ * so no answer it gives can contain one.
+ *
+ * ─── ITS FAILURE IS NOT THE AGENT'S FAILURE ─────────────────────────────────
+ * Returns null on every failure — no key, no answer, unparseable, wrong shape — and the caller
+ * carries on exactly as it did before this stage existed. That is deliberate: stage 1 only ever
+ * makes the agent MORE cautious, so losing it costs a safeguard and not a reply. Failing the
+ * whole turn because a second call timed out would turn an optional gate into a new way for a
+ * customer to get no answer at all.
+ */
+async function runQualifier(args: {
+  apiKey: string;
+  model: string;
+  company: string;
+  recordedProduct: string | null;
+  recordedSeats: number | null;
+  history: readonly SalesAgentTurn[];
+  incoming: string;
+}): Promise<Qualification | null> {
+  const raw = await geminiJson<unknown>({
+    apiKey: args.apiKey,
+    model: args.model,
+    system: QUALIFIER_SYSTEM_PROMPT,
+    user: qualifierUserPrompt({
+      company: args.company,
+      recordedProduct: args.recordedProduct,
+      recordedSeats: args.recordedSeats,
+      history: args.history,
+      incoming: args.incoming,
+    }),
+    /* Zero, unlike the responder's 0.3. This stage extracts facts rather than writing prose,
+       and the reason to keep the responder warm — that identical wording reads as a template
+       the second time a customer sees it — has no equivalent here. Nobody reads this output. */
+    temperature: 0,
+    label: "ai/sales-qualifier",
+  });
+
+  if (raw === null) return null;
+  const parsed = parseQualification(raw);
+  return parsed.ok ? parsed.value : null;
+}
+
 export async function runSalesAgent(args: {
   admin: SupabaseClient<Database>;
   tenantId: string;
@@ -293,6 +350,13 @@ export async function runSalesAgent(args: {
   incoming: string;
   sellerName: string;
   sellerEmail: string;
+  /**
+   * The enquiry arrived as a voice note and `incoming` is a machine transcription.
+   *
+   * Reaches stage 1's seat rule: a seat count the model read out of a transcription is two
+   * doubts deep, and may not price. See mergeQualification in lib/ai/pipeline.ts.
+   */
+  heardNotWritten?: boolean;
   /**
    * Totals the CALLER already knows are real — a live quote's own subtotal and amount.
    * Folded in alongside the seats × price figure this function works out itself. See
@@ -346,6 +410,28 @@ export async function runSalesAgent(args: {
     ]),
   ];
 
+  /* ── Stage 1, before the responder's prompt is even assembled ──
+     Its verdict goes INTO that prompt as a binding briefing, and is applied again to the
+     action after the model answers. Null when the call failed, in which case everything below
+     behaves exactly as it did before this stage existed. */
+  const qualification = await runQualifier({
+    apiKey: cfg.apiKey,
+    model: cfg.model,
+    company: args.lead.company,
+    recordedProduct: args.lead.plan,
+    recordedSeats: args.lead.seats,
+    history,
+    incoming: args.incoming,
+  });
+
+  const merged = qualification
+    ? mergeQualification(
+        qualification,
+        { plan: args.lead.plan, seats: args.lead.seats },
+        { heardNotWritten: args.heardNotWritten },
+      )
+    : null;
+
   const prompt = buildSalesAgentPrompt({
     lead: args.lead,
     authorisedTotals,
@@ -355,6 +441,7 @@ export async function runSalesAgent(args: {
     sellerName: args.sellerName,
     sellerEmail: args.sellerEmail,
     domainFacts: await observeDomain(args.domain),
+    qualifierBrief: merged ? qualifierBriefing(merged) : undefined,
   });
 
   let failure = "";
@@ -379,17 +466,31 @@ export async function runSalesAgent(args: {
   const parsed = parseSalesAgentDecision(raw);
   if (!parsed.ok) return { ok: false, reason: parsed.reason };
 
+  /* ── Stage 1's verdict, applied to the action the responder chose ──
+     Before applyHandoverRules, not after, so the money and promise guards see the action this
+     turn will actually take. Both only ever tighten, so the order cannot loosen anything — it
+     decides which REASON reaches the operator, and "monthly or annual not confirmed yet" is
+     more use to them than a money-guard message about a total that is no longer going out. */
+  const narrowed = merged
+    ? narrowByQualification(parsed.decision.action_required, merged)
+    : { action: parsed.decision.action_required, narrowed: false, reason: "" };
+
   const ruled = applyHandoverRules({
-    decision: parsed.decision,
-    seats: args.lead.seats,
+    decision: narrowed.narrowed
+      ? { ...parsed.decision, action_required: narrowed.action }
+      : parsed.decision,
+    seats: merged?.seats ?? args.lead.seats,
     allowedMoney: prompt.allowedMoney,
   });
 
   return {
     ok: true,
     decision: ruled.decision,
-    overruled: ruled.overruled,
-    overruleReason: ruled.reason,
+    /* Either stage may have overruled the model. The reasons are joined rather than one
+       winning, because they are different facts about the same message and an operator
+       reading only the second one would not know the qualifier had also objected. */
+    overruled: ruled.overruled || narrowed.narrowed,
+    overruleReason: [narrowed.reason, ruled.reason].filter(Boolean).join(" "),
     allowedMoney: prompt.allowedMoney,
   };
 }
