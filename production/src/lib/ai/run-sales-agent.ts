@@ -98,7 +98,7 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
      values. */
   const { data: leadRow } = await args.admin
     .from("leads")
-    .select("company, contact_name, seats, plan, gstin")
+    .select("company, contact_name, seats, plan, gstin, domain")
     .eq("id", args.leadId)
     .eq("tenant_id", args.tenantId)
     .maybeSingle();
@@ -109,6 +109,7 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
     seats?: number | null;
     plan?: string | null;
     gstin?: string | null;
+    domain?: string | null;
   };
   const company = lead.company ?? "Customer";
   const contactName = lead.contact_name ?? "";
@@ -153,6 +154,9 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
     sellerName: args.sellerName,
     sellerEmail: args.fromEmail,
     extraAuthorisedTotals: quote.totals,
+    /* The customer own domain, so the agent can observe what their mail runs on today. The
+       lookup and its guard live in sales-agent.server.ts — see observeDomain there. */
+    domain: lead.domain ?? null,
   });
 
   if (!run.ok) {

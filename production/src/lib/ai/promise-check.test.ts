@@ -163,3 +163,49 @@ describe("edge inputs", () => {
     expect(safe("I will send it\r\nby Friday.")).toBe(false);
   });
 });
+
+describe("Hinglish durations — the hole found on 25 Aug 2026", () => {
+  it("catches the sentence a brief asked the agent to write", () => {
+    /* THE ONE THAT STARTED IT. "in 2 hours" was already caught; this puts the number first and
+       the unit in Hindi, which matched nothing — a duration promise about work whose length
+       depends entirely on how many mailboxes there are and how big they are. */
+    const p = findPromises("Hum aapke saare emails 2 ghante mein migrate kar denge.");
+    expect(p.safe).toBe(false);
+    expect(p.findings.map((f) => f.matched).join(" ")).toContain("2 ghante");
+  });
+
+  it.each([
+    "3 ghanta lagega",
+    "2 din mein ho jayega",
+    "1 hafte mein setup complete",
+    "6 mahine ka plan activate kar denge",
+    "we will finish this in 4 hours",
+    "migration 2 hours mein complete",
+    "done in 3 working days",
+  ])("catches %s", (text) => {
+    expect(findPromises(text).safe).toBe(false);
+  });
+
+  it("does NOT catch a duration that describes somebody else's process", () => {
+    /* Caught by an existing support-agent test the moment this rule was broadened, and it was
+       right to: "DNS changes can take up to 48 hours to propagate" is a statement about how the
+       internet works and an upper BOUND that protects us — the opposite of a deadline we could
+       miss. A guard that blocks it would make the honest DNS answer unsendable. */
+    expect(findPromises("DNS changes can take up to 48 hours to propagate.").safe).toBe(true);
+  });
+
+  it.each([
+    "Propagation takes 24 hours in most cases.",
+    "Verification can take up to 72 hours at some registrars.",
+    "Google's own sync takes 2 days for large mailboxes.",
+  ])("leaves %s alone", (text) => {
+    expect(findPromises(text).safe).toBe(true);
+  });
+
+  it("still allows the vague futures that make a safe reply possible", () => {
+    /* The original comment on DATE_RE: "shortly" and "soon" promise nothing anyone can hold a
+       stopwatch to, and they are what makes a safe acknowledgement possible at all. */
+    expect(findPromises("We will get back to you shortly.").safe).toBe(true);
+    expect(findPromises("Someone from the team will call you soon.").safe).toBe(true);
+  });
+});

@@ -46,6 +46,7 @@ import { findPromises } from "./promise-check";
 import { CUSTOM_PRICING_ABOVE, authorisedRatesForItem, discountedRate, slabFor, slabLines } from "@/lib/pricing/volume-slabs";
 import { authorisedNetCostFigures, computeNetCost, netCostLines } from "@/lib/pricing/net-cost";
 import { battlecardLines } from "./battlecards";
+import { MIGRATION_CLAIMS_FORBIDDEN } from "@/lib/dns/domain-inspect";
 
 /**
  * Deals above this many seats are not auto-quoted, whatever the model thinks.
@@ -203,6 +204,14 @@ export interface BuildPromptArgs {
   sellerName: string;
   /** The address the agent signs as, e.g. "sales@anutech.in". */
   sellerEmail: string;
+  /**
+   * Finished sentences about the customer's OWN domain, from lib/dns/domain-inspect.
+   *
+   * Observations, never prescriptions: what their MX says today, which the customer can verify
+   * in thirty seconds. The module refuses to name a target record, and the block below repeats
+   * the migration claims the model must not attach to them.
+   */
+  domainFacts?: readonly string[];
 }
 
 export interface BuiltPrompt {
@@ -370,7 +379,7 @@ function rupees(n: number): string {
  * it to multiply would be handing it arithmetic, which it is explicitly not trusted with.
  */
 export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
-  const { lead, catalog, incoming, sellerName, sellerEmail } = args;
+  const { lead, catalog, incoming, sellerName, sellerEmail, domainFacts } = args;
 
   const history = args.history.slice(-MAX_CONTEXT_TURNS);
 
@@ -438,6 +447,15 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
     "You do not decide a discount; you read it off this table by seat count. Never invent a",
     "percentage, never round one up, and never offer a discount to win an argument.",
     "",
+    ...(domainFacts && domainFacts.length > 0
+      ? [
+          "WHAT THEIR DOMAIN SAYS TODAY (an observation — state it, do not go beyond it)",
+          domainFacts.join("\n"),
+          "You must NOT state:",
+          ...MIGRATION_CLAIMS_FORBIDDEN.map((c) => `  - ${c}`),
+          "",
+        ]
+      : []),
     ...(battlecards
       ? [
           "THIS MESSAGE RAISED AN OBJECTION. Handle it as follows.",

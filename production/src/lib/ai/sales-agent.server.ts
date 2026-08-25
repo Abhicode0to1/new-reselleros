@@ -24,6 +24,8 @@ import { createClient as createBareClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { resolveGeminiConfig, geminiJson } from "./gemini";
+import { lookupDomainMx } from "@/lib/dns/domain-inspect.server";
+import { identifyProvider, inspectionFacts } from "@/lib/dns/domain-inspect";
 import {
   applyHandoverRules,
   buildSalesAgentPrompt,
@@ -259,6 +261,31 @@ export type SalesAgentRun =
  * "AI drafting is not configured" is fixed on a settings page; "draft failed" is fixed by
  * asking an engineer, and that difference is the whole reason `onFailure` exists in gemini.ts.
  */
+/**
+ * Look at the customer's own domain and turn it into sentences the agent may state.
+ *
+ * Returns undefined — not an empty array — when there is no domain or nothing resolved, so the
+ * prompt omits the block entirely rather than rendering an empty heading. A section that says
+ * "here is what we found" followed by nothing is worse than no section.
+ *
+ * The block it produces is observations only. `inspectionFacts` refuses to name a target record
+ * and `MIGRATION_CLAIMS_FORBIDDEN` travels with it into the prompt — see
+ * lib/dns/domain-inspect.ts for why reading back what a customer HAS is safe while prescribing
+ * what they should switch TO is not.
+ */
+async function observeDomain(domain: string | null | undefined): Promise<string[] | undefined> {
+  if (!domain?.trim()) return undefined;
+  const lookup = await lookupDomainMx(domain);
+  if (!lookup.domain) return undefined;
+  /* A failed lookup still produces the "probably a typo, ask them" line, which is useful — so
+     only a domain we could not even parse is dropped. */
+  return inspectionFacts({
+    domain: lookup.domain,
+    verdict: identifyProvider(lookup.mx),
+    mx: lookup.mx,
+  });
+}
+
 export async function runSalesAgent(args: {
   admin: SupabaseClient<Database>;
   tenantId: string;
@@ -272,6 +299,14 @@ export async function runSalesAgent(args: {
    * BuildPromptArgs.authorisedTotals for why a total has to be authorised at all.
    */
   extraAuthorisedTotals?: readonly number[];
+  /**
+   * The customer's own domain, if we know it — `leads.domain`.
+   *
+   * Looked up here rather than passed in as facts, so one call site cannot forget the guard
+   * that comes with it. The lookup is bounded at 3 seconds and never throws; a slow resolver
+   * costs the agent a fact, not the customer their reply.
+   */
+  domain?: string | null;
 }): Promise<SalesAgentRun> {
   const cfg = await resolveGeminiConfig(args.admin, args.tenantId);
   if (!cfg.apiKey) {
@@ -319,6 +354,7 @@ export async function runSalesAgent(args: {
     catalog,
     sellerName: args.sellerName,
     sellerEmail: args.sellerEmail,
+    domainFacts: await observeDomain(args.domain),
   });
 
   let failure = "";

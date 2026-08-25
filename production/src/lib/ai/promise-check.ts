@@ -63,6 +63,35 @@ const DATE_RE = new RegExp(
     String.raw`\b(?:mon|tues?|wed(?:nes)?|thur?s?|fri|sat(?:ur)?|sun)day\b`,
     String.raw`\b(?:eod|cob|end\s+of\s+(?:day|week)|close\s+of\s+business)\b`,
     String.raw`\b(?:with)?in\s+\d+\s*(?:hour|hr|day|week|month)s?\b`,
+    /* ── THE HOLE THIS CLOSES, FOUND 25 AUG 2026 ─────────────────────────────
+       The line above needs the preposition FIRST — "in 2 hours". Half the sentences this
+       agent will actually write put the number first and the unit in Hindi:
+
+           "aapke saare emails 2 ghante mein migrate kar denge"
+
+       which is a duration promise in every sense that matters and matched nothing here. It
+       came out of a brief asking the agent to say exactly that, and the guard would have let
+       it through: a commitment somebody can hold a stopwatch to, made by a machine, about work
+       whose length depends entirely on how many mailboxes there are and how big they are.
+
+       Both orders are covered now, in Latin and in Hinglish. `ghanta`/`ghante`, `din`,
+       `hafta`/`hafte`, `mahina`/`mahine` are the units that appear in real Hinglish sales
+       writing; the bare English form ("2 hours", "3 working days") is added for the same
+       reason — the preposition was never what made it a promise.
+
+       ─── AND A DURATION IS NOT ALWAYS A PROMISE ──────────────────────────
+       Broadening this caught something it should not have, immediately, in an existing test:
+
+           "DNS changes can take up to 48 hours to propagate."
+
+       That is not a commitment. It is a statement about how the internet works, and it is an
+       upper BOUND that protects us rather than a deadline we could miss — the opposite end of
+       the thing this rule is for. The original comment on this block already drew that line
+       ("vague futures are deliberately NOT here"), and the fix is to keep drawing it: a
+       duration introduced by "up to" or "takes" is describing somebody else's process, while
+       "2 ghante mein kar denge" has us as the actor. The lookbehinds are what separate them. */
+    String.raw`(?<!\bup\s+to\s)(?<!\btakes?\s)(?<!\btaking\s)\b\d+\s*(?:ghante?a?|din|haft[ae]|mahin[ae])\b`,
+    String.raw`(?<!\bup\s+to\s)(?<!\btakes?\s)(?<!\btaking\s)\b\d+\s*(?:working|business)?\s*(?:hour|hr|day|week|month)s?\b(?=[^\w]*(?:me?in|me|within|and|,|\.|$|\s))`,
     String.raw`\b(?:next|this|coming)\s+(?:week|month|monday|friday)\b`,
     /* 25 Aug · 25/08 · 2026-08-25 · 25th */
     String.raw`\b\d{1,2}\s*(?:st|nd|rd|th)?\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)`,
