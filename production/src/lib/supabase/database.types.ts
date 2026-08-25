@@ -1146,6 +1146,9 @@ type QuoteRow = {
   status: "draft" | "sent" | "viewed" | "accepted" | "rejected" | "expired";
   owner_id: string | null;
   created_date: string;
+  /** When the desk was told this quote is being read repeatedly. Set once — migration
+   *  20260825200000. */
+  hot_lead_alerted_at: string | null;
   expires_date: string | null;
   pdf_url: string | null;
   line_items: QuoteLineItem[];

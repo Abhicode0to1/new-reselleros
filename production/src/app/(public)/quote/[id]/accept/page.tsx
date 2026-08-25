@@ -8,12 +8,15 @@
  * Customer can accept, request changes, or print the quote here.
  */
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { Quote, QuoteLineItem, LineCommitment } from "@/lib/supabase/database.types";
 import { quoteTokenMatches } from "@/lib/quotes/accept-token";
 import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
 import { quoteAmountDue } from "@/lib/payments/amount-due";
 import { QuoteAcceptView, type PublicQuote, type PublicLine } from "./quote-accept-view";
+import { isBotUserAgent } from "@/lib/quotes/quote-intent";
+import { maybeAlertHotLead, recordQuoteView } from "@/lib/quotes/quote-views.server";
 
 export const dynamic = "force-dynamic"; // never cache — quotes change state
 
@@ -52,7 +55,7 @@ export default async function QuoteAcceptPage({ params, searchParams }: Props) {
     // payment_status / payment_amount / invoice_id are here for quoteAmountDue, which
     // refuses to build a UPI QR for money already settled or already asked for on an
     // invoice — two documents collecting the same amount is how a customer pays twice.
-    .select("id, status, tenant_id, public_token, customer_name, subtotal, discount_pct, tax_rate, amount, expires_date, notes, line_items, billing_cycle, currency, exchange_rate, payment_status, payment_amount, invoice_id")
+    .select("id, status, tenant_id, public_token, customer_name, subtotal, discount_pct, tax_rate, amount, expires_date, notes, line_items, billing_cycle, currency, exchange_rate, payment_status, payment_amount, invoice_id, hot_lead_alerted_at")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -69,6 +72,45 @@ export default async function QuoteAcceptPage({ params, searchParams }: Props) {
   // Don't expose draft quotes via public link — they're not meant for customer eyes
   if (quote.status === "draft") {
     notFound();
+  }
+
+  /* ── VIEW TRACKING ────────────────────────────────────────────────────────
+     Recorded HERE, on our own page, rather than by an analytics pixel. The brief asked for a
+     pixel and it fails in the expensive direction: Gmail pre-fetches images through its proxy,
+     so a pixel fires with no human involved, and three of those tell a rep to ring somebody who
+     never opened the quote. A false hot lead costs more than a missed one — after two of them
+     nobody acts on the third.
+
+     Placed AFTER the token check and the draft check on purpose: a fetch that was not allowed
+     to see the quote is not a view of it, and counting enumeration attempts as customer
+     interest would be the easiest possible way to fake a hot lead.
+
+     Awaited rather than fired and forgotten, because a Server Component's floating promise can
+     be cut off when the render finishes — but it never throws, so a failed analytics write
+     cannot stop a customer reading their quote. See lib/quotes/quote-views.server.ts. */
+  const ua = headers().get("user-agent");
+  await recordQuoteView({
+    tenantId: quote.tenant_id,
+    quoteId: quote.id,
+    userAgent: ua,
+    /* First hop of X-Forwarded-For — Cloud Run puts the client there. Hashed with a salt
+       before storage; the address itself is never written. */
+    ip: (headers().get("x-forwarded-for") ?? "").split(",")[0].trim() || null,
+  });
+
+  /* And then, only if this is a person reading it repeatedly, tell the desk. Once.
+     Not gated by the autonomy dial: this is the app talking to OUR OWN desk, the same
+     exemption the SLA breach alert has and the same reason `compliance.send` was removed from
+     the registry — the dial must never be able to silence what the app says to us. */
+  if (!isBotUserAgent(ua)) {
+    await maybeAlertHotLead({
+      admin: supabase,
+      tenantId: quote.tenant_id,
+      quoteId: quote.id,
+      customerName: quote.customer_name ?? "",
+      amount: quote.amount ?? 0,
+      alreadyAlertedAt: quote.hot_lead_alerted_at ? new Date(quote.hot_lead_alerted_at) : null,
+    }).catch((err) => console.error("[quote/accept] hot-lead check failed:", err));
   }
 
   // Fetch tenant info for the brand header. Phone + address help the customer
