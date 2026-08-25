@@ -642,7 +642,7 @@ function DashboardMockup() {
     <div className="flex min-h-[420px]">
       {/* Sidebar */}
       <aside className="hidden w-[180px] shrink-0 border-r border-hairline/60 bg-paper-2/30 p-3 sm:block backdrop-blur-md">
-        <div className="mb-4 px-2 font-mono text-[9px] uppercase tracking-wider text-ink-3 font-semibold">
+        <div className="mb-4 px-2 font-mono text-3xs uppercase tracking-wider text-ink-3 font-semibold">
           Excel Tech
         </div>
         <SidebarItem icon="home"    label="Dashboard" active />
@@ -663,7 +663,7 @@ function DashboardMockup() {
         <div className="absolute top-0 right-0 h-64 w-64 bg-amber/5 blur-[100px] rounded-full pointer-events-none" />
 
         {/* Breadcrumb */}
-        <p className="mb-1 font-mono text-[9px] uppercase tracking-wider text-ink-3">
+        <p className="mb-1 font-mono text-3xs uppercase tracking-wider text-ink-3">
           Friday, 29 May 2026
         </p>
         <h4 className="mb-4 font-serif text-lg tracking-tight">
@@ -725,7 +725,7 @@ function SidebarItem({
       <Icon name={icon} className={`h-3.5 w-3.5 ${active ? "text-amber" : "text-ink-3"}`} />
       <span className="flex-1 font-medium">{label}</span>
       {badge && (
-        <span className="rounded-full bg-amber-soft px-1.5 py-px font-mono text-[9px] text-amber-ink font-semibold">
+        <span className="rounded-full bg-amber-soft px-1.5 py-px font-mono text-3xs text-amber-ink font-semibold">
           {badge}
         </span>
       )}
@@ -736,7 +736,7 @@ function SidebarItem({
 function KpiTile({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="rounded-lg border border-hairline/60 bg-paper/80 p-3 shadow-sm backdrop-blur-sm transition-transform hover:-translate-y-0.5 hover:shadow-md">
-      <p className="font-mono text-[9px] uppercase tracking-wider text-ink-3 font-semibold">{label}</p>
+      <p className="font-mono text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</p>
       <p className="mt-0.5 font-serif text-lg leading-tight tracking-tight text-ink">{value}</p>
       <p className="text-3xs text-ink-3">{hint}</p>
     </div>
@@ -771,7 +771,7 @@ function QuoteRow({
         {amount}
       </td>
       <td className="px-4 py-2.5 text-right">
-        <span className={`inline-block rounded-full px-2 py-px border font-mono text-[9px] uppercase tracking-wider font-semibold ${statusStyle[status]}`}>
+        <span className={`inline-block rounded-full px-2 py-px border font-mono text-3xs uppercase tracking-wider font-semibold ${statusStyle[status]}`}>
           {status}
         </span>
       </td>
@@ -795,10 +795,10 @@ function KanbanMockup() {
         {cols.map((c) => (
           <div key={c.name}>
             <div className="mb-2 flex items-center justify-between px-1.5">
-              <span className="font-mono text-[9px] uppercase tracking-wider text-ink-3 font-semibold">
+              <span className="font-mono text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 {c.name}
               </span>
-              <span className="font-mono text-[9px] text-ink-3 font-medium bg-paper px-1.5 rounded-full shadow-sm">
+              <span className="font-mono text-3xs text-ink-3 font-medium bg-paper px-1.5 rounded-full shadow-sm">
                 {c.items.length}
               </span>
             </div>
@@ -824,14 +824,14 @@ function QuoteBuilderMockup() {
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h4 className="font-serif text-base tracking-tight">New Quote</h4>
-            <p className="font-mono text-[9px] text-ink-3">Q-2026-27-0042</p>
+            <p className="font-mono text-3xs text-ink-3">Q-2026-27-0042</p>
           </div>
           <Badge kind="warning" size="sm">Draft</Badge>
         </div>
         
         <div className="space-y-3">
           <div className="rounded-md border border-hairline/60 bg-paper p-3 shadow-sm">
-            <p className="font-mono text-[9px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Customer</p>
+            <p className="font-mono text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Customer</p>
             <div className="flex items-center gap-2">
               <div className="h-6 w-6 rounded bg-indigo/10 flex items-center justify-center text-indigo font-serif text-3xs">T</div>
               <div>
@@ -845,9 +845,9 @@ function QuoteBuilderMockup() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-hairline/40">
-                  <th className="pb-2 font-mono text-[9px] uppercase text-ink-3">Item</th>
-                  <th className="pb-2 font-mono text-[9px] uppercase text-ink-3 text-right">Qty</th>
-                  <th className="pb-2 font-mono text-[9px] uppercase text-ink-3 text-right">Rate</th>
+                  <th className="pb-2 font-mono text-3xs uppercase text-ink-3">Item</th>
+                  <th className="pb-2 font-mono text-3xs uppercase text-ink-3 text-right">Qty</th>
+                  <th className="pb-2 font-mono text-3xs uppercase text-ink-3 text-right">Rate</th>
                 </tr>
               </thead>
               <tbody>
@@ -936,11 +936,11 @@ function BankingMockup() {
           <div className="rounded-md border border-emerald/30 bg-emerald/5 p-2.5 flex justify-between items-center">
             <div>
               <p className="text-2xs font-medium text-ink">UPI/TechVista/INV-0042</p>
-              <p className="text-[9px] text-ink-3">May 28 • Cr</p>
+              <p className="text-3xs text-ink-3">May 28 • Cr</p>
             </div>
             <div className="flex items-center gap-2">
               <span className="font-serif text-sm text-emerald">₹6,30,000</span>
-              <span className="bg-emerald text-paper text-[9px] uppercase px-1.5 py-0.5 rounded font-mono tracking-wider">Matched</span>
+              <span className="bg-emerald text-paper text-3xs uppercase px-1.5 py-0.5 rounded font-mono tracking-wider">Matched</span>
             </div>
           </div>
           
@@ -948,12 +948,12 @@ function BankingMockup() {
             <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber" />
             <div className="pl-2">
               <p className="text-2xs font-medium text-ink">NEFT-SUNIL LOZA-HDFC</p>
-              <p className="text-[9px] text-ink-3">May 27 • Cr</p>
+              <p className="text-3xs text-ink-3">May 27 • Cr</p>
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className="font-serif text-sm text-emerald">₹28,900</span>
               <div className="flex gap-1">
-                <button className="bg-amber-soft text-amber-ink text-[9px] uppercase px-1.5 py-0.5 rounded font-mono hover:bg-amber/30 transition-colors">Accept Match</button>
+                <button className="bg-amber-soft text-amber-ink text-3xs uppercase px-1.5 py-0.5 rounded font-mono hover:bg-amber/30 transition-colors">Accept Match</button>
               </div>
             </div>
           </div>
@@ -961,11 +961,11 @@ function BankingMockup() {
           <div className="rounded-md border border-hairline/60 bg-paper p-2.5 flex justify-between items-center shadow-sm">
             <div>
               <p className="text-2xs font-medium text-ink">AWS EMEA SARL</p>
-              <p className="text-[9px] text-ink-3">May 25 • Dr</p>
+              <p className="text-3xs text-ink-3">May 25 • Dr</p>
             </div>
             <div className="flex items-center gap-2">
               <span className="font-serif text-sm text-rose">₹12,450</span>
-              <span className="border border-hairline text-ink-3 text-[9px] uppercase px-1.5 py-0.5 rounded font-mono">Unreconciled</span>
+              <span className="border border-hairline text-ink-3 text-3xs uppercase px-1.5 py-0.5 rounded font-mono">Unreconciled</span>
             </div>
           </div>
         </div>

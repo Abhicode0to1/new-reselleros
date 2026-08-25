@@ -626,7 +626,7 @@ export default function SubscriptionsPage() {
                     {/* The date needs saying what it IS. On desktop the column
                         header does that job; the card has no header, so a bare
                         date could read as "started", "paid" or "expires". */}
-                    <p className="text-[9px] uppercase tracking-wider text-ink-3 leading-none mb-0.5">Renewal</p>
+                    <p className="text-3xs uppercase tracking-wider text-ink-3 leading-none mb-0.5">Renewal</p>
                     <p className="text-xs text-ink-2 tabular-nums">
                       {s.renewal_date ? formatDate(s.renewal_date) : "—"}
                     </p>
@@ -729,7 +729,7 @@ export default function SubscriptionsPage() {
                         </span>
                         <span className="text-ink-3"> / {s.seats}</span>
                         {util.level === "unknown" && (
-                          <span className="block text-[9px] uppercase tracking-wider text-ink-3">not tracked</span>
+                          <span className="block text-3xs uppercase tracking-wider text-ink-3">not tracked</span>
                         )}
                       </td>
                       {/* MRR — the money, given weight. */}
@@ -747,7 +747,7 @@ export default function SubscriptionsPage() {
                             <span className="text-3xs text-ink-2 tabular-nums font-medium">{rupee(cogs.marginMonthly)}</span>
                           )}
                           {cogs.source === "catalog" && (
-                            <span className="text-[9px] uppercase tracking-wider text-ink-3">est.</span>
+                            <span className="text-3xs uppercase tracking-wider text-ink-3">est.</span>
                           )}
                         </div>
                       </td>

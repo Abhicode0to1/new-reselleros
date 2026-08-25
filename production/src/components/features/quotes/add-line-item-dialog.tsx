@@ -244,12 +244,12 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
                             // so the picker shows the SAME currency the quote bills in.
                             <div className="font-medium text-sm">
                               {formatForeign(it.msrp / fx, currency ?? "USD")}/mo
-                              <span className="block text-[9px] text-ink-3 font-normal">≈ {rupee(it.msrp)} @ ₹{fx}</span>
+                              <span className="block text-3xs text-ink-3 font-normal">≈ {rupee(it.msrp)} @ ₹{fx}</span>
                             </div>
                           ) : (
                             <div className="font-medium text-sm">
                               {rupee(it.msrp)}/mo
-                              {isUsd && <span className="block text-[9px] text-amber-ink font-normal">set the exchange rate to show {currency}</span>}
+                              {isUsd && <span className="block text-3xs text-amber-ink font-normal">set the exchange rate to show {currency}</span>}
                             </div>
                           )}
                           <div className={cn(

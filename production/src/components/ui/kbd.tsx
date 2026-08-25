@@ -60,7 +60,7 @@ export function Kbd({ keys, className, sequence }: KbdProps) {
       {keys.map((k, i) => (
         <React.Fragment key={`${k}-${i}`}>
           {i > 0 && (
-            <span aria-hidden="true" className="px-0.5 text-[9px] text-ink-3">
+            <span aria-hidden="true" className="px-0.5 text-3xs text-ink-3">
               {sequence ? "" : "+"}
             </span>
           )}

@@ -943,7 +943,7 @@ function HeroVisual() {
                   </span>
                   {row.tag && (
                     <span
-                      className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold flex-shrink-0 ${
+                      className={`text-3xs uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold flex-shrink-0 ${
                         row.tag.color === "emerald" ? "bg-emerald-soft text-emerald" :
                         row.tag.color === "blue"    ? "bg-indigo-soft text-indigo-ink" :
                         "bg-paper-2 text-ink-3"
@@ -1382,7 +1382,7 @@ export function BuyWorkspaceClient({
                           />
                         )}
                       </div>
-                      <span className="text-[9px] font-medium text-ink-3 tracking-wide">{app.label}</span>
+                      <span className="text-3xs font-medium text-ink-3 tracking-wide">{app.label}</span>
                     </div>
                   ))}
                 </div>

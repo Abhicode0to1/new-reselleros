@@ -904,7 +904,7 @@ function LeadsPageInner() {
               lenses over the folders above, not places beside them. Do not add them
               to anything. */}
           <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-hairline" />
-          <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-ink-4 select-none">
+          <span className="shrink-0 text-3xs font-bold uppercase tracking-wider text-ink-4 select-none">
             Filter
           </span>
           {SALES_FLAGS.map((f) => {

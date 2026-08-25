@@ -170,7 +170,7 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
         </Tooltip>
         {unreadCount > 0 && (
           <span
-            className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose text-white text-[9px] font-bold grid place-items-center ring-2 ring-paper pointer-events-none tabular-nums"
+            className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose text-white text-3xs font-bold grid place-items-center ring-2 ring-paper pointer-events-none tabular-nums"
             aria-hidden="true"
           >
             {unreadCount}

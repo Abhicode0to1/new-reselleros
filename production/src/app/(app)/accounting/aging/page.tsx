@@ -367,7 +367,7 @@ function Mini({ label, value, tone }: { label: string; value: number; tone?: "am
                    : "text-ink-3";
   return (
     <div className="rounded-md border border-hairline p-1.5 text-center bg-paper">
-      <div className="text-[9px] uppercase tracking-wider text-ink-3 font-semibold leading-none mb-0.5">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold leading-none mb-0.5">{label}</div>
       <div className={`font-mono leading-none ${colorClass}`}>{value > 0 ? rupee(value) : "—"}</div>
     </div>
   );

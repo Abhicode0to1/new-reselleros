@@ -485,7 +485,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                               {/* Why, and from which layer. Hidden once overridden, because
                                   then the reason is simply "you chose it". */}
                               {suggestion && override[i] === undefined && (
-                                <span className="block text-[9px] text-ink-3 truncate max-w-[150px]">
+                                <span className="block text-3xs text-ink-3 truncate max-w-[150px]">
                                   {suggestion.layer === "tenant-rule" ? suggestion.reason : "keyword"}
                                 </span>
                               )}
@@ -508,7 +508,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                                 if (!direction || candidates.length === 0) return null;
                                 return (
                                   <span className="mt-1 block">
-                                    <span className="block text-[9px] text-ink-3">Always file as {override[i]} when it says:</span>
+                                    <span className="block text-3xs text-ink-3">Always file as {override[i]} when it says:</span>
                                     <span className="flex flex-wrap items-center gap-1 mt-0.5">
                                       {candidates.map((c) => (
                                         <button
@@ -521,7 +521,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                                               { onSuccess: () => setRuleDone((d) => ({ ...d, [i]: true })) },
                                             );
                                           }}
-                                          className="rounded border border-amber/50 bg-amber-soft px-1 py-0.5 text-[9px] font-medium text-amber-ink hover:bg-amber/20 disabled:opacity-50"
+                                          className="rounded border border-amber/50 bg-amber-soft px-1 py-0.5 text-3xs font-medium text-amber-ink hover:bg-amber/20 disabled:opacity-50"
                                         >
                                           {c}
                                         </button>
@@ -530,7 +530,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                                       <button
                                         type="button"
                                         onClick={() => setRuleDone((d) => ({ ...d, [i]: true }))}
-                                        className="text-[9px] text-ink-3 underline hover:text-ink-2"
+                                        className="text-3xs text-ink-3 underline hover:text-ink-2"
                                       >
                                         just this once
                                       </button>

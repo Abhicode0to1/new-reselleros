@@ -119,7 +119,7 @@ export function EmployeeDetailDrawer({
                   <div className="space-y-2 text-xs">
                     {/* Earnings */}
                     <div className="bg-paper-2/50 p-2 rounded-lg border border-hairline/60">
-                      <span className="font-bold text-ink block uppercase text-[9.5px] tracking-wider mb-1">1. Earnings (Gross {rupee(ctc.grossMonthly)}/mo)</span>
+                      <span className="font-bold text-ink block uppercase text-3xs tracking-wider mb-1">1. Earnings (Gross {rupee(ctc.grossMonthly)}/mo)</span>
                       <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-2xs text-ink-2">
                         <div>Basic (50%): <b className="font-mono">{rupee(ctc.basicMonthly)}</b></div>
                         <div>HRA (40%): <b className="font-mono">{rupee(ctc.hraMonthly)}</b></div>
@@ -131,7 +131,7 @@ export function EmployeeDetailDrawer({
 
                     {/* Retirals */}
                     <div className="bg-paper-2/50 p-2 rounded-lg border border-hairline/60">
-                      <span className="font-bold text-amber-800 block uppercase text-[9.5px] tracking-wider mb-1">2. Employer Contributions ({rupee(ctc.totalEmployerContributionMonthly)}/mo)</span>
+                      <span className="font-bold text-amber-800 block uppercase text-3xs tracking-wider mb-1">2. Employer Contributions ({rupee(ctc.totalEmployerContributionMonthly)}/mo)</span>
                       <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-2xs text-ink-2">
                         <div>EPF Share: <b className="font-mono">{rupee(ctc.employerEpfShareMonthly)}</b></div>
                         <div>EPS Pension: <b className="font-mono">{rupee(ctc.employerEpsMonthly)}</b></div>
@@ -142,7 +142,7 @@ export function EmployeeDetailDrawer({
 
                     {/* Net Take Home */}
                     <div className="bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 text-emerald-900">
-                      <span className="font-bold block uppercase text-[9.5px] tracking-wider mb-1 text-emerald-800">3. Employee Net In-Hand Take Home</span>
+                      <span className="font-bold block uppercase text-3xs tracking-wider mb-1 text-emerald-800">3. Employee Net In-Hand Take Home</span>
                       <div className="flex items-center justify-between font-extrabold text-sm text-emerald-700">
                         <span>Net Payout / Month:</span>
                         <span className="font-mono">{rupee(ctc.netTakeHomeMonthly)}</span>

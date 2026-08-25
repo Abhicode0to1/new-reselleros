@@ -279,7 +279,7 @@ function PinPad({ employee, requireSelfie, onClose }: { employee: Employee; requ
               className="mx-auto mb-3 flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3 hover:border-amber/50 hover:text-amber-ink"
             >
               <Icon name="eye" size={22} />
-              <span className="text-[9px] leading-tight">Tap for camera</span>
+              <span className="text-3xs leading-tight">Tap for camera</span>
             </button>
           )}
           <div className="font-serif text-2xl text-ink">{employee.name}</div>

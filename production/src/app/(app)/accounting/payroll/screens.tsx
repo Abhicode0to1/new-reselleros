@@ -256,7 +256,7 @@ export function EmployeesTab() {
                       <td className="px-4 py-3 text-right font-mono tabular-nums" title={leaveTitle}>
                         <span className={cn(left === 0 && allowance > 0 && "text-amber-ink")}>{left}</span>
                         <span className="text-ink-3"> / {allowance}</span>
-                        {prorated && <span className="ml-1 text-[9px] uppercase tracking-wide text-ink-3 font-sans not-italic" title={leaveTitle}>pro-rata</span>}
+                        {prorated && <span className="ml-1 text-3xs uppercase tracking-wide text-ink-3 font-sans not-italic" title={leaveTitle}>pro-rata</span>}
                       </td>
                       <td className="px-4 py-3"><Badge kind={e.is_active ? "success" : "muted"} dot>{e.is_active ? "Active" : "Inactive"}</Badge></td>
                       <td className="px-4 py-3 text-right" onClick={(ev) => ev.stopPropagation()}>
@@ -2336,7 +2336,7 @@ function AttendanceRegister({ period, employees, attendance }: { period: string;
                     )}
                   >
                     {d}
-                    {kind !== "work" && <div className="text-[7px] leading-none font-semibold">{kind === "sunday" ? "S" : "H"}</div>}
+                    {kind !== "work" && <div className="text-3xs leading-none font-semibold">{kind === "sunday" ? "S" : "H"}</div>}
                   </th>
                 );
               })}
@@ -2362,8 +2362,8 @@ function AttendanceRegister({ period, employees, attendance }: { period: string;
                       >
                         {isPresent
                           ? <span className="font-semibold text-emerald">P</span>
-                          : kind === "sunday" ? <span className="text-indigo/50 text-[9px]">S</span>
-                          : kind === "holiday" ? <span className="text-amber-ink/60 text-[9px]">H</span>
+                          : kind === "sunday" ? <span className="text-indigo/50 text-3xs">S</span>
+                          : kind === "holiday" ? <span className="text-amber-ink/60 text-3xs">H</span>
                           : future ? <span className="text-ink-3/25">·</span>
                           : <span className="text-ink-3/40">–</span>}
                       </td>

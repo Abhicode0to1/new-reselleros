@@ -368,7 +368,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-ink whitespace-nowrap">{row.label}</span>
                       {row.badge && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber text-paper font-semibold tracking-wider uppercase">
+                        <span className="text-3xs px-1.5 py-0.5 rounded-full bg-amber text-paper font-semibold tracking-wider uppercase">
                           {row.badge}
                         </span>
                       )}

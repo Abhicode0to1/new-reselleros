@@ -204,7 +204,7 @@ function EnrollFaceCard() {
           {!camOn && (
             <button type="button" onClick={start}
               className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3">
-              <Icon name="eye" size={20} /><span className="text-[9px]">Tap</span>
+              <Icon name="eye" size={20} /><span className="text-3xs">Tap</span>
             </button>
           )}
         </div>

@@ -77,7 +77,7 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
             <span
               title={`${intent.label} — ${intent.reason}`}
               className={cn(
-                "px-1 py-0.5 rounded text-[9px] font-bold leading-none",
+                "px-1 py-0.5 rounded text-3xs font-bold leading-none",
                 intent.tier === "hot"  && "bg-rose-soft text-rose",
                 intent.tier === "warm" && "bg-amber-soft text-amber-ink",
                 intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
@@ -88,7 +88,7 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
             {stale7 && (
               <span
                 title={stale7.message}
-                className="inline-flex items-center gap-1 px-1 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-soft/70 text-amber-ink border border-amber/30"
+                className="inline-flex items-center gap-1 px-1 py-0.5 rounded text-3xs font-bold leading-none bg-amber-soft/70 text-amber-ink border border-amber/30"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" />
                 {stale7.days}d

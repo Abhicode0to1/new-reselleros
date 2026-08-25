@@ -183,7 +183,7 @@ function FeedbackCard({ row, userId }: { row: FeedbackWithShots; userId: string 
           title={row.severity_score === null ? "Not triaged yet" : `Severity ${row.severity_score} of 100`}
         >
           <span className="text-sm font-bold leading-none text-ink">{row.severity_score ?? "—"}</span>
-          <span className="text-[9px] uppercase tracking-wide text-ink-4 mt-0.5">sev</span>
+          <span className="text-3xs uppercase tracking-wide text-ink-4 mt-0.5">sev</span>
         </div>
 
         <div className="flex-1 min-w-0">

@@ -108,7 +108,7 @@ function PayBadge({ e, today }: { e: Expense; today: string }) {
 function BillChip({ tone, label, title }: { tone: "rose" | "amber"; label: string; title?: string }) {
   const cls = tone === "rose" ? "bg-rose/10 text-rose" : "bg-amber-soft/70 text-amber-ink";
   return (
-    <span title={title} className={`inline-flex items-center gap-1 rounded-full ${cls} px-1.5 py-0.5 text-[9px] uppercase tracking-wide font-semibold align-middle`}>
+    <span title={title} className={`inline-flex items-center gap-1 rounded-full ${cls} px-1.5 py-0.5 text-3xs uppercase tracking-wide font-semibold align-middle`}>
       <Icon name="alert" size={10} /> {label}
     </span>
   );
@@ -671,8 +671,8 @@ export default function ExpensesPage() {
                     )}
                     <div className="font-medium text-ink leading-tight flex-1">
                       {e.category}
-                      {e.bill_type === "kaccha" && <span className="ml-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-soft/60 text-amber-ink align-middle">Kaccha bill</span>}
-                      {e.bill_type === "none" && <span className="ml-1.5 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper-2 text-ink-3 align-middle">No bill</span>}
+                      {e.bill_type === "kaccha" && <span className="ml-1.5 text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-soft/60 text-amber-ink align-middle">Kaccha bill</span>}
+                      {e.bill_type === "none" && <span className="ml-1.5 text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper-2 text-ink-3 align-middle">No bill</span>}
                       {isPayrollExpense(e)
                         ? (() => { const t = reconcileTag(e, salByExpense.get(e.id)); return t ? <ReconcileTag {...t} /> : null; })()
                         : <PayBadge e={e} today={today} />}

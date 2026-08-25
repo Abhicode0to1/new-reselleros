@@ -386,7 +386,7 @@ function OriginBadge({ kind, source }: { kind: "auto" | "manual" | "derived"; so
     derived: { icon: "zap" as const,      cls: "bg-slate-soft text-slate",     text: "derived", tip: "Derived — computed so the sheet balances" },
   }[kind];
   return (
-    <span title={cfg.tip} className={`inline-flex items-center gap-0.5 rounded-full ${cfg.cls} px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide align-middle`}>
+    <span title={cfg.tip} className={`inline-flex items-center gap-0.5 rounded-full ${cfg.cls} px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide align-middle`}>
       <Icon name={cfg.icon} size={9} /> {cfg.text}
     </span>
   );
