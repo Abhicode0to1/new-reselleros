@@ -45,6 +45,7 @@ import { verifyDraftMoney } from "./money-guard";
 import { findPromises } from "./promise-check";
 import { CUSTOM_PRICING_ABOVE, authorisedRatesForItem, discountedRate, slabFor, slabLines } from "@/lib/pricing/volume-slabs";
 import { authorisedNetCostFigures, computeNetCost, netCostLines } from "@/lib/pricing/net-cost";
+import { battlecardLines } from "./battlecards";
 
 /**
  * Deals above this many seats are not auto-quoted, whatever the model thinks.
@@ -379,6 +380,12 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
   const netCost = netCostFactsFor(catalog, lead, sellerName);
   const netCostBlock = netCost?.lines ?? null;
 
+  /* Objection handling, and ONLY when the incoming message actually raised one. Loading every
+     battlecard into every prompt would teach the agent to argue with customers who were not
+     arguing — and the cards are constraints as much as scripts, so the ones that do not apply
+     are noise the model has to read past. */
+  const battlecards = battlecardLines({ message: incoming, catalogue: catalog });
+
   const catalogueLines = catalog.map(
     (c) =>
       `- ${c.name} (${c.vendor}) — customer pays ${rupees(c.msrpPerSeatPerYear)} per seat per year` +
@@ -431,6 +438,13 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
     "You do not decide a discount; you read it off this table by seat count. Never invent a",
     "percentage, never round one up, and never offer a discount to win an argument.",
     "",
+    ...(battlecards
+      ? [
+          "THIS MESSAGE RAISED AN OBJECTION. Handle it as follows.",
+          battlecards.join("\n"),
+          "",
+        ]
+      : []),
     "AUTHORISED TOTALS (already worked out for you — state these, never your own arithmetic)",
     totalLines,
     "",

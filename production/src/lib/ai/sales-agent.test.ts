@@ -1027,3 +1027,53 @@ describe("the prompt's own examples must survive its own guards", () => {
     expect(SALES_AGENT_SYSTEM_PROMPT).toMatch(/Say WHAT you will do\s+and never WHEN/);
   });
 });
+
+describe("battlecards reach the prompt only when an objection was raised", () => {
+  const promptFor = (incoming: string) =>
+    buildSalesAgentPrompt({
+      lead: LEAD,
+      history: [],
+      incoming,
+      catalog: CATALOGUE,
+      sellerName: "ANUTECH",
+      sellerEmail: "sales@anutech.in",
+    }).user;
+
+  it("stays out of an ordinary enquiry", () => {
+    /* Loading every card into every prompt would teach the agent to argue with customers who
+       were not arguing, and the cards are constraints as much as scripts — the ones that do
+       not apply are noise the model has to read past. */
+    expect(promptFor("15 log ke liye Google Workspace chahiye, kitna lagega?"))
+      .not.toContain("THIS MESSAGE RAISED AN OBJECTION");
+  });
+
+  it("appears when the customer says a competitor is cheaper", () => {
+    const p = promptFor("Zoho cheaper hai, main Zoho le raha hu");
+    expect(p).toContain("THIS MESSAGE RAISED AN OBJECTION");
+    expect(p).toContain("we sell it too");
+  });
+
+  it("carries NO price anchor when we do not stock the named vendor", () => {
+    /* This fixture's catalogue is two Google items and no Zoho, so there is nothing to anchor
+       against — and the card falls back to asking what the customer needs rather than inventing
+       a comparison. Asserted here because the first version of this test expected the anchor
+       and was reading the wrong fixture: `priceAnchor` returning null IS the correct behaviour
+       for a vendor we do not carry. The anchor itself is covered in battlecards.test.ts, whose
+       catalogue has both. */
+    expect(promptFor("Zoho cheaper hai")).not.toContain("Price anchor");
+  });
+
+  it("forbids the vendor claims the brief asked for", () => {
+    /* The briefed card said "Direct Google par ... GST invoice lagne mein dikkat aati hai" —
+       the same claim lib/pricing/net-cost.ts refuses, because Google bills Indian customers
+       through Google Cloud India Pvt Ltd against an Indian GSTIN. Letting the battlecard say
+       it would break that guard from the other side, on the same day it was written. */
+    const p = promptFor("Main direct Google se khareed lunga");
+    expect(p).toContain("does not issue a GST invoice");
+    expect(p).toContain("no phone support");
+  });
+
+  it("never offers the comparison sheet that does not exist", () => {
+    expect(promptFor("Zoho cheaper hai").toLowerCase()).not.toContain("comparison sheet");
+  });
+});
