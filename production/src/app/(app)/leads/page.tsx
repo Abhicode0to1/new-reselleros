@@ -3217,14 +3217,22 @@ function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 }
 
-// Spreadsheet mode: Stage / Value / Priority / Follow-up are all editable in
-// place, so the four fields a rep changes most never need the drawer. Widths
-// still sum to 100% — Contact and Plan gave up room for the two new columns
-// rather than introducing a horizontal scrollbar.
-const LEADLIST_COL_ORDER = ["select", "company", "stage", "contact", "plan", "value", "priority", "followup", "closedate", "lastupdate", "actions"];
+// Spreadsheet mode: Stage / Value / Priority / Follow-up are all editable in place, so the
+// four fields a rep changes most never need the drawer.
+//
+// ─── THIS LIST IS HALF OF WHAT A COLUMN IS ─────────────────────────────────
+// `table-fixed` reads its widths from here, so removing a <th> and its <td> without
+// removing the entry leaves every later column wearing its neighbour's width. That is
+// exactly what happened when Contact and Last update came out on 26 Aug 2026: the Stage
+// select spilled across Plan and the row looked broken.
+//
+// Contact folded under the company name and Last update went entirely, so their 21%
+// is redistributed — most of it to company, which now carries the name, the intent
+// badge and the contact line, and a little to stage, whose select was already tight.
+const LEADLIST_COL_ORDER = ["select", "company", "stage", "plan", "value", "priority", "followup", "closedate", "actions"];
 const LEADLIST_COL_WIDTHS: Record<string, string> = {
-  select: "3%", company: "18%", stage: "10%", contact: "14%", plan: "11%",
-  value: "9%", priority: "7%", followup: "8%", closedate: "9%", lastupdate: "7%", actions: "9%",
+  select: "3%", company: "30%", stage: "12%", plan: "13%",
+  value: "10%", priority: "8%", followup: "8%", closedate: "9%", actions: "7%",
 };
 
 function LeadListView({
@@ -3480,7 +3488,6 @@ function LeadListView({
             </th>
             <SortHeader col="company" label="Company" />
             <SortHeader col="stage" label="Stage" />
-            <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Contact</th>
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Plan</th>
             <SortHeader col="value" label="Value" align="right" />
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Priority</th>
@@ -3494,7 +3501,6 @@ function LeadListView({
             >
               Close date
             </th>
-            <SortHeader col="age" label="Last update" />
             {/* Actions column — quick action icons on row hover. */}
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-right">
               <span className="sr-only">Quick actions</span>
@@ -3503,7 +3509,6 @@ function LeadListView({
         </thead>
         <tbody>
           {sorted.map((lead, rowIndex) => {
-            const age         = daysSince(lead.updated_at);
             const isSelected  = selectedIds.has(lead.id);
             // Heat → visual hierarchy. High-value (big money) wins the emerald
             // treatment; else a hot lead (priority high OR late-funnel stage)
@@ -3516,9 +3521,11 @@ function LeadListView({
             // can never disagree about the same lead.
             const intent = intentMeta(lead);
             const stale7 = staleWarning(lead);
-            const railCls     = isHighValue ? "border-l-2 border-emerald"
-                              : isHot       ? "border-l-2 border-rose"
-                              :               "border-l-2 border-transparent";
+            /* Hot first: high value is a fact about the deal, hot is a job for today. 4px
+               rather than 2 because at 2 it was there and nobody saw it. */
+            const railCls     = isHot       ? "border-l-4 border-rose"
+                              : isHighValue ? "border-l-4 border-emerald"
+                              :               "border-l-4 border-transparent";
             const isDup       = dupIds.has(lead.id);
             // Phone/email affordances now live inside <RowActions/>.
             const kbSelected = rowIndex === leadKeys.index;
@@ -3574,23 +3581,25 @@ function LeadListView({
                       </span>
                     ) : null}
                     <div className="min-w-0">
+                      {/* Above the name rather than beside it: it reads first, and it cannot push a
+                      long company name into an ellipsis the way an inline badge did. */}
+                      <span
+                      title={`${intent.label} — ${intent.reason}`}
+                      className={cn(
+                      "shrink-0 inline-flex items-center gap-0.5 rounded-full text-3xs font-semibold px-1.5 py-0.5 leading-none cursor-help",
+                      intent.tier === "hot"  && "bg-rose-soft text-rose-ink",
+                      intent.tier === "warm" && "bg-amber-soft text-amber-ink",
+                      intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
+                      )}
+                      >
+                      {intent.tier === "hot" ? "🔥" : intent.tier === "warm" ? "⚡" : "❄️"} {intent.label}
+                      </span>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-ink truncate">{lead.company}</span>
+                        <span className="font-medium text-ink truncate" title={lead.id}>{lead.company}</span>
                         {/* Intent tier — replaces the old binary "Hot" pill.
                             Cold deliberately outranks Hot (see heat.ts): a big
                             deal nobody has touched in 10 days is at risk, not
                             on fire. */}
-                        <span
-                          title={`${intent.label} — ${intent.reason}`}
-                          className={cn(
-                            "shrink-0 inline-flex items-center gap-0.5 rounded-full text-3xs font-semibold px-1.5 py-0.5 leading-none cursor-help",
-                            intent.tier === "hot"  && "bg-rose-soft text-rose-ink",
-                            intent.tier === "warm" && "bg-amber-soft text-amber-ink",
-                            intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
-                          )}
-                        >
-                          {intent.tier === "hot" ? "🔥" : intent.tier === "warm" ? "⚡" : "❄️"} {intent.label}
-                        </span>
                         {/* Stale nudge — fires at 7 days, BEFORE Cold at 10, so
                             there is still a window to save the deal. */}
                         {stale7 && (
@@ -3613,7 +3622,14 @@ function LeadListView({
                           </button>
                         )}
                       </div>
-                      <div className="text-3xs text-ink-3 font-mono">{lead.id}</div>
+                      {/* Contact under the name, as /customers does. The lead's internal id used to sit
+                          here; it is on the company name's tooltip now — a handle for support, not
+                          something anyone reads down a column of rows. */}
+                      <div className="text-2xs text-ink-3 truncate">
+                        {[lead.contact_name?.trim(), lead.contact_phone?.trim(), lead.contact_email?.trim()]
+                          .filter(Boolean)
+                          .join(" · ") || "no contact details"}
+                      </div>
                       {(() => {
                         const tk = openTaskByLead.get(lead.id);
                         if (!tk) return null;
@@ -3689,17 +3705,6 @@ function LeadListView({
                 {/* Email is kept off the row to keep it tight — it shows on hover
                     (title) with a small mail glyph as the cue. Phone stays visible
                     as it's the primary call-to-action in the pipeline. */}
-                <td className="px-3 py-2 text-sm" title={lead.contact_email ? `Email: ${lead.contact_email}` : undefined}>
-                  <div className="flex items-center gap-1 text-ink">
-                    <span className="truncate max-w-[170px]">{lead.contact_name ?? "—"}</span>
-                    {lead.contact_email && <Icon name="mail" size={11} className="shrink-0 text-ink-3" />}
-                  </div>
-                  {lead.contact_phone && (
-                    <div className="text-2xs text-ink-3 font-mono truncate max-w-[180px]">
-                      {lead.contact_phone}
-                    </div>
-                  )}
-                </td>
                 {/* Plan + seats folded together — saves a column, keeps both
                     facts. Seats bold so quantity reads at a glance. */}
                 <td className="px-3 py-2 text-sm text-ink-2">
@@ -3820,18 +3825,6 @@ function LeadListView({
                     }
                   />
                 </td>
-                <td className="px-3 py-2 text-sm">
-                  <span className={cn(
-                    "tabular-nums block",
-                    // Same threshold as the badge (heat.ts), not a local >14 rule.
-                    stale7 ? "text-rose font-medium" : "text-ink-3",
-                  )}>
-                    {age === 0 ? "today" : age === 1 ? "1d ago" : `${age}d ago`}
-                  </span>
-                  <span className="block text-3xs text-ink-4 tabular-nums">
-                    {formatDate(lead.updated_at)} · {fmtActTime(lead.updated_at)}
-                  </span>
-                </td>
                 {/* Quick actions — dark panel that opens from the ⋯ (hover/click/
                     focus) and stays open while the panel itself is hovered. */}
                 <RowActions lead={lead} isSelected={isSelected} onSendQuote={onSendQuote} onFollowUp={onFollowUp} onWhatsApp={onWhatsApp} />
@@ -3845,7 +3838,7 @@ function LeadListView({
       )}
       <div className="px-3 py-2 border-t border-hairline bg-paper-2/40 text-2xs text-ink-3 flex items-center gap-2">
         <Icon name="info" size={11} />
-        Click any row to open the drawer · Tick a checkbox to enable bulk actions · Quick actions (Call / WhatsApp / Send quote / ⋯) sit at the end of each row · ★ = high-value, Hot = priority lead
+        Click any row to open the drawer · Tick a checkbox to enable bulk actions · Every row action lives under the ⋯ at its right · a red left edge means it needs you today, green means high value
       </div>
     </div>
 
