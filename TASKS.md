@@ -49,6 +49,68 @@ Dono ke test green thay. Test us line ko cover hi nahi karte thay.
 `no setting for this action, so its default "hold" applies`, **31 me 8 baar**.
 👉 Ye guard nahi hai. Ye **anset setting** hai. `/automation` par jaakar dial tay karo.
 
+### 🔵 SHAAM KA DOOSRA HISSA — chaar "seekhne wale loop" aur do faisle jo dohraye jaayenge
+
+Shaam ko chha feature aur bane (kul **chhabbis commit**, `anutech/deploy` se **41 aage**, test
+**5,320** / 264 file). Inme se **chaar ek hi shape ke hain** — AI apne se seekhe — aur agli session
+me ye **dobara maange jaayenge**. Chaaron ka jawaab ek jagah likha hai taaki dobara na sochna pade:
+
+| Loop | File | Faisla | Kyun |
+|---|---|---|---|
+| Won deals se seekhna (Vector RAG) | `lib/ai/playbook.ts` | **Sirf sawaal seekhta hai, jawaab nahi** | Won-deal filter *asardaar* hone ka filter hai, *sach* hone ka nahi |
+| Raat ka reflection cron | `lib/ai/reflection.ts` + `api/cron/ai-reflection` | **Output prompt me KABHI nahi** | Reflection customer ka text padhta hai; prompt me guards hain → **prompt injection** |
+| Human rep ka jawaab (RLHF) | `lib/ai/gold-standard.ts` | **Wahi guards jo agent par lagte hain, phir aadmi ki haan** | Human ka jawaab acha hota hai kyunki **uske paas adhikar tha** |
+| Lost deals se seekhna | `lib/ai/loss-analysis.ts` | **Diagnosis ko sahi kism ke fix par bhejta hai** | Price aur delay ke **ulte fix** hain |
+
+**Chaaron ka ek hi asool:** kram badalna surakshit hai, **dawa jodna nahi.** Chaar module ab
+`AUTHORISED_CLAIMS` ka subset assert karte hain: `tone.ts`, `trade-in.ts`, `ab-test.ts`,
+`playbook.ts`.
+
+**Aur ek farq jo yaad rakhna:** `loss-analysis.ts` ka `safeToApplyAutomatically` **jhoota
+inkaar nahi hai.** Authorised claims ka kram automatic badalna **sach me surakshit hai** — sirf
+sample nahi hai (15 price-loss chahiye, **0 hain**). Baaki teen loop me automation **usool se**
+mana hai. Ye farq mitao mat.
+
+### 🔴 Naye naap — jo agli session ko pata hona chahiye
+
+| Naap | Value | Matlab |
+|---|---|---|
+| `quotes` | 31 → **27 accepted, 0 LOST** | Lost-deal analysis ke liye **kuch nahi hai** |
+| `leads.lost_at` | **har row par null** | Deal "lost" mark hi nahi hoti |
+| `leads.lost_reason` | **kabhi nahi likha** | Diagnosis ka sabse acha source khaali hai |
+| `ai_sales_conversations` role='agent' | **0** | Agent ne kabhi jawaab nahi diya → latency naapi hi nahi ja sakti |
+| Held draft timeline par | **12** | Ye likhe gaye aur bheje nahi gaye |
+| `ai_action_log` held | **23** | Handover trigger **chalta hai** — RLHF ke liye asli material |
+| pgvector | **install nahi** | "Vector DB" maujood nahi |
+| won deal jispar conversation ho | **0 / 27** | Playbook shoonya se bharta |
+| `ai_knowledge_base` | **table nahi hai** | Maine banai bhi nahi — schema par tumhari haan chahiye |
+
+### 💰 SLA ka asli exposure — jo agli session ko naapna nahi padega
+
+30-seat Business Starter, asli catalogue (msrp ₹270 / wholesale ₹110 per seat per **month**):
+
+```
+customer deta hai ......... ₹8,100 / mahina
+hamara margin ............. ₹4,800 / mahina
+99.0-99.9% mahina, 15% ... ₹1,215  =  margin ka 25%
+95-99%, 25% credit ....... ₹2,025  =  42%
+95% se neeche, 50% ....... ₹4,050  =  84%
+```
+
+Google ka apna credit schedule, **hamare invoice par**. Aur peeche sahara nahi:
+TASKS.md:1564 — reseller agreement **approved nahi**. Isliye `agreement.esign.send` dial
+**`off`** hai aur uska **`auto` setting hai hi nahi**.
+
+### Aur do guard chhed jo shaam ko band hue
+
+1. **Telecall ka seat count bina guard tha.** `heardNotWritten` webhook me **kahin nahi** tha, aur
+   us route ka comment jhootha tha (*"the seat count ... is checked above"* — **upar kuch nahi
+   jaanchta tha**). Ab pass hota hai; sirf **ROK** sakta hai.
+2. **`takes?` ek vaada exempt kar raha tha.** *"We will take 3 days."* **rule likhe jaane ke din
+   se SAFE tha** — `takes?` bare form bhi match karta hai. Ab bare `take` sirf modal ke baad
+   exempt hai.
+
+
 ## MAINE JO GALAT KAHA — aaj, aur naapne par pakda gaya
 
 **"RESEND_API_KEY set hai, isliye galat-price wala auto-quote ka risk live hai."**
