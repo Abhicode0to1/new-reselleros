@@ -201,7 +201,7 @@ function EmployeeLoansInner() {
           {/* Desktop table */}
           <Card className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-3">Employee</th>
                   <th className="text-left  px-4 py-3">Purpose</th>
@@ -278,7 +278,7 @@ function EmployeeLoansInner() {
                     </div>
                     <div className="font-serif text-xl text-ink leading-none">{rupee(l.outstanding)}</div>
                   </div>
-                  <div className="text-[11px] text-ink-3 mb-1.5">
+                  <div className="text-2xs text-ink-3 mb-1.5">
                     {formatDate(l.disbursed_on)} · {rupee(l.principal)} lent · {rupee(l.repaid)} repaid
                   </div>
                   <button
@@ -378,7 +378,7 @@ function PendingClaimsPanel({
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-[11px] text-ink-3">
+      <p className="mt-2 text-2xs text-ink-3">
         Approving books the expense under its category and reduces that employee&apos;s advance. No cash moves — it already left when the advance was given.
       </p>
     </Card>
@@ -523,7 +523,7 @@ function ClaimLinkDialog({ onClose }: { onClose: () => void }) {
                  className="mt-3 inline-flex items-center gap-1.5 text-sm text-emerald hover:underline">
                 <Icon name="whatsapp" size={15} /> Share on WhatsApp
               </a>
-              <p className="mt-3 text-[11px] text-ink-3">
+              <p className="mt-3 text-2xs text-ink-3">
                 Anyone with this link can open the form, but they must enter a valid employee PIN and every claim needs your approval — so it stays safe.
               </p>
             </>
@@ -575,7 +575,7 @@ function LoanHistoryDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () 
                   {h.notes && (
                     <div className="text-xs text-ink-2">{h.method === "expense" ? "For: " : ""}{h.notes}</div>
                   )}
-                  <div className="text-[11px] text-ink-3">
+                  <div className="text-2xs text-ink-3">
                     {formatDate(h.repaid_on)}
                     {h.bank_account_id ? ` · ${acctName.get(h.bank_account_id) ?? "account"}` : ""}
                   </div>
@@ -747,7 +747,7 @@ function KPI({ label, value, tone }: { label: string; value: string; tone?: "amb
   const color = tone === "amber" ? "text-amber" : tone === "emerald" ? "text-emerald" : "text-ink";
   return (
     <Card className="p-3 md:p-4">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif text-xl md:text-2xl ${color} leading-tight`}>{value}</div>
     </Card>
   );
@@ -821,11 +821,11 @@ function DisburseDialog({ onClose, initialKind }: { onClose: () => void; initial
                   )}
                 >
                   <div className={cn("text-sm font-medium", kind === opt.k ? "text-amber-ink" : "text-ink")}>{opt.label}</div>
-                  <div className="text-[10px] text-ink-3 mt-0.5">{opt.desc}</div>
+                  <div className="text-3xs text-ink-3 mt-0.5">{opt.desc}</div>
                 </button>
               ))}
             </div>
-            <p className="mt-1.5 text-[11px] text-ink-3">{kindHint}</p>
+            <p className="mt-1.5 text-2xs text-ink-3">{kindHint}</p>
           </div>
           <div className="relative">
             <label className="block text-xs font-medium text-ink-2 mb-1">Employee</label>
@@ -850,14 +850,14 @@ function DisburseDialog({ onClose, initialKind }: { onClose: () => void; initial
                       className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2"
                     >
                       <span className="text-ink">{e.name}</span>
-                      <span className="text-[11px] text-ink-3">{rupee(e.monthly_gross)}/mo</span>
+                      <span className="text-2xs text-ink-3">{rupee(e.monthly_gross)}/mo</span>
                     </button>
                   ))}
                 </div>
               );
             })()}
             {employees.length === 0 && (
-              <p className="mt-1 text-[11px] text-ink-3">No employees yet — add them in Payroll → Employees. You can still type a name.</p>
+              <p className="mt-1 text-2xs text-ink-3">No employees yet — add them in Payroll → Employees. You can still type a name.</p>
             )}
           </div>
           <div>
@@ -947,7 +947,7 @@ function RepaymentDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () =>
           <div>
             <label className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
             <Input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
-            {tooMuch && <p className="mt-1 text-[11px] text-rose">Can&apos;t exceed the outstanding {rupee(loan.outstanding)}.</p>}
+            {tooMuch && <p className="mt-1 text-2xs text-rose">Can&apos;t exceed the outstanding {rupee(loan.outstanding)}.</p>}
           </div>
           <div>
             <label className="block text-xs font-medium text-ink-2 mb-1">Repaid via</label>
@@ -979,7 +979,7 @@ function RepaymentDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () =>
 
           {history.length > 0 && (
             <div className="rounded-md border border-hairline bg-paper-2/40 p-2.5">
-              <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Repayments so far</div>
+              <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Repayments so far</div>
               <ul className="space-y-1">
                 {history.map((h) => (
                   <li key={h.id} className="flex items-center justify-between text-xs text-ink-2">
@@ -1081,9 +1081,9 @@ function SettleDialog({ loan, onClose }: { loan: EmployeeLoan; onClose: () => vo
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Mumbai client visit" />
           </div>
 
-          {tooMuch && <p className="text-[11px] text-rose">Spent + returned ({rupee(total)}) can&apos;t exceed the outstanding {rupee(loan.outstanding)}.</p>}
+          {tooMuch && <p className="text-2xs text-rose">Spent + returned ({rupee(total)}) can&apos;t exceed the outstanding {rupee(loan.outstanding)}.</p>}
           {!tooMuch && total > 0 && total < loan.outstanding && (
-            <p className="text-[11px] text-ink-3">
+            <p className="text-2xs text-ink-3">
               {rupee(loan.outstanding - total)} will stay outstanding after this.
             </p>
           )}

@@ -188,7 +188,7 @@ export function ContactForm({
                     if (c) setValue("company", c.name, { shouldDirty: true });
                   }}
                 />
-                <p className="text-[11px] text-ink-3">Connect this person to a customer to manage their company&apos;s records here.</p>
+                <p className="text-2xs text-ink-3">Connect this person to a customer to manage their company&apos;s records here.</p>
               </FormField>
 
               {/* Relationship type — lets a person who is neither a lead nor a
@@ -202,7 +202,7 @@ export function ContactForm({
                 >
                   {RELATIONSHIP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
-                <p className="text-[11px] text-ink-3">How you know this person — used to group them in Contacts.</p>
+                <p className="text-2xs text-ink-3">How you know this person — used to group them in Contacts.</p>
               </FormField>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -326,7 +326,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <section className="space-y-3">
       <div className="flex items-center gap-2">
         <Icon name="chevron_down" size={12} className="text-ink-3" />
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">{title}</h3>
+        <h3 className="text-2xs font-semibold uppercase tracking-wider text-ink-3">{title}</h3>
       </div>
       {children}
     </section>

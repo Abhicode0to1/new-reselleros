@@ -191,15 +191,15 @@ export default function PlatformSignupsPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
         <Card className="p-3">
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Total Resellers</div>
+          <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Total Resellers</div>
           <div className="font-serif text-2xl font-bold">{q.data ? q.data.count : "—"}</div>
         </Card>
         <Card className="p-3">
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Activated Workspaces</div>
+          <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Activated Workspaces</div>
           <div className="font-serif text-2xl font-bold text-emerald">{q.data ? activatedCount : "—"}</div>
         </Card>
         <Card className="p-3">
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Setup Pending</div>
+          <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Setup Pending</div>
           <div className="font-serif text-2xl font-bold text-amber-dark">{q.data ? q.data.count - activatedCount : "—"}</div>
         </Card>
       </div>
@@ -213,7 +213,7 @@ export default function PlatformSignupsPage() {
       ) : (
         <Card className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+            <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               <tr>
                 <th className="text-left px-4 py-3">Business</th>
                 <th className="text-left px-4 py-3">Owner Contact</th>
@@ -234,7 +234,7 @@ export default function PlatformSignupsPage() {
                     <td className="px-4 py-3">
                       <div className="font-semibold text-ink">{t.name}</div>
                       {t.gstin && (
-                        <div className="font-mono text-[11px] text-ink-3">
+                        <div className="font-mono text-2xs text-ink-3">
                           {t.gstin}{t.state ? ` · ${t.state}` : ""}
                         </div>
                       )}
@@ -387,7 +387,7 @@ export default function PlatformSignupsPage() {
               <div className="pt-2 border-t border-hairline flex items-center justify-between">
                 <div>
                   <p className="font-semibold text-ink">Activation Status</p>
-                  <p className="text-[11px] text-ink-3">Mark setup as completed or pending</p>
+                  <p className="text-2xs text-ink-3">Mark setup as completed or pending</p>
                 </div>
                 <button
                   type="button"

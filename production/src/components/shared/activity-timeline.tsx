@@ -71,7 +71,7 @@ export function ActivityTimeline({ events, compact = false, className }: Activit
                 </div>
               )}
               {(ev.time || ev.actor || ev.meta) && (
-                <div className="text-[11px] text-ink-3 mt-1 flex flex-wrap gap-x-2">
+                <div className="text-2xs text-ink-3 mt-1 flex flex-wrap gap-x-2">
                   {ev.time && <span>{ev.time}</span>}
                   {ev.actor && (
                     <>

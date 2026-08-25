@@ -108,7 +108,7 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <header className="border-b border-hairline pb-3 mb-4">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1">
             New coupon code
           </p>
           <h2 className="font-serif text-2xl text-ink">Create coupon</h2>
@@ -129,7 +129,7 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
               className="font-mono uppercase"
               maxLength={50}
             />
-            <p className="text-[10px] text-ink-3 mt-1">A-Z, 0-9. Auto-uppercased.</p>
+            <p className="text-3xs text-ink-3 mt-1">A-Z, 0-9. Auto-uppercased.</p>
           </div>
           <div>
             <Label>Description (internal)</Label>
@@ -182,7 +182,7 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
               onChange={(e) => setDiscountValue(e.target.value)}
               className="font-mono"
             />
-            <p className="text-[10px] text-ink-3 mt-1">
+            <p className="text-3xs text-ink-3 mt-1">
               {discountType === "percent" ? "0-100" : "Flat ₹ off pre-GST gross"}
             </p>
           </div>
@@ -244,7 +244,7 @@ export default function CreateCouponDialog({ open, onOpenChange }: Props) {
               onChange={(e) => setValidUntil(e.target.value)}
               className="font-mono"
             />
-            <p className="text-[10px] text-ink-3 mt-1">Leave blank for no expiry</p>
+            <p className="text-3xs text-ink-3 mt-1">Leave blank for no expiry</p>
           </div>
         </div>
 

@@ -62,7 +62,7 @@ function AlertRow({ a }: { a: MarginAlert }) {
           {formatBps(a.marginBps)}
         </div>
         {/* The number that decides whether this is worth a phone call today. */}
-        <div className="text-[11px] text-ink-3">
+        <div className="text-2xs text-ink-3">
           {(a.grossAnnualPaise ?? 0) < 0 ? "losing " : ""}
           {r(Math.abs(a.grossAnnualPaise ?? 0))}/yr
         </div>

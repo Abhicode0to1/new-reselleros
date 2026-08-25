@@ -139,20 +139,20 @@ export default function GstinVerifyCard({
           {result ? "Re-verify with GSTN" : "Verify with GSTN"}
         </Button>
         {result && cachedAt && !stale && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-emerald">
+          <span className="inline-flex items-center gap-1 text-3xs text-emerald">
             <Icon name="check" size={11} />
             Verified · {formatDate(cachedAt)}
           </span>
         )}
         {result && stale && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-amber-ink">
+          <span className="inline-flex items-center gap-1 text-3xs text-amber-ink">
             <Icon name="alert" size={11} />
             Cached {ageDays} days ago — consider re-verifying
           </span>
         )}
         {!canVerify && gstinHint && (
           <span className={cn(
-            "text-[11px] leading-snug",
+            "text-2xs leading-snug",
             gstinHint.tone === "bad" ? "text-rose" : gstinHint.tone === "info" ? "text-amber-ink" : "text-ink-3"
           )}>
             {gstinHint.text}
@@ -176,7 +176,7 @@ export default function GstinVerifyCard({
             <Badge kind={statusTone(result.status)} dot>{result.status}</Badge>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-ink-3">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-2xs text-ink-3">
             {result.constitution && (
               <div><span className="text-ink-3">Constitution</span><br /><span className="text-ink-2">{result.constitution}</span></div>
             )}
@@ -203,7 +203,7 @@ export default function GstinVerifyCard({
           {/* Fill form from GST — explicit user action; never silent */}
           {onFillForm && (
             <div className="flex items-center justify-between gap-3 pt-2 mt-1 border-t border-hairline">
-              <p className="text-[11px] text-ink-3 leading-snug max-w-[60%]">
+              <p className="text-2xs text-ink-3 leading-snug max-w-[60%]">
                 Copy legal name, address and PIN from this verification into the Company form?
               </p>
               <Button
@@ -223,7 +223,7 @@ export default function GstinVerifyCard({
 
           {result.source === "mock" && (
             <p className={cn(
-              "text-[10px] inline-flex items-center gap-1.5 mt-1 px-2 py-1 rounded",
+              "text-3xs inline-flex items-center gap-1.5 mt-1 px-2 py-1 rounded",
               "bg-amber-soft/60 text-amber-ink"
             )}>
               <Icon name="info" size={10} />

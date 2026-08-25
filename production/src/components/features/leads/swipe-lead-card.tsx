@@ -268,7 +268,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                     (heat.incomplete ? "\n\nSome inputs are missing, so this is a floor, not a verdict." : "") +
                     `\n\nAct-now signal: ${intent.label} — ${intent.reason}`}
                   className={cn(
-                    "shrink-0 inline-flex items-center gap-0.5 rounded-full text-[10px] font-semibold px-1.5 py-0.5 leading-none tabular-nums",
+                    "shrink-0 inline-flex items-center gap-0.5 rounded-full text-3xs font-semibold px-1.5 py-0.5 leading-none tabular-nums",
                     heat.band === "hot"  && "bg-rose-soft text-rose",
                     heat.band === "warm" && "bg-amber-soft text-amber-ink",
                     heat.band === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
@@ -279,7 +279,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                 {stale7 && (
                   <span
                     title={stale7.message}
-                    className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-soft/70 text-amber-ink text-[10px] font-semibold px-1.5 py-0.5 leading-none border border-amber/30"
+                    className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-soft/70 text-amber-ink text-3xs font-semibold px-1.5 py-0.5 leading-none border border-amber/30"
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" />
                     {stale7.days}d
@@ -296,7 +296,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               )}
               {task && (
                 <span className={cn(
-                  "mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                  "mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium",
                   task.overdue ? "bg-rose-soft text-rose" : "bg-amber-soft text-amber-ink",
                 )}>
                   <Icon name="clock" size={10} />
@@ -311,7 +311,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                 {lead.value ? rupee(lead.value, { compact: true }) : "—"}
               </p>
               {lead.seats && (
-                <p className="text-[10px] text-ink-3 tabular-nums mt-0.5">{lead.seats} seats</p>
+                <p className="text-3xs text-ink-3 tabular-nums mt-0.5">{lead.seats} seats</p>
               )}
             </div>
           </div>
@@ -328,7 +328,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                       tabIndex={0}
                       onClick={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-2 px-1.5 py-0.5 rounded hover:bg-paper-2 active:bg-paper-2/70 cursor-pointer shrink-0"
+                      className="inline-flex items-center gap-1 text-3xs font-medium text-ink-2 px-1.5 py-0.5 rounded hover:bg-paper-2 active:bg-paper-2/70 cursor-pointer shrink-0"
                     >
                       <span className={cn("w-1.5 h-1.5 rounded-full", stageMeta.dot)} />
                       {stageMeta.label}
@@ -340,7 +340,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                     onClick={(e) => e.stopPropagation()}
                     onPointerDown={(e) => e.stopPropagation()}
                   >
-                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-ink-3">
+                    <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
                       Move {lead.company} to…
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
@@ -354,7 +354,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                         <span className={cn("w-2 h-2 rounded-full mr-2", s.dot)} />
                         {s.label}
                         {s.id === lead.stage && (
-                          <span className="ml-auto text-[10px] text-ink-3">current</span>
+                          <span className="ml-auto text-3xs text-ink-3">current</span>
                         )}
                       </DropdownMenuItem>
                     ))}
@@ -364,7 +364,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               {followUp && (
                 <span
                   className={cn(
-                    "text-[10px] font-medium rounded-full px-1.5 py-0.5 shrink-0 inline-flex items-center gap-1",
+                    "text-3xs font-medium rounded-full px-1.5 py-0.5 shrink-0 inline-flex items-center gap-1",
                     followUp.tone === "rose"  && "bg-rose-soft text-rose",
                     followUp.tone === "amber" && "bg-amber-soft text-amber-ink",
                     followUp.tone === "ink-3" && "bg-paper-2 text-ink-3",
@@ -375,7 +375,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                 </span>
               )}
               {/* Plan text — truncates when space tight. Shown for context. */}
-              <span className="text-[11px] text-ink-3 truncate min-w-0">
+              <span className="text-2xs text-ink-3 truncate min-w-0">
                 {lead.plan || "No plan"}
               </span>
             </div>
@@ -461,7 +461,7 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
           {/* And the gestures, said out loud once per card. Cheap, and the only reason
               anyone will discover a three-way swipe. */}
           {hasPhone && (
-            <p className="mt-1.5 text-[10px] leading-none text-ink-3">
+            <p className="mt-1.5 text-3xs leading-none text-ink-3">
               Swipe → contacted · ← tomorrow · ↑ WhatsApp
             </p>
           )}

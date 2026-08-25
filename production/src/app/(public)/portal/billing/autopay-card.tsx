@@ -118,7 +118,7 @@ export function AutopayCard({ view }: { view: AutopayView }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Badge kind={badge.kind}>{badge.label}</Badge>
         <span className="text-sm tabular-nums text-ink-2">
-          {rupee(view.cycleAmount)} <span className="text-[11px] text-ink-3">each cycle</span>
+          {rupee(view.cycleAmount)} <span className="text-2xs text-ink-3">each cycle</span>
         </span>
       </div>
 

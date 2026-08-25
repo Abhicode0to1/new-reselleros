@@ -65,7 +65,7 @@ export default async function PortalInvoicesPage() {
       ) : (
         <Card className="overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+            <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               <tr>
                 <th className="text-left  px-4 py-3">Invoice #</th>
                 <th className="text-left  px-4 py-3">Date</th>
@@ -85,7 +85,7 @@ export default async function PortalInvoicesPage() {
                   <td className="px-4 py-3 text-right font-mono font-semibold text-ink">
                     {rupee(inv.net_payable ?? inv.amount)}
                   </td>
-                  <td className="px-4 py-3 font-mono text-[10px] text-ink-3 max-w-[140px] truncate">
+                  <td className="px-4 py-3 font-mono text-3xs text-ink-3 max-w-[140px] truncate">
                     {inv.gst_irn ?? "—"}
                   </td>
                   <td className="px-4 py-3">
@@ -114,7 +114,7 @@ export default async function PortalInvoicesPage() {
       )}
 
       {tenantWhatsAppLink(session.tenantPhone, `Hi ${reseller}, I have a question about an invoice.`) && (
-        <div className="mt-6 text-[11px] text-ink-3 text-center">
+        <div className="mt-6 text-2xs text-ink-3 text-center">
           Questions about an invoice? WhatsApp {reseller} on{" "}
           <a
             href={tenantWhatsAppLink(session.tenantPhone, `Hi ${reseller}, I have a question about an invoice.`)!}

@@ -90,7 +90,7 @@ export function BattlecardDrawer({ open, onClose, plan }: {
           ) : (
             <>
               <div className="rounded-lg border border-emerald/30 bg-emerald-soft/30 p-3">
-                <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Where it genuinely wins</p>
+                <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Where it genuinely wins</p>
                 <p className="mt-1 text-[13px] leading-snug text-ink">{set.strength}</p>
               </div>
 
@@ -107,7 +107,7 @@ export function BattlecardDrawer({ open, onClose, plan }: {
                     <button
                       type="button"
                       onClick={() => copy(c.response)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper-2 px-2 py-1 text-[11px] font-semibold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper-2 px-2 py-1 text-2xs font-semibold text-ink hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
                     >
                       <Icon name="copy" size={11} /> Copy reply
                     </button>
@@ -116,7 +116,7 @@ export function BattlecardDrawer({ open, onClose, plan }: {
                   {c.avoid && (
                     <div className="mt-2.5 flex items-start gap-1.5 rounded-md bg-rose-soft/40 px-2 py-1.5">
                       <Icon name="alert" size={11} className="mt-[3px] shrink-0 text-rose" />
-                      <p className="text-[11px] leading-snug text-ink-2">
+                      <p className="text-2xs leading-snug text-ink-2">
                         <b className="text-rose">Don&apos;t say:</b> {c.avoid}
                       </p>
                     </div>
@@ -124,7 +124,7 @@ export function BattlecardDrawer({ open, onClose, plan }: {
                 </div>
               ))}
 
-              <p className="text-[11px] leading-snug text-ink-3">
+              <p className="text-2xs leading-snug text-ink-3">
                 No card quotes a price or a date — those change per customer, and a stale number here
                 becomes a promise a rep makes without knowing it is stale. Numbers belong on the quote.
               </p>

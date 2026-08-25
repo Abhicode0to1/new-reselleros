@@ -150,7 +150,7 @@ export default function ProfitByProductPage() {
                 <div><span className="text-ink-3 block">Cost</span><span className="tabular-nums text-ink-2">{rupee(r.cost)}</span></div>
                 <div><span className="text-ink-3 block">Profit</span><span className="tabular-nums text-emerald font-medium">{rupee(r.profit)}</span></div>
               </div>
-              <div className="text-[11px] text-ink-3 mt-1.5 tabular-nums">{r.units} units · {r.orders} orders</div>
+              <div className="text-2xs text-ink-3 mt-1.5 tabular-nums">{r.units} units · {r.orders} orders</div>
             </li>
           ))}
           <li className="rounded-lg border-2 border-ink bg-paper-2/40 p-3">

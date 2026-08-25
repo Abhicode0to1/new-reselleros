@@ -190,7 +190,7 @@ export default function CampaignsPage() {
       )}
 
       {!isLoading && campaigns && campaigns.length > 0 && (
-        <p className="text-[11px] text-ink-3 mt-3 flex items-center gap-1.5">
+        <p className="text-2xs text-ink-3 mt-3 flex items-center gap-1.5">
           <Icon name="info" size={11} />
           Click <Link href={"/leads" as never} className="text-amber-ink hover:underline">/leads</Link> to fine-tune audience before broadcasting.
         </p>

@@ -83,8 +83,8 @@ export default function PurchaseInboxPage() {
                       <Badge kind={row.source === "amazon" ? "warning" : "muted"} dot>
                         {row.source === "amazon" ? "Amazon" : "Online"}
                       </Badge>
-                      {row.order_id && <span className="font-mono text-[11px] text-ink-3">#{row.order_id}</span>}
-                      {row.order_date && <span className="text-[11px] text-ink-3">· {formatDate(row.order_date)}</span>}
+                      {row.order_id && <span className="font-mono text-2xs text-ink-3">#{row.order_id}</span>}
+                      {row.order_date && <span className="text-2xs text-ink-3">· {formatDate(row.order_date)}</span>}
                     </div>
                     <p className="text-sm font-medium text-ink truncate">{row.subject || "Order email"}</p>
                     {(row.items?.length ?? 0) > 0 && (
@@ -93,7 +93,7 @@ export default function PurchaseInboxPage() {
                       </p>
                     )}
                     {gross === 0 && (
-                      <p className="text-[11px] text-rose mt-1 inline-flex items-center gap-1">
+                      <p className="text-2xs text-rose mt-1 inline-flex items-center gap-1">
                         <Icon name="alert" size={11} /> Amount not read — you can fix it in Expenses after adding.
                       </p>
                     )}
@@ -101,7 +101,7 @@ export default function PurchaseInboxPage() {
 
                   <div className="text-right shrink-0">
                     <div className="font-serif text-xl tabular-nums">{gross > 0 ? rupee(gross) : "—"}</div>
-                    <div className="text-[11px] text-ink-3">{gst > 0 ? `incl. GST ${rupee(gst)}` : "no GST read"}</div>
+                    <div className="text-2xs text-ink-3">{gst > 0 ? `incl. GST ${rupee(gst)}` : "no GST read"}</div>
                   </div>
                 </div>
 

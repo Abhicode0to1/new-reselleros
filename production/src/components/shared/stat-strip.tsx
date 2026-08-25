@@ -35,7 +35,7 @@ export function StatStrip({ items, className }: { items: Stat[]; className?: str
   return (
     <div className={cn("flex flex-wrap items-baseline gap-x-6 gap-y-2", className)}>
       {items.map((it, i) => {
-        const label = <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{it.label}</span>;
+        const label = <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{it.label}</span>;
         const value = <span className={cn("text-base font-semibold tabular-nums", toneClass(it.tone))}>{it.value}</span>;
         if (it.onClick) {
           return (

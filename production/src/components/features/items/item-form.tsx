@@ -323,13 +323,13 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
             <div className="px-3 py-2 bg-paper-2 border-b border-hairline flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold text-ink">Pricing by commitment</div>
-                <div className="text-[11px] text-ink-3">All rates in ₹/seat/month · leave 0 to skip a tier</div>
+                <div className="text-2xs text-ink-3">All rates in ₹/seat/month · leave 0 to skip a tier</div>
               </div>
               <Icon name="info" size={13} className="text-ink-3" />
             </div>
 
             {/* Header row */}
-            <div className="grid grid-cols-[minmax(220px,1fr)_170px_170px_100px] gap-3 px-4 py-2 bg-paper border-b border-hairline text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+            <div className="grid grid-cols-[minmax(220px,1fr)_170px_170px_100px] gap-3 px-4 py-2 bg-paper border-b border-hairline text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               <div>Commitment</div>
               <div className="text-right">Customer ₹</div>
               <div className="text-right">Cost ₹</div>
@@ -373,7 +373,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-ink-3">{row.hint}</div>
+                    <div className="text-2xs text-ink-3">{row.hint}</div>
                   </div>
                   <div>
                     <Input
@@ -403,7 +403,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                     {displayMsrp > 0 ? (
                       <div className={cn("text-sm font-medium tabular-nums leading-tight", tone)}>
                         {rupee(m)}
-                        <div className="text-[10px] font-normal">{pct}%</div>
+                        <div className="text-3xs font-normal">{pct}%</div>
                       </div>
                     ) : (
                       <span className="text-xs text-ink-3">—</span>
@@ -420,7 +420,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
               <div className="text-sm font-semibold text-ink inline-flex items-center gap-2 flex-wrap">
                 🌍 USD price <Badge kind="info" size="sm">Export · optional</Badge>
               </div>
-              <div className="text-[11px] text-ink-3">
+              <div className="text-2xs text-ink-3">
                 Product ka <b>asli USD price</b> (jaise Google ka published $ rate) — ₹ se convert NAHI.
                 International customer ko USD me quote/invoice tab ye use hoga. Khaali chhodo to ₹ price
                 convert ho jayega.
@@ -467,7 +467,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                     Partner pricing
                     <Badge kind="warning" size="sm">Distributor only</Badge>
                   </div>
-                  <div className="text-[11px] text-ink-3">
+                  <div className="text-2xs text-ink-3">
                     Sub-reseller children dekhenge ye SKU + price apne "From your distributor" tab me.
                   </div>
                 </div>
@@ -496,7 +496,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                       onChange={(e) => setPartnerPrice(Math.max(0, parseInt(e.target.value) || 0))}
                       className="text-right tabular-nums max-w-xs"
                     />
-                    <div className="mt-1 text-[10px] text-ink-3">
+                    <div className="mt-1 text-3xs text-ink-3">
                       Ye rate sub-reseller ka wholesale cost banega. Annual yearly bill ke liye × 12 hoga ({rupee(partnerPrice * 12)}/seat/yr).
                     </div>
                   </FormField>
@@ -507,7 +507,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
 
           {/* Headline summary */}
           {headlineTier.msrp > 0 && (
-            <div className="text-[11px] text-ink-3 flex items-center gap-1.5">
+            <div className="text-2xs text-ink-3 flex items-center gap-1.5">
               <Icon name="info" size={11} />
               Headline rate{" "}
               <b className="text-ink">{rupee(headlineTier.msrp)}/seat/mo</b>{" "}

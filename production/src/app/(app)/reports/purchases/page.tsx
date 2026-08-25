@@ -254,7 +254,7 @@ export default function PurchasesReportPage() {
           <Card flush>
             <div className="p-3 border-b border-hairline">
               <h2 className="text-sm font-semibold text-ink">By month</h2>
-              <p className="text-[11px] text-ink-3">Spend trend over the period</p>
+              <p className="text-2xs text-ink-3">Spend trend over the period</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[420px]">
@@ -296,13 +296,13 @@ function DrillLines({ lines, colSpan }: { lines: PurchaseLine[]; colSpan?: numbe
     <ul className="divide-y divide-hairline/70">
       {lines.map((l) => (
         <li key={`${l.source}-${l.id}`} className="flex items-center gap-3 py-2 pl-2 pr-1">
-          <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${l.source === "cogs" ? "bg-indigo-soft text-indigo" : "bg-paper-2 text-ink-3"}`}>
+          <span className={`shrink-0 text-3xs font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${l.source === "cogs" ? "bg-indigo-soft text-indigo" : "bg-paper-2 text-ink-3"}`}>
             {SOURCE_LABEL[l.source]}
           </span>
           <span className="text-[12px] text-ink-3 tabular-nums shrink-0 w-20">{formatDate(l.date)}</span>
           <span className="text-sm text-ink-2 truncate flex-1 min-w-0">{l.category}</span>
           <span className="tabular-nums text-sm text-ink-2 shrink-0">{rupee(l.net + l.gst)}</span>
-          <Link href={lineHref(l) as never} className="shrink-0 inline-flex items-center gap-0.5 text-[11px] text-amber-ink hover:underline">
+          <Link href={lineHref(l) as never} className="shrink-0 inline-flex items-center gap-0.5 text-2xs text-amber-ink hover:underline">
             Open <Icon name="arrow_right" size={11} />
           </Link>
         </li>
@@ -337,7 +337,7 @@ function BreakdownTable({
     <Card flush>
       <div className="p-3 border-b border-hairline">
         <h2 className="text-sm font-semibold text-ink">{title}</h2>
-        <p className="text-[11px] text-ink-3">{subtitle}</p>
+        <p className="text-2xs text-ink-3">{subtitle}</p>
       </div>
 
       {/* Mobile cards */}
@@ -354,7 +354,7 @@ function BreakdownTable({
                   </span>
                   <span className="tabular-nums text-sm font-medium">{rupee(r.gross)}</span>
                 </div>
-                <div className="text-[11px] text-ink-3 tabular-nums pl-4">{r.count} bills · net {rupee(r.net)} · GST {rupee(r.gst)}</div>
+                <div className="text-2xs text-ink-3 tabular-nums pl-4">{r.count} bills · net {rupee(r.net)} · GST {rupee(r.gst)}</div>
               </button>
               {isOpen && <DrillLines lines={groupLines.get(r.key) ?? []} />}
             </li>

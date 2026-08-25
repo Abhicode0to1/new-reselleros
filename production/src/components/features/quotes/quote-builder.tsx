@@ -1127,7 +1127,7 @@ export function QuoteBuilder() {
             <button
               type="button"
               onClick={() => router.push("/items" as any)}
-              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper px-2.5 py-1 text-2xs font-semibold text-ink hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
             >
               Open catalogue
             </button>
@@ -1248,18 +1248,18 @@ export function QuoteBuilder() {
                 </select>
               </FormField>
               {isExport ? (
-                <p className="text-[11px] flex items-start gap-1 -mt-1 text-indigo-ink">
+                <p className="text-2xs flex items-start gap-1 -mt-1 text-indigo-ink">
                   🌍 Export ({leadCountry}) → zero-rated under LUT, no GST
                 </p>
               ) : leadStateCode && (
-                <p className="text-[11px] flex items-center gap-1 -mt-1">
+                <p className="text-2xs flex items-center gap-1 -mt-1">
                   {interState
                     ? <span className="text-amber-ink">⚠ Inter-state → IGST {taxRate}% will apply</span>
                     : <span className="text-emerald">✓ Intra-state → CGST + SGST split</span>}
                 </p>
               )}
 
-              <div className="flex gap-2 text-[11px] text-ink-3 pt-1 border-t border-hairline">
+              <div className="flex gap-2 text-2xs text-ink-3 pt-1 border-t border-hairline">
                 <span>Lead ID: <code className="font-mono">{leadId}</code></span>
                 {leadPlan && <span>· Interested in: <b>{leadPlan}</b></span>}
                 {leadSeats && <span>· {leadSeats} seats</span>}
@@ -1318,7 +1318,7 @@ export function QuoteBuilder() {
                       is one the operator has to verify by hand — which costs more than the
                       preselection saved. A name match says so and asks them to check. */}
                   {leadMatchNote && customerId && (
-                    <p className="mt-1 text-[10px] leading-snug text-emerald">{leadMatchNote}</p>
+                    <p className="mt-1 text-3xs leading-snug text-emerald">{leadMatchNote}</p>
                   )}
                 </FormField>
               )}
@@ -1334,7 +1334,7 @@ export function QuoteBuilder() {
                   value={prospectName}
                   onChange={(e) => setProspectName(e.target.value)}
                 />
-                <p className="text-[10px] text-ink-3 mt-1">
+                <p className="text-3xs text-ink-3 mt-1">
                   A new prospect who hasn&apos;t paid yet — we&apos;ll auto-create the customer record when they pay.
                 </p>
               </FormField>
@@ -1347,20 +1347,20 @@ export function QuoteBuilder() {
                 <div className="rounded-lg border border-hairline bg-paper-2/40 px-3 py-2.5">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3">
                     <div className="min-w-0">
-                      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Website</div>
+                      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Website</div>
                       <div className="text-sm text-ink-2 font-mono truncate">{customer?.domain || "—"}</div>
                     </div>
                     <div className="min-w-0">
-                      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">GSTIN</div>
+                      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">GSTIN</div>
                       <div className="text-sm text-ink-2 font-mono truncate">{customer?.gstin || "—"}</div>
                     </div>
                     <div className="min-w-0">
-                      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Place of supply</div>
+                      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Place of supply</div>
                       <div className="text-sm text-ink-2 truncate">{customer?.state || "—"}</div>
                     </div>
                   </div>
                   {customer && (
-                    <p className="text-[11px] mt-2.5 pt-2.5 border-t border-hairline/70 flex items-center gap-1">
+                    <p className="text-2xs mt-2.5 pt-2.5 border-t border-hairline/70 flex items-center gap-1">
                       {isExport ? (
                         <span className="text-indigo-ink">🌍 Export ({customer?.country}) → zero-rated under LUT, no GST</span>
                       ) : !buyerStateCode ? (
@@ -1411,7 +1411,7 @@ export function QuoteBuilder() {
                     )}
                   </FormField>
                   <div className="sm:col-span-2 -mt-1">
-                    <p className="text-[11px] flex items-center gap-1">
+                    <p className="text-2xs flex items-center gap-1">
                       {isExport ? (
                         <span className="text-indigo-ink">🌍 Export ({prospectCountry}) → zero-rated under LUT, no GST</span>
                       ) : !prospectStateCode ? (
@@ -1463,7 +1463,7 @@ export function QuoteBuilder() {
                   <option key={o.id} value={o.id}>{o.label}</option>
                 ))}
               </select>
-              <p className="mt-1.5 text-[11px] text-ink-3">
+              <p className="mt-1.5 text-2xs text-ink-3">
                 {hasFlexMonthly
                   ? "A line is “Monthly flex” — a no-commitment plan bills monthly, so the whole invoice is monthly."
                   : <>How often invoices go out. Applies to the whole {isInvoiceMode ? "invoice" : "quote"} — separate from each line’s Monthly-flex vs Annual <b>price</b> (set in the items table).</>}
@@ -1556,7 +1556,7 @@ export function QuoteBuilder() {
                 the catalog picker shows each product's real USD price (books stay ₹). */}
             {isExport && (
               <div className="lg:col-span-2 rounded-md bg-indigo-soft/40 border border-indigo/20 p-3 space-y-2">
-                <p className="text-[11px] font-semibold text-indigo-ink">🌍 International billing · books stay in ₹</p>
+                <p className="text-2xs font-semibold text-indigo-ink">🌍 International billing · books stay in ₹</p>
                 <div className="grid grid-cols-2 gap-3 max-w-sm">
                   <FormField label="Bill in currency" htmlFor="billingCurrency">
                     <select
@@ -1606,7 +1606,7 @@ export function QuoteBuilder() {
                 </div>
                 {/* Which price to bill on when an item has both a ₹ and a real USD price */}
                 <div className="flex items-center gap-2 flex-wrap pt-0.5">
-                  <span className="text-[11px] font-medium text-indigo-ink">Pricing basis:</span>
+                  <span className="text-2xs font-medium text-indigo-ink">Pricing basis:</span>
                   <div className="inline-flex rounded-md border border-indigo/30 bg-paper p-0.5">
                     {([["international", `International ${currency}`], ["india", `India rate → ${currency}`]] as const).map(([val, label]) => (
                       <button
@@ -1614,7 +1614,7 @@ export function QuoteBuilder() {
                         type="button"
                         onClick={() => setUsdPricingBasis(val)}
                         className={cn(
-                          "px-2.5 py-1 text-[11px] rounded transition-colors",
+                          "px-2.5 py-1 text-2xs rounded transition-colors",
                           usdPricingBasis === val ? "bg-indigo text-white font-medium" : "text-ink-3 hover:text-ink",
                         )}
                       >
@@ -1622,25 +1622,25 @@ export function QuoteBuilder() {
                       </button>
                     ))}
                   </div>
-                  <span className="text-[10px] text-ink-3">
+                  <span className="text-3xs text-ink-3">
                     {usdPricingBasis === "international"
                       ? `Each item uses its own ${currency} price when set; otherwise the ₹ price is converted.`
                       : `Every ₹ price is converted to ${currency} at this rate.`}
                   </span>
                 </div>
                 {fxMissing ? (
-                  <p className="text-[11px] text-rose font-medium">
+                  <p className="text-2xs text-rose font-medium">
                     ⚠ Set the exchange rate (₹ per {currency}) — it&apos;s 1 right now, so the numbers will be wrong.
                     {fxLoading ? " Fetching the latest rate…" : " Or tap “Latest”."}
                   </p>
                 ) : isForeign && fxAuto ? (
-                  <p className="text-[11px] text-emerald">
+                  <p className="text-2xs text-emerald">
                     ✓ Latest rate: <b>₹{exchangeRate}/{currency}</b>
                     {fxInfo?.asOf ? ` · as of ${fxInfo.asOf}` : ""} (auto — you can edit to override).
                     Books are recorded in ₹ (GST).
                   </p>
                 ) : isForeign ? (
-                  <p className="text-[11px] text-indigo-ink">
+                  <p className="text-2xs text-indigo-ink">
                     All amounts are now in <b>{currency}</b> — this is what the customer sees. Books are recorded in ₹ (GST).
                     Catalog items use their own {currency} price (set it in Items); otherwise the ₹ price is converted.
                   </p>
@@ -1713,7 +1713,7 @@ export function QuoteBuilder() {
                         <button
                           type="button"
                           onClick={() => setViewDomains({ name: line.name, domains: line.domains! })}
-                          className="mt-0.5 text-[11px] text-amber-ink hover:underline inline-flex items-center gap-1"
+                          className="mt-0.5 text-2xs text-amber-ink hover:underline inline-flex items-center gap-1"
                         >
                           ▸ {line.domains.length} domains · {line.domains.reduce((s, d) => s + d.seats, 0)} seats
                         </button>
@@ -1723,7 +1723,7 @@ export function QuoteBuilder() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <label className="block">
-                      <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Qty</span>
+                      <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Qty</span>
                       {line.bulk ? (
                         <div className="mt-0.5 px-2 py-1.5 text-sm tabular-nums text-ink border border-hairline rounded bg-paper-2/40">{line.qty}</div>
                       ) : (
@@ -1735,7 +1735,7 @@ export function QuoteBuilder() {
                       )}
                     </label>
                     <label className="block">
-                      <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Rate {isUsdBill ? "$" : "₹"}{unitLabel}</span>
+                      <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Rate {isUsdBill ? "$" : "₹"}{unitLabel}</span>
                       <input
                         type="number" min={0} step={isUsdBill ? "0.01" : "1"}
                         value={isUsdBill ? Number((displayRate / fxRate).toFixed(2)) : displayRate}
@@ -1744,7 +1744,7 @@ export function QuoteBuilder() {
                       />
                     </label>
                     <label className="block">
-                      <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Commit</span>
+                      <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Commit</span>
                       <select
                         value={commitType}
                         onChange={(e) => updateCommitment(line.id, e.target.value === "monthly" ? "monthly" : "annual_yearly")}
@@ -1755,7 +1755,7 @@ export function QuoteBuilder() {
                       </select>
                     </label>
                     <label className="block">
-                      <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Starts</span>
+                      <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Starts</span>
                       <input
                         type="date" value={line.start_date ?? ""}
                         onChange={(e) => updateStartDate(line.id, e.target.value)}
@@ -1764,7 +1764,7 @@ export function QuoteBuilder() {
                     </label>
                     {!line.bulk && (
                       <label className="block col-span-2">
-                        <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Domain (optional)</span>
+                        <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Domain (optional)</span>
                         <input
                           type="text" value={line.domain ?? ""}
                           onChange={(e) => updateDomain(line.id, e.target.value)}
@@ -1774,13 +1774,13 @@ export function QuoteBuilder() {
                       </label>
                     )}
                   </div>
-                  <div className="text-[11px] text-ink-3 inline-flex items-center gap-1 flex-wrap">
+                  <div className="text-2xs text-ink-3 inline-flex items-center gap-1 flex-wrap">
                     <span>Cost {isUsdBill ? "$" : "₹"}</span>
                     <input
                       type="number" min={0} step={isUsdBill ? "0.01" : "1"}
                       value={isUsdBill ? Number((displayCost / fxRate).toFixed(2)) : displayCost}
                       onChange={(e) => { const v = parseFloat(e.target.value) || 0; updateCost(line.id, (isUsdBill ? Math.round(v * fxRate) : Math.round(v)) * billingN); }}
-                      className="w-14 px-1 py-0.5 text-[11px] text-right tabular-nums border border-hairline rounded bg-paper focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
+                      className="w-14 px-1 py-0.5 text-2xs text-right tabular-nums border border-hairline rounded bg-paper focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
                     />
                     {/* "Margin unknown" beats "Margin 100%" when cost is 0 — see the
                         cost-unknown banner above for why. */}
@@ -1794,7 +1794,7 @@ export function QuoteBuilder() {
                   <LineBandNote line={line} catalog={catalog} />
                   <LineAdjustControls line={line} onChange={(p) => updateAdjustable(line.id, p)} />
                   <div className="flex items-center justify-between border-t border-hairline pt-2">
-                    <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Amount</span>
+                    <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Amount</span>
                     <span className="font-medium text-sm tabular-nums">{fmtDispC(dispAmt(line.rate, line.qty, line.discount_pct ?? 0))}{billingN > 1 ? " /yr" : ""}</span>
                   </div>
                 </div>
@@ -1849,12 +1849,12 @@ export function QuoteBuilder() {
                         <button
                           type="button"
                           onClick={() => setViewDomains({ name: line.name, domains: line.domains! })}
-                          className="mt-1 text-[11px] text-amber-ink hover:underline inline-flex items-center gap-1"
+                          className="mt-1 text-2xs text-amber-ink hover:underline inline-flex items-center gap-1"
                         >
                           ▸ {line.domains.length} domains · {line.domains.reduce((s, d) => s + d.seats, 0)} seats — view
                         </button>
                       )}
-                      <div className="text-[11px] text-ink-3 mt-0.5 tabular-nums flex items-center gap-1.5 flex-wrap">
+                      <div className="text-2xs text-ink-3 mt-0.5 tabular-nums flex items-center gap-1.5 flex-wrap">
                         <span>Cost {isUsdBill ? "$" : "₹"}</span>
                         <input
                           type="number"
@@ -1865,7 +1865,7 @@ export function QuoteBuilder() {
                             const v = parseFloat(e.target.value) || 0;
                             handleCostChange(isUsdBill ? Math.round(v * fxRate) : Math.round(v));
                           }}
-                          className="w-16 px-1 py-0.5 text-[11px] text-right tabular-nums border border-hairline rounded bg-paper focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
+                          className="w-16 px-1 py-0.5 text-2xs text-right tabular-nums border border-hairline rounded bg-paper focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
                         />
                         <span>
                           /seat{unitLabel} ·{" "}
@@ -1885,24 +1885,24 @@ export function QuoteBuilder() {
                           (how often invoiced) is set once at the quote level. */}
                       <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Commit</span>
+                          <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Commit</span>
                           <select
                             value={commitType}
                             onChange={(e) => handleCommitTypeChange(e.target.value as "monthly" | "annual")}
-                            className="text-[11px] px-1.5 py-0.5 border border-hairline rounded bg-paper focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
+                            className="text-2xs px-1.5 py-0.5 border border-hairline rounded bg-paper focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
                           >
                             <option value="monthly">Monthly flex</option>
                             <option value="annual">Annual (1-yr)</option>
                           </select>
                         </div>
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Starts</span>
+                          <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Starts</span>
                           <input
                             type="date"
                             value={line.start_date ?? ""}
                             onChange={(e) => updateStartDate(line.id, e.target.value)}
                             title="Service start date — leave blank to start on the payment date"
-                            className="text-[11px] px-1.5 py-0.5 border border-hairline rounded bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
+                            className="text-2xs px-1.5 py-0.5 border border-hairline rounded bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
                           />
                         </div>
                         {/* Per-line domain — this subscription provisions against it
@@ -1910,14 +1910,14 @@ export function QuoteBuilder() {
                             their own per-domain list instead. */}
                         {!line.bulk && (
                           <div className="flex items-center gap-1">
-                            <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Domain</span>
+                            <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Domain</span>
                             <input
                               type="text"
                               value={line.domain ?? ""}
                               onChange={(e) => updateDomain(line.id, e.target.value)}
                               placeholder="acme.in (optional)"
                               title="Domain this subscription is set up on — optional"
-                              className="text-[11px] px-1.5 py-0.5 w-36 border border-hairline rounded bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
+                              className="text-2xs px-1.5 py-0.5 w-36 border border-hairline rounded bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
                             />
                           </div>
                         )}
@@ -1952,7 +1952,7 @@ export function QuoteBuilder() {
                           }}
                           className="w-24 px-2 py-1 text-sm text-right tabular-nums border border-hairline rounded bg-paper focus:outline-none focus:ring-2 focus:ring-amber focus:border-amber"
                         />
-                        <span className="text-[10px] text-ink-3 ml-0.5">{unitLabel}</span>
+                        <span className="text-3xs text-ink-3 ml-0.5">{unitLabel}</span>
                       </div>
                     </td>
                     <td className="p-3 text-right tabular-nums text-sm font-medium">
@@ -1960,7 +1960,7 @@ export function QuoteBuilder() {
                         <>
                           {/* Per-invoice amount = what customer pays each billing cycle */}
                           <div>{fmtDispC(dispAmt(displayRate, line.qty, lineDiscountPct))}{unitLabel}</div>
-                          <div className="text-[10px] text-ink-3 font-normal">
+                          <div className="text-3xs text-ink-3 font-normal">
                             = {fmtDispC(dispAmt(line.rate, line.qty, lineDiscountPct))}/yr
                             {lineDiscountPct > 0 && (
                               <span className="text-ink-3"> (was {fmtDispC(dispAmt(line.rate, line.qty))})</span>
@@ -1972,7 +1972,7 @@ export function QuoteBuilder() {
                         <div>
                           {fmtDispC(dispAmt(line.rate, line.qty, lineDiscountPct))}
                           {lineDiscountPct > 0 && (
-                            <div className="text-[10px] text-ink-3 font-normal line-through">
+                            <div className="text-3xs text-ink-3 font-normal line-through">
                               {fmtDispC(dispAmt(line.rate, line.qty))}
                             </div>
                           )}
@@ -2009,7 +2009,7 @@ export function QuoteBuilder() {
                   : "Pricing valid for 30 days. Onboarding includes DNS, MX, SPF, DKIM, DMARC setup. Free training (2 sessions)."}
                 rows={6}
               />
-              <p className="text-[11px] text-ink-3 mt-1">Shown on customer-facing {isInvoiceMode ? "invoice" : "quote"} PDF.</p>
+              <p className="text-2xs text-ink-3 mt-1">Shown on customer-facing {isInvoiceMode ? "invoice" : "quote"} PDF.</p>
 
               {/* Terms & Conditions (Zoho-style) — document-level, separate from notes. */}
               <div className="mt-4">
@@ -2044,12 +2044,12 @@ export function QuoteBuilder() {
               <TotalRow label="Taxable amount" value={fmtTotalC(dispTaxable)} />
 
               {isExport ? (
-                <div className="text-[11px] text-indigo-ink flex items-start gap-1 py-1">
+                <div className="text-2xs text-indigo-ink flex items-start gap-1 py-1">
                   <span>🌍</span>
                   <span>Export ({customer?.country}) → <b>zero-rated under LUT</b> · no GST (CGST/SGST/IGST) applies</span>
                 </div>
               ) : (
-                <div className="text-[11px] text-ink-3 italic flex items-center gap-1 py-1">
+                <div className="text-2xs text-ink-3 italic flex items-center gap-1 py-1">
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10" />
                     <path d="M12 16v-4M12 8h.01" />
@@ -2072,7 +2072,7 @@ export function QuoteBuilder() {
                   up top (Settings), so here we just confirm what the customer is billed. */}
               {isForeign && (
                 <div className="rounded-md bg-indigo-soft/40 border border-indigo/20 p-2.5 my-1">
-                  <p className="text-[11px] text-indigo-ink">
+                  <p className="text-2xs text-indigo-ink">
                     🌍 Customer billed in <b>{currency}</b> @ ₹{exchangeRate}/{currency} · books record <b>{rupee(total)}</b> (for GST)
                   </p>
                 </div>
@@ -2104,12 +2104,12 @@ export function QuoteBuilder() {
                         : fmtPayableC(dispTotal)}
                     </span>
                     {showPerInvoice && (
-                      <div className="text-[11px] text-ink-3 font-normal mt-0.5">
+                      <div className="text-2xs text-ink-3 font-normal mt-0.5">
                         per invoice ({billingN}/yr) · = {fmtPayableC(dispTotal)} / year
                       </div>
                     )}
                     {isForeign && (
-                      <label className="mt-1 flex items-center justify-end gap-1.5 text-[11px] text-ink-3 cursor-pointer select-none">
+                      <label className="mt-1 flex items-center justify-end gap-1.5 text-2xs text-ink-3 cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={roundTotal}
@@ -2120,12 +2120,12 @@ export function QuoteBuilder() {
                       </label>
                     )}
                     {!showPerInvoice && billingN === 1 && (
-                      <div className="text-[11px] text-emerald font-medium mt-0.5">
+                      <div className="text-2xs text-emerald font-medium mt-0.5">
                         ✓ Single invoice · pay once for full year
                       </div>
                     )}
                     {isForeign && (
-                      <div className="text-[11px] text-indigo-ink font-medium mt-0.5">
+                      <div className="text-2xs text-indigo-ink font-medium mt-0.5">
                         = {rupee(total)} in books (for GST) @ ₹{exchangeRate}/{currency}
                       </div>
                     )}
@@ -2140,7 +2140,7 @@ export function QuoteBuilder() {
                 <span className="text-xs text-ink-3 uppercase tracking-wider font-semibold">Est. margin</span>
                 <MarginPill margin={margin} variant="default" period="one-time" estimated />
               </div>
-              <p className="mt-1 text-[10px] text-ink-3 text-right">
+              <p className="mt-1 text-3xs text-ink-3 text-right">
                 Estimate — edit each line&apos;s cost to make this exact.
               </p>
             </div>
@@ -2155,14 +2155,14 @@ export function QuoteBuilder() {
       {lineItems.length > 0 && (
         <div className="order-last sticky bottom-0 z-20 -mx-4 -mb-4 flex items-center justify-between gap-3 flex-wrap border-t border-hairline bg-paper px-4 py-3 shadow-[0_-6px_16px_-10px_rgba(0,0,0,0.25)] md:-mx-6 md:-mb-6 md:px-6 lg:-mx-8 lg:-mb-8 lg:px-8">
           <div className="flex items-baseline gap-2">
-            <span className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+            <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">
               {!showPerInvoice && billingN === 1 ? "Total payable now" : "Total"}
             </span>
             <span className="font-serif text-2xl text-amber tabular-nums">
               {showPerInvoice ? fmtPayableC(dRound(dispTotal / billingN)) : fmtPayableC(dispTotal)}
             </span>
             {showPerInvoice && (
-              <span className="text-[11px] text-ink-3">/invoice · {fmtPayableC(dispTotal)}/yr</span>
+              <span className="text-2xs text-ink-3">/invoice · {fmtPayableC(dispTotal)}/yr</span>
             )}
           </div>
           {isInvoiceMode ? (
@@ -2354,8 +2354,8 @@ function LineAdjustControls({ line, onChange }: {
   onChange: (patch: Partial<QuoteLineItem>) => void;
 }) {
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-      <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Customer can</span>
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs">
+      <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Customer can</span>
       <label className="inline-flex items-center gap-1 cursor-pointer">
         <input
           type="checkbox"
@@ -2415,7 +2415,7 @@ function LineBandNote({ line, catalog }: { line: QuoteLineItem; catalog: Item[] 
   const upsell = onBandRate ? nextSlabUpsell(slabs, line.qty) : null;
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-2xs">
       <span className="rounded bg-paper-2 px-1.5 py-px font-medium text-ink-3">
         Volume band: {priced.label}
       </span>

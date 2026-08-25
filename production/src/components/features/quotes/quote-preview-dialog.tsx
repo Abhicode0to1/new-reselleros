@@ -170,7 +170,7 @@ export function QuotePreviewDialog({
               </div>
             </div>
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold">
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold">
                 Quotation
               </p>
               <p className="font-serif text-3xl mt-1">{quoteId}</p>
@@ -186,7 +186,7 @@ export function QuotePreviewDialog({
           {/* Bill to */}
           <div className="grid grid-cols-2 gap-6 mb-6">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">
                 Bill to
               </p>
               <p className="font-serif text-lg leading-tight">{customerName}</p>
@@ -200,13 +200,13 @@ export function QuotePreviewDialog({
                 <p className="text-sm text-ink-3 font-mono">{contactPhone}</p>
               )}
               {isProspect && (
-                <p className="text-[11px] text-amber-ink mt-2 italic print:hidden">
+                <p className="text-2xs text-amber-ink mt-2 italic print:hidden">
                   Internal: this is a prospect — customer record pending payment
                 </p>
               )}
             </div>
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">
                 Place of supply
               </p>
               <p className="text-sm">
@@ -216,16 +216,16 @@ export function QuotePreviewDialog({
               </p>
               {lineItems.length > 0 && firstCommitment && (
                 <>
-                  <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mt-3 mb-1.5">
+                  <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mt-3 mb-1.5">
                     Billing schedule
                   </p>
                   <p className="text-sm">{scheduleLabel(firstCommitment, effectiveCycle)}</p>
                   {billingN > 1 && (
-                    <p className="text-[11px] text-ink-3">{billingN} invoices per year</p>
+                    <p className="text-2xs text-ink-3">{billingN} invoices per year</p>
                   )}
                 </>
               )}
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mt-3 mb-1.5">
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mt-3 mb-1.5">
                 HSN / SAC
               </p>
               <p className="text-sm font-mono">998313</p>
@@ -236,10 +236,10 @@ export function QuotePreviewDialog({
           <table className="w-full mb-6">
             <thead className="border-y-2 border-ink">
               <tr>
-                <th className="text-left py-2 text-[11px] uppercase tracking-wider font-semibold text-ink">Description</th>
-                <th className="text-right py-2 text-[11px] uppercase tracking-wider font-semibold text-ink w-20">Qty</th>
-                <th className="text-right py-2 text-[11px] uppercase tracking-wider font-semibold text-ink w-32">Rate</th>
-                <th className="text-right py-2 text-[11px] uppercase tracking-wider font-semibold text-ink w-36">Amount</th>
+                <th className="text-left py-2 text-2xs uppercase tracking-wider font-semibold text-ink">Description</th>
+                <th className="text-right py-2 text-2xs uppercase tracking-wider font-semibold text-ink w-20">Qty</th>
+                <th className="text-right py-2 text-2xs uppercase tracking-wider font-semibold text-ink w-32">Rate</th>
+                <th className="text-right py-2 text-2xs uppercase tracking-wider font-semibold text-ink w-36">Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -261,14 +261,14 @@ export function QuotePreviewDialog({
                     <tr key={line.id} className="border-b border-hairline">
                       <td className="py-3 text-sm">
                         <p className="font-medium text-ink">{line.name}</p>
-                        <p className="text-[11px] text-ink-3 mt-0.5">
+                        <p className="text-2xs text-ink-3 mt-0.5">
                           Per seat{showPer ? "" : " per year"} · HSN 998313
                           {line.commitment && (
                             <> · {scheduleLabel(line.commitment, effectiveCycle)}</>
                           )}
                         </p>
                         {line.bulk && line.domains && line.domains.length > 0 && (
-                          <p className="text-[11px] text-ink-3 mt-0.5">
+                          <p className="text-2xs text-ink-3 mt-0.5">
                             Covering {line.domains.length} domains: {line.domains.map((d) => `${d.domain} (${d.seats})`).join(", ")}
                           </p>
                         )}
@@ -280,7 +280,7 @@ export function QuotePreviewDialog({
                       <td className="py-3 text-right text-sm tabular-nums font-medium">
                         <div>{money(amount)}{showPer ? lineUnit : ""}</div>
                         {showPer && (
-                          <div className="text-[10px] font-normal text-ink-3">
+                          <div className="text-3xs font-normal text-ink-3">
                             = {money(line.qty * line.rate)}/yr
                           </div>
                         )}
@@ -320,7 +320,7 @@ export function QuotePreviewDialog({
                 )}
                 <div className="border-t-2 border-ink pt-2 mt-2">
                   <div className="flex justify-between items-baseline">
-                    <span className="text-[11px] uppercase tracking-widest font-semibold">
+                    <span className="text-2xs uppercase tracking-widest font-semibold">
                       {perInvoice ? `Per invoice (${billingN}/yr)` : "Grand total"}
                     </span>
                     <span className="font-serif text-2xl tabular-nums">
@@ -331,13 +331,13 @@ export function QuotePreviewDialog({
                   </div>
                   {perInvoice && (
                     <div className="flex justify-between items-baseline mt-1.5 text-ink-3">
-                      <span className="text-[11px]">Annual contract value</span>
+                      <span className="text-2xs">Annual contract value</span>
                       <span className="text-sm tabular-nums">{money(total)}/yr</span>
                     </div>
                   )}
                   {isForeign && (
                     <div className="flex justify-between items-baseline mt-1.5 text-ink-3">
-                      <span className="text-[11px]">INR equivalent (for GST) @ ₹{exchangeRate}/{currency}</span>
+                      <span className="text-2xs">INR equivalent (for GST) @ ₹{exchangeRate}/{currency}</span>
                       <span className="text-sm tabular-nums">{rupee(total)}</span>
                     </div>
                   )}
@@ -349,7 +349,7 @@ export function QuotePreviewDialog({
           {/* Notes */}
           {notes && (
             <div className="mb-6 pt-4 border-t border-hairline">
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">
                 Notes
               </p>
               <p className="text-sm text-ink-2 whitespace-pre-wrap leading-relaxed">
@@ -361,7 +361,7 @@ export function QuotePreviewDialog({
           {/* Terms & conditions */}
           {termsConditions?.trim() && (
             <div className={`mb-6 ${notes ? "" : "pt-4 border-t border-hairline"}`}>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">
                 Terms &amp; conditions
               </p>
               <p className="text-sm text-ink-2 whitespace-pre-wrap leading-relaxed">
@@ -371,7 +371,7 @@ export function QuotePreviewDialog({
           )}
 
           {/* Terms footer */}
-          <div className="pt-5 mt-6 border-t border-hairline text-[11px] text-ink-3 leading-relaxed space-y-1">
+          <div className="pt-5 mt-6 border-t border-hairline text-2xs text-ink-3 leading-relaxed space-y-1">
             <p>
               <b>Payment terms:</b> Net 7 days from acceptance. UPI / NEFT / Razorpay accepted.
             </p>

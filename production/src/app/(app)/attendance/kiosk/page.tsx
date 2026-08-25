@@ -55,7 +55,7 @@ export default function AttendanceKioskPage() {
       <div className="mb-6 text-center relative">
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Attendance</h1>
         <p className="text-sm text-ink-3 mt-1">Tap your name and enter your PIN to check in or out.</p>
-        <div className="mt-2 flex items-center justify-center gap-3 text-[11px]">
+        <div className="mt-2 flex items-center justify-center gap-3 text-2xs">
           {locked ? (
             <span className={cn("inline-flex items-center gap-1", offNetwork ? "text-rose" : "text-emerald")}>
               <Icon name={offNetwork ? "alert" : "lock"} size={12} />
@@ -97,7 +97,7 @@ export default function AttendanceKioskPage() {
                 )}
               >
                 <div className="font-medium text-ink leading-tight">{e.name}</div>
-                <div className="text-[11px] mt-2">
+                <div className="text-2xs mt-2">
                   {done ? (
                     <span className="text-ink-3">In {fmtTime(a!.check_in)} · Out {fmtTime(a!.check_out)}</span>
                   ) : inOnly ? (
@@ -150,7 +150,7 @@ function PresenceCodeBanner() {
     <Card className="mb-5 p-4 md:p-5 border-amber/40 bg-amber-soft/30">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-wider text-amber-ink font-semibold">Office check-in code</div>
+          <div className="text-2xs uppercase tracking-wider text-amber-ink font-semibold">Office check-in code</div>
           <p className="text-xs text-ink-3 mt-0.5 max-w-md">
             Apne phone se attendance mark karne wale employees ye code daalenge. Har {secs > 0 ? "" : "kuch"} second me badalta hai — office me hi dikhega.
           </p>
@@ -159,7 +159,7 @@ function PresenceCodeBanner() {
           <div className="font-mono text-4xl md:text-5xl font-bold tracking-[0.25em] tabular-nums text-ink">
             {code ?? "······"}
           </div>
-          <div className="text-[11px] text-ink-3 mt-1">refreshes in {secs}s</div>
+          <div className="text-2xs text-ink-3 mt-1">refreshes in {secs}s</div>
         </div>
       </div>
     </Card>

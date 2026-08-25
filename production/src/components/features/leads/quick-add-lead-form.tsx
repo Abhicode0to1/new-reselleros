@@ -243,7 +243,7 @@ export function QuickAddLeadForm({ open, onOpenChange }: QuickAddLeadFormProps) 
             </FormField>
           </div>
 
-          <p className="text-[11px] text-ink-3 -mt-1">
+          <p className="text-2xs text-ink-3 -mt-1">
             Lead lands in your Inbox as <span className="font-semibold text-ink-2">New</span>,
             priority <span className="font-semibold text-ink-2">Medium</span>. Pick plan + seats
             later to promote it to a deal.

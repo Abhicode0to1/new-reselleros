@@ -62,7 +62,7 @@ function reconcileTag(e: Expense, sal?: SalMini):
 function ReconcileTag({ tone, label, title }: { tone: "emerald" | "amber"; label: string; title?: string }) {
   const cls = tone === "emerald" ? "bg-emerald/10 text-emerald" : "bg-amber-soft text-amber-ink";
   return (
-    <span title={title} className={`inline-flex items-center gap-1 rounded-full ${cls} px-2 py-0.5 text-[10px] font-medium align-middle`}>
+    <span title={title} className={`inline-flex items-center gap-1 rounded-full ${cls} px-2 py-0.5 text-3xs font-medium align-middle`}>
       <Icon name={tone === "emerald" ? "check_circle" : "clock"} size={11} />
       {label}
     </span>
@@ -77,7 +77,7 @@ function ReconcileTag({ tone, label, title }: { tone: "emerald" | "amber"; label
  * "✓ Paid" tick (bank-verified). An open bill reads "To pay" / "Overdue".
  */
 function PayBadge({ e, today }: { e: Expense; today: string }) {
-  const base = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium align-middle";
+  const base = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-3xs font-medium align-middle";
   if (!e.paid) {
     const overdue = expensePayStatus(e, today) === "overdue";
     return (
@@ -423,7 +423,7 @@ export default function ExpensesPage() {
                 key={p.id}
                 type="button"
                 onClick={() => setRange(r)}
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium border transition-colors ${
+                className={`rounded-full px-2.5 py-0.5 text-2xs font-medium border transition-colors ${
                   active
                     ? "bg-amber text-white border-amber"
                     : "bg-paper border-hairline text-ink-2 hover:border-hairline-strong"
@@ -438,7 +438,7 @@ export default function ExpensesPage() {
             type="button"
             onClick={() => setUnpaidOnly((v) => !v)}
             aria-pressed={unpaidOnly}
-            className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium border transition-colors ${
+            className={`rounded-full px-2.5 py-0.5 text-2xs font-medium border transition-colors ${
               unpaidOnly
                 ? "bg-amber text-white border-amber"
                 : "bg-paper border-hairline text-ink-2 hover:border-hairline-strong"
@@ -446,7 +446,7 @@ export default function ExpensesPage() {
           >
             To pay{payableQ.data && payableQ.data.count > 0 ? ` · ${payableQ.data.count}` : ""}
           </button>
-          <span className="ml-auto text-[11px] text-ink-3">
+          <span className="ml-auto text-2xs text-ink-3">
             {rows.length} {rows.length === 1 ? "entry" : "entries"}
           </span>
         </div>
@@ -495,7 +495,7 @@ export default function ExpensesPage() {
           </select>
           {isFiltered && (
             <button type="button" onClick={() => { setCatFilter(""); setPayeeFilter(""); setUnpaidOnly(false); setSearch(""); }}
-              className="text-[11px] text-amber-ink hover:underline">Clear</button>
+              className="text-2xs text-amber-ink hover:underline">Clear</button>
           )}
         </div>
         {/* Filtered summary — total paid + input GST for the current filter. */}
@@ -564,7 +564,7 @@ export default function ExpensesPage() {
                 <col style={{ width: "16%" }} />
                 <col style={{ width: "20%" }} />
               </colgroup>
-              <thead className="sticky top-0 z-10 bg-paper-2 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="sticky top-0 z-10 bg-paper-2 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="px-2 py-2.5">
                     <input
@@ -611,7 +611,7 @@ export default function ExpensesPage() {
                         {e.bill_type === "kaccha" && <BillChip tone="amber" label="Kaccha" title="Non-GST (kaccha) bill" />}
                         {e.bill_type === "none" && !isPayrollExpense(e) && <BillChip tone="rose" label="No bill" title="No bill/receipt attached yet" />}
                       </div>
-                      <div className="text-[11px] text-ink-3 truncate mt-0.5" title={e.description ?? undefined}>
+                      <div className="text-2xs text-ink-3 truncate mt-0.5" title={e.description ?? undefined}>
                         {formatDate(e.expense_date)}
                         {e.payment_method ? ` · ${e.payment_method}` : ""}
                         {e.description ? ` · ${e.description}` : ""}
@@ -622,8 +622,8 @@ export default function ExpensesPage() {
                     {/* Amount (+ GST + FX as sub-lines) */}
                     <td className="px-3 py-2.5 text-right">
                       <div className="font-semibold text-ink font-mono">{rupee(e.amount)}</div>
-                      {e.gst_paid > 0 && <div className="text-[10px] text-emerald">+{rupee(e.gst_paid)} GST</div>}
-                      {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-[10px] text-ink-3">{fx}</div> : null; })()}
+                      {e.gst_paid > 0 && <div className="text-3xs text-emerald">+{rupee(e.gst_paid)} GST</div>}
+                      {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-3xs text-ink-3">{fx}</div> : null; })()}
                     </td>
                     {/* Actions — icon-first, wrap instead of overflowing */}
                     <td className="px-3 py-2.5" onClick={(ev) => ev.stopPropagation()}>
@@ -633,11 +633,11 @@ export default function ExpensesPage() {
                             title="Upload receipt / bill" onClick={() => setEditing(e)} />
                         )}
                         {!e.paid && !isPayrollExpense(e) && (
-                          <Button variant="default" className="h-7 px-2 py-0 text-[11px]"
+                          <Button variant="default" className="h-7 px-2 py-0 text-2xs"
                             onClick={() => setPayingExpense(e)}>Mark paid</Button>
                         )}
                         {canReconcile(e) && (
-                          <Button variant="default" className="h-7 px-2 py-0 text-[11px]"
+                          <Button variant="default" className="h-7 px-2 py-0 text-2xs"
                             onClick={() => startReconcile(e)}>Reconcile</Button>
                         )}
                         <IconButton icon="edit" size="sm" variant="ghost" aria-label="Edit expense" onClick={() => setEditing(e)} />
@@ -678,26 +678,26 @@ export default function ExpensesPage() {
                         : <PayBadge e={e} today={today} />}
                     </div>
                     <div className="font-serif text-xl text-ink leading-none">{rupee(e.amount)}</div>
-                    {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-[11px] text-ink-3">{fx} @ ₹{e.fx_rate}/{e.currency}</div> : null; })()}
+                    {(() => { const fx = foreignAmount(e.currency, e.amount, e.fx_rate); return fx ? <div className="text-2xs text-ink-3">{fx} @ ₹{e.fx_rate}/{e.currency}</div> : null; })()}
                   </div>
-                  <div className="text-[11px] text-ink-3 mb-1.5">
+                  <div className="text-2xs text-ink-3 mb-1.5">
                     {formatDate(e.expense_date)} · {e.payment_method ?? "—"}
                   </div>
                   {e.vendor_name && <div className="text-xs text-ink-2 mb-1">{e.vendor_name}</div>}
                   {e.description && <div className="text-xs text-ink-3 mb-2">{e.description}</div>}
                   <div className="flex items-center justify-between">
                     {e.gst_paid > 0 && (
-                      <span className="text-[11px] text-emerald">+{foreignAmount(e.currency, e.gst_paid, e.fx_rate) ?? rupee(e.gst_paid)} input GST</span>
+                      <span className="text-2xs text-emerald">+{foreignAmount(e.currency, e.gst_paid, e.fx_rate) ?? rupee(e.gst_paid)} input GST</span>
                     )}
                     <div className="ml-auto flex items-center gap-1">
                       {!e.paid && !isPayrollExpense(e) && (
-                        <Button variant="default" className="h-7 px-2 py-0 text-[11px] mr-1"
+                        <Button variant="default" className="h-7 px-2 py-0 text-2xs mr-1"
                           onClick={(ev) => { ev.stopPropagation(); setPayingExpense(e); }}>
                           Mark paid
                         </Button>
                       )}
                       {canReconcile(e) && (
-                        <Button variant="default" className="h-7 px-2 py-0 text-[11px] mr-1"
+                        <Button variant="default" className="h-7 px-2 py-0 text-2xs mr-1"
                           onClick={(ev) => { ev.stopPropagation(); startReconcile(e); }}>
                           Reconcile
                         </Button>
@@ -761,9 +761,9 @@ function KPI({
                    : "text-ink";
   return (
     <Card className="p-2.5">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5 truncate">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5 truncate">{label}</div>
       <div className={`font-serif text-lg md:text-xl ${colorClass} leading-tight truncate`}>{value}</div>
-      {sub && <div className="text-[10px] text-ink-3 truncate">{sub}</div>}
+      {sub && <div className="text-3xs text-ink-3 truncate">{sub}</div>}
     </Card>
   );
 }

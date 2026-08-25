@@ -88,7 +88,7 @@ export default function MyExpensesPage() {
     <div className="p-4 md:p-6 max-w-[640px] mx-auto space-y-5">
       {/* Top Header */}
       <div className="text-center space-y-1">
-        <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Employee Self-Service</p>
+        <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Employee Self-Service</p>
         <h1 className="font-serif text-2xl md:text-3xl tracking-tight">My Advance &amp; Expenses</h1>
         <p className="text-xs text-ink-3">
           Welcome <strong className="text-ink">{userName || "Darshan"}</strong> ({userEmail || "sales@anutech.in"})
@@ -107,7 +107,7 @@ export default function MyExpensesPage() {
               </div>
               <div>
                 <span className="font-bold text-sm text-ink">{activeAdvance.employee_name}</span>
-                <p className="text-[11px] text-ink-3">Disbursed on {formatDate(activeAdvance.disbursed_date, "short")}</p>
+                <p className="text-2xs text-ink-3">Disbursed on {formatDate(activeAdvance.disbursed_date, "short")}</p>
               </div>
             </div>
             <Badge kind="warning" size="sm">Active Advance</Badge>
@@ -116,17 +116,17 @@ export default function MyExpensesPage() {
           {/* Balance Numbers */}
           <div className="grid grid-cols-3 gap-2 bg-paper p-3 rounded-xl border border-hairline text-center">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Advance Given</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Advance Given</p>
               <p className="font-serif text-base text-ink font-semibold mt-0.5">{rupee(totalDisbursed)}</p>
             </div>
 
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Claimed Spent</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Claimed Spent</p>
               <p className="font-serif text-base text-emerald font-semibold mt-0.5">{rupee(totalSpent)}</p>
             </div>
 
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Balance Left</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Balance Left</p>
               <p className="font-serif text-base text-amber-dark font-bold mt-0.5">{rupee(totalAvailable)}</p>
             </div>
           </div>
@@ -146,7 +146,7 @@ export default function MyExpensesPage() {
           </Button>
 
           {activeAdvance.purpose && (
-            <p className="text-[11px] text-ink-3 text-center">
+            <p className="text-2xs text-ink-3 text-center">
               Purpose: <strong>{activeAdvance.purpose}</strong>
             </p>
           )}
@@ -184,15 +184,15 @@ export default function MyExpensesPage() {
                       <span className="font-bold text-ink truncate">{exp.category}</span>
                       <Badge kind="success" size="sm">Deducted</Badge>
                     </div>
-                    {exp.description && <p className="text-ink-2 text-[11px] truncate">{exp.description}</p>}
-                    <p className="text-[10px] text-ink-3">
+                    {exp.description && <p className="text-ink-2 text-2xs truncate">{exp.description}</p>}
+                    <p className="text-3xs text-ink-3">
                       {formatDate(exp.expense_date, "short")} {exp.vendor_name ? `· Vendor: ${exp.vendor_name}` : ""}
                     </p>
                   </div>
 
                   <div className="text-right shrink-0">
                     <span className="font-bold text-sm text-ink">{rupee(exp.amount)}</span>
-                    <p className="text-[10px] text-emerald font-medium">✓ Adjusted</p>
+                    <p className="text-3xs text-emerald font-medium">✓ Adjusted</p>
                   </div>
                 </Card>
               ))}
@@ -334,7 +334,7 @@ function RecordExpenseModal({ advance, open, onOpenChange }: { advance: Employee
               className="block w-full text-xs text-ink-3 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-paper-2 file:text-ink hover:file:bg-paper-3 cursor-pointer"
               onChange={(e) => setFileInput(e.target.files?.[0] ?? null)}
             />
-            {fileInput && <p className="text-[10px] text-emerald mt-1">✓ Photo selected: {fileInput.name}</p>}
+            {fileInput && <p className="text-3xs text-emerald mt-1">✓ Photo selected: {fileInput.name}</p>}
           </FormField>
 
           <DialogFooter className="pt-3 gap-2">

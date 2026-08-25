@@ -111,9 +111,9 @@ export function AddLabourDialog({
             <FormField label="From"><Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></FormField>
             <FormField label="To"><Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></FormField>
           </div>
-          {badRange && <p className="text-[11px] text-rose">To date must be after From date.</p>}
-          {beforeStart && <p className="text-[11px] text-rose">Can&apos;t start before the project ({formatDate(projectStart!)}). Set the project&apos;s start earlier if needed.</p>}
-          {afterTarget && <p className="text-[11px] text-rose">Ends after the project target ({formatDate(projectTarget!)}). Extend the project&apos;s target date first.</p>}
+          {badRange && <p className="text-2xs text-rose">To date must be after From date.</p>}
+          {beforeStart && <p className="text-2xs text-rose">Can&apos;t start before the project ({formatDate(projectStart!)}). Set the project&apos;s start earlier if needed.</p>}
+          {afterTarget && <p className="text-2xs text-rose">Ends after the project target ({formatDate(projectTarget!)}). Extend the project&apos;s target date first.</p>}
 
           <FormField label="Note (optional)"><Input placeholder="e.g. backend development" value={note} onChange={(e) => setNote(e.target.value)} /></FormField>
 
@@ -121,8 +121,8 @@ export function AddLabourDialog({
             <div className="rounded-lg border border-hairline bg-paper-2/50 px-3 py-2.5 text-sm">
               <span className="text-ink-3">Labour cost: </span>
               <span className="font-semibold text-ink">{rupee(cost)}</span>
-              <span className="text-[11px] text-ink-3"> = {rupee(emp.monthly_gross ?? 0)}/mo × {pctN}% × {monN} month{monN === 1 ? "" : "s"}</span>
-              {fromDate && toDate && <span className="block text-[11px] text-ink-3">{formatDate(fromDate)} → {formatDate(toDate)}</span>}
+              <span className="text-2xs text-ink-3"> = {rupee(emp.monthly_gross ?? 0)}/mo × {pctN}% × {monN} month{monN === 1 ? "" : "s"}</span>
+              {fromDate && toDate && <span className="block text-2xs text-ink-3">{formatDate(fromDate)} → {formatDate(toDate)}</span>}
             </div>
           )}
         </div>

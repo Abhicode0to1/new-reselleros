@@ -22,7 +22,7 @@ function PinInput({
 }: { value: string; onChange: (v: string) => void; label: string; disabled?: boolean; id: string }) {
   return (
     <div>
-      <label htmlFor={id} className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">{label}</label>
+      <label htmlFor={id} className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">{label}</label>
       <input
         id={id}
         type="password"
@@ -90,7 +90,7 @@ export function VaultPinSettings() {
               ? `${PIN_LENGTH}-digit PIN laga hua hai. Vault kholne par poochha jayega.`
               : "Koi PIN nahi laga. Chaho to laga sakte ho — zaroori nahi hai."}
           </p>
-          <p className="mt-2 text-[11px] text-ink-4 leading-relaxed">
+          <p className="mt-2 text-2xs text-ink-4 leading-relaxed">
             Ye PIN <b>sirf screen ka lock</b> hai, data ko encrypt nahi karta. Ye tab kaam aata hai
             jab laptop khula chhoot jaye. Aapke rows ki asli suraksha database ka niyam hai, jo
             inhe sirf aapke login ko deta hai — PIN ho ya na ho.
@@ -112,7 +112,7 @@ export function VaultPinSettings() {
             <PinInput id="vault-pin-new" label={configured ? "Naya PIN" : "PIN"} value={next} onChange={setNext} disabled={busy} />
           </div>
 
-          <p className="text-[11px] text-ink-4">
+          <p className="text-2xs text-ink-4">
             1234, 0000, 1212 jaise PIN allowed nahi hain — inhe koi bhi pehli koshish me guess kar leta hai.
           </p>
 

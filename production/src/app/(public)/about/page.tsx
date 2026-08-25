@@ -150,7 +150,7 @@ export default function AboutPage() {
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-b border-hairline pb-2">
-      <dt className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">
+      <dt className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">
         {label}
       </dt>
       <dd className="text-ink font-medium">{value}</dd>

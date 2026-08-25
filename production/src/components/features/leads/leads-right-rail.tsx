@@ -193,7 +193,7 @@ export function LeadsRightRail({
                       </Badge>
                     </div>
                     {l.contact_name && (
-                      <div className="text-[11px] text-ink-3 truncate mt-0.5 group-hover:text-ink-2">
+                      <div className="text-2xs text-ink-3 truncate mt-0.5 group-hover:text-ink-2">
                         {l.contact_name}
                         {l.contact_phone && ` · ${l.contact_phone}`}
                       </div>
@@ -225,7 +225,7 @@ export function LeadsRightRail({
                       {l.value ? rupee(l.value, { compact: true }) : "—"}
                     </span>
                   </div>
-                  <div className="text-[11px] text-ink-3 mt-0.5 inline-flex items-center gap-1.5">
+                  <div className="text-2xs text-ink-3 mt-0.5 inline-flex items-center gap-1.5">
                     <span className="capitalize">{STAGE_LABEL[l.stage]}</span>
                     {l.seats && <span>· {l.seats} seats</span>}
                   </div>
@@ -245,7 +245,7 @@ export function LeadsRightRail({
                 <div className="text-sm text-ink font-medium">
                   {noFollowUp} lead{noFollowUp === 1 ? "" : "s"} without a follow-up date
                 </div>
-                <p className="text-[11px] text-ink-3 mt-0.5 leading-snug">
+                <p className="text-2xs text-ink-3 mt-0.5 leading-snug">
                   Schedule one so they don't fall through the cracks.
                 </p>
               </li>
@@ -255,7 +255,7 @@ export function LeadsRightRail({
                 <div className="text-sm text-ink font-medium">
                   {staleLeads} stale lead{staleLeads === 1 ? "" : "s"} (14+ days no activity)
                 </div>
-                <p className="text-[11px] text-ink-3 mt-0.5 leading-snug">
+                <p className="text-2xs text-ink-3 mt-0.5 leading-snug">
                   Touch base or mark lost to clean the pipeline.
                 </p>
               </li>
@@ -330,13 +330,13 @@ function Section({
 }) {
   return (
     <section>
-      <h3 className="text-[10px] uppercase font-semibold text-ink-3 tracking-[0.1em] mb-2 inline-flex items-center gap-1.5">
+      <h3 className="text-3xs uppercase font-semibold text-ink-3 tracking-[0.1em] mb-2 inline-flex items-center gap-1.5">
         <Icon name={icon} size={11} className="text-amber" />
         {title}
         {count !== undefined && count > 0 && (
           <span
             className={cn(
-              "inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-semibold tabular-nums",
+              "inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-3xs font-semibold tabular-nums",
               countTone === "amber"
                 ? "bg-amber text-paper"
                 : "bg-paper-2 text-ink-3 border border-hairline",

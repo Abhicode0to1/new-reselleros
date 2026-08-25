@@ -94,7 +94,7 @@ export function ProfitDonut({
               <div className="font-serif text-lg leading-none text-ink tabular-nums">
                 {rupee(totalGross, { compact: true })}
               </div>
-              <div className="text-[10px] text-ink-3">gross profit</div>
+              <div className="text-3xs text-ink-3">gross profit</div>
             </div>
           </div>
         )}
@@ -130,7 +130,7 @@ export function ProfitDonut({
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[12px] font-medium text-ink">{s.label}</span>
               {/* Both shares, always. "6% of profit from 2% of sales" is the sentence. */}
-              <span className="block text-[10px] text-ink-3 tabular-nums">
+              <span className="block text-3xs text-ink-3 tabular-nums">
                 {s.sharePct}% of profit · {s.revenueSharePct}% of sales
               </span>
             </span>
@@ -146,7 +146,7 @@ export function ProfitDonut({
         {/* A loss can never be a wedge — there is no −15% of a circle. Said in words
             instead, which is the only honest rendering on a pie chart. */}
         {losing.map((l) => (
-          <p key={l.vendor} className="px-2 text-[11px] leading-snug text-rose">
+          <p key={l.vendor} className="px-2 text-2xs leading-snug text-rose">
             {l.label} is <b>losing {rupee(Math.abs(l.gross))}</b> — it cannot be drawn as a slice,
             because a loss has no share of a profit.
           </p>

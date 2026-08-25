@@ -142,7 +142,7 @@ export default function VendorsPage() {
           {/* Desktop table */}
           <Card flush className="hidden md:block">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2 border-b border-hairline-strong text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2 border-b border-hairline-strong text-2xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-2.5">Vendor</th>
                   <th className="text-left  px-4 py-2.5">Supplied Products</th>
@@ -168,16 +168,16 @@ export default function VendorsPage() {
                     >
                       <td className="px-4 py-2.5 align-top">
                         <div className="font-medium text-ink leading-snug">{v.name}</div>
-                        {v.gstin && <div className="text-[11px] text-ink-3 font-mono">{v.gstin}</div>}
-                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-[11px] text-ink-3">{r}</div> : null; })()}
-                        {v.contact_email && <div className="text-[11px] text-ink-3 truncate">{v.contact_email}</div>}
+                        {v.gstin && <div className="text-2xs text-ink-3 font-mono">{v.gstin}</div>}
+                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-2xs text-ink-3">{r}</div> : null; })()}
+                        {v.contact_email && <div className="text-2xs text-ink-3 truncate">{v.contact_email}</div>}
                       </td>
 
                       <td className="px-4 py-2.5 align-top">
                         {prods.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {prods.map((p) => (
-                              <Badge key={p} kind="info" size="sm" className="text-[10px] font-semibold">
+                              <Badge key={p} kind="info" size="sm" className="text-3xs font-semibold">
                                 {p}
                               </Badge>
                             ))}
@@ -192,7 +192,7 @@ export default function VendorsPage() {
                       <td className="px-4 py-2.5 text-right tabular-nums align-top">
                         {v.totalSpend > 0 ? rupee(v.totalSpend) : "—"}
                         {v.billCurrency && v.totalBilled > 0 && (
-                          <div className="text-[10px] text-ink-3">{formatForeignAmount(v.billCurrency, v.foreignBilled)} COGS</div>
+                          <div className="text-3xs text-ink-3">{formatForeignAmount(v.billCurrency, v.foreignBilled)} COGS</div>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums align-top">
@@ -200,7 +200,7 @@ export default function VendorsPage() {
                           ? <span className="font-serif text-[15px] font-semibold text-rose">{rupee(v.outstanding)}</span>
                           : <span className="text-emerald">✓</span>}
                         {v.billCurrency && v.outstanding > 0 && (
-                          <div className="text-[10px] font-normal text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
+                          <div className="text-3xs font-normal text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
                         )}
                       </td>
                       <td className="px-2 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
@@ -229,16 +229,16 @@ export default function VendorsPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="font-medium text-ink truncate">{v.name}</div>
-                        {v.gstin && <div className="text-[11px] text-ink-3 font-mono truncate">{v.gstin}</div>}
-                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-[11px] text-ink-3 truncate">{r}</div> : null; })()}
-                        <div className="text-[11px] text-ink-3 mt-0.5">{v.docCount} {v.docCount === 1 ? "entry" : "entries"} · {rupee(v.totalSpend, { compact: true })} spent</div>
+                        {v.gstin && <div className="text-2xs text-ink-3 font-mono truncate">{v.gstin}</div>}
+                        {(() => { const r = vendorRegion(v.gstin); return r ? <div className="text-2xs text-ink-3 truncate">{r}</div> : null; })()}
+                        <div className="text-2xs text-ink-3 mt-0.5">{v.docCount} {v.docCount === 1 ? "entry" : "entries"} · {rupee(v.totalSpend, { compact: true })} spent</div>
                       </div>
                       <div className="text-right shrink-0">
                         {v.outstanding > 0
                           ? <span className="font-serif text-lg text-rose">{rupee(v.outstanding, { compact: true })}</span>
                           : <span className="text-emerald text-sm">✓ clear</span>}
                         {v.billCurrency && v.outstanding > 0 && (
-                          <div className="text-[10px] text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
+                          <div className="text-3xs text-rose/70">{formatForeignAmount(v.billCurrency, v.foreignOutstanding)}</div>
                         )}
                       </div>
                     </div>
@@ -246,7 +246,7 @@ export default function VendorsPage() {
                     {prods.length > 0 && (
                       <div className="flex flex-wrap gap-1 pt-1 border-t border-hairline/60">
                         {prods.map((p) => (
-                          <Badge key={p} kind="info" size="sm" className="text-[10px]">
+                          <Badge key={p} kind="info" size="sm" className="text-3xs">
                             {p}
                           </Badge>
                         ))}
@@ -410,7 +410,7 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
                 );
               })}
             </div>
-            <p className="text-[11px] text-ink-3">Select products this vendor offers so you can buy & source licenses from them.</p>
+            <p className="text-2xs text-ink-3">Select products this vendor offers so you can buy & source licenses from them.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -472,8 +472,8 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {vendor.name}
-            {vendor.gstin && <span className="font-mono text-[11px] text-ink-3">{vendor.gstin}</span>}
-            {(() => { const r = vendorRegion(vendor.gstin); return r ? <span className="text-[11px] font-normal text-ink-3 rounded-full bg-paper-2 px-2 py-0.5">{r}</span> : null; })()}
+            {vendor.gstin && <span className="font-mono text-2xs text-ink-3">{vendor.gstin}</span>}
+            {(() => { const r = vendorRegion(vendor.gstin); return r ? <span className="text-2xs font-normal text-ink-3 rounded-full bg-paper-2 px-2 py-0.5">{r}</span> : null; })()}
           </DialogTitle>
           <DialogDescription>
             {vendor.docCount} {vendor.docCount === 1 ? "entry" : "entries"} · {rupee(vendor.totalSpend)}
@@ -492,7 +492,7 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
 
         {/* Supplied Products Portfolio Section */}
         <div className="p-3 bg-paper-2/60 border border-hairline rounded-xl space-y-1.5">
-          <div className="text-[11px] font-bold text-ink uppercase tracking-wider">🛒 Products Supplied by {vendor.name}:</div>
+          <div className="text-2xs font-bold text-ink uppercase tracking-wider">🛒 Products Supplied by {vendor.name}:</div>
           {prods.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {prods.map((p) => (
@@ -515,7 +515,7 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
           <>
             {(bills ?? []).length > 0 && (
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1 px-1">COGS bills</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1 px-1">COGS bills</p>
             <ul className="divide-y divide-hairline">
               {(bills ?? []).map((b) => {
                 const out = Math.max(0, (b.total ?? 0) - (b.paid_amount ?? 0));
@@ -527,15 +527,15 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
                   >
                     <div className="min-w-0">
                       <p className="text-sm text-ink truncate">{b.bill_no || b.id} <span className="text-ink-3">· {b.category}</span>{(b.line_items?.length ?? 0) > 0 && <span className="text-ink-3"> · {b.line_items.length} items</span>}</p>
-                      <p className="text-[11px] text-ink-3">{formatDate(b.bill_date)}</p>
+                      <p className="text-2xs text-ink-3">{formatDate(b.bill_date)}</p>
                     </div>
                     <div className="text-right shrink-0">
                       {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? (
-                        <p className="font-mono text-sm font-semibold text-ink">{fx} <span className="text-[10px] font-normal text-ink-3">({rupee(b.total)})</span></p>
+                        <p className="font-mono text-sm font-semibold text-ink">{fx} <span className="text-3xs font-normal text-ink-3">({rupee(b.total)})</span></p>
                       ) : (
                         <p className="font-mono text-sm font-semibold text-ink">{rupee(b.total)}</p>
                       ); })()}
-                      <p className={`text-[10px] ${out > 0 ? "text-rose" : "text-emerald"}`}>{out > 0 ? `${rupee(out)} due` : "paid"}</p>
+                      <p className={`text-3xs ${out > 0 ? "text-rose" : "text-emerald"}`}>{out > 0 ? `${rupee(out)} due` : "paid"}</p>
                     </div>
                   </li>
                 );
@@ -545,7 +545,7 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
             )}
             {(vExpenses ?? []).length > 0 && (
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1 px-1">Expenses</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1 px-1">Expenses</p>
               <ul className="divide-y divide-hairline">
                 {(vExpenses ?? []).map((e) => {
                   const fx = foreignAmount(e.currency, e.amount, e.fx_rate);
@@ -557,11 +557,11 @@ function VendorBillsDialog({ vendor, onClose, onEdit }: { vendor: Vendor; onClos
                   >
                     <div className="min-w-0">
                       <p className="text-sm text-ink truncate">{e.category}{e.description ? <span className="text-ink-3"> · {e.description}</span> : ""}</p>
-                      <p className="text-[11px] text-ink-3">{formatDate(e.expense_date)}</p>
+                      <p className="text-2xs text-ink-3">{formatDate(e.expense_date)}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-mono text-sm font-semibold text-ink">{fx ? <>{fx} <span className="text-[10px] font-normal text-ink-3">({rupee(e.amount)})</span></> : rupee(e.amount)}</p>
-                      {e.gst_paid > 0 && (() => { const gfx = foreignAmount(e.currency, e.gst_paid, e.fx_rate); return <p className="text-[10px] text-emerald">+{gfx ?? rupee(e.gst_paid)} GST{gfx ? ` (${rupee(e.gst_paid)})` : ""}</p>; })()}
+                      <p className="font-mono text-sm font-semibold text-ink">{fx ? <>{fx} <span className="text-3xs font-normal text-ink-3">({rupee(e.amount)})</span></> : rupee(e.amount)}</p>
+                      {e.gst_paid > 0 && (() => { const gfx = foreignAmount(e.currency, e.gst_paid, e.fx_rate); return <p className="text-3xs text-emerald">+{gfx ?? rupee(e.gst_paid)} GST{gfx ? ` (${rupee(e.gst_paid)})` : ""}</p>; })()}
                     </div>
                   </li>
                   );

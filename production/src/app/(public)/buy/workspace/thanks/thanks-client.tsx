@@ -125,11 +125,11 @@ export function ThanksClient({
             </div>
             <div className="hidden sm:block">
               <div className="font-serif text-base leading-none">Excel Technologies</div>
-              <div className="text-[10px] text-ink-3 mt-1">Cloud Reseller · India</div>
+              <div className="text-3xs text-ink-3 mt-1">Cloud Reseller · India</div>
             </div>
           </Link>
           <div
-            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold border border-[#FBBF24]"
+            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-3xs font-semibold border border-[#FBBF24]"
             style={{
               background: "linear-gradient(135deg, #1A1815 0%, #2D2418 100%)",
               color:      "#FCD34D",
@@ -156,7 +156,7 @@ export function ThanksClient({
             <Icon name="check" size={42} className="text-paper" />
           </div>
 
-          <div className="text-[11px] uppercase tracking-[0.18em] text-emerald font-semibold mb-3">
+          <div className="text-2xs uppercase tracking-[0.18em] text-emerald font-semibold mb-3">
             {isFullyPaid ? "Payment received" : "Order placed"}
           </div>
           <h1 className="font-serif text-3xl md:text-5xl leading-[1.05] tracking-tight mb-3">
@@ -176,7 +176,7 @@ export function ThanksClient({
           <Card className="p-6 md:p-8">
             <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
+                <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
                   Order summary
                 </div>
                 <div className="font-serif text-xl text-ink leading-tight">
@@ -187,25 +187,25 @@ export function ThanksClient({
                 <div className="font-serif text-3xl text-ink leading-none">
                   {amountFmt}
                 </div>
-                <div className="text-[11px] text-ink-3 mt-1">incl 18% GST</div>
+                <div className="text-2xs text-ink-3 mt-1">incl 18% GST</div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 text-sm border-t border-hairline pt-5">
               <div className="flex justify-between sm:block">
-                <span className="text-ink-3 sm:text-[11px] sm:uppercase sm:tracking-wider sm:font-semibold sm:block sm:mb-0.5">Company</span>
+                <span className="text-ink-3 sm:text-2xs sm:uppercase sm:tracking-wider sm:font-semibold sm:block sm:mb-0.5">Company</span>
                 <span className="text-ink font-medium">{order.customerName}</span>
               </div>
               <div className="flex justify-between sm:block">
-                <span className="text-ink-3 sm:text-[11px] sm:uppercase sm:tracking-wider sm:font-semibold sm:block sm:mb-0.5">Plan</span>
+                <span className="text-ink-3 sm:text-2xs sm:uppercase sm:tracking-wider sm:font-semibold sm:block sm:mb-0.5">Plan</span>
                 <span className="text-ink font-medium">{order.tierName}</span>
               </div>
               <div className="flex justify-between sm:block">
-                <span className="text-ink-3 sm:text-[11px] sm:uppercase sm:tracking-wider sm:font-semibold sm:block sm:mb-0.5">Seats</span>
+                <span className="text-ink-3 sm:text-2xs sm:uppercase sm:tracking-wider sm:font-semibold sm:block sm:mb-0.5">Seats</span>
                 <span className="text-ink font-medium">{order.seats} {order.seats === 1 ? "user" : "users"}</span>
               </div>
               <div className="flex justify-between sm:block">
-                <span className="text-ink-3 sm:text-[11px] sm:uppercase sm:tracking-wider sm:font-semibold sm:block sm:mb-0.5">Status</span>
+                <span className="text-ink-3 sm:text-2xs sm:uppercase sm:tracking-wider sm:font-semibold sm:block sm:mb-0.5">Status</span>
                 <span className={`font-medium inline-flex items-center gap-1.5 ${isFullyPaid ? "text-emerald" : "text-amber-ink"}`}>
                   <span className="w-1.5 h-1.5 rounded-full"
                         style={{ background: isFullyPaid ? "#10B981" : "#C2410C" }} />
@@ -225,7 +225,7 @@ export function ThanksClient({
       {/* ── What happens next — vertical timeline ── */}
       <section className="max-w-[800px] mx-auto px-6 py-12 md:py-16">
         <div className="text-center mb-10">
-          <div className="text-[11px] uppercase tracking-[0.12em] text-ink-3 font-semibold mb-2">
+          <div className="text-2xs uppercase tracking-[0.12em] text-ink-3 font-semibold mb-2">
             What happens next
           </div>
           <h2 className="font-serif text-2xl md:text-3xl tracking-tight">
@@ -290,7 +290,7 @@ export function ThanksClient({
       {/* ── Support strip — dominant WhatsApp + secondary email/phone ── */}
       <section className="bg-paper-2/40 border-y border-hairline py-12 md:py-14">
         <div className="max-w-[680px] mx-auto px-6 text-center">
-          <div className="text-[11px] uppercase tracking-[0.12em] text-ink-3 font-semibold mb-3">
+          <div className="text-2xs uppercase tracking-[0.12em] text-ink-3 font-semibold mb-3">
             Need help right now?
           </div>
           <h2 className="font-serif text-2xl md:text-3xl tracking-tight mb-2">

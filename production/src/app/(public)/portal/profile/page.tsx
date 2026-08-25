@@ -34,7 +34,7 @@ export default async function PortalProfilePage() {
       </div>
 
       <Card className="p-6 mb-4">
-        <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-4">
+        <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
           Company
         </div>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
@@ -50,7 +50,7 @@ export default async function PortalProfilePage() {
       </Card>
 
       <Card className="p-6 mb-4">
-        <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-4">
+        <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
           Primary contact
         </div>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6">
@@ -89,7 +89,7 @@ export default async function PortalProfilePage() {
         })()}
       </Card>
 
-      <div className="mt-6 text-[11px] text-ink-3 text-center">
+      <div className="mt-6 text-2xs text-ink-3 text-center">
         Signed in as <b className="text-ink">{session.userEmail}</b> · {session.tenantName}
       </div>
     </div>
@@ -99,13 +99,13 @@ export default async function PortalProfilePage() {
 function Row({ label, value, mono, hint }: { label: string; value?: string | null; mono?: boolean; hint?: string }) {
   return (
     <div>
-      <dt className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">
+      <dt className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">
         {label}
       </dt>
       <dd className={`text-sm text-ink ${mono ? "font-mono" : ""}`}>
         {value || <span className="text-ink-3 italic">Not on file</span>}
       </dd>
-      {hint && <div className="text-[10px] text-ink-3 mt-0.5">{hint}</div>}
+      {hint && <div className="text-3xs text-ink-3 mt-0.5">{hint}</div>}
     </div>
   );
 }

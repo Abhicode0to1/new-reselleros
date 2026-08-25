@@ -356,7 +356,7 @@ export function NextBestActionCard({ nba, customer }: { nba: Nba; customer: Cust
     <div className={cn("rounded-lg border p-3.5 flex items-start gap-3", tone.wrap)}>
       <div className={cn("mt-0.5", tone.icon)}><Icon name={nba.icon} size={18} /></div>
       <div className="flex-1 min-w-0">
-        <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5 inline-flex items-center gap-1">
+        <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5 inline-flex items-center gap-1">
           <Icon name="sparkles" size={11} className="text-amber" /> Next best action
         </div>
         <div className="text-sm font-medium text-ink leading-snug">{nba.title}</div>
@@ -394,7 +394,7 @@ export function NextBestActionCard({ nba, customer }: { nba: Nba; customer: Cust
                   onChange={(e) => setDraft({ ...draft, message: e.target.value })}
                 />
                 <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
-                  <span className="text-[10px] text-ink-3">
+                  <span className="text-3xs text-ink-3">
                     {draft.mode === "gemini" ? "AI draft · verify the amount, then send" : "Template · add a Gemini key in Settings → Integrations for real AI"}
                   </span>
                   <div className="flex gap-1.5">
@@ -489,7 +489,7 @@ export function SubscriptionList({ subs }: { subs: Subscription[] }) {
                 <Badge kind={active ? "success" : "muted"} color={VENDOR_COLOR[s.vendor] ?? "slate"} size="sm" dot>{s.status}</Badge>
                 {term && <Badge kind="muted" size="sm">{term}</Badge>}
               </div>
-              <div className="text-[11px] text-ink-3 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+              <div className="text-2xs text-ink-3 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
                 {s.domain && (
                   <span className="inline-flex items-center gap-1 font-mono text-amber-ink" title="Domain this subscription is provisioned on">
                     <Icon name="globe" size={11} /> {s.domain}
@@ -507,12 +507,12 @@ export function SubscriptionList({ subs }: { subs: Subscription[] }) {
               </div>
             </div>
             <div className="text-right flex-shrink-0">
-              <div className="text-sm font-medium text-ink tabular-nums">{rupee(s.mrr)}<span className="text-[10px] text-ink-3">/mo</span></div>
-              {term === "Annual" && <div className="text-[10px] text-ink-3 tabular-nums">{rupee(s.mrr * 12, { compact: true })}/yr</div>}
+              <div className="text-sm font-medium text-ink tabular-nums">{rupee(s.mrr)}<span className="text-3xs text-ink-3">/mo</span></div>
+              {term === "Annual" && <div className="text-3xs text-ink-3 tabular-nums">{rupee(s.mrr * 12, { compact: true })}/yr</div>}
               {owed > 0 ? (
-                <div className="text-[11px] text-rose mt-0.5">{rupee(owed)} due</div>
+                <div className="text-2xs text-rose mt-0.5">{rupee(owed)} due</div>
               ) : (
-                <div className="text-[11px] text-emerald mt-0.5">Paid</div>
+                <div className="text-2xs text-emerald mt-0.5">Paid</div>
               )}
             </div>
           </div>
@@ -536,9 +536,9 @@ export function CustomerActivity({ subs, invoices, quotes, limit = 12 }: {
           <div className="flex-1 min-w-0 flex items-baseline justify-between gap-2">
             <div className="min-w-0">
               <span className="text-sm text-ink-2">{e.title}</span>
-              {e.sub && <span className="text-[11px] text-ink-3 ml-1.5">· {e.sub}</span>}
+              {e.sub && <span className="text-2xs text-ink-3 ml-1.5">· {e.sub}</span>}
             </div>
-            <span className="text-[11px] text-ink-3 flex-shrink-0">{formatDate(e.date)}</span>
+            <span className="text-2xs text-ink-3 flex-shrink-0">{formatDate(e.date)}</span>
           </div>
         </li>
       ))}
@@ -553,7 +553,7 @@ export function CustomerDetailsGrid({ c }: { c: Customer }) {
   return (
     <div className="space-y-5">
       <div>
-        <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-2">Tax &amp; compliance</div>
+        <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-2">Tax &amp; compliance</div>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6">
           <Field label="GSTIN" value={c.gstin} mono badge={c.gstin ? (c.gstin_verified_at ? { kind: "success", text: "verified" } : { kind: "muted", text: "unverified" }) : undefined} />
           <Field label="Place of supply" value={c.state} />
@@ -562,7 +562,7 @@ export function CustomerDetailsGrid({ c }: { c: Customer }) {
         </dl>
       </div>
       <div className="pt-4 border-t border-hairline">
-        <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-2">Contact</div>
+        <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-2">Contact</div>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6">
           <Field label="Primary contact" value={c.contact_name} />
           <Field label="Title" value={c.contact_title} />
@@ -574,7 +574,7 @@ export function CustomerDetailsGrid({ c }: { c: Customer }) {
       </div>
       {c.notes && (
         <div className="pt-4 border-t border-hairline">
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Notes</div>
+          <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Notes</div>
           <p className="text-sm text-ink-2 whitespace-pre-wrap">{c.notes}</p>
         </div>
       )}
@@ -618,7 +618,7 @@ export function CustomerIdentityRail({ c }: { c: Customer }) {
           <Avatar initials={initials(c.contact_name || c.name) || "?"} color="amber" size="md" />
           <div className="min-w-0 flex-1">
             <div className="font-medium text-ink truncate">{c.contact_name || c.name}</div>
-            {c.contact_title && <div className="text-[11px] text-ink-3">{c.contact_title}</div>}
+            {c.contact_title && <div className="text-2xs text-ink-3">{c.contact_title}</div>}
             <div className="mt-1.5 space-y-1">
               {c.contact_email && (
                 <a href={`mailto:${c.contact_email}`} className="flex items-center gap-1.5 text-xs text-ink-2 hover:text-amber-ink transition-colors">
@@ -643,7 +643,7 @@ export function CustomerIdentityRail({ c }: { c: Customer }) {
       {/* Address */}
       <Card title="Address">
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Billing</div>
+          <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Billing</div>
           {billing.length ? (
             <address className="not-italic text-sm text-ink-2 leading-relaxed">
               {billing.map((line, i) => <div key={i}>{line}</div>)}
@@ -651,7 +651,7 @@ export function CustomerIdentityRail({ c }: { c: Customer }) {
           ) : <p className="text-sm text-ink-3 italic">No billing address</p>}
         </div>
         <div className="mt-3 pt-3 border-t border-hairline">
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Shipping</div>
+          <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Shipping</div>
           {shipLines.length ? (
             <address className="not-italic text-sm text-ink-2 leading-relaxed">
               {shipLines.map((line, i) => <div key={i}>{line}</div>)}
@@ -679,7 +679,7 @@ export function CustomerIdentityRail({ c }: { c: Customer }) {
         </dl>
         {c.notes && (
           <div className="mt-4 pt-3 border-t border-hairline">
-            <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Notes</div>
+            <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Notes</div>
             <p className="text-sm text-ink-2 whitespace-pre-wrap">{c.notes}</p>
           </div>
         )}
@@ -709,9 +709,9 @@ export function MetricCard({ label, value, tone = "default", hint, href, hrefTit
     tone === "danger" ? "text-rose" : tone === "warning" ? "text-amber-ink" : tone === "success" ? "text-emerald" : "text-ink";
   const body = (
     <>
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
       <div className={cn("text-sm font-semibold tabular-nums mt-1 truncate", valueColor)}>{value}</div>
-      {hint && <div className="text-[10px] text-ink-3 mt-0.5 truncate">{hint}</div>}
+      {hint && <div className="text-3xs text-ink-3 mt-0.5 truncate">{hint}</div>}
     </>
   );
   const shell = "bg-paper-2/40 border border-hairline rounded-md px-3 py-2.5";
@@ -733,7 +733,7 @@ export function Field({ label, value, mono, badge }: {
 }) {
   return (
     <div>
-      <dt className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">{label}</dt>
+      <dt className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">{label}</dt>
       <dd className={cn("text-sm text-ink flex items-center gap-1.5", mono && "font-mono", !value && "italic text-ink-3 font-sans")}>
         <span className="truncate">{value || "—"}</span>
         {value && badge && <Badge kind={badge.kind} size="sm">{badge.text}</Badge>}

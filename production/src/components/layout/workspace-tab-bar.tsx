@@ -95,7 +95,7 @@ export function WorkspaceTabBar() {
       })}
 
       {tabs.length >= MAX_TABS && (
-        <span className="self-center pl-2 text-[10px] text-ink-3 whitespace-nowrap">
+        <span className="self-center pl-2 text-3xs text-ink-3 whitespace-nowrap">
           {MAX_TABS} max
         </span>
       )}

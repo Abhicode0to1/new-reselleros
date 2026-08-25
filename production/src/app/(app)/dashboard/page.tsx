@@ -346,7 +346,7 @@ export default function DashboardPage() {
         {activity.length === 0 ? (
           <div className="py-6 text-center text-sm text-ink-3">
             Nothing happened in the last 24 hours.<br/>
-            <span className="text-[11px]">Add a lead or send a quote to see activity here.</span>
+            <span className="text-2xs">Add a lead or send a quote to see activity here.</span>
           </div>
         ) : (
           <div className="space-y-3">
@@ -419,7 +419,7 @@ export default function DashboardPage() {
                 p.rank === 1 ? "bg-amber text-white" : "bg-paper-2 text-ink-2")}>{p.rank}</div>
               <div className="min-w-0">
                 <div className="text-sm font-medium truncate">{p.name}</div>
-                <div className="text-[11px] text-ink-3">{p.deals} deal{p.deals === 1 ? "" : "s"} closed</div>
+                <div className="text-2xs text-ink-3">{p.deals} deal{p.deals === 1 ? "" : "s"} closed</div>
               </div>
               <div className="font-serif tabular-nums text-lg">{rupee(p.amount, { compact: true })}</div>
             </div>
@@ -448,7 +448,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate">{sub.customer_name}</div>
-                  <div className="flex items-center gap-2 text-[11px] text-ink-3 mt-0.5">
+                  <div className="flex items-center gap-2 text-2xs text-ink-3 mt-0.5">
                     <span>{sub.renewal_date ? formatDate(sub.renewal_date) : "—"}</span><span>·</span>
                     <span className="font-mono">{sub.seats} seats · {rupee(sub.mrr)}/mo</span>
                   </div>
@@ -463,7 +463,7 @@ export default function DashboardPage() {
               </div>
             ))}
             {enrichedRenewals.length > 5 && (
-              <p className="text-[11px] text-ink-3 pt-2 border-t border-hairline">+ {enrichedRenewals.length - 5} more renewing soon</p>
+              <p className="text-2xs text-ink-3 pt-2 border-t border-hairline">+ {enrichedRenewals.length - 5} more renewing soon</p>
             )}
           </div>
         )}
@@ -489,7 +489,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate">{u.type}: <span className="font-normal">{u.who}</span></div>
-                  <div className={cn("text-[11px]", u.tone === "rose" ? "text-rose font-medium" : "text-ink-3")}>{u.time}</div>
+                  <div className={cn("text-2xs", u.tone === "rose" ? "text-rose font-medium" : "text-ink-3")}>{u.time}</div>
                 </div>
                 <Icon name="arrow_right" size={14} className="text-ink-3" />
               </button>
@@ -652,7 +652,7 @@ export default function DashboardPage() {
       <PartnerRenewalAlertCard />
 
       {/* Drag hint */}
-      <p className="text-[11px] text-ink-3 mb-2 hidden md:flex items-center gap-1">
+      <p className="text-2xs text-ink-3 mb-2 hidden md:flex items-center gap-1">
         <Icon name="more_h" size={11} className="rotate-90" />
         Drag any card by its handle to rearrange — your layout is saved on this device.
       </p>
@@ -700,7 +700,7 @@ function FocusRow({
       </div>
       <div className="min-w-0">
         <div className="text-sm font-medium leading-tight">{title}</div>
-        <div className="text-[11px] text-ink-3 mt-0.5">{note}</div>
+        <div className="text-2xs text-ink-3 mt-0.5">{note}</div>
       </div>
       <Button size="sm" variant="outline" iconRight="arrow_right" onClick={onClick}>
         {action}
@@ -733,7 +733,7 @@ function ChaseRow({
       </div>
       <div className="min-w-0">
         <div className={cn("text-sm font-semibold leading-tight", tone === "emerald" ? "text-emerald" : tone === "rose" ? "text-rose" : "text-ink")}>{title}</div>
-        <div className="text-[11px] text-ink-3 mt-0.5">{note}</div>
+        <div className="text-2xs text-ink-3 mt-0.5">{note}</div>
       </div>
       <Icon name="arrow_right" size={14} className="text-ink-3" />
     </button>
@@ -757,7 +757,7 @@ function ActivityRow({ icon, tone, title, time }: { icon: string; tone: string; 
         <Icon name={icon} size={12} />
       </div>
       <div className="text-sm">{title}</div>
-      <div className="text-[11px] text-ink-3">{time}</div>
+      <div className="text-2xs text-ink-3">{time}</div>
     </div>
   );
 }
@@ -873,7 +873,7 @@ function PartnerRenewalAlertCard() {
             <span className="text-ink-2 font-mono font-medium ml-1.5">{rupee(totals.renewal_value)}</span>
             <span className="text-ink-3 font-normal text-xs ml-1">projected annual</span>
           </p>
-          <p className="text-[11px] text-ink-3">
+          <p className="text-2xs text-ink-3">
             {totals.partners_w_due} of your sub-reseller{totals.partners_w_due === 1 ? "" : "s"} have customer renewals coming up. Confirm inventory + cash flow.
           </p>
         </div>

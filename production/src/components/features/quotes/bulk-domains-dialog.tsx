@@ -209,7 +209,7 @@ export function BulkDomainsDialog({ open, onOpenChange, catalog, customerId, onA
                       value={row.seats}
                       onChange={(e) => setManual((arr) => arr.map((x, i) => i === idx ? { ...x, seats: Math.max(0, Number(e.target.value) || 0) } : x))}
                     />
-                    <span className="text-[10px] text-ink-3 w-8 shrink-0">seats</span>
+                    <span className="text-3xs text-ink-3 w-8 shrink-0">seats</span>
                     <button
                       type="button" aria-label="Remove domain"
                       onClick={() => setManual((arr) => arr.length > 1 ? arr.filter((_, i) => i !== idx) : [{ domain: "", seats: 1 }])}
@@ -224,7 +224,7 @@ export function BulkDomainsDialog({ open, onOpenChange, catalog, customerId, onA
                 onClick={() => setManual((arr) => [...arr, { domain: "", seats: 1 }])}>
                 Add domain
               </Button>
-              <p className="text-[11px] text-ink-3">
+              <p className="text-2xs text-ink-3">
                 Each domain has its own seat count — that seat count is what carries to its subscription on payment.
               </p>
             </div>
@@ -237,7 +237,7 @@ export function BulkDomainsDialog({ open, onOpenChange, catalog, customerId, onA
               )}>
                 <Icon name="upload" size={22} className="text-ink-3 mx-auto mb-1" />
                 <p className="text-sm font-medium text-ink">{csvName ?? "Choose CSV (domain, seats)"}</p>
-                <p className="text-[11px] text-ink-3 mt-0.5">Two columns: <b>domain</b>, <b>seats</b>. We load them into the list so you can review before adding.</p>
+                <p className="text-2xs text-ink-3 mt-0.5">Two columns: <b>domain</b>, <b>seats</b>. We load them into the list so you can review before adding.</p>
                 <input ref={fileRef} id="bulk-csv" type="file" accept=".csv,text/csv" onChange={handleCsv} className="sr-only" />
               </label>
             </div>
@@ -251,10 +251,10 @@ export function BulkDomainsDialog({ open, onOpenChange, catalog, customerId, onA
                 <div key={s.domain} className="flex items-center gap-2 px-3 py-1.5 border-b border-hairline last:border-0">
                   <input type="checkbox" className="accent-amber" checked={s.on}
                     onChange={(e) => setSaved((arr) => arr.map((x, i) => i === idx ? { ...x, on: e.target.checked } : x))} />
-                  <span className="font-mono text-[11px] text-ink flex-1 truncate">{s.domain}</span>
+                  <span className="font-mono text-2xs text-ink flex-1 truncate">{s.domain}</span>
                   <Input type="number" className="w-20 h-7 text-xs" value={s.seats}
                     onChange={(e) => setSaved((arr) => arr.map((x, i) => i === idx ? { ...x, seats: Math.max(0, Number(e.target.value) || 0) } : x))} />
-                  <span className="text-[10px] text-ink-3">seats</span>
+                  <span className="text-3xs text-ink-3">seats</span>
                 </div>
               ))}
             </div>

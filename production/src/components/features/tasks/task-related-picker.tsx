@@ -57,7 +57,7 @@ export function TaskRelatedPicker({
     const sel = options.find((o) => o.kind === value.kind && o.id === value.id);
     return (
       <div className="flex items-center gap-2 rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
-        <span className={`text-[10px] px-1.5 py-0.5 rounded ${TAG[value.kind].cls}`}>{TAG[value.kind].label}</span>
+        <span className={`text-3xs px-1.5 py-0.5 rounded ${TAG[value.kind].cls}`}>{TAG[value.kind].label}</span>
         <span className="text-sm text-ink truncate flex-1">{sel?.label ?? TAG[value.kind].label}</span>
         <button
           type="button"
@@ -90,7 +90,7 @@ export function TaskRelatedPicker({
               onClick={() => { onChange({ kind: o.kind, id: o.id }); setQuery(""); setOpen(false); }}
               className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-paper-2/60"
             >
-              <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${TAG[o.kind].cls}`}>{TAG[o.kind].label}</span>
+              <span className={`text-3xs px-1.5 py-0.5 rounded shrink-0 ${TAG[o.kind].cls}`}>{TAG[o.kind].label}</span>
               <span className="text-sm text-ink truncate">{o.label}</span>
             </button>
           ))}

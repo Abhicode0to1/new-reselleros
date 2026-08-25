@@ -52,7 +52,7 @@ export function SendResetLinkButton({ email }: { email: string | null }) {
   const justSent = sentAt !== null && Date.now() - sentAt < 60_000;
 
   if (!email) {
-    return <span className="text-[11px] text-ink-3">no email</span>;
+    return <span className="text-2xs text-ink-3">no email</span>;
   }
 
   return (

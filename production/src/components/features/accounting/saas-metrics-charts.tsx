@@ -47,7 +47,7 @@ function Notes({ items }: { items: readonly string[] }) {
   return (
     <ul className="mt-3 space-y-1.5">
       {items.map((n, i) => (
-        <li key={i} className="flex gap-2 text-[11px] leading-relaxed text-ink-3">
+        <li key={i} className="flex gap-2 text-2xs leading-relaxed text-ink-3">
           <Icon name="info" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{n}</span>
         </li>
@@ -79,7 +79,7 @@ export function MrrTrendChart({
     <Card className="print-keep p-5 md:p-6">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+          <div className="text-2xs font-semibold uppercase tracking-wider text-ink-3">
             MRR by month
           </div>
           <div className="mt-0.5 text-xs text-ink-3">
@@ -168,7 +168,7 @@ export function RetentionVelocityChart({
     <Card className="print-keep p-5 md:p-6">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+          <div className="text-2xs font-semibold uppercase tracking-wider text-ink-3">
             Retention velocity
           </div>
           {/* The definition, on the card. An invented metric with no definition beside it is

@@ -157,7 +157,7 @@ export function OfferLetterDialog({
                 </div>
               </div>
             </div>
-            <p className="text-center text-[11px] text-ink-3 mt-3 flex items-center justify-center gap-1">
+            <p className="text-center text-2xs text-ink-3 mt-3 flex items-center justify-center gap-1">
               <Icon name="info" size={11} /> Fields upar edit karo — preview turant badalta hai. Print / Save PDF se de do.
             </p>
           </div>

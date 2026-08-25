@@ -234,7 +234,7 @@ export function LeadsInsightBand({
                   type="button"
                   onClick={() => onToggleStage(stage)}
                   className={cn(
-                    "inline-flex items-center gap-1.5 text-[10px] text-ink-3 hover:text-ink transition-colors",
+                    "inline-flex items-center gap-1.5 text-3xs text-ink-3 hover:text-ink transition-colors",
                     isDimmed && "opacity-50",
                   )}
                 >
@@ -248,7 +248,7 @@ export function LeadsInsightBand({
             {/* Total ₹ pipeline at the end of the legend. Shows aggregate value
                 across all visible stages — useful at a glance for owners. */}
             {pulseTotal > totalCount && (
-              <span className="inline-flex items-center gap-1.5 text-[10px] text-ink-3 ml-auto">
+              <span className="inline-flex items-center gap-1.5 text-3xs text-ink-3 ml-auto">
                 <span>Total</span>
                 <span className="font-serif text-ink tabular-nums text-sm">{rupee(pulseTotal, { compact: true })}</span>
               </span>
@@ -297,7 +297,7 @@ function KpiPill({
 
   const inner = (
     <>
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold opacity-80">
+      <div className="flex items-center gap-1 text-3xs uppercase tracking-wider font-semibold opacity-80">
         <Icon name={icon} size={11} className={iconColor[tone]} />
         {label}
       </div>

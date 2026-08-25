@@ -89,7 +89,7 @@ export function ContactCompanyPanel({ customerId }: { customerId: string }) {
           <Avatar initials={initials(c.name) || "?"} color="emerald" size="md" />
           <span className="min-w-0">
             <span className="block font-medium text-ink truncate group-hover:text-amber-ink transition-colors">{c.name}</span>
-            <span className="block text-[11px] text-ink-3 truncate">
+            <span className="block text-2xs text-ink-3 truncate">
               {c.customer_type === "individual" ? "Individual" : "Business"}
               {c.gstin ? ` · ${c.gstin}` : ""}
             </span>
@@ -111,7 +111,7 @@ export function ContactCompanyPanel({ customerId }: { customerId: string }) {
         {counts.map((k) => (
           <div key={k.label} className="rounded-lg border border-hairline bg-paper px-3 py-2 text-center">
             <div className="text-lg font-semibold text-ink tabular-nums">{k.value}</div>
-            <div className="text-[10px] uppercase tracking-wider text-ink-3">{k.label}</div>
+            <div className="text-3xs uppercase tracking-wider text-ink-3">{k.label}</div>
           </div>
         ))}
       </div>
@@ -119,13 +119,13 @@ export function ContactCompanyPanel({ customerId }: { customerId: string }) {
       {/* Recent records */}
       {recent.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-ink-3 mb-2">Recent records</h3>
+          <h3 className="text-2xs font-semibold uppercase tracking-wider text-ink-3 mb-2">Recent records</h3>
           <ul className="divide-y divide-hairline rounded-lg border border-hairline overflow-hidden">
             {recent.map((r, idx) => (
               <li key={`${r.type}-${r.ref}-${idx}`} className="flex items-center gap-3 px-3 py-2 bg-paper">
                 <Badge kind="muted" size="sm">{r.type}</Badge>
                 <span className="text-sm text-ink truncate flex-1 min-w-0">{r.ref}</span>
-                <span className="text-[11px] text-ink-3 whitespace-nowrap">{r.date ? formatDate(r.date) : "—"}</span>
+                <span className="text-2xs text-ink-3 whitespace-nowrap">{r.date ? formatDate(r.date) : "—"}</span>
                 <span className="text-sm font-medium text-ink tabular-nums whitespace-nowrap">{rupee(r.amount ?? 0)}</span>
               </li>
             ))}
@@ -139,7 +139,7 @@ export function ContactCompanyPanel({ customerId }: { customerId: string }) {
 function Panel({ children }: { children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-hairline bg-paper p-4 md:p-5">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-3 mb-3">Company</h2>
+      <h2 className="text-2xs font-semibold uppercase tracking-wider text-ink-3 mb-3">Company</h2>
       {children}
     </section>
   );

@@ -196,7 +196,7 @@ export function CommandPalette({
                 placeholder="Search customers, leads, quotes, invoices, or run an action…"
                 className="flex-1 bg-transparent border-0 outline-none text-base text-ink placeholder:text-ink-4 font-sans"
               />
-              <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-paper-2 border border-hairline text-ink-3 font-mono">
+              <kbd className="text-3xs px-1.5 py-0.5 rounded bg-paper-2 border border-hairline text-ink-3 font-mono">
                 ESC
               </kbd>
             </div>
@@ -438,17 +438,17 @@ export function CommandPalette({
             </Command.List>
 
             {/* Footer hint */}
-            <div className="flex items-center gap-3 px-3 py-2 border-t border-hairline bg-paper-2 text-[11px] text-ink-3">
+            <div className="flex items-center gap-3 px-3 py-2 border-t border-hairline bg-paper-2 text-2xs text-ink-3">
               <span className="flex items-center gap-1">
-                <kbd className="text-[10px] px-1 py-0.5 rounded bg-paper border border-hairline font-mono">↑↓</kbd>
+                <kbd className="text-3xs px-1 py-0.5 rounded bg-paper border border-hairline font-mono">↑↓</kbd>
                 navigate
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="text-[10px] px-1 py-0.5 rounded bg-paper border border-hairline font-mono">↵</kbd>
+                <kbd className="text-3xs px-1 py-0.5 rounded bg-paper border border-hairline font-mono">↵</kbd>
                 select
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="text-[10px] px-1 py-0.5 rounded bg-paper border border-hairline font-mono">ESC</kbd>
+                <kbd className="text-3xs px-1 py-0.5 rounded bg-paper border border-hairline font-mono">ESC</kbd>
                 close
               </span>
             </div>
@@ -510,7 +510,7 @@ function PaletteItem({
       <Icon name={icon} size={15} className="text-ink-3 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">{label}</div>
-        {meta && <div className="text-[11px] text-ink-3 truncate">{meta}</div>}
+        {meta && <div className="text-2xs text-ink-3 truncate">{meta}</div>}
       </div>
     </Command.Item>
   );

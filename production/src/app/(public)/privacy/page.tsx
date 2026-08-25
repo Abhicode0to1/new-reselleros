@@ -93,7 +93,7 @@ export default function PrivacyPage() {
           stricter than the DPDP Act:
         </p>
         <table className="w-full mt-3 text-sm">
-          <thead className="border-b border-hairline text-left text-[11px] uppercase tracking-wider text-ink-3">
+          <thead className="border-b border-hairline text-left text-2xs uppercase tracking-wider text-ink-3">
             <tr>
               <th className="py-2 pr-3 font-semibold">Provider</th>
               <th className="py-2 pr-3 font-semibold">Purpose</th>

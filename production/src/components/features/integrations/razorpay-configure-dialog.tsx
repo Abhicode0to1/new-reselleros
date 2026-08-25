@@ -141,7 +141,7 @@ export default function RazorpayConfigureDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="md:!max-w-2xl">
         <header className="border-b border-hairline pb-3 mb-4">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1 inline-flex items-center gap-1.5">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1 inline-flex items-center gap-1.5">
             <Icon name="rupee" size={11} /> Integration · Razorpay
           </p>
           <h2 className="font-serif text-2xl text-ink">Payments</h2>
@@ -157,7 +157,7 @@ export default function RazorpayConfigureDialog({ open, onOpenChange }: Props) {
             <div className="flex items-center justify-between rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-ink">Current state</p>
-                <p className="text-[11px] text-ink-3 truncate">
+                <p className="text-2xs text-ink-3 truncate">
                   {status?.configured
                     ? <>Configured · {status.mode === "live" ? "LIVE" : "TEST"} mode · secret {status.key_secret_mask} · saved {status.updated_at ? formatDate(status.updated_at) : "—"}</>
                     : "Not configured — Buy page is in simulation mode"}
@@ -180,7 +180,7 @@ export default function RazorpayConfigureDialog({ open, onOpenChange }: Props) {
                 onChange={(e) => setKeyId(e.target.value)}
                 autoComplete="off"
               />
-              <p className="text-[10px] text-ink-3 mt-1 break-words">
+              <p className="text-3xs text-ink-3 mt-1 break-words">
                 Razorpay Dashboard · Settings · API Keys · "Key Id". {inferredMode && (
                   <span className={inferredMode === "live" ? "text-emerald font-medium" : "text-amber-ink font-medium"}>
                     Detected: {inferredMode.toUpperCase()} mode
@@ -204,7 +204,7 @@ export default function RazorpayConfigureDialog({ open, onOpenChange }: Props) {
                   <Icon name={showSecret ? "eye_off" : "eye"} size={14} />
                 </Button>
               </div>
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 Generated alongside the Key ID. Never shown back after save.
               </p>
             </div>
@@ -216,12 +216,12 @@ export default function RazorpayConfigureDialog({ open, onOpenChange }: Props) {
 
               <div className="rounded-md bg-paper-2 p-3 space-y-2 min-w-0">
                 <div className="min-w-0">
-                  <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
+                  <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
                     Webhook URL — paste this in Razorpay dashboard
                   </p>
                   <div className="flex items-center gap-2 min-w-0">
                     <code
-                      className="font-mono text-[11px] text-ink-2 bg-paper px-2 py-1 rounded flex-1 min-w-0 truncate"
+                      className="font-mono text-2xs text-ink-2 bg-paper px-2 py-1 rounded flex-1 min-w-0 truncate"
                       title={status?.webhook_url}
                     >
                       {status?.webhook_url ?? "loading…"}
@@ -251,7 +251,7 @@ export default function RazorpayConfigureDialog({ open, onOpenChange }: Props) {
                       <Icon name={showWebhook ? "eye_off" : "eye"} size={14} />
                     </Button>
                   </div>
-                  <p className="text-[10px] text-ink-3 mt-1">
+                  <p className="text-3xs text-ink-3 mt-1">
                     Required for verifying <span className="font-mono">x-razorpay-signature</span> on payment captured / failed events. Set in Razorpay Dashboard · Settings · Webhooks.
                   </p>
                 </div>

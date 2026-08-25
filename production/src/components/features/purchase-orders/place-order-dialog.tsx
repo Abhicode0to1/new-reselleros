@@ -125,7 +125,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
         <header className="border-b border-hairline pb-3 mb-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1">
+              <p className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1">
                 Procurement · PO
               </p>
               <h2 className="font-serif text-2xl text-ink">{po.id}</h2>
@@ -151,19 +151,19 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
         {/* Order shape — read-only context */}
         <div className="bg-paper-2 rounded-md p-3 mb-4 grid grid-cols-2 gap-3 text-sm">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Vendor</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Vendor</p>
             <p className="font-medium text-ink">{VENDOR_LABEL[po.vendor] ?? po.vendor}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Plan</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Plan</p>
             <p className="font-medium text-ink">{po.plan}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Seats</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Seats</p>
             <p className="font-medium text-ink tabular-nums">{po.seats}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Term</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Term</p>
             <p className="font-medium text-ink tabular-nums">{po.term_months} months</p>
           </div>
         </div>
@@ -183,7 +183,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
           />
           <span className="text-xs text-ink-3 whitespace-nowrap">₹/seat/mo</span>
         </div>
-        <p className="text-[11px] text-ink-3 mb-4">
+        <p className="text-2xs text-ink-3 mb-4">
           Total order value: <b className="text-ink-2 tabular-nums">{rupee(totalCost)}</b>
           {" "}({rupee(unitCostNum)} × {po.seats} seats × {po.term_months} months)
         </p>
@@ -224,7 +224,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
               <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold">
                 Linked vendor bills
               </p>
-              <p className="text-[11px] text-ink-3 mt-0.5">
+              <p className="text-2xs text-ink-3 mt-0.5">
                 Match Google's monthly invoices to this PO for real cost tracking
               </p>
             </div>
@@ -260,15 +260,15 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
             return (
               <div className="bg-paper-2 rounded-md p-3 mb-2 grid grid-cols-3 gap-3 text-sm">
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Expected</p>
+                  <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Expected</p>
                   <p className="font-medium text-ink tabular-nums">{rupee(po.total_cost)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Allocated</p>
+                  <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Allocated</p>
                   <p className="font-medium text-ink tabular-nums">{rupee(allocatedTotal)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Variance</p>
+                  <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Variance</p>
                   <p className={cn(
                     "font-medium tabular-nums",
                     Math.abs(variance) < 100 ? "text-emerald" :
@@ -353,14 +353,14 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
                       {" · "}
                       <span className="font-mono">{a.vendor_bill?.bill_no ?? "(no ref)"}</span>
                     </p>
-                    <p className="text-ink-3 text-[10px]">
+                    <p className="text-ink-3 text-3xs">
                       Bill date: {a.vendor_bill ? formatDate(a.vendor_bill.bill_date) : "—"}
                       {" · "}Total: {a.vendor_bill ? rupee(a.vendor_bill.total) : "—"}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-medium text-ink tabular-nums">{rupee(a.allocated_amount)}</p>
-                    <p className="text-[10px] text-ink-3">allocated</p>
+                    <p className="text-3xs text-ink-3">allocated</p>
                   </div>
                   {!isTerminal && (
                     <IconButton
@@ -383,7 +383,7 @@ export default function PlaceOrderDialog({ po, open, onOpenChange }: Props) {
           )}
 
           {allocsQ.data && allocsQ.data.length === 0 && !showAllocator && (
-            <p className="text-[11px] text-ink-3 italic">
+            <p className="text-2xs text-ink-3 italic">
               No vendor bills matched yet. When Google sends its monthly invoice, match it here.
             </p>
           )}

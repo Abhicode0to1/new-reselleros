@@ -46,7 +46,7 @@ export function PriorityActionHub({
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-amber-500/20 pt-3">
-            <span className="text-[11px] font-medium text-muted-foreground">
+            <span className="text-2xs font-medium text-muted-foreground">
               Auto-cadence active
             </span>
             <Button asChild size="sm" variant="outline" className="h-7 text-xs border-amber-500/30 hover:bg-amber-500/10">
@@ -78,7 +78,7 @@ export function PriorityActionHub({
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-blue-500/20 pt-3">
-            <span className="text-[11px] font-medium text-muted-foreground">
+            <span className="text-2xs font-medium text-muted-foreground">
               Quote Builder
             </span>
             <Button asChild size="sm" variant="outline" className="h-7 text-xs border-blue-500/30 hover:bg-blue-500/10">
@@ -110,7 +110,7 @@ export function PriorityActionHub({
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-emerald-500/20 pt-3">
-            <span className="text-[11px] font-medium text-muted-foreground">
+            <span className="text-2xs font-medium text-muted-foreground">
               Payments Hub
             </span>
             <Button asChild size="sm" variant="outline" className="h-7 text-xs border-emerald-500/30 hover:bg-emerald-500/10">

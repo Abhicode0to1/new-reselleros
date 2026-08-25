@@ -79,7 +79,7 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile }: {
       </div>
 
       {totals.unpricedCount > 0 && (
-        <p className="mt-2 text-[11px] leading-snug text-amber-ink">
+        <p className="mt-2 text-2xs leading-snug text-amber-ink">
           {totals.unpricedCount} {totals.unpricedCount === 1 ? "gap has" : "gaps have"} no catalogue cost, so the
           seats are counted above but the money is not.
         </p>
@@ -105,11 +105,11 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile }: {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-ink">
                     {sub.customer_name}
-                    {sub.domain && <span className="ml-1.5 font-mono text-[11px] text-ink-3">{sub.domain}</span>}
+                    {sub.domain && <span className="ml-1.5 font-mono text-2xs text-ink-3">{sub.domain}</span>}
                   </p>
-                  <p className="mt-0.5 text-[11px] leading-snug text-ink-2">{result.message}</p>
+                  <p className="mt-0.5 text-2xs leading-snug text-ink-2">{result.message}</p>
                   {sub.vendor_synced_at && (
-                    <p className="mt-0.5 text-[10px] text-ink-3">
+                    <p className="mt-0.5 text-3xs text-ink-3">
                       Vendor count from {formatDate(sub.vendor_synced_at)}
                     </p>
                   )}
@@ -123,7 +123,7 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile }: {
                       "mt-1 text-sm font-medium tabular-nums",
                       result.kind === "under_billed" ? "text-rose" : "text-amber-ink",
                     )}>
-                      {rupee(result.monthlyImpact)}<span className="text-[10px] font-normal text-ink-3">/mo</span>
+                      {rupee(result.monthlyImpact)}<span className="text-3xs font-normal text-ink-3">/mo</span>
                     </p>
                   )}
                 </div>
@@ -147,7 +147,7 @@ function Figure({ label, value, suffix, count, tone }: {
 }) {
   return (
     <div className="rounded-lg border border-hairline bg-paper-2/40 p-3">
-      <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-3">{label}</p>
+      <p className="text-3xs uppercase tracking-wider font-semibold text-ink-3">{label}</p>
       <p className={cn(
         "mt-0.5 font-serif text-lg font-bold tabular-nums",
         tone === "bad" ? "text-rose" : tone === "warn" ? "text-amber-ink" : "text-ink",
@@ -155,7 +155,7 @@ function Figure({ label, value, suffix, count, tone }: {
         {value}{suffix && <span className="text-xs font-normal text-ink-3">{suffix}</span>}
       </p>
       {count != null && count > 0 && (
-        <p className="mt-0.5 text-[10px] text-ink-3">
+        <p className="mt-0.5 text-3xs text-ink-3">
           across {count} {count === 1 ? "subscription" : "subscriptions"}
         </p>
       )}

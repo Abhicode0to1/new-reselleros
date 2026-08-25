@@ -183,7 +183,7 @@ export default function GoogleContactsImportDialog({ open, onOpenChange }: Props
           <div className="py-12 text-center">
             <Icon name="refresh" size={32} className="text-amber-ink mx-auto mb-3 animate-spin" />
             <p className="text-sm text-ink-2">Fetching contacts from Google…</p>
-            <p className="text-[11px] text-ink-3 mt-1">First time can take 5-10 seconds for large contact lists</p>
+            <p className="text-2xs text-ink-3 mt-1">First time can take 5-10 seconds for large contact lists</p>
           </div>
         )}
 
@@ -200,7 +200,7 @@ export default function GoogleContactsImportDialog({ open, onOpenChange }: Props
             <Button variant="primary" icon="external" onClick={connectGoogle}>
               Connect Google
             </Button>
-            <p className="text-[11px] text-ink-3 mt-4">
+            <p className="text-2xs text-ink-3 mt-4">
               ResellerOS only reads — never writes or deletes anything in your Google Contacts.
             </p>
           </div>
@@ -227,7 +227,7 @@ export default function GoogleContactsImportDialog({ open, onOpenChange }: Props
                   {contacts.filter((c) => c.email).length} with email
                 </Badge>
               </div>
-              <p className="text-[11px] text-ink-3">
+              <p className="text-2xs text-ink-3">
                 Selected → becomes a <b className="text-ink-2">lead</b> at stage <code>new</code>
               </p>
             </div>
@@ -270,7 +270,7 @@ export default function GoogleContactsImportDialog({ open, onOpenChange }: Props
                           />
                         </td>
                         <td className="px-2 py-1.5 font-medium text-ink truncate max-w-[180px]">{c.fullName}</td>
-                        <td className="px-2 py-1.5 text-ink-2 font-mono text-[11px] truncate max-w-[200px]">{c.email ?? "—"}</td>
+                        <td className="px-2 py-1.5 text-ink-2 font-mono text-2xs truncate max-w-[200px]">{c.email ?? "—"}</td>
                         <td className="px-2 py-1.5 text-ink-2 truncate max-w-[140px]">{c.phone ?? "—"}</td>
                         <td className="px-2 py-1.5 text-ink-2 truncate max-w-[160px]">{c.company ?? "—"}</td>
                         <td className="px-2 py-1.5 text-ink-3 truncate max-w-[160px]">{c.title ?? "—"}</td>
@@ -281,7 +281,7 @@ export default function GoogleContactsImportDialog({ open, onOpenChange }: Props
               </table>
             </div>
 
-            <div className="bg-paper-2 rounded-md p-3 text-[11px] text-ink-3 flex items-start gap-2">
+            <div className="bg-paper-2 rounded-md p-3 text-2xs text-ink-3 flex items-start gap-2">
               <Icon name="info" size={12} className="text-amber-ink shrink-0 mt-0.5" />
               <p>
                 Pro tip: Selected contacts land in your <b className="text-ink-2">Deal Pipeline → Leads tab</b> at stage <code>new</code>.

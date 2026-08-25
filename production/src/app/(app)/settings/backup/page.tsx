@@ -121,7 +121,7 @@ export default function BackupPage() {
                       <span className="text-[13px] font-medium text-ink truncate">{b.label || "Backup"}</span>
                       <Badge kind={b.kind === "auto" ? "muted" : "info"} size="sm">{b.kind === "auto" ? "Auto" : "Manual"}</Badge>
                     </div>
-                    <div className="text-[11px] text-ink-3">{whenLabel(b.created_at)} · {b.table_count} tables · {humanSize(b.bytes)}</div>
+                    <div className="text-2xs text-ink-3">{whenLabel(b.created_at)} · {b.table_count} tables · {humanSize(b.bytes)}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">

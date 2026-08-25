@@ -55,7 +55,7 @@ export default function PerformancePage() {
             leaving a control that silently does nothing. */}
         {scope === "month" && (
           <div>
-            <label className="block text-[11px] text-ink-3 mb-1">Month</label>
+            <label className="block text-2xs text-ink-3 mb-1">Month</label>
             <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="w-44" />
           </div>
         )}
@@ -67,7 +67,7 @@ export default function PerformancePage() {
       <Card className="p-4">
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="block text-[11px] text-ink-3 mb-1">
+            <label className="block text-2xs text-ink-3 mb-1">
               Bonus pool for {scope === "week" ? "this week" : "this month"} (₹)
             </label>
             <Input type="number" min={0} value={pool} onChange={(e) => setPool(e.target.value)} placeholder="e.g. 50000" className="w-48" />
@@ -99,7 +99,7 @@ export default function PerformancePage() {
         </div>
       )}
 
-      <p className="text-[11px] text-ink-3">
+      <p className="text-2xs text-ink-3">
         Weights: +1 pt / ₹{PERF_WEIGHTS.revenuePerRupees.toLocaleString("en-IN")} collected · deal won +{PERF_WEIGHTS.dealWon} ·
         quote +{PERF_WEIGHTS.quoteSent} · payment +{PERF_WEIGHTS.paymentRecorded} · task on-time +{PERF_WEIGHTS.taskOnTime} · late {PERF_WEIGHTS.taskLate} ·
         peer kudos +{PERF_WEIGHTS.kudosReceived} (max {KUDOS_PER_GIVER_PER_PERIOD} given per person per period).
@@ -116,7 +116,7 @@ function PerfCard({ row, rank, share }: { row: PerfRow; rank: number; share: num
       <button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-3 p-4 text-left hover:bg-paper-2/40">
         <span className="w-8 text-center text-lg font-semibold">{medal}</span>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-ink">{row.name} <span className="text-[11px] font-normal text-ink-3">· {row.role}</span></div>
+          <div className="font-semibold text-ink">{row.name} <span className="text-2xs font-normal text-ink-3">· {row.role}</span></div>
           <div className="text-[12px] text-ink-3 mt-0.5">
             {rupee(row.revenue)} collected · {row.dealsWon} won · {row.quotesSent} quotes · {row.tasksOnTime} tasks on-time
             {(row.kudosReceived ?? 0) > 0 && <> · {row.kudosReceived} kudos</>}
@@ -135,18 +135,18 @@ function PerfCard({ row, rank, share }: { row: PerfRow; rank: number; share: num
         </div>
         <div className="text-right">
           <div className="font-serif text-2xl text-ink tabular-nums">{row.score}</div>
-          <div className="text-[10px] uppercase tracking-wider text-ink-3">points</div>
+          <div className="text-3xs uppercase tracking-wider text-ink-3">points</div>
         </div>
         {share !== null && (
           <div className="text-right pl-3 ml-1 border-l border-hairline">
             <div className="font-serif text-xl text-emerald tabular-nums">{rupee(share)}</div>
-            <div className="text-[10px] uppercase tracking-wider text-ink-3">bonus</div>
+            <div className="text-3xs uppercase tracking-wider text-ink-3">bonus</div>
           </div>
         )}
       </button>
       {open && (
         <div className="border-t border-hairline px-4 py-3 bg-paper-2/30">
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-2">How the {row.score} points break down</div>
+          <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-2">How the {row.score} points break down</div>
           <ul className="space-y-1">
             {row.breakdown.map((b) => (
               <li key={b.label} className="flex items-center justify-between text-[13px]">

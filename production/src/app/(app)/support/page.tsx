@@ -237,7 +237,7 @@ export default function SupportPage() {
             <Icon name="building" size={15} />
             <span>🏢 Tenant / Customer Feedback</span>
             {scopeCounts.tenant_feedback > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
+              <span className="text-3xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
                 {scopeCounts.tenant_feedback}
               </span>
             )}
@@ -255,7 +255,7 @@ export default function SupportPage() {
             <Icon name="bug" size={15} />
             <span>🐛 Bug Reports &amp; Testing</span>
             {scopeCounts.team_testing > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose text-white font-bold">
+              <span className="text-3xs px-1.5 py-0.5 rounded-full bg-rose text-white font-bold">
                 {scopeCounts.team_testing}
               </span>
             )}
@@ -284,7 +284,7 @@ export default function SupportPage() {
                 }`}
               >
                 <span>{label}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${active ? "bg-paper font-bold" : "bg-paper-2 text-ink-3"}`}>{count}</span>
+                <span className={`text-3xs px-1.5 py-0.5 rounded ${active ? "bg-paper font-bold" : "bg-paper-2 text-ink-3"}`}>{count}</span>
               </button>
             );
           })}
@@ -462,7 +462,7 @@ export default function SupportPage() {
                     is the history of the ticket, and the rep who picks it up second needs it. */}
                 {selected.ai_escalated === true && (
                   <div className="rounded-md border border-rose/30 bg-rose-soft/50 px-3 py-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-rose">
+                    <p className="text-2xs font-semibold uppercase tracking-wide text-rose">
                       The AI stopped and asked for a person
                       {selected.ai_escalated_at
                         ? ` · ${formatDate(selected.ai_escalated_at, "short")}`
@@ -476,7 +476,7 @@ export default function SupportPage() {
                         ?? "No reason was recorded. Check the ticket's transcript, and tell whoever owns lib/ai/actions/support-dispatcher.ts."}
                     </p>
                     {!selected.assigned_agent && (
-                      <p className="mt-1.5 text-[11px] text-ink-3">
+                      <p className="mt-1.5 text-2xs text-ink-3">
                         Nobody owns this ticket yet — assign it or reply, and the SLA alert stops.
                       </p>
                     )}
@@ -555,7 +555,7 @@ export default function SupportPage() {
 
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold text-ink truncate font-mono group-hover:text-primary transition-colors">{att.name}</p>
-                          <span className="text-[11px] text-primary font-bold hover:underline flex items-center gap-1 mt-0.5">
+                          <span className="text-2xs text-primary font-bold hover:underline flex items-center gap-1 mt-0.5">
                             <Icon name={att.url ? "eye" : "file"} size={12} />
                             <span>{att.url ? "View Full Screenshot" : "Open Attachment Details"}</span>
                           </span>

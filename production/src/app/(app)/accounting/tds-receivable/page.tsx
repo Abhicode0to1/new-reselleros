@@ -142,7 +142,7 @@ export default function TdsReceivablePage() {
       {/* Lifecycle education banner (only when empty) */}
       {summary && summary.totalCount === 0 && (
         <Card className="p-5 mb-6 bg-paper-2/30">
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
             <Icon name="info" size={12} className="text-indigo inline mr-1 align-text-bottom" />
             How TDS Receivable works
           </div>
@@ -213,7 +213,7 @@ export default function TdsReceivablePage() {
           {/* Desktop table */}
           <Card className="hidden md:block overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-3">Date</th>
                   <th className="text-left  px-4 py-3">Customer</th>
@@ -271,13 +271,13 @@ export default function TdsReceivablePage() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0">
                         <div className="font-medium text-ink leading-tight">{r.customer_name}</div>
-                        <div className="text-[11px] text-ink-3 mt-0.5">
+                        <div className="text-2xs text-ink-3 mt-0.5">
                           {formatDate(r.payment_received_date)} · {r.section} @ {Number(r.rate_pct).toFixed(2)}%
                         </div>
                       </div>
                       <Badge color={STATUS_COLOR[r.status]}>{TDS_STATUS_LABEL[r.status]}</Badge>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="grid grid-cols-2 gap-2 text-2xs">
                       <div>
                         <div className="text-ink-3 uppercase tracking-wider">Gross</div>
                         <div className="font-mono text-ink">{rupee(r.gross_amount)}</div>
@@ -288,7 +288,7 @@ export default function TdsReceivablePage() {
                       </div>
                     </div>
                     {r.customer_tan && (
-                      <div className="text-[10px] text-ink-3 mt-2 font-mono">TAN: {r.customer_tan}</div>
+                      <div className="text-3xs text-ink-3 mt-2 font-mono">TAN: {r.customer_tan}</div>
                     )}
                   </Card>
                 </button>
@@ -339,7 +339,7 @@ function TabButton({
     >
       {tone && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
       {label}
-      <span className={`text-[10px] px-1.5 py-0.5 rounded ${active ? "bg-paper text-amber-ink" : "bg-paper-2 text-ink-3"}`}>
+      <span className={`text-3xs px-1.5 py-0.5 rounded ${active ? "bg-paper text-amber-ink" : "bg-paper-2 text-ink-3"}`}>
         {count}
       </span>
     </button>
@@ -362,11 +362,11 @@ function KPI({
                    : "text-ink";
   return (
     <Card className="p-3 md:p-4">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif ${big ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"} ${colorClass} leading-tight`}>
         {value}
       </div>
-      {hint && <div className="text-[10px] text-ink-3 mt-1">{hint}</div>}
+      {hint && <div className="text-3xs text-ink-3 mt-1">{hint}</div>}
     </Card>
   );
 }

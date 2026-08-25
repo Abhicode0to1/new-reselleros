@@ -61,15 +61,15 @@ export default function ReferralsPage() {
       <Card className="mb-6">
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Owed (to pay)</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Owed (to pay)</p>
             <p className="font-serif text-2xl text-amber-ink mt-1">{rupee(owed, { compact: true })}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Paid · all time</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Paid · all time</p>
             <p className="font-serif text-2xl text-ink mt-1">{rupee(paid, { compact: true })}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">TDS held (194H)</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">TDS held (194H)</p>
             <p className="font-serif text-2xl text-ink mt-1">{rupee(tdsHeld, { compact: true })}</p>
           </div>
         </div>
@@ -114,7 +114,7 @@ export default function ReferralsPage() {
                     <span className="font-medium text-ink truncate">{c.partner_name ?? "—"}</span>
                     <span className="font-serif tabular-nums text-ink">{rupee(c.net_payable)}</span>
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-[11px] text-ink-3 flex-wrap">
+                  <div className="mt-1 flex items-center gap-2 text-2xs text-ink-3 flex-wrap">
                     <span className={`px-1.5 py-0.5 rounded ${STATUS_PILL[c.status]}`}>{c.status}</span>
                     <span>· {formatDate(c.earned_date)}</span>
                     <span>· base {rupee(c.base_amount)}</span>
@@ -135,7 +135,7 @@ export default function ReferralsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-paper-2 border-b border-hairline">
-                    <tr className="text-left text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+                    <tr className="text-left text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                       <th className="p-3">Earned</th>
                       <th className="p-3">Partner</th>
                       <th className="p-3 text-right">Base (ex-GST)</th>
@@ -152,7 +152,7 @@ export default function ReferralsPage() {
                         <td className="p-3 whitespace-nowrap text-ink-2">{formatDate(c.earned_date)}</td>
                         <td className="p-3 font-medium text-ink">
                           {c.partner_name ?? "—"}
-                          <span className="ml-2 text-[10px] text-ink-3">
+                          <span className="ml-2 text-3xs text-ink-3">
                             {c.basis === "percent" ? `${c.rate ?? 0}%` : "fixed"}
                           </span>
                         </td>
@@ -160,7 +160,7 @@ export default function ReferralsPage() {
                         <td className="p-3 text-right tabular-nums text-ink-2">{rupee(c.gross_commission)}</td>
                         <td className="p-3 text-right tabular-nums text-ink-3">{c.tds_amount > 0 ? rupee(c.tds_amount) : "—"}</td>
                         <td className="p-3 text-right font-serif tabular-nums text-ink">{rupee(c.net_payable)}</td>
-                        <td className="p-3"><span className={`px-1.5 py-0.5 rounded text-[11px] ${STATUS_PILL[c.status]}`}>{c.status}</span></td>
+                        <td className="p-3"><span className={`px-1.5 py-0.5 rounded text-2xs ${STATUS_PILL[c.status]}`}>{c.status}</span></td>
                         <td className="p-3 text-right">
                           {c.status === "earned" ? (
                             <div className="flex justify-end gap-1">
@@ -168,8 +168,8 @@ export default function ReferralsPage() {
                               <Button size="sm" variant="ghost" onClick={() => cancel.mutate(c.id)}>Cancel</Button>
                             </div>
                           ) : c.status === "paid" ? (
-                            <span className="text-[11px] text-emerald inline-flex items-center gap-1"><Icon name="check" className="w-3 h-3" /> {c.paid_date ? formatDate(c.paid_date) : "Paid"}</span>
-                          ) : <span className="text-[11px] text-ink-3">—</span>}
+                            <span className="text-2xs text-emerald inline-flex items-center gap-1"><Icon name="check" className="w-3 h-3" /> {c.paid_date ? formatDate(c.paid_date) : "Paid"}</span>
+                          ) : <span className="text-2xs text-ink-3">—</span>}
                         </td>
                       </tr>
                     ))}
@@ -202,12 +202,12 @@ export default function ReferralsPage() {
                     <p className="font-medium text-ink">{p.name}</p>
                     {p.phone && <p className="text-[12px] text-ink-3">{p.phone}</p>}
                   </div>
-                  {p.deduct_tds && <span className="text-[10px] px-1.5 py-0.5 rounded bg-paper-2 text-ink-3">TDS 5%</span>}
+                  {p.deduct_tds && <span className="text-3xs px-1.5 py-0.5 rounded bg-paper-2 text-ink-3">TDS 5%</span>}
                 </div>
                 <div className="mt-2 text-[12px] text-ink-2">
                   Default: {p.default_basis === "percent" ? `${p.default_percent ?? 0}% of deal` : rupee(p.default_fixed_amount ?? 0)}
                 </div>
-                {p.pan && <p className="mt-1 text-[11px] font-mono text-ink-3">PAN {p.pan}</p>}
+                {p.pan && <p className="mt-1 text-2xs font-mono text-ink-3">PAN {p.pan}</p>}
               </Card>
             ))}
           </div>

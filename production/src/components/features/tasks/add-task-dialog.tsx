@@ -296,7 +296,7 @@ export function AddTaskDialog({ open, onOpenChange, linkLabel, linkTo, task }: A
                     shouldValidate: true,
                   })
                 }
-                className="text-[11px] px-2 py-1 rounded-full border border-hairline text-ink-2 hover:bg-paper-2 transition-colors"
+                className="text-2xs px-2 py-1 rounded-full border border-hairline text-ink-2 hover:bg-paper-2 transition-colors"
               >
                 {q.label}
               </button>
@@ -321,7 +321,7 @@ export function AddTaskDialog({ open, onOpenChange, linkLabel, linkTo, task }: A
               </SelectContent>
             </Select>
             <input type="hidden" {...register("assignee")} />
-            <p className="text-[11px] text-ink-3 mt-1">
+            <p className="text-2xs text-ink-3 mt-1">
               Only teammates with a login appear here. Invite more at{" "}
               <a href="/team" className="text-amber-ink underline">Team</a>.
             </p>
@@ -329,7 +329,7 @@ export function AddTaskDialog({ open, onOpenChange, linkLabel, linkTo, task }: A
 
           <FormField label="Related to (optional)" htmlFor="related">
             <TaskRelatedPicker value={related} onChange={setRelated} />
-            <p className="text-[11px] text-ink-3 mt-1">
+            <p className="text-2xs text-ink-3 mt-1">
               Link this task to a customer, lead or deal — you&apos;ll get a one-tap
               &ldquo;Open&rdquo; from the task, and it shows on that record.
             </p>

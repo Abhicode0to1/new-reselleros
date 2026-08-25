@@ -512,11 +512,11 @@ export default function PdfTestPage() {
                       <p className="text-sm font-semibold text-ink leading-tight">{fx.title}</p>
                       <Badge kind="muted">{fx.props.quoteId.split("-").slice(-1)[0]}</Badge>
                     </div>
-                    <p className="text-[11px] text-ink-3 leading-snug">{fx.why}</p>
+                    <p className="text-2xs text-ink-3 leading-snug">{fx.why}</p>
                   </div>
 
                   {/* Mini fact sheet */}
-                  <div className="text-[11px] text-ink-2 space-y-0.5 bg-paper-2 rounded-md p-2.5">
+                  <div className="text-2xs text-ink-2 space-y-0.5 bg-paper-2 rounded-md p-2.5">
                     <FactRow label="Tenant" value={fx.props.tenantName} />
                     <FactRow label="Customer" value={fx.props.customerName} />
                     <FactRow label="Lines" value={`${fx.props.lineItems.length}`} />

@@ -145,7 +145,7 @@ export default function GeminiConfigureDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="md:!max-w-xl">
         <header className="border-b border-hairline pb-3 mb-4">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1 inline-flex items-center gap-1.5">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1 inline-flex items-center gap-1.5">
             <Icon name="sparkles" size={11} /> Integration · AI (Google Gemini)
           </p>
           <h2 className="font-serif text-2xl text-ink">AI assistant</h2>
@@ -161,7 +161,7 @@ export default function GeminiConfigureDialog({ open, onOpenChange }: Props) {
             <div className="flex items-center justify-between rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-ink">Current state</p>
-                <p className="text-[11px] text-ink-3 truncate">
+                <p className="text-2xs text-ink-3 truncate">
                   {status?.configured
                     ? <>Configured · key {status.key_mask} · model {status.model} · saved {status.updated_at ? formatDate(status.updated_at) : "—"}</>
                     : status?.env_fallback
@@ -191,7 +191,7 @@ export default function GeminiConfigureDialog({ open, onOpenChange }: Props) {
                   {show ? "Hide" : "Show"}
                 </Button>
               </div>
-              <p className="text-[10px] text-ink-3 mt-1 break-words">
+              <p className="text-3xs text-ink-3 mt-1 break-words">
                 Get it free at <span className="font-mono">aistudio.google.com</span> → Get API key. Paid tier recommended (privacy). Never shown back after save.
               </p>
             </div>
@@ -210,7 +210,7 @@ export default function GeminiConfigureDialog({ open, onOpenChange }: Props) {
                   <option key={m} value={m}>{m}{m === RECOMMENDED_MODEL ? " — recommended" : ""}</option>
                 ))}
               </select>
-              <p className="text-[10px] text-ink-3 mt-1"><span className="font-mono">gemini-flash-latest</span> — a rolling alias, so it will not go stale the way a pinned version does. If a model fails, hit Test — but note the list it shows comes from Google and is not always accurate about what will actually work.</p>
+              <p className="text-3xs text-ink-3 mt-1"><span className="font-mono">gemini-flash-latest</span> — a rolling alias, so it will not go stale the way a pinned version does. If a model fails, hit Test — but note the list it shows comes from Google and is not always accurate about what will actually work.</p>
             </div>
 
             <div className="rounded-md bg-paper-2 p-3 text-xs text-ink-3 leading-relaxed break-words">

@@ -89,7 +89,7 @@ export function ApprovalDrawer({
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* Why it is here */}
           <div className="rounded-lg border border-amber/40 bg-amber-soft/40 p-3">
-            <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Why it needs sign-off</p>
+            <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Why it needs sign-off</p>
             <ul className="mt-1.5 space-y-1">
               {requirement.reasons.map((r) => (
                 <li key={r} className="flex items-start gap-1.5 text-[12px] leading-snug text-ink-2">
@@ -115,7 +115,7 @@ export function ApprovalDrawer({
 
           {rejecting && (
             <div>
-              <label htmlFor="reject-reason" className="block text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+              <label htmlFor="reject-reason" className="block text-2xs uppercase tracking-wider text-ink-3 font-semibold">
                 Reason (the rep sees this)
               </label>
               <textarea
@@ -176,7 +176,7 @@ function Figure({ label, value, note, big, tone }: {
 }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wider text-ink-3">{label}</p>
+      <p className="text-2xs uppercase tracking-wider text-ink-3">{label}</p>
       <p className={cn(
         "mt-0.5 font-serif font-semibold tabular-nums",
         big ? "text-[19px]" : "text-[16px]",
@@ -185,7 +185,7 @@ function Figure({ label, value, note, big, tone }: {
       )}>
         {value}
       </p>
-      {note && <p className="mt-0.5 text-[10px] leading-snug text-ink-3">{note}</p>}
+      {note && <p className="mt-0.5 text-3xs leading-snug text-ink-3">{note}</p>}
     </div>
   );
 }

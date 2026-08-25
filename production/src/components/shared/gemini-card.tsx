@@ -78,7 +78,7 @@ export function GeminiCard({
         <div className={cn("flex items-center gap-1.5", compact ? "mb-1" : "mb-2")}>
           <GeminiSpark size={14} />
           <span
-            className="text-[10px] font-bold uppercase tracking-wider"
+            className="text-3xs font-bold uppercase tracking-wider"
             style={{
               background: "linear-gradient(90deg, #4285F4, #9333EA, #EC4899)",
               WebkitBackgroundClip: "text",

@@ -371,7 +371,7 @@ function DrawerSection({
 }) {
   return (
     <div>
-      <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-ink-3">
+      <p className="mb-2 text-3xs font-bold uppercase tracking-widest text-ink-3">
         {title}
       </p>
       {children}
@@ -806,13 +806,13 @@ export default function OnlineOrdersPage() {
                       <div className="min-w-0 flex-1">
                         <p className="font-mono text-xs font-semibold text-ink">{o.id}</p>
                         <p className="text-sm font-medium text-ink mt-0.5 truncate">{o.company}</p>
-                        <p className="font-mono text-[11px] text-ink-3 truncate">{o.domain}</p>
+                        <p className="font-mono text-2xs text-ink-3 truncate">{o.domain}</p>
                       </div>
                       <div className="text-right shrink-0">
                         {o.total ? (
                           <>
                             <p className="font-serif text-base tabular-nums text-ink">{rupee(o.total)}</p>
-                            <p className="text-[10px] text-ink-3">{o.seats} seats</p>
+                            <p className="text-3xs text-ink-3">{o.seats} seats</p>
                           </>
                         ) : (
                           <Badge kind="warning" size="sm">Trial</Badge>
@@ -822,7 +822,7 @@ export default function OnlineOrdersPage() {
                     <p className="text-xs text-ink-2 truncate mb-2">{o.tier}</p>
                     <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-hairline/60">
                       <Badge kind={s.kind} size="sm" dot>{s.label}</Badge>
-                      <span className="text-[11px] text-ink-3 truncate max-w-[60%] text-right">
+                      <span className="text-2xs text-ink-3 truncate max-w-[60%] text-right">
                         {o.nextAction}
                       </span>
                     </div>
@@ -867,7 +867,7 @@ export default function OnlineOrdersPage() {
                         <p className="font-mono text-xs font-semibold text-ink">
                           {o.id}
                         </p>
-                        <p className="text-[11px] text-ink-3">{o.createdAt}</p>
+                        <p className="text-2xs text-ink-3">{o.createdAt}</p>
                       </td>
 
                       {/* Company */}
@@ -890,7 +890,7 @@ export default function OnlineOrdersPage() {
                       {/* Plan */}
                       <td className="px-4 py-3">
                         <p className="text-xs text-ink">{o.tier}</p>
-                        <p className="text-[11px] text-ink-3">
+                        <p className="text-2xs text-ink-3">
                           {o.billing === "annual"
                             ? "Annual"
                             : o.billing === "monthly"

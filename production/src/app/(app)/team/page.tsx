@@ -165,7 +165,7 @@ export default function TeamPage() {
         /* Says what "Reports to" does and — the part that matters — what it does not do.
            A reporting line that looks like a permission is how somebody concludes peer
            isolation is finished. The database wall is a separate, deliberate switch. */
-        <p className="mb-3 text-[11px] leading-snug text-ink-3">
+        <p className="mb-3 text-2xs leading-snug text-ink-3">
           <span className="font-medium text-ink-2">Reports to</span> builds the reporting tree.
           It decides who appears under <span className="font-medium">Team view</span> on Leads and
           Quotes — a manager sees their reports, a rep sees only themselves.{" "}
@@ -244,9 +244,9 @@ export default function TeamPage() {
                           Can view deals
                         </label>
                       ) : (m.role === "owner" || m.role === "sales_senior") ? (
-                        <span className="text-[11px] text-emerald">Full access</span>
+                        <span className="text-2xs text-emerald">Full access</span>
                       ) : (
-                        <span className="text-[11px] text-ink-3">—</span>
+                        <span className="text-2xs text-ink-3">—</span>
                       )}
                     </td>
                   )}
@@ -279,7 +279,7 @@ export default function TeamPage() {
                   </td>
                   <td className="p-3 font-mono text-xs text-ink-2">{inv.email}</td>
                   <td className="p-3"><Badge kind={ROLE_TONE[inv.role] ?? "muted"}>{ROLE_LABEL[inv.role] ?? inv.role}</Badge></td>
-                  {isOwner && <td className="p-3 text-[11px] text-ink-3">—</td>}
+                  {isOwner && <td className="p-3 text-2xs text-ink-3">—</td>}
                   <td className="p-3">
                     <div className="flex items-center justify-between gap-2">
                       {memberEmails.has(inv.email.trim().toLowerCase())
@@ -307,7 +307,7 @@ export default function TeamPage() {
                     {m.full_name ?? "—"}
                     {m.id === me?.userId && <span className="text-ink-3 font-normal"> (you)</span>}
                   </p>
-                  <p className="font-mono text-[11px] text-ink-2 truncate">{m.email}</p>
+                  <p className="font-mono text-2xs text-ink-2 truncate">{m.email}</p>
                 </div>
                 <Badge kind={m.is_active === false ? "muted" : "success"} dot>
                   {m.is_active === false ? "Inactive" : "Active"}
@@ -337,7 +337,7 @@ export default function TeamPage() {
                   </label>
                 )}
                 {isOwner && (m.role === "owner" || m.role === "sales_senior") && (
-                  <span className="text-[11px] text-emerald">Full deals access</span>
+                  <span className="text-2xs text-emerald">Full deals access</span>
                 )}
               </div>
               {isOwner && (
@@ -371,8 +371,8 @@ export default function TeamPage() {
                     <Icon name="mail" size={14} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-mono text-[11px] text-ink-2 truncate">{inv.email}</p>
-                    <p className="text-[11px] italic text-ink-3">
+                    <p className="font-mono text-2xs text-ink-2 truncate">{inv.email}</p>
+                    <p className="text-2xs italic text-ink-3">
                       {memberEmails.has(inv.email.trim().toLowerCase())
                         ? "Already a member — this invite is leftover"
                         : "Invited · not joined yet"}
@@ -398,7 +398,7 @@ export default function TeamPage() {
         </ul>
       )}
 
-      <p className="mt-3 flex items-center gap-1.5 text-[11px] text-ink-3">
+      <p className="mt-3 flex items-center gap-1.5 text-2xs text-ink-3">
         <Icon name="info" size={11} />
         An invited email joins this workspace the first time they sign in with Google — no new tenant is created.
       </p>
@@ -485,7 +485,7 @@ function InviteDialog({ open, onOpenChange, onInvited }: {
               className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber">
               {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
             </select>
-            <p className="mt-1 text-[11px] text-ink-3">For the Google reseller-admin account, pick <b>Owner</b> so it can run the sync + add subscriptions.</p>
+            <p className="mt-1 text-2xs text-ink-3">For the Google reseller-admin account, pick <b>Owner</b> so it can run the sync + add subscriptions.</p>
           </div>
         </div>
 

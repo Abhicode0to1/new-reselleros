@@ -50,7 +50,7 @@ export function OutcomeChips({
             onPointerDown={(e) => e.stopPropagation()}
             className={cn(
               "inline-flex items-center gap-1 rounded-full border font-semibold transition-colors",
-              size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-3 py-1.5 text-xs",
+              size === "sm" ? "px-2 py-0.5 text-2xs" : "px-3 py-1.5 text-xs",
               // 44px touch target on the md size — thumbs, per §20.
               size === "md" && "min-h-[38px]",
               blocked ? "cursor-not-allowed border-hairline text-ink-3 opacity-50" : TONE[chip.tone],

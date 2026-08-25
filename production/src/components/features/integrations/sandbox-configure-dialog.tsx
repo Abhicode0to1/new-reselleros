@@ -139,7 +139,7 @@ export default function SandboxConfigureDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <header className="border-b border-hairline pb-3 mb-4">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1 inline-flex items-center gap-1.5">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1 inline-flex items-center gap-1.5">
             <Icon name="settings" size={11} /> Integration · Sandbox.co.in
           </p>
           <h2 className="font-serif text-2xl text-ink">GSTIN verification</h2>
@@ -156,7 +156,7 @@ export default function SandboxConfigureDialog({ open, onOpenChange }: Props) {
             <div className="flex items-center justify-between rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
               <div>
                 <p className="text-xs font-medium text-ink">Current state</p>
-                <p className="text-[11px] text-ink-3">
+                <p className="text-2xs text-ink-3">
                   {status?.configured
                     ? <>Configured · API key {status.api_key_mask} · saved {status.updated_at ? formatDate(status.updated_at) : "—"}</>
                     : "Not configured — verifications return mock data right now"}
@@ -184,7 +184,7 @@ export default function SandboxConfigureDialog({ open, onOpenChange }: Props) {
                   <Icon name={showKey ? "eye_off" : "eye"} size={14} />
                 </Button>
               </div>
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 Find at sandbox.co.in dashboard · API Keys section · uses `x-api-key` header
               </p>
             </div>
@@ -204,7 +204,7 @@ export default function SandboxConfigureDialog({ open, onOpenChange }: Props) {
                   <Icon name={showSecret ? "eye_off" : "eye"} size={14} />
                 </Button>
               </div>
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 The secret is stored server-side only — never shown back after save.
               </p>
             </div>
@@ -218,7 +218,7 @@ export default function SandboxConfigureDialog({ open, onOpenChange }: Props) {
                 onChange={(e) => setApiBase(e.target.value)}
                 placeholder="https://api.sandbox.co.in"
               />
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 Default is fine. Override only for staging / on-prem deployments.
               </p>
             </div>

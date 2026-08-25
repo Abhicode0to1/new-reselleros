@@ -321,7 +321,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                 {aiRunning ? "Drafting…" : "Generate"}
               </Button>
             </div>
-            <p className="text-[10px] text-ink-3">
+            <p className="text-3xs text-ink-3">
               Powered by Gemini. The AI returns HTML + text + subject. You can edit anything before sending.
             </p>
           </div>
@@ -331,10 +331,10 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
         {hasPreset ? (
           <div className="border-t border-hairline pt-3">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Audience — selected contacts</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Audience — selected contacts</p>
               <Badge kind="info" dot>Sending to {recipientCount} selected contact{recipientCount === 1 ? "" : "s"}</Badge>
             </div>
-            <p className="text-[11px] text-ink-3 mt-1.5">
+            <p className="text-2xs text-ink-3 mt-1.5">
               You hand-picked these on the Contacts page.
               {typeof totalSelected === "number" && totalSelected > recipientCount ? (
                 <> <b className="text-amber-ink">{totalSelected - recipientCount} of your {totalSelected} skipped</b> — no email address (reach them via WhatsApp/phone).</>
@@ -346,7 +346,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
         ) : (
           <div className="border-t border-hairline pt-3">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Audience — pick stages</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Audience — pick stages</p>
               <Badge kind={recipientCount > 0 ? "info" : "muted"} dot>
                 {recipientsQuery.isLoading ? "counting…" : `Sending to ${recipientCount} lead${recipientCount === 1 ? "" : "s"}`}
               </Badge>
@@ -398,7 +398,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                   type="button"
                   onClick={() => setBodyMode(m)}
                   className={cn(
-                    "px-2.5 py-0.5 text-[11px] font-medium rounded transition-colors",
+                    "px-2.5 py-0.5 text-2xs font-medium rounded transition-colors",
                     bodyMode === m ? "bg-paper text-ink shadow-sm" : "text-ink-3 hover:text-ink",
                   )}
                 >
@@ -417,7 +417,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                   sandbox=""
                   title="Email preview"
                 />
-                <p className="text-[10px] text-ink-3 px-3 py-1.5 border-t border-hairline">
+                <p className="text-3xs text-ink-3 px-3 py-1.5 border-t border-hairline">
                   Live preview · sample vars filled (name=Ramesh, company=Acme)
                 </p>
               </div>
@@ -448,7 +448,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
             />
           )}
 
-          <p className="text-[10px] text-ink-3">
+          <p className="text-3xs text-ink-3">
             Variables: <code>{`{{name}}`}</code> · <code>{`{{company}}`}</code> · <code>{`{{sender}}`}</code>
             {offerEnabled && (
               <> · <code>{`{{offer_code}}`}</code> · <code>{`{{discount}}`}</code> · <code>{`{{expires}}`}</code></>
@@ -469,7 +469,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
               className="accent-amber"
             />
             <span className="text-sm font-medium text-ink">Attach a time-bound offer</span>
-            <span className="text-[11px] text-ink-3">(month-end sale / discount code / etc.)</span>
+            <span className="text-2xs text-ink-3">(month-end sale / discount code / etc.)</span>
           </label>
           {offerEnabled && (
             <div className="grid grid-cols-3 gap-2">
@@ -482,7 +482,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
                   className={cn("font-mono", !offerCode.trim() && "border-amber/60")}
                 />
                 {!offerCode.trim() && (
-                  <p className="mt-1 text-[10px] text-amber-ink">Type your code — this shows in the email as {`{{offer_code}}`}.</p>
+                  <p className="mt-1 text-3xs text-amber-ink">Type your code — this shows in the email as {`{{offer_code}}`}.</p>
                 )}
               </div>
               <div>

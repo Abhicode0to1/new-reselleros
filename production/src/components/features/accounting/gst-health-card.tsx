@@ -83,12 +83,12 @@ export function GstHealthCard() {
             established, across {data.customers.length} customer{one ? "" : "s"} and{" "}
             {data.invoicesWithIssues} invoice{data.invoicesWithIssues === 1 ? "" : "s"}.
           </p>
-          <span className="text-[11px] text-ink-3 tabular-nums shrink-0">
+          <span className="text-2xs text-ink-3 tabular-nums shrink-0">
             {data.invoicesChecked} checked
           </span>
         </div>
         {/* The amount is not a shortfall, and saying so prevents the wrong panic. */}
-        <p className="mt-1 text-[11px] leading-snug text-ink-3">
+        <p className="mt-1 text-2xs leading-snug text-ink-3">
           This is the tax whose <b>head</b> may be wrong (CGST + SGST vs IGST), not money
           missing. The customer paid the right total; it may have gone into the wrong pots,
           and they may be unable to claim the credit.
@@ -101,7 +101,7 @@ export function GstHealthCard() {
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <span className="text-[13px] font-medium text-ink">
                 {c.customerName}
-                <span className="ml-1.5 text-[11px] font-normal text-ink-3">
+                <span className="ml-1.5 text-2xs font-normal text-ink-3">
                   {c.invoiceCount} invoice{c.invoiceCount === 1 ? "" : "s"}
                 </span>
               </span>
@@ -121,7 +121,7 @@ export function GstHealthCard() {
             </div>
             <ul className="mt-1 space-y-0.5">
               {c.issues.map((i) => (
-                <li key={i.code} className="text-[11px] leading-snug text-ink-3">
+                <li key={i.code} className="text-2xs leading-snug text-ink-3">
                   <span className={i.severity === "critical" ? "text-rose-ink" : "text-amber-ink"}>
                     {i.severity === "critical" ? "●" : "○"}
                   </span>{" "}

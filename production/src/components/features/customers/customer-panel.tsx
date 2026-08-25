@@ -122,8 +122,8 @@ export function CustomerPanel({ customerId, onClose }: { customerId: string; onC
               {insights.activeSubs.length > 0
                 ? <Badge kind={healthKind} dot>{healthLabel} · {c.health}</Badge>
                 : <Badge kind="muted">{insights.lifetimePaid > 0 ? "Inactive" : "New"}</Badge>}
-              <span className="text-[11px] text-ink-3">{tenureDays === 0 ? "Added today" : `Customer for ${tenure}`}</span>
-              {c.domain && <span className="text-[11px] text-ink-3 font-mono truncate">· {c.domain}</span>}
+              <span className="text-2xs text-ink-3">{tenureDays === 0 ? "Added today" : `Customer for ${tenure}`}</span>
+              {c.domain && <span className="text-2xs text-ink-3 font-mono truncate">· {c.domain}</span>}
             </div>
             {/* Parent account (customer group) — highlighted, so the operator
                 instantly sees this customer belongs to a larger account. */}
@@ -132,7 +132,7 @@ export function CustomerPanel({ customerId, onClose }: { customerId: string; onC
               return g ? (
                 <Link
                   href={`/customers/groups/${g.id}` as never}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-soft px-2.5 py-1 text-[11px] font-semibold text-amber-ink hover:bg-amber/20 transition-colors max-w-full"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-soft px-2.5 py-1 text-2xs font-semibold text-amber-ink hover:bg-amber/20 transition-colors max-w-full"
                   title={`Part of parent account: ${g.name}`}
                 >
                   <Icon name="layout" size={12} className="shrink-0" />
@@ -178,8 +178,8 @@ export function CustomerPanel({ customerId, onClose }: { customerId: string; onC
         {/* 4. Subscriptions & projects — ongoing revenue relationships */}
         <section>
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Subscriptions & projects</span>
-            {(allSubs.length + custProjects.length) > 0 && <span className="text-[10px] text-ink-3 tabular-nums">({allSubs.length + custProjects.length})</span>}
+            <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Subscriptions & projects</span>
+            {(allSubs.length + custProjects.length) > 0 && <span className="text-3xs text-ink-3 tabular-nums">({allSubs.length + custProjects.length})</span>}
           </div>
           <SubscriptionList subs={allSubs} />
           {custProjects.length > 0 && (
@@ -191,7 +191,7 @@ export function CustomerPanel({ customerId, onClose }: { customerId: string; onC
                       <Icon name="package" size={14} className="text-ink-3 shrink-0" />
                       <span className="min-w-0">
                         <span className="text-sm text-ink truncate block">{p.title}</span>
-                        <span className="text-[11px] text-ink-3">Project · {p.receivable > 0 ? `${rupee(p.receivable)} outstanding` : "fully paid"}</span>
+                        <span className="text-2xs text-ink-3">Project · {p.receivable > 0 ? `${rupee(p.receivable)} outstanding` : "fully paid"}</span>
                       </span>
                     </span>
                     <Badge kind={p.status === "completed" ? "success" : p.status === "cancelled" ? "muted" : p.status === "quoted" ? "info" : "warning"} size="sm" dot>
@@ -268,7 +268,7 @@ function SimpleTable({ head, rows, rowLinks }: {
         <thead className="bg-paper-2/50">
           <tr>
             {head.map((h) => (
-              <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">{h}</th>
+              <th key={h} className="text-left px-3 py-2 text-3xs font-semibold text-ink-3 uppercase tracking-wider">{h}</th>
             ))}
           </tr>
         </thead>

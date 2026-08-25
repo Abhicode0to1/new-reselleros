@@ -73,7 +73,7 @@ export function LeadsBulkBar({
           <Icon name="chevron_down" size={11} className="opacity-60" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="center" side="top">
-          <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-ink-3">
+          <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
             Move {count} lead{count === 1 ? "" : "s"} to…
           </DropdownMenuLabel>
           <DropdownMenuSeparator />

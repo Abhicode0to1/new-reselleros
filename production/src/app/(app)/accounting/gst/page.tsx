@@ -633,7 +633,7 @@ export default function GstReportPage() {
           rowLabel="bill/expense"
         />
         <Card className="p-4 md:p-5 border-2 border-amber/30 bg-amber-soft/20">
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
+          <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
             <Term k="net_liability">Net liability</Term>
           </div>
           {isLoading ? <Skeleton className="h-8 w-32 mt-2" /> : (
@@ -641,7 +641,7 @@ export default function GstReportPage() {
               <div className={`font-serif text-2xl md:text-3xl ${data && data.netLiability >= 0 ? "text-rose" : "text-emerald"}`}>
                 {data ? rupee(data.netLiability) : "—"}
               </div>
-              <div className="text-[11px] text-ink-3 mt-1.5 leading-relaxed">
+              <div className="text-2xs text-ink-3 mt-1.5 leading-relaxed">
                 {data && data.netLiability >= 0
                   ? "Payable to government via GSTR-3B"
                   : "Refundable / carry-forward input tax credit"}
@@ -695,7 +695,7 @@ export default function GstReportPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-3 py-2">Box</th>
                   <th className="text-left  px-3 py-2">What to enter</th>
@@ -733,7 +733,7 @@ export default function GstReportPage() {
               </tbody>
             </table>
           </div>
-          <p className="text-[11px] text-ink-3 mt-2 leading-relaxed">
+          <p className="text-2xs text-ink-3 mt-2 leading-relaxed">
             Net = output − ITC per head (floored at 0). The portal also lets IGST credit set off CGST/SGST,
             so your actual cash payable can be lower. Expense ITC is assumed intra-state (CGST+SGST) — adjust
             if any expense was inter-state / import (IGST). Add reverse-charge, interest or late fee separately.
@@ -762,7 +762,7 @@ export default function GstReportPage() {
         <Card className="overflow-hidden mb-6">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-3">Invoice #</th>
                   <th className="text-left  px-4 py-3">Date</th>
@@ -791,7 +791,7 @@ export default function GstReportPage() {
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-emerald">
                       {rupee(r.gst)}
-                      <span className="block text-[10px] text-ink-3">
+                      <span className="block text-3xs text-ink-3">
                         {r.interState ? `IGST ${rupee(s.igst)}` : `${rupee(s.cgst)} + ${rupee(s.sgst)}`}
                       </span>
                     </td>
@@ -802,7 +802,7 @@ export default function GstReportPage() {
               </tbody>
               <tfoot className="bg-paper-2/30 border-t-2 border-ink">
                 <tr>
-                  <td colSpan={4} className="px-4 py-3 text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+                  <td colSpan={4} className="px-4 py-3 text-2xs uppercase tracking-wider text-ink-3 font-semibold">
                     Total ({data.outputRows.length})
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold text-ink">{rupee(data.outputTotal)}</td>
@@ -837,7 +837,7 @@ export default function GstReportPage() {
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-3">Source</th>
                   <th className="text-left  px-4 py-3">Date</th>
@@ -852,7 +852,7 @@ export default function GstReportPage() {
                 {data.inputRows.map((r) => (
                   <tr key={`${r.source}-${r.id}`} className="hover:bg-paper-2/40">
                     <td className="px-4 py-3">
-                      <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      <span className={`text-3xs uppercase tracking-wider px-2 py-0.5 rounded-full ${
                         r.source === "bill" ? "bg-amber-soft text-amber-ink" : "bg-paper-2 text-ink-2"
                       }`}>
                         {r.source === "bill" ? "Bill" : "Expense"}
@@ -869,7 +869,7 @@ export default function GstReportPage() {
               </tbody>
               <tfoot className="bg-paper-2/30 border-t-2 border-ink">
                 <tr>
-                  <td colSpan={5} className="px-4 py-3 text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+                  <td colSpan={5} className="px-4 py-3 text-2xs uppercase tracking-wider text-ink-3 font-semibold">
                     Total ({data.inputRows.length})
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold text-ink">{rupee(data.inputTotal)}</td>
@@ -901,7 +901,7 @@ function SectionHeader({
       <div>
         <h2 className="font-serif text-xl text-ink leading-tight">{title}</h2>
         {count > 0 && (
-          <div className="text-[11px] text-ink-3 mt-0.5">{count} {count === 1 ? "row" : "rows"}</div>
+          <div className="text-2xs text-ink-3 mt-0.5">{count} {count === 1 ? "row" : "rows"}</div>
         )}
       </div>
       <Button variant="default" size="sm" onClick={onExport} disabled={disabled}>
@@ -923,9 +923,9 @@ function SummaryCard({
 }) {
   return (
     <Card className="p-4 md:p-5">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className="font-serif text-2xl md:text-3xl text-ink leading-tight mb-2">{rupee(gst)}</div>
-      <div className="text-[11px] text-ink-3 leading-relaxed">
+      <div className="text-2xs text-ink-3 leading-relaxed">
         on {rupee(taxable)} taxable value · {rowCount} {rowLabel}{rowCount === 1 ? "" : "s"}
       </div>
     </Card>

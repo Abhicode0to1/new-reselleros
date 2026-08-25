@@ -35,7 +35,7 @@ function SimulateApprovalInner() {
         <div className="p-2">
           <div className="flex items-center gap-2 mb-3">
             <Badge kind="warning" size="sm" dot>Mock mode</Badge>
-            <p className="text-[11px] text-ink-3">
+            <p className="text-2xs text-ink-3">
               (In production, this screen is on Setu&apos;s domain.)
             </p>
           </div>
@@ -63,7 +63,7 @@ function SimulateApprovalInner() {
             <Row label="Your VUA"         value={handle ? `(handle: ${handle.slice(0, 14)}…)` : "(no handle)"} />
           </div>
 
-          <p className="text-[11px] text-ink-3 mb-4 leading-relaxed">
+          <p className="text-2xs text-ink-3 mb-4 leading-relaxed">
             Under RBI&apos;s Account Aggregator regulations, your bank only shares the
             data ResellerOS asked for, only for the period you approve, and you
             can revoke this consent anytime from your AA app. Nothing else.
@@ -96,7 +96,7 @@ function SimulateApprovalInner() {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <span className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold whitespace-nowrap">
+      <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold whitespace-nowrap">
         {label}
       </span>
       <span className="text-sm text-ink-2 text-right">{value}</span>

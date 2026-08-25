@@ -461,7 +461,7 @@ export default function TdsYearEndPage() {
             </div>
             <div className="overflow-x-auto max-h-96">
               <table className="w-full text-xs">
-                <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold sticky top-0">
+                <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold sticky top-0">
                   <tr>
                     <th className="text-left  px-3 py-2">26AS row</th>
                     <th className="text-left  px-3 py-2">TAN</th>
@@ -485,7 +485,7 @@ export default function TdsYearEndPage() {
                         {m.matchedTdsRows.length > 0 ? (
                           <div className="space-y-0.5">
                             {m.matchedTdsRows.map((t) => (
-                              <div key={t.id} className="text-[11px]">
+                              <div key={t.id} className="text-2xs">
                                 <span className="font-mono text-ink-2">{t.id.slice(0, 14)}…</span>
                                 <span className="ml-1 text-ink-3">·</span>
                                 <span className="ml-1 font-mono">{rupee(t.tds_amount)}</span>
@@ -495,7 +495,7 @@ export default function TdsYearEndPage() {
                             ))}
                           </div>
                         ) : (
-                          <span className="text-ink-3 italic text-[11px]">
+                          <span className="text-ink-3 italic text-2xs">
                             No TDS row with matching TAN — add manually or investigate
                           </span>
                         )}
@@ -521,7 +521,7 @@ export default function TdsYearEndPage() {
         <Card className="overflow-hidden">
           <div className="px-5 py-4 border-b border-hairline">
             <h2 className="font-serif text-lg text-ink">By customer</h2>
-            <p className="text-[11px] text-ink-3">Who deducted how much · sorted by total</p>
+            <p className="text-2xs text-ink-3">Who deducted how much · sorted by total</p>
           </div>
           {isLoading ? (
             <div className="p-5 space-y-2">
@@ -536,7 +536,7 @@ export default function TdsYearEndPage() {
             />
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/30 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/30 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-2.5">Customer</th>
                   <th className="text-left  px-4 py-2.5">TAN</th>
@@ -562,7 +562,7 @@ export default function TdsYearEndPage() {
         <Card className="overflow-hidden">
           <div className="px-5 py-4 border-b border-hairline">
             <h2 className="font-serif text-lg text-ink">By section</h2>
-            <p className="text-[11px] text-ink-3">Which IT section · sorted by total</p>
+            <p className="text-2xs text-ink-3">Which IT section · sorted by total</p>
           </div>
           {bySection.length === 0 ? (
             <EmptyState compact icon="file" title="—" body="No data" />
@@ -575,7 +575,7 @@ export default function TdsYearEndPage() {
                     <div className="flex items-baseline justify-between mb-1">
                       <div>
                         <span className="font-mono text-sm font-semibold text-ink">{s.section}</span>
-                        <span className="text-[11px] text-ink-3 ml-2">{s.count} entries</span>
+                        <span className="text-2xs text-ink-3 ml-2">{s.count} entries</span>
                       </div>
                       <div className="font-mono text-sm font-semibold text-ink">{rupee(s.total)}</div>
                     </div>
@@ -585,7 +585,7 @@ export default function TdsYearEndPage() {
                         style={{ width: `${Math.max(3, pct)}%` }}
                       />
                     </div>
-                    <div className="text-[10px] text-ink-3 mt-0.5">{pct.toFixed(1)}% of FY total</div>
+                    <div className="text-3xs text-ink-3 mt-0.5">{pct.toFixed(1)}% of FY total</div>
                   </li>
                 );
               })}
@@ -598,7 +598,7 @@ export default function TdsYearEndPage() {
       <Card className="overflow-hidden">
         <div className="px-5 py-4 border-b border-hairline">
           <h2 className="font-serif text-lg text-ink">All TDS rows · {fy}</h2>
-          <p className="text-[11px] text-ink-3">{rows.length} entries · ready for CA review</p>
+          <p className="text-2xs text-ink-3">{rows.length} entries · ready for CA review</p>
         </div>
         {isLoading ? (
           <div className="p-5 space-y-2">
@@ -614,7 +614,7 @@ export default function TdsYearEndPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/30 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/30 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-2.5">Date</th>
                   <th className="text-left  px-4 py-2.5">Customer</th>
@@ -642,7 +642,7 @@ export default function TdsYearEndPage() {
               </tbody>
               <tfoot className="bg-paper-2/30 border-t-2 border-ink">
                 <tr>
-                  <td colSpan={5} className="px-4 py-2.5 text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+                  <td colSpan={5} className="px-4 py-2.5 text-2xs uppercase tracking-wider text-ink-3 font-semibold">
                     Total · {rows.length} entries
                   </td>
                   <td className="px-4 py-2.5 text-right font-serif text-base text-ink">{rupee(summary.total)}</td>
@@ -677,12 +677,12 @@ function KPI({
                    : "text-ink";
   return (
     <Card className="p-3 md:p-4">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif ${big ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"} ${colorClass} leading-tight`}>
         {value}
       </div>
       {count !== undefined && (
-        <div className="text-[10px] text-ink-3 mt-1">{count} {count === 1 ? "entry" : "entries"}</div>
+        <div className="text-3xs text-ink-3 mt-1">{count} {count === 1 ? "entry" : "entries"}</div>
       )}
     </Card>
   );

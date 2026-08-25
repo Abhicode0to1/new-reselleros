@@ -194,7 +194,7 @@ export function EntitlementCard({ customerId, ticketText, customerName }: Entitl
         <p className="text-[13px] text-ink-3">No active product licences on this account.</p>
       ) : (
         <>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+          <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-ink-3">
             Licences · {summary.covered} of {summary.total} covered
             {summary.unknown > 0 && ` · ${summary.unknown} not recorded`}
           </p>
@@ -203,11 +203,11 @@ export function EntitlementCard({ customerId, ticketText, customerName }: Entitl
               <li key={licence.subscriptionId} className="flex items-start justify-between gap-3 py-2">
                 <div className="min-w-0">
                   <p className="truncate text-[13px] text-ink">{licence.plan}</p>
-                  <p className="text-[11px] text-ink-3">
+                  <p className="text-2xs text-ink-3">
                     {licence.seats} {licence.seats === 1 ? "seat" : "seats"} · {productLabel(licence.vendor)}
                   </p>
                   {verdict.state !== "covered" && (
-                    <p className="mt-0.5 text-[11px] leading-snug text-ink-3">{verdict.reason}</p>
+                    <p className="mt-0.5 text-2xs leading-snug text-ink-3">{verdict.reason}</p>
                   )}
                 </div>
                 <VerdictBadge v={verdict} />

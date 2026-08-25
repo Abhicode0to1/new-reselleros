@@ -98,7 +98,7 @@ function ConversationList({
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <p className="font-mono text-xs text-ink truncate">{c.contact_phone}</p>
-                  <span className="text-[10px] text-ink-3 shrink-0">{relativeTime(c.last_message.created_at)}</span>
+                  <span className="text-3xs text-ink-3 shrink-0">{relativeTime(c.last_message.created_at)}</span>
                 </div>
                 <p className={cn(
                   "text-xs truncate mt-0.5",
@@ -109,7 +109,7 @@ function ConversationList({
                 </p>
               </div>
               {c.unread_count > 0 && !active && (
-                <span className="ml-1 bg-emerald text-paper text-[10px] font-semibold rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
+                <span className="ml-1 bg-emerald text-paper text-3xs font-semibold rounded-full px-1.5 py-0.5 min-w-[18px] text-center shrink-0">
                   {c.unread_count}
                 </span>
               )}
@@ -138,10 +138,10 @@ function MessageBubble({ m }: { m: WhatsAppMessageRow }) {
           <p className="text-xs text-ink-3 italic">[{m.type}]</p>
         )}
         <div className="flex items-center justify-end gap-1.5 mt-1">
-          <span className="text-[10px] text-ink-3 tabular-nums">{relativeTime(m.created_at)}</span>
+          <span className="text-3xs text-ink-3 tabular-nums">{relativeTime(m.created_at)}</span>
           {mine && (
             <span className={cn(
-              "text-[10px] tabular-nums",
+              "text-3xs tabular-nums",
               m.status === "read"    ? "text-emerald"
               : m.status === "failed" ? "text-rose"
               : "text-ink-3",
@@ -207,7 +207,7 @@ function ThreadPane({ contactPhone }: { contactPhone: string | null }) {
       <div className="px-4 py-2.5 border-b border-hairline bg-paper flex items-center justify-between">
         <div>
           <p className="font-mono text-sm text-ink">{contactPhone}</p>
-          <p className="text-[10px] text-ink-3">
+          <p className="text-3xs text-ink-3">
             {messages?.length ?? 0} messages
             {lastInbound && ` · last reply ${relativeTime(lastInbound.created_at)}`}
           </p>
@@ -296,7 +296,7 @@ export default function WhatsAppInboxPage() {
               conversation is opened; on md+ it's always the left pane. */}
           <div className={`${selected ? "hidden md:flex" : "flex"} border-r border-hairline overflow-hidden flex-col`}>
             <div className="px-3 py-2 border-b border-hairline bg-paper-2/30">
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Conversations</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Conversations</p>
             </div>
             <div className="flex-1 overflow-y-auto">
               <ConversationList selected={selected} onSelect={setSelected} />
@@ -322,7 +322,7 @@ export default function WhatsAppInboxPage() {
         </div>
       </Card>
 
-      <p className="text-[11px] text-ink-3 mt-3 flex items-center gap-1.5">
+      <p className="text-2xs text-ink-3 mt-3 flex items-center gap-1.5">
         <Icon name="info" size={11} />
         Refresh: every 15s for conversation list, 10s for active thread. Meta delivery status (sent → delivered → read) arrives via webhook.
       </p>

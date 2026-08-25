@@ -86,7 +86,7 @@ export function LossReasonsCard({ leads }: { leads: readonly LossLead[] }) {
         <>
           {mostlyUnrecorded && (
             // Don't let the owner read a conclusion out of mostly-missing data.
-            <p className="mt-2 text-[11px] text-ink-3 leading-snug">
+            <p className="mt-2 text-2xs text-ink-3 leading-snug">
               Most of these were lost before the reason prompt existed, so this is
               not yet a reliable picture — it fills in from here.
             </p>
@@ -133,7 +133,7 @@ function WindowPicker({
           onClick={() => onChange(w.id)}
           aria-pressed={value === w.id}
           className={cn(
-            "px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-amber",
+            "px-2 py-0.5 rounded-md text-2xs font-medium transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-amber",
             value === w.id ? "bg-paper text-ink shadow-2xs" : "text-ink-3 hover:text-ink",
           )}
         >

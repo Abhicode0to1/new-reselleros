@@ -483,7 +483,7 @@ export default function PnLPage() {
         return (
           <Card className="p-4 md:p-5 mb-6">
             <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
-              <h2 className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+              <h2 className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">
                 Where the money went
               </h2>
               <div className="flex items-center gap-2">
@@ -493,7 +493,7 @@ export default function PnLPage() {
                 <button
                   type="button"
                   onClick={() => setCompare((c) => !c)}
-                  className="text-[11px] font-semibold text-amber-ink hover:underline"
+                  className="text-2xs font-semibold text-amber-ink hover:underline"
                 >
                   {compare ? "Hide comparison" : "Compare with previous period"}
                 </button>
@@ -573,10 +573,10 @@ export default function PnLPage() {
 
                 <div className="mt-5 border-t border-hairline pt-4">
                   <div className="mb-3">
-                    <h3 className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+                    <h3 className="text-2xs font-semibold uppercase tracking-wider text-ink-3">
                       Same five numbers, as steps
                     </h3>
-                    <p className="text-[11px] leading-snug text-ink-3">
+                    <p className="text-2xs leading-snug text-ink-3">
                       Each bar starts where the one before it ended, so the dotted line follows
                       the money down from sales to what you kept. Click a bar for the entries.
                     </p>
@@ -600,11 +600,11 @@ export default function PnLPage() {
                 <p className="text-[12px] font-medium text-ink">
                   Can&apos;t chart this period — the licence cost is missing.
                 </p>
-                <p className="mt-0.5 text-[11px] leading-snug text-ink-2">{cogsBasisNote(m)}</p>
+                <p className="mt-0.5 text-2xs leading-snug text-ink-2">{cogsBasisNote(m)}</p>
               </div>
             )}
 
-            <p className="mt-3 border-t border-hairline pt-2 text-[11px] leading-snug text-ink-3">
+            <p className="mt-3 border-t border-hairline pt-2 text-2xs leading-snug text-ink-3">
               {cogsBasisNote(m)}
             </p>
 
@@ -639,7 +639,7 @@ export default function PnLPage() {
           rather than one not selling it. */}
       {!isLoading && data && data.model.byVendor.length > 0 && (
         <Card className="p-4 md:p-5 mb-6">
-          <h2 className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-3">
+          <h2 className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-3">
             Profit by vendor · from your subscription book
           </h2>
 
@@ -681,7 +681,7 @@ export default function PnLPage() {
                 <div key={v.vendor} className="rounded-md border border-hairline p-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-[13px] font-medium text-ink">{v.label}</span>
-                    <span className="text-[11px] text-ink-3 tabular-nums">
+                    <span className="text-2xs text-ink-3 tabular-nums">
                       {v.subscriptions} subscription{v.subscriptions === 1 ? "" : "s"} · {v.seats} seats
                     </span>
                   </div>
@@ -690,7 +690,7 @@ export default function PnLPage() {
                     <Figure label="Licence cost" value={v.cost} tone="rose" />
                     <Figure label="Gross" value={v.gross} tone={v.gross >= 0 ? "emerald" : "rose"} />
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Margin</div>
+                      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Margin</div>
                       <div className={cn(
                         "font-serif text-lg leading-none tabular-nums",
                         v.marginPct === null ? "text-ink-3" : v.marginPct >= 25 ? "text-emerald" : "text-amber-ink",
@@ -701,7 +701,7 @@ export default function PnLPage() {
                     </div>
                   </div>
                   {v.marginNote && (
-                    <p className="mt-1.5 text-[11px] leading-snug text-amber-ink">{v.marginNote}</p>
+                    <p className="mt-1.5 text-2xs leading-snug text-amber-ink">{v.marginNote}</p>
                   )}
                 </div>
               ))}
@@ -715,10 +715,10 @@ export default function PnLPage() {
       {trend && trend.length > 1 && (
         <Card className="p-4 md:p-5 mb-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
-            <h2 className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+            <h2 className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">
               This financial year, month by month
             </h2>
-            <span className="text-[11px] text-ink-3">
+            <span className="text-2xs text-ink-3">
               Bars in ₹ · margin line in % on the right
             </span>
           </div>
@@ -728,7 +728,7 @@ export default function PnLPage() {
           {/* The two months worth pointing at, in words. A chart tells you the shape; a
               sentence tells you which month to go and look at. */}
           {highlights.best && highlights.worst && highlights.best.key !== highlights.worst.key && (
-            <p className="mt-2 border-t border-hairline pt-2 text-[11px] leading-snug text-ink-2">
+            <p className="mt-2 border-t border-hairline pt-2 text-2xs leading-snug text-ink-2">
               {/* "Best month was Apr at ₹-90,000" makes a reader stop and re-read. When
                   every finished month is a loss, the honest sentence is about the size of
                   the losses, not about a winner there wasn't one of. */}
@@ -757,7 +757,7 @@ export default function PnLPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 mb-6">
         {/* Left: waterfall */}
         <Card className="p-5 md:p-6">
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-4">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
             For period · {range.from} to {range.to}
           </div>
 
@@ -807,7 +807,7 @@ export default function PnLPage() {
                       className="w-full flex items-center justify-between gap-3 rounded pl-6 pr-1 py-1 text-left transition-colors hover:bg-paper-2/60"
                     >
                       <span className="text-[13px] text-ink-2">
-                        {c.category} <span className="text-[11px] text-ink-3">· {c.count}</span>
+                        {c.category} <span className="text-2xs text-ink-3">· {c.count}</span>
                       </span>
                       <span className="font-mono text-[13px] tabular-nums text-rose">-{rupee(c.total)}</span>
                     </button>
@@ -835,7 +835,7 @@ export default function PnLPage() {
 
         {/* Right: GST snapshot */}
         <Card className="p-5 md:p-6">
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-4">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
             GST snapshot (same period)
           </div>
           {isLoading ? (
@@ -853,12 +853,12 @@ export default function PnLPage() {
                 <span className="font-mono text-emerald">−{rupee(data.inputGST)}</span>
               </div>
               <div className="border-t-2 border-ink pt-3 flex justify-between items-baseline">
-                <span className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold"><Term k="net_liability">Net liability</Term></span>
+                <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold"><Term k="net_liability">Net liability</Term></span>
                 <span className={`font-serif text-2xl ${data.netGST >= 0 ? "text-rose" : "text-emerald"}`}>
                   {rupee(data.netGST)}
                 </span>
               </div>
-              <p className="text-[11px] text-ink-3 leading-relaxed mt-3">
+              <p className="text-2xs text-ink-3 leading-relaxed mt-3">
                 Net positive = payable to govt. Negative = refund / carryforward credit.
                 File via GSTR-3B by the 20th of next month.
               </p>
@@ -870,7 +870,7 @@ export default function PnLPage() {
       {/* Quick insights */}
       {data && data.revenue > 0 && (
         <Card className="p-5 bg-paper-2/30">
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
             What this means
           </div>
           <ul className="text-sm text-ink-2 space-y-1.5 list-disc pl-5">
@@ -945,8 +945,8 @@ function Row({
         </div>
         {hint && (
           onHint
-            ? <button type="button" onClick={onHint} className="text-[11px] text-amber-ink hover:underline mt-0.5 inline-flex items-center gap-0.5">{hint} <span aria-hidden>→</span></button>
-            : <div className="text-[11px] text-ink-3 mt-0.5">{hint}</div>
+            ? <button type="button" onClick={onHint} className="text-2xs text-amber-ink hover:underline mt-0.5 inline-flex items-center gap-0.5">{hint} <span aria-hidden>→</span></button>
+            : <div className="text-2xs text-ink-3 mt-0.5">{hint}</div>
         )}
       </div>
       <div className={`font-mono whitespace-nowrap ${xl ? "font-serif text-3xl" : emphasis ? "text-lg font-semibold" : "text-base"} ${colorClass}`}>
@@ -967,7 +967,7 @@ function Figure({ label, value, tone }: {
   const cls = tone === "rose" ? "text-rose" : tone === "emerald" ? "text-emerald" : "text-amber-ink";
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
       <div className={cn("font-serif text-lg leading-none tabular-nums", cls)}>{rupee(value)}</div>
     </div>
   );
@@ -997,7 +997,7 @@ function ComparisonCell({ label, current, previous, partial, loading, periodLabe
   if (current === null || previous === null) {
     return (
       <div className="rounded-md border border-hairline px-3 py-2">
-        <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
+        <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
         <div className="text-[13px] text-ink-3">Not comparable — a figure is unknown.</div>
       </div>
     );
@@ -1012,12 +1012,12 @@ function ComparisonCell({ label, current, previous, partial, loading, periodLabe
 
   return (
     <div className="rounded-md border border-hairline px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="font-mono text-[13px] tabular-nums text-ink">{rupee(current)}</span>
         <span className={cn("text-[12px] font-semibold", tone)}>{d.label}</span>
       </div>
-      <div className="text-[10px] text-ink-3 tabular-nums" title={periodLabel}>
+      <div className="text-3xs text-ink-3 tabular-nums" title={periodLabel}>
         was {rupee(previous)}
         {d.pct !== null && ` · ${d.absolute >= 0 ? "+" : "−"}${rupee(Math.abs(d.absolute))}`}
       </div>

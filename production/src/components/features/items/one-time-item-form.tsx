@@ -103,17 +103,17 @@ export function OneTimeItemForm({ open, onOpenChange, item }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Sale price (₹)" required htmlFor="ot_msrp">
                 <Input id="ot_msrp" type="number" step="any" prefix="₹" placeholder="0.00" error={errors.msrp?.message} {...register("msrp")} />
-                <p className="text-[10px] text-ink-3 mt-1">Default price — editable per deal/quote.</p>
+                <p className="text-3xs text-ink-3 mt-1">Default price — editable per deal/quote.</p>
               </FormField>
               <FormField label="Your cost (₹)" htmlFor="ot_cost">
                 <Input id="ot_cost" type="number" step="any" prefix="₹" placeholder="0.00" error={errors.wholesale?.message} {...register("wholesale")} />
-                <p className="text-[10px] text-ink-3 mt-1">Optional — for margin.</p>
+                <p className="text-3xs text-ink-3 mt-1">Optional — for margin.</p>
               </FormField>
             </div>
 
             <FormField label="HSN / SAC code" htmlFor="ot_hsn">
               <Input id="ot_hsn" className="font-mono" placeholder="e.g. 998314" {...register("hsn")} />
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 998314 = IT software design & development. GST 18% applies at quote/invoice time.
               </p>
             </FormField>

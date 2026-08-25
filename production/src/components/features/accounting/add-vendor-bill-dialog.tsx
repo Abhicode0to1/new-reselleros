@@ -366,7 +366,7 @@ export function AddVendorBillDialog({
                 <Icon name="sparkles" size={18} className="text-amber-ink shrink-0" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-ink">Bill upload karo — AI khud bhar dega</p>
-                  <p className="text-[11px] text-ink-3">Photo (JPG/PNG) ya PDF · fields nikaal ke form bhar dega, aap check karke Save karo</p>
+                  <p className="text-2xs text-ink-3">Photo (JPG/PNG) ya PDF · fields nikaal ke form bhar dega, aap check karke Save karo</p>
                 </div>
               </div>
               <Button type="button" variant="primary" size="sm" icon="upload" loading={reading} onClick={() => fileRef.current?.click()}>
@@ -381,17 +381,17 @@ export function AddVendorBillDialog({
               />
             </div>
             {aiNote && (
-              <p className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald">
+              <p className="mt-2 flex items-center gap-1.5 text-2xs text-emerald">
                 <Icon name="check_circle" size={12} /> {aiNote}
               </p>
             )}
             {aiError && (
-              <p className="mt-2 flex items-center gap-1.5 text-[11px] text-rose">
+              <p className="mt-2 flex items-center gap-1.5 text-2xs text-rose">
                 <Icon name="alert" size={12} /> {aiError}
               </p>
             )}
             {attachFile && !aiNote && (
-              <p className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-2">
+              <p className="mt-2 flex items-center gap-1.5 text-2xs text-ink-2">
                 <Icon name="file" size={12} /> {attachFile.name} — bill ke saath attach hoga
               </p>
             )}
@@ -399,7 +399,7 @@ export function AddVendorBillDialog({
 
           {/* Quick presets */}
           <div className="flex flex-wrap gap-1.5">
-            <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold self-center mr-1">
+            <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold self-center mr-1">
               Quick fill:
             </span>
             {VENDOR_PRESETS.map((p, i) => (
@@ -407,7 +407,7 @@ export function AddVendorBillDialog({
                 key={p.name}
                 type="button"
                 onClick={() => applyVendorPreset(i)}
-                className="text-[11px] px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper-2 transition-colors"
+                className="text-2xs px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper-2 transition-colors"
               >
                 {p.name.split(" ")[0]}
               </button>
@@ -449,7 +449,7 @@ export function AddVendorBillDialog({
                           className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2"
                         >
                           <span className="text-ink truncate">{v.name}</span>
-                          {v.gstin && <span className="text-[10px] text-ink-3 font-mono shrink-0">{v.gstin}</span>}
+                          {v.gstin && <span className="text-3xs text-ink-3 font-mono shrink-0">{v.gstin}</span>}
                         </button>
                       ))}
                     </div>
@@ -488,7 +488,7 @@ export function AddVendorBillDialog({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[10px] text-ink-3 mt-1">
+            <p className="text-3xs text-ink-3 mt-1">
               Categories starting with <code>COGS-</code> count as cost of goods sold in the P&L.
             </p>
           </FormField>
@@ -496,16 +496,16 @@ export function AddVendorBillDialog({
           {/* Line items — products/services on the bill (auto-filled from AI). */}
           <div className="p-3 rounded-lg border border-hairline bg-paper-2/30">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 Items on this bill{isForeign ? ` · amounts in ${currency}` : ""}
               </p>
               <Button type="button" variant="ghost" size="sm" icon="plus" onClick={addLine}>Add item</Button>
             </div>
             {lines.length === 0 ? (
-              <p className="text-[11px] text-ink-3">No items yet — upload a bill to auto-fill, or add rows manually.</p>
+              <p className="text-2xs text-ink-3">No items yet — upload a bill to auto-fill, or add rows manually.</p>
             ) : (
               <div className="space-y-2">
-                <div className="hidden sm:grid grid-cols-12 gap-2 text-[10px] uppercase tracking-wider text-ink-3">
+                <div className="hidden sm:grid grid-cols-12 gap-2 text-3xs uppercase tracking-wider text-ink-3">
                   <span className="col-span-5">Description</span>
                   <span className="col-span-2 text-right">Qty</span>
                   <span className="col-span-2 text-right">Unit price</span>
@@ -538,7 +538,7 @@ export function AddVendorBillDialog({
             {isForeign && (
               <div className="mb-3 rounded-md bg-amber-soft/40 p-2.5">
                 <div className="flex flex-wrap items-end gap-3">
-                  <div className="text-[11px] text-amber-ink leading-snug max-w-[55%]">
+                  <div className="text-2xs text-amber-ink leading-snug max-w-[55%]">
                     Bill is in <b>{currency}</b>. Enter today's rate — the ₹ books use the converted amounts.
                   </div>
                   <FormField label={`Exchange rate (₹ per 1 ${currency})`} required>
@@ -566,11 +566,11 @@ export function AddVendorBillDialog({
             </div>
             <div className="flex flex-wrap gap-1.5 mt-3">
               <button type="button" onClick={applyGST18Intra}
-                className="text-[11px] px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper transition-colors">
+                className="text-2xs px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper transition-colors">
                 Intra-state GST 18% (CGST 9 + SGST 9)
               </button>
               <button type="button" onClick={applyGST18Inter}
-                className="text-[11px] px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper transition-colors">
+                className="text-2xs px-2.5 py-1 rounded-full border border-hairline text-ink-3 hover:text-ink hover:bg-paper transition-colors">
                 Inter-state GST 18% (IGST 18)
               </button>
             </div>
@@ -586,7 +586,7 @@ export function AddVendorBillDialog({
               )}
             </div>
             {isForeign && rate > 0 && Number(watch("total")) > 0 && (
-              <p className="mt-1 text-[11px] text-emerald">
+              <p className="mt-1 text-2xs text-emerald">
                 ≈ ₹{Math.round(Number(watch("total")) * rate).toLocaleString("en-IN")} in books (@ ₹{rate}/{currency})
               </p>
             )}

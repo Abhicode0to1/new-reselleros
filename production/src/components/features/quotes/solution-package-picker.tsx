@@ -99,11 +99,11 @@ export function SolutionPackagePicker({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-ink">{r.bundle.name}</p>
-                    <p className="mt-0.5 text-[11px] leading-snug text-ink-3">{r.bundle.pitch}</p>
+                    <p className="mt-0.5 text-2xs leading-snug text-ink-3">{r.bundle.pitch}</p>
                   </div>
                   {total > 0 && (
                     <p className="shrink-0 font-serif text-[15px] font-semibold text-ink tabular-nums">
-                      {rupee(total)}<span className="ml-0.5 font-sans text-[10px] font-normal text-ink-3">/yr</span>
+                      {rupee(total)}<span className="ml-0.5 font-sans text-3xs font-normal text-ink-3">/yr</span>
                     </p>
                   )}
                 </div>
@@ -113,7 +113,7 @@ export function SolutionPackagePicker({
                     const hit  = r.resolved.find((x) => x.component === c);
                     const miss = r.unresolved.find((x) => x.component === c);
                     return (
-                      <li key={c.label} className="flex items-start gap-1.5 text-[11px] leading-snug">
+                      <li key={c.label} className="flex items-start gap-1.5 text-2xs leading-snug">
                         <Icon
                           name={hit ? "check" : "alert"}
                           size={11}

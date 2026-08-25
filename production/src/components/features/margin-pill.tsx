@@ -88,7 +88,7 @@ export function MarginPill({
         <span className={cn("font-semibold text-sm tabular-nums", colors)}>
           {rupee(margin.margin)}
         </span>
-        <span className="text-[10px] text-ink-3 tabular-nums">
+        <span className="text-3xs text-ink-3 tabular-nums">
           {margin.marginPct}%{estimated ? " est." : ""} margin · ₹{margin.cost.toLocaleString("en-IN")} cost
           {period && ` · ${period}`}
         </span>
@@ -106,7 +106,7 @@ export function MarginPill({
       title={`Cost: ${rupee(margin.cost)} · Price: ${rupee(margin.price)} · Margin: ${rupee(margin.margin)} (${margin.marginPct}%)${estHint}`}
     >
       <span className={cn("font-semibold text-sm", colors)}>{rupee(margin.margin)}</span>
-      <span className="text-[10px] text-ink-3">
+      <span className="text-3xs text-ink-3">
         {estimated ? "~" : ""}{margin.marginPct}%{estimated ? " est." : ""}
         {period && ` ${period === "monthly" ? "/mo" : period === "annual" ? "/yr" : ""}`}
       </span>

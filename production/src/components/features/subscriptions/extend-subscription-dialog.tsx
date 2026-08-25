@@ -83,7 +83,7 @@ export default function ExtendSubscriptionDialog({ sub, open, onOpenChange }: Pr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <header className="border-b border-hairline pb-3 mb-4">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1">
             Subscription · Extend
           </p>
           <h2 className="font-serif text-2xl text-ink">{sub.customer_name}</h2>
@@ -96,14 +96,14 @@ export default function ExtendSubscriptionDialog({ sub, open, onOpenChange }: Pr
         {/* Term preview */}
         <div className="bg-paper-2 rounded-md p-3 mb-4 text-sm flex justify-between items-center">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Current renewal</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Current renewal</p>
             <p className="font-medium text-ink tabular-nums">
               {currentRenewal ? formatDate(currentRenewal.toISOString()) : "—"}
             </p>
           </div>
           <div className="text-ink-3">→</div>
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider text-emerald font-semibold">New renewal</p>
+            <p className="text-3xs uppercase tracking-wider text-emerald font-semibold">New renewal</p>
             <p className="font-medium text-emerald tabular-nums">
               {newRenewal ? formatDate(newRenewal.toISOString()) : "—"}
             </p>
@@ -128,7 +128,7 @@ export default function ExtendSubscriptionDialog({ sub, open, onOpenChange }: Pr
               )}
             >
               <p className="font-medium text-sm">{p.label}</p>
-              {p.sublabel && <p className="text-[10px] text-ink-3 mt-0.5">{p.sublabel}</p>}
+              {p.sublabel && <p className="text-3xs text-ink-3 mt-0.5">{p.sublabel}</p>}
             </button>
           ))}
         </div>
@@ -153,7 +153,7 @@ export default function ExtendSubscriptionDialog({ sub, open, onOpenChange }: Pr
           </div>
         </div>
 
-        <p className="text-[11px] text-ink-3 leading-relaxed mb-1">
+        <p className="text-2xs text-ink-3 leading-relaxed mb-1">
           A separate <b className="text-ink-2">extension quote</b> will be issued — the original
           1-year invoice stays untouched. When the customer pays, the renewal date will
           advance by <Badge size="sm" kind="muted">{years * 12} months</Badge>.

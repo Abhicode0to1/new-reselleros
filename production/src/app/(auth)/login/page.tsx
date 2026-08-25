@@ -120,7 +120,7 @@ function LoginPageInner() {
                   className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
                 >
                   <div className="font-medium text-ink">{u.label}</div>
-                  <div className="text-[11px] text-ink-3 font-mono">
+                  <div className="text-2xs text-ink-3 font-mono">
                     {u.email} · <span className="text-amber-ink">{u.password}</span>
                   </div>
                 </button>

@@ -68,7 +68,7 @@ export function UploadDocumentDialog({ open, onOpenChange }: Props) {
               onChange={(e) => onPick(e.target.files?.[0] ?? null)}
               className="w-full text-sm text-ink file:mr-3 file:rounded-md file:border-0 file:bg-amber file:px-3 file:py-1.5 file:text-paper file:font-medium hover:file:bg-amber/90"
             />
-            {file && <p className="text-[11px] text-ink-3 mt-1">{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</p>}
+            {file && <p className="text-2xs text-ink-3 mt-1">{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</p>}
           </FormField>
 
           <FormField label="Title" required htmlFor="doc_title">
@@ -86,7 +86,7 @@ export function UploadDocumentDialog({ open, onOpenChange }: Props) {
 
           <FormField label="Expiry date (optional)" htmlFor="doc_expiry">
             <Input id="doc_expiry" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
-            <p className="text-[10px] text-ink-3 mt-1">Set for licenses/registrations that renew — you&apos;ll get an expiring-soon reminder.</p>
+            <p className="text-3xs text-ink-3 mt-1">Set for licenses/registrations that renew — you&apos;ll get an expiring-soon reminder.</p>
           </FormField>
 
           <FormField label="Notes" htmlFor="doc_notes">

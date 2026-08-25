@@ -221,7 +221,7 @@ export function PriorityCallQueue({
             🔥 Today&apos;s priority call queue
           </span>
           {/* Stays visible when folded. This is the count a rep must keep seeing. */}
-          <span className="block text-[11px] text-ink-3">
+          <span className="block text-2xs text-ink-3">
             {queue.entries.length > 0
               ? `${queue.entries.length} of ${queue.dueCount} due`
               : "Everything due today is missing a phone number"}
@@ -236,7 +236,7 @@ export function PriorityCallQueue({
           </Badge>
         )}
         {!open && (
-          <span className="shrink-0 text-[11px] font-semibold text-primary">Show</span>
+          <span className="shrink-0 text-2xs font-semibold text-primary">Show</span>
         )}
       </button>
 
@@ -259,7 +259,7 @@ export function PriorityCallQueue({
 
       {/* The truncation, stated. Not "and more" — the actual number. */}
       {hidden > 0 && (
-        <p className="border-t border-hairline bg-paper-2 px-4 py-2 text-[11px] text-ink-3">
+        <p className="border-t border-hairline bg-paper-2 px-4 py-2 text-2xs text-ink-3">
           {hidden} more due today, below the top {queue.entries.length}. Work through these
           first — the list re-sorts as you clear them.
         </p>
@@ -267,7 +267,7 @@ export function PriorityCallQueue({
 
       {/* The unreachable ones, named. */}
       {queue.dueWithoutPhone.length > 0 && (
-        <p className="border-t border-hairline px-4 py-2.5 text-[11px] leading-relaxed text-ink-2">
+        <p className="border-t border-hairline px-4 py-2.5 text-2xs leading-relaxed text-ink-2">
           <b>{queue.dueWithoutPhone.length} due today with no phone number</b> —{" "}
           {queue.dueWithoutPhone.slice(0, 3).map((l) => cleanDisplayName(l.company)).join(", ")}
           {queue.dueWithoutPhone.length > 3 ? ` +${queue.dueWithoutPhone.length - 3} more` : ""}.

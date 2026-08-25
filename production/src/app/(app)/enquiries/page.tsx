@@ -102,14 +102,14 @@ function snippet(e: InboundEmailRow): string {
 function Detail({ label, e }: { label: string; e: { value: string | number | null; source: string | null } }) {
   return (
     <div>
-      <dt className="text-[10px] uppercase tracking-wider text-ink-3">{label}</dt>
+      <dt className="text-3xs uppercase tracking-wider text-ink-3">{label}</dt>
       {e.value == null ? (
         <dd className="text-[12px] italic text-ink-3">not found</dd>
       ) : (
         <>
           <dd className="break-words text-[13px] font-medium text-ink">{e.value}</dd>
           {e.source && (
-            <dd className="mt-0.5 break-words text-[10px] leading-snug text-ink-3">
+            <dd className="mt-0.5 break-words text-3xs leading-snug text-ink-3">
               from “{e.source.length > 60 ? `${e.source.slice(0, 60)}…` : e.source}”
             </dd>
           )}
@@ -422,7 +422,7 @@ export default function EnquiriesPage() {
                     <span className="min-w-0 flex-1 truncate">{f.label}</span>
                     {badge > 0
                       ? <Badge kind="danger" size="sm">{badge}</Badge>
-                      : count > 0 && <span className="text-[11px] tabular-nums text-ink-3">{count}</span>}
+                      : count > 0 && <span className="text-2xs tabular-nums text-ink-3">{count}</span>}
                   </button>
                 </li>
               );
@@ -455,7 +455,7 @@ export default function EnquiriesPage() {
         )}>
           <Card className="p-0 overflow-hidden h-full flex flex-col">
             <div className="flex items-center justify-between border-b border-hairline px-3 py-2 shrink-0">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+              <span className="text-2xs font-semibold uppercase tracking-wider text-ink-3">
                 {folderMeta.icon} {folderMeta.label}
                 {threads.length > 0 && <span className="ml-1.5 tabular-nums">({threads.length})</span>}
               </span>
@@ -534,7 +534,7 @@ export default function EnquiriesPage() {
                             )}>
                               {senderLabel(e)}
                             </span>
-                            <span className="shrink-0 text-[11px] tabular-nums text-ink-3">
+                            <span className="shrink-0 text-2xs tabular-nums text-ink-3">
                               {shortWhen(e.created_at, nowMs)}
                             </span>
                           </div>
@@ -544,12 +544,12 @@ export default function EnquiriesPage() {
                           )}>
                             {e.subject || "(no subject)"}
                             {!t.isSingle && (
-                              <span className="ml-1.5 text-[11px] tabular-nums text-ink-3">
+                              <span className="ml-1.5 text-2xs tabular-nums text-ink-3">
                                 ({t.messages.length})
                               </span>
                             )}
                           </p>
-                          <p className="truncate text-[11px] text-ink-3">{snippet(e) || "—"}</p>
+                          <p className="truncate text-2xs text-ink-3">{snippet(e) || "—"}</p>
                         </button>
 
                         <span className="mt-0.5 shrink-0 text-[13px] leading-none" aria-hidden>
@@ -596,7 +596,7 @@ export default function EnquiriesPage() {
                         account is a different address, and the reply itself went to the
                         customer. See lib/inbound/sent.ts. */}
                     {viewingSentReply && (
-                      <p className="mt-1 text-[11px] leading-snug text-ink-3">
+                      <p className="mt-1 text-2xs leading-snug text-ink-3">
                         {sentFromNote(emailSender?.address)}
                       </p>
                     )}
@@ -793,7 +793,7 @@ export default function EnquiriesPage() {
               <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[1fr_260px] flex-1 min-h-0 overflow-y-auto">
                 <div className="min-w-0">
                   {selectedThread && !selectedThread.isSingle && (
-                    <p className="mb-3 rounded-md border border-hairline bg-paper-2/60 px-2.5 py-1.5 text-[11px] leading-snug text-ink-3">
+                    <p className="mb-3 rounded-md border border-hairline bg-paper-2/60 px-2.5 py-1.5 text-2xs leading-snug text-ink-3">
                       {selectedThread.messages.length} messages, grouped by sender and subject.
                       {" "}Email replies carry no thread header we can read, so this is a
                       best guess — a colleague writing from a different address starts
@@ -812,7 +812,7 @@ export default function EnquiriesPage() {
                           <span className="truncate text-[12px] font-medium text-ink-2">
                             {senderLabel(m)}
                           </span>
-                          <span className="shrink-0 text-[11px] text-ink-3">
+                          <span className="shrink-0 text-2xs text-ink-3">
                             {formatDate(m.created_at)}
                           </span>
                         </div>
@@ -820,7 +820,7 @@ export default function EnquiriesPage() {
                         {m.attachment_name && (
                           <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-hairline bg-paper px-2.5 py-1">
                             <Icon name="paperclip" size={12} className="text-ink-3" />
-                            <span className="text-[11px] text-ink-2">{m.attachment_name}</span>
+                            <span className="text-2xs text-ink-2">{m.attachment_name}</span>
                           </div>
                         )}
 
@@ -840,7 +840,7 @@ export default function EnquiriesPage() {
                 {entities && (
                   <aside className="min-w-0">
                     <div className="rounded-lg border border-hairline bg-paper-2/40 p-3">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+                      <p className="mb-2 text-2xs font-semibold uppercase tracking-wider text-ink-3">
                         Details found · {foundCount(entities)} of 5
                       </p>
                       <dl className="space-y-2">
@@ -857,7 +857,7 @@ export default function EnquiriesPage() {
                           at — and left blank when nothing matched, because a guessed
                           seat count becomes a price and a guessed number becomes a
                           message to a stranger. */}
-                      <p className="mt-2.5 border-t border-hairline pt-2 text-[10px] leading-snug text-ink-3">
+                      <p className="mt-2.5 border-t border-hairline pt-2 text-3xs leading-snug text-ink-3">
                         Read from the email text. Anything blank was not found — nothing here is guessed.
                       </p>
                     </div>
@@ -901,7 +901,7 @@ export default function EnquiriesPage() {
           delivery record. The previous version of this line said the text is never
           stored, which stopped being true the moment replies started being filed. */}
       {folder === "sent" && (
-        <p className="mt-3 px-1 text-[11px] leading-snug text-ink-3">
+        <p className="mt-3 px-1 text-2xs leading-snug text-ink-3">
           {sentFromNote(emailSender?.address)}{" "}
           Replies sent before 18 Aug 2026 are not listed above — only their delivery was
           recorded, not their text, so there is nothing here to reprint. Look in that

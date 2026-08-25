@@ -315,15 +315,15 @@ export default function CustomersPage() {
             <div className="p-3 border-t border-hairline bg-paper">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Total Customers</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Total Customers</p>
                   <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{total}</p>
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Monthly Revenue</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Monthly Revenue</p>
                   <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalMRR, { compact: true })}</p>
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Yearly Revenue</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Yearly Revenue</p>
                   <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(totalARR, { compact: true })}</p>
                 </div>
                 <button
@@ -331,7 +331,7 @@ export default function CustomersPage() {
                   onClick={() => setView("unpaid")}
                   className="bg-paper-2/40 border border-hairline hover:border-rose/60 transition-colors rounded-lg p-3 text-left cursor-pointer"
                 >
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">To Collect (Unpaid)</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">To Collect (Unpaid)</p>
                   <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{rupee(totalReceivables, { compact: true })}</p>
                 </button>
               </div>
@@ -370,7 +370,7 @@ export default function CustomersPage() {
                   >
                     {v.label}
                     <span className={cn(
-                      "rounded-full px-1.5 tabular-nums text-[11px]",
+                      "rounded-full px-1.5 tabular-nums text-2xs",
                       active ? "bg-amber/25 text-amber-ink"
                         : isDebt && viewCounts[v.id] > 0 ? "bg-rose-soft text-rose"
                         : "bg-paper-2 text-ink-3",
@@ -392,7 +392,7 @@ export default function CustomersPage() {
               >
                 <Icon name="inbox" size={13} />
                 {showArchived ? "Active" : "Archived"}
-                <span className="rounded-full bg-paper-2 px-1.5 tabular-nums text-[11px] text-ink-3">{archivedCount}</span>
+                <span className="rounded-full bg-paper-2 px-1.5 tabular-nums text-2xs text-ink-3">{archivedCount}</span>
               </button>
             )}
             <Button variant="primary" size="sm" icon="plus" onClick={goAdd} className="shrink-0 font-semibold shadow-xs hidden sm:inline-flex">
@@ -406,7 +406,7 @@ export default function CustomersPage() {
               type="button"
               onClick={() => toggleSort("mrr")}
               className={cn(
-                "px-2.5 py-1 rounded border text-[11px] font-medium transition-colors cursor-pointer shrink-0",
+                "px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
                 sort.key === "mrr" ? "bg-amber-soft border-amber text-amber-ink" : "border-hairline hover:bg-paper-2 text-ink-2",
               )}
             >
@@ -416,7 +416,7 @@ export default function CustomersPage() {
               type="button"
               onClick={() => toggleSort("receivables")}
               className={cn(
-                "px-2.5 py-1 rounded border text-[11px] font-medium transition-colors cursor-pointer shrink-0",
+                "px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
                 sort.key === "receivables" ? "bg-rose-soft border-rose text-rose" : "border-hairline hover:bg-paper-2 text-ink-2",
               )}
             >
@@ -426,7 +426,7 @@ export default function CustomersPage() {
               type="button"
               onClick={() => toggleSort("name")}
               className={cn(
-                "px-2.5 py-1 rounded border text-[11px] font-medium transition-colors cursor-pointer shrink-0",
+                "px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
                 sort.key === "name" ? "bg-amber-soft border-amber text-amber-ink" : "border-hairline hover:bg-paper-2 text-ink-2",
               )}
             >
@@ -499,7 +499,7 @@ export default function CustomersPage() {
                         <p className="font-medium text-ink truncate">{cleanDisplayName(c.display_name || c.name)}</p>
                         {subsByCustomer.has(c.id) && <Badge kind="success" size="sm" dot>Active</Badge>}
                       </div>
-                      <p className="text-[11px] text-ink-3 truncate mt-0.5">
+                      <p className="text-2xs text-ink-3 truncate mt-0.5">
                         {customerSubline(c) || "—"}
                       </p>
                     </div>
@@ -519,7 +519,7 @@ export default function CustomersPage() {
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-emerald-soft text-emerald font-medium hover:bg-emerald hover:text-white transition-colors"
+                          className="inline-flex items-center gap-1 text-2xs px-2 py-0.5 rounded bg-emerald-soft text-emerald font-medium hover:bg-emerald hover:text-white transition-colors"
                         >
                           <Icon name="message_square" size={12} /> WhatsApp
                         </a>
@@ -555,8 +555,8 @@ export default function CustomersPage() {
                 <thead className="bg-paper-2 border-b border-hairline-strong">
                   <tr>
                     <SortHead label="Customer"        sortKey="name"        sort={sort} onSort={toggleSort} />
-                    <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Status</th>
-                    <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Place of supply</th>
+                    <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Status</th>
+                    <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Place of supply</th>
                     <SortHead label="Monthly"         sortKey="mrr"         sort={sort} onSort={toggleSort} align="right" />
                     <SortHead label="To collect"      sortKey="receivables" sort={sort} onSort={toggleSort} align="right" />
                     <SortHead label="Unused credits"  sortKey="credits"     sort={sort} onSort={toggleSort} align="right" />
@@ -594,7 +594,7 @@ export default function CustomersPage() {
                                 <span>{primaryName}</span>
                               </div>
                               {customerSubline(c) && (
-                                <div className="text-[11px] text-ink-3 truncate mt-0.5">{customerSubline(c)}</div>
+                                <div className="text-2xs text-ink-3 truncate mt-0.5">{customerSubline(c)}</div>
                               )}
                             </div>
                           </div>
@@ -605,7 +605,7 @@ export default function CustomersPage() {
                         <td className="px-3 py-2.5 text-sm text-ink-2 truncate">{c.state || <span className="text-ink-3">N/A</span>}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums">
                           {mrr > 0
-                            ? <span className="text-sm font-medium text-ink">{rupee(mrr, { compact: true })}<span className="text-[11px] text-ink-3">/mo</span></span>
+                            ? <span className="text-sm font-medium text-ink">{rupee(mrr, { compact: true })}<span className="text-2xs text-ink-3">/mo</span></span>
                             : <span className="text-sm text-ink-3">{rupee(0)}</span>}
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">
@@ -613,7 +613,7 @@ export default function CustomersPage() {
                             <div>
                               <div className="text-sm font-semibold text-rose">{rupee(receivable)}</div>
                               {days > 0 && (
-                                <div className={cn("text-[11px]", days > 45 ? "text-rose font-medium" : "text-ink-3")}>{days}d outstanding</div>
+                                <div className={cn("text-2xs", days > 45 ? "text-rose font-medium" : "text-ink-3")}>{days}d outstanding</div>
                               )}
                             </div>
                           ) : <span className="text-sm text-ink-3">{rupee(0)}</span>}
@@ -704,7 +704,7 @@ export default function CustomersPage() {
                     <Avatar name={cleanDisplayName(c.display_name || c.name)} color={avatarColor(c.id)} size="sm" className="shrink-0" />
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-sm text-ink truncate">{cleanDisplayName(c.display_name || c.name)}</div>
-                      <div className="flex items-center justify-between gap-2 text-[11px] mt-0.5">
+                      <div className="flex items-center justify-between gap-2 text-2xs mt-0.5">
                         <span className="truncate text-ink-3">{c.domain || c.contact_email || "—"}</span>
                         {receivable > 0
                           ? <span className="tabular-nums flex-shrink-0 text-rose font-medium">{rupee(receivable, { compact: true })}</span>
@@ -763,7 +763,7 @@ function SortHead({
 }) {
   const active = sort.key === sortKey;
   return (
-    <th className={cn("group px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider", align === "right" ? "text-right" : "text-left")}>
+    <th className={cn("group px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider", align === "right" ? "text-right" : "text-left")}>
       <button
         type="button"
         onClick={() => onSort(sortKey)}

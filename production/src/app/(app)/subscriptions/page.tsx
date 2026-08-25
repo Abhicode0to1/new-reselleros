@@ -352,39 +352,39 @@ export default function SubscriptionsPage() {
             <div className="p-3 border-t border-hairline space-y-3 bg-paper">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Active MRR</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Active MRR</p>
                   <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(activeMRR, { compact: true })}</p>
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Active ARR</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Active ARR</p>
                   <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(activeARR, { compact: true })}</p>
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Margin (ARR)</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Margin (ARR)</p>
                   <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(annualMargin, { compact: true })} <span className="text-xs text-ink-3 font-normal">({avgMarginPct}%)</span></p>
                   {/* A total that silently drops the unmeasured rows reads as covering
                       everything. Both counts are stated so it cannot. */}
                   {marginUnknownCount > 0 && (
-                    <p className="mt-0.5 text-[10px] leading-snug text-amber-ink">
+                    <p className="mt-0.5 text-3xs leading-snug text-amber-ink">
                       {marginUnknownCount} excluded — no cost
                     </p>
                   )}
                   {marginEstimatedCount > 0 && (
-                    <p className="mt-0.5 text-[10px] leading-snug text-ink-3">
+                    <p className="mt-0.5 text-3xs leading-snug text-ink-3">
                       {marginEstimatedCount} from catalogue, not vendor bills
                     </p>
                   )}
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Total Subscriptions</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Total Subscriptions</p>
                   <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{subsByWorkspace.length} <span className="text-xs text-emerald font-normal">({folderCount.active + folderCount.expiring} live)</span></p>
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Seats In Use</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Seats In Use</p>
                   <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{usedSeats} <span className="text-xs text-ink-3 font-normal">/ {totalSeats}</span></p>
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Active Trials</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Active Trials</p>
                   <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{trials?.length ?? 0}</p>
                 </div>
               </div>
@@ -452,7 +452,7 @@ export default function SubscriptionsPage() {
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-ink truncate">{t.company}</p>
-                      <p className="text-[11px] text-ink-3 truncate flex items-center gap-2">
+                      <p className="text-2xs text-ink-3 truncate flex items-center gap-2">
                         {t.domain && <span className="font-mono">{t.domain}</span>}
                         <span>·</span>
                         <span>{t.plan?.replace(/^google-workspace-/, "Google Workspace ").replace(/-/g, " ")}</span>
@@ -461,7 +461,7 @@ export default function SubscriptionsPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Trial ends</p>
+                      <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Trial ends</p>
                       <p className="text-xs tabular-nums text-ink-2">
                         {t.trial_expires_at ? formatDate(t.trial_expires_at) : "—"}
                       </p>
@@ -578,7 +578,7 @@ export default function SubscriptionsPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-serif text-base tabular-nums text-ink">{rupee(s.mrr)}</p>
-                    <p className="text-[10px] text-ink-3">/mo · {s.seats} seats</p>
+                    <p className="text-3xs text-ink-3">/mo · {s.seats} seats</p>
                   </div>
                 </div>
 
@@ -632,7 +632,7 @@ export default function SubscriptionsPage() {
                     </p>
                     {dl !== null && (
                       <p className={cn(
-                        "text-[10px] tabular-nums",
+                        "text-3xs tabular-nums",
                         dl <= 7  ? "text-rose font-medium"     :
                         dl <= 30 ? "text-amber-ink font-medium" : "text-ink-3"
                       )}>
@@ -653,15 +653,15 @@ export default function SubscriptionsPage() {
             <table className="w-full">
               <thead className="bg-paper-2 border-b border-hairline-strong">
                 <tr>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Customer · Domain</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Plan</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Vendor</th>
-                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider" title="Seats in use / licensed">Seats</th>
-                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">MRR</th>
-                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider" title="Monthly margin">Margin</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Started</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Renewal</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Status</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Customer · Domain</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Plan</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Vendor</th>
+                  <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider" title="Seats in use / licensed">Seats</th>
+                  <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">MRR</th>
+                  <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider" title="Monthly margin">Margin</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Started</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Renewal</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Status</th>
                   <th className="px-2 py-2.5 text-right w-28"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -744,7 +744,7 @@ export default function SubscriptionsPage() {
                               equally trustworthy. */}
                           <Badge kind={mb.kind} size="sm" title={mb.title}>{mb.label}</Badge>
                           {cogs.marginMonthly != null && (
-                            <span className="text-[10px] text-ink-2 tabular-nums font-medium">{rupee(cogs.marginMonthly)}</span>
+                            <span className="text-3xs text-ink-2 tabular-nums font-medium">{rupee(cogs.marginMonthly)}</span>
                           )}
                           {cogs.source === "catalog" && (
                             <span className="text-[9px] uppercase tracking-wider text-ink-3">est.</span>
@@ -759,7 +759,7 @@ export default function SubscriptionsPage() {
                         ) : dl !== null && s.status !== "expired" ? (
                           // Beyond 30 days the badge would be alarmist, but the
                           // distance still beats making the reader subtract dates.
-                          <div className="mt-0.5 text-[11px] text-ink-3 tabular-nums">{renewalDistance(dl)}</div>
+                          <div className="mt-0.5 text-2xs text-ink-3 tabular-nums">{renewalDistance(dl)}</div>
                         ) : null}
                       </td>
                       <td className="px-3 py-2.5 align-top">
@@ -885,7 +885,7 @@ export default function SubscriptionsPage() {
                     >
                       <td className="p-3">
                         <div className="font-medium text-sm text-ink">{t.company}</div>
-                        {t.domain && <div className="text-[11px] text-ink-3 font-mono">{t.domain}</div>}
+                        {t.domain && <div className="text-2xs text-ink-3 font-mono">{t.domain}</div>}
                       </td>
                       <td className="p-3 text-sm text-ink-2">{planLabel}</td>
                       <td className="p-3">
@@ -946,8 +946,8 @@ export default function SubscriptionsPage() {
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-ink truncate">{t.company}</p>
-                      {t.domain && <p className="text-[11px] text-ink-3 font-mono truncate">{t.domain}</p>}
-                      <p className="text-[11px] text-ink-3 truncate mt-0.5">{planLabel} · {t.seats ?? 0} seats</p>
+                      {t.domain && <p className="text-2xs text-ink-3 font-mono truncate">{t.domain}</p>}
+                      <p className="text-2xs text-ink-3 truncate mt-0.5">{planLabel} · {t.seats ?? 0} seats</p>
                     </div>
                     <Badge
                       kind={dr <= 1 ? "danger" : dr <= 3 ? "warning" : dr <= 7 ? "info" : "muted"}
@@ -958,7 +958,7 @@ export default function SubscriptionsPage() {
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between gap-2 pt-2 border-t border-hairline/60">
-                    <span className="text-[11px] text-ink-3">
+                    <span className="text-2xs text-ink-3">
                       Trial ends {t.trial_expires_at ? formatDate(t.trial_expires_at) : "—"}
                     </span>
                     <Button size="sm" variant="primary" icon="check_circle" onClick={(e) => { e.stopPropagation(); router.push(`/leads?lead=${t.id}` as never); }}>
@@ -1149,7 +1149,7 @@ function DomainCell({ sub, compact = false }: { sub: Subscription; compact?: boo
         type="button"
         onClick={() => { setValue(sub.domain ?? ""); setEditing(true); }}
         className={cn(
-          "font-mono text-[11px] text-ink-3 hover:text-ink truncate text-left transition-colors",
+          "font-mono text-2xs text-ink-3 hover:text-ink truncate text-left transition-colors",
           compact && "mt-0.5",
         )}
         title="Click to edit domain"
@@ -1165,7 +1165,7 @@ function DomainCell({ sub, compact = false }: { sub: Subscription; compact?: boo
         type="button"
         onClick={() => { setValue(""); setEditing(true); }}
         className={cn(
-          "inline-flex items-center gap-1 text-[11px] text-amber-ink hover:underline",
+          "inline-flex items-center gap-1 text-2xs text-amber-ink hover:underline",
           compact && "mt-0.5",
         )}
       >
@@ -1197,7 +1197,7 @@ function DomainCell({ sub, compact = false }: { sub: Subscription; compact?: boo
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="e.g. acme.in"
-        className="h-7 text-[11px] font-mono py-0"
+        className="h-7 text-2xs font-mono py-0"
         onKeyDown={(e) => {
           if (e.key === "Enter") submit();
           if (e.key === "Escape") setEditing(false);

@@ -145,7 +145,7 @@ export function RecordProjectPaymentDialog({ open, onOpenChange, milestone, proj
                 </option>
               ))}
             </select>
-            <p className="text-[10px] text-ink-3 mt-1">
+            <p className="text-3xs text-ink-3 mt-1">
               Reconciles the actual bank credit to this payment — the bank line is the cash, this is the receivable.
             </p>
           </FormField>

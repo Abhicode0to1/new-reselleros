@@ -278,7 +278,7 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
 
           {isNewCustomer && !isEdit && (
             <div className="rounded-md border border-hairline bg-paper-2/30 p-3 space-y-2">
-              <p className="text-[11px] text-ink-3 font-semibold uppercase tracking-wider">New customer details</p>
+              <p className="text-2xs text-ink-3 font-semibold uppercase tracking-wider">New customer details</p>
               <Input placeholder="Company name *" value={newName} onChange={(e) => setNewName(e.target.value)} />
               <div className="grid grid-cols-2 gap-2">
                 <Input placeholder="Contact person" value={contactName} onChange={(e) => setContactName(e.target.value)} />
@@ -289,7 +289,7 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
                 <Input placeholder="GSTIN" className="font-mono" value={gstin} onChange={(e) => setGstin(e.target.value)} />
                 <Input placeholder="State (e.g. Maharashtra)" value={stateName} onChange={(e) => setStateName(e.target.value)} />
               </div>
-              <p className="text-[10px] text-ink-3">GSTIN + state make the tax invoice GST-correct (CGST/SGST vs IGST + the customer&apos;s ITC).</p>
+              <p className="text-3xs text-ink-3">GSTIN + state make the tax invoice GST-correct (CGST/SGST vs IGST + the customer&apos;s ITC).</p>
             </div>
           )}
 
@@ -307,7 +307,7 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-ink-2">Line items (taxable ₹)</p>
               {!partialLock && (
-                <button type="button" onClick={addLine} className="text-[11px] text-amber-ink hover:underline inline-flex items-center gap-0.5">
+                <button type="button" onClick={addLine} className="text-2xs text-amber-ink hover:underline inline-flex items-center gap-0.5">
                   <Icon name="plus" size={12} /> Add line
                 </button>
               )}
@@ -332,9 +332,9 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="text-[11px] text-ink-3">Qty</label>
+                    <label className="text-2xs text-ink-3">Qty</label>
                     <Input className="w-16" inputMode="numeric" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} disabled={partialLock} />
-                    <label className="text-[11px] text-ink-3">Rate</label>
+                    <label className="text-2xs text-ink-3">Rate</label>
                     <Input className="w-28" inputMode="numeric" prefix="₹" placeholder="0" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} disabled={partialLock} />
                     <span className="ml-auto text-sm font-mono text-ink">{rupee(lineAmount(l))}</span>
                   </div>
@@ -365,7 +365,7 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-ink-2">Payment schedule (GST-inclusive)</p>
-              <button type="button" onClick={addRow} className="text-[11px] text-amber-ink hover:underline inline-flex items-center gap-0.5">
+              <button type="button" onClick={addRow} className="text-2xs text-amber-ink hover:underline inline-flex items-center gap-0.5">
                 <Icon name="plus" size={12} /> Add
               </button>
             </div>
@@ -375,7 +375,7 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
               <div key={m.id} className="flex items-center gap-2 rounded-md border border-hairline bg-paper-2/40 px-3 py-2 text-sm mb-2">
                 <Icon name="lock" size={13} className="text-ink-3 shrink-0" />
                 <span className="flex-1 text-ink-2 truncate">{m.label}</span>
-                <span className="text-[10px] uppercase tracking-wide text-ink-3">{m.invoice_id ? "Invoiced" : "Paid"}</span>
+                <span className="text-3xs uppercase tracking-wide text-ink-3">{m.invoice_id ? "Invoiced" : "Paid"}</span>
                 <span className="font-mono text-ink">{rupee(m.total_amount)}</span>
               </div>
             ))}
@@ -390,7 +390,7 @@ export function CreateProjectQuoteDialog({ open, onOpenChange, editProject, pref
                 </div>
               ))}
             </div>
-            <div className={`mt-2 text-[11px] flex items-center gap-2 flex-wrap ${mismatch ? "text-rose" : "text-emerald"}`}>
+            <div className={`mt-2 text-2xs flex items-center gap-2 flex-wrap ${mismatch ? "text-rose" : "text-emerald"}`}>
               <span>
                 {partialLock ? "Remaining scheduled " : "Schedule total "}{rupee(milestonesTotal)} · {mismatch
                   ? `should equal ${rupee(scheduleTarget)}`

@@ -64,7 +64,7 @@ export function Kbd({ keys, className, sequence }: KbdProps) {
               {sequence ? "" : "+"}
             </span>
           )}
-          <kbd className="rounded border border-hairline bg-paper-2 px-1.5 py-0.5 font-mono text-[10px] leading-none text-ink-2 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
+          <kbd className="rounded border border-hairline bg-paper-2 px-1.5 py-0.5 font-mono text-3xs leading-none text-ink-2 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
             {glyph(k, isMac)}
           </kbd>
         </React.Fragment>

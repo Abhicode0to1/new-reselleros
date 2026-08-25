@@ -160,7 +160,7 @@ export default function WhatsAppConfigureDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="md:!max-w-2xl">
         <header className="border-b border-hairline pb-3 mb-4">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-emerald mb-1 inline-flex items-center gap-1.5">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-emerald mb-1 inline-flex items-center gap-1.5">
             <Icon name="whatsapp" size={11} /> Integration · Meta WhatsApp Cloud API
           </p>
           <h2 className="font-serif text-2xl text-ink">WhatsApp Business</h2>
@@ -176,7 +176,7 @@ export default function WhatsAppConfigureDialog({ open, onOpenChange }: Props) {
             <div className="flex items-center justify-between rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
               <div>
                 <p className="text-xs font-medium text-ink">Current state</p>
-                <p className="text-[11px] text-ink-3">
+                <p className="text-2xs text-ink-3">
                   {status?.configured
                     ? <>Configured · token {status.access_token_mask} · saved {status.updated_at ? formatDate(status.updated_at) : "—"}</>
                     : "Not configured — no WhatsApp sends will happen until you set up credentials"}
@@ -197,7 +197,7 @@ export default function WhatsAppConfigureDialog({ open, onOpenChange }: Props) {
                 onChange={(e) => setPhoneNumberId(e.target.value)}
                 autoComplete="off"
               />
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 Meta dashboard · WhatsApp · API Setup · "Phone number ID" (not the phone number itself)
               </p>
             </div>
@@ -217,7 +217,7 @@ export default function WhatsAppConfigureDialog({ open, onOpenChange }: Props) {
                   <Icon name={showToken ? "eye_off" : "eye"} size={14} />
                 </Button>
               </div>
-              <p className="text-[10px] text-ink-3 mt-1 break-words">
+              <p className="text-3xs text-ink-3 mt-1 break-words">
                 Prefer a <b>System User token</b> — those never expire. Temporary user tokens last 24 hrs only.
               </p>
             </div>
@@ -231,7 +231,7 @@ export default function WhatsAppConfigureDialog({ open, onOpenChange }: Props) {
                 onChange={(e) => setBusinessAccountId(e.target.value)}
                 autoComplete="off"
               />
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 Needed when we add template management. Safe to leave blank for first send.
               </p>
             </div>
@@ -243,12 +243,12 @@ export default function WhatsAppConfigureDialog({ open, onOpenChange }: Props) {
 
               <div className="rounded-md bg-paper-2 p-3 space-y-2 min-w-0">
                 <div className="min-w-0">
-                  <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
+                  <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
                     Callback URL — paste this in Meta dashboard
                   </p>
                   <div className="flex items-center gap-2 min-w-0">
                     <code
-                      className="font-mono text-[11px] text-ink-2 bg-paper px-2 py-1 rounded flex-1 min-w-0 truncate"
+                      className="font-mono text-2xs text-ink-2 bg-paper px-2 py-1 rounded flex-1 min-w-0 truncate"
                       title={status?.webhook_url}
                     >
                       {status?.webhook_url ?? "loading…"}
@@ -282,7 +282,7 @@ export default function WhatsAppConfigureDialog({ open, onOpenChange }: Props) {
                         <Icon name="refresh" size={13} />
                       </Button>
                     </div>
-                    <p className="text-[10px] text-ink-3 mt-1 break-words">
+                    <p className="text-3xs text-ink-3 mt-1 break-words">
                       Set the same value in Meta&apos;s webhook subscription form.
                     </p>
                   </div>
@@ -301,7 +301,7 @@ export default function WhatsAppConfigureDialog({ open, onOpenChange }: Props) {
                         <Icon name={showSecret ? "eye_off" : "eye"} size={14} />
                       </Button>
                     </div>
-                    <p className="text-[10px] text-ink-3 mt-1 break-words">
+                    <p className="text-3xs text-ink-3 mt-1 break-words">
                       Used to validate HMAC on inbound webhooks. Recommended.
                     </p>
                   </div>

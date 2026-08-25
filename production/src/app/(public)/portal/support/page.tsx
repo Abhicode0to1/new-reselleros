@@ -110,7 +110,7 @@ export default async function PortalSupportPage() {
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
                   <div className="min-w-0">
                     <div className="font-medium text-ink leading-tight">{t.subject}</div>
-                    <div className="text-[11px] text-ink-3 mt-0.5">
+                    <div className="text-2xs text-ink-3 mt-0.5">
                       <span className="font-mono">{t.id}</span>
                       <span className="mx-1.5">·</span>
                       {formatDate(t.created_at.slice(0, 10))}
@@ -133,7 +133,7 @@ export default async function PortalSupportPage() {
                 <p className="text-sm text-ink-2 leading-relaxed line-clamp-3">{t.body}</p>
                 {t.resolution_note && (
                   <div className="mt-3 p-3 rounded-md bg-emerald-soft/40 border border-emerald/20 text-xs">
-                    <div className="text-[10px] uppercase tracking-wider text-emerald font-semibold mb-1">
+                    <div className="text-3xs uppercase tracking-wider text-emerald font-semibold mb-1">
                       {reseller}&apos;s response
                     </div>
                     <p className="text-ink-2 leading-relaxed">{t.resolution_note}</p>

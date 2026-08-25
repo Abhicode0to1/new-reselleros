@@ -119,7 +119,7 @@ function Footer() {
             </a>
           </nav>
         </div>
-        <div className="mt-8 border-t border-hairline/60 pt-6 font-mono text-[11px] uppercase tracking-wider text-ink-3">
+        <div className="mt-8 border-t border-hairline/60 pt-6 font-mono text-2xs uppercase tracking-wider text-ink-3">
           Excel Technologies Pvt Ltd · Mumbai, India · Made with care for Indian resellers
         </div>
       </div>

@@ -76,7 +76,7 @@ export function MarkPaidDialog({ expense, onClose }: { expense: Expense; onClose
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-ink-3 mt-1">Cash-in-hand se ye amount ab minus hoga.</p>
+              <p className="text-3xs text-ink-3 mt-1">Cash-in-hand se ye amount ab minus hoga.</p>
             </FormField>
           )}
         </div>

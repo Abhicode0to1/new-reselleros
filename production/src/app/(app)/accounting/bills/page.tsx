@@ -190,7 +190,7 @@ export default function VendorBillsPage() {
                 <col className="w-[11%]" />
                 <col className="w-[17%]" />
               </colgroup>
-              <thead className="bg-paper-2 border-b border-hairline-strong text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2 border-b border-hairline-strong text-2xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-2.5">Vendor</th>
                   <th className="text-left  px-3 py-2.5">Bill #</th>
@@ -222,7 +222,7 @@ export default function VendorBillsPage() {
                             <Badge color="indigo" title="Auto-imported from your distributor — created when they invoiced you">From distributor</Badge>
                           )}
                         </div>
-                        <div className="mt-0.5 flex items-center gap-2 flex-wrap text-[11px] text-ink-3">
+                        <div className="mt-0.5 flex items-center gap-2 flex-wrap text-2xs text-ink-3">
                           {b.vendor_gstin && <span className="font-mono">{b.vendor_gstin}</span>}
                           {b.category && <Badge kind="muted" size="sm">{b.category}</Badge>}
                           {(b.line_items?.length ?? 0) > 0 && (
@@ -231,11 +231,11 @@ export default function VendorBillsPage() {
                         </div>
                       </td>
                       {/* Bill # */}
-                      <td className="px-3 py-3 font-mono text-[11px] text-ink-2 align-top truncate" title={b.bill_no || undefined}>{b.bill_no || "—"}</td>
+                      <td className="px-3 py-3 font-mono text-2xs text-ink-2 align-top truncate" title={b.bill_no || undefined}>{b.bill_no || "—"}</td>
                       {/* Date + aging */}
                       <td className="px-3 py-3 align-top whitespace-nowrap">
                         <div className="text-ink-2">{formatDate(b.bill_date)}</div>
-                        {b.due_date && <div className="text-[11px] text-ink-3">due {formatDate(b.due_date)}</div>}
+                        {b.due_date && <div className="text-2xs text-ink-3">due {formatDate(b.due_date)}</div>}
                         {showAging && (
                           <div className="mt-0.5">
                             <Badge kind={dueDays! < 0 ? "danger" : dueDays! <= 7 ? "warning" : "muted"} dot>
@@ -247,10 +247,10 @@ export default function VendorBillsPage() {
                       {/* Amount — total prominent, GST + foreign as sublines */}
                       <td className="px-3 py-3 text-right align-top whitespace-nowrap">
                         <div className="font-semibold text-ink font-mono tabular-nums">{rupee(b.total)}</div>
-                        {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? <div className="text-[11px] font-normal text-ink-3 font-mono">{fx}</div> : null; })()}
-                        {gst > 0 && <div className="text-[11px] text-emerald cursor-help" title={gstTitle}>incl {rupee(gst)} GST</div>}
+                        {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? <div className="text-2xs font-normal text-ink-3 font-mono">{fx}</div> : null; })()}
+                        {gst > 0 && <div className="text-2xs text-emerald cursor-help" title={gstTitle}>incl {rupee(gst)} GST</div>}
                         {b.status !== "paid" && (b.total - (b.paid_amount ?? 0)) > 0 && (b.paid_amount ?? 0) > 0 && (
-                          <div className="text-[10px] text-rose tabular-nums">{rupee(b.total - (b.paid_amount ?? 0))} due</div>
+                          <div className="text-3xs text-rose tabular-nums">{rupee(b.total - (b.paid_amount ?? 0))} due</div>
                         )}
                       </td>
                       {/* Status */}
@@ -282,20 +282,20 @@ export default function VendorBillsPage() {
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="font-medium text-ink leading-tight">
                         {b.vendor_name}
-                        {(b.line_items?.length ?? 0) > 0 && <span className="ml-1 text-[11px] font-normal text-ink-3">· {b.line_items.length} items</span>}
+                        {(b.line_items?.length ?? 0) > 0 && <span className="ml-1 text-2xs font-normal text-ink-3">· {b.line_items.length} items</span>}
                       </div>
                       <Badge color={STATUS_COLOR[b.status] ?? "slate"}>{b.status}</Badge>
                     </div>
-                    <div className="text-[11px] text-ink-3 font-mono mb-2">
+                    <div className="text-2xs text-ink-3 font-mono mb-2">
                       {b.bill_no || "—"} · {formatDate(b.bill_date)}
                     </div>
                     <div className="text-xs text-ink-3 mb-2">{b.category}</div>
                     <div className="flex items-end justify-between">
                       <div>
                         <div className="font-serif text-xl text-ink leading-none">{rupee(b.total)}</div>
-                        {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? <div className="text-[11px] text-ink-3 mt-1">{fx} @ ₹{b.fx_rate}/{b.currency}</div> : null; })()}
+                        {(() => { const fx = foreignAmount(b.currency, b.total, b.fx_rate); return fx ? <div className="text-2xs text-ink-3 mt-1">{fx} @ ₹{b.fx_rate}/{b.currency}</div> : null; })()}
                         {gst > 0 && (
-                          <div className="text-[11px] text-emerald mt-1">+{rupee(gst)} input GST</div>
+                          <div className="text-2xs text-emerald mt-1">+{rupee(gst)} input GST</div>
                         )}
                       </div>
                       <span onClick={(e) => e.stopPropagation()}>
@@ -428,7 +428,7 @@ function PayBillDialog({ bill, onClose }: { bill: VendorBill; onClose: () => voi
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </FormField>
           </div>
-          {tooMuch && <p className="text-[11px] text-rose">Outstanding {rupee(outstanding)} se zyada nahi.</p>}
+          {tooMuch && <p className="text-2xs text-rose">Outstanding {rupee(outstanding)} se zyada nahi.</p>}
           <FormField label="Pay from">
             <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber">
               {accounts.length === 0 && <option value="">No accounts — add one in Banking</option>}
@@ -464,7 +464,7 @@ function KPI({
                    : "text-ink";
   return (
     <Card className="p-3 md:p-4">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif text-xl md:text-2xl ${colorClass} leading-tight`}>{value}</div>
     </Card>
   );

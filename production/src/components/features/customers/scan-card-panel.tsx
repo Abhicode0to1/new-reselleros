@@ -90,7 +90,7 @@ export function ScanCardPanel({ onFields }: { onFields: (f: CardFields) => void 
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-ink">Save yourself the typing</p>
-          <p className="text-[11px] text-ink-3 leading-relaxed">
+          <p className="text-2xs text-ink-3 leading-relaxed">
             Scan a visiting card or paste an email signature. Everything lands in the fields
             below for you to check — the GSTIN still gets verified with GSTN.
           </p>
@@ -138,10 +138,10 @@ export function ScanCardPanel({ onFields }: { onFields: (f: CardFields) => void 
           )}
 
           {note && (
-            <p className="mt-2 text-[11px] text-emerald leading-relaxed">{note}</p>
+            <p className="mt-2 text-2xs text-emerald leading-relaxed">{note}</p>
           )}
           {error && (
-            <p className="mt-2 text-[11px] text-amber-ink leading-relaxed">{error}</p>
+            <p className="mt-2 text-2xs text-amber-ink leading-relaxed">{error}</p>
           )}
         </div>
       </div>

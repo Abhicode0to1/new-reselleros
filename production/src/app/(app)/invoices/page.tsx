@@ -356,7 +356,7 @@ function InvoicesPageInner() {
                       {pending.length} quote{pending.length === 1 ? "" : "s"} ({rupee(totalAmt)})
                     </Badge>
                   </div>
-                  <p className="text-[11px] text-ink-3 truncate hidden sm:block">
+                  <p className="text-2xs text-ink-3 truncate hidden sm:block">
                     Invoice mandatory within 30 days of first advance (CGST §13, Rule 47)
                   </p>
                 </div>
@@ -413,12 +413,12 @@ function InvoicesPageInner() {
                           <div className="min-w-0 flex-1">
                             <Link href={`/quotes/${q.id}` as any} className="font-mono text-xs font-semibold text-ink hover:text-amber-ink hover:underline block truncate">{q.id}</Link>
                             <p className="text-sm text-ink truncate mt-0.5">{q.customer_name}</p>
-                            <p className="text-[11px] text-ink-3 mt-0.5">First advance {anchor ? formatDate(anchor) : "—"}</p>
+                            <p className="text-2xs text-ink-3 mt-0.5">First advance {anchor ? formatDate(anchor) : "—"}</p>
                           </div>
                           <div className="text-right shrink-0">
                             <p className="font-serif text-base tabular-nums text-ink">{rupee(q.amount ?? 0)}</p>
                             {isPartial && q.payment_amount != null && (
-                              <p className="text-[10px] text-amber-ink mt-0.5">{rupee(q.payment_amount)} received</p>
+                              <p className="text-3xs text-amber-ink mt-0.5">{rupee(q.payment_amount)} received</p>
                             )}
                           </div>
                         </div>
@@ -453,12 +453,12 @@ function InvoicesPageInner() {
                             aria-label="Select all pending"
                           />
                         </th>
-                        <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Quote</th>
-                        <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Customer</th>
-                        <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Amount</th>
-                        <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Payment</th>
-                        <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">First advance</th>
-                        <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Aging</th>
+                        <th className="text-left p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Quote</th>
+                        <th className="text-left p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Customer</th>
+                        <th className="text-right p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Amount</th>
+                        <th className="text-left p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Payment</th>
+                        <th className="text-left p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">First advance</th>
+                        <th className="text-left p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Aging</th>
                         <th className="w-32"></th>
                       </tr>
                     </thead>
@@ -500,7 +500,7 @@ function InvoicesPageInner() {
                             <td className="p-2 text-right tabular-nums text-sm font-medium">
                               {rupee(q.amount ?? 0)}
                               {isPartial && q.payment_amount != null && (
-                                <div className="text-[10px] text-amber-ink mt-0.5">
+                                <div className="text-3xs text-amber-ink mt-0.5">
                                   {rupee(q.payment_amount)} received
                                 </div>
                               )}
@@ -551,7 +551,7 @@ function InvoicesPageInner() {
             onClick={() => setTab("pending")}
             className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
           >
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Outstanding</p>
+            <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Outstanding</p>
             <p className="font-serif text-lg font-bold text-rose-ink tabular-nums mt-0.5">{rupee(outstanding, { compact: true })}</p>
           </button>
           <button
@@ -559,7 +559,7 @@ function InvoicesPageInner() {
             onClick={() => setTab("overdue")}
             className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-rose/60 transition-all cursor-pointer"
           >
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Overdue ({overdueCount})</p>
+            <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Overdue ({overdueCount})</p>
             <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(overdueTotal, { compact: true })}</p>
           </button>
           <button
@@ -567,15 +567,15 @@ function InvoicesPageInner() {
             onClick={() => setTab("paid")}
             className="bg-paper border border-hairline rounded-lg p-3 text-left hover:border-emerald/60 transition-all cursor-pointer"
           >
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Collected MTD</p>
+            <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Collected MTD</p>
             <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(collectedMTD, { compact: true })}</p>
           </button>
           <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Margin MTD</p>
+            <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Margin MTD</p>
             <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(marginMTD, { compact: true })}</p>
           </div>
           <div className="bg-paper border border-hairline rounded-lg p-3 text-left">
-            <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Avg collection</p>
+            <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Avg collection</p>
             <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{avgCollection}d</p>
           </div>
         </div>
@@ -757,13 +757,13 @@ function InvoicesPageInner() {
                     onCheckedChange={toggleAll}
                   />
                 </th>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Invoice #</th>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Customer</th>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Date</th>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Due date</th>
-                <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Amount</th>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Status</th>
-                <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Action</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Invoice #</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Customer</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Date</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Due date</th>
+                <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Amount</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Status</th>
+                <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -838,7 +838,7 @@ function MobileInvoiceCard({ inv }: { inv: Invoice; isProject?: boolean }) {
           <div className="text-right shrink-0">
             <p className="font-serif text-base tabular-nums text-ink">{rupee(inv.amount)}</p>
             {inv.net_payable && inv.net_payable !== inv.amount && (
-              <p className="text-[10px] text-ink-3 tabular-nums">Net: {rupee(inv.net_payable)}</p>
+              <p className="text-3xs text-ink-3 tabular-nums">Net: {rupee(inv.net_payable)}</p>
             )}
           </div>
         </div>
@@ -952,7 +952,7 @@ function InvoiceRow({
               Clean single line; the advance breakdown rides in the tooltip. */}
           {inv.net_payable !== null && inv.net_payable < inv.amount && (
             <span
-              className="text-[10px] font-medium tabular-nums leading-tight text-ink-3 cursor-help"
+              className="text-3xs font-medium tabular-nums leading-tight text-ink-3 cursor-help"
               title={`Net payable ${rupee(inv.net_payable)} · advance adjusted ${rupee(inv.amount - inv.net_payable)}`}
             >
               Net due <span className="text-ink-2">{rupee(inv.net_payable)}</span>
@@ -960,7 +960,7 @@ function InvoiceRow({
           )}
           {/* Part-received (project milestone receipts) — show what's still due. */}
           {(inv.paid_amount ?? 0) > 0 && inv.status !== "paid" && (
-            <span className="text-[10px] font-medium tabular-nums leading-tight text-emerald">
+            <span className="text-3xs font-medium tabular-nums leading-tight text-emerald">
               {rupee(inv.paid_amount)} paid · <span className="text-amber-ink">{rupee(Math.max(0, inv.amount - inv.paid_amount))} due</span>
             </span>
           )}
@@ -1303,11 +1303,11 @@ function InvoicePreviewContainer({
                 <div className="p-4 space-y-3 text-xs">
                   <div className="grid grid-cols-2 gap-3 pb-3 border-b border-hairline/60">
                     <div>
-                      <p className="text-[10px] text-ink-3 uppercase tracking-wider font-semibold">Total Amount</p>
+                      <p className="text-3xs text-ink-3 uppercase tracking-wider font-semibold">Total Amount</p>
                       <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(total)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-ink-3 uppercase tracking-wider font-semibold">Net Payable</p>
+                      <p className="text-3xs text-ink-3 uppercase tracking-wider font-semibold">Net Payable</p>
                       <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(invoice.net_payable ?? total)}</p>
                     </div>
                   </div>
@@ -1340,7 +1340,7 @@ function InvoicePreviewContainer({
                   {lineItems.length > 0 ? (
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="border-b border-hairline text-ink-3 text-[10px] uppercase">
+                        <tr className="border-b border-hairline text-ink-3 text-3xs uppercase">
                           <th className="text-left py-1">Description</th>
                           <th className="text-center py-1">HSN/SAC</th>
                           <th className="text-right py-1">Qty</th>
@@ -1351,7 +1351,7 @@ function InvoicePreviewContainer({
                         {lineItems.map((item, idx) => (
                           <tr key={idx}>
                             <td className="py-2 font-medium text-ink">{item.name}</td>
-                            <td className="py-2 text-center text-ink-3 font-mono text-[11px]">{SAAS_HSN}</td>
+                            <td className="py-2 text-center text-ink-3 font-mono text-2xs">{SAAS_HSN}</td>
                             <td className="py-2 text-right tabular-nums">{item.qty}</td>
                             <td className="py-2 text-right font-medium tabular-nums">{rupee((item.rate ?? 0) * (item.qty ?? 1))}</td>
                           </tr>
@@ -1454,7 +1454,7 @@ function RecordSubscriptionPaymentContainer({
   // Quote is the money source of truth. Until it loads we can't open the dialog
   // safely (no expected amount / already-received), so hold with a tiny hint.
   if (isLoading || !quote) {
-    return <div className="text-[10px] text-ink-3 mt-1 italic">Loading payment…</div>;
+    return <div className="text-3xs text-ink-3 mt-1 italic">Loading payment…</div>;
   }
 
   return (
@@ -1507,7 +1507,7 @@ function DeleteInvoiceDialog({
           extra: (projPays?.length ?? 0) > 0 ? (
             <ul className="mt-1.5 space-y-1">
               {projPays!.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-3 rounded-md border border-hairline bg-paper px-2.5 py-1.5 text-[11px]">
+                <li key={p.id} className="flex items-center justify-between gap-3 rounded-md border border-hairline bg-paper px-2.5 py-1.5 text-2xs">
                   <span className="text-ink-2 capitalize">{(p.method ?? "payment").replace("_", " ")}{p.reference ? ` · ${p.reference}` : ""}{p.bank_txn_id ? " · bank-reconciled" : ""}</span>
                   <span className="tabular-nums font-medium text-ink">{rupee(p.amount)} · {formatDate(p.received_at)}</span>
                 </li>
@@ -1553,7 +1553,7 @@ function DeleteInvoiceDialog({
         <ol className="space-y-2.5">
           {items.map((it, i) => (
             <li key={i} className="flex gap-2.5">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-paper-2 text-[11px] font-semibold text-ink-2">{i + 1}</span>
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-paper-2 text-2xs font-semibold text-ink-2">{i + 1}</span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-ink font-medium">{it.what}</p>
                 {it.extra}
@@ -1593,24 +1593,24 @@ function InvoiceNotesList({ invoiceId }: { invoiceId: string }) {
 
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
         Credit &amp; debit notes ({notes.length})
       </div>
       <ul className="space-y-1.5">
         {notes.map((n) => (
           <li key={n.id} className="flex items-center justify-between gap-3 rounded-md border border-hairline bg-paper px-3 py-2">
             <span className="flex items-center gap-2 min-w-0">
-              <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${n.kind === "credit" ? "bg-rose/10 text-rose" : "bg-indigo-soft text-indigo-ink"}`}>
+              <span className={`text-3xs font-semibold uppercase px-1.5 py-0.5 rounded ${n.kind === "credit" ? "bg-rose/10 text-rose" : "bg-indigo-soft text-indigo-ink"}`}>
                 {n.kind === "credit" ? "Credit" : "Debit"} note
               </span>
-              <span className="font-mono text-[11px] text-ink truncate">{n.id}</span>
-              <span className="text-[11px] text-ink-3 capitalize">· {n.reason_code.replace(/_/g, " ")}</span>
+              <span className="font-mono text-2xs text-ink truncate">{n.id}</span>
+              <span className="text-2xs text-ink-3 capitalize">· {n.reason_code.replace(/_/g, " ")}</span>
             </span>
             <span className="flex items-center gap-3 shrink-0">
               <span className={`tabular-nums text-sm font-medium ${n.kind === "credit" ? "text-rose" : "text-indigo-ink"}`}>
                 {n.kind === "credit" ? "−" : "+"} {rupee(n.amount)}
               </span>
-              <span className="text-[11px] text-ink-3">{formatDate(n.date)}</span>
+              <span className="text-2xs text-ink-3">{formatDate(n.date)}</span>
             </span>
           </li>
         ))}
@@ -1637,7 +1637,7 @@ function InvoicePaymentsAccordion({ inv }: { inv: Invoice }) {
   if (received.length === 0 && (projPays?.length ?? 0) > 0) {
     return (
       <div>
-        <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+        <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
           Payment receipts ({projPays!.length})
         </div>
         <ul className="space-y-1.5">
@@ -1646,11 +1646,11 @@ function InvoicePaymentsAccordion({ inv }: { inv: Invoice }) {
               <span className="flex items-center gap-2 min-w-0">
                 <Icon name="receipt" size={14} className="text-amber-ink shrink-0" />
                 <span className="text-xs text-ink capitalize">{p.method ?? "Payment"}{p.reference ? ` · ${p.reference}` : ""}</span>
-                {p.bank_txn_id && <span className="text-[10px] text-emerald">· bank-reconciled</span>}
+                {p.bank_txn_id && <span className="text-3xs text-emerald">· bank-reconciled</span>}
               </span>
               <span className="flex items-center gap-3 shrink-0">
                 <span className="tabular-nums text-sm font-medium text-ink">{rupee(p.amount)}</span>
-                <span className="text-[11px] text-ink-3">{formatDate(p.received_at)}</span>
+                <span className="text-2xs text-ink-3">{formatDate(p.received_at)}</span>
               </span>
             </li>
           ))}
@@ -1665,7 +1665,7 @@ function InvoicePaymentsAccordion({ inv }: { inv: Invoice }) {
 
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
         Payment receipts ({received.length})
       </div>
       <ul className="space-y-1.5">
@@ -1680,11 +1680,11 @@ function InvoicePaymentsAccordion({ inv }: { inv: Invoice }) {
               <span className="flex items-center gap-2 min-w-0">
                 <Icon name="receipt" size={14} className="text-amber-ink shrink-0" />
                 <span className="font-mono text-xs text-ink truncate">{p.receipt_voucher_no ?? "Receipt"}</span>
-                <span className="text-[11px] text-ink-3 capitalize">· {p.method}</span>
+                <span className="text-2xs text-ink-3 capitalize">· {p.method}</span>
               </span>
               <span className="flex items-center gap-3 shrink-0">
                 <span className="tabular-nums text-sm font-medium text-ink">{rupee(p.amount)}</span>
-                <span className="text-[11px] text-ink-3">{formatDate(p.received_at)}</span>
+                <span className="text-2xs text-ink-3">{formatDate(p.received_at)}</span>
                 <Icon name="chevron_right" size={12} className="text-ink-3" />
               </span>
             </button>
@@ -1732,9 +1732,9 @@ function BucketTile({ label, count, amount, tone }: {
                            "bg-rose-soft border-rose/40 text-rose";
   return (
     <div className={`rounded-md border ${styles} p-3`}>
-      <div className="text-[10px] uppercase tracking-wider font-semibold opacity-80">{label}</div>
+      <div className="text-3xs uppercase tracking-wider font-semibold opacity-80">{label}</div>
       <div className="font-serif text-xl mt-0.5 tabular-nums">{count}</div>
-      <div className="text-[11px] tabular-nums opacity-80 mt-0.5">{rupee(amount)}</div>
+      <div className="text-2xs tabular-nums opacity-80 mt-0.5">{rupee(amount)}</div>
     </div>
   );
 }

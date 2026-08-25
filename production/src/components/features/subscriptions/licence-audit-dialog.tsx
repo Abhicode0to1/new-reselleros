@@ -143,7 +143,7 @@ export function LicenceAuditDialog({ open, onOpenChange, subs, vendorOf }: Licen
                   <summary className="cursor-pointer text-ink-3">
                     {parsed.skipped.length} row{parsed.skipped.length === 1 ? "" : "s"} not counted
                   </summary>
-                  <ul className="mt-1 space-y-0.5 text-[11px] text-ink-3">
+                  <ul className="mt-1 space-y-0.5 text-2xs text-ink-3">
                     {parsed.skipped.slice(0, 20).map((s) => (
                       <li key={s.row}>Row {s.row}: {s.reason}</li>
                     ))}
@@ -185,7 +185,7 @@ export function LicenceAuditDialog({ open, onOpenChange, subs, vendorOf }: Licen
                 </ul>
               )}
 
-              <p className="border-t border-hairline pt-2 text-[11px] leading-snug text-ink-3">
+              <p className="border-t border-hairline pt-2 text-2xs leading-snug text-ink-3">
                 This report changes nothing. Adjusting a seat count moves a renewal price, a
                 vendor bill and a customer&apos;s invoice — make each change on the
                 subscription itself, where you can see what it does.
@@ -203,7 +203,7 @@ function Figure({ label, value, sub, tone }: {
 }) {
   return (
     <div className="rounded-lg border border-hairline bg-paper-2/40 p-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-3">{label}</p>
+      <p className="text-3xs font-semibold uppercase tracking-wider text-ink-3">{label}</p>
       <p className={cn(
         "font-serif text-lg tabular-nums",
         tone === "rose" && "text-rose",
@@ -213,7 +213,7 @@ function Figure({ label, value, sub, tone }: {
       )}>
         {value}
       </p>
-      <p className="text-[10px] leading-snug text-ink-3">{sub}</p>
+      <p className="text-3xs leading-snug text-ink-3">{sub}</p>
     </div>
   );
 }
@@ -227,7 +227,7 @@ function Row({ m }: { m: Mismatch }) {
         {mismatchNote(m, rupee)}
       </span>
       {m.consoleSeats != null && m.billedSeats != null && (
-        <span className="shrink-0 font-mono text-[11px] text-ink-3">
+        <span className="shrink-0 font-mono text-2xs text-ink-3">
           {m.consoleSeats} / {m.billedSeats}
           <Icon name="arrow_right" size={10} className="mx-1 inline align-middle" />
           {m.delta != null && m.delta > 0 ? `+${m.delta}` : m.delta}

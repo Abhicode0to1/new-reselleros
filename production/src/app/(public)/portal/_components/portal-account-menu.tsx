@@ -40,7 +40,7 @@ export function PortalAccountMenu({
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
           <div className="truncate font-medium text-ink">{customerName}</div>
-          <div className="truncate text-[11px] text-ink-3 font-normal">{email}</div>
+          <div className="truncate text-2xs text-ink-3 font-normal">{email}</div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => { window.location.href = "/portal/profile"; }}>

@@ -69,7 +69,7 @@ export function CustomerCombobox({
               <span className="min-w-0 flex-1">
                 <span className="block font-medium text-ink truncate">{selected.name}</span>
                 {(selected.contact_email || selected.domain) && (
-                  <span className="block text-[11px] text-ink-3 truncate">{selected.contact_email || selected.domain}</span>
+                  <span className="block text-2xs text-ink-3 truncate">{selected.contact_email || selected.domain}</span>
                 )}
               </span>
             </>
@@ -133,7 +133,7 @@ export function CustomerCombobox({
                   <Avatar initials={c.name} color={active ? "amber" : "slate"} size="sm" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-medium text-ink truncate">{c.name}</span>
-                    <span className="block text-[11px] text-ink-3 truncate">{sub(c)}</span>
+                    <span className="block text-2xs text-ink-3 truncate">{sub(c)}</span>
                   </span>
                   {active && <Icon name="check" size={15} className="text-amber shrink-0" />}
                 </button>

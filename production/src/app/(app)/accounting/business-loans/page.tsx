@@ -107,7 +107,7 @@ export default function BusinessLoansPage() {
           {/* Desktop table */}
           <Card className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-3">Lender</th>
                   <th className="text-left  px-4 py-3">Taken on</th>
@@ -123,7 +123,7 @@ export default function BusinessLoansPage() {
                   <tr key={l.id} className="hover:bg-paper-2/40">
                     <td className="px-4 py-3">
                       <div className="font-medium text-ink">{l.lender}</div>
-                      {l.purpose && <div className="text-[11px] text-ink-3">{l.purpose}</div>}
+                      {l.purpose && <div className="text-2xs text-ink-3">{l.purpose}</div>}
                     </td>
                     <td className="px-4 py-3 text-ink-2">{formatDate(l.disbursed_on)}</td>
                     <td className="px-4 py-3 text-right font-mono text-ink-2">{rupee(l.principal)}</td>
@@ -157,11 +157,11 @@ export default function BusinessLoansPage() {
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="font-medium text-ink leading-tight">
                       {l.lender}
-                      {l.purpose && <div className="text-[11px] text-ink-3 font-normal">{l.purpose}</div>}
+                      {l.purpose && <div className="text-2xs text-ink-3 font-normal">{l.purpose}</div>}
                     </div>
                     <div className="font-serif text-xl text-ink leading-none">{rupee(l.outstanding)}</div>
                   </div>
-                  <div className="text-[11px] text-ink-3 mb-2">
+                  <div className="text-2xs text-ink-3 mb-2">
                     {formatDate(l.disbursed_on)} · {rupee(l.principal)} liya · {rupee(l.principalPaid)} chukaya · {l.emisPaid} EMI
                   </div>
                   <div className="flex items-center justify-between">
@@ -193,7 +193,7 @@ function KPI({ label, value, tone }: { label: string; value: string; tone?: "ros
   const color = tone === "rose" ? "text-rose" : tone === "emerald" ? "text-emerald" : "text-ink";
   return (
     <Card className="p-3 md:p-4">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif text-xl md:text-2xl ${color} leading-tight`}>{value}</div>
     </Card>
   );
@@ -311,7 +311,7 @@ function AddLoanDialog({ onClose }: { onClose: () => void }) {
               <Input type="number" min={0} value={emi} onChange={(e) => setEmi(e.target.value)} placeholder="e.g. 46000" />
             </div>
           </div>
-          <p className="text-[11px] text-ink-3">Interest %, tenure aur EMI optional hai — sirf reference ke liye. Zaroori hai: lender, amount, account.</p>
+          <p className="text-2xs text-ink-3">Interest %, tenure aur EMI optional hai — sirf reference ke liye. Zaroori hai: lender, amount, account.</p>
         </div>
         <DialogFooter>
           <Button type="button" variant="default" onClick={onClose}>Cancel</Button>
@@ -407,7 +407,7 @@ function PayEmiDialog({ loan, onClose }: { loan: BusinessLoan; onClose: () => vo
             </div>
           </div>
           {loan.interest_rate ? (
-            <p className="text-[11px] text-ink-3">Interest apne-aap estimate kiya ({loan.interest_rate}%/yr par). Bank statement se sahi figure daal do.</p>
+            <p className="text-2xs text-ink-3">Interest apne-aap estimate kiya ({loan.interest_rate}%/yr par). Bank statement se sahi figure daal do.</p>
           ) : null}
         </div>
         <DialogFooter>
@@ -448,13 +448,13 @@ function HistoryDialog({ loan, onClose }: { loan: BusinessLoan; onClose: () => v
               <div key={h.id} className="flex items-start justify-between gap-3 rounded-md border border-hairline px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-ink">{rupee(h.amount)}</div>
-                  <div className="text-[11px] text-ink-3">
+                  <div className="text-2xs text-ink-3">
                     {formatDate(h.paid_on)}
                     {h.bank_account_id ? ` · ${acctName.get(h.bank_account_id) ?? "account"}` : ""}
                     {h.notes ? ` · ${h.notes}` : ""}
                   </div>
                 </div>
-                <div className="shrink-0 text-right text-[11px]">
+                <div className="shrink-0 text-right text-2xs">
                   <div className="text-emerald">−{rupee(h.principal_part)} loan</div>
                   <div className="text-ink-3">{rupee(h.interest_part)} byaaj</div>
                 </div>

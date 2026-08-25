@@ -80,14 +80,14 @@ export default function AssessmentsPage() {
                       <span className="font-medium text-ink">{t.title}</span>
                       <Badge kind="muted" size="sm">{t.questions.length} Qs</Badge>
                       <Badge kind="muted" size="sm">{t.difficulty}</Badge>
-                      {t.topic && <span className="text-[11px] text-ink-3">· {t.topic}</span>}
+                      {t.topic && <span className="text-2xs text-ink-3">· {t.topic}</span>}
                     </div>
-                    <div className="text-[11px] text-ink-3 mt-1">{t.attempts} attempt{t.attempts === 1 ? "" : "s"} · created {formatDate(t.created_at)}</div>
+                    <div className="text-2xs text-ink-3 mt-1">{t.attempts} attempt{t.attempts === 1 ? "" : "s"} · created {formatDate(t.created_at)}</div>
                     {/* Share link */}
                     <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                      <code className="text-[11px] font-mono bg-paper-2 rounded px-2 py-1 text-ink-2 truncate max-w-[280px]">{testLink(t.public_token)}</code>
-                      <Button variant="default" className="h-7 px-2 text-[11px]" icon="copy" onClick={() => copyLink(t.public_token)}>Copy link</Button>
-                      <a href={testLink(t.public_token)} target="_blank" rel="noopener noreferrer" className="text-[11px] text-amber-ink hover:underline inline-flex items-center gap-1"><Icon name="external" size={11} /> Open</a>
+                      <code className="text-2xs font-mono bg-paper-2 rounded px-2 py-1 text-ink-2 truncate max-w-[280px]">{testLink(t.public_token)}</code>
+                      <Button variant="default" className="h-7 px-2 text-2xs" icon="copy" onClick={() => copyLink(t.public_token)}>Copy link</Button>
+                      <a href={testLink(t.public_token)} target="_blank" rel="noopener noreferrer" className="text-2xs text-amber-ink hover:underline inline-flex items-center gap-1"><Icon name="external" size={11} /> Open</a>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -172,7 +172,7 @@ function CreateTestDialog({ onClose }: { onClose: () => void }) {
             <Input id="at_topic" placeholder={subject === "software" ? "e.g. billing, leads, GST, accounting" : "e.g. IQ, logical reasoning, verbal, numerical"} value={topic} onChange={(e) => setTopic(e.target.value)} />
           </FormField>
           {subject === "software" && (
-            <p className="text-[11px] text-ink-3">App ke features + money-flow ke aadhaar par questions banenge — jaanne ke liye ki employee software kitna samajh chuka hai.</p>
+            <p className="text-2xs text-ink-3">App ke features + money-flow ke aadhaar par questions banenge — jaanne ke liye ki employee software kitna samajh chuka hai.</p>
           )}
           <div className="grid grid-cols-3 gap-3">
             <FormField label="Language" htmlFor="at_lang" className="col-span-1">
@@ -196,13 +196,13 @@ function CreateTestDialog({ onClose }: { onClose: () => void }) {
             </FormField>
           </div>
           {language === "both" && (
-            <p className="text-[11px] text-ink-3">Dono bhasha me banega — employee test lete waqt English/Hinglish choose kar sakta hai.</p>
+            <p className="text-2xs text-ink-3">Dono bhasha me banega — employee test lete waqt English/Hinglish choose kar sakta hai.</p>
           )}
           <Button variant="default" icon="sparkles" loading={generating} onClick={generate} className="w-full justify-center">
             {questions.length ? "Regenerate with AI" : "Generate with AI"}
           </Button>
           {stub && questions.length > 0 && (
-            <p className="text-[11px] text-amber-ink">AI key nahi mili — sample questions dikha rahe hain. Real AI ke liye Settings → Integrations → AI me Gemini key daalo.</p>
+            <p className="text-2xs text-amber-ink">AI key nahi mili — sample questions dikha rahe hain. Real AI ke liye Settings → Integrations → AI me Gemini key daalo.</p>
           )}
           {questions.length > 0 && (
             <div className="rounded-lg border border-hairline divide-y divide-hairline">
@@ -221,7 +221,7 @@ function CreateTestDialog({ onClose }: { onClose: () => void }) {
                     <div className="mt-2 pl-2 border-l-2 border-hairline">
                       <div className="text-[12px] text-ink-2">{qn.q_hi}</div>
                       {qn.options_hi && qn.options_hi[qn.correct] != null && (
-                        <div className="text-[11px] text-emerald mt-0.5 flex items-center gap-1"><Icon name="check_circle" size={11} /> {qn.options_hi[qn.correct]}</div>
+                        <div className="text-2xs text-emerald mt-0.5 flex items-center gap-1"><Icon name="check_circle" size={11} /> {qn.options_hi[qn.correct]}</div>
                       )}
                     </div>
                   )}
@@ -263,12 +263,12 @@ function ResultsDialog({ test, onClose }: { test: Assessment; onClose: () => voi
                 <div key={a.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
                     <div className="text-[13px] font-medium text-ink truncate">{a.candidate_name}</div>
-                    <div className="text-[11px] text-ink-3">
+                    <div className="text-2xs text-ink-3">
                       {formatDate(a.submitted_at)} · {a.score}/{a.total}
                       {a.duration_seconds != null && <> · took {mmss(a.duration_seconds)}</>}
                     </div>
                     {flags.length > 0 && (
-                      <div className="text-[11px] text-rose mt-0.5 flex items-center gap-1">
+                      <div className="text-2xs text-rose mt-0.5 flex items-center gap-1">
                         <Icon name="alert" size={11} /> {flags.join(" · ")}
                       </div>
                     )}

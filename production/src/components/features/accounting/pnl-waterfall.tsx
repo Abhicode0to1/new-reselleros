@@ -77,7 +77,7 @@ export function HundredRupeeBar({ split }: { split: HundredRupeeSplit }) {
 
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
         {parts.map((p) => (
-          <span key={p.key} className="flex items-center gap-1.5 text-[11px] text-ink-2">
+          <span key={p.key} className="flex items-center gap-1.5 text-2xs text-ink-2">
             <span aria-hidden className={cn("h-2.5 w-2.5 rounded-sm", p.cls)} />
             {p.label} <b className="font-mono tabular-nums text-ink">₹{p.value}</b>
           </span>
@@ -212,9 +212,9 @@ export function PnlWaterfall({
             )}>
               {b.direction === "down" ? "−" : ""}{rupee(b.magnitude, { compact: true })}
             </div>
-            <div className="truncate text-[11px] text-ink-2" title={b.label}>{b.label}</div>
+            <div className="truncate text-2xs text-ink-2" title={b.label}>{b.label}</div>
             {b.hint && (
-              <div className="text-[10px] leading-tight text-ink-3">{b.hint}</div>
+              <div className="text-3xs leading-tight text-ink-3">{b.hint}</div>
             )}
           </div>
         ))}

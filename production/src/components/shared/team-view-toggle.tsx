@@ -68,7 +68,7 @@ export function TeamViewToggle({
         ))}
       </div>
 
-      <p className="text-[11px] leading-snug text-ink-3">
+      <p className="text-2xs leading-snug text-ink-3">
         {scopeNote(me, all, mode, counts)}{" "}
         {!enforcedInDatabase && (
           /* Stated plainly. The alternative is a filter that looks like a permission.

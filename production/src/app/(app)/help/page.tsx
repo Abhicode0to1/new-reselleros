@@ -104,14 +104,14 @@ export default function HelpPage() {
                           <p className="text-sm text-ink-2 leading-relaxed">{t.what}</p>
 
                           <div>
-                            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Steps</p>
+                            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Steps</p>
                             <ol className="list-decimal list-inside space-y-1 text-sm text-ink-2 marker:text-ink-3">
                               {t.steps.map((step, i) => <li key={i}>{step}</li>)}
                             </ol>
                           </div>
 
                           <div className="rounded-md bg-emerald-soft/40 border border-emerald/20 px-3 py-2">
-                            <p className="text-[10px] uppercase tracking-wider text-emerald-ink font-semibold mb-0.5">Example</p>
+                            <p className="text-3xs uppercase tracking-wider text-emerald-ink font-semibold mb-0.5">Example</p>
                             <p className="text-[13px] text-ink-2 leading-relaxed">{t.example}</p>
                           </div>
                         </div>

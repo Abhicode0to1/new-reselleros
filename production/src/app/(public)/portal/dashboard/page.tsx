@@ -57,7 +57,7 @@ export default async function PortalDashboardPage() {
         <Card className="p-6 mb-6">
           <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
+              <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
                 Active subscription
               </div>
               <div className="font-serif text-2xl text-ink leading-tight">{primary.plan}</div>
@@ -68,7 +68,7 @@ export default async function PortalDashboardPage() {
             </div>
             <div className="text-right">
               <div className="font-serif text-2xl text-ink leading-none">{rupee(primary.mrr)}</div>
-              <div className="text-[11px] text-ink-3 mt-1">/month equivalent</div>
+              <div className="text-2xs text-ink-3 mt-1">/month equivalent</div>
             </div>
           </div>
 
@@ -133,7 +133,7 @@ export default async function PortalDashboardPage() {
         );
         return (
           <Card className="p-6 text-center">
-            <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+            <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
               Need help right now?
             </div>
             <h2 className="font-serif text-xl mb-3">{waName} picks up the phone.</h2>
@@ -148,7 +148,7 @@ export default async function PortalDashboardPage() {
                 >
                   WhatsApp {waName}{waDisplay ? ` · ${waDisplay}` : ""}
                 </a>
-                <div className="mt-3 text-[11px] text-ink-3">Mon–Sat · 9am–7pm IST</div>
+                <div className="mt-3 text-2xs text-ink-3">Mon–Sat · 9am–7pm IST</div>
               </>
             ) : (
               <Link
@@ -179,9 +179,9 @@ function KV({
                    : "text-ink";
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">{label}</div>
       <div className={`font-medium ${colorClass}`}>{value}</div>
-      {hint && <div className="text-[11px] text-ink-3 mt-0.5">{hint}</div>}
+      {hint && <div className="text-2xs text-ink-3 mt-0.5">{hint}</div>}
     </div>
   );
 }
@@ -191,7 +191,7 @@ function QuickLink({ href, title, sub }: { href: "/portal/shop" | "/portal/order
     <Link href={href as never} className="block h-full">
       <Card className="p-4 h-full hover:bg-paper-2/40 transition-colors">
         <div className="font-serif text-base text-ink">{title}</div>
-        <div className="text-[11px] text-ink-3 mt-0.5">{sub}</div>
+        <div className="text-2xs text-ink-3 mt-0.5">{sub}</div>
       </Card>
     </Link>
   );

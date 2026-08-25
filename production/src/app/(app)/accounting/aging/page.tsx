@@ -221,7 +221,7 @@ export default function AgingPage() {
           {/* Desktop table */}
           <Card className="hidden md:block overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-3">Customer</th>
                   <th className="text-right px-4 py-3">Current</th>
@@ -239,7 +239,7 @@ export default function AgingPage() {
                     <td className="px-4 py-3">
                       <div className="font-medium text-ink">{r.customerName}</div>
                       {(r.contactEmail || r.contactPhone) && (
-                        <div className="text-[11px] text-ink-3 mt-0.5">
+                        <div className="text-2xs text-ink-3 mt-0.5">
                           {r.contactEmail ?? r.contactPhone}
                         </div>
                       )}
@@ -282,7 +282,7 @@ export default function AgingPage() {
               </tbody>
               <tfoot className="bg-paper-2/30 border-t-2 border-ink">
                 <tr>
-                  <td className="px-4 py-3 text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Total</td>
+                  <td className="px-4 py-3 text-2xs uppercase tracking-wider text-ink-3 font-semibold">Total</td>
                   <td className="px-4 py-3 text-right font-mono text-ink">{rupee(totals.current)}</td>
                   <td className="px-4 py-3 text-right font-mono text-amber-ink">{rupee(totals.b30)}</td>
                   <td className="px-4 py-3 text-right font-mono text-amber-ink">{rupee(totals.b60)}</td>
@@ -303,7 +303,7 @@ export default function AgingPage() {
                     <div className="font-medium text-ink leading-tight">{r.customerName}</div>
                     <div className="font-serif text-xl text-ink leading-none">{rupee(r.total)}</div>
                   </div>
-                  <div className="grid grid-cols-4 gap-1.5 text-[11px] mb-3">
+                  <div className="grid grid-cols-4 gap-1.5 text-2xs mb-3">
                     <Mini label="Current" value={r.buckets.current} />
                     <Mini label="31–60"   value={r.buckets.b30}    tone={r.buckets.b30   > 0 ? "amber" : undefined} />
                     <Mini label="61–90"   value={r.buckets.b60}    tone={r.buckets.b60   > 0 ? "amber" : undefined} />
@@ -387,7 +387,7 @@ function KPI({
                    : "text-ink";
   return (
     <Card className="p-3 md:p-4">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif ${big ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"} ${colorClass} leading-tight`}>
         {value}
       </div>

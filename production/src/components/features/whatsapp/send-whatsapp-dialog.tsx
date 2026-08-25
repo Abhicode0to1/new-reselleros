@@ -95,7 +95,7 @@ export default function SendWhatsAppDialog({
         className="w-full sm:max-w-[480px] md:max-w-[520px] p-0 flex flex-col overflow-x-hidden"
       >
         <header className="border-b border-hairline px-5 pt-5 pb-3 flex-shrink-0">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-emerald mb-1 inline-flex items-center gap-1.5">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-emerald mb-1 inline-flex items-center gap-1.5">
             <Icon name="whatsapp" size={11} /> WhatsApp · Cloud API
           </p>
           <h2 className="font-serif text-xl text-ink">{title ?? "Send via WhatsApp"}</h2>
@@ -113,7 +113,7 @@ export default function SendWhatsAppDialog({
               value={to}
               onChange={(e) => setTo(e.target.value)}
             />
-            <p className="text-[10px] text-ink-3 mt-1">
+            <p className="text-3xs text-ink-3 mt-1">
               Include country code. Spaces and the leading + are stripped server-side.
             </p>
           </div>
@@ -127,7 +127,7 @@ export default function SendWhatsAppDialog({
               onChange={(e) => setText(e.target.value)}
               maxLength={4096}
             />
-            <p className="text-[10px] text-ink-3 mt-1">
+            <p className="text-3xs text-ink-3 mt-1">
               {text.length} / 4096 chars
             </p>
           </div>
@@ -170,12 +170,12 @@ export default function SendWhatsAppDialog({
                   <p className="text-sm font-medium text-ink inline-flex items-center gap-1.5 group-hover:text-amber-ink">
                     <Icon name="file" size={13} />
                     Attach quote PDF
-                    <span className="text-[10px] text-ink-3 group-hover:text-amber-ink inline-flex items-center gap-0.5 ml-1">
+                    <span className="text-3xs text-ink-3 group-hover:text-amber-ink inline-flex items-center gap-0.5 ml-1">
                       <Icon name={previewing ? "refresh" : "eye"} size={10} />
                       {previewing ? "Loading…" : "Preview"}
                     </span>
                   </p>
-                  <p className="text-[11px] text-ink-3 mt-0.5">
+                  <p className="text-2xs text-ink-3 mt-0.5">
                     {attachQuoteLabel ?? `Quote-${attachQuoteId}.pdf`} — click to review · text above becomes the caption when sent.
                   </p>
                 </button>
@@ -185,7 +185,7 @@ export default function SendWhatsAppDialog({
                     <Icon name="file" size={13} />
                     Attach quote PDF
                   </p>
-                  <p className="text-[11px] text-ink-3 mt-0.5">
+                  <p className="text-2xs text-ink-3 mt-0.5">
                     {attachQuoteLabel ?? `Quote-${attachQuoteId}.pdf`} — rendered server-side and uploaded to Meta. Text above becomes the caption.
                   </p>
                 </div>

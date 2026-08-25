@@ -50,7 +50,7 @@ export default async function PortalOrdersPage() {
       ) : (
         <Card className="overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+            <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               <tr>
                 <th className="text-left  px-4 py-3">Order ID</th>
                 <th className="text-left  px-4 py-3">Plan</th>

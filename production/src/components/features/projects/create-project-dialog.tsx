@@ -156,7 +156,7 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-ink-2">Milestones (GST-inclusive amounts)</p>
-              <button type="button" onClick={addRow} className="text-[11px] text-amber-ink hover:underline inline-flex items-center gap-0.5">
+              <button type="button" onClick={addRow} className="text-2xs text-amber-ink hover:underline inline-flex items-center gap-0.5">
                 <Icon name="plus" size={12} /> Add
               </button>
             </div>
@@ -172,7 +172,7 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
                 </div>
               ))}
             </div>
-            <div className={`mt-2 text-[11px] ${mismatch ? "text-rose" : "text-emerald"}`}>
+            <div className={`mt-2 text-2xs ${mismatch ? "text-rose" : "text-emerald"}`}>
               Milestones total {rupee(milestonesTotal)} · {mismatch
                 ? `should equal ${rupee(totalNum)} (off by ${rupee(Math.abs(totalNum - milestonesTotal))})`
                 : "matches the total invoice value ✓"}

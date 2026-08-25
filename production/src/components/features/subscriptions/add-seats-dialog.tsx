@@ -100,7 +100,7 @@ export default function AddSeatsDialog({ sub, open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <header className="border-b border-hairline pb-3 mb-4">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1">
             Subscription · Add seats
           </p>
           <h2 className="font-serif text-2xl text-ink">{sub.customer_name}</h2>
@@ -183,16 +183,16 @@ export default function AddSeatsDialog({ sub, open, onOpenChange }: Props) {
             {/* Seat preview */}
             <div className="bg-emerald/5 border border-emerald/20 rounded-md p-3 mb-4 text-sm flex justify-between items-center">
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">After adding</p>
+                <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">After adding</p>
                 <p className="font-medium text-ink tabular-nums">{newSeats} seats</p>
               </div>
               <div className="text-right">
-                <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">New MRR</p>
+                <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">New MRR</p>
                 <p className="font-medium text-ink tabular-nums">{rupee(newMrr)}/mo</p>
               </div>
             </div>
 
-            <p className="text-[11px] text-ink-3 leading-relaxed mb-1">
+            <p className="text-2xs text-ink-3 leading-relaxed mb-1">
               Seats are added <b className="text-ink-2">immediately</b> — provision them with the
               vendor (Google CSP / Microsoft / Zoho). A pro-rata quote will be sent to the customer for
               the remaining <Badge size="sm" kind="muted">{daysRemaining} days</Badge>.

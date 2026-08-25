@@ -251,7 +251,7 @@ export default function SignupPage() {
           Create account
         </Button>
 
-        <p className="text-[11px] text-ink-3 text-center leading-relaxed">
+        <p className="text-2xs text-ink-3 text-center leading-relaxed">
           By signing up you agree to our{" "}
           <a href="#" className="underline">Terms</a> and{" "}
           <a href="#" className="underline">Privacy Policy</a>. DPDP Act 2023 compliant.

@@ -131,7 +131,7 @@ export function DocViewerDialog({ open, onOpenChange, title, mimeType, fileName,
               {loading && (
                 <div className="space-y-3">
                   <Skeleton className="h-72 w-full" />
-                  <p className="text-center text-[11px] text-ink-3">Loading preview…</p>
+                  <p className="text-center text-2xs text-ink-3">Loading preview…</p>
                 </div>
               )}
               {!loading && kind === "image" && imgUrl && (

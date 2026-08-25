@@ -108,7 +108,7 @@ export default function StartTrialDialog({ open, onOpenChange }: Props) {
       >
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
         <header className="border-b border-hairline pb-3 mb-4">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1">
             Workspace · Start 14-day trial
           </p>
           <h2 className="font-serif text-2xl text-ink">New trial</h2>
@@ -144,7 +144,7 @@ export default function StartTrialDialog({ open, onOpenChange }: Props) {
           <div>
             <Label>Domain *</Label>
             <Input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="e.g. acme.in" className="font-mono" />
-            <p className="text-[10px] text-ink-3 mt-1">For provisioning in Google CSP</p>
+            <p className="text-3xs text-ink-3 mt-1">For provisioning in Google CSP</p>
           </div>
           <div>
             <Label>Seats</Label>
@@ -168,7 +168,7 @@ export default function StartTrialDialog({ open, onOpenChange }: Props) {
               )}
             >
               <p className="font-medium text-sm">{t.label}</p>
-              <p className="text-[10px] text-ink-3 mt-0.5">{t.sublabel}</p>
+              <p className="text-3xs text-ink-3 mt-0.5">{t.sublabel}</p>
             </button>
           ))}
         </div>

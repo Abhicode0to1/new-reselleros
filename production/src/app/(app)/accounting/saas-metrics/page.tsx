@@ -156,14 +156,14 @@ function Step({
 
   return (
     <div className="print-keep">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">
         {label}
       </div>
       <div className={`font-serif text-xl mt-1 ${toneClass}`}>
         {amount === null ? "—" : `${sign ?? ""}${rupee(Math.abs(amount))}`}
       </div>
       {note && (
-        <div className="text-[10px] text-ink-3 mt-0.5 leading-snug">{note}</div>
+        <div className="text-3xs text-ink-3 mt-0.5 leading-snug">{note}</div>
       )}
     </div>
   );
@@ -176,7 +176,7 @@ function WaterfallCard({ w }: { w: MrrWaterfall }) {
     <Card className="p-5 md:p-6 mb-6 print-keep">
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">
             MRR waterfall — last 30 days
           </div>
           <div className="text-xs text-ink-3 mt-0.5">
@@ -201,7 +201,7 @@ function WaterfallCard({ w }: { w: MrrWaterfall }) {
           honest measure of how much this report cannot see. */}
       {!reconciles && (
         <div className="mt-4 pt-4 border-t border-hairline flex items-baseline gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+          <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">
             Unexplained movement
           </span>
           <span className="font-mono text-sm text-amber-ink">
@@ -213,12 +213,12 @@ function WaterfallCard({ w }: { w: MrrWaterfall }) {
       {w.notes.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {w.notes.map((n, i) => (
-            <li key={i} className="flex gap-2 text-[11px] text-ink-3 leading-relaxed">
+            <li key={i} className="flex gap-2 text-2xs text-ink-3 leading-relaxed">
               <Icon name="info" className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>{n}</span>
             </li>
           ))}
-          <li className="flex gap-2 text-[11px] text-ink-3 leading-relaxed">
+          <li className="flex gap-2 text-2xs text-ink-3 leading-relaxed">
             <Icon name="info" className="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <span>
               Churn timing uses <span className="font-mono">updated_at</span> as a proxy —
@@ -499,7 +499,7 @@ export default function SaasMetricsPage() {
 
           {/* 30-day movement */}
           <Card className="p-5 md:p-6 mb-6">
-            <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-4">
+            <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
               Last 30 days movement
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
@@ -526,11 +526,11 @@ export default function SaasMetricsPage() {
                 emphasis
               />
               <div className="md:border-l md:border-hairline md:pl-6">
-                <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+                <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                   Estimated LTV
                 </div>
                 <div className="font-serif text-2xl text-ink mt-1">{rupee(data.ltvEstimate)}</div>
-                <div className="text-[11px] text-ink-3 mt-1 leading-relaxed">
+                <div className="text-2xs text-ink-3 mt-1 leading-relaxed">
                   ARPC ÷ monthly churn ({data.monthlyChurnRate.toFixed(1)}%/mo)
                 </div>
               </div>
@@ -568,7 +568,7 @@ export default function SaasMetricsPage() {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+                  <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                     <tr>
                       <th className="text-left  px-4 py-3">Started in</th>
                       <th className="text-right px-4 py-3">New subs</th>
@@ -600,7 +600,7 @@ export default function SaasMetricsPage() {
           {/* Insights footer */}
           {data.mrr > 0 && (
             <Card className="p-5 mt-6 bg-paper-2/30">
-              <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+              <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
                 <Icon name="sparkles" size={12} className="text-amber inline mr-1 align-text-bottom" />
                 What this means
               </div>
@@ -666,11 +666,11 @@ function KPI({
 }: { label: string; value: string; hint?: string; big?: boolean }) {
   return (
     <Card className="p-3 md:p-4">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif ${big ? "text-3xl md:text-4xl" : "text-2xl md:text-3xl"} text-ink leading-tight`}>
         {value}
       </div>
-      {hint && <div className="text-[10px] text-ink-3 mt-1">{hint}</div>}
+      {hint && <div className="text-3xs text-ink-3 mt-1">{hint}</div>}
     </Card>
   );
 }
@@ -688,11 +688,11 @@ function Movement({
   const colorClass = tone === "emerald" ? "text-emerald" : "text-rose";
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif ${emphasis ? "text-2xl" : "text-xl"} ${colorClass} leading-tight`}>
         {sign}{rupee(Math.abs(amount))}
       </div>
-      <div className="text-[11px] text-ink-3 mt-1">
+      <div className="text-2xs text-ink-3 mt-1">
         {count} {count === 1 ? "customer" : "customers"}
       </div>
     </div>
@@ -707,7 +707,7 @@ function BreakdownCard({
 }) {
   return (
     <Card className="p-5">
-      <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-3">{title}</div>
+      <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-3">{title}</div>
       {rows.length === 0 ? (
         <div className="text-sm text-ink-3 py-4">No active subscriptions to break down.</div>
       ) : (
@@ -717,7 +717,7 @@ function BreakdownCard({
               <div className="flex items-baseline justify-between mb-1.5">
                 <div className="text-sm text-ink">
                   {r.label}
-                  <span className="text-ink-3 text-[11px] ml-1.5">· {r.count}</span>
+                  <span className="text-ink-3 text-2xs ml-1.5">· {r.count}</span>
                 </div>
                 <div className="text-sm font-mono font-semibold text-ink">{rupee(r.mrr)}</div>
               </div>
@@ -727,7 +727,7 @@ function BreakdownCard({
                   style={{ width: `${Math.max(2, r.pct)}%` }}
                 />
               </div>
-              <div className="text-[10px] text-ink-3 mt-0.5">{r.pct.toFixed(1)}% of MRR</div>
+              <div className="text-3xs text-ink-3 mt-0.5">{r.pct.toFixed(1)}% of MRR</div>
             </li>
           ))}
         </ul>

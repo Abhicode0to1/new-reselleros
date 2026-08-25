@@ -104,7 +104,7 @@ export function PayCommissionDialog({ open, onOpenChange, commission }: Props) {
           </div>
 
           {commission.tds_amount > 0 && (
-            <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-[11px] text-amber-ink leading-relaxed">
+            <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-2xs text-amber-ink leading-relaxed">
               ₹{commission.tds_amount.toLocaleString("en-IN")} TDS aapke paas rahega — usse govt ko deposit karna hoga (challan).
             </div>
           )}

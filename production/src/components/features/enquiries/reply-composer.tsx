@@ -168,7 +168,7 @@ export function ReplyComposer({
     <section className="mt-4 rounded-lg border border-hairline bg-paper-2/30 p-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-[12px] font-semibold uppercase tracking-wider text-ink-3">Reply</h3>
-        <span className="truncate text-[11px] text-ink-3">
+        <span className="truncate text-2xs text-ink-3">
           {toEmail ? <>To <span className="font-mono text-ink-2">{toEmail}</span></> : "No sender address on this email"}
         </span>
       </div>
@@ -227,7 +227,7 @@ export function ReplyComposer({
 
       <div className="space-y-2">
         <div>
-          <Label htmlFor="reply-subject" className="text-[11px] text-ink-3">Subject</Label>
+          <Label htmlFor="reply-subject" className="text-2xs text-ink-3">Subject</Label>
           <Input
             id="reply-subject"
             value={subject}
@@ -237,7 +237,7 @@ export function ReplyComposer({
         </div>
 
         <div>
-          <Label htmlFor="reply-body" className="text-[11px] text-ink-3">Message</Label>
+          <Label htmlFor="reply-body" className="text-2xs text-ink-3">Message</Label>
           <Textarea
             id="reply-body"
             value={body}
@@ -250,7 +250,7 @@ export function ReplyComposer({
       </div>
 
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] leading-snug text-ink-3">
+        <p className="text-2xs leading-snug text-ink-3">
           {/* The one thing a rep must not assume this box does. Prices belong to the quote
               builder, where the rate, discount and GST are computed together. */}
           Prices are never sent from here — use <span className="font-medium text-ink-2">Send quote</span> for anything with a figure in it.

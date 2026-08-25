@@ -145,7 +145,7 @@ export default function ProjectDetailPage() {
                 Send the customer this link. When they accept, it becomes an active project and you can raise milestone invoices.
               </p>
               <div className="flex items-center gap-2 mt-2">
-                <code className="text-[11px] bg-paper border border-hairline rounded px-2 py-1 truncate max-w-[280px]">{customerLink}</code>
+                <code className="text-2xs bg-paper border border-hairline rounded px-2 py-1 truncate max-w-[280px]">{customerLink}</code>
                 <Button size="sm" variant="outline" icon="copy" onClick={copyLink}>Copy link</Button>
               </div>
             </div>
@@ -166,7 +166,7 @@ export default function ProjectDetailPage() {
           <div className="px-5 py-3 border-b border-hairline"><h2 className="text-sm font-semibold text-ink">Quoted items</h2></div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[420px]">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3">
                 <tr>
                   <th className="text-left px-5 py-2">Item</th>
                   <th className="text-right px-3 py-2">Qty</th>
@@ -194,17 +194,17 @@ export default function ProjectDetailPage() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-x-6 gap-y-2 flex-wrap">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Start</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Start</p>
               <p className="text-sm text-ink mt-0.5">{project.start_date ? formatDate(project.start_date) : "—"}</p>
             </div>
             <Icon name="arrow_right" size={14} className="text-ink-3" />
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Target</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Target</p>
               <p className="text-sm text-ink mt-0.5">{project.target_date ? formatDate(project.target_date) : "—"}</p>
             </div>
             {durationDays != null && durationDays > 0 && (
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Duration</p>
+                <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Duration</p>
                 <p className="text-sm text-ink mt-0.5">{durationDays} days (~{suggestedMonths} mo)</p>
               </div>
             )}
@@ -223,11 +223,11 @@ export default function ProjectDetailPage() {
         {datesEdit && (
           <div className="mt-3 flex items-end gap-3 flex-wrap">
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">Start</label>
+              <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Start</label>
               <Input type="date" value={startVal} onChange={(e) => setStartVal(e.target.value)} />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">Target</label>
+              <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Target</label>
               <Input type="date" value={targetVal} onChange={(e) => setTargetVal(e.target.value)} />
             </div>
             <Button size="sm" variant="primary" onClick={saveDates} loading={updateDates.isPending}>Save</Button>
@@ -244,7 +244,7 @@ export default function ProjectDetailPage() {
           <Sum label="Total (incl GST)"     value={rupee(project.total_amount)} strong />
           <Sum label="Outstanding"          value={rupee(receivable)} tone={receivable > 0 ? "rose" : "emerald"} />
         </div>
-        <p className="text-[11px] text-ink-3 mt-3">
+        <p className="text-2xs text-ink-3 mt-3">
           Collected {rupee(paid)} of {rupee(project.total_amount)} · SAC {project.sac_code}
         </p>
       </Card>
@@ -266,7 +266,7 @@ export default function ProjectDetailPage() {
           <Sum label="Expected profit" value={rupee(contractProfit)} tone={contractProfit >= 0 ? "emerald" : "rose"} strong />
           <Sum label="Margin" value={`${pct(contractProfit, contractRevenue)}%`} tone={contractProfit >= 0 ? "emerald" : "rose"} />
         </div>
-        <p className="text-[11px] text-ink-3 mt-3">
+        <p className="text-2xs text-ink-3 mt-3">
           Booked to date: {rupee(bookedRevenue)} invoiced − {rupee(totalCost)} costs ={" "}
           <span className={bookedProfit >= 0 ? "text-emerald" : "text-rose"}>{rupee(bookedProfit)}</span>{" "}
           ({pct(bookedProfit, bookedRevenue)}%). External costs are ex-GST; labour is allocated salary (management view — it doesn&apos;t double-count in your overall P&amp;L).
@@ -311,7 +311,7 @@ export default function ProjectDetailPage() {
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-ink">{m.seq}. {m.label}</p>
-                  <p className="text-[11px] text-ink-3">
+                  <p className="text-2xs text-ink-3">
                     {m.due_date ? `Due ${formatDate(m.due_date)}` : "No due date"}
                     {m.invoice_id && <> · Invoice <span className="font-mono">{m.invoice_id}</span></>}
                   </p>
@@ -319,7 +319,7 @@ export default function ProjectDetailPage() {
                 <div className="text-right whitespace-nowrap">
                   <div className="font-mono text-sm text-ink">{rupee(m.total_amount)}</div>
                   {partial && (
-                    <div className="text-[10px]">
+                    <div className="text-3xs">
                       <span className="text-emerald">{rupee(paidSoFar)} received</span>
                       <span className="text-ink-3"> · </span>
                       <span className="text-amber-ink">{rupee(balance)} baaki</span>
@@ -329,7 +329,7 @@ export default function ProjectDetailPage() {
                 <MilestoneStatus status={m.status} partial={partial} />
                 <div className="flex gap-2">
                   {isQuote ? (
-                    <span className="text-[11px] text-ink-3 italic">Accept quotation to bill</span>
+                    <span className="text-2xs text-ink-3 italic">Accept quotation to bill</span>
                   ) : (
                     <>
                       {!m.invoice_id && (
@@ -348,7 +348,7 @@ export default function ProjectDetailPage() {
               </div>
               {/* Impact / next-step — plain-language effect of the current state */}
               {!isQuote && impact && (
-                <div className={`mt-2 flex items-start gap-1.5 text-[11px] rounded-md px-2.5 py-1.5 ${impact.tone === "warn" ? "bg-amber-soft/40 text-amber-ink" : impact.tone === "ok" ? "bg-emerald-soft/40 text-emerald" : "bg-paper-2/60 text-ink-3"}`}>
+                <div className={`mt-2 flex items-start gap-1.5 text-2xs rounded-md px-2.5 py-1.5 ${impact.tone === "warn" ? "bg-amber-soft/40 text-amber-ink" : impact.tone === "ok" ? "bg-emerald-soft/40 text-emerald" : "bg-paper-2/60 text-ink-3"}`}>
                   <Icon name={impact.tone === "warn" ? "alert" : impact.tone === "ok" ? "check_circle" : "info"} size={13} className="mt-0.5 shrink-0" />
                   <span>{impact.text}</span>
                 </div>
@@ -368,7 +368,7 @@ export default function ProjectDetailPage() {
               <div key={p.id} className="px-5 py-3 flex items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-ink">{rupee(p.amount)}</p>
-                  <p className="text-[11px] text-ink-3">
+                  <p className="text-2xs text-ink-3">
                     {formatDate(p.received_at)}{p.method ? ` · ${p.method}` : ""}{p.reference ? ` · ${p.reference}` : ""}
                     {p.bank_txn_id && <> · <span className="text-emerald">bank-reconciled</span></>}
                   </p>
@@ -440,7 +440,7 @@ export default function ProjectDetailPage() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-ink">{c.category}{c.vendor_name ? ` · ${c.vendor_name}` : ""}</p>
-                  <p className="text-[11px] text-ink-3">
+                  <p className="text-2xs text-ink-3">
                     {formatDate(c.expense_date)}
                     {c.description ? ` · ${c.description}` : ""}
                     {!c.paid && <> · <span className="text-amber-ink">unpaid</span></>}
@@ -506,7 +506,7 @@ function CollapsibleCard({
         >
           <Icon name={open ? "chevron_down" : "chevron_right"} size={15} className="text-ink-3 shrink-0" />
           <h2 className="text-sm font-semibold text-ink">{title}</h2>
-          {summary && <span className="text-[11px] text-ink-3 tabular-nums">{summary}</span>}
+          {summary && <span className="text-2xs text-ink-3 tabular-nums">{summary}</span>}
         </button>
         {action}
       </div>
@@ -561,7 +561,7 @@ function LabourRow({ line, projectId, projectStart, projectTarget }: { line: Pro
         <Icon name={open ? "chevron_down" : "chevron_right"} size={14} className="text-ink-3 shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="text-sm text-ink">{line.employeeName}{line.designation ? ` · ${line.designation}` : ""}</p>
-          <p className="text-[11px] text-ink-3">
+          <p className="text-2xs text-ink-3">
             {line.percent}% × {line.months} month{line.months === 1 ? "" : "s"} · {rupee(line.monthlyGross)}/mo
             {line.start_date && line.end_date ? ` · ${formatDate(line.start_date)} → ${formatDate(line.end_date)}` : ""}
             {line.note ? ` · ${line.note}` : ""}
@@ -574,27 +574,27 @@ function LabourRow({ line, projectId, projectStart, projectTarget }: { line: Pro
         <div className="px-5 pb-4 pt-1 bg-paper-2/30">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">Time (%)</label>
+              <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Time (%)</label>
               <Input type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">From</label>
+              <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">From</label>
               <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">To</label>
+              <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">To</label>
               <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </div>
           </div>
           <div className="mt-3">
-            <label className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold block mb-1">Note</label>
+            <label className="text-3xs uppercase tracking-wider text-ink-3 font-semibold block mb-1">Note</label>
             <Input placeholder="e.g. backend development" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
-          {badRange && <p className="mt-2 text-[11px] text-rose">To date must be after From date.</p>}
-          {beforeStart && <p className="mt-2 text-[11px] text-rose">Can&apos;t start before the project ({formatDate(projectStart!)}).</p>}
-          {afterTarget && <p className="mt-2 text-[11px] text-rose">Ends after the project target ({formatDate(projectTarget!)}).</p>}
+          {badRange && <p className="mt-2 text-2xs text-rose">To date must be after From date.</p>}
+          {beforeStart && <p className="mt-2 text-2xs text-rose">Can&apos;t start before the project ({formatDate(projectStart!)}).</p>}
+          {afterTarget && <p className="mt-2 text-2xs text-rose">Ends after the project target ({formatDate(projectTarget!)}).</p>}
           <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-[11px] text-ink-3">
+            <p className="text-2xs text-ink-3">
               Cost: <span className="font-semibold text-ink">{rupee(previewCost)}</span> = {rupee(line.monthlyGross)}/mo × {pctN}% × {months} mo
             </p>
             <div className="flex items-center gap-2">
@@ -614,9 +614,9 @@ function Sum({ label, value, sub, strong, tone = "ink" }: {
   const c = tone === "rose" ? "text-rose" : tone === "emerald" ? "text-emerald" : "text-ink";
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</p>
+      <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</p>
       <p className={`font-serif text-xl mt-1 ${c} ${strong ? "font-semibold" : ""}`}>{value}</p>
-      {sub && <p className="text-[10px] text-ink-3">{sub}</p>}
+      {sub && <p className="text-3xs text-ink-3">{sub}</p>}
     </div>
   );
 }

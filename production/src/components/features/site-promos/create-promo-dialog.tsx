@@ -111,7 +111,7 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <header className="border-b border-hairline pb-3 mb-4">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1">
             Online sale · new promo
           </p>
           <h2 className="font-serif text-2xl text-ink">Launch promo</h2>
@@ -122,13 +122,13 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
 
         {/* Live preview banner — exactly what visitors see */}
         <div className="mb-4">
-          <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+          <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
             Live preview · how it will look
           </p>
           <div className={cn("rounded-lg px-4 py-3 text-paper shadow-lg", previewBg)}>
             <div className="flex items-center gap-3 flex-wrap">
               {badgeText && (
-                <span className="text-[10px] uppercase tracking-wider font-semibold bg-paper/20 backdrop-blur px-2 py-1 rounded-full">
+                <span className="text-3xs uppercase tracking-wider font-semibold bg-paper/20 backdrop-blur px-2 py-1 rounded-full">
                   {badgeText}
                 </span>
               )}
@@ -137,7 +137,7 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
                   {headline || "Your headline will appear here"}
                 </div>
                 {subheadline && (
-                  <div className="text-[11px] sm:text-xs opacity-90 mt-0.5">{subheadline}</div>
+                  <div className="text-2xs sm:text-xs opacity-90 mt-0.5">{subheadline}</div>
                 )}
               </div>
               <span className="font-mono text-xs bg-paper text-ink px-2 py-1 rounded font-semibold whitespace-nowrap">
@@ -159,7 +159,7 @@ export default function CreatePromoDialog({ open, onOpenChange }: Props) {
                 className="text-left text-xs border border-hairline bg-paper hover:border-amber hover:bg-amber-soft/30 rounded p-2 transition-colors"
               >
                 <div className="font-medium text-ink truncate">{p.h}</div>
-                <div className="text-[10px] text-ink-3 truncate">{p.d}</div>
+                <div className="text-3xs text-ink-3 truncate">{p.d}</div>
               </button>
             ))}
           </div>

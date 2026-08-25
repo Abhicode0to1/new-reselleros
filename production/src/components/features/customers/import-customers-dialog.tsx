@@ -233,8 +233,8 @@ export function ImportCustomersDialog({ open, onOpenChange, onImportComplete }: 
             </label>
 
             <div className="text-xs text-ink-3">
-              <p className="font-semibold uppercase tracking-wider mb-1.5 text-[10px]">Recognised columns</p>
-              <code className="block bg-paper-2 border border-hairline rounded-md px-3 py-2 font-mono text-[11px] overflow-x-auto">
+              <p className="font-semibold uppercase tracking-wider mb-1.5 text-3xs">Recognised columns</p>
+              <code className="block bg-paper-2 border border-hairline rounded-md px-3 py-2 font-mono text-2xs overflow-x-auto">
                 {CSV_HEADER}
               </code>
               <p className="mt-2">
@@ -282,7 +282,7 @@ export function ImportCustomersDialog({ open, onOpenChange, onImportComplete }: 
                         r.dup && !r.error && "bg-amber-soft/40",
                       )}>
                         <td className="p-2 text-ink-3 tabular-nums">{r.rowNum}</td>
-                        <td className="p-2 text-ink-2 font-mono text-[10px]">{r.customer_number || "—"}</td>
+                        <td className="p-2 text-ink-2 font-mono text-3xs">{r.customer_number || "—"}</td>
                         <td className="p-2">
                           {r.error ? (
                             <span className="text-rose inline-flex items-center gap-1">
@@ -291,7 +291,7 @@ export function ImportCustomersDialog({ open, onOpenChange, onImportComplete }: 
                           ) : (
                             <span className="font-medium text-ink">
                               {r.name}
-                              {r.dup && <span className="ml-1.5 text-[10px] text-amber-ink">(already exists)</span>}
+                              {r.dup && <span className="ml-1.5 text-3xs text-amber-ink">(already exists)</span>}
                             </span>
                           )}
                         </td>

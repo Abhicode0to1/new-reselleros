@@ -238,7 +238,7 @@ export function TaxInvoiceDialog({
             <Icon name="receipt" size={16} className="text-ink-3" />
             <span className="text-sm font-semibold text-ink">Tax Invoice · GST-compliant</span>
             {advancesAdjusted > 0 && (
-              <span className="text-[10px] uppercase tracking-wider bg-emerald-soft text-emerald-ink px-2 py-0.5 rounded-full font-semibold">
+              <span className="text-3xs uppercase tracking-wider bg-emerald-soft text-emerald-ink px-2 py-0.5 rounded-full font-semibold">
                 ₹{advancesAdjusted.toLocaleString("en-IN")} advance adjusted
               </span>
             )}
@@ -307,20 +307,20 @@ export function TaxInvoiceDialog({
 
           {/* Header */}
           <div className="text-center mb-4">
-            <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold">
+            <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold">
               Original for recipient · GST-compliant
             </p>
             <h1 className="font-serif text-3xl mt-1">Tax Invoice</h1>
             <p className="font-mono text-sm text-ink-2 mt-1">{invoice.id}</p>
             {invoice.gst_irn && (
-              <p className="font-mono text-[10px] text-ink-3 mt-0.5">IRN: {invoice.gst_irn}</p>
+              <p className="font-mono text-3xs text-ink-3 mt-0.5">IRN: {invoice.gst_irn}</p>
             )}
           </div>
 
           {/* Supplier + Recipient */}
           <div className="grid grid-cols-2 gap-6 mb-6 border-y-2 border-ink py-4">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">From (Supplier)</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">From (Supplier)</p>
               <p className="font-serif text-lg leading-tight">{tenantName}</p>
               {tenantGstin && (
                 <p className="text-xs text-ink-2 mt-0.5 font-mono">GSTIN: {tenantGstin}</p>
@@ -335,7 +335,7 @@ export function TaxInvoiceDialog({
               {tenantPhone && <p className="text-xs text-ink-3 font-mono">{tenantPhone}</p>}
             </div>
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">Bill To (Recipient)</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">Bill To (Recipient)</p>
               <p className="font-serif text-lg leading-tight">{invoice.customer_name}</p>
               {customerGstin && (
                 <p className="text-xs text-ink-2 mt-0.5 font-mono">GSTIN: {customerGstin}</p>
@@ -349,19 +349,19 @@ export function TaxInvoiceDialog({
           {/* Invoice meta */}
           <div className="grid grid-cols-4 gap-4 mb-6 text-sm">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Invoice No.</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Invoice No.</p>
               <p className="font-mono">{invoice.id}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Invoice Date</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Invoice Date</p>
               <p>{formatDate(invoice.invoice_date)}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Due Date</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Due Date</p>
               <p>{invoice.due_date ? formatDate(invoice.due_date) : "—"}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Place of supply</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Place of supply</p>
               <p>{isExport ? `Export · ${customerCountry ?? "outside India"}` : fInter ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"}</p>
             </div>
           </div>
@@ -371,12 +371,12 @@ export function TaxInvoiceDialog({
             <table className="w-full">
               <thead className="bg-paper-2 border-b border-ink">
                 <tr>
-                  <th className="text-left  p-2.5 text-[10px] uppercase tracking-wider font-semibold w-8">#</th>
-                  <th className="text-left  p-2.5 text-[10px] uppercase tracking-wider font-semibold">Description</th>
-                  <th className="text-left  p-2.5 text-[10px] uppercase tracking-wider font-semibold w-20">HSN/SAC</th>
-                  <th className="text-right p-2.5 text-[10px] uppercase tracking-wider font-semibold w-16">Qty</th>
-                  <th className="text-right p-2.5 text-[10px] uppercase tracking-wider font-semibold w-24">Rate</th>
-                  <th className="text-right p-2.5 text-[10px] uppercase tracking-wider font-semibold w-28">Amount (₹)</th>
+                  <th className="text-left  p-2.5 text-3xs uppercase tracking-wider font-semibold w-8">#</th>
+                  <th className="text-left  p-2.5 text-3xs uppercase tracking-wider font-semibold">Description</th>
+                  <th className="text-left  p-2.5 text-3xs uppercase tracking-wider font-semibold w-20">HSN/SAC</th>
+                  <th className="text-right p-2.5 text-3xs uppercase tracking-wider font-semibold w-16">Qty</th>
+                  <th className="text-right p-2.5 text-3xs uppercase tracking-wider font-semibold w-24">Rate</th>
+                  <th className="text-right p-2.5 text-3xs uppercase tracking-wider font-semibold w-28">Amount (₹)</th>
                 </tr>
               </thead>
               <tbody>
@@ -393,10 +393,10 @@ export function TaxInvoiceDialog({
                       <td className="p-2.5 text-sm">
                         <p className="font-medium">{li.name}</p>
                         {li.description && (
-                          <p className="text-[11px] text-ink-3 mt-0.5">{li.description}</p>
+                          <p className="text-2xs text-ink-3 mt-0.5">{li.description}</p>
                         )}
                       </td>
-                      <td className="p-2.5 font-mono text-[11px] text-ink-2">998313</td>
+                      <td className="p-2.5 font-mono text-2xs text-ink-2">998313</td>
                       <td className="p-2.5 text-right tabular-nums text-sm">{li.qty}</td>
                       <td className="p-2.5 text-right tabular-nums text-sm">{money(li.rate)}</td>
                       <td className="p-2.5 text-right tabular-nums text-sm font-medium">
@@ -450,13 +450,13 @@ export function TaxInvoiceDialog({
                   </>
                 )}
                 <tr className="border-t-2 border-ink">
-                  <td className="py-2 font-semibold uppercase tracking-wider text-[11px]">
+                  <td className="py-2 font-semibold uppercase tracking-wider text-2xs">
                     Invoice total
                   </td>
                   <td className="py-2 text-right">
                     <span className="font-serif text-xl tabular-nums">{money(fTotal)}</span>
                     {isForeign && (
-                      <span className="block text-[11px] text-ink-3 font-normal">
+                      <span className="block text-2xs text-ink-3 font-normal">
                         INR equivalent (for GST): {rupee(fTotal)} @ ₹{exchangeRate}/{currency}
                       </span>
                     )}
@@ -469,7 +469,7 @@ export function TaxInvoiceDialog({
           {/* ── Advance adjustment section (CGST Sec 31 + Rule 53) ── */}
           {advancesAdjusted > 0 && (
             <div className="rounded-md bg-emerald-soft/40 border border-emerald/30 p-4 mb-6">
-              <p className="text-[10px] uppercase tracking-widest text-emerald-ink font-semibold mb-2 flex items-center gap-1.5">
+              <p className="text-3xs uppercase tracking-widest text-emerald-ink font-semibold mb-2 flex items-center gap-1.5">
                 <Icon name="check_circle" size={12} />
                 Advances adjusted against this invoice
               </p>
@@ -485,7 +485,7 @@ export function TaxInvoiceDialog({
                 <tbody>
                   {displayAdvances.map((a) => (
                     <tr key={a.id} className="border-b border-emerald/10 last:border-0">
-                      <td className="py-1.5 font-mono text-[11px]">
+                      <td className="py-1.5 font-mono text-2xs">
                         {a.voucher_no ?? <span className="italic text-ink-3">(unnumbered)</span>}
                       </td>
                       <td className="py-1.5 text-ink-2">{formatDate(a.received_at)}</td>
@@ -508,13 +508,13 @@ export function TaxInvoiceDialog({
           <div className="flex justify-end mb-6">
             <div className="w-80 border-2 border-ink rounded-md p-4 bg-paper-2">
               <div className="flex justify-between items-baseline">
-                <span className="text-[11px] uppercase tracking-widest font-semibold text-ink-3">
+                <span className="text-2xs uppercase tracking-widest font-semibold text-ink-3">
                   {advancesAdjusted > 0 ? "Net payable" : "Amount due"}
                 </span>
                 <span className="font-serif text-3xl tabular-nums">{money(netPayable)}</span>
               </div>
               {advancesAdjusted > 0 && netPayable === 0 && (
-                <p className="text-[11px] text-emerald-ink mt-1.5 flex items-center gap-1">
+                <p className="text-2xs text-emerald-ink mt-1.5 flex items-center gap-1">
                   <Icon name="check_circle" size={11} />
                   Fully settled via advance payments — no further amount due.
                 </p>
@@ -534,7 +534,7 @@ export function TaxInvoiceDialog({
           </p>
 
           {/* Compliance footer */}
-          <div className="rounded-md bg-amber-soft border border-amber/30 p-3 text-[11px] text-amber-ink mb-6">
+          <div className="rounded-md bg-amber-soft border border-amber/30 p-3 text-2xs text-amber-ink mb-6">
             <p className="font-semibold mb-1">📋 GST treatment</p>
             <p>
               {isExport ? (
@@ -566,22 +566,22 @@ export function TaxInvoiceDialog({
           {/* Signature */}
           <div className="mt-10 pt-6 border-t border-hairline grid grid-cols-2 gap-6">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-8">
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-8">
                 Customer acknowledgment
               </p>
               <div className="h-px bg-ink w-32" />
             </div>
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-8">
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-8">
                 For {tenantName}
               </p>
               <div className="h-px bg-ink w-32 ml-auto" />
-              <p className="text-[11px] text-ink-3 mt-1">Authorized signatory</p>
+              <p className="text-2xs text-ink-3 mt-1">Authorized signatory</p>
             </div>
           </div>
 
           {/* Footer */}
-          <p className="text-center text-[10px] text-ink-3 mt-8">
+          <p className="text-center text-3xs text-ink-3 mt-8">
             This is a system-generated tax invoice — valid without seal.
             {invoice.gst_irn && " IRN attested by NIC."}
           </p>

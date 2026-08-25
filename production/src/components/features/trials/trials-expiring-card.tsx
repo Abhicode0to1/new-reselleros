@@ -48,7 +48,7 @@ export function TrialsExpiringCard() {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-ink truncate">{t.company}</p>
-                    {t.domain && <p className="text-[10px] text-ink-3 font-mono truncate">{t.domain}</p>}
+                    {t.domain && <p className="text-3xs text-ink-3 font-mono truncate">{t.domain}</p>}
                   </div>
                   <div className="shrink-0 text-right">
                     <Badge
@@ -58,7 +58,7 @@ export function TrialsExpiringCard() {
                     >
                       {dr === 0 ? "today" : dr === 1 ? "1d" : `${dr}d`}
                     </Badge>
-                    <p className="text-[10px] text-ink-3 mt-0.5 tabular-nums">{t.seats} seats</p>
+                    <p className="text-3xs text-ink-3 mt-0.5 tabular-nums">{t.seats} seats</p>
                   </div>
                 </Link>
               </li>

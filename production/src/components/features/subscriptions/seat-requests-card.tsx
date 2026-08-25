@@ -124,7 +124,7 @@ export function SeatRequestsCard({ requests, subscriptions, onDecided }: {
                     {sub && <span className="ml-1.5 text-ink-3">· {sub.plan}</span>}
                   </p>
                   {r.note && <p className="mt-1 text-[12px] italic leading-snug text-ink-3">“{r.note}”</p>}
-                  <p className="mt-0.5 text-[11px] text-ink-3">
+                  <p className="mt-0.5 text-2xs text-ink-3">
                     Raised {formatDate(r.created_at)}
                     {r.requested_by_email && ` by ${r.requested_by_email}`}
                     {r.effective_on && ` · wanted from ${formatDate(r.effective_on)}`}
@@ -133,7 +133,7 @@ export function SeatRequestsCard({ requests, subscriptions, onDecided }: {
                   {!verdict.canApprove && (
                     <div className="mt-2 rounded-md border border-amber/50 bg-amber-soft/50 px-2.5 py-1.5">
                       <p className="text-[12px] font-medium text-amber-ink">{verdict.reason}</p>
-                      <p className="mt-0.5 text-[11px] leading-snug text-ink-2">{verdict.nextStep}</p>
+                      <p className="mt-0.5 text-2xs leading-snug text-ink-2">{verdict.nextStep}</p>
                     </div>
                   )}
                 </div>
@@ -144,7 +144,7 @@ export function SeatRequestsCard({ requests, subscriptions, onDecided }: {
                       <p className="font-serif text-lg font-semibold tabular-nums text-ink">
                         {rupee(preview.total)}
                       </p>
-                      <p className="text-[10px] leading-snug text-ink-3">
+                      <p className="text-3xs leading-snug text-ink-3">
                         incl. GST · {preview.remainingDays} days
                         <br />
                         then {rupee(preview.newMrr)}/mo
@@ -181,7 +181,7 @@ export function SeatRequestsCard({ requests, subscriptions, onDecided }: {
         })}
       </ul>
 
-      <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-ink-3">
+      <p className="mt-3 flex items-start gap-1.5 text-2xs leading-snug text-ink-3">
         <Icon name="alert" size={11} className="mt-px shrink-0" />
         Amounts shown are today&apos;s. A seat change is priced to the renewal date, so the
         figure falls each day — the real charge is worked out when you approve.

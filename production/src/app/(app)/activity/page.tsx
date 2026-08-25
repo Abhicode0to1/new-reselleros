@@ -96,13 +96,13 @@ export default function ActivityLogPage() {
         <div className="space-y-6">
           {groups.map(([day, items]) => (
             <div key={day}>
-              <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">{day}</div>
+              <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">{day}</div>
               <Card flush>
                 <ul className="divide-y divide-hairline">
                   {items.map((r) => (
                     <li key={r.id} className="flex items-center gap-3 px-4 py-2.5">
                       <span
-                        className="shrink-0 h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-semibold text-paper"
+                        className="shrink-0 h-7 w-7 rounded-full flex items-center justify-center text-2xs font-semibold text-paper"
                         style={{ background: r.actor?.color ?? "var(--ink-3, #787c84)" }}
                       >
                         {r.actor?.initials ?? "?"}
@@ -115,7 +115,7 @@ export default function ActivityLogPage() {
                         </span>
                         {r.label ? <span className="text-ink-2"> — {r.label}</span> : null}
                       </div>
-                      <span className="shrink-0 text-[11px] text-ink-3 tabular-nums">{timeOf(r.created_at)}</span>
+                      <span className="shrink-0 text-2xs text-ink-3 tabular-nums">{timeOf(r.created_at)}</span>
                     </li>
                   ))}
                 </ul>

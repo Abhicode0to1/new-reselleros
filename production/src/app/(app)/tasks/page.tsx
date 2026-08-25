@@ -299,7 +299,7 @@ function TaskRow({ task, onEdit, assignee }: { task: TaskWithLink; onEdit: (t: T
           <p className={cn("font-medium text-ink", isDone && "line-through")}>{task.title}</p>
           <Badge kind="muted">{kindMeta.label}</Badge>
           {assignee && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-soft/60 text-indigo px-2 py-0.5 text-[11px] font-medium" title={`Assigned to ${memberLabel(assignee)}`}>
+            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-soft/60 text-indigo px-2 py-0.5 text-2xs font-medium" title={`Assigned to ${memberLabel(assignee)}`}>
               <Icon name="user" size={10} /> {memberLabel(assignee)}
             </span>
           )}
@@ -318,12 +318,12 @@ function TaskRow({ task, onEdit, assignee }: { task: TaskWithLink; onEdit: (t: T
             })}
           </span>
           {task.snooze_count > 0 && (
-            <span className="text-ink-3 text-[11px]">snoozed {task.snooze_count}×</span>
+            <span className="text-ink-3 text-2xs">snoozed {task.snooze_count}×</span>
           )}
           {linkHref && linkLabel && (
             <Link
               href={linkHref as any}
-              className="text-amber-ink hover:underline text-[11px] inline-flex items-center gap-0.5"
+              className="text-amber-ink hover:underline text-2xs inline-flex items-center gap-0.5"
             >
               <Icon name="external" size={10} /> {linkLabel}
             </Link>

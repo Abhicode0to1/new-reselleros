@@ -226,7 +226,7 @@ export function SendQuoteDialog({
           </div>
 
             {!alreadySent && (
-              <div className="pt-1 text-[11px] text-ink-3">
+              <div className="pt-1 text-2xs text-ink-3">
                 <Badge kind="muted">Tip</Badge>{" "}
                 Status flips to <b>Sent</b> on success — downstream automation (reminders, renewals) starts tracking from here.
               </div>
@@ -238,7 +238,7 @@ export function SendQuoteDialog({
                 there; this only places it above the button. */}
             {amount !== undefined && (
               <div className="rounded-md border border-hairline/60 bg-paper-2 p-3">
-                <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+                <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
                   What this does
                 </div>
                 <ConsequenceList

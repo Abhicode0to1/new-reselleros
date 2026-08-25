@@ -142,14 +142,14 @@ export function EditPaymentDialog({ open, onOpenChange, payment, customerName }:
             <div className="rounded-md bg-paper-2 border border-hairline px-3 py-2.5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Amount received</p>
+                  <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Amount received</p>
                   <p className="font-serif text-xl tabular-nums text-ink mt-0.5">{rupee(payment.amount)}</p>
                 </div>
-                <span className="inline-flex items-center gap-1 text-[11px] text-ink-3">
+                <span className="inline-flex items-center gap-1 text-2xs text-ink-3">
                   <Icon name="lock" size={12} /> Locked
                 </span>
               </div>
-              <p className="text-[11px] text-ink-3 mt-1.5 leading-relaxed">
+              <p className="text-2xs text-ink-3 mt-1.5 leading-relaxed">
                 Amount can&apos;t be edited — it drives the GST receipt voucher &amp; subscription.
                 If the amount is wrong, reverse this payment and record a fresh one.
               </p>
@@ -220,7 +220,7 @@ export function EditPaymentDialog({ open, onOpenChange, payment, customerName }:
                 </SelectContent>
               </Select>
               <input type="hidden" {...register("bankAccountId")} value={bankAccountId} />
-              <p className="mt-1 text-[11px] text-ink-3">
+              <p className="mt-1 text-2xs text-ink-3">
                 Tags which account received this money (for reports + easier reconciliation).
                 Doesn&apos;t change the account balance — that comes from your bank statement.
               </p>

@@ -715,7 +715,7 @@ export function RecordPaymentDialog({
                 {...register("domain")}
               />
             </FormField>
-            <p className="text-[11px] text-ink-3">
+            <p className="text-2xs text-ink-3">
               Essential for Google Workspace / M365 provisioning & Partner Sales Console (PSC) tracking.
             </p>
           </div>
@@ -884,7 +884,7 @@ export function RecordPaymentDialog({
               </SelectContent>
             </Select>
             <input type="hidden" {...register("method")} value={method} />
-            <p className="text-[11px] text-ink-3 mt-1">
+            <p className="text-2xs text-ink-3 mt-1">
               Select company target account & payment mode in 1 click.
             </p>
           </FormField>
@@ -924,7 +924,7 @@ export function RecordPaymentDialog({
               error={errors.reference?.message}
               {...register("reference")}
             />
-            <p className="text-[11px] text-ink-3 mt-1">
+            <p className="text-2xs text-ink-3 mt-1">
               {
                 method === "upi" ? "12-digit UTR/UPI reference received on GPay, PhonePe, Paytm or HDFC QR." :
                 method === "razorpay" ? "Unique Razorpay payment ID starting with pay_." :
@@ -948,7 +948,7 @@ export function RecordPaymentDialog({
               />
               <div className="flex-1">
                 <div className="font-medium text-ink">Customer deducted TDS</div>
-                <div className="text-[11px] text-ink-3 mt-0.5">
+                <div className="text-2xs text-ink-3 mt-0.5">
                   Tick this when a B2B customer paid you LESS than the quote total
                   because they withheld TDS (typically 10% u/s 194J).
                 </div>
@@ -991,7 +991,7 @@ export function RecordPaymentDialog({
                     placeholder="MUMS12345A (Tax Account Number)"
                     {...register("customerTan")}
                   />
-                  <p className="text-[10px] text-ink-3 mt-1">
+                  <p className="text-3xs text-ink-3 mt-1">
                     10-character TAN of the customer (different from GSTIN). Required to verify Form 26AS deposit.
                     Saved to customer profile for future invoices.
                   </p>
@@ -999,7 +999,7 @@ export function RecordPaymentDialog({
 
                 {/* Live computation breakdown */}
                 <div className="bg-paper rounded-md p-3 text-xs space-y-1.5">
-                  <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
+                  <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
                     TDS computation
                   </div>
                   <div className="flex justify-between">
@@ -1018,7 +1018,7 @@ export function RecordPaymentDialog({
                     <span className="text-ink-3">Net to your bank</span>
                     <span className="font-mono font-semibold text-emerald">{rupee(expectedAmount - tdsAmount)}</span>
                   </div>
-                  <div className="text-[10px] text-ink-3 mt-2 leading-relaxed">
+                  <div className="text-3xs text-ink-3 mt-2 leading-relaxed">
                     Adjust &quot;Amount received&quot; above to match what actually hit your bank.
                     The quote will be marked fully satisfied — ₹{tdsAmount.toLocaleString("en-IN")} TDS appears as a receivable in <a href="/accounting/tds-receivable" className="underline">/accounting/tds-receivable</a>.
                   </div>
@@ -1043,7 +1043,7 @@ export function RecordPaymentDialog({
                 <span className="flex items-center gap-2 min-w-0">
                   <Icon name="file" size={14} className="shrink-0 text-ink-3" />
                   <span className="truncate text-ink">{receiptFile.name}</span>
-                  <span className="shrink-0 text-[11px] text-ink-3">
+                  <span className="shrink-0 text-2xs text-ink-3">
                     {(receiptFile.size / 1024).toFixed(0)} KB
                   </span>
                 </span>
@@ -1079,7 +1079,7 @@ export function RecordPaymentDialog({
                 setReceiptFile(f);
               }}
             />
-            <p className="mt-1 text-[11px] text-ink-3">JPG / PNG / WEBP / PDF · up to 20 MB · attached after the payment is saved.</p>
+            <p className="mt-1 text-2xs text-ink-3">JPG / PNG / WEBP / PDF · up to 20 MB · attached after the payment is saved.</p>
           </FormField>
 
           {newRunningTotal >= expectedAmount && (
@@ -1109,7 +1109,7 @@ export function RecordPaymentDialog({
               unit-tested there. This only places it above the button. */}
           {watchedAmount > 0 && (
             <div className="rounded-md border border-hairline/60 bg-paper-2 p-3">
-              <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+              <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
                 What this does
               </div>
               <ConsequenceList

@@ -832,7 +832,7 @@ function LeadsPageInner() {
           >
             <span aria-hidden>🚫</span>
             <span>Junk</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
+            <span className="px-1.5 py-0.2 rounded-full text-3xs bg-paper-2 text-ink-2 font-mono tabular-nums">
               {junkCount}
             </span>
           </button>
@@ -859,7 +859,7 @@ function LeadsPageInner() {
           >
             <Icon name="inbox" size={13} className={allOpenActive ? "text-amber-ink" : "text-ink-3"} />
             <span>All open</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
+            <span className="px-1.5 py-0.2 rounded-full text-3xs bg-paper-2 text-ink-2 font-mono tabular-nums">
               {openLeads.length}
             </span>
           </button>
@@ -890,7 +890,7 @@ function LeadsPageInner() {
               >
                 <span aria-hidden>{f.icon}</span>
                 <span>{f.label}</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
+                <span className="px-1.5 py-0.2 rounded-full text-3xs bg-paper-2 text-ink-2 font-mono tabular-nums">
                   {count}
                 </span>
               </button>
@@ -940,12 +940,12 @@ function LeadsPageInner() {
                 {late > 0 && (
                   <span
                     title={`${late} already overdue, not just due today`}
-                    className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-soft text-rose font-mono tabular-nums font-bold"
+                    className="px-1.5 py-0.2 rounded-full text-3xs bg-rose-soft text-rose font-mono tabular-nums font-bold"
                   >
                     {late} late
                   </span>
                 )}
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-paper-2 text-ink-2 font-mono tabular-nums">
+                <span className="px-1.5 py-0.2 rounded-full text-3xs bg-paper-2 text-ink-2 font-mono tabular-nums">
                   {count}
                 </span>
               </button>
@@ -1038,7 +1038,7 @@ function LeadsPageInner() {
                   aria-pressed={active}
                   title={def?.hint ?? "Every sales motion"}
                   className={cn(
-                    "rounded-md px-2 py-0.5 text-[11px] font-semibold transition-colors",
+                    "rounded-md px-2 py-0.5 text-2xs font-semibold transition-colors",
                     active ? "bg-paper text-ink shadow-xs border border-hairline"
                            : "text-ink-2 hover:bg-paper/60",
                   )}
@@ -1052,7 +1052,7 @@ function LeadsPageInner() {
           <button
             type="button"
             onClick={() => setKpiOpen((o) => !o)}
-            className="text-[11px] font-semibold text-amber-ink hover:underline shrink-0"
+            className="text-2xs font-semibold text-amber-ink hover:underline shrink-0"
           >
             {kpiOpen ? "Hide Breakdown" : "View Breakdown"}
           </button>
@@ -1064,34 +1064,34 @@ function LeadsPageInner() {
         <div className="mb-2.5 p-2.5 border border-hairline rounded-lg bg-paper shrink-0">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Open Pipeline</p>
+              <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Open Pipeline</p>
               <p className="font-serif text-base font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalValue, { compact: true })}</p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Open deals</p>
+              <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Open deals</p>
               <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{openDeals.length}</p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Won</p>
+              <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Won</p>
               <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{wonCount}</p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
+              <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
               <p className="font-serif text-base font-bold text-emerald tabular-nums mt-0.5">
                 {conversion === null ? "—" : `${conversion}%`}
               </p>
               {/* The sample, under the number. "100%" off two closed deals and "100%" off
                   two hundred are the same three characters and not the same claim. */}
-              <p className="text-[10px] text-ink-3 tabular-nums">
+              <p className="text-3xs text-ink-3 tabular-nums">
                 {decidedCount > 0 ? `${wonCount} of ${decidedCount} decided` : "nothing closed yet"}
               </p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">High Priority</p>
+              <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">High Priority</p>
               <p className="font-serif text-base font-bold text-rose-600 tabular-nums mt-0.5">{leads.filter((l) => l.priority === "high").length}</p>
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
-              <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Total Inquiries</p>
+              <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Total Inquiries</p>
               <p className="font-serif text-base font-bold text-ink tabular-nums mt-0.5">{leads.length}</p>
             </div>
           </div>
@@ -1182,14 +1182,14 @@ function LeadsPageInner() {
                 <Button icon="filter" size="sm">
                   Filter
                   {activeFilterCount > 0 && (
-                    <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-[16px] rounded-full bg-amber text-paper text-[10px] font-semibold px-1">
+                    <span className="ml-1 inline-flex items-center justify-center min-w-[16px] h-[16px] rounded-full bg-amber text-paper text-3xs font-semibold px-1">
                       {activeFilterCount}
                     </span>
                   )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-ink-3">Stage</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">Stage</DropdownMenuLabel>
                 {filterStages.map((s) => (
                   <DropdownMenuCheckboxItem
                     key={s.id}
@@ -1206,7 +1206,7 @@ function LeadsPageInner() {
                   </DropdownMenuCheckboxItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-ink-3">Priority</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">Priority</DropdownMenuLabel>
                 {(["high","medium","low"] as const).map((p) => (
                   <DropdownMenuCheckboxItem
                     key={p}
@@ -1545,7 +1545,7 @@ function LeadsPageInner() {
                     <div className="flex items-center gap-1.5">
                       <span className={cn("w-2 h-2 rounded-full", stage.dot)} />
                       <span className="text-xs font-bold text-ink">{stage.label}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-paper text-ink-2 font-mono tabular-nums border border-hairline">
+                      <span className="text-3xs px-1.5 py-0.5 rounded-full bg-paper text-ink-2 font-mono tabular-nums border border-hairline">
                         {stageLeads.length}
                       </span>
                     </div>
@@ -1571,7 +1571,7 @@ function LeadsPageInner() {
                     ))}
 
                     {stageLeads.length === 0 && (
-                      <div className="h-20 flex items-center justify-center border border-dashed border-hairline/60 rounded-md text-[11px] text-ink-3">
+                      <div className="h-20 flex items-center justify-center border border-dashed border-hairline/60 rounded-md text-2xs text-ink-3">
                         No deals in {stage.label.toLowerCase()}
                       </div>
                     )}
@@ -1581,7 +1581,7 @@ function LeadsPageInner() {
                   <button
                     type="button"
                     onClick={() => setAddOpen(true)}
-                    className="mt-2 shrink-0 border border-dashed border-hairline hover:border-hairline-strong rounded-md py-1.5 text-[11px] font-medium text-ink-3 hover:text-ink flex items-center justify-center gap-1 transition-colors cursor-pointer bg-paper/50 hover:bg-paper"
+                    className="mt-2 shrink-0 border border-dashed border-hairline hover:border-hairline-strong rounded-md py-1.5 text-2xs font-medium text-ink-3 hover:text-ink flex items-center justify-center gap-1 transition-colors cursor-pointer bg-paper/50 hover:bg-paper"
                   >
                     <Icon name="plus" size={12} /> Add deal
                   </button>
@@ -1591,7 +1591,7 @@ function LeadsPageInner() {
           </div>
 
           {/* Footer status bar */}
-          <div className="shrink-0 flex items-center justify-between text-[11px] text-ink-3 pt-1.5 px-1">
+          <div className="shrink-0 flex items-center justify-between text-2xs text-ink-3 pt-1.5 px-1">
             <span className="flex items-center gap-1">
               <Icon name="info" size={12} /> Drag cards across columns to update pipeline stage instantly
             </span>
@@ -2247,7 +2247,7 @@ function LeadDetailSheet({
                     <span className="font-medium text-ink">{lead.contact_name}</span>
                   )}
                   {lead.contact_name && (lead.contact_phone || lead.contact_email) && " · "}
-                  <span className="font-mono text-[11px] text-ink-3">
+                  <span className="font-mono text-2xs text-ink-3">
                     {lead.contact_phone}
                     {lead.contact_phone && lead.contact_email && " · "}
                     {lead.contact_email}
@@ -2258,7 +2258,7 @@ function LeadDetailSheet({
                      the old title said just "GST Identification Number" — so the number
                      itself was not readable anywhere in the drawer. */
                   <span
-                    className="shrink-0 inline-flex items-center gap-1 rounded border border-indigo/20 bg-indigo-soft px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase text-indigo-ink"
+                    className="shrink-0 inline-flex items-center gap-1 rounded border border-indigo/20 bg-indigo-soft px-1.5 py-0.5 font-mono text-3xs font-semibold uppercase text-indigo-ink"
                     title={`GSTIN ${lead.gstin}`}
                   >
                     GST {lead.gstin.slice(0, 2)}…
@@ -2388,7 +2388,7 @@ function LeadDetailSheet({
                 const ageText =
                   quoteAgeDays === null ? "" : quoteAgeDays === 0 ? "Sent today" : `Sent ${quoteAgeDays}d ago`;
                 return (
-                  <p className="flex items-start gap-1 text-[11px] leading-snug text-ink-3">
+                  <p className="flex items-start gap-1 text-2xs leading-snug text-ink-3">
                     <Icon name="info" size={11} className="mt-0.5 shrink-0" />
                     <span>
                       {ageText}
@@ -2417,13 +2417,13 @@ function LeadDetailSheet({
               <Icon name={nextAction.icon} size={14} />
               {nextAction.label}
               {nextAction.hint && (
-                <span className="text-[11px] opacity-90 ml-1">
+                <span className="text-2xs opacity-90 ml-1">
                   · {nextAction.hint}
                 </span>
               )}
             </button>
             {nextAction.help && (
-              <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-snug text-ink-3">
+              <p className="mt-1.5 flex items-start gap-1 text-2xs leading-snug text-ink-3">
                 <Icon name="info" size={11} className="mt-0.5 shrink-0" />
                 {nextAction.help}
               </p>
@@ -2462,7 +2462,7 @@ function LeadDetailSheet({
               alone cannot do that — a flex item shrinks before it wraps. */}
           {lead.stage === "new" && (threadSummary.total > 0 || activities.length > 0) && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
-              <p className="min-w-0 basis-full sm:basis-0 sm:flex-1 text-[11px] leading-snug text-ink-3">
+              <p className="min-w-0 basis-full sm:basis-0 sm:flex-1 text-2xs leading-snug text-ink-3">
                 Stage still reads <b className="font-semibold text-ink-2">New</b>, but there
                 {threadSummary.total > 0
                   ? ` ${threadSummary.total === 1 ? "is 1 message" : `are ${threadSummary.total} messages`} in the thread`
@@ -2503,7 +2503,7 @@ function LeadDetailSheet({
             <Icon name="shield" size={15} className="shrink-0 text-ink-3" />
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-ink">Objection battlecards</span>
-              <span className="block text-[11px] text-ink-3">
+              <span className="block text-2xs text-ink-3">
                 &ldquo;Microsoft is cheaper&rdquo;, &ldquo;nobody has heard of Zoho&rdquo; — what to say.
               </span>
             </span>
@@ -2524,7 +2524,7 @@ function LeadDetailSheet({
               const b = marginBadge(m);
               return (
                 <div>
-                  <p className="text-[11px] uppercase tracking-wider text-ink-3">Gross margin</p>
+                  <p className="text-2xs uppercase tracking-wider text-ink-3">Gross margin</p>
                   <p
                     title={b.title}
                     className={cn(
@@ -2543,12 +2543,12 @@ function LeadDetailSheet({
                     )}
                   </p>
                   {m.band === "loss" && (
-                    <p className="mt-0.5 text-[11px] font-semibold leading-snug text-rose">
+                    <p className="mt-0.5 text-2xs font-semibold leading-snug text-rose">
                       Below the vendor&apos;s own cost — reprice before quoting.
                     </p>
                   )}
                   {m.band === "unknown" && (
-                    <p className="mt-0.5 text-[11px] leading-snug text-ink-3">{b.title}</p>
+                    <p className="mt-0.5 text-2xs leading-snug text-ink-3">{b.title}</p>
                   )}
                 </div>
               );
@@ -2590,7 +2590,7 @@ function LeadDetailSheet({
                 <button
                   type="button"
                   onClick={() => setDrawerTab("activity")}
-                  className="text-[11px] font-medium text-amber-ink hover:text-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+                  className="text-2xs font-medium text-amber-ink hover:text-amber focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
                 >
                   Open conversation ({activities.length})
                 </button>
@@ -2614,7 +2614,7 @@ function LeadDetailSheet({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-sm text-ink truncate">{a.detail || meta.label}</div>
-                          <div className="text-[11px] text-ink-3">
+                          <div className="text-2xs text-ink-3">
                             {meta.label} · {formatDate(a.created_at)} {fmtActTime(a.created_at)}
                           </div>
                         </div>
@@ -2760,7 +2760,7 @@ function LeadDetailSheet({
                           )}
                         </div>
                         {e.detail && <div className="truncate text-xs text-ink-2">{e.detail}</div>}
-                        <div className="text-[11px] text-ink-3">
+                        <div className="text-2xs text-ink-3">
                           {formatDate(e.at)} {fmtActTime(e.at)}
                         </div>
                       </div>
@@ -2773,7 +2773,7 @@ function LeadDetailSheet({
                 placed at a guessed position — a wrongly-ordered event invents a history
                 that never happened. */}
             {timeline.undated > 0 && (
-              <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
+              <p className="mt-2 text-2xs leading-relaxed text-ink-3">
                 {timeline.undated} record{timeline.undated === 1 ? " has" : "s have"} no
                 usable date and {timeline.undated === 1 ? "is" : "are"} not shown — placing
                 {timeline.undated === 1 ? " it" : " them"} anywhere in this list would
@@ -2867,7 +2867,7 @@ function LeadDetailSheet({
                saying that plainly beats a composer that cannot send. The Email button is
                still there; what it does NOT do is worth stating, because a logged
                "Emailed …" line looks like the mail was kept. */
-            <div className="text-[11px] leading-snug text-ink-3 p-2.5 bg-paper-2 rounded-md">
+            <div className="text-2xs leading-snug text-ink-3 p-2.5 bg-paper-2 rounded-md">
               No email from this lead yet, so there is no thread to reply into. Use the{" "}
               <b className="text-ink-2">Email</b> button to write to them — it sends from
               your connected account and keeps the text, so it shows up in the Email tab.
@@ -2912,7 +2912,7 @@ function LeadDetailSheet({
                           </span>
                           <Badge kind={statusKind} dot>{q.status}</Badge>
                         </div>
-                        <div className="text-[11px] text-ink-3 mt-0.5">
+                        <div className="text-2xs text-ink-3 mt-0.5">
                           {formatDate(q.created_at)} · {q.line_items && Array.isArray(q.line_items) ? q.line_items.length : 0} item
                           {Array.isArray(q.line_items) && q.line_items.length === 1 ? "" : "s"}
                         </div>
@@ -2927,7 +2927,7 @@ function LeadDetailSheet({
                   );
                 })}
               </div>
-              <p className="text-[11px] text-ink-3 mt-1.5 flex items-center gap-1">
+              <p className="text-2xs text-ink-3 mt-1.5 flex items-center gap-1">
                 <Icon name="info" size={11} />
                 {lead.stage === "won"
                   ? "Click any quote to view · upsell with a new quote below"
@@ -2954,7 +2954,7 @@ function LeadDetailSheet({
                 <Icon name="clock" size={12} />
                 Follow-ups
                 {openTasks.length > 0 && (
-                  <span className="text-[10px] tabular-nums bg-amber-soft text-amber-ink px-1.5 py-0.5 rounded-full">
+                  <span className="text-3xs tabular-nums bg-amber-soft text-amber-ink px-1.5 py-0.5 rounded-full">
                     {openTasks.length} open
                   </span>
                 )}
@@ -2993,7 +2993,7 @@ function LeadDetailSheet({
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-ink leading-tight">{t.title}</p>
                         <p className={cn(
-                          "text-[11px] mt-0.5 tabular-nums",
+                          "text-2xs mt-0.5 tabular-nums",
                           isOverdue ? "text-rose font-medium" : "text-ink-3",
                         )}>
                           {isOverdue ? "Overdue · " : ""}
@@ -3001,7 +3001,7 @@ function LeadDetailSheet({
                           {t.snooze_count > 0 && ` · snoozed ${t.snooze_count}×`}
                         </p>
                         {t.notes && (
-                          <p className="text-[11px] text-ink-3 mt-1 line-clamp-2">{t.notes}</p>
+                          <p className="text-2xs text-ink-3 mt-1 line-clamp-2">{t.notes}</p>
                         )}
                       </div>
                       <div className="flex gap-0.5 shrink-0">
@@ -3026,7 +3026,7 @@ function LeadDetailSheet({
                   );
                 })}
                 {doneTasks.length > 0 && (
-                  <details className="text-[11px] text-ink-3 mt-2">
+                  <details className="text-2xs text-ink-3 mt-2">
                     <summary className="cursor-pointer select-none hover:text-ink">
                       {doneTasks.length} completed
                     </summary>
@@ -3109,12 +3109,12 @@ function LeadDetailSheet({
                       "mt-3 rounded-md border px-3 py-2",
                       q.qualified ? "border-emerald/40 bg-emerald-soft" : "border-hairline bg-paper-2/60",
                     )}>
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+                      <p className="text-2xs font-semibold uppercase tracking-wider text-ink-3">
                         Ready to quote · {q.passedCount} of 3
                       </p>
                       <ul className="mt-1 space-y-0.5">
                         {q.checks.map((c) => (
-                          <li key={c.id} className="flex items-start gap-1.5 text-[11px] leading-snug">
+                          <li key={c.id} className="flex items-start gap-1.5 text-2xs leading-snug">
                             <span aria-hidden className={c.passed ? "text-emerald" : "text-ink-3"}>
                               {c.passed ? "✓" : "○"}
                             </span>
@@ -3450,7 +3450,7 @@ function RowActions({
                 onClick={() => logActivity.mutate({ leadId: lead.id, kind: "email", detail: `Emailed ${lead.contact_email}` })}
               >
                 <Icon name="email" size={20} /> Email
-                <span className="ml-auto max-w-[9rem] truncate text-[11px] text-ink-3">{lead.contact_email}</span>
+                <span className="ml-auto max-w-[9rem] truncate text-2xs text-ink-3">{lead.contact_email}</span>
               </a>
             </DropdownMenuItem>
           )}
@@ -3878,7 +3878,7 @@ function LeadListView({
                         <span
                           title={`${intent.label} — ${intent.reason}`}
                           className={cn(
-                            "shrink-0 inline-flex items-center gap-0.5 rounded-full text-[10px] font-semibold px-1.5 py-0.5 leading-none cursor-help",
+                            "shrink-0 inline-flex items-center gap-0.5 rounded-full text-3xs font-semibold px-1.5 py-0.5 leading-none cursor-help",
                             intent.tier === "hot"  && "bg-rose-soft text-rose",
                             intent.tier === "warm" && "bg-amber-soft text-amber-ink",
                             intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
@@ -3891,7 +3891,7 @@ function LeadListView({
                         {stale7 && (
                           <span
                             title={stale7.message}
-                            className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-soft/70 text-amber-ink text-[10px] font-semibold px-1.5 py-0.5 leading-none border border-amber/30 cursor-help"
+                            className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-soft/70 text-amber-ink text-3xs font-semibold px-1.5 py-0.5 leading-none border border-amber/30 cursor-help"
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-amber animate-pulse" />
                             {stale7.days}d
@@ -3902,19 +3902,19 @@ function LeadListView({
                             type="button"
                             onClick={(e) => { e.stopPropagation(); onMerge(lead); }}
                             title="Possible duplicate — click to review & merge"
-                            className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-amber-soft text-amber-ink text-[10px] font-semibold px-1.5 py-0.5 leading-none border border-amber/30 hover:bg-amber-soft/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber"
+                            className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-amber-soft text-amber-ink text-3xs font-semibold px-1.5 py-0.5 leading-none border border-amber/30 hover:bg-amber-soft/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber"
                           >
                             <Icon name="copy" size={9} /> Duplicate?
                           </button>
                         )}
                       </div>
-                      <div className="text-[10px] text-ink-3 font-mono">{lead.id}</div>
+                      <div className="text-3xs text-ink-3 font-mono">{lead.id}</div>
                       {(() => {
                         const tk = openTaskByLead.get(lead.id);
                         if (!tk) return null;
                         return (
                           <span className={cn(
-                            "mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                            "mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium",
                             tk.overdue ? "bg-rose-soft text-rose" : "bg-amber-soft text-amber-ink",
                           )}>
                             <Icon name="clock" size={10} />
@@ -3971,7 +3971,7 @@ function LeadListView({
                         <span
                           title={a.title}
                           className={cn(
-                            "shrink-0 rounded px-1 py-px text-[10px] font-semibold tabular-nums leading-none",
+                            "shrink-0 rounded px-1 py-px text-3xs font-semibold tabular-nums leading-none",
                             a.stale ? "bg-rose-soft text-rose" : "text-ink-4",
                           )}
                         >
@@ -3990,7 +3990,7 @@ function LeadListView({
                     {lead.contact_email && <Icon name="mail" size={11} className="shrink-0 text-ink-3" />}
                   </div>
                   {lead.contact_phone && (
-                    <div className="text-[11px] text-ink-3 font-mono truncate max-w-[180px]">
+                    <div className="text-2xs text-ink-3 font-mono truncate max-w-[180px]">
                       {lead.contact_phone}
                     </div>
                   )}
@@ -4000,7 +4000,7 @@ function LeadListView({
                 <td className="px-3 py-2 text-sm text-ink-2">
                   <span className="block truncate" title={lead.plan ?? undefined}>{lead.plan ?? "—"}</span>
                   {lead.seats != null && (
-                    <span className="text-[11px] text-ink-3"><span className="font-semibold text-ink-2 tabular-nums">{lead.seats}</span> seats</span>
+                    <span className="text-2xs text-ink-3"><span className="font-semibold text-ink-2 tabular-nums">{lead.seats}</span> seats</span>
                   )}
                 </td>
                 {/* Value — the money, given visual precedence (serif, bold), and
@@ -4032,7 +4032,7 @@ function LeadListView({
                                 <span
                                   title={b.title}
                                   className={cn(
-                                    "shrink-0 rounded px-1 py-px text-[10px] font-semibold tabular-nums leading-none",
+                                    "shrink-0 rounded px-1 py-px text-3xs font-semibold tabular-nums leading-none",
                                     b.kind === "danger"  && "bg-rose-soft text-rose",
                                     b.kind === "warning" && "bg-amber-soft text-amber-ink",
                                     b.kind === "success" && "bg-paper-2 text-ink-3",
@@ -4123,7 +4123,7 @@ function LeadListView({
                   )}>
                     {age === 0 ? "today" : age === 1 ? "1d ago" : `${age}d ago`}
                   </span>
-                  <span className="block text-[10px] text-ink-4 tabular-nums">
+                  <span className="block text-3xs text-ink-4 tabular-nums">
                     {formatDate(lead.updated_at)} · {fmtActTime(lead.updated_at)}
                   </span>
                 </td>
@@ -4138,7 +4138,7 @@ function LeadListView({
       {sorted.length === 0 && (
         <div className="p-8 text-center text-sm text-ink-3 italic">No leads match.</div>
       )}
-      <div className="px-3 py-2 border-t border-hairline bg-paper-2/40 text-[11px] text-ink-3 flex items-center gap-2">
+      <div className="px-3 py-2 border-t border-hairline bg-paper-2/40 text-2xs text-ink-3 flex items-center gap-2">
         <Icon name="info" size={11} />
         Click any row to open the drawer · Tick a checkbox to enable bulk actions · Quick actions (Call / WhatsApp / Send quote / ⋯) sit at the end of each row · ★ = high-value, Hot = priority lead
       </div>
@@ -4162,7 +4162,7 @@ function LeadListView({
 function Fact({ label, value, mono, big }: { label: string; value: string | null | undefined; mono?: boolean; big?: boolean }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wider text-ink-3 mb-0.5">{label}</div>
+      <div className="text-2xs uppercase tracking-wider text-ink-3 mb-0.5">{label}</div>
       <div className={cn(
         "text-ink",
         mono && "font-mono",

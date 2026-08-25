@@ -346,7 +346,7 @@ export default function ProfitabilityPage() {
           {/* Desktop */}
           <Card className="hidden md:block overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-3 w-12"></th>
                   <th className="text-left  px-4 py-3">Customer</th>
@@ -398,7 +398,7 @@ export default function ProfitabilityPage() {
               </tbody>
               <tfoot className="bg-paper-2/30 border-t-2 border-ink">
                 <tr>
-                  <td colSpan={2} className="px-4 py-3 text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+                  <td colSpan={2} className="px-4 py-3 text-2xs uppercase tracking-wider text-ink-3 font-semibold">
                     Total ({rows.length})
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-ink-3">
@@ -442,7 +442,7 @@ export default function ProfitabilityPage() {
                           </Link>
                         ) : r.customerName}
                       </div>
-                      <div className="text-[11px] text-ink-3 mt-0.5">
+                      <div className="text-2xs text-ink-3 mt-0.5">
                         {r.quoteCount} {r.quoteCount === 1 ? "quote" : "quotes"} · {r.seatCount} seats
                       </div>
                     </div>
@@ -450,7 +450,7 @@ export default function ProfitabilityPage() {
                       {r.marginPct.toFixed(1)}%
                     </Badge>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-[11px] mb-2">
+                  <div className="grid grid-cols-3 gap-2 text-2xs mb-2">
                     <div>
                       <div className="text-ink-3 uppercase tracking-wider">Revenue</div>
                       <div className="font-mono text-ink">{rupee(r.revenue)}</div>
@@ -496,11 +496,11 @@ function KPI({
                    : "text-ink";
   return (
     <Card className="p-3 md:p-4">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif ${big ? "text-2xl md:text-3xl" : "text-xl md:text-2xl"} ${colorClass} leading-tight`}>
         {value}
       </div>
-      {hint && <div className="text-[10px] text-ink-3 mt-1">{hint}</div>}
+      {hint && <div className="text-3xs text-ink-3 mt-1">{hint}</div>}
     </Card>
   );
 }

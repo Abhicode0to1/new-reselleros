@@ -122,12 +122,12 @@ export function ComplianceView({
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`inline-flex items-center gap-1 rounded-full ${sm.cls} px-2 py-0.5 text-[10px] font-medium`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full ${sm.cls} px-2 py-0.5 text-3xs font-medium`}>
                           <Icon name={sm.icon} size={11} /> {sm.label}
                         </span>
                         <span className="font-medium text-ink">{r.ob.name}</span>
-                        {r.ob.form && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-paper-2 text-ink-3">{r.ob.form}</span>}
-                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-indigo/10 text-indigo">
+                        {r.ob.form && <span className="text-3xs font-mono px-1.5 py-0.5 rounded bg-paper-2 text-ink-3">{r.ob.form}</span>}
+                        <span className="text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-indigo/10 text-indigo">
                           {CATEGORY_META[r.ob.category].short}
                         </span>
                       </div>
@@ -139,12 +139,12 @@ export function ComplianceView({
                         )}
                         {r.status === "filed" && <span className="text-emerald"> · {dueText(r)}</span>}
                       </div>
-                      {r.ob.applies && <div className="text-[11px] text-ink-3 mt-1">{r.ob.applies}</div>}
+                      {r.ob.applies && <div className="text-2xs text-ink-3 mt-1">{r.ob.applies}</div>}
                       <div className="flex items-center gap-3 mt-1.5">
-                        {r.ob.penalty && <span className="text-[11px] text-rose/80">Late: {r.ob.penalty}</span>}
+                        {r.ob.penalty && <span className="text-2xs text-rose/80">Late: {r.ob.penalty}</span>}
                         {r.ob.link && (
                           <a href={r.ob.link} target="_blank" rel="noopener noreferrer"
-                            className="text-[11px] text-amber-ink hover:underline inline-flex items-center gap-1">
+                            className="text-2xs text-amber-ink hover:underline inline-flex items-center gap-1">
                             <Icon name="external" size={11} /> {r.ob.authority}
                           </a>
                         )}
@@ -152,7 +152,7 @@ export function ComplianceView({
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-1">
                       {r.status === "filed" ? (
-                        <Button variant="ghost" className="h-7 px-2 text-[11px]"
+                        <Button variant="ghost" className="h-7 px-2 text-2xs"
                           loading={unmark.isPending}
                           onClick={() => unmark.mutate({ obligation_key: r.ob.key, period_key: r.inst.periodKey })}>
                           Undo
@@ -160,12 +160,12 @@ export function ComplianceView({
                       ) : (
                         <>
                           {r.ob.filingSteps && (
-                            <Button variant={r.status === "overdue" ? "primary" : "default"} icon="rocket" className="h-7 px-2.5 text-[11px]"
+                            <Button variant={r.status === "overdue" ? "primary" : "default"} icon="rocket" className="h-7 px-2.5 text-2xs"
                               onClick={() => setGuide(r)}>
                               How to file
                             </Button>
                           )}
-                          <Button variant="ghost" icon="check" className="h-7 px-2.5 text-[11px]"
+                          <Button variant="ghost" icon="check" className="h-7 px-2.5 text-2xs"
                             onClick={() => setFiling(r)}>
                             Mark filed
                           </Button>
@@ -252,7 +252,7 @@ function FilingGuideDialog({
           <ol className="space-y-2">
             {row.ob.filingSteps?.map((step, i) => (
               <li key={i} className="flex gap-2.5 text-[13px] text-ink-2 leading-relaxed">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-ink text-paper grid place-items-center text-[11px] font-semibold">{i + 1}</span>
+                <span className="shrink-0 w-5 h-5 rounded-full bg-ink text-paper grid place-items-center text-2xs font-semibold">{i + 1}</span>
                 <span>{step}</span>
               </li>
             ))}
@@ -323,7 +323,7 @@ function MarkFiledDialog({
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick}
-      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium border transition-colors ${
+      className={`rounded-full px-2.5 py-0.5 text-2xs font-medium border transition-colors ${
         active ? "bg-amber text-white border-amber" : "bg-paper border-hairline text-ink-2 hover:border-hairline-strong"
       }`}>
       {children}
@@ -337,9 +337,9 @@ function KPI({ label, value, tone, sub }: {
   const colorClass = tone === "emerald" ? "text-emerald" : tone === "rose" ? "text-rose" : tone === "amber" ? "text-amber-ink" : "text-ink";
   return (
     <Card className="p-2.5">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5 truncate">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5 truncate">{label}</div>
       <div className={`font-serif text-xl md:text-2xl ${colorClass} leading-tight`}>{value}</div>
-      {sub && <div className="text-[10px] text-ink-3 truncate">{sub}</div>}
+      {sub && <div className="text-3xs text-ink-3 truncate">{sub}</div>}
     </Card>
   );
 }

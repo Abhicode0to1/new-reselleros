@@ -586,7 +586,7 @@ export function AddExpenseDialog({
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* ── STEP 1: What kind of bill? This shapes the whole form. ── */}
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Is kharche ka bill?</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Is kharche ka bill?</p>
             <div className="grid grid-cols-3 gap-1.5">
               {([["none", "No bill / cash"], ["kaccha", "Kaccha bill"], ["gst", "GST invoice"]] as const).map(([val, label]) => (
                 <button
@@ -605,7 +605,7 @@ export function AddExpenseDialog({
                 </button>
               ))}
             </div>
-            <p className={cn("mt-1.5 text-[10px] leading-snug", isGstBill ? "text-ink-3" : "text-amber-ink")}>
+            <p className={cn("mt-1.5 text-3xs leading-snug", isGstBill ? "text-ink-3" : "text-amber-ink")}>
               {billType === "gst"
                 ? "GST tax invoice — input GST claimable, vendor saved to your Vendors master."
                 : billType === "kaccha"
@@ -615,7 +615,7 @@ export function AddExpenseDialog({
           </div>
 
           {!isEdit && (
-            <p className="text-[11px] text-ink-3 leading-relaxed">
+            <p className="text-2xs text-ink-3 leading-relaxed">
               Salary de rahe ho?{" "}
               <button type="button" onClick={() => { onClose(); router.push("/accounting/payroll" as never); }}
                 className="text-amber-ink font-medium underline hover:no-underline">Payroll &amp; Leave me book karo →</button>{" "}
@@ -631,7 +631,7 @@ export function AddExpenseDialog({
                   <Icon name="sparkles" size={16} className="text-amber-ink shrink-0" />
                   <div className="min-w-0">
                     <p className="text-[12px] font-medium text-ink">Bill upload karo — AI khud bhar dega</p>
-                    <p className="text-[10px] text-ink-3">Photo/PDF — AI fields + items nikaal dega, aap confirm karke Save karo</p>
+                    <p className="text-3xs text-ink-3">Photo/PDF — AI fields + items nikaal dega, aap confirm karke Save karo</p>
                   </div>
                 </div>
                 <Button type="button" variant="primary" size="sm" icon="upload" loading={reading} onClick={() => fileRef.current?.click()}>
@@ -645,8 +645,8 @@ export function AddExpenseDialog({
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBillFile(f); e.target.value = ""; }}
                 />
               </div>
-              {aiNote && <p className="mt-2 flex items-start gap-1.5 text-[11px] text-emerald"><Icon name="check_circle" size={12} className="mt-0.5 shrink-0" /> {aiNote}</p>}
-              {aiError && <p className="mt-2 flex items-start gap-1.5 text-[11px] text-rose"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> {aiError}</p>}
+              {aiNote && <p className="mt-2 flex items-start gap-1.5 text-2xs text-emerald"><Icon name="check_circle" size={12} className="mt-0.5 shrink-0" /> {aiNote}</p>}
+              {aiError && <p className="mt-2 flex items-start gap-1.5 text-2xs text-rose"><Icon name="alert" size={12} className="mt-0.5 shrink-0" /> {aiError}</p>}
 
               {/* Confirmation gate — AI read something; confirm before it fills. */}
               {pending && (() => {
@@ -666,7 +666,7 @@ export function AddExpenseDialog({
                   <div className="mt-2.5 rounded-md border border-amber/40 bg-paper p-3">
                     <p className="text-[12px] font-medium text-ink mb-2">AI ne ye padha — sahi hai? Confirm karo tabhi bharega.</p>
                     {dupInReview && (
-                      <div className="mb-2 flex items-start gap-1.5 rounded-md bg-amber-soft/60 px-2.5 py-2 text-[11px] text-amber-ink">
+                      <div className="mb-2 flex items-start gap-1.5 rounded-md bg-amber-soft/60 px-2.5 py-2 text-2xs text-amber-ink">
                         <Icon name="alert" size={13} className="mt-0.5 shrink-0" />
                         <span>Isi bill{` (${pending.billNo ? `#${pending.billNo}` : `${formatDate(dupInReview.expense_date)} · ${rupee(dupInReview.amount)}`})`} ki ek entry pehle se hai. Agar ye <b>alag category ka hissa</b> hai to theek — warna duplicate ho jayega.</span>
                       </div>
@@ -677,8 +677,8 @@ export function AddExpenseDialog({
                         <span className="text-ink text-right flex items-center gap-1.5 justify-end flex-wrap">
                           {pending.vendorName || "—"}
                           {existing
-                            ? <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald/10 text-emerald px-1.5 py-0.5 text-[10px] font-medium"><Icon name="check_circle" size={10} /> Existing</span>
-                            : (pending.vendorName && <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-soft text-amber-ink px-1.5 py-0.5 text-[10px] font-medium"><Icon name="plus" size={10} /> New</span>)}
+                            ? <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald/10 text-emerald px-1.5 py-0.5 text-3xs font-medium"><Icon name="check_circle" size={10} /> Existing</span>
+                            : (pending.vendorName && <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-soft text-amber-ink px-1.5 py-0.5 text-3xs font-medium"><Icon name="plus" size={10} /> New</span>)}
                         </span>
                       </div>
                       {shownGstin && <div className="flex justify-between gap-2"><span className="text-ink-3">GSTIN</span><span className="font-mono text-ink text-right">{shownGstin}</span></div>}
@@ -688,10 +688,10 @@ export function AddExpenseDialog({
                     </div>
                     {pending.items.length > 0 && (
                       <div className="mt-2 border-t border-hairline pt-2">
-                        <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{pending.items.length} item{pending.items.length > 1 ? "s" : ""}</p>
+                        <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{pending.items.length} item{pending.items.length > 1 ? "s" : ""}</p>
                         <ul className="space-y-0.5 max-h-28 overflow-y-auto">
                           {pending.items.map((it, i) => (
-                            <li key={i} className="flex justify-between gap-2 text-[11px]">
+                            <li key={i} className="flex justify-between gap-2 text-2xs">
                               <span className="text-ink-2 truncate">{it.description || "—"}{it.qty ? ` × ${it.qty}` : ""}</span>
                               <span className="font-mono text-ink-3 shrink-0">{it.amount ? fmt(Number(it.amount)) : "—"}</span>
                             </li>
@@ -703,7 +703,7 @@ export function AddExpenseDialog({
                       <Button type="button" variant="primary" size="sm" icon="check" onClick={applyExtract}>Haan, sahi hai — bhar do</Button>
                       <Button type="button" variant="default" size="sm" onClick={discardExtract}>Galat — main khud bharunga</Button>
                     </div>
-                    <p className="mt-2 text-[10px] text-ink-3">Kaise bhi karo, 📎 <button type="button" onClick={openLocalFile} className="text-amber-ink underline hover:no-underline">{attachFile?.name}</button> bill attach ho jayega. (click karke dekho)</p>
+                    <p className="mt-2 text-3xs text-ink-3">Kaise bhi karo, 📎 <button type="button" onClick={openLocalFile} className="text-amber-ink underline hover:no-underline">{attachFile?.name}</button> bill attach ho jayega. (click karke dekho)</p>
                     {previewUrl && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={previewUrl} alt="Invoice preview" onClick={openLocalFile}
@@ -715,7 +715,7 @@ export function AddExpenseDialog({
 
               {attachFile && !pending && (
                 <div className="mt-2">
-                  <p className="flex items-center gap-1.5 text-[11px] text-ink-2">
+                  <p className="flex items-center gap-1.5 text-2xs text-ink-2">
                     <Icon name="file" size={12} />
                     <button type="button" onClick={openLocalFile} className="text-amber-ink underline hover:no-underline">{attachFile.name}</button>
                     — expense ke saath attach hoga
@@ -746,7 +746,7 @@ export function AddExpenseDialog({
                     </SelectContent>
                   </Select>
                   {categoryAuto && !categoryTouched && (
-                    <p className="mt-1 flex items-center gap-1 text-[10px] text-amber-ink">
+                    <p className="mt-1 flex items-center gap-1 text-3xs text-amber-ink">
                       <Icon name="sparkles" size={10} /> Auto-chuni — galat ho to badal do.
                     </p>
                   )}
@@ -777,7 +777,7 @@ export function AddExpenseDialog({
               </FormField>
             ) : !isPayroll ? (
               <div className="rounded-md border border-hairline bg-paper/60 p-2.5">
-                <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1.5">
+                <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">
                   Items — har item ki category{isForeign ? ` · amount ${currency} me` : ""}
                 </p>
                 <div className="space-y-2">
@@ -819,7 +819,7 @@ export function AddExpenseDialog({
 
                 {/* Split preview — >1 category ⇒ auto-split into that many entries. */}
                 {splitGroups.length > 1 && (
-                  <div className="mt-2 rounded-md bg-amber-soft/40 px-2.5 py-2 text-[11px] text-amber-ink leading-snug">
+                  <div className="mt-2 rounded-md bg-amber-soft/40 px-2.5 py-2 text-2xs text-amber-ink leading-snug">
                     <b>{splitGroups.length} categories</b> → Save par {splitGroups.length} alag entries banengi (ek hi bill se judi):
                     <span className="block mt-0.5 text-ink-2">
                       {splitGroups.map((g) => `${g.category} ${isForeign ? "" : "₹"}${g.amount.toLocaleString("en-IN")}`).join("  ·  ")}
@@ -832,7 +832,7 @@ export function AddExpenseDialog({
             {/* Toggle simple note ↔ itemised (hidden for payroll postings). */}
             {!isPayroll && (
               <button type="button" onClick={() => setShowItems((v) => !v)}
-                className="text-[11px] text-amber-ink hover:underline">
+                className="text-2xs text-amber-ink hover:underline">
                 {showItems ? "− Simple note pe wapas" : "+ Itemise (bill ke line items daalo)"}
               </button>
             )}
@@ -869,7 +869,7 @@ export function AddExpenseDialog({
                   </div>
                 )}
                 {!isForeign && (
-                  <p className="text-[10px] text-ink-3">GST is the input tax credit portion of the amount above — claimable in your GST return.</p>
+                  <p className="text-3xs text-ink-3">GST is the input tax credit portion of the amount above — claimable in your GST return.</p>
                 )}
               </>
             ) : (
@@ -901,33 +901,33 @@ export function AddExpenseDialog({
               )}
             </div>
             {(watch("tds_section") || "") !== "" && (
-              <p className="text-[10px] text-ink-3">Record the TDS you deducted while paying this vendor — it feeds your quarterly 26Q return.</p>
+              <p className="text-3xs text-ink-3">Record the TDS you deducted while paying this vendor — it feeds your quarterly 26Q return.</p>
             )}
           </section>
 
           {/* ── STEP 5: Paid already, or still to pay? ── */}
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Paisa de diya?</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1.5">Paisa de diya?</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
               <button type="button" onClick={() => { setPaid(true); setReimburse(false); }}
                 className={cn("rounded-md border px-3 py-2 text-sm text-left transition-colors",
                   paid && !reimburse ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
                 <span className="font-medium">Haan, de diya</span>
-                <span className="block text-[10px] text-ink-3">Company ne pay kiya (cash/UPI/bank)</span>
+                <span className="block text-3xs text-ink-3">Company ne pay kiya (cash/UPI/bank)</span>
               </button>
               {!isEdit && (
                 <button type="button" onClick={() => { setReimburse(true); }}
                   className={cn("rounded-md border px-3 py-2 text-sm text-left transition-colors",
                     reimburse ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
                   <span className="font-medium">Kisi aur ne diya</span>
-                  <span className="block text-[10px] text-ink-3">Reimbursement — company use wapas degi</span>
+                  <span className="block text-3xs text-ink-3">Reimbursement — company use wapas degi</span>
                 </button>
               )}
               <button type="button" onClick={() => { setPaid(false); setReimburse(false); }}
                 className={cn("rounded-md border px-3 py-2 text-sm text-left transition-colors",
                   !paid && !reimburse ? "border-amber bg-amber-soft/60 text-amber-ink" : "border-hairline text-ink-2 hover:bg-paper-2")}>
                 <span className="font-medium">Nahi, baad me</span>
-                <span className="block text-[10px] text-ink-3">Udhaar — vendor ko dena baaki</span>
+                <span className="block text-3xs text-ink-3">Udhaar — vendor ko dena baaki</span>
               </button>
             </div>
           </div>
@@ -936,7 +936,7 @@ export function AddExpenseDialog({
             <FormField label="Kisne diya? (person)" htmlFor="reimburse_person">
               <Input id="reimburse_person" placeholder="e.g. Prateek / Darshan / self"
                 value={reimbursePerson} onChange={(e) => setReimbursePerson(e.target.value)} />
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 Kharcha company ka hai (P&amp;L me jayega), par paisa <b>{reimbursePerson.trim() || "is vyakti"}</b> ne apne pocket se diya —
                 company ab unhe wapas degi (Reimbursements me &quot;payable&quot; ban jayega, baad me Settle karo).
               </p>
@@ -955,7 +955,7 @@ export function AddExpenseDialog({
           ) : (
             <FormField label="Kab tak dena hai? (due date — optional)" htmlFor="due_date">
               <Input id="due_date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-              <p className="text-[10px] text-ink-3 mt-1">P&amp;L mein aaj hi count hoga; bank/cash tab minus hoga jab &quot;Mark paid&quot; karoge.</p>
+              <p className="text-3xs text-ink-3 mt-1">P&amp;L mein aaj hi count hoga; bank/cash tab minus hoga jab &quot;Mark paid&quot; karoge.</p>
             </FormField>
           )}
 
@@ -973,7 +973,7 @@ export function AddExpenseDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-ink-3 mt-1">Kis bank se paisa gaya. Banking me isi account ki statement line se reconcile ho jayega.</p>
+              <p className="text-3xs text-ink-3 mt-1">Kis bank se paisa gaya. Banking me isi account ki statement line se reconcile ho jayega.</p>
             </FormField>
           )}
 
@@ -988,7 +988,7 @@ export function AddExpenseDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-ink-3 mt-1">Cash-in-hand se ye amount minus ho jayega.</p>
+              <p className="text-3xs text-ink-3 mt-1">Cash-in-hand se ye amount minus ho jayega.</p>
             </FormField>
           )}
 
@@ -1015,7 +1015,7 @@ export function AddExpenseDialog({
                         onMouseDown={(e) => { e.preventDefault(); setValue("vendor_name", v.name); setVendorId(v.id); setVendorMatch({ kind: "existing", name: v.name }); setVendorOpen(false); }}
                         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2">
                         <span className="text-ink truncate">{v.name}</span>
-                        {v.gstin && <span className="text-[10px] text-ink-3 font-mono shrink-0">{v.gstin}</span>}
+                        {v.gstin && <span className="text-3xs text-ink-3 font-mono shrink-0">{v.gstin}</span>}
                       </button>
                     ))}
                   </div>
@@ -1024,15 +1024,15 @@ export function AddExpenseDialog({
             </div>
             {vendorMatch && (
               vendorMatch.kind === "existing" ? (
-                <p className="mt-1 flex items-center gap-1.5 text-[11px] text-emerald">
+                <p className="mt-1 flex items-center gap-1.5 text-2xs text-emerald">
                   <Icon name="check_circle" size={12} /> Existing vendor mil gaya{aiGstin ? " (GSTIN se)" : ""} — isi se link hoga.
                 </p>
               ) : isGstBill ? (
-                <p className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-ink">
+                <p className="mt-1 flex items-center gap-1.5 text-2xs text-amber-ink">
                   <Icon name="plus" size={12} /> Naya vendor &ldquo;{vendorMatch.name}&rdquo;{aiGstin ? ` (GSTIN ${aiGstin})` : ""} — Save par Vendors master me add hoga.
                 </p>
               ) : (
-                <p className="mt-1 text-[11px] text-ink-3">Naya payee — kaccha/no-bill hone se Vendors master me add nahi hoga.</p>
+                <p className="mt-1 text-2xs text-ink-3">Naya payee — kaccha/no-bill hone se Vendors master me add nahi hoga.</p>
               )
             )}
           </FormField>
@@ -1041,7 +1041,7 @@ export function AddExpenseDialog({
           {isGstBill && (
             <FormField label="Bill / invoice no. (optional)" htmlFor="bill_no">
               <Input id="bill_no" placeholder="e.g. INV-2026-0042" value={billNo} onChange={(e) => setBillNo(e.target.value)} />
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 Ek hi invoice mein alag-alag category ka saaman? Har category ki <b>alag entry</b> banao — <b>same bill no.</b> daalo. Wo ek hi invoice ke hisse maane jayenge (duplicate warning nahi aayegi).
               </p>
             </FormField>
@@ -1055,7 +1055,7 @@ export function AddExpenseDialog({
               placeholder="e.g. Ranjeet ka birthday gift — company ne Prateek ke a/c me bheja, Prateek ne cash Ranjeet ko diya"
               {...register("notes")}
             />
-            <p className="text-[10px] text-ink-3 mt-1">Koi bhi extra detail — kis liye, kiske through, koi note. Report/detail me dikhega.</p>
+            <p className="text-3xs text-ink-3 mt-1">Koi bhi extra detail — kis liye, kiske through, koi note. Report/detail me dikhega.</p>
           </FormField>
 
           <DialogFooter>

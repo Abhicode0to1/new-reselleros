@@ -99,7 +99,7 @@ export function EnquiryClient({
             )}
             <div>
               <div className="font-serif text-base leading-none text-ink">{brandName}</div>
-              <div className="mt-1 text-[10px] text-ink-3">Cloud Reseller · India</div>
+              <div className="mt-1 text-3xs text-ink-3">Cloud Reseller · India</div>
             </div>
           </div>
         )}
@@ -127,7 +127,7 @@ export function EnquiryClient({
           ) : (
             <>
               <div className="mb-5">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-3">
+                <p className="text-3xs font-semibold uppercase tracking-wider text-ink-3">
                   Enquiry
                 </p>
                 <h1 className="mt-1 font-serif text-2xl leading-tight text-ink">
@@ -214,7 +214,7 @@ export function EnquiryClient({
                   Send enquiry
                 </Button>
 
-                <p className="text-center text-[11px] text-ink-3">
+                <p className="text-center text-2xs text-ink-3">
                   We&apos;ll only use your details to respond to this enquiry.
                 </p>
               </form>
@@ -223,7 +223,7 @@ export function EnquiryClient({
         </div>
 
         {!embed && (
-          <p className="mt-4 text-center text-[10px] text-ink-3">
+          <p className="mt-4 text-center text-3xs text-ink-3">
             Powered by ResellerOS
           </p>
         )}

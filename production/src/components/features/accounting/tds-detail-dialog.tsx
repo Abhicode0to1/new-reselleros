@@ -176,7 +176,7 @@ export function TdsDetailDialog({ open, onOpenChange, tds }: Props) {
 
         {tds.notes && (
           <div className="bg-paper-2/40 rounded-md p-3 text-xs text-ink-2 leading-relaxed">
-            <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Notes</div>
+            <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Notes</div>
             {tds.notes}
           </div>
         )}
@@ -186,7 +186,7 @@ export function TdsDetailDialog({ open, onOpenChange, tds }: Props) {
           <div className="flex items-center justify-between mb-2">
             <div>
               <div className="text-sm font-medium text-ink">Form 16A Certificate</div>
-              <div className="text-[11px] text-ink-3 mt-0.5">
+              <div className="text-2xs text-ink-3 mt-0.5">
                 {tds.form_16a_url
                   ? "Uploaded · verify on Form 26AS next"
                   : "PDF or image, max 10 MB"}
@@ -385,7 +385,7 @@ function Field({
 }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">{label}</div>
       <div className={`text-ink ${mono ? "font-mono" : ""}`}>{value}</div>
     </div>
   );

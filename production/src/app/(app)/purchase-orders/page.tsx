@@ -248,7 +248,7 @@ export default function PurchaseOrdersPage() {
                       <td className="p-3 font-mono text-xs font-semibold text-ink">{p.id}</td>
                       <td className="p-3">
                         <div className="font-medium text-sm text-ink">{p.customer_name}</div>
-                        {p.domain && <div className="text-[11px] text-ink-3 font-mono">{p.domain}</div>}
+                        {p.domain && <div className="text-2xs text-ink-3 font-mono">{p.domain}</div>}
                       </td>
                       <td className="p-3 text-sm text-ink-2">{p.plan}</td>
                       <td className="p-3">
@@ -258,7 +258,7 @@ export default function PurchaseOrdersPage() {
                       <td className="p-3 text-right tabular-nums text-sm">{p.term_months}m</td>
                       <td className="p-3 text-right tabular-nums text-sm font-medium">
                         {rupee(p.total_cost)}
-                        <div className="text-[10px] text-ink-3">{rupee(p.unit_cost_pm)}/seat/mo</div>
+                        <div className="text-3xs text-ink-3">{rupee(p.unit_cost_pm)}/seat/mo</div>
                       </td>
                       <td className="p-3 text-right tabular-nums text-sm">
                         {(() => {
@@ -271,7 +271,7 @@ export default function PurchaseOrdersPage() {
                             <>
                               <div className="font-medium">{rupee(s.allocated_total)}</div>
                               <div className={cn(
-                                "text-[10px] tabular-nums",
+                                "text-3xs tabular-nums",
                                 Math.abs(v) < 100  ? "text-emerald" :
                                 v > 0              ? "text-amber-ink" :
                                                      "text-rose",
@@ -284,7 +284,7 @@ export default function PurchaseOrdersPage() {
                           );
                         })()}
                       </td>
-                      <td className="p-3 font-mono text-[11px] text-ink-2">
+                      <td className="p-3 font-mono text-2xs text-ink-2">
                         {p.vendor_order_id ?? <span className="text-ink-3">—</span>}
                       </td>
                       <td className="p-3"><Badge kind={meta.kind} dot>{meta.label}</Badge></td>
@@ -323,11 +323,11 @@ export default function PurchaseOrdersPage() {
                   <div className="min-w-0 flex-1">
                     <span className="font-mono text-xs font-semibold text-ink">{p.id}</span>
                     <p className="text-sm font-medium text-ink mt-0.5 truncate">{p.customer_name}</p>
-                    {p.domain && <p className="text-[11px] text-ink-3 font-mono truncate">{p.domain}</p>}
+                    {p.domain && <p className="text-2xs text-ink-3 font-mono truncate">{p.domain}</p>}
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-serif text-base tabular-nums text-ink">{rupee(p.total_cost)}</p>
-                    <p className="text-[10px] text-ink-3">{p.seats}s · {p.term_months}m</p>
+                    <p className="text-3xs text-ink-3">{p.seats}s · {p.term_months}m</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-hairline/60 text-xs">
@@ -386,7 +386,7 @@ export default function PurchaseOrdersPage() {
               })}
             </tbody>
           </table>
-          <p className="text-[11px] text-ink-3 mt-3">
+          <p className="text-2xs text-ink-3 mt-3">
             <Icon name="info" size={11} className="inline mr-1" />
             Gap = customer subscriptions waiting on procurement. Negative = over-ordered (maybe seat reduction).
           </p>

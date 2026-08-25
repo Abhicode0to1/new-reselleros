@@ -307,7 +307,7 @@ export default function MobilePwaPage() {
                 </Button>
               </div>
             </div>
-            <p className="mt-3 text-[11px] text-ink-3">
+            <p className="mt-3 text-2xs text-ink-3">
               Renders the live app inside an iPhone-sized frame (375×812). Same code, same auth — what you tap inside the frame is real.
             </p>
           </Card>
@@ -328,7 +328,7 @@ export default function MobilePwaPage() {
           </div>
 
           <p className="text-center text-xs text-ink-3">
-            Tip: shrink your browser window or hit <kbd className="px-1 py-0.5 rounded border border-hairline font-mono text-[10px]">F12</kbd> → Device Toolbar for an even more realistic test.
+            Tip: shrink your browser window or hit <kbd className="px-1 py-0.5 rounded border border-hairline font-mono text-3xs">F12</kbd> → Device Toolbar for an even more realistic test.
           </p>
         </div>
       )}
@@ -401,7 +401,7 @@ function InstallSection({
       <ol className="space-y-2 text-sm text-ink-2">
         {steps.map((step, i) => (
           <li key={i} className="flex gap-2.5">
-            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber/15 text-amber-ink text-[11px] font-semibold tabular-nums">
+            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber/15 text-amber-ink text-2xs font-semibold tabular-nums">
               {i + 1}
             </span>
             <span>{step}</span>

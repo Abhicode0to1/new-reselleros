@@ -87,7 +87,7 @@ export default async function PortalBillingPage() {
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-ink-3">Outstanding now</p>
+              <p className="text-2xs uppercase tracking-wider font-semibold text-ink-3">Outstanding now</p>
               <p className="font-serif text-2xl font-semibold text-rose tabular-nums">{rupee(outstanding)}</p>
             </div>
             <Link
@@ -134,7 +134,7 @@ export default async function PortalBillingPage() {
                         {formatDate(p.billOn)}
                         {i === 0 && <Badge kind="warning" size="sm" className="ml-2">next</Badge>}
                       </p>
-                      <p className="text-[11px] text-ink-3">
+                      <p className="text-2xs text-ink-3">
                         covers {formatDate(p.periodStart)} – {formatDate(p.periodEnd)}
                       </p>
                     </div>
@@ -152,7 +152,7 @@ export default async function PortalBillingPage() {
             )}
 
             {current.length > 0 && (
-              <p className="mt-2 text-[11px] text-ink-3">
+              <p className="mt-2 text-2xs text-ink-3">
                 This term totals {rupee(grossAmount(scheduleTotal(current), 18))} including GST, across{" "}
                 {current.length} {current.length === 1 ? "invoice" : "invoices"}.
               </p>
@@ -193,7 +193,7 @@ export default async function PortalBillingPage() {
               <li key={inv.id} className="flex items-center justify-between gap-3 py-2">
                 <div className="min-w-0">
                   <p className="truncate font-mono text-[13px] text-ink">{inv.id}</p>
-                  <p className="text-[11px] text-ink-3">{formatDate(inv.invoice_date)}</p>
+                  <p className="text-2xs text-ink-3">{formatDate(inv.invoice_date)}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Badge kind={inv.status === "paid" ? "success" : inv.status === "overdue" ? "danger" : "warning"} size="sm">
@@ -210,7 +210,7 @@ export default async function PortalBillingPage() {
         </Card>
       )}
 
-      <p className="px-1 text-[11px] leading-snug text-ink-3">
+      <p className="px-1 text-2xs leading-snug text-ink-3">
         Scheduled amounts are what is planned, not invoices. Each tax invoice is issued on
         its own date. If something here looks wrong, tell {session.tenantName} before it is
         raised — it is much easier to fix now than with a credit note afterwards.

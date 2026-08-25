@@ -76,7 +76,7 @@ export function Intro({ children }: { children: React.ReactNode }) {
 export function TOC({ items }: { items: Array<{ id: string; label: string }> }) {
   return (
     <nav className="rounded-md border border-hairline bg-paper-2/40 px-5 py-4">
-      <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+      <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
         On this page
       </p>
       <ol className="space-y-1 text-sm text-ink-2 list-decimal pl-4 marker:text-ink-3">

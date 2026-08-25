@@ -42,7 +42,7 @@ export function ShortcutsSheet({ open, onOpenChange }: {
         <div className="space-y-4">
           {shortcutGroups().map(({ group, items }) => (
             <div key={group}>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-3">
+              <p className="mb-1.5 text-3xs font-semibold uppercase tracking-wider text-ink-3">
                 {group}
               </p>
               <ul className="space-y-1">
@@ -55,7 +55,7 @@ export function ShortcutsSheet({ open, onOpenChange }: {
                     {/* The scope is stated, because "j moves the list" is confusing on a
                         page with no list — and somebody WILL try it there first. */}
                     {s.scope !== "global" && (
-                      <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wider text-ink-3">
+                      <span className="ml-auto shrink-0 text-3xs uppercase tracking-wider text-ink-3">
                         {s.scope === "list" ? "on a list" : "in a form"}
                       </span>
                     )}
@@ -95,18 +95,18 @@ export function KeyHintBar({ visible, onShowHelp, className }: {
       )}
       role="status"
     >
-      <span className="flex items-center gap-1.5 text-[11px] text-ink-2">
+      <span className="flex items-center gap-1.5 text-2xs text-ink-2">
         <Kbd keys={["j"]} /><Kbd keys={["k"]} /> Navigate
       </span>
       <span aria-hidden="true" className="text-ink-3">·</span>
-      <span className="flex items-center gap-1.5 text-[11px] text-ink-2">
+      <span className="flex items-center gap-1.5 text-2xs text-ink-2">
         <Kbd keys={["Enter"]} /> Open
       </span>
       <span aria-hidden="true" className="text-ink-3">·</span>
       <button
         type="button"
         onClick={onShowHelp}
-        className="flex items-center gap-1.5 text-[11px] text-amber-ink hover:underline"
+        className="flex items-center gap-1.5 text-2xs text-amber-ink hover:underline"
       >
         <Kbd keys={["?"]} /> Shortcuts
       </button>

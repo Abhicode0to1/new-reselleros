@@ -45,7 +45,7 @@ export default async function PortalLayout({ children }: { children: React.React
             </div>
             <div className="min-w-0">
               <div className="font-serif text-base leading-none truncate">{brandName}</div>
-              <div className="text-[10px] text-ink-3 mt-1">Customer Portal</div>
+              <div className="text-3xs text-ink-3 mt-1">Customer Portal</div>
             </div>
           </Link>
           <div className="flex items-center gap-5">

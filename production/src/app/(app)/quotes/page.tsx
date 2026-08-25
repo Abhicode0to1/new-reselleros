@@ -354,7 +354,7 @@ export default function QuotesPage() {
                       ) : (
                         <span className="font-medium text-ink block truncate">{p.customer_name}</span>
                       )}
-                      <Link href={`/projects/${p.id}` as never} className="text-[11px] text-ink-2 hover:text-amber-ink hover:underline block truncate">{p.title}</Link>
+                      <Link href={`/projects/${p.id}` as never} className="text-2xs text-ink-2 hover:text-amber-ink hover:underline block truncate">{p.title}</Link>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -389,7 +389,7 @@ export default function QuotesPage() {
                     </Badge>
                     <div className="text-right">
                       <span className="font-serif text-base tabular-nums text-ink">{rupee(p.total_amount)}</span>
-                      {p.receivable > 0 && <span className="block text-[10px] text-rose">{rupee(p.receivable)} due</span>}
+                      {p.receivable > 0 && <span className="block text-3xs text-rose">{rupee(p.receivable)} due</span>}
                     </div>
                   </div>
                 </li>
@@ -398,7 +398,7 @@ export default function QuotesPage() {
 
             <div className="hidden md:block overflow-auto max-h-[calc(100vh-15rem)]">
               <table className="w-full text-sm min-w-[620px]">
-                <thead className="sticky top-0 z-10 bg-paper-2 border-b border-hairline text-[10px] uppercase tracking-wider text-ink-3">
+                <thead className="sticky top-0 z-10 bg-paper-2 border-b border-hairline text-3xs uppercase tracking-wider text-ink-3">
                   <tr>
                     <th className="text-left px-4 py-2.5">Customer / Project</th>
                     <th className="text-left px-3 py-2.5">Type</th>
@@ -504,7 +504,7 @@ export default function QuotesPage() {
                       onClick={() => setTab("all")}
                       className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
                     >
-                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Pipeline</p>
+                      <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Pipeline</p>
                       <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalValue, { compact: true })}</p>
                     </button>
                     <button
@@ -512,7 +512,7 @@ export default function QuotesPage() {
                       onClick={() => setTab("sent")}
                       className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-amber/60 transition-all cursor-pointer"
                     >
-                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Out for review</p>
+                      <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Out for review</p>
                       <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{rupee(sentValue, { compact: true })}</p>
                     </button>
                     <button
@@ -520,26 +520,26 @@ export default function QuotesPage() {
                       onClick={() => setTab("accepted")}
                       className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left hover:border-emerald/60 transition-all cursor-pointer"
                     >
-                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Accepted</p>
+                      <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Accepted</p>
                       <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(acceptedValue, { compact: true })}</p>
                     </button>
                     <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Pipeline Margin</p>
+                      <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Pipeline Margin</p>
                       <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(pipelineMargin, { compact: true })}</p>
                       {/* A total that silently drops the unknowns reads as a complete
                           measurement of the pipeline when it is a partial one. */}
                       {pipelineMarginUnknownCount > 0 && (
-                        <p className="mt-0.5 text-[10px] leading-snug text-amber-ink">
+                        <p className="mt-0.5 text-3xs leading-snug text-amber-ink">
                           {pipelineMarginUnknownCount} quote{pipelineMarginUnknownCount === 1 ? "" : "s"} excluded — no cost
                         </p>
                       )}
                     </div>
                     <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
+                      <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Win Rate</p>
                       <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{winRate}%</p>
                     </div>
                     <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                      <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Total Quotes</p>
+                      <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Total Quotes</p>
                       <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{quotes.length}</p>
                     </div>
                   </div>
@@ -704,15 +704,15 @@ export default function QuotesPage() {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-mono text-xs font-semibold text-ink">{q.id}</span>
                         {q.is_extension ? (
-                          <Badge kind="warning" className="font-sans text-[10px]">
+                          <Badge kind="warning" className="font-sans text-3xs">
                             Extension · {Math.round((q.extension_months ?? 12) / 12)}yr
                           </Badge>
                         ) : q.is_renewal ? (
-                          <Badge kind="info" className="font-sans text-[10px]">Renewal</Badge>
+                          <Badge kind="info" className="font-sans text-3xs">Renewal</Badge>
                         ) : q.is_add_seats ? (
-                          <Badge kind="info" className="font-sans text-[10px]">Prorata</Badge>
+                          <Badge kind="info" className="font-sans text-3xs">Prorata</Badge>
                         ) : q.is_one_off ? (
-                          <Badge kind="muted" className="font-sans text-[10px]">Direct invoice</Badge>
+                          <Badge kind="muted" className="font-sans text-3xs">Direct invoice</Badge>
                         ) : null}
                       </div>
                       <p className="text-sm font-semibold text-ink mt-1 truncate">
@@ -723,7 +723,7 @@ export default function QuotesPage() {
                       <p className="font-serif text-base font-bold tabular-nums text-ink">
                         {quoteMoney(q)}
                       </p>
-                      <p className="text-[11px] text-ink-3 tabular-nums">
+                      <p className="text-2xs text-ink-3 tabular-nums">
                         {q.seats ?? "—"} seats
                       </p>
                     </div>
@@ -745,7 +745,7 @@ export default function QuotesPage() {
                           anywhere. Same helper as the table, so the two cannot drift. */}
                       {note && (
                         <span className={cn(
-                          "text-[10px] font-semibold tabular-nums",
+                          "text-3xs font-semibold tabular-nums",
                           note.tone === "owed" ? "text-rose" : "text-amber-ink",
                         )}>
                           {note.text}
@@ -758,7 +758,7 @@ export default function QuotesPage() {
               </li>
             );
           })}
-          <li className="pt-2 text-center text-[11px] text-ink-3">
+          <li className="pt-2 text-center text-2xs text-ink-3">
             Showing {filtered.length} of {counts.all ?? 0} · Total {rupee(filtered.reduce((s, q) => s + (q.amount ?? 0), 0), { compact: true })}
           </li>
         </ul>
@@ -771,13 +771,13 @@ export default function QuotesPage() {
             <table className="w-full">
               <thead className="bg-paper-2 border-b border-hairline-strong">
                 <tr>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Quote</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Customer</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Plan</th>
-                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Amount</th>
-                  <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider" title="Annual margin">Margin</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Validity</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Quote</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Customer</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Plan</th>
+                  <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Amount</th>
+                  <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider" title="Annual margin">Margin</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Status</th>
+                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Validity</th>
                   <th className="px-2 py-2.5 text-right"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -806,33 +806,33 @@ export default function QuotesPage() {
                       {/* Compact ID — the tail number as a chip; full ID on hover. */}
                       <td className="px-3 py-2.5 align-top" title={q.id}>
                         <div className="flex items-center gap-1.5">
-                          <span className="inline-flex items-center rounded-md bg-paper-2 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink">
+                          <span className="inline-flex items-center rounded-md bg-paper-2 px-1.5 py-0.5 font-mono text-2xs font-semibold text-ink">
                             #{q.id.split("-").pop()}
                           </span>
                           {q.is_extension ? (
-                            <Badge kind="warning" className="font-sans text-[10px]">
+                            <Badge kind="warning" className="font-sans text-3xs">
                               Ext · {Math.round((q.extension_months ?? 12) / 12)}yr
                             </Badge>
                           ) : q.is_renewal ? (
-                            <Badge kind="info" className="font-sans text-[10px]">Renewal</Badge>
+                            <Badge kind="info" className="font-sans text-3xs">Renewal</Badge>
                           ) : q.is_add_seats ? (
-                            <Badge kind="info" className="font-sans text-[10px]">Prorata</Badge>
+                            <Badge kind="info" className="font-sans text-3xs">Prorata</Badge>
                           ) : q.is_one_off ? (
-                            <Badge kind="muted" className="font-sans text-[10px]">Direct invoice</Badge>
+                            <Badge kind="muted" className="font-sans text-3xs">Direct invoice</Badge>
                           ) : null}
                         </div>
                       </td>
                       <td className="px-3 py-2.5 align-top">
                         <div className="font-medium text-ink leading-snug break-words max-w-[220px]" title={cleanDisplayName(q.customer_name)}>{cleanDisplayName(q.customer_name)}</div>
                         {phoneSuffixOf(q.customer_name) && (
-                          <div className="text-[10px] text-ink-3 tabular-nums mt-0.5">{phoneSuffixOf(q.customer_name)}</div>
+                          <div className="text-3xs text-ink-3 tabular-nums mt-0.5">{phoneSuffixOf(q.customer_name)}</div>
                         )}
                       </td>
                       {/* Plan — wraps to a second line rather than truncating with "…". */}
                       <td className="px-3 py-2.5 text-sm text-ink-2 align-top">
                         <div className="leading-snug break-words max-w-[240px]">{q.plan ?? "—"}</div>
                         {q.seats != null && (
-                          <div className="text-[10px] text-ink-3 mt-0.5"><span className="font-semibold text-ink-2 tabular-nums">{q.seats}</span> seats</div>
+                          <div className="text-3xs text-ink-3 mt-0.5"><span className="font-semibold text-ink-2 tabular-nums">{q.seats}</span> seats</div>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-right align-top">
@@ -843,7 +843,7 @@ export default function QuotesPage() {
                           {/* Foreign quote: show the ₹ base underneath so the amount
                               reconciles with the (all-INR) pipeline totals. */}
                           {isForeignCurrency(q.currency) && q.amount ? (
-                            <span className="text-[10px] text-ink-3 tabular-nums">≈ {rupee(q.amount)}</span>
+                            <span className="text-3xs text-ink-3 tabular-nums">≈ {rupee(q.amount)}</span>
                           ) : null}
                         </div>
                       </td>
@@ -867,7 +867,7 @@ export default function QuotesPage() {
                             >
                               {margin.marginPct}%
                             </Badge>
-                            <span className="text-[10px] text-ink-3 tabular-nums">{rupee(margin.margin)}</span>
+                            <span className="text-3xs text-ink-3 tabular-nums">{rupee(margin.margin)}</span>
                           </div>
                         )}
                       </td>
@@ -884,7 +884,7 @@ export default function QuotesPage() {
                               <Badge kind={uStatus.kind} dot>{uStatus.label}</Badge>
                               {note && (
                                 <span className={cn(
-                                  "text-[10px] font-medium tabular-nums",
+                                  "text-3xs font-medium tabular-nums",
                                   note.tone === "owed" ? "text-rose" : "text-amber-ink",
                                 )}>
                                   {note.text}

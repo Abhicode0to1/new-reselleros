@@ -130,18 +130,18 @@ function StepCompany({
           {(() => {
             const v = data.gstin.trim();
             if (v.length < 15) return (
-              <p className="mt-1 text-[10px] text-ink-3">
+              <p className="mt-1 text-3xs text-ink-3">
                 State auto-fills from the first 2 digits of your GSTIN.
               </p>
             );
             if (isValidGstin(v)) return (
-              <p className="mt-1 text-[10px] text-emerald inline-flex items-center gap-1">
+              <p className="mt-1 text-3xs text-emerald inline-flex items-center gap-1">
                 <Icon name="check_circle" size={11} /> Format + checksum match. Click Verify to confirm with GSTN.
               </p>
             );
             const r = validateGstin(v);
             return (
-              <p className="mt-1 text-[10px] text-rose inline-flex items-center gap-1">
+              <p className="mt-1 text-3xs text-rose inline-flex items-center gap-1">
                 <Icon name="alert" size={11} /> {r.ok ? "" : r.message}
               </p>
             );
@@ -502,7 +502,7 @@ function StepDone() {
 
       {/* Next-steps checklist */}
       <div className="mx-auto mt-6 max-w-md rounded-xl border border-hairline bg-paper-2 p-4 text-left">
-        <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-ink-3">
+        <p className="mb-3 text-3xs font-bold uppercase tracking-widest text-ink-3">
           Suggested first week
         </p>
         <div className="space-y-2">
@@ -728,7 +728,7 @@ export default function SetupPage() {
               <div key={s.id} className="text-center">
                 <div
                   className={cn(
-                    "mx-auto mb-1.5 flex h-7 w-7 items-center justify-center rounded-full border-1.5 text-[11px] font-semibold",
+                    "mx-auto mb-1.5 flex h-7 w-7 items-center justify-center rounded-full border-1.5 text-2xs font-semibold",
                     i < step
                       ? "border-emerald-500 bg-emerald-500 text-white"
                       : i === step
@@ -745,7 +745,7 @@ export default function SetupPage() {
                 </div>
                 <p
                   className={cn(
-                    "text-[10px]",
+                    "text-3xs",
                     i === step ? "font-semibold text-ink" : "text-ink-3",
                   )}
                 >

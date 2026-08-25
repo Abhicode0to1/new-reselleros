@@ -200,7 +200,7 @@ export function AddBankAccountForm({ open, onOpenChange, account }: Props) {
                 error={errors.name?.message}
                 {...register("name")}
               />
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 Short name to identify this account in dropdowns. E.g. &ldquo;HDFC Main&rdquo; or &ldquo;ICICI Operations&rdquo;.
               </p>
             </FormField>
@@ -220,7 +220,7 @@ export function AddBankAccountForm({ open, onOpenChange, account }: Props) {
                   </Select>
                   <input type="hidden" {...register("bank_name")} value={bankName} />
                   {errors.bank_name?.message && (
-                    <p className="mt-1 text-[10px] text-rose">{errors.bank_name.message}</p>
+                    <p className="mt-1 text-3xs text-rose">{errors.bank_name.message}</p>
                   )}
                 </FormField>
 
@@ -235,7 +235,7 @@ export function AddBankAccountForm({ open, onOpenChange, account }: Props) {
                       error={errors.account_number_last4?.message}
                       {...register("account_number_last4")}
                     />
-                    <p className="text-[10px] text-ink-3 mt-1">
+                    <p className="text-3xs text-ink-3 mt-1">
                       Last 4 only — full number not stored
                     </p>
                   </FormField>
@@ -254,7 +254,7 @@ export function AddBankAccountForm({ open, onOpenChange, account }: Props) {
             )}
 
             {isCash && (
-              <div className="rounded-md bg-amber-soft/50 border border-amber/30 px-3 py-2 text-[11px] text-amber-ink leading-relaxed">
+              <div className="rounded-md bg-amber-soft/50 border border-amber/30 px-3 py-2 text-2xs text-amber-ink leading-relaxed">
                 <b>Petty cash / cash in hand.</b> No bank or IFSC needed. Move money in
                 with &ldquo;Withdraw to petty cash&rdquo; from a bank account, and cash
                 expenses (Expenses → paid by Cash) reduce this balance.
@@ -262,7 +262,7 @@ export function AddBankAccountForm({ open, onOpenChange, account }: Props) {
             )}
 
             {isCard && (
-              <div className="rounded-md bg-indigo-soft/50 border border-indigo/30 px-3 py-2 text-[11px] text-indigo-ink leading-relaxed">
+              <div className="rounded-md bg-indigo-soft/50 border border-indigo/30 px-3 py-2 text-2xs text-indigo-ink leading-relaxed">
                 <b>Company credit card.</b> Ye ek <b>owe / udhari</b> hai — jo paisa aapko chukana hai.
                 Card ke kharche is card par transaction ke roop me add karke expense categorise
                 karo; jab card ka bill pay karo to <b>Transfer</b> (bank → ye card) use karo —
@@ -310,7 +310,7 @@ export function AddBankAccountForm({ open, onOpenChange, account }: Props) {
                 />
               </FormField>
             </div>
-            <p className="text-[11px] text-ink-3 -mt-2 leading-relaxed">
+            <p className="text-2xs text-ink-3 -mt-2 leading-relaxed">
               {isCard
                 ? "Upar wali date tak is card par jo owe / udhari hai wo daalo (positive number). Naye card kharche isme jud jaate hain; bill pay karne se ghat jaati hai."
                 : "Opening balance = money in this account on the “as of” date, BEFORE any transaction you import. Set it to the closing balance on your bank statement just before your first imported line — the running balance builds on top of it."}
@@ -326,7 +326,7 @@ export function AddBankAccountForm({ open, onOpenChange, account }: Props) {
               />
             </FormField>
 
-            <div className="rounded-md bg-paper-2/40 border border-hairline px-3 py-2 text-[11px] text-ink-3 leading-relaxed">
+            <div className="rounded-md bg-paper-2/40 border border-hairline px-3 py-2 text-2xs text-ink-3 leading-relaxed">
               <b className="text-ink-2">Security:</b> ResellerOS stores only the
               IFSC and last 4 digits of your account number — never the full
               account number or any credentials. Your live bank balance is

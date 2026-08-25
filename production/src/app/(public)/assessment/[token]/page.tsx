@@ -155,7 +155,7 @@ export default function TakeAssessmentPage() {
     return (
       <Shell>
         <div className="text-center py-4">
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Your result</div>
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Your result</div>
           <div className="font-serif text-5xl mt-2" style={{ color: GRADE_COLOR[result.grade] }}>{result.grade}</div>
           <div className="text-2xl font-serif text-ink mt-1">{result.pct}%</div>
           <div className="text-sm text-ink-2 mt-1">{result.score} / {result.total} correct · {mmss(elapsed)} liya</div>
@@ -176,7 +176,7 @@ export default function TakeAssessmentPage() {
           </div>
           {/* Live timer */}
           <div className="shrink-0 text-right">
-            <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Time</div>
+            <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Time</div>
             <div className="font-mono tabular-nums text-lg text-ink leading-tight">{mmss(elapsed)}</div>
           </div>
         </div>
@@ -185,7 +185,7 @@ export default function TakeAssessmentPage() {
       {/* Language toggle — only for bilingual tests. */}
       {hasHinglish && (
         <div className="mb-4 flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Language</span>
+          <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Language</span>
           <div className="inline-flex rounded-md border border-hairline overflow-hidden">
             {(["en", "hi"] as const).map((l) => (
               <button key={l} type="button" onClick={() => setLang(l)}
@@ -198,14 +198,14 @@ export default function TakeAssessmentPage() {
       )}
 
       {/* Transparency: candidate is told the test is monitored (honest by design). */}
-      <div className="mb-4 rounded-md border border-amber/40 bg-amber-soft/40 px-3 py-2 text-[11px] text-amber-ink">
+      <div className="mb-4 rounded-md border border-amber/40 bg-amber-soft/40 px-3 py-2 text-2xs text-amber-ink">
         Ye test timed + monitored hai — time, tab/window switch aur paste record hote hain. Kripya test isi tab me poora karein, kisi aur source (AI/Google) ki madad na lein.
         {focusLost > 0 && <span className="block mt-1 font-medium">⚠ Aap {focusLost} baar test se bahar gaye — ye record ho gaya hai.</span>}
       </div>
 
       {/* Who is taking */}
       <div className="mb-5 rounded-lg border border-hairline bg-paper-2/40 p-3">
-        <label className="block text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Aap kaun ho?</label>
+        <label className="block text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Aap kaun ho?</label>
         {data.employees.length > 0 ? (
           <select value={empId} onChange={(e) => setEmpId(e.target.value)}
             className="w-full px-3 py-2 text-sm rounded-md border border-hairline bg-paper">

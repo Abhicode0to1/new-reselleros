@@ -115,7 +115,7 @@ export function GettingStartedCard({
               </span>
               <span className="min-w-0 flex-1">
                 <span className={`block text-sm font-medium ${s.done ? "text-ink-3 line-through" : "text-ink"}`}>{s.label}</span>
-                {!s.done && <span className="block text-[11px] text-ink-3">{s.hint}</span>}
+                {!s.done && <span className="block text-2xs text-ink-3">{s.hint}</span>}
               </span>
               {!s.done && (
                 <Link

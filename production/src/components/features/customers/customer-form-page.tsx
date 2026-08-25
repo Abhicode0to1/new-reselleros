@@ -65,7 +65,7 @@ function Row({
     <div className="grid grid-cols-1 md:grid-cols-[190px_minmax(0,1fr)] gap-1.5 md:gap-5 md:items-start py-3.5 border-b border-hairline/50 last:border-b-0">
       <div className="md:pt-2">
         <Label htmlFor={htmlFor} required={required}>{label}</Label>
-        {hint && <p className="text-[11px] leading-snug text-ink-3 mt-1">{hint}</p>}
+        {hint && <p className="text-2xs leading-snug text-ink-3 mt-1">{hint}</p>}
       </div>
       <div className="max-w-xl">{children}</div>
     </div>
@@ -84,10 +84,10 @@ function ReviewLine({ label, value, mono, note }: {
   const v = (value ?? "").trim();
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] uppercase tracking-wider text-ink-3">{label}</dt>
+      <dt className="text-3xs uppercase tracking-wider text-ink-3">{label}</dt>
       {v ? (
         <dd className={cn("break-words text-[13px] font-medium text-ink", mono && "font-mono")}>
-          {v}{note && <span className="ml-1 font-sans text-[11px] font-normal text-ink-3">· {note}</span>}
+          {v}{note && <span className="ml-1 font-sans text-2xs font-normal text-ink-3">· {note}</span>}
         </dd>
       ) : (
         <dd className="text-[12px] italic text-ink-3">not set</dd>
@@ -422,7 +422,7 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
             />
             {displayNameSuggestions.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] text-ink-3">Suggestions:</span>
+                <span className="text-2xs text-ink-3">Suggestions:</span>
                 {displayNameSuggestions.map((s) => (
                   <button
                     key={s}
@@ -612,7 +612,7 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
             <div className="overflow-x-auto rounded-lg border border-hairline mb-3">
               <table className="w-full min-w-[860px] border-collapse text-sm">
                 <thead>
-                  <tr className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3">
+                  <tr className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3">
                     <th className="w-[92px] text-left font-medium px-3 py-2 border-b border-r border-hairline">Salutation</th>
                     <th className="text-left font-medium px-3 py-2 border-b border-r border-hairline">First name</th>
                     <th className="text-left font-medium px-3 py-2 border-b border-r border-hairline">Last name</th>
@@ -694,7 +694,7 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
             end up on a document a tax officer reads. */}
         <section className={cn(tab !== "review" && "hidden")}>
           <div className="rounded-xl border border-hairline bg-paper-2/40 p-4 md:p-5">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+            <p className="mb-3 text-2xs font-semibold uppercase tracking-wider text-ink-3">
               About to be saved
             </p>
             <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -719,7 +719,7 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
               <ReviewLine label="City"     value={watch("city")} />
               <ReviewLine label="PIN"      value={watch("pin_code")} mono />
             </dl>
-            <p className="mt-3 border-t border-hairline pt-2.5 text-[11px] leading-snug text-ink-3">
+            <p className="mt-3 border-t border-hairline pt-2.5 text-2xs leading-snug text-ink-3">
               Anything marked “not set” saves empty. Go back to any tab above to fill it —
               nothing is lost.
             </p>

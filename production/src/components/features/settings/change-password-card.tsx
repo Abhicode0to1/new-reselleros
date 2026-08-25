@@ -62,7 +62,7 @@ export default function ChangePasswordCard() {
     <Card className="p-4">
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-ink">Change your password</h3>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-ink-3">
+        <p className="mt-0.5 text-2xs leading-relaxed text-ink-3">
           Only yours. To reset a teammate&apos;s, use <b>Send reset link</b> on the Team page.
         </p>
       </div>
@@ -124,7 +124,7 @@ export default function ChangePasswordCard() {
           Change password
         </Button>
 
-        <p className="text-[11px] leading-relaxed text-ink-3">
+        <p className="text-2xs leading-relaxed text-ink-3">
           Devices already signed in stay signed in — a password change does not sign them
           out. Sign out from each one if that is what you need.
         </p>

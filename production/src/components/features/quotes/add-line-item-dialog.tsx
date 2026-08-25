@@ -233,7 +233,7 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
                               {it.vendor}
                             </Badge>
                           </div>
-                          <div className="text-[11px] text-ink-3 font-mono truncate">{it.id}</div>
+                          <div className="text-2xs text-ink-3 font-mono truncate">{it.id}</div>
                         </div>
                         <div className="text-right shrink-0 tabular-nums">
                           {useIntlUsd && it.prices?.usd && it.prices.usd.msrp > 0 ? (
@@ -253,7 +253,7 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
                             </div>
                           )}
                           <div className={cn(
-                            "text-[10px]",
+                            "text-3xs",
                             it.margin_pct >= 18 ? "text-emerald" : it.margin_pct >= 14 ? "text-amber-ink" : "text-rose"
                           )}>
                             {it.margin_pct}% margin
@@ -331,7 +331,7 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
 
             {/* USD entry: make the ₹-books conversion explicit so it's never a surprise */}
             {usdEntry && customRate > 0 && (
-              <p className="text-[11px] text-ink-3">
+              <p className="text-2xs text-ink-3">
                 Billed in {entryCur} · recorded in books as{" "}
                 <span className="font-medium text-ink-2">{rupee(Math.round(customRate * (fx ?? 1)))}</span>/unit at ₹{fx}/{entryCur}.
               </p>

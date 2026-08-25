@@ -157,7 +157,7 @@ export default function NewTicketPage() {
               {...register("body")}
             />
             {errors.body?.message && (
-              <p className="text-[11px] text-rose mt-1">{errors.body.message}</p>
+              <p className="text-2xs text-rose mt-1">{errors.body.message}</p>
             )}
           </FormField>
 

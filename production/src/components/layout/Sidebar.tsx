@@ -74,7 +74,7 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                 looks like one. */}
             <div
               className={cn(
-                "text-[11px] truncate",
+                "text-2xs truncate",
                 identity.status === "member" ? "text-ink-3" : "text-amber-ink",
               )}
               title={me?.tenantName ?? "No workspace"}
@@ -95,7 +95,7 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
         {/* Mobile-only quick-grid — surface My Expenses & top tools at the top of the "More" drawer */}
         <div className="md:hidden">
-          <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-ink-3 mb-1.5">Quick Actions</div>
+          <div className="px-3 py-1 text-3xs font-bold uppercase tracking-wider text-ink-3 mb-1.5">Quick Actions</div>
           <div className="grid grid-cols-2 gap-2 px-1 pb-3 mb-1 border-b border-hairline">
             {[
               { href: "/my-expenses",   label: "My Expenses", icon: "wallet" },
@@ -164,7 +164,7 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                 {b && (collapsed ? (
                   <span className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-amber" />
                 ) : (
-                  <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full tabular-nums flex-shrink-0", isActive ? "bg-amber/15 text-amber" : "bg-paper-2 text-ink-3")}>
+                  <span className={cn("text-3xs px-1.5 py-0.5 rounded-full tabular-nums flex-shrink-0", isActive ? "bg-amber/15 text-amber" : "bg-paper-2 text-ink-3")}>
                     {b}
                   </span>
                 ))}
@@ -333,7 +333,7 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                   </div>
                   <div
                     className={cn(
-                      "text-[11px] truncate",
+                      "text-2xs truncate",
                       identity.status === "member" ? "text-ink-3 font-mono" : "text-amber-ink",
                     )}
                     title={identity.email ?? undefined}
@@ -352,7 +352,7 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                       claim about somebody we have not identified. roleLabel() handles a
                       value the union does not know rather than rendering blank. */}
                   {identity.status === "member" && me?.role && (
-                    <div className="text-[10px] uppercase tracking-wider text-ink-3 truncate">
+                    <div className="text-3xs uppercase tracking-wider text-ink-3 truncate">
                       {roleLabel(me.role)}
                     </div>
                   )}

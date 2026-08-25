@@ -154,7 +154,7 @@ export function AddReferralDialog({ open, onOpenChange, customerId, customerName
                 <Input type="text" inputMode="numeric" prefix="₹" value={fixedAmount} onChange={(e) => setFixedAmount(e.target.value.replace(/[^\d]/g, ""))} placeholder="e.g. 5000" />
               )}
             </div>
-            <p className="mt-1 text-[11px] text-ink-3">
+            <p className="mt-1 text-2xs text-ink-3">
               {basis === "percent"
                 ? "Deal ke ex-GST value ka % (GST par commission nahi)."
                 : "Har qualifying payment par tay amount."}
@@ -179,7 +179,7 @@ export function AddReferralDialog({ open, onOpenChange, customerId, customerName
             <Input id="ref_label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Google Workspace — 50 seats" />
           </FormField>
 
-          <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-[11px] text-amber-ink leading-relaxed">
+          <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-2xs text-amber-ink leading-relaxed">
             {basis === "percent"
               ? <>Har {scope === "recurring" ? "payment" : "pehli payment"} par <b>{pctNum}%</b> commission banegi{deductTds ? " (− 5% TDS)" : ""}. Manually approve karke pay karoge.</>
               : <>Har {scope === "recurring" ? "payment" : "pehli payment"} par <b>{rupee(fixedNum)}</b> commission banegi{deductTds ? " (− 5% TDS)" : ""}.</>}

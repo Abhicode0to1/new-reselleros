@@ -74,7 +74,7 @@ export default function SentryClientTestPage() {
   return (
     <div className="mx-auto max-w-[720px] p-6 space-y-4">
       <div>
-        <p className="text-[11px] uppercase tracking-wider text-ink-3">Dev · monitoring</p>
+        <p className="text-2xs uppercase tracking-wider text-ink-3">Dev · monitoring</p>
         <h1 className="font-serif text-2xl text-ink">Browser Sentry test</h1>
         <p className="mt-1 text-sm text-ink-2">
           The server half was proven with <code className="font-mono text-[12px]">/api/sentry-test</code>.
@@ -120,7 +120,7 @@ export default function SentryClientTestPage() {
         <Button variant="primary" onClick={() => setCrash(true)}>
           Crash this page
         </Button>
-        <p className="text-[11px] leading-relaxed text-ink-3">
+        <p className="text-2xs leading-relaxed text-ink-3">
           Expect the &ldquo;We hit a snag&rdquo; screen. Then look in Sentry for
           <b> ResellerOS BROWSER Sentry test</b> — if it is there, the browser half works.
         </p>

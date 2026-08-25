@@ -54,7 +54,7 @@ export function BillDetailDialog({ bill, onClose }: { bill: VendorBill; onClose:
           {/* Line items */}
           <div className="rounded-lg border border-hairline overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2 text-ink-3 text-[11px] uppercase tracking-wider">
+              <thead className="bg-paper-2 text-ink-3 text-2xs uppercase tracking-wider">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium">Item</th>
                   <th className="text-right px-3 py-2 font-medium">Qty</th>
@@ -90,7 +90,7 @@ export function BillDetailDialog({ bill, onClose }: { bill: VendorBill; onClose:
               <span className="font-mono tabular-nums text-ink-2">{money(subDisp)}</span>
             </div>
             {itemsMatch !== null && (
-              <div className={`flex items-center gap-1.5 text-[11px] ${itemsMatch ? "text-emerald" : "text-amber-ink"}`}>
+              <div className={`flex items-center gap-1.5 text-2xs ${itemsMatch ? "text-emerald" : "text-amber-ink"}`}>
                 <Icon name={itemsMatch ? "check_circle" : "alert"} size={12} />
                 {itemsMatch ? "Items add up to the subtotal" : `Items (${money(itemsSum)}) don't match the subtotal (${money(subDisp)}) — check the entry`}
               </div>
@@ -103,17 +103,17 @@ export function BillDetailDialog({ bill, onClose }: { bill: VendorBill; onClose:
               <span className="font-semibold text-ink">Total</span>
               <span className="text-right">
                 <span className="font-mono tabular-nums font-semibold text-ink">{money(totDisp)}</span>
-                {foreign && <span className="block text-[11px] font-normal text-ink-3">= {rupee(bill.total)}</span>}
+                {foreign && <span className="block text-2xs font-normal text-ink-3">= {rupee(bill.total)}</span>}
               </span>
             </div>
             {!totalMatch && (
-              <div className="flex items-center gap-1.5 text-[11px] text-amber-ink">
+              <div className="flex items-center gap-1.5 text-2xs text-amber-ink">
                 <Icon name="alert" size={12} /> Subtotal + GST doesn&apos;t equal Total — re-check the amounts.
               </div>
             )}
           </div>
 
-          <p className="text-[11px] text-ink-3">
+          <p className="text-2xs text-ink-3">
             Amounts shown in {foreign ? `${cur} (the bill's currency), with ₹ for the total` : "₹"}.
             {bill.attachment_url ? " Open the original bill from the ⋯ menu to compare." : ""}
           </p>

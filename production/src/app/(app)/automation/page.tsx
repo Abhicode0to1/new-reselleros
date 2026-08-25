@@ -176,7 +176,7 @@ export default function AutomationPage() {
               <li key={r.id} className="rounded-md border border-hairline bg-paper p-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="text-sm font-medium text-ink">{r.action}</span>
-                  <span className="font-mono text-[11px] text-ink-3">
+                  <span className="font-mono text-2xs text-ink-3">
                     {formatDate(r.created_at)}
                   </span>
                 </div>
@@ -212,7 +212,7 @@ export default function AutomationPage() {
               </p>
               {/* Stated plainly, because it is the question somebody will have the moment
                   they flip it back. */}
-              <p className="mt-1.5 text-[11px] text-ink-3">
+              <p className="mt-1.5 text-2xs text-ink-3">
                 Turning it off never stops your own alerts — a switch that silenced those
                 would hide the thing you flipped it to look at.
               </p>
@@ -231,7 +231,7 @@ export default function AutomationPage() {
           </div>
         )}
         {!canEdit && !policy.isLoading && (
-          <p className="mt-3 border-t border-hairline pt-3 text-[11px] text-ink-3">
+          <p className="mt-3 border-t border-hairline pt-3 text-2xs text-ink-3">
             You can see these settings but not change them. Ask an owner or a manager.
           </p>
         )}
@@ -240,7 +240,7 @@ export default function AutomationPage() {
       {/* ── 3. THE DIAL ───────────────────────────────────────────────────── */}
       <div className="mb-2 flex items-baseline justify-between">
         <h2 className="font-serif text-xl text-ink">What it may do</h2>
-        <span className="text-[11px] text-ink-3">
+        <span className="text-2xs text-ink-3">
           {policy.data?.killSwitch ? "All paused by the switch above" : ""}
         </span>
       </div>
@@ -258,7 +258,7 @@ export default function AutomationPage() {
                     <Badge kind="muted">default</Badge>
                   )}
                 </div>
-                <p className="mt-0.5 text-[11px] text-ink-3">{MODE_COPY[a.mode].hint}</p>
+                <p className="mt-0.5 text-2xs text-ink-3">{MODE_COPY[a.mode].hint}</p>
               </div>
               <div className="flex shrink-0 gap-1">
                 {(["off", "hold", "auto"] as Mode[])
@@ -319,12 +319,12 @@ export default function AutomationPage() {
                     </Badge>
                     <span className="font-mono text-xs text-ink-2">{r.action}</span>
                     {r.entity && r.entity_id && (
-                      <span className="font-mono text-[11px] text-ink-3">
+                      <span className="font-mono text-2xs text-ink-3">
                         {r.entity} {r.entity_id}
                       </span>
                     )}
                   </div>
-                  <span className="font-mono text-[11px] text-ink-3">
+                  <span className="font-mono text-2xs text-ink-3">
                     {formatDate(r.created_at)}
                   </span>
                 </div>
@@ -353,7 +353,7 @@ function FactList({ facts }: { facts: Record<string, unknown> }) {
   return (
     <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
       {entries.map(([k, v]) => (
-        <span key={k} className="font-mono text-[10px] text-ink-3">
+        <span key={k} className="font-mono text-3xs text-ink-3">
           <span className="text-ink-4">{k}</span> {String(v)}
         </span>
       ))}

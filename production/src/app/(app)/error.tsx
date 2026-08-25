@@ -35,7 +35,7 @@ export default function AppError({
         <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600">
           <Icon name="alert" className="h-6 w-6" />
         </div>
-        <p className="mb-2 text-[11px] uppercase tracking-wider text-ink-3">
+        <p className="mb-2 text-2xs uppercase tracking-wider text-ink-3">
           Something went wrong
         </p>
         <h1 className="mb-3 font-serif text-2xl text-ink">
@@ -59,7 +59,7 @@ export default function AppError({
           <Button onClick={() => reset()}>Try again</Button>
         </div>
         {error.digest && (
-          <p className="mt-6 font-mono text-[11px] text-ink-3">
+          <p className="mt-6 font-mono text-2xs text-ink-3">
             ref: {error.digest}
           </p>
         )}

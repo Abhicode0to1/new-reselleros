@@ -110,7 +110,7 @@ export function ConnectAaDialog({ open, onOpenChange, bankAccountId, bankName }:
               onChange={(e) => setVua(e.target.value)}
               className="font-mono"
             />
-            <p className="text-[10px] text-ink-3 mt-1">
+            <p className="text-3xs text-ink-3 mt-1">
               Format: <code>+91&lt;phone&gt;@&lt;aa-app&gt;</code>. Example:{" "}
               <code>+919876543210@onemoney</code> (or <code>@finvu</code>, <code>@nadl</code>).
             </p>
@@ -126,14 +126,14 @@ export function ConnectAaDialog({ open, onOpenChange, bankAccountId, bankName }:
               value={windowDays}
               onChange={(e) => setWindowDays(parseInt(e.target.value, 10) || 180)}
             />
-            <p className="text-[10px] text-ink-3 mt-1">
+            <p className="text-3xs text-ink-3 mt-1">
               How many days of past transactions to pull on first sync. Bank
               max is usually 365 days. After this, daily auto-sync picks up
               only new entries.
             </p>
           </FormField>
 
-          <div className="rounded-md bg-amber-soft/50 border border-amber/30 px-3 py-2 text-[11px] text-amber-ink leading-relaxed">
+          <div className="rounded-md bg-amber-soft/50 border border-amber/30 px-3 py-2 text-2xs text-amber-ink leading-relaxed">
             <Badge kind="warning" size="sm" dot className="mb-1">Status</Badge>
             <p>
               <b>Mock mode active.</b> Without Setu API keys configured, this

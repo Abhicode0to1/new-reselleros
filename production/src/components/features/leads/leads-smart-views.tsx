@@ -193,11 +193,11 @@ export function LeadsSmartViews({
           <span className="hidden text-ink-3 sm:inline">{"View: "}</span>
           <span className="font-medium">{activeLabel}</span>
           {activeDef?.count !== undefined && (
-            <span className="text-[10px] tabular-nums opacity-70">{activeDef.count}</span>
+            <span className="text-3xs tabular-nums opacity-70">{activeDef.count}</span>
           )}
           {showOverdueAlert && (
             <span
-              className="ml-0.5 inline-flex items-center gap-1 rounded-full bg-rose-soft px-1.5 py-0.5 text-[10px] font-semibold text-rose tabular-nums"
+              className="ml-0.5 inline-flex items-center gap-1 rounded-full bg-rose-soft px-1.5 py-0.5 text-3xs font-semibold text-rose tabular-nums"
               title={`${overdue} lead${overdue === 1 ? "" : "s"} past their follow-up date`}
             >
               {overdue} overdue
@@ -208,7 +208,7 @@ export function LeadsSmartViews({
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-ink-3">
+        <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
           Views
         </DropdownMenuLabel>
         {views.map((v) => (
@@ -217,7 +217,7 @@ export function LeadsSmartViews({
         {cleanup.length > 0 && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-ink-3">
+            <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
               Needs cleanup
             </DropdownMenuLabel>
             {cleanup.map((v) => (
@@ -254,7 +254,7 @@ function ViewRow({ view, active, onSelect }: { view: ViewDef; active: boolean; o
         <span className={cn("block text-xs", active ? "font-semibold text-ink" : "text-ink-2")}>
           {view.label}
         </span>
-        <span className="block text-[10px] text-ink-3">{view.hint}</span>
+        <span className="block text-3xs text-ink-3">{view.hint}</span>
       </span>
       {view.count !== undefined && (
         <span className={cn("text-xs font-semibold tabular-nums shrink-0", countTone)}>

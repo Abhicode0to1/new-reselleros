@@ -383,7 +383,7 @@ export default function ContactsPage() {
                     <a
                       href={`mailto:${c.email}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="block font-mono text-[11px] text-amber-ink truncate mt-1"
+                      className="block font-mono text-2xs text-amber-ink truncate mt-1"
                     >
                       {c.email}
                     </a>
@@ -392,7 +392,7 @@ export default function ContactsPage() {
                     <a
                       href={`tel:${c.phone}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="block font-mono text-[11px] text-amber-ink truncate"
+                      className="block font-mono text-2xs text-amber-ink truncate"
                     >
                       {c.phone}
                     </a>
@@ -480,7 +480,7 @@ export default function ContactsPage() {
                             {c.name ?? <span className="italic text-ink-3">No name</span>}
                           </div>
                           {c.title && (
-                            <div className="text-[11px] text-ink-3 truncate">{c.title}</div>
+                            <div className="text-2xs text-ink-3 truncate">{c.title}</div>
                           )}
                         </div>
                       </div>
@@ -609,7 +609,7 @@ function StatItem({
       {icon && <Icon name={icon} size={13} className="text-ink-3 self-center" />}
       <span className="font-serif text-xl text-ink leading-none tabular-nums">{value}</span>
       <span className="text-xs text-ink-3">{label}</span>
-      {hint && <span className="text-[11px] text-ink-3">· {hint}</span>}
+      {hint && <span className="text-2xs text-ink-3">· {hint}</span>}
     </div>
   );
 }

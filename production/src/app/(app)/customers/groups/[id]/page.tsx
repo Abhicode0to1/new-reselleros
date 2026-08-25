@@ -119,22 +119,22 @@ export default function CustomerGroupDetailPage() {
       {/* Rollup KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
         <Card className="p-4">
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Companies</div>
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Companies</div>
           <div className="font-serif text-2xl mt-1 tabular-nums">{members.length}</div>
         </Card>
         <Card className="p-4">
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Total outstanding</div>
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Total outstanding</div>
           <div className={`font-serif text-2xl mt-1 tabular-nums ${totalOutstanding > 0 ? "text-rose" : "text-ink"}`}>{rupee(totalOutstanding)}</div>
         </Card>
         <Card className="p-4">
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Total MRR</div>
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Total MRR</div>
           <div className="font-serif text-2xl mt-1 tabular-nums">{rupee(totalMRR)}</div>
         </Card>
       </div>
 
       {group.is_partner && (
         <Card className="mb-6 bg-paper-2/40 p-3">
-          <p className="text-[11px] text-ink-3 leading-relaxed flex items-start gap-1.5">
+          <p className="text-2xs text-ink-3 leading-relaxed flex items-start gap-1.5">
             <Icon name="info" size={13} className="mt-0.5 shrink-0" />
             <span>This reseller earns a commission. Add the actual per-deal commission from each company&apos;s <Link href={"/referrals" as never} className="text-amber hover:underline">Referrals</Link> — it flows into your P&amp;L automatically.</span>
           </p>
@@ -158,7 +158,7 @@ export default function CustomerGroupDetailPage() {
           <Card className="hidden md:block overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+                <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                   <tr>
                     <th className="text-left px-4 py-3">Company</th>
                     <th className="text-left px-4 py-3">GSTIN</th>
@@ -210,7 +210,7 @@ export default function CustomerGroupDetailPage() {
 
       {group.notes && (
         <Card className="mt-6 p-4">
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Notes</div>
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Notes</div>
           <p className="text-sm text-ink-2 whitespace-pre-wrap">{group.notes}</p>
         </Card>
       )}

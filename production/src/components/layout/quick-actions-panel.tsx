@@ -282,7 +282,7 @@ function GenericActions() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="text-[10px] uppercase font-semibold text-ink-3 tracking-[0.1em] mb-2.5">
+      <h3 className="text-3xs uppercase font-semibold text-ink-3 tracking-[0.1em] mb-2.5">
         {title}
       </h3>
       {children}

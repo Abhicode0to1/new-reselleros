@@ -86,7 +86,7 @@ function ScreenshotThumb({ path, name }: { path: string; name: string | null }) 
   if (failed) {
     // Says what is wrong rather than showing a broken image frame.
     return (
-      <div className="w-24 h-16 rounded border border-hairline bg-paper-2 flex items-center justify-center text-[10px] text-ink-4 text-center px-1">
+      <div className="w-24 h-16 rounded border border-hairline bg-paper-2 flex items-center justify-center text-3xs text-ink-4 text-center px-1">
         Could not load
       </div>
     );
@@ -328,7 +328,7 @@ function FeedbackCard({ row, userId }: { row: FeedbackWithShots; userId: string 
               )}
             </div>
             {row.directive ? (
-              <pre className="text-[11px] leading-relaxed text-ink whitespace-pre-wrap font-mono bg-paper-2 border border-hairline rounded-md p-3 max-h-96 overflow-y-auto">
+              <pre className="text-2xs leading-relaxed text-ink whitespace-pre-wrap font-mono bg-paper-2 border border-hairline rounded-md p-3 max-h-96 overflow-y-auto">
                 {row.directive}
               </pre>
             ) : (
@@ -369,9 +369,9 @@ export default function AdminFeedbackPage() {
       <div>
         <h1 className="text-2xl md:text-3xl font-serif text-ink">Feedback &amp; AI Fixes</h1>
         <p className="text-sm text-ink-3 mt-1">
-          Every bug report and idea the team files with <kbd className="px-1 py-0.5 rounded bg-paper-2 border border-hairline font-mono text-[11px]">Ctrl</kbd>{" "}
-          <kbd className="px-1 py-0.5 rounded bg-paper-2 border border-hairline font-mono text-[11px]">Shift</kbd>{" "}
-          <kbd className="px-1 py-0.5 rounded bg-paper-2 border border-hairline font-mono text-[11px]">B</kbd>, triaged and turned into a directive for a coding agent.
+          Every bug report and idea the team files with <kbd className="px-1 py-0.5 rounded bg-paper-2 border border-hairline font-mono text-2xs">Ctrl</kbd>{" "}
+          <kbd className="px-1 py-0.5 rounded bg-paper-2 border border-hairline font-mono text-2xs">Shift</kbd>{" "}
+          <kbd className="px-1 py-0.5 rounded bg-paper-2 border border-hairline font-mono text-2xs">B</kbd>, triaged and turned into a directive for a coding agent.
         </p>
       </div>
 
@@ -393,7 +393,7 @@ export default function AdminFeedbackPage() {
               {s === "mine" ? "This workspace" : "All workspaces"}
             </button>
           ))}
-          <span className="text-[11px] text-ink-3">
+          <span className="text-2xs text-ink-3">
             Testers on their own workspace file reports here too — they are invisible on
             &ldquo;This workspace&rdquo;.
           </span>
@@ -450,7 +450,7 @@ export default function AdminFeedbackPage() {
                 {error instanceof Error ? error.message : "Unknown error."}
                 <br />
                 If this says the table does not exist, migration{" "}
-                <code className="font-mono text-[11px]">20260819120000_feedback_triage</code> has not been applied yet.
+                <code className="font-mono text-2xs">20260819120000_feedback_triage</code> has not been applied yet.
               </>
             }
           />
@@ -532,16 +532,16 @@ function PlatformFeedbackList({
         {others.map((r) => (
           <li key={r.id} className="px-4 py-3">
             <div className="flex flex-wrap items-baseline gap-2">
-              <span className="rounded bg-paper-2 border border-hairline px-1.5 py-0.5 text-[10px] font-medium text-ink-2">
+              <span className="rounded bg-paper-2 border border-hairline px-1.5 py-0.5 text-3xs font-medium text-ink-2">
                 {r.tenantName}
               </span>
               <span className="text-[13px] font-medium text-ink">{r.title ?? "(no title)"}</span>
               {r.severity_score != null && (
-                <span className="text-[11px] text-ink-3 tabular-nums">{r.severity_score}/100</span>
+                <span className="text-2xs text-ink-3 tabular-nums">{r.severity_score}/100</span>
               )}
             </div>
             <p className="mt-1 text-[12px] text-ink-2 leading-snug">{r.body}</p>
-            <p className="mt-1 text-[11px] text-ink-3">
+            <p className="mt-1 text-2xs text-ink-3">
               {r.reporter_name ?? "someone"} &middot; {r.reporter_email ?? "no email"}
               {r.page_path ? ` · ${r.page_path}` : ""} &middot; {new Date(r.created_at).toLocaleString("en-IN")}
             </p>
@@ -554,7 +554,7 @@ function PlatformFeedbackList({
                       <img src={sh.url} alt={sh.fileName} className="h-20 rounded border border-hairline" />
                     </a>
                   ) : (
-                    <span key={sh.id} className="text-[11px] text-ink-3">
+                    <span key={sh.id} className="text-2xs text-ink-3">
                       {sh.fileName} — could not be loaded
                     </span>
                   ),
@@ -568,7 +568,7 @@ function PlatformFeedbackList({
                   void navigator.clipboard.writeText(r.directive!);
                   toast.success("Directive copied — paste it into Claude Code.");
                 }}
-                className="mt-2 rounded border border-hairline px-2 py-0.5 text-[11px] text-ink-2 hover:bg-paper-2"
+                className="mt-2 rounded border border-hairline px-2 py-0.5 text-2xs text-ink-2 hover:bg-paper-2"
               >
                 Copy directive
               </button>

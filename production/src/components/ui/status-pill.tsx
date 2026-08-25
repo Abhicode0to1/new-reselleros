@@ -131,7 +131,7 @@ export function StatusPill({
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 tracking-wide shadow-xs transition-colors",
-        size === "sm" ? "text-[11px] px-2 py-0.25" : "text-xs px-2.5 py-0.5",
+        size === "sm" ? "text-2xs px-2 py-0.25" : "text-xs px-2.5 py-0.5",
         config.bg,
         config.text,
         config.border,

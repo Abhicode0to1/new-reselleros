@@ -223,13 +223,13 @@ export default function ItemsPage() {
       {!isLoading && items && items.length > 0 && (
         <div className="space-y-2.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="w-14 shrink-0 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Vendor</span>
+            <span className="w-14 shrink-0 text-3xs uppercase tracking-wider text-ink-3 font-semibold">Vendor</span>
             {tabsWithCounts.map((t) => (
               <FilterChip key={t.id} active={vendor === t.id} onClick={() => setVendor(t.id)} label={t.label} count={t.count} dot={t.dot} />
             ))}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="w-14 shrink-0 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Type</span>
+            <span className="w-14 shrink-0 text-3xs uppercase tracking-wider text-ink-3 font-semibold">Type</span>
             {kindTabsWithCounts.map((t) => (
               <FilterChip key={t.id} active={kind === t.id} onClick={() => setKind(t.id)} label={t.label} count={t.count} dot={t.dot} />
             ))}
@@ -314,13 +314,13 @@ export default function ItemsPage() {
                 <div className="flex items-start justify-between gap-3 mb-1.5">
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-ink truncate">{it.name}</p>
-                    <p className="font-mono text-[11px] text-ink-3 mt-0.5">{it.id}</p>
+                    <p className="font-mono text-2xs text-ink-3 mt-0.5">{it.id}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-serif text-base tabular-nums text-ink">
-                      {rupee(it.msrp)}<span className="text-[10px] text-ink-3 font-sans">/mo</span>
+                      {rupee(it.msrp)}<span className="text-3xs text-ink-3 font-sans">/mo</span>
                     </p>
-                    <p className="text-[10px] text-ink-3">{it.margin_pct}% margin</p>
+                    <p className="text-3xs text-ink-3">{it.margin_pct}% margin</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-2 border-t border-hairline/60">
@@ -395,7 +395,7 @@ export default function ItemsPage() {
                         tone === "rose" && "text-rose"
                       )}>
                         {rupee(margin)}
-                        <div className="text-[10px]">{it.margin_pct}%</div>
+                        <div className="text-3xs">{it.margin_pct}%</div>
                       </div>
                     </td>
                     <td className="p-3">
@@ -539,7 +539,7 @@ function OneTimeCatalog({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-medium text-ink truncate">{it.name}</p>
-                  <p className="font-mono text-[11px] text-ink-3 mt-0.5">HSN/SAC {it.hsn ?? "—"}</p>
+                  <p className="font-mono text-2xs text-ink-3 mt-0.5">HSN/SAC {it.hsn ?? "—"}</p>
                 </div>
                 <p className="font-serif text-base tabular-nums text-ink shrink-0">{rupee(it.msrp)}</p>
               </div>
@@ -629,7 +629,7 @@ function PublicBuyPagesCard({ items }: { items: Item[] }) {
     <Card className="p-5">
       <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
         <div>
-          <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">
             Public buy pages
           </div>
           <h2 className="font-serif text-lg text-ink leading-tight">
@@ -659,7 +659,7 @@ function PublicBuyPagesCard({ items }: { items: Item[] }) {
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div>
                   <div className="font-serif text-base text-ink leading-tight">{bp.label}</div>
-                  <div className="text-[11px] text-ink-3 font-mono mt-0.5">{bp.href}</div>
+                  <div className="text-2xs text-ink-3 font-mono mt-0.5">{bp.href}</div>
                 </div>
                 {bp.status === "live" ? (
                   <Badge kind="success" size="sm">Live</Badge>
@@ -683,7 +683,7 @@ function PublicBuyPagesCard({ items }: { items: Item[] }) {
                   </Button>
                 </div>
               ) : (
-                <div className="text-[11px] text-ink-3 italic">
+                <div className="text-2xs text-ink-3 italic">
                   Build this landing page in the next sprint.
                 </div>
               )}
@@ -833,13 +833,13 @@ function PartnerCatalogSection() {
                     {row.kind === "main" ? "Main" : "Add-on"}
                   </Badge>
                 </div>
-                <p className="text-[11px] text-ink-3 mt-0.5 font-mono">{row.id}</p>
+                <p className="text-2xs text-ink-3 mt-0.5 font-mono">{row.id}</p>
               </div>
               <div className="text-right shrink-0">
                 <p className="text-sm font-medium tabular-nums text-ink">
-                  {rupee(row.partner_price ?? 0)}<span className="text-[10px] text-ink-3 font-normal">/seat/mo</span>
+                  {rupee(row.partner_price ?? 0)}<span className="text-3xs text-ink-3 font-normal">/seat/mo</span>
                 </p>
-                <p className="text-[10px] text-ink-3 tabular-nums">
+                <p className="text-3xs text-ink-3 tabular-nums">
                   = {rupee((row.partner_price ?? 0) * 12)}/yr
                 </p>
               </div>

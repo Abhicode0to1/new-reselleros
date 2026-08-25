@@ -200,19 +200,19 @@ export default function PersonalExpensesPage() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Card className="p-4">
-              <p className="text-[11px] uppercase tracking-wide text-ink-4">Company se (is FY)</p>
+              <p className="text-2xs uppercase tracking-wide text-ink-4">Company se (is FY)</p>
               <div className="mt-0.5"><Money amount={flow.drawnFromCompany} size="display" /></div>
             </Card>
             <Card className="p-4">
-              <p className="text-[11px] uppercase tracking-wide text-ink-4">Kul aaya</p>
+              <p className="text-2xs uppercase tracking-wide text-ink-4">Kul aaya</p>
               <div className="mt-0.5"><Money amount={flow.moneyIn} size="display" /></div>
             </Card>
             <Card className="p-4">
-              <p className="text-[11px] uppercase tracking-wide text-ink-4">Kharch hua</p>
+              <p className="text-2xs uppercase tracking-wide text-ink-4">Kharch hua</p>
               <div className="mt-0.5"><Money amount={flow.moneyOut} size="display" /></div>
             </Card>
             <Card className="p-4">
-              <p className="text-[11px] uppercase tracking-wide text-ink-4">Bacha</p>
+              <p className="text-2xs uppercase tracking-wide text-ink-4">Bacha</p>
               <div className="mt-0.5"><Money amount={flow.net} size="display" /></div>
             </Card>
           </div>
@@ -289,7 +289,7 @@ export default function PersonalExpensesPage() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Type</label>
+                <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Type</label>
                 <Select value={form.kind} onValueChange={(v) => setForm((f) => ({ ...f, kind: v as TxKind }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -300,7 +300,7 @@ export default function PersonalExpensesPage() {
                 </Select>
               </div>
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Amount (₹)</label>
+                <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Amount (₹)</label>
                 <Input
                   value={form.amount}
                   onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
@@ -312,7 +312,7 @@ export default function PersonalExpensesPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Date</label>
+                <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Date</label>
                 <Input
                   type="date"
                   value={form.occurred_on}
@@ -320,7 +320,7 @@ export default function PersonalExpensesPage() {
                 />
               </div>
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Account</label>
+                <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Account</label>
                 <Select
                   value={form.account_id || "none"}
                   onValueChange={(v) => setForm((f) => ({ ...f, account_id: v === "none" ? "" : v }))}
@@ -336,7 +336,7 @@ export default function PersonalExpensesPage() {
 
             {!isIncome && (
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Kis cheez par</label>
+                <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Kis cheez par</label>
                 <Select
                   value={form.category || "none"}
                   onValueChange={(v) => setForm((f) => ({ ...f, category: v === "none" ? "" : v }))}
@@ -351,7 +351,7 @@ export default function PersonalExpensesPage() {
             )}
 
             <div>
-              <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Note</label>
+              <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Note</label>
               <Input
                 value={form.note}
                 onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}

@@ -178,7 +178,7 @@ export default function EmailSendingCard() {
                 </span>
                 {active && <Icon name="check" size={14} className="text-amber-ink" />}
               </div>
-              <p className="mt-0.5 text-[11px] leading-snug text-ink-3">
+              <p className="mt-0.5 text-2xs leading-snug text-ink-3">
                 {p === "resend"
                   ? "Reports bounces. Needs a verified domain."
                   : gmailReady
@@ -193,7 +193,7 @@ export default function EmailSendingCard() {
       {/* Stated plainly because it is the reason Resend is the default and it is
           invisible until a customer's address goes dead. */}
       {data.provider === "gmail" && (
-        <p className="mb-4 text-[11px] leading-relaxed text-ink-3">
+        <p className="mb-4 text-2xs leading-relaxed text-ink-3">
           Gmail does not report bounces. A dead customer address will fail
           silently and this app will still record the email as sent.
         </p>
@@ -208,7 +208,7 @@ export default function EmailSendingCard() {
                 connected and ready, connected but missing the send scope, and
                 not connected at all. Collapsing the first two into "Not
                 connected" told the user to redo work they had already done. */}
-            <p className="truncate text-[11px] text-ink-3">
+            <p className="truncate text-2xs text-ink-3">
               {gmailReady
                 ? `${data.gmail.email} · ready to send${data.gmail.isDesignated ? "" : " (not yet selected)"}`
                 : data.gmail.email
@@ -257,7 +257,7 @@ export default function EmailSendingCard() {
             {data.senderCandidates.filter((c) => !c.eligible).length > 0 && (
               <ul className="mt-2 space-y-1">
                 {data.senderCandidates.filter((c) => !c.eligible).map((c) => (
-                  <li key={c.userId} className="text-[11px] leading-relaxed text-ink-3">
+                  <li key={c.userId} className="text-2xs leading-relaxed text-ink-3">
                     <span className="font-mono text-ink-2">{c.loginEmail ?? c.userId}</span>{" "}
                     {blockerText(c.blocker!)}
                   </li>
@@ -265,7 +265,7 @@ export default function EmailSendingCard() {
               </ul>
             )}
 
-            <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
+            <p className="mt-2 text-2xs leading-relaxed text-ink-3">
               Mail leaves from the <b>Google address</b> shown here, which is what the
               customer sees — not the workspace login.
             </p>
@@ -286,7 +286,7 @@ export default function EmailSendingCard() {
             spellCheck={false}
             className="font-mono"
           />
-          <p className="mt-1 text-[11px] leading-relaxed text-ink-3">
+          <p className="mt-1 text-2xs leading-relaxed text-ink-3">
             {data.hasResendKey
               ? "A key is saved for this workspace. Leaving this blank keeps it — it is never deleted by saving."
               : data.hasEnvResendKey
@@ -315,7 +315,7 @@ export default function EmailSendingCard() {
             />
           </div>
         </div>
-        <p className="text-[11px] leading-relaxed text-ink-3">
+        <p className="text-2xs leading-relaxed text-ink-3">
           The domain must be verified inside your own Resend account, or Resend
           rejects the send. Holding a valid key with an unverified domain is the
           most common reason mail quietly stops.

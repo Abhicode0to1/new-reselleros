@@ -180,7 +180,7 @@ function LedgerPageInner() {
           {/* Customer / vendor. A segmented control, not a dropdown: it changes what the
               Dr and Cr columns MEAN, which is too consequential to hide in a menu. */}
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
+            <label className="block text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
               Ledger of
             </label>
             <div className="inline-flex rounded-md border border-hairline overflow-hidden">
@@ -201,7 +201,7 @@ function LedgerPageInner() {
           </div>
 
           <div className="min-w-[220px] flex-1">
-            <label htmlFor="party" className="block text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
+            <label htmlFor="party" className="block text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
               {kind === "customer" ? "Customer" : "Vendor"}
             </label>
             {kind === "customer" ? (
@@ -239,7 +239,7 @@ function LedgerPageInner() {
           </div>
 
           <div>
-            <label htmlFor="period" className="block text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
+            <label htmlFor="period" className="block text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
               Period
             </label>
             <select
@@ -316,13 +316,13 @@ function SummaryStrip({ statement: s, partyName }: { statement: LedgerStatement;
           : s.closingSide === (s.kind === "customer" ? "Dr" : "Cr") ? "border-amber/50 bg-amber-soft/25"
           : "border-hairline",
       )}>
-        <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Closing balance</div>
+        <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Closing balance</div>
         <div className="font-serif text-2xl leading-none tabular-nums">
           {rupee(Math.abs(s.closingBalance))}
           {s.closingSide && <span className="ml-1.5 text-sm font-sans font-semibold text-ink-2">{s.closingSide}</span>}
         </div>
         {/* Spelled out, because "Dr" is not plain English to the person being sent this. */}
-        <div className="text-[11px] text-ink-3 mt-1.5">
+        <div className="text-2xs text-ink-3 mt-1.5">
           {s.closingBalance === 0
             ? "Fully settled — nothing outstanding either way."
             : s.closingSide === (s.kind === "customer" ? "Dr" : "Cr")
@@ -337,7 +337,7 @@ function SummaryStrip({ statement: s, partyName }: { statement: LedgerStatement;
 function Cell({ label, value, side }: { label: string; value: number; side?: "Dr" | "Cr" | null }) {
   return (
     <Card className="p-3.5">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className="font-serif text-2xl leading-none tabular-nums text-ink">
         {rupee(value)}
         {side && <span className="ml-1.5 text-sm font-sans font-semibold text-ink-2">{side}</span>}
@@ -389,7 +389,7 @@ function StatementTable({ statement: s }: { statement: LedgerStatement }) {
                 <td className="p-2.5 font-mono text-ink-2 whitespace-nowrap">{r.date}</td>
                 <td className="p-2.5">
                   <span className="font-mono text-ink">{r.reference}</span>
-                  {r.narration && <span className="block text-[11px] text-ink-3">{r.narration}</span>}
+                  {r.narration && <span className="block text-2xs text-ink-3">{r.narration}</span>}
                 </td>
                 <td className="p-2.5 whitespace-nowrap">
                   <Badge kind="muted" size="sm">{r.voucher}</Badge>
@@ -424,7 +424,7 @@ function StatementTable({ statement: s }: { statement: LedgerStatement }) {
         </table>
       </div>
 
-      <p className="px-3 py-2 text-[11px] text-ink-3 border-t border-hairline flex items-center gap-1.5">
+      <p className="px-3 py-2 text-2xs text-ink-3 border-t border-hairline flex items-center gap-1.5">
         <Icon name="info" size={12} />
         {s.kind === "customer"
           ? "Dr = owed to you · Cr = held on their behalf. Void invoices are excluded — a void document was never issued."

@@ -118,7 +118,7 @@ export function VaultPinGate({ children }: { children: React.ReactNode }) {
         </form>
 
         {/* The sentence that matters. */}
-        <p className="mt-5 pt-4 border-t border-hairline text-[11px] leading-relaxed text-ink-4">
+        <p className="mt-5 pt-4 border-t border-hairline text-2xs leading-relaxed text-ink-4">
           Ye PIN <b>screen ka lock</b> hai — data encrypt nahi karta. Ye us sthiti ke liye hai jab
           aapka laptop khula chhoot jaye. Aapka data alag cheez se surakshit hai: database ka apna
           niyam, jo in rows ko sirf aapke login ko deta hai — PIN ho ya na ho.

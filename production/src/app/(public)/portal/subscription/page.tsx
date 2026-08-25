@@ -125,7 +125,7 @@ export default function PortalSubscriptionPage() {
               <Card key={sub.id} className="p-6">
                 <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
                   <div className="min-w-0">
-                    <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-1">
+                    <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
                       {sub.vendor === "google" ? "Google Workspace" :
                        sub.vendor === "microsoft" ? "Microsoft 365" :
                        sub.vendor === "zoho" ? "Zoho" : "Subscription"}
@@ -138,18 +138,18 @@ export default function PortalSubscriptionPage() {
                   </div>
                   <div className="text-right">
                     <div className="font-serif text-2xl text-ink leading-none">{rupee(sub.mrr)}</div>
-                    <div className="text-[11px] text-ink-3 mt-1">/month equivalent</div>
+                    <div className="text-2xs text-ink-3 mt-1">/month equivalent</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-hairline text-sm mb-5">
                   <div>
-                    <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Next renewal</div>
+                    <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Next renewal</div>
                     <div className="font-medium text-ink">
                       {sub.renewal_date ? formatDate(sub.renewal_date) : "—"}
                     </div>
                     {daysToRenewal !== null && (
-                      <div className={`text-[11px] mt-0.5 ${daysToRenewal <= 30 ? "text-amber-ink" : "text-ink-3"}`}>
+                      <div className={`text-2xs mt-0.5 ${daysToRenewal <= 30 ? "text-amber-ink" : "text-ink-3"}`}>
                         {daysToRenewal <= 0
                           ? "Overdue"
                           : `In ${daysToRenewal} ${daysToRenewal === 1 ? "day" : "days"}`}
@@ -157,17 +157,17 @@ export default function PortalSubscriptionPage() {
                     )}
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Outstanding</div>
+                    <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Outstanding</div>
                     <div className={`font-medium ${sub.outstanding_amount > 0 ? "text-rose" : "text-emerald"}`}>
                       {sub.outstanding_amount > 0 ? rupee(sub.outstanding_amount) : "Nil"}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Renewal</div>
+                    <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">Renewal</div>
                     {sub.auto_renew ? (
                       <>
                         <div className="font-medium text-emerald">On track</div>
-                        <div className="text-[10px] text-ink-3 mt-0.5 leading-snug">
+                        <div className="text-3xs text-ink-3 mt-0.5 leading-snug">
                           We&apos;ll prepare your renewal quote + remind you before the date.
                           You pay each renewal — <b className="text-ink-2">we never auto-charge</b>.
                         </div>
@@ -175,7 +175,7 @@ export default function PortalSubscriptionPage() {
                     ) : (
                       <>
                         <div className="font-medium text-amber-ink">Not renewing</div>
-                        <div className="text-[10px] text-ink-3 mt-0.5 leading-snug">
+                        <div className="text-3xs text-ink-3 mt-0.5 leading-snug">
                           Will lapse on the renewal date. Want to continue? Raise a request below.
                         </div>
                       </>

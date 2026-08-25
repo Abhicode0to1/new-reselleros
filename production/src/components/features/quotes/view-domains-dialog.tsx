@@ -55,7 +55,7 @@ export function ViewDomainsDialog({ open, onOpenChange, planName, domains }: Pro
           )}
         </div>
         {q.trim() && (
-          <p className="mt-1 text-[11px] text-ink-3">{filtered.length} of {domains.length} shown</p>
+          <p className="mt-1 text-2xs text-ink-3">{filtered.length} of {domains.length} shown</p>
         )}
       </DialogContent>
     </Dialog>

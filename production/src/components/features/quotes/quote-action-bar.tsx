@@ -157,7 +157,7 @@ export function QuoteActionBar({ quote, onOpenFullQuote, onChanged, className }:
           <button
             type="button"
             onClick={onOpenFullQuote}
-            className="w-full inline-flex items-center justify-center gap-1 text-[11px] font-medium text-ink-3 hover:text-ink transition-colors"
+            className="w-full inline-flex items-center justify-center gap-1 text-2xs font-medium text-ink-3 hover:text-ink transition-colors"
           >
             Open full quote — preview, resend, PDF, invoice
             <Icon name="arrow_right" size={11} />

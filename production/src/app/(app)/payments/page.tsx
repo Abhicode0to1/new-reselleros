@@ -279,19 +279,19 @@ function PaymentsPageInner() {
             <div className="p-3 border-t border-hairline bg-paper">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Collected MTD</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Collected MTD</p>
                   <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{rupee(mtdCollected, { compact: true })}</p>
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Partial Quotes</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Partial Quotes</p>
                   <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{partialQuotes.length}</p>
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Awaiting GST Invoice</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Awaiting GST Invoice</p>
                   <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{rupee(awaitingInvoiceTotal, { compact: true })} <span className="text-xs text-ink-3 font-normal">({awaitingInvoiceQuotes.length})</span></p>
                 </div>
                 <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                  <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Top Payment Method</p>
+                  <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Top Payment Method</p>
                   <p className="font-serif text-lg font-bold text-ink tabular-nums mt-0.5">{topMethod ? METHOD_META[topMethod[0]]?.label ?? topMethod[0] : "—"}</p>
                 </div>
               </div>
@@ -334,11 +334,11 @@ function PaymentsPageInner() {
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-ink truncate">{o.customer_name}</p>
-                        <p className="text-[11px] text-ink-3 truncate mt-0.5">{o.plan}</p>
+                        <p className="text-2xs text-ink-3 truncate mt-0.5">{o.plan}</p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="font-serif text-base tabular-nums text-rose">{rupee(o.outstanding_amount)}</p>
-                        <p className="text-[10px] text-ink-3">of {rupee(o.total_quote_amount)}</p>
+                        <p className="text-3xs text-ink-3">of {rupee(o.total_quote_amount)}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between gap-2 pt-2 border-t border-hairline/60">
@@ -361,13 +361,13 @@ function PaymentsPageInner() {
               <table className="w-full">
                 <thead className="sticky top-0 z-10 bg-paper-2 border-b border-hairline">
                   <tr>
-                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Customer</th>
-                    <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Paid</th>
-                    <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Balance due</th>
-                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Age</th>
-                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Status</th>
-                    <th className="text-left p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3">Last reminder</th>
-                    <th className="text-right p-2 text-[10px] uppercase tracking-wider font-semibold text-ink-3 w-72">Actions</th>
+                    <th className="text-left p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Customer</th>
+                    <th className="text-right p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Paid</th>
+                    <th className="text-right p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Balance due</th>
+                    <th className="text-left p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Age</th>
+                    <th className="text-left p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Status</th>
+                    <th className="text-left p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3">Last reminder</th>
+                    <th className="text-right p-2 text-3xs uppercase tracking-wider font-semibold text-ink-3 w-72">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -404,7 +404,7 @@ function PaymentsPageInner() {
               </table>
             </div>
 
-            <p className="text-[11px] text-ink-3 mt-2 flex items-center gap-1">
+            <p className="text-2xs text-ink-3 mt-2 flex items-center gap-1">
               <Icon name="info" size={11} />
               0–15 days: friendly reminder · 16–30 days: stronger nudge · 30+ days: consider suspending service · 60+ days: accept it as a loss (bad debt)
             </p>
@@ -552,11 +552,11 @@ function PaymentsPageInner() {
                       <p className="font-medium text-ink truncate">
                         {cleanDisplayName(customer?.name ?? ctx?.customerName ?? "—")}
                       </p>
-                      <p className="font-mono text-[11px] text-ink-3 mt-0.5">{p.quote_id}</p>
+                      <p className="font-mono text-2xs text-ink-3 mt-0.5">{p.quote_id}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-serif text-base tabular-nums text-ink">{rupee(p.amount)}</p>
-                      <p className="text-[10px] text-ink-3">{p.method}</p>
+                      <p className="text-3xs text-ink-3">{p.method}</p>
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-hairline/60 text-xs">
@@ -613,13 +613,13 @@ function PaymentsPageInner() {
             </colgroup>
             <thead className="bg-paper-2 border-b border-hairline-strong">
               <tr>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Date</th>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Customer</th>
-                <th className="text-right px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Amount</th>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Method</th>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Reference</th>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Linked docs</th>
-                <th className="text-left px-3 py-2.5 text-[11px] font-semibold text-ink-3 uppercase tracking-wider">Status</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Date</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Customer</th>
+                <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Amount</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Method</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Reference</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Linked docs</th>
+                <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Status</th>
                 <th className="px-2 py-2.5 text-right"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -665,7 +665,7 @@ function PaymentsPageInner() {
           <div className="px-4 py-3 border-b border-hairline flex items-center gap-2">
             <Icon name="package" size={15} className="text-ink-3" />
             <h2 className="text-sm font-semibold text-ink">Project payments</h2>
-            <span className="text-[11px] text-ink-3">· {rupee(projCollected)} collected</span>
+            <span className="text-2xs text-ink-3">· {rupee(projCollected)} collected</span>
           </div>
 
           {/* Mobile card list — phones only */}
@@ -679,8 +679,8 @@ function PaymentsPageInner() {
                     ) : (
                       <span className="font-medium text-ink block truncate">{cleanDisplayName(p.customer_name)}</span>
                     )}
-                    <Link href={`/projects/${p.project_id}` as never} className="text-[11px] text-ink-2 hover:text-amber-ink hover:underline block truncate">{p.project_title}</Link>
-                    <p className="text-[11px] text-ink-3 mt-0.5 capitalize">
+                    <Link href={`/projects/${p.project_id}` as never} className="text-2xs text-ink-2 hover:text-amber-ink hover:underline block truncate">{p.project_title}</Link>
+                    <p className="text-2xs text-ink-3 mt-0.5 capitalize">
                       {(p.method ?? "—").replace("_", " ")}{p.bank_txn_id ? " · reconciled" : ""} · {formatDate(p.received_at)}
                     </p>
                   </div>
@@ -692,7 +692,7 @@ function PaymentsPageInner() {
 
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm min-w-[560px]">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3">
                 <tr>
                   <th className="text-left px-4 py-2">Customer / Project</th>
                   <th className="text-left px-3 py-2">Method</th>
@@ -782,7 +782,7 @@ function OutstandingRowView({
     <tr className="border-b border-hairline last:border-0 hover:bg-paper-2/40">
       <td className="p-2">
         <div className="font-medium text-sm text-ink">{o.customer_name}</div>
-        <div className="text-[10px] text-ink-3">{o.plan}</div>
+        <div className="text-3xs text-ink-3">{o.plan}</div>
       </td>
       <td className="p-2 text-right tabular-nums text-xs text-emerald">{rupee(o.paid_amount)}</td>
       <td className="p-2 text-right tabular-nums text-sm font-medium text-rose">{rupee(o.outstanding_amount)}</td>
@@ -916,7 +916,7 @@ function PaymentRowView({
           <span className="text-xs text-ink-3">{p.method}</span>
         )}
         {bankLabel && (
-          <div className="text-[10px] text-ink-3 mt-0.5 flex items-center gap-1 truncate">
+          <div className="text-3xs text-ink-3 mt-0.5 flex items-center gap-1 truncate">
             <Icon name="receipt" size={9} className="shrink-0" /> <span className="truncate">{bankLabel}</span>
           </div>
         )}
@@ -926,16 +926,16 @@ function PaymentRowView({
           chips, so the Status column stays a clean single badge. */}
       <td className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
         <div className="flex flex-col gap-1 items-start">
-          <Link href={`/quotes/${p.quote_id}` as any} className="inline-flex items-center rounded-md bg-paper-2 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink hover:text-amber-ink" title={p.quote_id}>
+          <Link href={`/quotes/${p.quote_id}` as any} className="inline-flex items-center rounded-md bg-paper-2 px-1.5 py-0.5 font-mono text-3xs font-semibold text-ink hover:text-amber-ink" title={p.quote_id}>
             {p.quote_id}
           </Link>
           {ctx?.invoiceId && (
-            <Link href={`/invoices?open=${ctx.invoiceId}` as any} className="font-mono text-[10px] text-indigo-ink hover:underline" title="Open GST invoice">{ctx.invoiceId}</Link>
+            <Link href={`/invoices?open=${ctx.invoiceId}` as any} className="font-mono text-3xs text-indigo-ink hover:underline" title="Open GST invoice">{ctx.invoiceId}</Link>
           )}
           {p.receipt_voucher_no && (
             me
-              ? <button type="button" onClick={() => setReceiptOpen(true)} className="font-mono text-[10px] text-ink-3 hover:text-amber-ink hover:underline" title="Open receipt voucher">{p.receipt_voucher_no}</button>
-              : <span className="font-mono text-[10px] text-ink-3">{p.receipt_voucher_no}</span>
+              ? <button type="button" onClick={() => setReceiptOpen(true)} className="font-mono text-3xs text-ink-3 hover:text-amber-ink hover:underline" title="Open receipt voucher">{p.receipt_voucher_no}</button>
+              : <span className="font-mono text-3xs text-ink-3">{p.receipt_voucher_no}</span>
           )}
         </div>
       </td>

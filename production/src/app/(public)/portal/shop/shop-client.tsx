@@ -99,7 +99,7 @@ export function ShopClient({
         <div className="space-y-10">
           {grouped.map(({ vendor, items }) => (
             <section key={vendor}>
-              <h2 className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-3">
+              <h2 className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-3">
                 {VENDOR_LABEL[vendor] ?? VENDOR_LABEL.other}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -110,7 +110,7 @@ export function ShopClient({
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div className="font-serif text-lg text-ink leading-tight">{p.name}</div>
                         {owned && (
-                          <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald bg-emerald-soft px-2 py-0.5 rounded-full whitespace-nowrap">
+                          <span className="text-3xs uppercase tracking-wider font-semibold text-emerald bg-emerald-soft px-2 py-0.5 rounded-full whitespace-nowrap">
                             Current plan
                           </span>
                         )}
@@ -118,7 +118,7 @@ export function ShopClient({
                       <div className="mb-5">
                         <span className="font-serif text-2xl text-ink">{rupee(p.price_per_seat_month)}</span>
                         <span className="text-xs text-ink-3"> /user/month</span>
-                        <div className="text-[11px] text-ink-3 mt-0.5">+ 18% GST · billed annually</div>
+                        <div className="text-2xs text-ink-3 mt-0.5">+ 18% GST · billed annually</div>
                       </div>
                       <div className="mt-auto">
                         <Button

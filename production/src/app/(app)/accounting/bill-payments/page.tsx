@@ -44,15 +44,15 @@ export default function BillPaymentsPage() {
         <Card className="mb-6">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Paid · this month</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Paid · this month</p>
               <p className="font-serif text-2xl text-ink mt-1">{rupee(totalMtd, { compact: true })}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Paid · all time</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Paid · all time</p>
               <p className="font-serif text-2xl text-ink mt-1">{rupee(totalAll, { compact: true })}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Payments</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Payments</p>
               <p className="font-serif text-2xl text-ink mt-1">{rows.length}</p>
             </div>
           </div>
@@ -81,7 +81,7 @@ export default function BillPaymentsPage() {
                   <span className="font-medium text-ink truncate">{p.vendor_name}</span>
                   <span className="font-serif tabular-nums text-rose">− {rupee(p.amount)}</span>
                 </div>
-                <div className="mt-1 flex items-center gap-2 text-[11px] text-ink-3">
+                <div className="mt-1 flex items-center gap-2 text-2xs text-ink-3">
                   <span>{formatDate(p.txn_date)}</span>
                   {p.method && <span className="capitalize">· {p.method}</span>}
                   <span>· {p.bank_account_name}</span>
@@ -96,7 +96,7 @@ export default function BillPaymentsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-paper-2 border-b border-hairline">
-                  <tr className="text-left text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+                  <tr className="text-left text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                     <th className="p-3">Date</th>
                     <th className="p-3">Vendor</th>
                     <th className="p-3">Bill #</th>
@@ -110,7 +110,7 @@ export default function BillPaymentsPage() {
                     <tr key={p.id} className="border-b border-hairline last:border-0 hover:bg-paper-2/40">
                       <td className="p-3 whitespace-nowrap text-ink-2">{formatDate(p.txn_date)}</td>
                       <td className="p-3 font-medium text-ink">{p.vendor_name}</td>
-                      <td className="p-3 font-mono text-[11px] text-ink-3">{p.bill_no ?? "—"}</td>
+                      <td className="p-3 font-mono text-2xs text-ink-3">{p.bill_no ?? "—"}</td>
                       <td className="p-3 capitalize text-ink-2">{p.method ?? "—"}</td>
                       <td className="p-3 text-ink-2">{p.bank_account_name}</td>
                       <td className="p-3 text-right font-serif tabular-nums text-rose">− {rupee(p.amount)}</td>

@@ -74,7 +74,7 @@ export default function MyAttendancePage() {
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[560px] mx-auto">
       <div className="mb-6 text-center">
-        <p className="text-[11px] uppercase tracking-wider text-ink-3">Payroll &amp; HR</p>
+        <p className="text-2xs uppercase tracking-wider text-ink-3">Payroll &amp; HR</p>
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight mt-1">My Attendance</h1>
         <p className="text-sm text-ink-3 mt-1">{todayLabel()}</p>
 
@@ -153,7 +153,7 @@ function ConsentCard({ retentionDays }: { retentionDays: number }) {
       <Button className="w-full mt-6" disabled={record.isPending} onClick={() => record.mutate()}>
         {record.isPending ? "…" : "Main samajh gaya — consent deta hoon"}
       </Button>
-      <p className="text-[11px] text-ink-3 mt-3 text-center">DPDP Act 2023 ke hisaab se — aapki marzi se hi data liya jaata hai.</p>
+      <p className="text-2xs text-ink-3 mt-3 text-center">DPDP Act 2023 ke hisaab se — aapki marzi se hi data liya jaata hai.</p>
     </Card>
   );
 }
@@ -345,7 +345,7 @@ function HistoryCard() {
   if (!rows.length) return null;
   return (
     <Card className="mt-4 p-4">
-      <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-3">Aapka recent record</div>
+      <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-3">Aapka recent record</div>
       <ul className="divide-y divide-hairline">
         {rows.map((r) => (
           <li key={r.work_date} className="flex items-center justify-between py-2 text-sm">
@@ -502,7 +502,7 @@ function CheckInCard({
                 <Icon name="laptop" size={16} />
                 <span>Desktop PC (No Webcam) Mode</span>
               </div>
-              <p className="text-[11px] text-ink-3">
+              <p className="text-2xs text-ink-3">
                 System detected desktop PC without webcam. Authenticated via Google Account.
               </p>
             </div>
@@ -523,7 +523,7 @@ function CheckInCard({
                   className="mx-auto flex h-28 w-28 flex-col items-center justify-center gap-1 rounded-full border border-dashed border-hairline bg-paper-2 text-ink-3 hover:border-amber/50 hover:text-amber-ink"
                 >
                   <Icon name="eye" size={24} />
-                  <span className="text-[10px] leading-tight">Camera on karne ke liye tap</span>
+                  <span className="text-3xs leading-tight">Camera on karne ke liye tap</span>
                 </button>
               )}
               <p className={cn("mt-2 text-xs", camErrMsg ? "text-rose" : "text-ink-3")}>
@@ -536,7 +536,7 @@ function CheckInCard({
 
       {requirePresence && pending && (
         <div className="mt-5 text-left">
-          <label htmlFor="office-code" className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+          <label htmlFor="office-code" className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">
             Office code
           </label>
           <input
@@ -549,7 +549,7 @@ function CheckInCard({
             placeholder="6-digit"
             className="mt-1 w-full rounded-lg border border-hairline bg-paper px-4 py-3 text-center font-mono text-2xl tracking-[0.4em] tabular-nums focus:border-amber focus:outline-none"
           />
-          <p className="mt-1.5 text-[11px] text-ink-3">
+          <p className="mt-1.5 text-2xs text-ink-3">
             Office tablet pe abhi jo code chal raha hai wahi daalo — isse pata chalta hai aap office me hi ho.
           </p>
         </div>
@@ -557,13 +557,13 @@ function CheckInCard({
 
       <div className="mt-6 grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-hairline p-4">
-          <p className="text-[11px] uppercase tracking-wider text-ink-3">Check-in</p>
+          <p className="text-2xs uppercase tracking-wider text-ink-3">Check-in</p>
           <p className={cn("font-serif text-2xl mt-1 tabular-nums", checkIn ? "text-emerald" : "text-ink-3")}>
             {fmtTime(checkIn)}
           </p>
         </div>
         <div className="rounded-lg border border-hairline p-4">
-          <p className="text-[11px] uppercase tracking-wider text-ink-3">Check-out</p>
+          <p className="text-2xs uppercase tracking-wider text-ink-3">Check-out</p>
           <p className={cn("font-serif text-2xl mt-1 tabular-nums", checkOut ? "text-indigo" : "text-ink-3")}>
             {fmtTime(checkOut)}
           </p>
@@ -612,7 +612,7 @@ function CheckInCard({
         )}
       </div>
 
-      <p className="text-[11px] text-ink-3 mt-4">
+      <p className="text-2xs text-ink-3 mt-4">
         {[
           "Google Auth Login",
           noCamDetected ? "desktop mode" : requireSelfie ? "selfie" : null,

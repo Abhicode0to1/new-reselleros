@@ -86,7 +86,7 @@ export function KPI({
       {/* Label row */}
       <div className="flex items-center gap-2 text-xs text-ink-3 mb-2">
         {icon && <Icon name={icon} size={13} />}
-        <span className="font-medium uppercase tracking-wide text-[11px]">{label}</span>
+        <span className="font-medium uppercase tracking-wide text-2xs">{label}</span>
       </div>
 
       {/* Value */}

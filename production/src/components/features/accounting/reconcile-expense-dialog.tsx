@@ -81,9 +81,9 @@ export function ReconcileExpenseDialog({ expense, onClose }: { expense: Expense;
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-medium text-ink tabular-nums">{rupee(t.debit)}</span>
-                      {exact && <span className="rounded-full bg-emerald/10 text-emerald px-1.5 py-0.5 text-[10px] font-medium">exact match</span>}
+                      {exact && <span className="rounded-full bg-emerald/10 text-emerald px-1.5 py-0.5 text-3xs font-medium">exact match</span>}
                     </div>
-                    <div className="text-[11px] text-ink-3 truncate">
+                    <div className="text-2xs text-ink-3 truncate">
                       {formatDate(t.txn_date)} · {t.account_name}{t.description ? ` · ${t.description}` : ""}
                     </div>
                   </div>

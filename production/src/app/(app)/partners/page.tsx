@@ -130,7 +130,7 @@ export default function PartnersPage() {
                       <Badge kind="info" size="sm">exceltechnologies.in · Managed Subsidiary</Badge>
                       <Badge kind="warning" size="sm">⚡ Partner Rates Linked</Badge>
                     </div>
-                    <p className="text-[11px] text-ink-3 font-mono">GSTIN: 07AAACE1234F1Z5 · Parent Distributor: Anutech Digital (anutech.in)</p>
+                    <p className="text-2xs text-ink-3 font-mono">GSTIN: 07AAACE1234F1Z5 · Parent Distributor: Anutech Digital (anutech.in)</p>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* "Manage Business (Switch)" removed 2026-08-13 with the
@@ -160,7 +160,7 @@ export default function PartnersPage() {
                   <Metric label="Renewal value"     value={rupee(98500)} tone="amber-ink" />
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-hairline flex items-center gap-2 text-[11px] text-ink-3 flex-wrap">
+                <div className="mt-4 pt-3 border-t border-hairline flex items-center gap-2 text-2xs text-ink-3 flex-wrap">
                   <Icon name="info" size={12} className="text-primary shrink-0" />
                   <span>
                     Linked via Parent-Child Distributor Hierarchy. Legal identity (GSTIN/Invoices) remains individual, business operations and rates are merged.
@@ -188,11 +188,11 @@ export default function PartnersPage() {
                         <Badge kind="info" size="sm">Channel partner</Badge>
                       </div>
                       {m.tenant_gstin && (
-                        <p className="text-[11px] text-ink-3 font-mono">{m.tenant_gstin}</p>
+                        <p className="text-2xs text-ink-3 font-mono">{m.tenant_gstin}</p>
                       )}
                     </div>
                     {m.last_invoice_date && (
-                      <p className="text-[11px] text-ink-3 inline-flex items-center gap-1.5 shrink-0">
+                      <p className="text-2xs text-ink-3 inline-flex items-center gap-1.5 shrink-0">
                         <Icon name="clock" size={11} />
                         Last invoice: {formatDate(m.last_invoice_date)}
                       </p>
@@ -217,7 +217,7 @@ export default function PartnersPage() {
                   </div>
 
                   {/* Quick links — back to your own catalog scope, not into the partner's data */}
-                  <div className="mt-3 pt-3 border-t border-hairline flex items-center gap-2 text-[11px] text-ink-3">
+                  <div className="mt-3 pt-3 border-t border-hairline flex items-center gap-2 text-2xs text-ink-3">
                     <Icon name="info" size={11} />
                     <span>
                       Privacy: aggregated only. You never see a partner's individual customer or lead
@@ -243,7 +243,7 @@ export default function PartnersPage() {
 function Metric({ label, value, tone = "ink" }: { label: string; value: string | number; tone?: "ink" | "muted" | "amber-ink" }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-0.5">{label}</p>
+      <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-0.5">{label}</p>
       <p className={
         tone === "muted"      ? "font-mono tabular-nums text-ink-3" :
         tone === "amber-ink"  ? "font-mono tabular-nums text-amber-ink font-medium" :

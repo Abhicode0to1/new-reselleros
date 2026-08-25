@@ -38,7 +38,7 @@ export function LifecycleStepper({ steps, dead }: { steps: LifecycleStep[]; dead
                 <span
                   title={step.detail}
                   className={cn(
-                    "grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 text-[11px] font-bold",
+                    "grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 text-2xs font-bold",
                     step.state === "done"    && "border-emerald bg-emerald text-white",
                     step.state === "current" && "border-amber bg-paper text-amber-ink",
                     step.state === "todo"    && "border-hairline-strong bg-paper text-ink-3",
@@ -53,7 +53,7 @@ export function LifecycleStepper({ steps, dead }: { steps: LifecycleStep[]; dead
               </div>
               <span
                 className={cn(
-                  "mt-1 truncate text-[10px] font-semibold uppercase tracking-wider",
+                  "mt-1 truncate text-3xs font-semibold uppercase tracking-wider",
                   step.state === "done"    && "text-emerald",
                   step.state === "current" && "text-amber-ink",
                   step.state === "todo"    && "text-ink-3",
@@ -66,7 +66,7 @@ export function LifecycleStepper({ steps, dead }: { steps: LifecycleStep[]; dead
                   hidden in a tooltip — a phone has no hover, and this is the one step
                   somebody actually needs to read. */}
               {step.state === "current" && (
-                <span className="mt-0.5 hidden text-[10px] leading-snug text-ink-3 sm:block">
+                <span className="mt-0.5 hidden text-3xs leading-snug text-ink-3 sm:block">
                   {step.detail}
                 </span>
               )}

@@ -153,10 +153,10 @@ function Review({ label, value, mono, note }: {
   const v = (value ?? "").trim();
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] uppercase tracking-wider text-ink-3">{label}</dt>
+      <dt className="text-3xs uppercase tracking-wider text-ink-3">{label}</dt>
       {v ? (
         <dd className={cn("break-words text-[13px] font-medium text-ink", mono && "font-mono")}>
-          {v}{note && <span className="ml-1 font-sans text-[11px] font-normal text-ink-3">· {note}</span>}
+          {v}{note && <span className="ml-1 font-sans text-2xs font-normal text-ink-3">· {note}</span>}
         </dd>
       ) : (
         <dd className="text-[12px] italic text-ink-3">not set</dd>
@@ -801,7 +801,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 Haryana has caught a wrong paste before it became a tax head. */}
             <FieldPill check={checkGstin(watch("gstin") ?? "")} />
             {!(watch("gstin") ?? "").trim() && (
-              <p className="text-[10px] text-ink-3">
+              <p className="text-3xs text-ink-3">
                 Optional. Helps auto-fill legal name + address on conversion.
               </p>
             )}
@@ -833,7 +833,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               </SelectContent>
             </Select>
             <input type="hidden" {...register("plan")} value={plan} />
-            <p className="text-[11px] text-ink-3 mt-1">
+            <p className="text-2xs text-ink-3 mt-1">
               {plan
                 ? "Will go straight into Deal Pipeline as a qualified opportunity."
                 : "Leave empty to drop into Lead Inbox — you can qualify later."}
@@ -916,7 +916,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               </Select>
               <input type="hidden" {...register("stage")} value={stage} />
               {!plan && (
-                <p className="mt-1 text-[10px] text-ink-3 leading-snug">
+                <p className="mt-1 text-3xs text-ink-3 leading-snug">
                   Pick a plan to unlock Demo / Trial / Quote / Won.
                 </p>
               )}
@@ -979,7 +979,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               <option value="fresh">Fresh subscription (new)</option>
               <option value="switch">Switching vendor (already subscribed elsewhere)</option>
             </select>
-            <p className="mt-1 text-[10px] text-ink-3 leading-snug">
+            <p className="mt-1 text-3xs text-ink-3 leading-snug">
               &ldquo;Switching&rdquo; = they already use this product, just moving billing/reseller to you (migration).
             </p>
           </FormField>
@@ -993,7 +993,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 min={new Date().toISOString().slice(0, 10)}
                 {...register("follow_up_date")}
               />
-              <p className="mt-1 text-[10px] text-ink-3">
+              <p className="mt-1 text-3xs text-ink-3">
                 Drives your daily worklist · reminder ping the morning of.
               </p>
             </FormField>
@@ -1044,7 +1044,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               landline in the phone box actually gets caught. */}
           <Step show={useSteps && step === 3}>
             <div className="rounded-lg border border-hairline bg-paper-2/40 p-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+              <p className="mb-2 text-2xs font-semibold uppercase tracking-wider text-ink-3">
                 About to be saved
               </p>
               <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1063,7 +1063,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
               {/* Blanks are stated, not shown as gaps — a blank row reads as a
                   rendering fault and an operator cannot tell it apart from a value
                   that failed to load. See the same rule on the enquiry panel. */}
-              <p className="mt-2.5 border-t border-hairline pt-2 text-[10px] leading-snug text-ink-3">
+              <p className="mt-2.5 border-t border-hairline pt-2 text-3xs leading-snug text-ink-3">
                 Anything marked “not set” will be saved empty. Go back to any step above to
                 fill it — nothing is lost.
               </p>

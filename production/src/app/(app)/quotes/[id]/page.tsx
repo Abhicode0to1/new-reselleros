@@ -759,7 +759,7 @@ export default function QuoteDetailPage() {
                   {approvalNeed && approvalNeed.reasons.length > 0 && approvalRec?.status === "not_required" && (
                     <ul className="mt-1.5 space-y-0.5">
                       {approvalNeed.reasons.map((r) => (
-                        <li key={r} className="text-[11px] leading-snug text-ink-3">· {r}</li>
+                        <li key={r} className="text-2xs leading-snug text-ink-3">· {r}</li>
                       ))}
                     </ul>
                   )}
@@ -1115,7 +1115,7 @@ export default function QuoteDetailPage() {
                 </div>
                 <div className="text-sm text-ink-3 mb-3 tabular-nums">{margin.marginPct}% est. margin</div>
                 <MarginPill margin={margin} period="one-time" estimated />
-                <div className="text-[11px] text-ink-3 mt-3 tabular-nums">
+                <div className="text-2xs text-ink-3 mt-3 tabular-nums">
                   Cost: {rupee(margin.cost)} · Price: {rupee(margin.price)}
                 </div>
               </>
@@ -1160,7 +1160,7 @@ export default function QuoteDetailPage() {
                 <tr key={p.id} className="border-b border-hairline last:border-0">
                   <td className="p-3 text-xs text-ink-2">
                     <div>{formatDate(p.received_at)}</div>
-                    <div className="text-[10px] text-ink-3">#{idx + 1}</div>
+                    <div className="text-3xs text-ink-3">#{idx + 1}</div>
                   </td>
                   <td className="p-3 text-right tabular-nums text-sm font-medium">
                     {rupee(p.amount)}
@@ -1174,7 +1174,7 @@ export default function QuoteDetailPage() {
                       <Badge kind="danger" dot>refunded</Badge>
                     )}
                     {p.receipt_voucher_no && (
-                      <div className="text-[10px] text-ink-3 font-mono mt-0.5">{p.receipt_voucher_no}</div>
+                      <div className="text-3xs text-ink-3 font-mono mt-0.5">{p.receipt_voucher_no}</div>
                     )}
                   </td>
                   <td className="p-3 text-right">
@@ -1189,7 +1189,7 @@ export default function QuoteDetailPage() {
                         View
                       </Button>
                     ) : (
-                      <span className="text-[11px] text-ink-3">—</span>
+                      <span className="text-2xs text-ink-3">—</span>
                     )}
                   </td>
                 </tr>
@@ -1414,7 +1414,7 @@ export default function QuoteDetailPage() {
                   <Icon name="receipt" size={16} className="text-emerald shrink-0" />
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-ink truncate">Invoice {quote.invoice_id}</div>
-                    <div className="text-[11px] text-ink-3">Pehle ise credit-note / void karo</div>
+                    <div className="text-2xs text-ink-3">Pehle ise credit-note / void karo</div>
                   </div>
                 </div>
                 <Button asChild variant="ghost" size="sm" icon="external" className="shrink-0">
@@ -1433,12 +1433,12 @@ export default function QuoteDetailPage() {
                 </div>
                 <ul className="space-y-0.5 pl-6">
                   {receivedPayments.map((p, i) => (
-                    <li key={p.id} className="text-[11px] text-ink-3 tabular-nums">
+                    <li key={p.id} className="text-2xs text-ink-3 tabular-nums">
                       #{i + 1} · {rupee(p.amount)} · {p.method.replace("_", " ")} · {formatDate(p.received_at)}
                     </li>
                   ))}
                 </ul>
-                <div className="text-[11px] text-ink-3 mt-1.5 pl-6">Pehle inhe refund / void karo (Payment history se).</div>
+                <div className="text-2xs text-ink-3 mt-1.5 pl-6">Pehle inhe refund / void karo (Payment history se).</div>
               </div>
             )}
 

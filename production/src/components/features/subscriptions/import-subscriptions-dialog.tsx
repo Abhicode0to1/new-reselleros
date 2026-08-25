@@ -154,7 +154,7 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
             Import subscriptions
           </DialogTitle>
           <DialogDescription className="break-words">
-            CSV with <span className="font-mono text-[11px]">Customer Number, Item Name, Quantity, Item Price, Start Date, End Date</span>.
+            CSV with <span className="font-mono text-2xs">Customer Number, Item Name, Quantity, Item Price, Start Date, End Date</span>.
             Each row attaches to a customer by Customer Number. MRR is computed from the price ÷ the period (from Start→End dates).
           </DialogDescription>
         </DialogHeader>
@@ -195,15 +195,15 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
             {/* Money summary — verify before commit */}
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Subscriptions</div>
+                <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Subscriptions</div>
                 <div className="text-sm font-semibold tabular-nums mt-0.5">{matched.length}</div>
               </div>
               <div className="rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Total MRR</div>
+                <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Total MRR</div>
                 <div className="text-sm font-semibold tabular-nums mt-0.5 text-emerald">{rupee(totalMRR)}</div>
               </div>
               <div className="rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Total ARR</div>
+                <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Total ARR</div>
                 <div className="text-sm font-semibold tabular-nums mt-0.5">{rupee(totalMRR * 12, { compact: true })}</div>
               </div>
             </div>

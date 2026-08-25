@@ -108,7 +108,7 @@ export function IssueCreditNoteDialog({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="rounded-md bg-paper-2/50 border border-hairline px-3 py-2 text-[11px] text-ink-3">
+          <div className="rounded-md bg-paper-2/50 border border-hairline px-3 py-2 text-2xs text-ink-3">
             Amount still owed on this invoice: <b className="text-ink">{rupee(netPayable)}</b>
           </div>
 
@@ -122,7 +122,7 @@ export function IssueCreditNoteDialog({
               onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
               placeholder="0"
             />
-            <p className="mt-1 text-[11px] text-ink-3">
+            <p className="mt-1 text-2xs text-ink-3">
               {isExport
                 ? "Export (zero-rated) — no GST on the note."
                 : `Splits as ${interState ? "IGST" : "CGST + SGST"} @ ${rate}%: taxable ${rupee(taxable)} + tax ${rupee(tax)}.`}
@@ -151,7 +151,7 @@ export function IssueCreditNoteDialog({
             />
           </FormField>
 
-          <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-[11px] text-amber-ink leading-relaxed">
+          <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-2xs text-amber-ink leading-relaxed">
             A {noun} is permanent + GST-reported (GSTR-1). It {verb} your output GST and the
             customer&apos;s ITC — issue it only for a genuine {isDebit ? "additional charge" : "reduction"}.
           </div>

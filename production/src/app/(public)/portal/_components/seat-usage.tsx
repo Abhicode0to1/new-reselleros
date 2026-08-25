@@ -32,7 +32,7 @@ export function SeatUsage({ used, seats, usedSyncedAt }: {
     return (
       <div>
         <div className="mb-1 flex items-baseline justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-3">
+          <span className="text-3xs font-semibold uppercase tracking-wider text-ink-3">
             Seats in use
           </span>
           <span className="text-xs font-medium text-ink-3">
@@ -50,7 +50,7 @@ export function SeatUsage({ used, seats, usedSyncedAt }: {
           role="img"
           aria-label={`Seat usage is not tracked on this plan. You are billed for ${safeSeats} seats.`}
         />
-        <p className="mt-1 text-[10px] leading-snug text-ink-3">
+        <p className="mt-1 text-3xs leading-snug text-ink-3">
           You have {safeSeats} {safeSeats === 1 ? "seat" : "seats"}. We don&apos;t currently
           track how many are assigned, so this isn&apos;t a sign they&apos;re unused.
         </p>
@@ -65,7 +65,7 @@ export function SeatUsage({ used, seats, usedSyncedAt }: {
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-3">
+        <span className="text-3xs font-semibold uppercase tracking-wider text-ink-3">
           Seats in use
         </span>
         <span className="text-xs font-medium text-ink-2">

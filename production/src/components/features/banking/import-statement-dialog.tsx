@@ -384,13 +384,13 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                 <div className="w-44 h-1.5 rounded-full bg-hairline overflow-hidden">
                   <div className="h-full w-1/3 rounded-full bg-amber" style={{ animation: "ros-loadbar 1.1s ease-in-out infinite" }} />
                 </div>
-                <span className="text-[11px] text-ink-3">Bade statement mein thoda zyada waqt lag sakta hai — ruko mat 😊</span>
+                <span className="text-2xs text-ink-3">Bade statement mein thoda zyada waqt lag sakta hai — ruko mat 😊</span>
               </div>
             ) : (
               <label className="cursor-pointer flex flex-col items-center text-center gap-2">
                 <Icon name="upload" size={20} className="text-ink-3" />
                 <span className="text-sm font-medium">Choose file — PDF / CSV</span>
-                <span className="text-[11px] text-ink-3">Bank statement PDF (AI reads it) · ya .csv · up to 8 MB</span>
+                <span className="text-2xs text-ink-3">Bank statement PDF (AI reads it) · ya .csv · up to 8 MB</span>
                 <input
                   type="file"
                   accept=".csv,text/csv,application/pdf,image/*"
@@ -427,17 +427,17 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                 )}
               </div>
               {parsed.warnings.length > 0 && (
-                <ul className="text-[11px] text-rose space-y-0.5 mb-2">
+                <ul className="text-2xs text-rose space-y-0.5 mb-2">
                   {parsed.warnings.map((w, i) => <li key={i}>• {w}</li>)}
                 </ul>
               )}
               {parsed.skipped > 0 && (
-                <p className="text-[11px] text-ink-3 mb-2">
+                <p className="text-2xs text-ink-3 mb-2">
                   Skipped {parsed.skipped} row{parsed.skipped === 1 ? "" : "s"} (missing date or both amounts zero — usually opening-balance / sub-total lines)
                 </p>
               )}
               {dupCount > 0 && (
-                <p className="text-[11px] text-amber-ink mb-2 flex items-start gap-1.5">
+                <p className="text-2xs text-amber-ink mb-2 flex items-start gap-1.5">
                   <Icon name="alert" size={12} className="mt-0.5 shrink-0" />
                   {dupCount} line{dupCount === 1 ? "" : "s"} pehle se books me hain — ye <b>skip</b> ho jaayengi{freshCount > 0 ? ` (sirf ${freshCount} nayi import hongi)` : " (kuch naya nahi)"}.
                 </p>
@@ -448,7 +448,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                       beside an editable category column would let somebody set 5 of 39
                       categories and believe they had reviewed the statement. */}
                   <div className="max-h-[320px] overflow-y-auto custom-scrollbar">
-                  <table className="w-full text-[11px]">
+                  <table className="w-full text-2xs">
                     <thead className="text-ink-3 sticky top-0 bg-paper">
                       <tr>
                         <th className="text-left py-1">Date</th>
@@ -473,7 +473,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                                 aria-label={`Category for ${r.description}`}
                                 value={chosen ?? ""}
                                 onChange={(e) => setOverride((o) => ({ ...o, [i]: e.target.value }))}
-                                className="w-full max-w-[150px] rounded border border-hairline bg-paper px-1 py-0.5 text-[11px] text-ink"
+                                className="w-full max-w-[150px] rounded border border-hairline bg-paper px-1 py-0.5 text-2xs text-ink"
                               >
                                 {/* Named, not blank. An empty option reads as "nothing
                                     needed here"; this one admits there is no answer yet. */}
@@ -547,7 +547,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                   </div>
                   {/* The honest number — it says what is NOT done, so a half-categorised
                       statement cannot read as a finished one. */}
-                  <p className="text-[10px] text-ink-3 mt-1.5">
+                  <p className="text-3xs text-ink-3 mt-1.5">
                     <b className="text-ink-2">{categorisedCount} of {parsed.rows.length}</b> line
                     {parsed.rows.length === 1 ? "" : "s"} have a category.
                     {categorisedCount < parsed.rows.length && (
@@ -559,7 +559,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
             </div>
           )}
 
-          <div className="rounded-md bg-indigo-50 border border-indigo/20 px-3 py-2 text-[11px] text-indigo-ink">
+          <div className="rounded-md bg-indigo-50 border border-indigo/20 px-3 py-2 text-2xs text-indigo-ink">
             <b>Tip:</b> Net banking se statement <b>PDF</b> ya <b>CSV</b> dono chalti hai —
             PDF ko AI padh leta hai, CSV auto-detect hoti hai (HDFC, ICICI, SBI, Axis,
             Kotak, IndusInd, Yes Bank). Import se pehle preview zaroor check karo.

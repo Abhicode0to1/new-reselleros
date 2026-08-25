@@ -473,7 +473,7 @@ export function QuoteAcceptView({
               </div>
             </div>
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold">Quotation</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold">Quotation</p>
               <p className="font-serif text-3xl mt-1">{quote.id}</p>
               {quote.expires_date && (
                 <p className="text-xs text-ink-3 mt-1">
@@ -486,16 +486,16 @@ export function QuoteAcceptView({
           {/* Bill to + billing */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">Prepared for</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">Prepared for</p>
               <p className="font-serif text-lg leading-tight">{quote.customer_name}</p>
             </div>
             <div className="sm:text-right">
               {lineItems.length > 0 && firstCommitment && (
                 <>
-                  <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">Billing schedule</p>
+                  <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">Billing schedule</p>
                   <p className="text-sm">{scheduleLabel(firstCommitment, effectiveCycle)}</p>
                   {billingN > 1 && (
-                    <p className="text-[11px] text-ink-3">{billingN} invoices per year</p>
+                    <p className="text-2xs text-ink-3">{billingN} invoices per year</p>
                   )}
                 </>
               )}
@@ -506,10 +506,10 @@ export function QuoteAcceptView({
           <table className="w-full mb-6">
             <thead className="border-y-2 border-ink">
               <tr>
-                <th className="text-left py-2 text-[11px] uppercase tracking-wider font-semibold">Item</th>
-                <th className="text-right py-2 text-[11px] uppercase tracking-wider font-semibold w-16">Qty</th>
-                <th className="text-right py-2 text-[11px] uppercase tracking-wider font-semibold w-28">Rate</th>
-                <th className="text-right py-2 text-[11px] uppercase tracking-wider font-semibold w-32">Amount</th>
+                <th className="text-left py-2 text-2xs uppercase tracking-wider font-semibold">Item</th>
+                <th className="text-right py-2 text-2xs uppercase tracking-wider font-semibold w-16">Qty</th>
+                <th className="text-right py-2 text-2xs uppercase tracking-wider font-semibold w-28">Rate</th>
+                <th className="text-right py-2 text-2xs uppercase tracking-wider font-semibold w-32">Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -545,15 +545,15 @@ export function QuoteAcceptView({
                         <div className="min-w-0">
                           <p className="font-medium">
                             {line.name}
-                            {line.optional && <span className="ml-1.5 text-[10px] uppercase tracking-wider text-ink-3">optional</span>}
+                            {line.optional && <span className="ml-1.5 text-3xs uppercase tracking-wider text-ink-3">optional</span>}
                           </p>
                           {line.commitment && (
-                            <p className="text-[11px] text-ink-3 mt-0.5">
+                            <p className="text-2xs text-ink-3 mt-0.5">
                               {scheduleLabel(line.commitment, effectiveCycle)}
                             </p>
                           )}
                           {live?.rePriced && live.bandLabel && (
-                            <p className="mt-0.5 text-[11px] font-medium text-emerald">
+                            <p className="mt-0.5 text-2xs font-medium text-emerald">
                               {qty} seats reaches the {live.bandLabel} price
                             </p>
                           )}
@@ -585,7 +585,7 @@ export function QuoteAcceptView({
           </table>
 
           {adjustable && (
-            <p className="-mt-4 mb-6 text-[11px] leading-snug text-ink-3">
+            <p className="-mt-4 mb-6 text-2xs leading-snug text-ink-3">
               You can change the seat count and pick the optional items above — the price updates
               from {tenantName}&apos;s own price list, not from this page.
               {pricing && <span className="ml-1 text-amber-ink">Updating…</span>}
@@ -620,7 +620,7 @@ export function QuoteAcceptView({
               <Row label={`GST (${quote.tax_rate}%)`} value={fmtInv(liveConfig ? liveConfig.total - liveConfig.subtotal : dTax)} />
               <div className="border-t-2 border-ink pt-2 mt-2">
                 <div className="flex justify-between items-baseline">
-                  <span className="text-[11px] uppercase tracking-widest font-semibold">
+                  <span className="text-2xs uppercase tracking-widest font-semibold">
                     {/* Annual upfront (single yearly invoice) → emphasize "payable now"
                         so customer knows full amount needs to clear in one go. */}
                     {perInvoice ? `Per invoice (${billingN}/yr)` : (billingN === 1 ? "Total payable now" : "Total")}
@@ -637,12 +637,12 @@ export function QuoteAcceptView({
                 </div>
                 {perInvoice && (
                   <div className="flex justify-between items-baseline mt-1.5 text-ink-3">
-                    <span className="text-[11px]">Annual contract value</span>
+                    <span className="text-2xs">Annual contract value</span>
                     <span className="text-sm tabular-nums">{fmtC(payableTotal)}/yr</span>
                   </div>
                 )}
                 {!perInvoice && billingN === 1 && (
-                  <div className="mt-1.5 text-[11px] text-emerald font-medium">
+                  <div className="mt-1.5 text-2xs text-emerald font-medium">
                     ✓ One-time payment · covers full 12 months of service
                   </div>
                 )}
@@ -653,7 +653,7 @@ export function QuoteAcceptView({
           {/* Notes */}
           {quote.notes && (
             <div className="mb-6 pt-4 border-t border-hairline">
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">Notes</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">Notes</p>
               <p className="text-sm whitespace-pre-wrap leading-relaxed text-ink-2">{quote.notes}</p>
             </div>
           )}
@@ -736,7 +736,7 @@ export function QuoteAcceptView({
                 >
                   I&apos;ve sent the payment
                 </Button>
-                <p className="mt-1.5 text-[11px] leading-snug text-ink-3">
+                <p className="mt-1.5 text-2xs leading-snug text-ink-3">
                   This tells {tenantName} to check their account. It does not confirm the payment —
                   they will verify it and send your GST invoice.
                 </p>
@@ -776,7 +776,7 @@ export function QuoteAcceptView({
             >
               Request changes / revision
             </Button>
-            <p className="text-[11px] text-ink-3 text-center leading-relaxed pt-2">
+            <p className="text-2xs text-ink-3 text-center leading-relaxed pt-2">
               {payOnline
                 ? <>Pay securely via Razorpay (UPI / card / net-banking) — your GST invoice is issued automatically once payment is confirmed. Or accept with PO and {tenantName} will share payment instructions.</>
                 : <>By accepting, you agree to the pricing and billing terms shown above. {tenantName} will share payment instructions and issue your GST invoice once payment is received. No payment is taken on this page.</>}
@@ -937,7 +937,7 @@ export function QuoteAcceptView({
                   />
                 </div>
               </div>
-              <p className="text-[11px] leading-snug text-ink-3">
+              <p className="text-2xs leading-snug text-ink-3">
                 Confirming records your name, the date and time, and the network address this was
                 sent from, together with the figures shown above. This is a record of your
                 confirmation — it is not a digital signature certificate.

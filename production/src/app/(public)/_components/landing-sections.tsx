@@ -111,7 +111,7 @@ export function Hero() {
 export function TrustRibbon() {
   return (
     <section className="border-y border-hairline bg-paper-2/60 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-7 gap-y-2 px-6 py-5 font-mono text-[11px] uppercase tracking-wider text-ink-3">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-7 gap-y-2 px-6 py-5 font-mono text-2xs uppercase tracking-wider text-ink-3">
         <span className="text-amber-ink font-semibold">★ Google Premier Partner · since 2014</span>
         <Dot />
         <span className="text-emerald font-semibold">⚡ 1-Click Excel & Tally Migration</span>
@@ -294,7 +294,7 @@ export function ModuleShowcase() {
           transition={{ duration: 0.5 }}
           className="mt-20"
         >
-          <p className="mb-6 text-center font-mono text-[11px] uppercase tracking-wider text-ink-3">
+          <p className="mb-6 text-center font-mono text-2xs uppercase tracking-wider text-ink-3">
             Plus 8 more modules
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -337,7 +337,7 @@ function ModuleRow({
         viewport={{ once: true, margin: "-50px" }}
         transition={{ duration: 0.5, ease: "easeOut" }}
       >
-        <p className="mb-3 font-mono text-[11px] uppercase tracking-wider text-amber font-semibold">
+        <p className="mb-3 font-mono text-2xs uppercase tracking-wider text-amber font-semibold">
           {badge}
         </p>
         <h3 className="mb-3 font-serif text-2xl leading-tight tracking-tight sm:text-3xl">
@@ -477,7 +477,7 @@ export function FounderSection() {
               <div className="h-px w-10 bg-ink-3/40" />
               <div>
                 <p className="font-medium text-ink">Pardeep A</p>
-                <p className="font-mono text-[11px] uppercase tracking-wider text-ink-3">
+                <p className="font-mono text-2xs uppercase tracking-wider text-ink-3">
                   Founder · Excel Technologies · Mumbai
                 </p>
               </div>
@@ -557,7 +557,7 @@ export function BetaPricing() {
           We&rsquo;re onboarding the first 10 paying resellers personally.
           Starter / Growth / Pro tiers launch once we hit ₹15K MRR.
         </p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-wider text-ink-3">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 font-mono text-2xs uppercase tracking-wider text-ink-3">
           <span>All features included</span>
           <Dot />
           <span>No seat limits</span>
@@ -622,7 +622,7 @@ function BrowserFrame({
         <span className="h-2.5 w-2.5 rounded-full bg-rose/60 shadow-sm" />
         <span className="h-2.5 w-2.5 rounded-full bg-amber/70 shadow-sm" />
         <span className="h-2.5 w-2.5 rounded-full bg-emerald/60 shadow-sm" />
-        <div className="ml-3 flex-1 truncate rounded border border-hairline/60 bg-paper/50 px-3 py-1 text-center font-mono text-[10px] uppercase tracking-wider text-ink-3">
+        <div className="ml-3 flex-1 truncate rounded border border-hairline/60 bg-paper/50 px-3 py-1 text-center font-mono text-3xs uppercase tracking-wider text-ink-3">
           {title}
         </div>
         <div className="hidden gap-1 sm:flex">
@@ -683,11 +683,11 @@ function DashboardMockup() {
           <div className="flex items-center justify-between border-b border-hairline/60 px-4 py-2.5">
             <div className="flex items-center gap-2">
               <Icon name="file" className="h-3.5 w-3.5 text-ink-3" />
-              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <span className="font-mono text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 Recent quotes
               </span>
             </div>
-            <span className="font-mono text-[10px] uppercase tracking-wider text-amber font-medium">
+            <span className="font-mono text-3xs uppercase tracking-wider text-amber font-medium">
               View all →
             </span>
           </div>
@@ -718,7 +718,7 @@ function SidebarItem({
 }) {
   return (
     <div
-      className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px] transition-colors ${
+      className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-2xs transition-colors ${
         active ? "bg-paper text-ink shadow-[0_1px_2px_rgba(28,25,23,0.08)] ring-1 ring-black/5" : "text-ink-2 hover:bg-paper/50 hover:text-ink"
       }`}
     >
@@ -738,7 +738,7 @@ function KpiTile({ label, value, hint }: { label: string; value: string; hint: s
     <div className="rounded-lg border border-hairline/60 bg-paper/80 p-3 shadow-sm backdrop-blur-sm transition-transform hover:-translate-y-0.5 hover:shadow-md">
       <p className="font-mono text-[9px] uppercase tracking-wider text-ink-3 font-semibold">{label}</p>
       <p className="mt-0.5 font-serif text-lg leading-tight tracking-tight text-ink">{value}</p>
-      <p className="text-[10px] text-ink-3">{hint}</p>
+      <p className="text-3xs text-ink-3">{hint}</p>
     </div>
   );
 }
@@ -764,9 +764,9 @@ function QuoteRow({
   };
   return (
     <tr className="border-b border-hairline/40 last:border-0 hover:bg-paper-2/30 transition-colors">
-      <td className="px-4 py-2.5 font-mono text-[10px] text-ink-3">{id}</td>
+      <td className="px-4 py-2.5 font-mono text-3xs text-ink-3">{id}</td>
       <td className="px-2 py-2.5 text-xs text-ink font-medium">{who}</td>
-      <td className="hidden px-2 py-2.5 text-[11px] text-ink-2 sm:table-cell">{plan}</td>
+      <td className="hidden px-2 py-2.5 text-2xs text-ink-2 sm:table-cell">{plan}</td>
       <td className="px-2 py-2.5 text-right font-serif text-sm tracking-tight text-ink">
         {amount}
       </td>
@@ -805,7 +805,7 @@ function KanbanMockup() {
             <div className="space-y-2">
               {c.items.map(([co, amt]) => (
                 <div key={co} className="rounded-md border border-hairline/80 bg-paper p-2 shadow-sm transition-shadow hover:shadow-md cursor-pointer">
-                  <p className="text-[11px] font-medium text-ink">{co}</p>
+                  <p className="text-2xs font-medium text-ink">{co}</p>
                   <p className="mt-0.5 font-serif text-xs tracking-tight text-amber">{amt}</p>
                 </div>
               ))}
@@ -833,10 +833,10 @@ function QuoteBuilderMockup() {
           <div className="rounded-md border border-hairline/60 bg-paper p-3 shadow-sm">
             <p className="font-mono text-[9px] uppercase tracking-wider text-ink-3 font-semibold mb-1">Customer</p>
             <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded bg-indigo/10 flex items-center justify-center text-indigo font-serif text-[10px]">T</div>
+              <div className="h-6 w-6 rounded bg-indigo/10 flex items-center justify-center text-indigo font-serif text-3xs">T</div>
               <div>
                 <p className="text-xs font-medium">TechVista Solutions</p>
-                <p className="text-[10px] text-ink-3">GSTIN: 27AADCB2230M1Z2</p>
+                <p className="text-3xs text-ink-3">GSTIN: 27AADCB2230M1Z2</p>
               </div>
             </div>
           </div>
@@ -882,7 +882,7 @@ function RenewalTimelineMockup() {
             </div>
             <div>
               <p className="text-xs font-medium">T-30 Reminder Sent</p>
-              <p className="text-[10px] text-ink-3">May 1, 2026 via Email</p>
+              <p className="text-3xs text-ink-3">May 1, 2026 via Email</p>
             </div>
           </div>
           
@@ -892,7 +892,7 @@ function RenewalTimelineMockup() {
             </div>
             <div>
               <p className="text-xs font-medium">T-15 Quote Auto-drafted</p>
-              <p className="text-[10px] text-ink-3">May 15, 2026 • Q-2026-27-0038</p>
+              <p className="text-3xs text-ink-3">May 15, 2026 • Q-2026-27-0038</p>
             </div>
           </div>
           
@@ -902,8 +902,8 @@ function RenewalTimelineMockup() {
             </div>
             <div className="bg-paper border border-amber/30 rounded-md p-2.5 shadow-sm flex-1">
               <p className="text-xs font-medium text-amber-ink">T-7 Final Reminder Due</p>
-              <p className="text-[10px] text-ink-3 mb-2">May 23, 2026</p>
-              <Button size="sm" variant="primary" className="h-6 text-[10px] px-2 w-full">Send WhatsApp + Email</Button>
+              <p className="text-3xs text-ink-3 mb-2">May 23, 2026</p>
+              <Button size="sm" variant="primary" className="h-6 text-3xs px-2 w-full">Send WhatsApp + Email</Button>
             </div>
           </div>
           
@@ -911,7 +911,7 @@ function RenewalTimelineMockup() {
             <div className="h-5 w-5 rounded-full bg-paper border-2 border-hairline flex items-center justify-center shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-medium text-ink-3">T-0 Expiry & Grace Period</p>
-              <p className="text-[10px] text-ink-3">May 30, 2026</p>
+              <p className="text-3xs text-ink-3">May 30, 2026</p>
             </div>
           </div>
         </div>
@@ -926,7 +926,7 @@ function BankingMockup() {
       <div className="p-3 sm:p-4 bg-paper/50 backdrop-blur-sm">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
-            <div className="h-6 w-6 bg-[#004C8F] rounded flex items-center justify-center font-serif text-[10px] text-white">H</div>
+            <div className="h-6 w-6 bg-[#004C8F] rounded flex items-center justify-center font-serif text-3xs text-white">H</div>
             <span className="text-xs font-medium">HDFC Current •••• 1234</span>
           </div>
           <Badge kind="success" size="sm">Connected via Setu AA</Badge>
@@ -935,7 +935,7 @@ function BankingMockup() {
         <div className="space-y-2">
           <div className="rounded-md border border-emerald/30 bg-emerald/5 p-2.5 flex justify-between items-center">
             <div>
-              <p className="text-[11px] font-medium text-ink">UPI/TechVista/INV-0042</p>
+              <p className="text-2xs font-medium text-ink">UPI/TechVista/INV-0042</p>
               <p className="text-[9px] text-ink-3">May 28 • Cr</p>
             </div>
             <div className="flex items-center gap-2">
@@ -947,7 +947,7 @@ function BankingMockup() {
           <div className="rounded-md border border-amber/30 bg-paper p-2.5 flex justify-between items-center shadow-sm relative overflow-hidden">
             <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber" />
             <div className="pl-2">
-              <p className="text-[11px] font-medium text-ink">NEFT-SUNIL LOZA-HDFC</p>
+              <p className="text-2xs font-medium text-ink">NEFT-SUNIL LOZA-HDFC</p>
               <p className="text-[9px] text-ink-3">May 27 • Cr</p>
             </div>
             <div className="flex flex-col items-end gap-1">
@@ -960,7 +960,7 @@ function BankingMockup() {
           
           <div className="rounded-md border border-hairline/60 bg-paper p-2.5 flex justify-between items-center shadow-sm">
             <div>
-              <p className="text-[11px] font-medium text-ink">AWS EMEA SARL</p>
+              <p className="text-2xs font-medium text-ink">AWS EMEA SARL</p>
               <p className="text-[9px] text-ink-3">May 25 • Dr</p>
             </div>
             <div className="flex items-center gap-2">

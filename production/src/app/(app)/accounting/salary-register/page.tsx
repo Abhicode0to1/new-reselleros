@@ -249,7 +249,7 @@ function MonthRegister() {
 
           <Card flush>
             <table className="w-full text-xs">
-              <thead className="bg-paper-2/60 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/60 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left px-3 py-3">Employee</th>
                   <th className="text-right px-3 py-3">Annual CTC</th>
@@ -271,7 +271,7 @@ function MonthRegister() {
                     <tr key={e.id} className="hover:bg-paper-2/40 transition-colors">
                       <td className="px-3 py-2.5">
                         <div className="font-bold text-ink">{toTitleCase(e.name)}</div>
-                        <div className="text-[10px] text-ink-3">{e.designation || "Staff"}</div>
+                        <div className="text-3xs text-ink-3">{e.designation || "Staff"}</div>
                       </td>
                       <td className="px-3 py-2.5 text-right font-mono font-bold text-ink">{rupee(ctc.annualCtc)}</td>
                       <td className="px-3 py-2.5 text-right font-mono font-semibold text-ink-2">{rupee(ctc.monthlyCtc)}</td>
@@ -314,7 +314,7 @@ function MonthRegister() {
       ) : (
         <Card flush>
           <table className="w-full text-sm">
-            <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+            <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               <tr>
                 <th className="text-left px-3 py-3 whitespace-nowrap">Employee</th>
                 {COLS.map((c) => <th key={c.key} className="text-right px-3 py-3 whitespace-nowrap">{c.label}</th>)}
@@ -335,7 +335,7 @@ function MonthRegister() {
                   >
                     <td className="px-3 py-2.5">
                       <div className="font-medium text-ink">{toTitleCase(e?.name ?? "Employee")}</div>
-                      {e?.designation && <div className="text-[11px] text-ink-3 mt-0.5">{e.designation}</div>}
+                      {e?.designation && <div className="text-2xs text-ink-3 mt-0.5">{e.designation}</div>}
                     </td>
                     {COLS.map((c) => <td key={c.key} className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-2">{num(p[c.key] as number)}</td>)}
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums font-semibold text-ink">{rupee(p.net)}</td>
@@ -348,7 +348,7 @@ function MonthRegister() {
           </table>
         </Card>
       )}
-      <p className="mt-3 text-[11px] text-ink-3">
+      <p className="mt-3 text-2xs text-ink-3">
         Net pay = Gross − LOP − TDS − PF − ESI − other. These are the real amounts paid — the same figures your CA files.
       </p>
         </>
@@ -389,9 +389,9 @@ function EmployeeRegister({ employeeId }: { employeeId: string }) {
       </div>
 
       <Card className="mb-4 p-4">
-        <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Salary register</div>
+        <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Salary register</div>
         <div className="font-serif text-2xl text-ink leading-tight mt-1">{toTitleCase(emp?.name ?? "Employee")}</div>
-        <div className="text-[11px] text-ink-3 mt-0.5">
+        <div className="text-2xs text-ink-3 mt-0.5">
           {[emp?.designation?.trim() || null, emp?.joining_date ? `Joined ${formatDate(emp.joining_date)}` : null].filter(Boolean).join(" · ")}
         </div>
       </Card>
@@ -403,7 +403,7 @@ function EmployeeRegister({ employeeId }: { employeeId: string }) {
       ) : (
         <Card flush>
           <table className="w-full text-sm">
-            <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+            <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               <tr>
                 <th className="text-left px-3 py-3 whitespace-nowrap">Month</th>
                 <th className="text-left px-3 py-3 whitespace-nowrap">Pay date</th>

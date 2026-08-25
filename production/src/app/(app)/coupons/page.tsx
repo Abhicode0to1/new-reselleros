@@ -195,7 +195,7 @@ export default function CouponsPage() {
                           <Icon name="copy" size={11} />
                         </button>
                         {c.description && (
-                          <div className="text-[11px] text-ink-3 mt-0.5 max-w-[220px] truncate">
+                          <div className="text-2xs text-ink-3 mt-0.5 max-w-[220px] truncate">
                             {c.description}
                           </div>
                         )}
@@ -288,7 +288,7 @@ export default function CouponsPage() {
                         {" uses"}
                       </button>
                     </div>
-                    <div className="text-[11px] text-ink-3 tabular-nums mb-2">
+                    <div className="text-2xs text-ink-3 tabular-nums mb-2">
                       {c.min_seats}+ seats
                       {c.max_seats != null ? ` · max ${c.max_seats}` : ""}
                       {" · "}
@@ -316,7 +316,7 @@ export default function CouponsPage() {
       )}
 
       {!isLoading && coupons && coupons.length > 0 && (
-        <p className="text-[11px] text-ink-3 mt-3 flex items-center gap-1.5">
+        <p className="text-2xs text-ink-3 mt-3 flex items-center gap-1.5">
           <Icon name="info" size={11} />
           Live on the public <span className="font-mono text-ink-2">/buy/workspace</span> page. Discount is applied pre-GST, then 18% GST recomputed on the discounted base.
         </p>

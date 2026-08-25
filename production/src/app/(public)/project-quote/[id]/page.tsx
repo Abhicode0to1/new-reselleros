@@ -65,7 +65,7 @@ export default async function ProjectQuotePage({ params }: { params: { id: strin
 
         <div className="rounded-lg border border-hairline bg-paper p-5 md:p-7 shadow-sm">
           <div className="mb-5">
-            <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">For</p>
+            <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">For</p>
             <p className="text-lg font-semibold text-ink">{project.customer_name}</p>
             <p className="text-sm text-ink-2 mt-1">{project.title}</p>
             {project.description && <p className="text-sm text-ink-3 mt-1">{project.description}</p>}
@@ -75,7 +75,7 @@ export default async function ProjectQuotePage({ params }: { params: { id: strin
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[420px]">
               <thead>
-                <tr className="border-b border-hairline text-[11px] uppercase tracking-wider text-ink-3">
+                <tr className="border-b border-hairline text-2xs uppercase tracking-wider text-ink-3">
                   <th className="text-left py-2">Item</th>
                   <th className="text-right py-2">Qty</th>
                   <th className="text-right py-2">Rate</th>
@@ -107,7 +107,7 @@ export default async function ProjectQuotePage({ params }: { params: { id: strin
           {/* Milestone schedule */}
           {(milestones?.length ?? 0) > 0 && (
             <div className="mt-6">
-              <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">Payment schedule</p>
+              <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">Payment schedule</p>
               <ul className="divide-y divide-hairline border border-hairline rounded-md">
                 {milestones!.map((m) => (
                   <li key={m.seq} className="flex items-center justify-between px-3 py-2 text-sm">
@@ -136,7 +136,7 @@ export default async function ProjectQuotePage({ params }: { params: { id: strin
           </div>
         </div>
 
-        <p className="text-center text-[11px] text-ink-3 mt-5">
+        <p className="text-center text-2xs text-ink-3 mt-5">
           Powered by ResellerOS · This is a quotation, not a tax invoice.
         </p>
       </div>

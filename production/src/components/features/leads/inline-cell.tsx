@@ -131,7 +131,7 @@ export function InlineCell<T>({
       )}
       {error && (
         // §24: say what's wrong, in place, without stealing focus from the cell.
-        <p role="alert" className="absolute z-20 mt-0.5 whitespace-nowrap rounded bg-rose text-paper text-[10px] px-1.5 py-0.5 shadow">
+        <p role="alert" className="absolute z-20 mt-0.5 whitespace-nowrap rounded bg-rose text-paper text-3xs px-1.5 py-0.5 shadow">
           {error}
         </p>
       )}

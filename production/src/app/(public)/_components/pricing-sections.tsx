@@ -57,7 +57,7 @@ export function BetaBanner() {
             <Icon name="sparkles" className="h-4 w-4" />
           </span>
           <div className="flex-1">
-            <p className="mb-1 font-mono text-[11px] uppercase tracking-wider text-amber-ink font-semibold">
+            <p className="mb-1 font-mono text-2xs uppercase tracking-wider text-amber-ink font-semibold">
               Beta · until 2026-09-01 or 10 paying customers
             </p>
             <h2 className="mb-2 font-serif text-xl tracking-tight text-ink sm:text-2xl">
@@ -177,7 +177,7 @@ function TierCard({ tier, index }: { tier: (typeof TIERS)[number]; index: number
       {isPopular && (
         <>
           <div className="absolute inset-0 rounded-2xl border-2 border-transparent bg-[linear-gradient(135deg,var(--amber-soft),transparent,var(--amber-soft))] [mask-image:linear-gradient(white,white)] [-webkit-mask-composite:destination-out] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ maskComposite: "exclude" }} />
-          <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber to-orange-500 px-4 py-1 font-mono text-[10px] uppercase tracking-wider text-paper shadow-md">
+          <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber to-orange-500 px-4 py-1 font-mono text-3xs uppercase tracking-wider text-paper shadow-md">
             {tier.badge}
           </span>
         </>
@@ -197,7 +197,7 @@ function TierCard({ tier, index }: { tier: (typeof TIERS)[number]; index: number
           </span>
           <span className="text-sm text-ink-3">/ month</span>
         </div>
-        <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+        <p className="mt-1 font-mono text-2xs uppercase tracking-wider text-ink-3 font-semibold">
           Or ₹{yearlyMonthly}/mo billed yearly · save 2 months
         </p>
       </div>
@@ -221,7 +221,7 @@ function TierCard({ tier, index }: { tier: (typeof TIERS)[number]; index: number
             <Link href={tier.href}>{tier.cta}</Link>
           )}
         </Button>
-        <p className="mt-2 text-center text-[11px] text-ink-3">
+        <p className="mt-2 text-center text-2xs text-ink-3">
           {tier.name === "Pro" ? "Reply within 24 hours" : "14-day trial · No credit card"}
         </p>
       </div>
@@ -257,7 +257,7 @@ export function Comparison({ comparisonData }: { comparisonData: any }) {
           <table className="w-full min-w-[720px] border-collapse bg-paper/50 backdrop-blur-sm rounded-xl overflow-hidden shadow-sm border border-hairline/60">
             <thead>
               <tr className="border-b border-hairline bg-paper-2/50">
-                <th className="py-4 pr-4 pl-4 text-left font-mono text-[10px] uppercase tracking-wider text-ink-3"></th>
+                <th className="py-4 pr-4 pl-4 text-left font-mono text-3xs uppercase tracking-wider text-ink-3"></th>
                 {["Starter", "Growth", "Pro"].map((name) => (
                   <th
                     key={name}
@@ -290,7 +290,7 @@ function ComparisonGroup({
       <tr>
         <td
           colSpan={4}
-          className="pt-6 pb-2 pl-4 font-mono text-[10px] uppercase tracking-wider text-amber font-semibold bg-paper/40"
+          className="pt-6 pb-2 pl-4 font-mono text-3xs uppercase tracking-wider text-amber font-semibold bg-paper/40"
         >
           {group.group}
         </td>
@@ -329,7 +329,7 @@ function ComparisonCell({ value }: { value: string | boolean }) {
     );
   }
   return (
-    <td className="px-3 py-3 text-center font-mono text-[11px] text-ink-2">
+    <td className="px-3 py-3 text-center font-mono text-2xs text-ink-2">
       {value}
     </td>
   );

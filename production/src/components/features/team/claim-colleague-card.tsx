@@ -161,7 +161,7 @@ export function ClaimColleagueCard({ isOwner }: { isOwner: boolean }) {
                 <button
                   type="button"
                   onClick={() => { setEmail(u.email); setBlocked(null); }}
-                  className="rounded-full border border-hairline px-2.5 py-1 font-mono text-[11px] text-ink-2 hover:border-amber hover:text-ink"
+                  className="rounded-full border border-hairline px-2.5 py-1 font-mono text-2xs text-ink-2 hover:border-amber hover:text-ink"
                   title={u.last_sign_in_at ? `Last signed in ${new Date(u.last_sign_in_at).toLocaleDateString("en-IN")}` : "Never signed in"}
                 >
                   {u.email}

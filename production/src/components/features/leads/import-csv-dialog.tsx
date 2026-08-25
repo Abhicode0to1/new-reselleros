@@ -253,8 +253,8 @@ export function ImportCsvDialog({ open, onOpenChange, onImportComplete }: Import
 
             {/* Expected columns reference */}
             <div className="text-xs text-ink-3">
-              <p className="font-semibold uppercase tracking-wider mb-1.5 text-[10px]">Expected header</p>
-              <code className="block bg-paper-2 border border-hairline rounded-md px-3 py-2 font-mono text-[11px] overflow-x-auto">
+              <p className="font-semibold uppercase tracking-wider mb-1.5 text-3xs">Expected header</p>
+              <code className="block bg-paper-2 border border-hairline rounded-md px-3 py-2 font-mono text-2xs overflow-x-auto">
                 {CSV_HEADER}
               </code>
               <p className="mt-2">
@@ -330,7 +330,7 @@ export function ImportCsvDialog({ open, onOpenChange, onImportComplete }: Import
                         <td className="p-2 text-ink-2 font-mono">
                           {r.contact_email || <span className="text-ink-3 font-sans">—</span>}
                           {r.warning && (
-                            <span className="ml-1.5 text-[10px] text-amber-ink">({r.warning})</span>
+                            <span className="ml-1.5 text-3xs text-amber-ink">({r.warning})</span>
                           )}
                         </td>
                         <td className="p-2 text-ink-2 font-mono">{r.contact_phone || <span className="text-ink-3 font-sans">—</span>}</td>

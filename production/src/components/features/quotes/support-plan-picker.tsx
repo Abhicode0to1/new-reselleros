@@ -112,7 +112,7 @@ export function SupportPlanPicker({ items, onAdd, selected, onRemove }: SupportP
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-[13px] font-semibold text-ink">Support plan</h3>
-          <p className="text-[11px] text-ink-3">Sold alongside the licences, billed on its own cycle.</p>
+          <p className="text-2xs text-ink-3">Sold alongside the licences, billed on its own cycle.</p>
         </div>
 
         {/* Two buttons rather than a dropdown: there are exactly two answers and the
@@ -157,21 +157,21 @@ export function SupportPlanPicker({ items, onAdd, selected, onRemove }: SupportP
               <p className="mb-1.5 font-serif text-lg tabular-nums text-ink">
                 {isFree ? "Free" : rupee(supportPrice(tier, cycle))}
                 {!isFree && (
-                  <span className="ml-1 text-[11px] font-sans text-ink-3">
+                  <span className="ml-1 text-2xs font-sans text-ink-3">
                     {cycle === "yearly" ? "/yr" : "/mo"}
                   </span>
                 )}
               </p>
 
               {cycle === "yearly" && saving && (
-                <p className="mb-1.5 text-[11px] text-emerald">
+                <p className="mb-1.5 text-2xs text-emerald">
                   {saving.monthsFree} months free · {rupee(saving.rupees)} off {rupee(tier.monthly * 12)}
                 </p>
               )}
 
-              <p className="mb-2 text-[11px] leading-snug text-ink-3">{tier.summary}</p>
+              <p className="mb-2 text-2xs leading-snug text-ink-3">{tier.summary}</p>
 
-              <ul className="mb-2.5 space-y-0.5 text-[11px] text-ink-3">
+              <ul className="mb-2.5 space-y-0.5 text-2xs text-ink-3">
                 <li>· First response in {tier.slaHours}h</li>
                 <li>
                   ·{" "}
@@ -191,13 +191,13 @@ export function SupportPlanPicker({ items, onAdd, selected, onRemove }: SupportP
                   invoice, and generate_invoice refuses a zero-value tax invoice. It
                   is what a customer has when they buy nothing. */}
               {isFree ? (
-                <p className="text-[11px] italic text-ink-3">
+                <p className="text-2xs italic text-ink-3">
                   Included by default — nothing to add to a quote.
                 </p>
               ) : !sku ? (
                 /* Never fall back to a price computed here. If the row is missing the
                    catalogue is what needs fixing, and saying so is the next step. */
-                <p className="text-[11px] leading-snug text-rose">
+                <p className="text-2xs leading-snug text-rose">
                   Not in your catalogue yet. Add it under Catalog &amp; Products, then
                   it can go on a quote.
                 </p>

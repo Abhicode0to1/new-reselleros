@@ -123,7 +123,7 @@ function Stat({ label, value, tone = "ink" }: { label: string; value: string; to
   const c = tone === "rose" ? "text-rose" : tone === "emerald" ? "text-emerald" : "text-ink";
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</p>
+      <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</p>
       <p className={`font-serif text-2xl mt-1 ${c}`}>{value}</p>
     </div>
   );
@@ -141,7 +141,7 @@ function ProjectCard({ project, onOpen }: { project: ProjectSaleWithTotals; onOp
     >
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{project.customer_name}</p>
+          <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{project.customer_name}</p>
           <h3 className="font-semibold text-ink truncate mt-0.5">{project.title}</h3>
         </div>
         <Badge
@@ -154,11 +154,11 @@ function ProjectCard({ project, onOpen }: { project: ProjectSaleWithTotals; onOp
 
       <div className="border-t border-hairline pt-3 space-y-2">
         <div className="flex items-baseline justify-between">
-          <span className="text-[11px] text-ink-3">Contract (incl GST)</span>
+          <span className="text-2xs text-ink-3">Contract (incl GST)</span>
           <span className="font-mono text-sm text-ink">{rupee(project.total_amount)}</span>
         </div>
         <div className="flex items-baseline justify-between">
-          <span className="text-[11px] text-ink-3">Outstanding</span>
+          <span className="text-2xs text-ink-3">Outstanding</span>
           <span className={`font-mono text-sm ${project.receivable > 0 ? "text-rose" : "text-emerald"}`}>
             {rupee(project.receivable)}
           </span>
@@ -167,13 +167,13 @@ function ProjectCard({ project, onOpen }: { project: ProjectSaleWithTotals; onOp
         {((project.costTotal ?? 0) + (project.labourTotal ?? 0) > 0) && (
           <>
             <div className="flex items-baseline justify-between">
-              <span className="text-[11px] text-ink-3">Cost</span>
+              <span className="text-2xs text-ink-3">Cost</span>
               <span className="font-mono text-sm text-ink-2">{rupee((project.costTotal ?? 0) + (project.labourTotal ?? 0))}</span>
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-[11px] text-ink-3">Profit</span>
+              <span className="text-2xs text-ink-3">Profit</span>
               <span className={`font-mono text-sm ${(project.profit ?? 0) >= 0 ? "text-emerald" : "text-rose"}`}>
-                {rupee(project.profit ?? 0)} <span className="text-[10px]">({project.marginPct ?? 0}%)</span>
+                {rupee(project.profit ?? 0)} <span className="text-3xs">({project.marginPct ?? 0}%)</span>
               </span>
             </div>
           </>
@@ -182,17 +182,17 @@ function ProjectCard({ project, onOpen }: { project: ProjectSaleWithTotals; onOp
         <div className="h-1.5 rounded-full bg-paper-2 overflow-hidden">
           <div className="h-full bg-emerald" style={{ width: `${pct}%` }} />
         </div>
-        <p className="text-[10px] text-ink-3">{pct}% collected</p>
+        <p className="text-3xs text-ink-3">{pct}% collected</p>
 
         {/* Timeline — start → target with days left / overdue */}
         {(project.start_date || project.target_date) && (
           <div className="flex items-center justify-between gap-2 pt-1">
-            <span className="text-[10px] text-ink-3 inline-flex items-center gap-1">
+            <span className="text-3xs text-ink-3 inline-flex items-center gap-1">
               <Icon name="clock" size={11} className="text-ink-3" />
               {project.start_date ? formatDate(project.start_date) : "—"} → {project.target_date ? formatDate(project.target_date) : "—"}
             </span>
             {project.target_date && !done && daysLeft != null && (
-              <span className={`text-[10px] font-medium rounded-full px-1.5 py-0.5 ${daysLeft < 0 ? "bg-rose-soft text-rose" : daysLeft <= 7 ? "bg-amber-soft text-amber-ink" : "bg-emerald-soft text-emerald"}`}>
+              <span className={`text-3xs font-medium rounded-full px-1.5 py-0.5 ${daysLeft < 0 ? "bg-rose-soft text-rose" : daysLeft <= 7 ? "bg-amber-soft text-amber-ink" : "bg-emerald-soft text-emerald"}`}>
                 {daysLeft < 0 ? `${-daysLeft}d overdue` : daysLeft === 0 ? "due today" : `${daysLeft}d left`}
               </span>
             )}

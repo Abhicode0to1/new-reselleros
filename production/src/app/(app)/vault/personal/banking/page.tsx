@@ -192,11 +192,11 @@ export default function PersonalBankingPage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Card className="p-4">
-              <p className="text-[11px] uppercase tracking-wide text-ink-4">Kul jama</p>
+              <p className="text-2xs uppercase tracking-wide text-ink-4">Kul jama</p>
               <div className="mt-0.5"><Money amount={assetTotal} size="display" /></div>
             </Card>
             <Card className="p-4">
-              <p className="text-[11px] uppercase tracking-wide text-ink-4">Card par bakaya</p>
+              <p className="text-2xs uppercase tracking-wide text-ink-4">Card par bakaya</p>
               <div className="mt-0.5">
                 <Money amount={debtTotal} size="display" tone={debtTotal > 0 ? "negative" : "default"} autoNegative={false} />
               </div>
@@ -236,7 +236,7 @@ export default function PersonalBankingPage() {
                         autoNegative={false}
                       />
                       {a.credit_limit !== null && a.credit_limit > 0 && (
-                        <p className="text-[10px] text-ink-4 mt-0.5">limit ₹{a.credit_limit.toLocaleString("en-IN")}</p>
+                        <p className="text-3xs text-ink-4 mt-0.5">limit ₹{a.credit_limit.toLocaleString("en-IN")}</p>
                       )}
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
@@ -267,7 +267,7 @@ export default function PersonalBankingPage() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Type</label>
+                <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Type</label>
                 <Select value={form.kind} onValueChange={(v) => setForm((f) => ({ ...f, kind: v as AccountKind }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -278,7 +278,7 @@ export default function PersonalBankingPage() {
                 </Select>
               </div>
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">
+                <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">
                   {isCard ? "Bakaya (₹)" : "Balance (₹)"}
                 </label>
                 <Input
@@ -291,7 +291,7 @@ export default function PersonalBankingPage() {
             </div>
 
             <div>
-              <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Naam</label>
+              <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Naam</label>
               <Input
                 value={form.label}
                 onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
@@ -301,7 +301,7 @@ export default function PersonalBankingPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Bank</label>
+                <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Bank</label>
                 <Input
                   value={form.institution}
                   onChange={(e) => setForm((f) => ({ ...f, institution: e.target.value }))}
@@ -309,7 +309,7 @@ export default function PersonalBankingPage() {
                 />
               </div>
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Aakhri 4 digit</label>
+                <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Aakhri 4 digit</label>
                 <Input
                   value={form.account_last4}
                   onChange={(e) => setForm((f) => ({ ...f, account_last4: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
@@ -322,7 +322,7 @@ export default function PersonalBankingPage() {
 
             {isCard && (
               <div>
-                <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Credit limit (₹)</label>
+                <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Credit limit (₹)</label>
                 <Input
                   value={form.credit_limit}
                   onChange={(e) => setForm((f) => ({ ...f, credit_limit: e.target.value }))}
@@ -335,7 +335,7 @@ export default function PersonalBankingPage() {
             {isDeposit && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Interest %</label>
+                  <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Interest %</label>
                   <Input
                     value={form.interest_rate}
                     onChange={(e) => setForm((f) => ({ ...f, interest_rate: e.target.value }))}
@@ -344,7 +344,7 @@ export default function PersonalBankingPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Maturity</label>
+                  <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Maturity</label>
                   <Input
                     type="date"
                     value={form.maturity_date}
@@ -355,7 +355,7 @@ export default function PersonalBankingPage() {
             )}
 
             <div>
-              <label className="block text-[11px] uppercase tracking-wide text-ink-4 mb-1">Note</label>
+              <label className="block text-2xs uppercase tracking-wide text-ink-4 mb-1">Note</label>
               <Input
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}

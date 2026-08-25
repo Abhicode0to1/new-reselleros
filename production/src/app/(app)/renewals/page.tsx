@@ -255,13 +255,13 @@ function RenewalBucket({
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-ink truncate">{sub.customer_name}</p>
-                    <p className="text-[11px] text-ink-3 truncate mt-0.5">
+                    <p className="text-2xs text-ink-3 truncate mt-0.5">
                       {sub.plan} · {sub.seats} seats
                     </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-serif text-base tabular-nums text-ink">{rupee(sub.mrr)}</p>
-                    <p className="text-[10px] text-ink-3">/mo</p>
+                    <p className="text-3xs text-ink-3">/mo</p>
                   </div>
                 </div>
 
@@ -440,7 +440,7 @@ function RenewalBucket({
                             )}
                           </div>
                           {sub.last_reminder_sent_at_v2 && (
-                            <p className="mt-1 text-[11px] text-ink-3">
+                            <p className="mt-1 text-2xs text-ink-3">
                               Last reminder: {formatDate(sub.last_reminder_sent_at_v2)}
                             </p>
                           )}
@@ -457,12 +457,12 @@ function RenewalBucket({
                             {renewalStateLabel(sub.renewal_state)}
                           </Badge>
                           {sub.reminder_count > 0 && (
-                            <p className="mt-1 text-[11px] text-ink-3 tabular-nums">
+                            <p className="mt-1 text-2xs text-ink-3 tabular-nums">
                               {sub.reminder_count} email{sub.reminder_count === 1 ? "" : "s"} sent
                             </p>
                           )}
                           {days < 0 && sub.renewal_state !== "suspended" && (
-                            <p className="mt-1 text-[11px] font-medium text-rose-600">
+                            <p className="mt-1 text-2xs font-medium text-rose-600">
                               Suspends in {Math.max(0, graceDays - Math.abs(days))}d
                             </p>
                           )}
@@ -546,7 +546,7 @@ function RenewalBucket({
                               )}
                             </div>
                             {sub.renewal_quote_id && (
-                              <p className="text-[11px] text-ink-3 font-mono">
+                              <p className="text-2xs text-ink-3 font-mono">
                                 Quote: {sub.renewal_quote_id}
                               </p>
                             )}
@@ -802,19 +802,19 @@ export default function RenewalsPage() {
           <div className="p-3 border-t border-hairline space-y-3 bg-paper">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Urgent (≤7d)</p>
+                <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Urgent (≤7d)</p>
                 <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{urgent.length} <span className="text-xs text-ink-3 font-normal">({rupee(urgentMrr, { compact: true })} MRR)</span></p>
               </div>
               <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Upcoming (30d)</p>
+                <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Upcoming (30d)</p>
                 <p className="font-serif text-lg font-bold text-amber-ink tabular-nums mt-0.5">{upcoming.length} <span className="text-xs text-ink-3 font-normal">({rupee(upcomingMrr, { compact: true })} MRR)</span></p>
               </div>
               <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">Future (31–90d)</p>
+                <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Future (31–90d)</p>
                 <p className="font-serif text-lg font-bold text-emerald tabular-nums mt-0.5">{future.length} <span className="text-xs text-ink-3 font-normal">({rupee(futureMrr, { compact: true })} MRR)</span></p>
               </div>
               <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
-                <p className="text-[10px] uppercase font-semibold text-ink-3 tracking-wider">High Risk ARR</p>
+                <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">High Risk ARR</p>
                 <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{rupee(highRiskArr, { compact: true })} <span className="text-xs text-ink-3 font-normal">({highRiskSubs.length} subs)</span></p>
               </div>
             </div>

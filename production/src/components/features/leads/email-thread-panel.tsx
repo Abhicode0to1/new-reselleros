@@ -53,7 +53,7 @@ export function EmailThreadPanel({
     : 0;
 
   const olderSendsNote = olderSends > 0 ? (
-    <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
+    <p className="mt-2 text-2xs leading-relaxed text-ink-3">
       The timeline also records {olderSends} earlier email{olderSends === 1 ? "" : "s"} to
       this lead with no saved text — {olderSends === 1 ? "it was" : "they were"} sent through
       Gmail before sending moved into the app, so only the fact of{" "}
@@ -88,7 +88,7 @@ export function EmailThreadPanel({
           they are the one thing those labels do NOT say: which way the traffic went.
           Right-aligned and alone, they read as a caption rather than a third title. */}
       <div className="mb-1.5 flex justify-end">
-        <span className="font-mono text-[11px] text-ink-3">
+        <span className="font-mono text-2xs text-ink-3">
           {summary.inbound} in · {summary.outbound} out
         </span>
       </div>
@@ -131,14 +131,14 @@ export function EmailThreadPanel({
               )}
             >
               <div className="mb-1 flex items-baseline justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ink-2">
+                <span className="inline-flex items-center gap-1.5 text-2xs font-semibold text-ink-2">
                   <Icon name={out ? "send" : "mail"} size={11} className={out ? "text-amber-ink" : "text-ink-3"} />
                   {out ? "You" : (m.counterparty ?? "Them")}
                   {out && m.counterparty && (
                     <span className="font-normal text-ink-3">→ {m.counterparty}</span>
                   )}
                 </span>
-                <span className="shrink-0 font-mono text-[10px] text-ink-3">
+                <span className="shrink-0 font-mono text-3xs text-ink-3">
                   {formatDate(m.at ?? "")} {fmtTime(m.at)}
                 </span>
               </div>
@@ -169,7 +169,7 @@ export function EmailThreadPanel({
                 /* Says which case this is rather than showing an empty bubble. An outbound
                    line with no body is a send that went through Gmail, where the text was
                    never kept — the drawer says so elsewhere and this must not contradict it. */
-                <div className="text-[11px] italic text-ink-3">
+                <div className="text-2xs italic text-ink-3">
                   {m.htmlOnly
                     /* Not rendered on purpose. body_html is whatever a stranger emailed in,
                        and putting it on screen means running their markup in this session. */
@@ -189,7 +189,7 @@ export function EmailThreadPanel({
 
       {summary.awaitingFirstInbound && (
         /* The state that confused the reporter, named. We have written; they have not. */
-        <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
+        <p className="mt-2 text-2xs leading-relaxed text-ink-3">
           They have not written back yet — everything above went out from your side. Their
           reply will appear here, and the reply box below becomes usable once it does.
         </p>

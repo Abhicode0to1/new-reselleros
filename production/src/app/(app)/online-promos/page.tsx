@@ -128,20 +128,20 @@ export default function OnlinePromosPage() {
       {/* "What's live" preview banner — exactly what the visitor will see */}
       {winning && (
         <div className="mb-6">
-          <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+          <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
             Currently live on <code className="font-mono text-ink-2">/buy/workspace</code>
           </p>
           <div className={cn("rounded-lg px-4 py-3 text-paper shadow-lg", bannerBg(winning.banner_style))}>
             <div className="flex items-center gap-3 flex-wrap">
               {winning.badge_text && (
-                <span className="text-[10px] uppercase tracking-wider font-semibold bg-paper/20 backdrop-blur px-2 py-1 rounded-full">
+                <span className="text-3xs uppercase tracking-wider font-semibold bg-paper/20 backdrop-blur px-2 py-1 rounded-full">
                   {winning.badge_text}
                 </span>
               )}
               <div className="flex-1 min-w-0">
                 <div className="font-serif text-base sm:text-lg leading-tight">{winning.headline}</div>
                 {winning.subheadline && (
-                  <div className="text-[11px] sm:text-xs opacity-90 mt-0.5">{winning.subheadline}</div>
+                  <div className="text-2xs sm:text-xs opacity-90 mt-0.5">{winning.subheadline}</div>
                 )}
               </div>
               <span className="font-mono text-xs bg-paper text-ink px-2 py-1 rounded font-semibold whitespace-nowrap">
@@ -150,7 +150,7 @@ export default function OnlinePromosPage() {
             </div>
           </div>
           {activePromos.length > 1 && (
-            <p className="text-[11px] text-amber-ink mt-2 inline-flex items-center gap-1.5">
+            <p className="text-2xs text-amber-ink mt-2 inline-flex items-center gap-1.5">
               <Icon name="alert" size={11} />
               {activePromos.length} promos are active — only the most-recently-updated one shows on the buy page.
             </p>
@@ -280,7 +280,7 @@ export default function OnlinePromosPage() {
                         {p.valid_until ? `ends ${formatDate(p.valid_until)}` : "no end date"}
                       </span>
                     </div>
-                    <div className="text-[11px] text-ink-3 tabular-nums mb-2">
+                    <div className="text-2xs text-ink-3 tabular-nums mb-2">
                       {p.min_seats}+ seats
                       {p.max_seats != null ? ` · max ${p.max_seats}` : ""}
                       {p.applies_to_tier ? ` · ${p.applies_to_tier}` : ""}
@@ -307,7 +307,7 @@ export default function OnlinePromosPage() {
       )}
 
       {!isLoading && promos && promos.length > 0 && (
-        <p className="text-[11px] text-ink-3 mt-3 flex items-center gap-1.5">
+        <p className="text-2xs text-ink-3 mt-3 flex items-center gap-1.5">
           <Icon name="info" size={11} />
           Stacks below Google promo (catalog), above any visitor coupon code. Discount is applied pre-GST; 18% GST recomputed on the discounted subtotal.
         </p>

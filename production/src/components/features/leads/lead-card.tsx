@@ -117,7 +117,7 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
       </div>
 
       {/* Seats · plan */}
-      <div className="text-[11px] text-ink-3 mt-1.5 truncate" title={`${lead.seats ?? "—"} seats · ${lead.plan ?? "—"}`}>
+      <div className="text-2xs text-ink-3 mt-1.5 truncate" title={`${lead.seats ?? "—"} seats · ${lead.plan ?? "—"}`}>
         {lead.seats ?? "—"} seats · {lead.plan ?? "—"}
       </div>
 
@@ -131,11 +131,11 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
           is in front of you, so it outranks the money. */}
       {lead.requires_human_attention === true && (
         <div className="mt-2 rounded-md bg-rose-soft/60 px-2 py-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-rose">
+          <p className="text-3xs font-semibold uppercase tracking-wide text-rose">
             AI stopped — needs you
           </p>
           {lead.human_attention_reason ? (
-            <p className="mt-0.5 text-[11px] leading-snug text-ink-2 line-clamp-2"
+            <p className="mt-0.5 text-2xs leading-snug text-ink-2 line-clamp-2"
                title={lead.human_attention_reason}>
               {lead.human_attention_reason}
             </p>
@@ -143,7 +143,7 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
             /* Flagged with no reason should not happen — the dispatcher writes both together.
                Said plainly rather than rendered as an empty box, because a blank explanation
                reads as "no reason to worry" when it means the opposite. */
-            <p className="mt-0.5 text-[11px] leading-snug text-ink-3">
+            <p className="mt-0.5 text-2xs leading-snug text-ink-3">
               No reason was recorded — open the lead&apos;s timeline.
             </p>
           )}
@@ -152,7 +152,7 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
 
       <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-hairline">
         <span className={cn("font-serif tabular-nums text-sm font-bold inline-flex items-center gap-1", isHighValue ? "text-emerald" : "text-amber-ink")}>
-          {isHighValue && <span aria-hidden className="text-[10px]">★</span>}
+          {isHighValue && <span aria-hidden className="text-3xs">★</span>}
           {lead.value !== null ? rupee(lead.value, { compact: true }) : "—"}
         </span>
 
@@ -160,7 +160,7 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
             A second one used to sit here computed from `created_at`, so a lead
             created 30 days ago but worked on yesterday was labelled "30d" —
             it measured the lead's AGE, not neglect. */}
-        <div className="flex items-center gap-1 text-[10px] text-ink-3">
+        <div className="flex items-center gap-1 text-3xs text-ink-3">
           <span>{age}</span>
         </div>
       </div>

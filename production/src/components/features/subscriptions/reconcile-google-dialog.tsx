@@ -189,7 +189,7 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
                   <p className="text-sm font-medium text-ink inline-flex items-center gap-1.5">
                     <Icon name="refresh" size={14} className="text-amber" /> Sync &amp; add live from Google
                   </p>
-                  <p className="text-[11px] text-ink-3 mt-0.5">
+                  <p className="text-2xs text-ink-3 mt-0.5">
                     No file — pull every subscription via the Reseller API and add the missing ones (needs the API enabled + reseller scope).
                   </p>
                 </div>
@@ -200,7 +200,7 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
               </div>
             )}
 
-            <div className="flex items-center gap-3 text-[11px] text-ink-3">
+            <div className="flex items-center gap-3 text-2xs text-ink-3">
               <div className="h-px flex-1 bg-hairline" /> or get the read-only report from a CSV <div className="h-px flex-1 bg-hairline" />
             </div>
 
@@ -227,7 +227,7 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
               <Stat label="Missing ARR (est.)" value={rupee(report.estMissingMrr * 12, { compact: true })} tone="rose" />
               <Stat label="Suspended (billing risk)" value={String(report.buckets.suspended.length)} tone="amber" />
             </div>
-            <p className="text-[11px] text-ink-3">
+            <p className="text-2xs text-ink-3">
               <b>Matched = domains</b> in both. One domain can carry several Google line-items (Business Starter + Vault + Storage), so the Google <i>subs</i> count is higher than matched <i>domains</i> — that's why matched stays ≤ your app subs.
               {" "}<b>"Only in Google"</b> = provisioned on Google but not tracked in the app. <b>Missing ARR is an estimate</b> (catalog price × seats) — verify the real rate before relying on it.
             </p>
@@ -262,7 +262,7 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
                   <tbody>
                     {shown.map((r, i) => (
                       <tr key={i} className="border-b border-hairline last:border-0">
-                        <td className="p-2 font-mono text-[11px] text-ink">{r.domain}</td>
+                        <td className="p-2 font-mono text-2xs text-ink">{r.domain}</td>
                         <td className="p-2 text-ink-2">{r.sku}</td>
                         <td className="p-2 text-right tabular-nums text-ink-2">{r.seats}{r.appSeats != null && r.appSeats !== r.seats ? ` (app ${r.appSeats})` : ""}</td>
                         <td className="p-2"><Badge kind={r.status === "Active" ? "success" : "warning"} size="sm" dot>{r.status || "—"}</Badge></td>
@@ -284,7 +284,7 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
               )}
             </div>
 
-            <p className="text-[11px] text-ink-3">{fileName} · matched by domain. Read-only — no records changed.</p>
+            <p className="text-2xs text-ink-3">{fileName} · matched by domain. Read-only — no records changed.</p>
           </div>
         )}
 
@@ -333,7 +333,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "em
   const c = tone === "rose" ? "text-rose" : tone === "emerald" ? "text-emerald" : tone === "amber" ? "text-amber-ink" : "text-ink";
   return (
     <div className="rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
       <div className={cn("text-sm font-semibold tabular-nums mt-0.5", c)}>{value}</div>
     </div>
   );

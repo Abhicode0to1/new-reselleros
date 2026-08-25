@@ -136,7 +136,7 @@ export function PortalDock({ className }: { className?: string }) {
                 {p.label}
                 <Icon name="external" size={12} className="text-ink-3" />
               </span>
-              <span className="mt-0.5 block text-[11px] leading-snug text-ink-3">
+              <span className="mt-0.5 block text-2xs leading-snug text-ink-3">
                 {p.hint}
               </span>
             </span>

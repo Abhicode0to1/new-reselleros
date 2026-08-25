@@ -532,7 +532,7 @@ export default function CustomerDetailPage() {
                         <span key="a" className="inline-flex flex-col">
                           <span className={cn("tabular-nums", t.indent === 0 ? "font-semibold" : "font-medium text-ink-2")}>{rupee(t.amount)}</span>
                           {t.due != null && t.due > 0 && (
-                            <span className="text-[10px] text-amber-ink tabular-nums">{rupee(t.due)} due</span>
+                            <span className="text-3xs text-amber-ink tabular-nums">{rupee(t.due)} due</span>
                           )}
                         </span>,
                         <span key="s" className="text-ink-2 capitalize">{t.status}</span>,
@@ -571,7 +571,7 @@ export default function CustomerDetailPage() {
                 <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
                   <p className="text-sm text-ink-3">Account statement — invoices billed vs payments received.</p>
                   <div className="text-right">
-                    <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Closing balance</div>
+                    <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Closing balance</div>
                     <div className={cn("font-serif text-xl tabular-nums", closingBalance > 0 ? "text-rose" : "text-emerald")}>
                       {closingBalance > 0 ? `${rupee(closingBalance)} owed` : closingBalance < 0 ? `${rupee(-closingBalance)} credit` : rupee(0)}
                     </div>
@@ -634,7 +634,7 @@ function RecordTable({ head, rows }: { head: string[]; rows: { cells: React.Reac
             >
               {r.cells.map((cell, j) => (
                 <div key={j} className="flex items-baseline justify-between gap-3">
-                  <span className="text-[10px] uppercase tracking-wider text-ink-3 shrink-0">{head[j]}</span>
+                  <span className="text-3xs uppercase tracking-wider text-ink-3 shrink-0">{head[j]}</span>
                   <span className="text-sm text-ink-2 text-right min-w-0">{cell}</span>
                 </div>
               ))}
@@ -649,7 +649,7 @@ function RecordTable({ head, rows }: { head: string[]; rows: { cells: React.Reac
           <thead className="bg-paper-2/50">
             <tr>
               {head.map((h) => (
-                <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold text-ink-3 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                <th key={h} className="text-left px-3 py-2 text-3xs font-semibold text-ink-3 uppercase tracking-wider whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>

@@ -181,7 +181,7 @@ export default function VaultPage() {
 function HealthCard({ findings }: { findings: HealthFinding[] }) {
   return (
     <Card className="p-5 mb-6">
-      <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-3">
+      <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-3">
         Needs attention
       </div>
       <ul className="space-y-2">
@@ -254,7 +254,7 @@ function EntryRow({ entry }: { entry: VaultEntry }) {
               <code className="font-mono text-sm bg-paper-2 px-2 py-1 rounded select-all">
                 {shown.password}
               </code>
-              <span className="text-[10px] text-ink-3 tabular-nums w-8">{secondsLeft}s</span>
+              <span className="text-3xs text-ink-3 tabular-nums w-8">{secondsLeft}s</span>
               <Button variant="ghost" size="sm" icon="eye_off" onClick={() => setShown(null)}>
                 Hide
               </Button>
@@ -348,7 +348,7 @@ function AddDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: bo
             <Input id="v-pass" value={password} onChange={(e) => setPassword(e.target.value)}
                    autoComplete="off" spellCheck={false} className="font-mono" />
             {password && (
-              <div className="text-[11px] text-ink-3 mt-1">
+              <div className="text-2xs text-ink-3 mt-1">
                 {strength.strength === "strong" ? "Strong" : strength.strength === "fair" ? "Fair" : "Weak"}
                 {strength.problems.length > 0 && ` — ${strength.problems[0]}`}
               </div>

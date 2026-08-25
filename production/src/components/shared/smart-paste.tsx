@@ -126,7 +126,7 @@ export function SmartPaste({ catalogue, onFill }: SmartPasteProps) {
 
       {entities && (
         <div className="mt-2.5 rounded-md border border-hairline bg-paper p-2.5">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+          <p className="mb-1.5 text-2xs font-semibold uppercase tracking-wider text-ink-3">
             Found {found} of 6
           </p>
           <dl className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -141,7 +141,7 @@ export function SmartPaste({ catalogue, onFill }: SmartPasteProps) {
               source={entities.email.value ? `the address ${entities.email.value}` : null}
             />
           </dl>
-          <p className="mt-2 border-t border-hairline pt-1.5 text-[10px] leading-snug text-ink-3">
+          <p className="mt-2 border-t border-hairline pt-1.5 text-3xs leading-snug text-ink-3">
             Read from the text by rules, not by a model — anything blank was not found and is
             left for you to type. Nothing here is guessed.
           </p>
@@ -170,7 +170,7 @@ export function SmartPaste({ catalogue, onFill }: SmartPasteProps) {
 function Row({ label, value, source }: { label: string; value: string | number | null; source: string | null }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] uppercase tracking-wider text-ink-3">{label}</dt>
+      <dt className="text-3xs uppercase tracking-wider text-ink-3">{label}</dt>
       {value == null ? (
         /* Said out loud. A gap reads as a rendering bug and an operator cannot tell it
            apart from a value that failed to load. */
@@ -179,7 +179,7 @@ function Row({ label, value, source }: { label: string; value: string | number |
         <>
           <dd className="break-words text-[13px] font-medium text-ink">{value}</dd>
           {source && (
-            <dd className="break-words text-[10px] leading-snug text-ink-3">
+            <dd className="break-words text-3xs leading-snug text-ink-3">
               from “{source.length > 40 ? `${source.slice(0, 40)}…` : source}”
             </dd>
           )}

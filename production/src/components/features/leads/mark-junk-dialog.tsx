@@ -87,7 +87,7 @@ export function MarkJunkDialog({
                   {r.recoverable ? "Can be undone" : "Final"}
                 </Badge>
               </div>
-              <p className="mt-0.5 text-[11px] leading-snug text-ink-3">{r.consequence}</p>
+              <p className="mt-0.5 text-2xs leading-snug text-ink-3">{r.consequence}</p>
             </button>
           ))}
         </div>
@@ -96,7 +96,7 @@ export function MarkJunkDialog({
             reads instead of a reason anybody can group by. */}
         {reasonId && junkNoteRequired(reasonId) && (
           <div className="mt-3">
-            <label htmlFor="junkNote" className="block text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+            <label htmlFor="junkNote" className="block text-2xs font-semibold uppercase tracking-wider text-ink-3">
               What was it?
             </label>
             <textarea

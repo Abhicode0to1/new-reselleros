@@ -239,17 +239,17 @@ function CompanyTab() {
                 {(() => {
                   const v = (watchedGstin ?? "").trim();
                   if (v.length < 15)        return (
-                    <p className="mt-1 text-[10px] text-ink-3">
+                    <p className="mt-1 text-3xs text-ink-3">
                       State + state code auto-fill from the first 2 digits.
                     </p>
                   );
                   if (isValidGstin(v))      return (
-                    <p className="mt-1 text-[10px] text-emerald inline-flex items-center gap-1">
+                    <p className="mt-1 text-3xs text-emerald inline-flex items-center gap-1">
                       <Icon name="check_circle" size={11} /> Format + checksum match. Click Verify to confirm with GSTN.
                     </p>
                   );
                   return (
-                    <p className="mt-1 text-[10px] text-rose inline-flex items-center gap-1">
+                    <p className="mt-1 text-3xs text-rose inline-flex items-center gap-1">
                       <Icon name="alert" size={11} /> {validateGstin(v).ok ? "" : (validateGstin(v) as { message: string }).message}
                     </p>
                   );
@@ -896,7 +896,7 @@ function BrandingTab() {
               </Button>
             )}
           </div>
-          <p className="text-[11px] text-ink-3 max-w-xs">
+          <p className="text-2xs text-ink-3 max-w-xs">
             Tip: a transparent PNG around 512×512 (or a wide 4:1 banner) looks crispest.
           </p>
         </div>

@@ -126,8 +126,8 @@ export default function ContactDetailPage() {
             </p>
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <Badge kind="muted" size="sm" dot>Contact</Badge>
-              {contact.city && <span className="text-[11px] text-ink-3 inline-flex items-center gap-1"><Icon name="globe" size={11} /> {contact.city}</span>}
-              <span className="text-[11px] text-ink-3">Added {formatDate(contact.created_at)}</span>
+              {contact.city && <span className="text-2xs text-ink-3 inline-flex items-center gap-1"><Icon name="globe" size={11} /> {contact.city}</span>}
+              <span className="text-2xs text-ink-3">Added {formatDate(contact.created_at)}</span>
             </div>
           </div>
         </div>
@@ -152,11 +152,11 @@ export default function ContactDetailPage() {
           {/* All phones — each with its label + call/WhatsApp shortcuts */}
           {phones.length > 0 && (
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-ink-3 mb-1.5">Phones</div>
+              <div className="text-2xs uppercase tracking-wider text-ink-3 mb-1.5">Phones</div>
               <ul className="space-y-1">
                 {phones.map((p, i) => (
                   <li key={`ph-${i}`} className="flex items-center gap-2 text-sm">
-                    <span className="inline-flex items-center rounded-full bg-paper-2 text-ink-3 text-[10px] uppercase tracking-wide px-1.5 py-0.5 w-14 justify-center shrink-0">{p.label}</span>
+                    <span className="inline-flex items-center rounded-full bg-paper-2 text-ink-3 text-3xs uppercase tracking-wide px-1.5 py-0.5 w-14 justify-center shrink-0">{p.label}</span>
                     <span className="font-mono text-ink truncate">{p.value}</span>
                     <a href={`tel:${p.value}`} className="ml-auto shrink-0 text-emerald hover:text-emerald/80" aria-label={`Call ${p.value}`}><Icon name="call" size={15} /></a>
                     <a href={`https://wa.me/${waFor(p.value)}`} target="_blank" rel="noopener noreferrer" className="shrink-0 text-emerald hover:text-emerald/80" aria-label={`WhatsApp ${p.value}`}><Icon name="whatsapp" size={15} /></a>
@@ -169,11 +169,11 @@ export default function ContactDetailPage() {
           {/* All emails — each with its label + a mail shortcut */}
           {emails.length > 0 && (
             <div>
-              <div className="text-[11px] uppercase tracking-wider text-ink-3 mb-1.5">Emails</div>
+              <div className="text-2xs uppercase tracking-wider text-ink-3 mb-1.5">Emails</div>
               <ul className="space-y-1">
                 {emails.map((e, i) => (
                   <li key={`em-${i}`} className="flex items-center gap-2 text-sm">
-                    <span className="inline-flex items-center rounded-full bg-paper-2 text-ink-3 text-[10px] uppercase tracking-wide px-1.5 py-0.5 w-14 justify-center shrink-0">{e.label}</span>
+                    <span className="inline-flex items-center rounded-full bg-paper-2 text-ink-3 text-3xs uppercase tracking-wide px-1.5 py-0.5 w-14 justify-center shrink-0">{e.label}</span>
                     <span className="font-mono text-ink truncate">{e.value}</span>
                     <a href={`mailto:${e.value}`} className="ml-auto shrink-0 text-amber-ink hover:text-amber" aria-label={`Email ${e.value}`}><Icon name="mail" size={15} /></a>
                   </li>
@@ -244,7 +244,7 @@ export default function ContactDetailPage() {
           </dl>
           {contact.family && (
             <div className="mt-3">
-              <dt className="text-[11px] uppercase tracking-wider text-ink-3">Family</dt>
+              <dt className="text-2xs uppercase tracking-wider text-ink-3">Family</dt>
               <dd className="text-sm text-ink-2 whitespace-pre-wrap leading-relaxed mt-0.5">{contact.family}</dd>
             </div>
           )}
@@ -257,7 +257,7 @@ export default function ContactDetailPage() {
           {contact.tags && contact.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {contact.tags.map((t) => (
-                <span key={t} className="inline-flex items-center rounded-full bg-paper-2 text-ink-2 text-[11px] px-2 py-0.5">#{t}</span>
+                <span key={t} className="inline-flex items-center rounded-full bg-paper-2 text-ink-2 text-2xs px-2 py-0.5">#{t}</span>
               ))}
             </div>
           )}
@@ -273,7 +273,7 @@ export default function ContactDetailPage() {
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-hairline bg-card/40 bg-paper p-4 md:p-5">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-3 mb-3">{title}</h2>
+      <h2 className="text-2xs font-semibold uppercase tracking-wider text-ink-3 mb-3">{title}</h2>
       {children}
     </section>
   );
@@ -304,7 +304,7 @@ function ReachButton({
 function Field({ label, value, mono }: { label: string; value: string | null; mono?: boolean }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[11px] uppercase tracking-wider text-ink-3">{label}</dt>
+      <dt className="text-2xs uppercase tracking-wider text-ink-3">{label}</dt>
       <dd className={cn("text-sm text-ink truncate", mono && "font-mono", !value && "italic text-ink-3")}>
         {value || "—"}
       </dd>

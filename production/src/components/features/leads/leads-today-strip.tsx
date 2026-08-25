@@ -57,7 +57,7 @@ export function LeadsTodayStrip({ leads, dueFilter, onFilterDue }: LeadsTodayStr
   return (
     <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-1">
       {/* Leading clock icon + "Today" label — sets the section context */}
-      <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-semibold text-ink-3 shrink-0 pr-1.5">
+      <div className="inline-flex items-center gap-1.5 text-3xs uppercase tracking-wider font-semibold text-ink-3 shrink-0 pr-1.5">
         <Icon name="clock" size={11} className="text-amber" />
         Today
       </div>
@@ -137,7 +137,7 @@ function TodayChip({ icon, label, tone, active, onClick }: TodayChipProps) {
       onClick={onClick}
       className={cn(
         "inline-flex items-center gap-1.5 shrink-0",
-        "px-2.5 py-1 rounded-full border text-[11px] font-semibold",
+        "px-2.5 py-1 rounded-full border text-2xs font-semibold",
         "transition-all hover:brightness-105 active:brightness-95",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2",
         toneClass[tone],

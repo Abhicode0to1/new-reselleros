@@ -73,7 +73,7 @@ export function ProjectTasks({ projectId, team, project }: { projectId: string; 
           <Button variant="default" icon="sparkles" onClick={() => setAiOpen(true)}>
             Plan with AI
           </Button>
-          <span className="text-[11px] text-ink-3 ml-2">Project ki detail do → explanation + tasks ban jaayenge</span>
+          <span className="text-2xs text-ink-3 ml-2">Project ki detail do → explanation + tasks ban jaayenge</span>
         </div>
       )}
 
@@ -158,7 +158,7 @@ export function ProjectTasks({ projectId, team, project }: { projectId: string; 
       </div>
 
       {team.length === 0 && (
-        <p className="text-[11px] text-ink-3 mt-2">
+        <p className="text-2xs text-ink-3 mt-2">
           Tip: is project ki <b>Team</b> me employees add karo (upar Labour section), phir unhe tasks assign kar paoge.
         </p>
       )}
@@ -337,7 +337,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
                     <button
                       type="button"
                       onClick={() => setDetails("")}
-                      className="text-[11px] font-semibold text-rose-600 hover:underline"
+                      className="text-2xs font-semibold text-rose-600 hover:underline"
                     >
                       Clear Text
                     </button>
@@ -346,7 +346,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
 
                 {/* 1-Click Sample Description Templates */}
                 <div className="p-3 mb-3 bg-paper-2/60 border border-hairline rounded-xl space-y-2">
-                  <div className="text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                  <div className="text-2xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                     <Icon name="sparkles" size={13} />
                     <span>⚡ 1-Click Standard Sample Templates (Click to fill):</span>
                   </div>
@@ -371,7 +371,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
                   placeholder="Click a sample template above OR paste custom project description... e.g. Custom ERP & Billing Solution for Private Ltd company with GST invoicing, inventory tracking, role-based access, payment gateway integration, and automated WhatsApp notifications. Delivery in 6 weeks."
                   className="w-full rounded-xl border border-hairline bg-paper px-4 py-3 text-sm focus:border-amber focus:ring-amber font-sans"
                 />
-                <p className="text-[11px] text-ink-3 mt-1.5">
+                <p className="text-2xs text-ink-3 mt-1.5">
                   💡 Provide project details, scope, or client requirements. AI agent will analyze this and ask key questions for proposal generation & phase breakdown.
                 </p>
               </div>
@@ -406,7 +406,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
                   <Icon name="help_circle" size={16} className="shrink-0 text-amber-ink" />
                   <div>
                     <span className="font-bold">Project Clarification Questions</span>
-                    <p className="text-[11px] text-ink-2 mt-0.5">
+                    <p className="text-2xs text-ink-2 mt-0.5">
                       {lang === "hi"
                         ? "AI proposal aur delivery roadmap ke liye in sawalon ka jawab dein:"
                         : "Answer these key questions to refine your client proposal & phase roadmap:"}

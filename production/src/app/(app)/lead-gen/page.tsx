@@ -409,7 +409,7 @@ export default function LeadGenPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-medium tabular-nums text-ink">{s.conv}%</p>
-                    <p className="text-[10px] text-ink-3">conv rate</p>
+                    <p className="text-3xs text-ink-3">conv rate</p>
                   </div>
                   <Icon name="chevron_right" size={14} className="text-ink-3 justify-self-end" />
                 </button>
@@ -460,7 +460,7 @@ export default function LeadGenPage() {
             </div>
 
             <div className="mt-2 flex items-center justify-between gap-2">
-              <code className="min-w-0 truncate rounded bg-paper-2 px-2 py-1 font-mono text-[10px] text-ink-3">
+              <code className="min-w-0 truncate rounded bg-paper-2 px-2 py-1 font-mono text-3xs text-ink-3">
                 {captureHost}/enquiry
               </code>
               <Button
@@ -501,7 +501,7 @@ export default function LeadGenPage() {
                 </Button>
               </div>
             </div>
-            <code className="block min-w-0 truncate rounded bg-paper-2 px-2 py-1 font-mono text-[10px] text-ink-3">
+            <code className="block min-w-0 truncate rounded bg-paper-2 px-2 py-1 font-mono text-3xs text-ink-3">
               {captureHost}/buy/workspace
             </code>
           </div>
@@ -608,7 +608,7 @@ export default function LeadGenPage() {
                       <SourceIcon source={lead.source} />
                       <span className="text-xs text-ink-3 truncate">· {lead.contact_name ?? "—"}</span>
                     </div>
-                    <p className="mt-1 text-[11px] text-ink-3">
+                    <p className="mt-1 text-2xs text-ink-3">
                       {formatDate(lead.created_at, "relative")}
                     </p>
                   </div>
@@ -657,7 +657,7 @@ export default function LeadGenPage() {
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm text-ink truncate">{l.company}</span>
-                      <span className="block text-[11px] text-ink-3 truncate">
+                      <span className="block text-2xs text-ink-3 truncate">
                         {l.contact_name ?? l.contact_email ?? "—"} · {formatDate(l.created_at)}
                       </span>
                     </span>

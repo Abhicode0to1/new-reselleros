@@ -26,7 +26,7 @@ const avatarVariants = cva(
     variants: {
       size: {
         xs: "w-5 h-5 text-[9px]",
-        sm: "w-7 h-7 text-[11px]",
+        sm: "w-7 h-7 text-2xs",
         md: "w-9 h-9 text-xs",
         lg: "w-12 h-12 text-sm",
         xl: "w-16 h-16 text-lg",

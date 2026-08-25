@@ -195,7 +195,7 @@ export function AttendanceReminder() {
               Aaj nahi
             </Button>
           </div>
-          <p className="text-[11px] text-ink-4 text-center pt-1">
+          <p className="text-2xs text-ink-4 text-center pt-1">
             Ye reminder /attendance/me par band ya time change kar sakte ho.
           </p>
         </div>

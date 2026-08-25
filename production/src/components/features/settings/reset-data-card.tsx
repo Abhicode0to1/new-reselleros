@@ -138,7 +138,7 @@ export function ResetDataCard({ isOwner }: { isOwner: boolean }) {
                   <span className="text-sm text-ink">{s.label}</span>
                   {s.statutory && <Badge kind="warning" size="sm">Statutory</Badge>}
                 </span>
-                <span className="block text-[11px] text-ink-3 leading-relaxed">{s.blurb}</span>
+                <span className="block text-2xs text-ink-3 leading-relaxed">{s.blurb}</span>
               </span>
             </label>
           </li>
@@ -210,12 +210,12 @@ export function ResetDataCard({ isOwner }: { isOwner: boolean }) {
           </p>
           <ul className="mt-1.5 space-y-0.5">
             {Object.entries(done.deleted).map(([tbl, n]) => (
-              <li key={tbl} className="font-mono text-[11px] text-ink-3">
+              <li key={tbl} className="font-mono text-2xs text-ink-3">
                 {tbl}: {n}
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-[11px] text-ink-3">
+          <p className="mt-2 text-2xs text-ink-3">
             Changed your mind? Use <b>Restore</b> on the newest &quot;Pre-Reset Safeguard Snapshot&quot;
             in the list above.
           </p>

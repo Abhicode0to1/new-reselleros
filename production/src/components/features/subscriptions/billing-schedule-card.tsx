@@ -64,7 +64,7 @@ export function BillingScheduleCard({ subscription, todayISO }: {
         </div>
       )}
 
-      <p className="mt-3 text-[11px] leading-snug text-ink-3">
+      <p className="mt-3 text-2xs leading-snug text-ink-3">
         These are scheduled amounts, not invoices. Each tax invoice is raised on its own
         billing date and takes its GST number then.
       </p>
@@ -82,12 +82,12 @@ function ScheduleTable({ rows, todayISO, label, muted }: {
   return (
     <div className={cn(muted && "opacity-75")}>
       <div className="mb-1.5 flex items-baseline justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">{label}</span>
+        <span className="text-2xs font-semibold uppercase tracking-wider text-ink-3">{label}</span>
         {/* "ex-GST" is stated because the customer's own portal shows the
             GST-inclusive figure for the same instalments, and two different numbers
             for one bill with nothing distinguishing them is how a rep and a customer
             end up arguing about which is right. */}
-        <span className="text-[11px] text-ink-3">
+        <span className="text-2xs text-ink-3">
           {rows.length} {rows.length === 1 ? "invoice" : "invoices"} · {rupee(total)} ex-GST
         </span>
       </div>
@@ -101,9 +101,9 @@ function ScheduleTable({ rows, todayISO, label, muted }: {
                 <p className={cn("text-sm", done ? "text-ink-3" : "text-ink")}>
                   {formatDate(p.billOn)}
                   {isNext && <Badge kind="warning" size="sm" className="ml-2">next</Badge>}
-                  {done && <span className="ml-2 text-[10px] uppercase tracking-wider text-ink-3">billed</span>}
+                  {done && <span className="ml-2 text-3xs uppercase tracking-wider text-ink-3">billed</span>}
                 </p>
-                <p className="text-[11px] text-ink-3">
+                <p className="text-2xs text-ink-3">
                   covers {formatDate(p.periodStart)} – {formatDate(p.periodEnd)}
                 </p>
               </div>

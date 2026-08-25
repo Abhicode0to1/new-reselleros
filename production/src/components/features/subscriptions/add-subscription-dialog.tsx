@@ -394,7 +394,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                 <button
                   type="button"
                   onClick={handleClearCustomerSelection}
-                  className="text-[11px] font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 mt-1 cursor-pointer"
+                  className="text-2xs font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 mt-1 cursor-pointer"
                 >
                   <Icon name="x" size={12} />
                   <span>Clear Selection & Type Brand New Customer</span>
@@ -423,7 +423,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                 onChange={(e) => setDomain(e.target.value)}
                 required
               />
-              <p className="text-[11px] text-ink-3 mt-1">Essential for Google/M365 Console provisioning.</p>
+              <p className="text-2xs text-ink-3 mt-1">Essential for Google/M365 Console provisioning.</p>
             </FormField>
 
             <FormField label="Contact Email (Optional)" htmlFor="custEmail">
@@ -485,7 +485,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                   Now it is possible, so it has to say what to do — and NOT block: the
                   custom-plan path still works, it just cannot check the margin. */}
               {!catalogLoading && products.length === 0 && !isCustomPlan && (
-                <p className="mt-1 text-[11px] leading-snug text-ink-3">
+                <p className="mt-1 text-2xs leading-snug text-ink-3">
                   Your catalogue is empty. Add products in{" "}
                   <a href="/items" className="font-semibold text-primary hover:underline">
                     Catalog &amp; Products
@@ -510,7 +510,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                       const first = productsForVendor(products, vendor)[0] ?? products[0];
                       if (first) applyProduct(first);
                     }}
-                    className="text-[11px] font-bold text-amber-ink hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-2xs font-bold text-amber-ink hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <Icon name="arrow_left" size={12} />
                     <span>Back to Product Catalog Dropdown</span>
@@ -546,7 +546,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                   replaced sat below vendor cost for months with nothing on screen to
                   say so — on M365 Business Standard, ₹7,920 against a ₹9,840 cost. */}
               {verdict.kind === "loss" && (
-                <p className="mt-1 flex items-start gap-1 text-[11px] font-semibold leading-snug text-rose">
+                <p className="mt-1 flex items-start gap-1 text-2xs font-semibold leading-snug text-rose">
                   <Icon name="alert" size={12} className="mt-px flex-shrink-0" />
                   <span>
                     Below cost — the vendor charges {rupee(selected!.annualCostPerSeat!)}/yr.
@@ -555,18 +555,18 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                 </p>
               )}
               {verdict.kind === "thin" && (
-                <p className="mt-1 text-[11px] font-semibold leading-snug text-amber-ink">
+                <p className="mt-1 text-2xs font-semibold leading-snug text-amber-ink">
                   Only {verdict.marginPct.toFixed(1)}% margin — cost is{" "}
                   {rupee(selected!.annualCostPerSeat!)}/yr.
                 </p>
               )}
               {verdict.kind === "ok" && (
-                <p className="mt-1 text-[11px] leading-snug text-ink-3">
+                <p className="mt-1 text-2xs leading-snug text-ink-3">
                   {verdict.marginPct.toFixed(1)}% margin over {rupee(selected!.annualCostPerSeat!)}/yr cost.
                 </p>
               )}
               {verdict.kind === "unknown" && selected && (
-                <p className="mt-1 text-[11px] leading-snug text-ink-3">
+                <p className="mt-1 text-2xs leading-snug text-ink-3">
                   No vendor cost in the catalogue — margin unknown, not zero.
                 </p>
               )}
@@ -618,7 +618,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                   <Icon name="clock" size={14} className="text-amber-ink" />
                   <span>⏳ Postpaid / Credit Terms</span>
                 </div>
-                <div className="text-[11px] text-ink-3">
+                <div className="text-2xs text-ink-3">
                   Activates subscription now without upfront payment. Quote/Invoice tracks pending balance in Debtors Ledger.
                 </div>
               </button>
@@ -636,7 +636,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
                   <Icon name="check_circle" size={14} className="text-emerald-ink" />
                   <span>💳 Payment Received (Paid)</span>
                 </div>
-                <div className="text-[11px] text-ink-3">
+                <div className="text-2xs text-ink-3">
                   Marks quote/invoice fully paid and activates subscription immediately.
                 </div>
               </button>
@@ -651,7 +651,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
               {/* ARR is the ex-GST revenue figure; the customer is billed the
                   GST-inclusive one. Showing only the first is what let a ₹4,320 gap
                   between "what this says" and "what gets charged" go unnoticed. */}
-              <div className="text-[11px] text-ink-3">
+              <div className="text-2xs text-ink-3">
                 Customer pays <b className="text-ink-2">{rupee(grossAmount(totalAnnualAmount, TAX_RATE_PCT))}</b> incl. {TAX_RATE_PCT}% GST
               </div>
             </div>

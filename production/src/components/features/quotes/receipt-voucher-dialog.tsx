@@ -131,7 +131,7 @@ export function ReceiptVoucherDialog({
 
           {/* Header */}
           <div className="text-center mb-4">
-            <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold">
+            <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold">
               GST-compliant advance receipt
             </p>
             <h1 className="font-serif text-3xl mt-1">Receipt Voucher</h1>
@@ -141,7 +141,7 @@ export function ReceiptVoucherDialog({
           {/* Tenant + Customer rows */}
           <div className="grid grid-cols-2 gap-6 mb-6 border-y-2 border-ink py-4">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">From (Supplier)</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">From (Supplier)</p>
               <p className="font-serif text-lg leading-tight">{tenantName}</p>
               {tenantGstin && (
                 <p className="text-xs text-ink-2 mt-0.5 font-mono">GSTIN: {tenantGstin}</p>
@@ -157,7 +157,7 @@ export function ReceiptVoucherDialog({
               )}
             </div>
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1.5">To (Recipient)</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">To (Recipient)</p>
               <p className="font-serif text-lg leading-tight">{customerName}</p>
               {customerGstin && (
                 <p className="text-xs text-ink-2 mt-0.5 font-mono">GSTIN: {customerGstin}</p>
@@ -174,29 +174,29 @@ export function ReceiptVoucherDialog({
           {/* Voucher meta */}
           <div className="grid grid-cols-3 gap-4 mb-6 text-sm">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Voucher No.</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Voucher No.</p>
               <p className="font-mono">{payment.receipt_voucher_no ?? "—"}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Date received</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Date received</p>
               <p>{formatDate(payment.received_at)}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Payment method</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Payment method</p>
               <p className="capitalize">{payment.method.replace("_", " ")}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Transaction ref.</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Transaction ref.</p>
               <p className="font-mono text-xs">{payment.reference ?? "—"}</p>
             </div>
             {quoteId && (
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Against quote</p>
+                <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Against quote</p>
                 <p className="font-mono text-xs">{quoteId}</p>
               </div>
             )}
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Place of supply</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-0.5">Place of supply</p>
               <p>
                 {interState
                   ? "Inter-state (IGST)"
@@ -212,15 +212,15 @@ export function ReceiptVoucherDialog({
             <table className="w-full">
               <thead className="bg-paper-2 border-b border-ink">
                 <tr>
-                  <th className="text-left p-3 text-[11px] uppercase tracking-wider font-semibold">Description</th>
-                  <th className="text-right p-3 text-[11px] uppercase tracking-wider font-semibold w-36">Amount (₹)</th>
+                  <th className="text-left p-3 text-2xs uppercase tracking-wider font-semibold">Description</th>
+                  <th className="text-right p-3 text-2xs uppercase tracking-wider font-semibold w-36">Amount (₹)</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b border-hairline">
                   <td className="p-3 text-sm">
                     <p className="font-medium">Advance received against {quoteId ? `quote ${quoteId}` : "service"}</p>
-                    <p className="text-[11px] text-ink-3 mt-0.5">HSN/SAC: 998313 · Reseller services</p>
+                    <p className="text-2xs text-ink-3 mt-0.5">HSN/SAC: 998313 · Reseller services</p>
                   </td>
                   <td className="p-3 text-right tabular-nums text-sm font-medium">{rupee(taxable)}</td>
                 </tr>
@@ -242,7 +242,7 @@ export function ReceiptVoucherDialog({
                   </>
                 )}
                 <tr className="bg-paper-2">
-                  <td className="p-3 text-sm font-semibold uppercase tracking-wider text-[11px]">
+                  <td className="p-3 text-sm font-semibold uppercase tracking-wider text-2xs">
                     Total amount received
                   </td>
                   <td className="p-3 text-right">
@@ -259,7 +259,7 @@ export function ReceiptVoucherDialog({
           </p>
 
           {/* GST compliance notice */}
-          <div className="rounded-md bg-amber-soft border border-amber/30 p-3 text-[11px] text-amber-ink mb-6">
+          <div className="rounded-md bg-amber-soft border border-amber/30 p-3 text-2xs text-amber-ink mb-6">
             <p className="font-semibold mb-1">📋 GST treatment of this advance</p>
             <p>
               Per CGST Section 13(2), time of supply for services is the earlier of invoice issue
@@ -272,7 +272,7 @@ export function ReceiptVoucherDialog({
           {/* Notes */}
           {payment.notes && (
             <div className="mb-4">
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-1">Notes</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1">Notes</p>
               <p className="text-sm text-ink-2">{payment.notes}</p>
             </div>
           )}
@@ -280,18 +280,18 @@ export function ReceiptVoucherDialog({
           {/* Signature block */}
           <div className="mt-10 pt-6 border-t border-hairline grid grid-cols-2 gap-6">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-8">Customer signature</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-8">Customer signature</p>
               <div className="h-px bg-ink w-32" />
             </div>
             <div className="text-right">
-              <p className="text-[10px] uppercase tracking-widest text-ink-3 font-semibold mb-8">For {tenantName}</p>
+              <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-8">For {tenantName}</p>
               <div className="h-px bg-ink w-32 ml-auto" />
-              <p className="text-[11px] text-ink-3 mt-1">Authorized signatory</p>
+              <p className="text-2xs text-ink-3 mt-1">Authorized signatory</p>
             </div>
           </div>
 
           {/* Footer */}
-          <p className="text-center text-[10px] text-ink-3 mt-8">
+          <p className="text-center text-3xs text-ink-3 mt-8">
             This is a system-generated receipt voucher — valid without seal.
           </p>
         </div>

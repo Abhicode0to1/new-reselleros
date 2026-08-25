@@ -78,19 +78,19 @@ export default function BankingPage() {
         <Card className="mb-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Total balance</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Total balance</p>
               <p className="font-serif text-2xl text-ink mt-1">{rupee(totalBalance, { compact: true })}</p>
-              <p className="text-[11px] text-ink-3 mt-0.5">
+              <p className="text-2xs text-ink-3 mt-0.5">
                 {cardOwed > 0 ? <>Cash &amp; bank · <span className="text-rose">{rupee(cardOwed, { compact: true })} cards ka owe / udhari</span></> : "Across all accounts"}
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Accounts</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Accounts</p>
               <p className="font-serif text-2xl text-ink mt-1">{accounts.length}</p>
-              <p className="text-[11px] text-ink-3 mt-0.5">Active</p>
+              <p className="text-2xs text-ink-3 mt-0.5">Active</p>
             </div>
             <div className="md:col-span-2">
-              <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-2">Tips</p>
+              <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-2">Tips</p>
               <ul className="text-xs text-ink-2 space-y-1 list-disc list-inside">
                 <li>Statement upload: Download last 30 days from your bank, upload CSV.</li>
                 <li>Each credit gets auto-suggested matches against your payments.</li>
@@ -197,7 +197,7 @@ function BankAccountCard({
       <button type="button" onClick={onOpen} className="text-left w-full p-5">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               {account.bank_name}
             </p>
             <h3 className="font-semibold text-ink truncate mt-0.5">{account.name}</h3>
@@ -224,7 +224,7 @@ function BankAccountCard({
         </div>
 
         <div className="border-t border-hairline pt-3">
-          <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+          <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">
             {isCard ? "Owe / Udhari" : "Balance"}
           </p>
           {isCard ? (
@@ -232,7 +232,7 @@ function BankAccountCard({
               <p className={`font-serif text-2xl mt-1 ${balance < 0 ? "text-rose" : "text-emerald"}`}>
                 {rupee(Math.abs(balance))}
               </p>
-              <p className="text-[10px] text-ink-3 mt-0.5">
+              <p className="text-3xs text-ink-3 mt-0.5">
                 {balance < 0 ? "card par owe / udhari" : balance > 0 ? "extra jama (credit)" : "koi owe / udhari nahi"}
               </p>
             </>
@@ -243,12 +243,12 @@ function BankAccountCard({
           )}
           {/* Data-integrity guard: cash-in-hand can never be negative in reality. */}
           {account.account_type === "cash" && balance < 0 && (
-            <div className="mt-2 flex items-start gap-1.5 rounded-md bg-rose/10 px-2 py-1.5 text-[11px] text-rose">
+            <div className="mt-2 flex items-start gap-1.5 rounded-md bg-rose/10 px-2 py-1.5 text-2xs text-rose">
               <Icon name="alert" size={12} className="mt-0.5 shrink-0" />
               <span>Cash can&apos;t be negative — you likely missed a cash deposit/top-up. Add it via <b>Move money</b>, or reconcile the missing entry.</span>
             </div>
           )}
-          <p className="text-[11px] text-ink-3 mt-1 inline-flex items-center gap-1">
+          <p className="text-2xs text-ink-3 mt-1 inline-flex items-center gap-1">
             <Icon name="arrow_right" size={11} /> View transactions
           </p>
         </div>

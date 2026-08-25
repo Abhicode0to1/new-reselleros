@@ -31,7 +31,7 @@ export default function CouponRedemptionsDialog({ open, onOpenChange, code }: Pr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <header className="border-b border-hairline pb-3 mb-4">
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1">
+          <p className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1">
             Audit log
           </p>
           <h2 className="font-serif text-2xl text-ink">
@@ -77,11 +77,11 @@ export default function CouponRedemptionsDialog({ open, onOpenChange, code }: Pr
               <table className="w-full">
                 <thead className="bg-paper-2 border-b border-hairline">
                   <tr>
-                    <th className="text-left p-2 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">Redeemed</th>
-                    <th className="text-left p-2 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">Contact</th>
-                    <th className="text-left p-2 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">Tier · Seats</th>
-                    <th className="text-left p-2 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">Quote</th>
-                    <th className="text-right p-2 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">Saved</th>
+                    <th className="text-left p-2 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Redeemed</th>
+                    <th className="text-left p-2 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Contact</th>
+                    <th className="text-left p-2 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Tier · Seats</th>
+                    <th className="text-left p-2 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Quote</th>
+                    <th className="text-right p-2 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Saved</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -92,7 +92,7 @@ export default function CouponRedemptionsDialog({ open, onOpenChange, code }: Pr
                       </td>
                       <td className="p-2">
                         <div className="text-sm text-ink">{r.contact_name ?? "—"}</div>
-                        <div className="text-[10px] text-ink-3">{r.contact_email ?? ""}</div>
+                        <div className="text-3xs text-ink-3">{r.contact_email ?? ""}</div>
                       </td>
                       <td className="p-2 text-xs">
                         {r.tier_id ? <Badge size="sm" kind="info">{r.tier_id}</Badge> : <span className="text-ink-3">—</span>}

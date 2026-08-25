@@ -116,7 +116,7 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
               {COUNTRIES.map((ctry) => <option key={ctry} value={ctry}>{ctry}</option>)}
             </select>
             {isForeign && (
-              <p className="mt-1 flex items-start gap-1 text-[11px] leading-snug text-indigo-ink">
+              <p className="mt-1 flex items-start gap-1 text-2xs leading-snug text-indigo-ink">
                 <span>🌍</span>
                 <span>
                   <b>Export customer.</b> Supplies to this customer are <b>zero-rated</b> (no CGST/SGST/IGST)
@@ -144,7 +144,7 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
                 names the STATE, which is what decides IGST vs CGST+SGST. */}
             <FieldPill check={checkGstin(watchedGstin ?? "")} />
             {!(watchedGstin ?? "").trim() && (
-              <p className="text-[10px] text-ink-3">
+              <p className="text-3xs text-ink-3">
                 State + code auto-fill from the first 2 digits. Then click Verify with GSTN to confirm.
               </p>
             )}
@@ -306,7 +306,7 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
             </Button>
           </div>
           {contactPersonFields.length === 0 ? (
-            <p className="text-[11px] text-ink-3">Add accounts / procurement / other people at this customer.</p>
+            <p className="text-2xs text-ink-3">Add accounts / procurement / other people at this customer.</p>
           ) : (
             <div className="space-y-3">
               {contactPersonFields.map((f, i) => (
@@ -348,7 +348,7 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
               <option value="30">Net 30</option>
               <option value="45">Net 45</option>
             </select>
-            <p className="text-[11px] text-ink-3 mt-1">Pre-fills the due date when you invoice this customer.</p>
+            <p className="text-2xs text-ink-3 mt-1">Pre-fills the due date when you invoice this customer.</p>
           </FormField>
 
           {/* ── Shipping address (separate from billing) ── */}

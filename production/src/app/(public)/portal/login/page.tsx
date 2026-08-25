@@ -255,7 +255,7 @@ function PortalLoginInner() {
               Email me a sign-in code
             </Button>
 
-            <p className="text-[11px] text-ink-3 text-center leading-relaxed">
+            <p className="text-2xs text-ink-3 text-center leading-relaxed">
               No passwords. We email you a one-time code that signs you in.
             </p>
           </form>
@@ -290,7 +290,7 @@ function PortalLoginInner() {
               Verify &amp; sign in
             </Button>
 
-            <div className="flex items-center justify-between text-[11px] text-ink-3">
+            <div className="flex items-center justify-between text-2xs text-ink-3">
               <button
                 type="button"
                 onClick={resend}

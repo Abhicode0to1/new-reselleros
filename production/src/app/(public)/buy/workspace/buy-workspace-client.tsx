@@ -111,7 +111,7 @@ function SitePromoBanner({ promo }: { promo: SitePromoRow }) {
     <div className={`${bannerBg(promo.banner_style)} text-paper`}>
       <div className="max-w-[1240px] mx-auto px-4 py-2.5 flex items-center justify-center gap-x-3 gap-y-1 flex-wrap text-xs sm:text-sm">
         {promo.badge_text && (
-          <span className="text-[10px] uppercase tracking-wider font-semibold bg-paper/20 backdrop-blur px-2 py-0.5 rounded-full whitespace-nowrap">
+          <span className="text-3xs uppercase tracking-wider font-semibold bg-paper/20 backdrop-blur px-2 py-0.5 rounded-full whitespace-nowrap">
             {promo.badge_text}
           </span>
         )}
@@ -119,11 +119,11 @@ function SitePromoBanner({ promo }: { promo: SitePromoRow }) {
         {promo.subheadline && (
           <span className="opacity-90 hidden md:inline">· {promo.subheadline}</span>
         )}
-        <span className="font-mono text-[11px] bg-paper text-ink px-2 py-0.5 rounded font-semibold whitespace-nowrap">
+        <span className="font-mono text-2xs bg-paper text-ink px-2 py-0.5 rounded font-semibold whitespace-nowrap">
           {off}
         </span>
         {remaining && (
-          <span className="inline-flex items-center gap-1 font-mono text-[11px] bg-ink/30 backdrop-blur px-2 py-0.5 rounded whitespace-nowrap">
+          <span className="inline-flex items-center gap-1 font-mono text-2xs bg-ink/30 backdrop-blur px-2 py-0.5 rounded whitespace-nowrap">
             <span aria-hidden>⏱</span> {remaining}
           </span>
         )}
@@ -736,7 +736,7 @@ function FounderHero({ waMessage }: { waMessage: string }) {
           <div className="flex-1 min-w-0">
             <div className="font-serif text-xl text-ink leading-tight">Pardeep Sharma</div>
             <div className="text-sm text-ink-3 mt-0.5">Founder, Excel Technologies</div>
-            <div className="text-[11px] text-amber-ink mt-1 font-medium">
+            <div className="text-2xs text-amber-ink mt-1 font-medium">
               Google Premier Partner · since 2014
             </div>
           </div>
@@ -770,7 +770,7 @@ function FounderHero({ waMessage }: { waMessage: string }) {
         </a>
 
         {/* Support hours micro-line */}
-        <div className="text-[11px] text-ink-3 text-center mt-3 pt-3 border-t border-hairline">
+        <div className="text-2xs text-ink-3 text-center mt-3 pt-3 border-t border-hairline">
           Live phone support · 9am–9pm IST · Mon–Sat · Hindi + English
         </div>
       </div>
@@ -891,7 +891,7 @@ function HeroVisual() {
             <div className="w-2.5 h-2.5 rounded-full" style={{ background: "#FEBC2E" }} />
             <div className="w-2.5 h-2.5 rounded-full" style={{ background: "#28C840" }} />
           </div>
-          <div className="flex-1 text-center text-[11px] text-ink-3 font-mono truncate">
+          <div className="flex-1 text-center text-2xs text-ink-3 font-mono truncate">
             mail.yourcompany.in · Inbox
           </div>
           <div className="w-10" />
@@ -901,11 +901,11 @@ function HeroVisual() {
         <div className="px-4 py-2.5 border-b border-hairline bg-paper-2/20 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="font-serif text-sm text-ink">Inbox</span>
-            <span className="text-[10px] text-ink-3 font-medium px-1.5 py-0.5 rounded bg-paper-2">
+            <span className="text-3xs text-ink-3 font-medium px-1.5 py-0.5 rounded bg-paper-2">
               2 unread
             </span>
           </div>
-          <div className="text-[10px] text-ink-3 font-mono">priya@yourcompany.in</div>
+          <div className="text-3xs text-ink-3 font-mono">priya@yourcompany.in</div>
         </div>
 
         {/* Email rows */}
@@ -924,7 +924,7 @@ function HeroVisual() {
               </div>
               {/* Avatar */}
               <div
-                className="w-8 h-8 rounded-full grid place-items-center text-[10px] font-medium text-white flex-shrink-0"
+                className="w-8 h-8 rounded-full grid place-items-center text-3xs font-medium text-white flex-shrink-0"
                 style={{ background: `hsl(${row.hue}, 50%, 55%)` }}
               >
                 {row.initials}
@@ -935,7 +935,7 @@ function HeroVisual() {
                   <span className={`text-sm truncate ${row.unread ? "font-semibold text-ink" : "text-ink-2"}`}>
                     {row.sender}
                   </span>
-                  <span className="text-[10px] text-ink-3 flex-shrink-0 font-mono">{row.time}</span>
+                  <span className="text-3xs text-ink-3 flex-shrink-0 font-mono">{row.time}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={`text-sm truncate ${row.unread ? "font-medium text-ink" : "text-ink-3"}`}>
@@ -961,7 +961,7 @@ function HeroVisual() {
 
         {/* Bottom shimmer — implies "more emails below" without showing fake ones */}
         <div className="px-4 py-2 text-center bg-paper-2/30 border-t border-hairline">
-          <span className="text-[10px] text-ink-3 font-mono">+ more in your inbox</span>
+          <span className="text-3xs text-ink-3 font-mono">+ more in your inbox</span>
         </div>
       </div>
 
@@ -999,13 +999,13 @@ function HeroVisual() {
           </svg>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-ink-3 font-medium">
+          <div className="text-3xs uppercase tracking-wider text-ink-3 font-medium">
             Your custom email
           </div>
           <div className="text-base text-ink font-medium leading-tight mt-1 font-mono">
             priya@yourcompany.in
           </div>
-          <div className="text-[10px] text-emerald font-medium mt-1 flex items-center gap-1">
+          <div className="text-3xs text-emerald font-medium mt-1 flex items-center gap-1">
             <Icon name="check" size={11} />
             Domain verified · live
           </div>
@@ -1275,12 +1275,12 @@ export function BuyWorkspaceClient({
             </div>
             <div className="hidden sm:block">
               <div className="font-serif text-base leading-none">Excel Technologies</div>
-              <div className="text-[10px] text-ink-3 mt-1">Cloud Reseller · India</div>
+              <div className="text-3xs text-ink-3 mt-1">Cloud Reseller · India</div>
             </div>
           </div>
           {/* Tiny partner pill */}
           <div
-            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold border border-[#FBBF24]"
+            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-3xs font-semibold border border-[#FBBF24]"
             style={{
               background: "linear-gradient(135deg, #1A1815 0%, #2D2418 100%)",
               color: "#FCD34D",
@@ -1361,7 +1361,7 @@ export function BuyWorkspaceClient({
                   · sits just above the tier picker so visitor sees "these
                   apps are bundled with every plan" before choosing one */}
               <div className="mb-4 pb-4 border-b border-hairline/60">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-ink-3 font-semibold mb-2.5">
+                <p className="text-3xs uppercase tracking-[0.18em] text-ink-3 font-semibold mb-2.5">
                   Every plan includes
                 </p>
                 <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
@@ -1390,7 +1390,7 @@ export function BuyWorkspaceClient({
 
               {/* Tier picker — segmented control */}
               <div className="mb-4">
-                <label className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold block mb-2">
+                <label className="text-2xs uppercase tracking-wider text-ink-3 font-semibold block mb-2">
                   Which plan?
                 </label>
                 <div
@@ -1414,7 +1414,7 @@ export function BuyWorkspaceClient({
                         <div className="font-serif text-sm leading-tight">
                           {t.name.replace("Business ", "")}
                         </div>
-                        <div className={`text-[10px] mt-0.5 ${isActive ? "text-paper/80" : "text-ink-3"}`}>
+                        <div className={`text-3xs mt-0.5 ${isActive ? "text-paper/80" : "text-ink-3"}`}>
                           {t.annualPrice
                             ? `₹${(t.promoPrice ?? t.annualPrice).toLocaleString("en-IN")}/user · excl GST`
                             : "Custom"}
@@ -1427,10 +1427,10 @@ export function BuyWorkspaceClient({
 
               {/* Seat picker — applies to all tiers */}
               <div className="flex items-center justify-between mb-3">
-                <label htmlFor="seats" className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">
+                <label htmlFor="seats" className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">
                   For how many users?
                 </label>
-                <span className="text-[10px] text-ink-3 font-mono">{selectedTierObj.name} · annual</span>
+                <span className="text-3xs text-ink-3 font-mono">{selectedTierObj.name} · annual</span>
               </div>
               <div className="flex items-center gap-3 mb-4">
                 <button
@@ -1600,7 +1600,7 @@ export function BuyWorkspaceClient({
       <section className="bg-paper-2/40 border-y border-hairline py-16 md:py-20">
         <div className="max-w-[1080px] mx-auto px-6">
           <div className="text-center mb-10">
-            <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
+            <div className="text-2xs uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
               Same price · more service
             </div>
             <h2 className="font-serif text-3xl md:text-4xl tracking-tight mb-3">
@@ -1619,7 +1619,7 @@ export function BuyWorkspaceClient({
               <div className="p-6 md:p-8 bg-amber-soft/20">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <div className="text-[10px] uppercase tracking-wider font-semibold text-amber-ink mb-1">
+                    <div className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1">
                       Recommended
                     </div>
                     <h3 className="font-serif text-xl text-ink">Excel Technologies</h3>
@@ -1642,7 +1642,7 @@ export function BuyWorkspaceClient({
               <div className="p-6 md:p-8">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <div className="text-[10px] uppercase tracking-wider font-semibold text-ink-3 mb-1">
+                    <div className="text-3xs uppercase tracking-wider font-semibold text-ink-3 mb-1">
                       Self-serve only
                     </div>
                     <h3 className="font-serif text-xl text-ink-3">Google direct</h3>
@@ -1683,7 +1683,7 @@ export function BuyWorkspaceClient({
 
           <section className="max-w-[1240px] mx-auto px-6 py-16 md:py-20">
             <div className="text-center mb-12">
-              <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
+              <div className="text-2xs uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
                 Real customers · real outcomes
               </div>
               <h2 className="font-serif text-3xl md:text-4xl tracking-tight">
@@ -1702,7 +1702,7 @@ export function BuyWorkspaceClient({
       {/* ── Pricing section ── */}
       <section id="pricing" className="max-w-[1240px] mx-auto px-6 py-16 md:py-20">
         <div className="text-center mb-12">
-          <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
+          <div className="text-2xs uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
             Plans &amp; pricing
           </div>
           <h2 className="font-serif text-3xl md:text-4xl tracking-tight mb-3">
@@ -1732,7 +1732,7 @@ export function BuyWorkspaceClient({
               }`}
             >
               Annual
-              <span className="text-[10px] bg-amber-soft text-amber-ink px-1.5 py-0.5 rounded font-semibold">
+              <span className="text-3xs bg-amber-soft text-amber-ink px-1.5 py-0.5 rounded font-semibold">
                 Save 20%
               </span>
             </button>
@@ -1763,7 +1763,7 @@ export function BuyWorkspaceClient({
       {/* ── How it works — 3 steps ── */}
       <section className="max-w-[1240px] mx-auto px-6 py-16 md:py-20">
         <div className="text-center mb-12">
-          <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
+          <div className="text-2xs uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
             How it works
           </div>
           <h2 className="font-serif text-3xl md:text-4xl tracking-tight mb-3">
@@ -1806,7 +1806,7 @@ export function BuyWorkspaceClient({
       {/* ── Post-purchase timeline — removes ghosting fear ── */}
       <section className="max-w-[1080px] mx-auto px-6 py-16 md:py-20">
         <div className="text-center mb-12">
-          <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
+          <div className="text-2xs uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
             What happens after you pay
           </div>
           <h2 className="font-serif text-3xl md:text-4xl tracking-tight mb-3">
@@ -1846,7 +1846,7 @@ export function BuyWorkspaceClient({
       <section className="bg-paper-2/40 border-y border-hairline py-16">
         <div className="max-w-[820px] mx-auto px-6">
           <div className="text-center mb-10">
-            <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
+            <div className="text-2xs uppercase tracking-[0.12em] font-semibold text-ink-3 mb-3">
               FAQ
             </div>
             <h2 className="font-serif text-3xl md:text-4xl tracking-tight">
@@ -2006,7 +2006,7 @@ function PricingCard({
       {tier.isPopular && billing === "annual" && (
         <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
           <div
-            className="px-4 py-1.5 text-paper text-[11px] font-bold uppercase tracking-wider rounded-md shadow-md"
+            className="px-4 py-1.5 text-paper text-2xs font-bold uppercase tracking-wider rounded-md shadow-md"
             style={{ background: "linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)" }}
           >
             20% OFF · First 20 users · 12 months
@@ -2069,12 +2069,12 @@ function PricingCard({
         )}
 
         {tier.maxUsers && (
-          <div className="text-[11px] text-ink-3 mb-4">Up to {tier.maxUsers} users</div>
+          <div className="text-2xs text-ink-3 mb-4">Up to {tier.maxUsers} users</div>
         )}
 
         {/* Urgency line — quote validity, NOT manipulative countdown */}
         {tier.isPopular && billing === "annual" && (
-          <div className="text-[11px] text-ink-3 mb-3 italic">
+          <div className="text-2xs text-ink-3 mb-3 italic">
             Quote valid 7 days · lock this rate for 12 months
           </div>
         )}
@@ -2199,7 +2199,7 @@ function AppChip({ app }: { app: WsApp }) {
         </div>
       )}
       <div className="text-xs font-medium text-ink leading-tight">{app.name}</div>
-      <div className="text-[10px] text-ink-3 mt-0.5 leading-tight">{app.tagline}</div>
+      <div className="text-3xs text-ink-3 mt-0.5 leading-tight">{app.tagline}</div>
     </div>
   );
 }
@@ -2212,7 +2212,7 @@ function LogoChip({ name, city }: { name: string; city: string }) {
   return (
     <div className="text-center">
       <div className="font-serif text-base md:text-lg text-ink leading-tight">{name}</div>
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 mt-1">{city}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 mt-1">{city}</div>
     </div>
   );
 }
@@ -2241,8 +2241,8 @@ function TestimonialCard({ testimonial: t }: { testimonial: Testimonial }) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-medium text-ink text-sm leading-tight">{t.name}</div>
-          <div className="text-[11px] text-ink-3 mt-0.5">{t.role}, {t.company}</div>
-          <div className="text-[10px] text-ink-3 mt-0.5">{t.city} · {t.seats} users</div>
+          <div className="text-2xs text-ink-3 mt-0.5">{t.role}, {t.company}</div>
+          <div className="text-3xs text-ink-3 mt-0.5">{t.city} · {t.seats} users</div>
         </div>
       </div>
     </Card>
@@ -2367,7 +2367,7 @@ function TrialDialog({
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-emerald mb-1 font-semibold inline-flex items-center gap-1.5">
+              <div className="text-3xs uppercase tracking-wider text-emerald mb-1 font-semibold inline-flex items-center gap-1.5">
                 <Icon name="rocket" size={11} />
                 14-day free trial · no card needed
               </div>
@@ -2409,7 +2409,7 @@ function TrialDialog({
 
             <FormField label="Your business domain" required htmlFor="trial-domain">
               <Input id="trial-domain" placeholder="e.g. acme.in" error={errors.domain?.message} {...register("domain")} />
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 We&apos;ll provision Workspace on this domain. You must own it (DNS access).
               </p>
             </FormField>
@@ -2440,7 +2440,7 @@ function TrialDialog({
               Start my 14-day trial
             </Button>
 
-            <p className="text-[11px] text-ink-3 text-center leading-relaxed">
+            <p className="text-2xs text-ink-3 text-center leading-relaxed">
               No credit card upfront. No auto-charge. Cancel anytime in 14 days.
             </p>
           </form>
@@ -2498,7 +2498,7 @@ function EnquiryDialog({
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-ink-3 mb-1 font-semibold">
+              <div className="text-3xs uppercase tracking-wider text-ink-3 mb-1 font-semibold">
                 Quote request
               </div>
               <h2 className="font-serif text-2xl leading-tight">
@@ -2569,7 +2569,7 @@ function EnquiryDialog({
               Send enquiry
             </Button>
 
-            <p className="text-[11px] text-ink-3 text-center leading-relaxed">
+            <p className="text-2xs text-ink-3 text-center leading-relaxed">
               We'll call within 30 minutes (Mon–Sat, 9am–7pm IST). No spam.
             </p>
           </form>
@@ -2968,12 +2968,12 @@ function BuyNowDialog({
         <div className="sticky top-0 z-10 bg-paper border-b border-hairline px-5 sm:px-6 py-4 flex items-start justify-between rounded-t-xl">
           <div>
             {isSimulation ? (
-              <div className="text-[10px] uppercase tracking-wider mb-1 font-semibold inline-flex items-center gap-1.5"
+              <div className="text-3xs uppercase tracking-wider mb-1 font-semibold inline-flex items-center gap-1.5"
                    style={{ color: "#7C2D12" }}>
                 <span aria-hidden>🧪</span> Test mode · simulated payment · no real money
               </div>
             ) : (
-              <div className="text-[10px] uppercase tracking-wider text-amber-ink mb-1 font-semibold inline-flex items-center gap-1.5">
+              <div className="text-3xs uppercase tracking-wider text-amber-ink mb-1 font-semibold inline-flex items-center gap-1.5">
                 <Icon name="zap" size={11} />
                 Instant checkout · UPI / Card / NetBanking
               </div>
@@ -3005,7 +3005,7 @@ function BuyNowDialog({
             {/* Tier picker */}
             {buyableTiers.length > 1 && (
               <div>
-                <label className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold block mb-2">
+                <label className="text-2xs uppercase tracking-wider text-ink-3 font-semibold block mb-2">
                   1 · Choose your plan
                 </label>
                 <div
@@ -3029,7 +3029,7 @@ function BuyNowDialog({
                         <div className="font-serif text-sm leading-tight">
                           {t.name.replace(/^Business\s+/i, "")}
                         </div>
-                        <div className={`text-[10px] mt-0.5 ${active ? "text-paper/85" : "text-ink-3"}`}>
+                        <div className={`text-3xs mt-0.5 ${active ? "text-paper/85" : "text-ink-3"}`}>
                           ₹{pricePm.toLocaleString("en-IN")}/user/mo
                         </div>
                       </button>
@@ -3041,7 +3041,7 @@ function BuyNowDialog({
 
             {/* Seat stepper */}
             <div>
-              <label className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold block mb-2">
+              <label className="text-2xs uppercase tracking-wider text-ink-3 font-semibold block mb-2">
                 {buyableTiers.length > 1 ? "2 · " : ""}How many users?
               </label>
 
@@ -3087,7 +3087,7 @@ function BuyNowDialog({
                       key={n}
                       type="button"
                       onClick={() => setSeats(n)}
-                      className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                      className={`text-2xs px-2.5 py-1 rounded-full border transition-colors ${
                         active
                           ? "border-amber bg-amber-soft text-amber-ink font-semibold"
                           : "border-hairline text-ink-3 hover:text-ink hover:bg-paper-2"
@@ -3102,7 +3102,7 @@ function BuyNowDialog({
 
             {/* Price breakdown card */}
             <div className="p-4 rounded-xl bg-paper border border-hairline">
-              <div className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-3">
+              <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-3">
                 Price breakdown
               </div>
               <div className="space-y-1.5 text-sm">
@@ -3161,7 +3161,7 @@ function BuyNowDialog({
                   </span>
                 </div>
                 <div className="border-t-2 border-ink mt-1 pt-2 flex items-baseline justify-between gap-2">
-                  <span className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Total to pay</span>
+                  <span className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Total to pay</span>
                   <span className="font-serif text-2xl text-ink whitespace-nowrap">
                     ₹{totalToPay.toLocaleString("en-IN")}
                   </span>
@@ -3180,7 +3180,7 @@ function BuyNowDialog({
                 Validation hits /api/public/coupons/validate (dry-run); actual
                 redemption only happens at checkout. */}
             <div className="p-3 rounded-xl border border-dashed border-hairline bg-paper/60">
-              <label className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold block mb-1.5 inline-flex items-center gap-1.5">
+              <label className="text-2xs uppercase tracking-wider text-ink-3 font-semibold block mb-1.5 inline-flex items-center gap-1.5">
                 <Icon name="rupee" size={11} /> Have a coupon code?
               </label>
               {couponApplied ? (
@@ -3190,14 +3190,14 @@ function BuyNowDialog({
                       <Icon name="check_circle" size={11} />
                       <span className="font-mono">{couponApplied.code}</span> applied
                     </span>
-                    <span className="text-[11px] text-ink-3">
+                    <span className="text-2xs text-ink-3">
                       Saving ₹{couponPreGstOff.toLocaleString("en-IN")} pre-GST
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={removeCoupon}
-                    className="text-[11px] text-ink-3 hover:text-rose underline-offset-2 hover:underline"
+                    className="text-2xs text-ink-3 hover:text-rose underline-offset-2 hover:underline"
                   >
                     Remove
                   </button>
@@ -3232,7 +3232,7 @@ function BuyNowDialog({
                     </button>
                   </div>
                   {couponError && (
-                    <p className="text-[11px] text-rose mt-1.5 inline-flex items-center gap-1">
+                    <p className="text-2xs text-rose mt-1.5 inline-flex items-center gap-1">
                       <Icon name="alert" size={11} /> {couponError}
                     </p>
                   )}
@@ -3241,7 +3241,7 @@ function BuyNowDialog({
             </div>
 
             {/* Trust strip */}
-            <div className="text-[11px] text-ink-3 flex flex-wrap gap-x-3 gap-y-1.5">
+            <div className="text-2xs text-ink-3 flex flex-wrap gap-x-3 gap-y-1.5">
               <span className="inline-flex items-center gap-1">
                 <Icon name="check" size={11} className="text-emerald" /> GST tax invoice
               </span>
@@ -3283,7 +3283,7 @@ function BuyNowDialog({
             <FormField label="Your business domain" required htmlFor="buy-domain">
               <Input id="buy-domain" placeholder="e.g. acme.in"
                 error={errors.domain?.message} {...register("domain")} />
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 We&apos;ll provision Workspace on this domain. You must own it (DNS access).
               </p>
             </FormField>
@@ -3301,7 +3301,7 @@ function BuyNowDialog({
 
             <FormField label="GSTIN (optional)" htmlFor="buy-gstin">
               <Input id="buy-gstin" placeholder="e.g. 27ABCDE1234F1Z5" {...register("gstin")} />
-              <p className="text-[10px] text-ink-3 mt-1">
+              <p className="text-3xs text-ink-3 mt-1">
                 Add your GSTIN to claim input tax credit. Skip if not GST-registered.
               </p>
             </FormField>
@@ -3318,7 +3318,7 @@ function BuyNowDialog({
                 : `Pay ₹${totalToPay.toLocaleString("en-IN")} securely`}
             </Button>
 
-            <p className="text-[11px] text-ink-3 text-center leading-relaxed">
+            <p className="text-2xs text-ink-3 text-center leading-relaxed">
               {isSimulation ? (
                 <>
                   <b>Test mode</b> · Razorpay isn&apos;t configured yet.<br />

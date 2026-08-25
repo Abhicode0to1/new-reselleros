@@ -154,15 +154,15 @@ export default function BalanceSheetPage() {
       {!loading && (
         <div className="grid grid-cols-3 gap-3 mb-4">
           <Card className="p-4">
-            <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Total assets</div>
+            <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Total assets</div>
             <div className="font-serif text-2xl mt-1 tabular-nums text-ink">{rupee(totalAssets, { compact: true })}</div>
           </Card>
           <Card className="p-4">
-            <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Total liabilities</div>
+            <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Total liabilities</div>
             <div className="font-serif text-2xl mt-1 tabular-nums text-ink">{rupee(totalLiab, { compact: true })}</div>
           </Card>
           <Card className="p-4">
-            <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Net worth</div>
+            <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Net worth</div>
             <div className={`font-serif text-2xl mt-1 tabular-nums ${netWorth >= 0 ? "text-emerald" : "text-rose"}`}>{rupee(netWorth, { compact: true })}</div>
           </Card>
         </div>
@@ -170,7 +170,7 @@ export default function BalanceSheetPage() {
 
       {/* Honesty note */}
       <Card className="mb-6 bg-paper-2/40 p-3">
-        <p className="text-[11px] text-ink-3 leading-relaxed flex items-start gap-1.5">
+        <p className="text-2xs text-ink-3 leading-relaxed flex items-start gap-1.5">
           <Icon name="info" size={13} className="mt-0.5 shrink-0" />
           <span>
             Auto figures (cash &amp; bank, receivables, TDS, payables, GST) come from your
@@ -311,13 +311,13 @@ export default function BalanceSheetPage() {
                         This is a <b>balancing figure</b>, not a stored P&amp;L number — it&apos;s whatever makes
                         <b> Assets = Liabilities + Equity</b> hold exactly.
                       </p>
-                      <div className="font-mono text-[11px] space-y-1 bg-paper rounded p-2 border border-hairline">
+                      <div className="font-mono text-2xs space-y-1 bg-paper rounded p-2 border border-hairline">
                         <div className="flex justify-between gap-3"><span>Total assets</span><span className="tabular-nums">{fmtBS(totalAssets)}</span></div>
                         <div className="flex justify-between gap-3"><span>− Total liabilities</span><span className="tabular-nums">{fmtBS(totalLiab)}</span></div>
                         <div className="flex justify-between gap-3"><span>− Owner&apos;s capital &amp; other manual equity</span><span className="tabular-nums">{fmtBS(sum(manualEqRows))}</span></div>
                         <div className="flex justify-between gap-3 border-t border-hairline pt-1 font-semibold text-ink"><span>= Retained earnings</span><span className="tabular-nums">{fmtBS(retained)}</span></div>
                       </div>
-                      <p className="mt-2 text-[11px] text-ink-3">
+                      <p className="mt-2 text-2xs text-ink-3">
                         A true P&amp;L-based figure (cumulative net income − owner drawings) needs closed-period books — a future enhancement. For now this keeps the sheet balanced and CA-explainable.
                       </p>
                     </div>
@@ -356,7 +356,7 @@ export default function BalanceSheetPage() {
 // ── Line + total primitives ─────────────────────────────────────────────────
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold border-b border-hairline pb-2">
+    <h2 className="text-2xs uppercase tracking-wider text-ink-3 font-semibold border-b border-hairline pb-2">
       {children}
     </h2>
   );
@@ -371,7 +371,7 @@ function fmtBS(amount: number): string {
 function Ratio({ label, value, good, tip }: { label: string; value: string; good: boolean; tip: string }) {
   return (
     <div title={tip} className="min-w-0">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
       <div className={`font-serif text-lg tabular-nums leading-tight ${good ? "text-emerald" : "text-rose"}`}>{value}</div>
     </div>
   );
@@ -436,7 +436,7 @@ function BSLine({
             </button>
           )}
         </div>
-        {hint && <div className="text-[11px] text-ink-3 mt-0.5 leading-snug">{hint}</div>}
+        {hint && <div className="text-2xs text-ink-3 mt-0.5 leading-snug">{hint}</div>}
       </div>
       <span className={`font-mono text-sm tabular-nums whitespace-nowrap shrink-0 ${amount < 0 ? "text-rose" : "text-ink"}`}>
         {fmtBS(amount)}
@@ -495,7 +495,7 @@ function ManualGroup({
           <Icon name={open ? "chevron_down" : "arrow_right"} size={13} className="text-ink-3 shrink-0" />
           <span className="text-sm text-ink">{label}</span>
           <OriginBadge kind="manual" />
-          <span className="text-[11px] text-ink-3">· {rows.length} entries</span>
+          <span className="text-2xs text-ink-3">· {rows.length} entries</span>
         </div>
         <span className={`font-mono text-sm tabular-nums whitespace-nowrap shrink-0 ${total < 0 ? "text-rose" : "text-ink"}`}>{fmtBS(total)}</span>
       </div>
@@ -581,7 +581,7 @@ function EditLineDialog({ item, onClose }: { item: BalanceSheetItem; onClose: ()
           <div>
             <label className="block text-xs font-medium text-ink-2 mb-1">Amount (₹)</label>
             <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <p className="mt-1 text-[11px] text-ink-3">Negative allowed (e.g. depreciation, drawings).</p>
+            <p className="mt-1 text-2xs text-ink-3">Negative allowed (e.g. depreciation, drawings).</p>
           </div>
         </div>
         <DialogFooter>
@@ -647,7 +647,7 @@ function AddLineDialog({ open, onClose }: { open: boolean; onClose: () => void }
                 })}
               </SelectContent>
             </Select>
-            <p className="text-[10px] text-ink-3 mt-1">
+            <p className="text-3xs text-ink-3 mt-1">
               Goes under <b>{SECTIONS.find((s) => s.value === category.section)?.label}</b> · e.g. {category.examples}
             </p>
           </FormField>
@@ -658,7 +658,7 @@ function AddLineDialog({ open, onClose }: { open: boolean; onClose: () => void }
 
           <FormField label="Amount (₹)" required htmlFor="bs-amount">
             <Input id="bs-amount" type="number" prefix="₹" error={errors.amount?.message} {...register("amount")} />
-            <p className="text-[10px] text-ink-3 mt-1">
+            <p className="text-3xs text-ink-3 mt-1">
               {category.contra
                 ? "Just type the amount — we'll record it as a reduction automatically."
                 : "Enter the current value / outstanding balance."}

@@ -16,6 +16,29 @@ const config: Config = {
       },
     },
     extend: {
+      /**
+       * The two rungs Tailwind's scale is missing.
+       *
+       * ─── WHY THERE WAS NO fontSize KEY HERE AT ALL ──────────────────────────
+       * Tailwind stops at `text-xs` = 12px. This app's densest surfaces live below that, so
+       * 2,010 elements reached for `text-[Npx]` instead — 1,143 at 11px and 820 at 10px, across
+       * 274 files. That is not 274 authors being careless; it is one missing scale, measured and
+       * written up in docs/TYPE-SCALE-PROPOSAL.md.
+       *
+       * ─── FONT-SIZE ONLY, AND THAT IS DELIBERATE ─────────────────────────────
+       * `text-xs` sets font-size AND line-height. These two set font-size alone, exactly as
+       * `text-[11px]` did — so renaming 1,963 call sites to them changes nothing that renders.
+       * Measured in the browser first: with no line-height of its own, 11px text inherits the
+       * root's unitless 1.5 and computes to 16.5px. Had these rungs carried `lineHeight: 1rem`
+       * the way a normal Tailwind scale does, every one of those 1,963 elements would have
+       * shifted its leading — 0.5px each, in 274 files, in the same commit as a mechanical
+       * rename. Leading is a separate, visible decision; it gets its own commit and its own
+       * before/after measurement.
+       */
+      fontSize: {
+        "3xs": "0.625rem", //  10px — 820 uses
+        "2xs": "0.6875rem", // 11px — 1,143 uses, the app's most common size
+      },
       fontFamily: {
         serif: ["var(--font-serif)", "DM Serif Display", "Georgia", "serif"],
         sans: ["var(--font-sans)", "Plus Jakarta Sans", "system-ui", "sans-serif"],

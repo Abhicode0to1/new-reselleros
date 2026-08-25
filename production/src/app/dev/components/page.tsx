@@ -403,7 +403,7 @@ export default function ComponentsShowcase() {
           ].map((name) => (
             <div key={name} className="flex flex-col items-center gap-1 p-2 rounded hover:bg-paper-2 transition-colors">
               <Icon name={name} size={20} className="text-ink-2" />
-              <span className="text-[10px] font-mono text-ink-3">{name}</span>
+              <span className="text-3xs font-mono text-ink-3">{name}</span>
             </div>
           ))}
         </div>

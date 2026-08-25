@@ -79,7 +79,7 @@ export default function AssetsPage() {
         <>
           <Card className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-paper-2/50 text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+              <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                 <tr>
                   <th className="text-left  px-4 py-3">Item</th>
                   <th className="text-left  px-4 py-3">Bought</th>
@@ -98,7 +98,7 @@ export default function AssetsPage() {
                         {p.name}
                         <Badge kind="muted">{EMI_CATEGORY_LABEL[p.category]}</Badge>
                       </div>
-                      {p.lender && <div className="text-[11px] text-ink-3 font-normal">{p.lender}</div>}
+                      {p.lender && <div className="text-2xs text-ink-3 font-normal">{p.lender}</div>}
                     </td>
                     <td className="px-4 py-3 text-ink-2">{formatDate(p.purchased_on)}</td>
                     <td className="px-4 py-3 text-right font-mono text-ink-2">{rupee(p.total_cost)}</td>
@@ -129,11 +129,11 @@ export default function AssetsPage() {
                 <Card className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="font-medium text-ink leading-tight">
-                      {p.name} <span className="text-[10px] font-normal text-ink-3">· {EMI_CATEGORY_LABEL[p.category]}</span>
+                      {p.name} <span className="text-3xs font-normal text-ink-3">· {EMI_CATEGORY_LABEL[p.category]}</span>
                     </div>
                     <div className="font-serif text-xl text-ink leading-none">{rupee(p.outstanding)}</div>
                   </div>
-                  <div className="text-[11px] text-ink-3 mb-2">
+                  <div className="text-2xs text-ink-3 mb-2">
                     {formatDate(p.purchased_on)} · {rupee(p.total_cost)} cost · {p.emisPaid}{p.emi_count ? `/${p.emi_count}` : ""} EMIs paid
                   </div>
                   <div className="flex items-center justify-between">
@@ -165,7 +165,7 @@ export default function AssetsPage() {
 function KPI({ label, value, tone }: { label: string; value: string; tone?: "amber" }) {
   return (
     <Card className="p-3 md:p-4">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{label}</div>
       <div className={`font-serif text-xl md:text-2xl leading-tight ${tone === "amber" ? "text-amber" : "text-ink"}`}>{value}</div>
     </Card>
   );
@@ -273,7 +273,7 @@ function PurchaseDialog({ onClose }: { onClose: () => void }) {
             <div className="flex items-center justify-between pt-1 border-t border-hairline font-semibold text-ink">
               <span>Loan (financed)</span><span className="font-mono">{rupee(financed)}</span>
             </div>
-            {emiN > 0 && countN > 0 && <p className="text-[11px] text-ink-3">≈ {rupee(emiN)} × {countN} EMIs</p>}
+            {emiN > 0 && countN > 0 && <p className="text-2xs text-ink-3">≈ {rupee(emiN)} × {countN} EMIs</p>}
           </div>
         </div>
         <DialogFooter>
@@ -328,8 +328,8 @@ function PayEmiDialog({ purchase, onClose }: { purchase: EmiPurchase; onClose: (
           <div>
             <label className="block text-xs font-medium text-ink-2 mb-1">Of which interest (₹, optional)</label>
             <Input type="number" min={0} value={interest} onChange={(e) => setInterest(e.target.value)} />
-            {tooMuchInt && <p className="mt-1 text-[11px] text-rose">Interest can&apos;t exceed the EMI.</p>}
-            {!tooMuchInt && tooMuchPrin && <p className="mt-1 text-[11px] text-rose">Principal ({rupee(principal)}) exceeds outstanding {rupee(purchase.outstanding)}.</p>}
+            {tooMuchInt && <p className="mt-1 text-2xs text-rose">Interest can&apos;t exceed the EMI.</p>}
+            {!tooMuchInt && tooMuchPrin && <p className="mt-1 text-2xs text-rose">Principal ({rupee(principal)}) exceeds outstanding {rupee(purchase.outstanding)}.</p>}
           </div>
           <div>
             <label className="block text-xs font-medium text-ink-2 mb-1">Paid from</label>
@@ -380,7 +380,7 @@ function EmiHistoryDialog({ purchase, onClose }: { purchase: EmiPurchase; onClos
               <div key={h.id} className="flex items-start justify-between gap-3 rounded-md border border-hairline px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-ink">{rupee(h.amount)}</div>
-                  <div className="text-[11px] text-ink-3">
+                  <div className="text-2xs text-ink-3">
                     {formatDate(h.paid_on)}
                     {h.bank_account_id ? ` · ${acctName.get(h.bank_account_id) ?? "account"}` : ""}
                     {" · "}{rupee(h.principal_part)} principal{h.interest_part > 0 ? ` + ${rupee(h.interest_part)} interest` : ""}

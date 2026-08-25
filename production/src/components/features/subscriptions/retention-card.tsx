@@ -70,21 +70,21 @@ export function RetentionCard({ snapshots }: { snapshots: MrrSnapshot[] }) {
     >
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
         <div>
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-3">Net revenue retention</p>
+          <p className="text-3xs uppercase tracking-wider font-semibold text-ink-3">Net revenue retention</p>
           <p className={cn("font-serif text-3xl font-bold tabular-nums", VERDICT_TONE[v.verdict])}>
             {fmtBps(r.nrrBps)}
           </p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-3">Gross (no expansion)</p>
+          <p className="text-3xs uppercase tracking-wider font-semibold text-ink-3">Gross (no expansion)</p>
           <p className="font-serif text-xl font-semibold tabular-nums text-ink-2">{fmtBps(r.grrBps)}</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-3">New customers</p>
-          <p className="font-serif text-xl font-semibold tabular-nums text-ink-2">{rupee(r.newMrr)}<span className="text-[10px] font-normal text-ink-3">/mo</span></p>
+          <p className="text-3xs uppercase tracking-wider font-semibold text-ink-3">New customers</p>
+          <p className="font-serif text-xl font-semibold tabular-nums text-ink-2">{rupee(r.newMrr)}<span className="text-3xs font-normal text-ink-3">/mo</span></p>
           {/* Stated on the card, not just in a comment — this is the number people
               expect to see folded in. */}
-          <p className="text-[10px] text-ink-3">not counted in NRR</p>
+          <p className="text-3xs text-ink-3">not counted in NRR</p>
         </div>
       </div>
 
@@ -97,7 +97,7 @@ export function RetentionCard({ snapshots }: { snapshots: MrrSnapshot[] }) {
         <Movement label="Churned" value={`−${rupee(r.churned)}`} tone="bad" count={r.counts.churned} />
       </div>
 
-      <p className="mt-2 text-[11px] text-ink-3">
+      <p className="mt-2 text-2xs text-ink-3">
         Ends at {rupee(r.endingCohortMrr)} from the same {r.counts.retained + r.counts.churned} customers.
       </p>
     </Card>
@@ -109,7 +109,7 @@ function Movement({ label, value, tone, count }: {
 }) {
   return (
     <div className="rounded-lg border border-hairline bg-paper-2/40 p-2.5">
-      <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-3">{label}</p>
+      <p className="text-3xs uppercase tracking-wider font-semibold text-ink-3">{label}</p>
       <p className={cn(
         "mt-0.5 text-sm font-semibold tabular-nums",
         tone === "good" ? "text-emerald" : tone === "warn" ? "text-amber-ink" : tone === "bad" ? "text-rose" : "text-ink",
@@ -117,7 +117,7 @@ function Movement({ label, value, tone, count }: {
         {value}
       </p>
       {count != null && count > 0 && (
-        <p className="text-[10px] text-ink-3">{count} {count === 1 ? "customer" : "customers"}</p>
+        <p className="text-3xs text-ink-3">{count} {count === 1 ? "customer" : "customers"}</p>
       )}
     </div>
   );

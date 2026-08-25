@@ -148,7 +148,7 @@ function DocRow({ doc, onOpen, onDelete }: { doc: DocumentRow; onOpen: () => voi
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium text-ink truncate">{doc.title}</p>
-          <p className="text-[11px] text-ink-3 truncate">
+          <p className="text-2xs text-ink-3 truncate">
             {categoryLabel(doc.category)}
             {doc.file_name ? ` · ${doc.file_name}` : ""}
             {doc.expiry_date ? ` · expires ${formatDate(doc.expiry_date)}` : ""}

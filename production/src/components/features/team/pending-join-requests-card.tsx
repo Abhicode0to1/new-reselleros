@@ -118,7 +118,7 @@ export function PendingJoinRequestsCard({ isOwner }: { isOwner: boolean }) {
                   {r.full_name || r.email.split("@")[0]}
                 </div>
                 <div className="text-xs text-ink-3 font-mono truncate">{r.email}</div>
-                <div className="text-[11px] text-ink-3 mt-0.5">
+                <div className="text-2xs text-ink-3 mt-0.5">
                   {r.matched_by === "domain"
                     ? "Matched by your company's email domain"
                     : "Asked to join by name"}

@@ -190,7 +190,7 @@ export default function ImportContactsDialog({ open, onOpenChange }: Props) {
             </div>
 
             {warnings.length > 0 && (
-              <div className="bg-amber-soft border border-amber/30 rounded-md p-2 text-[11px] text-amber-ink space-y-0.5">
+              <div className="bg-amber-soft border border-amber/30 rounded-md p-2 text-2xs text-amber-ink space-y-0.5">
                 {warnings.map((w, i) => <p key={i}>⚠️ {w}</p>)}
               </div>
             )}
@@ -227,7 +227,7 @@ export default function ImportContactsDialog({ open, onOpenChange }: Props) {
                           <input type="checkbox" checked={isSel} onChange={() => toggle(r.rowIndex)} className="accent-amber" />
                         </td>
                         <td className="px-2 py-1.5 font-medium text-ink truncate max-w-[180px]">{r.fullName}</td>
-                        <td className="px-2 py-1.5 text-ink-2 font-mono text-[11px] truncate max-w-[200px]">{r.email ?? "—"}</td>
+                        <td className="px-2 py-1.5 text-ink-2 font-mono text-2xs truncate max-w-[200px]">{r.email ?? "—"}</td>
                         <td className="px-2 py-1.5 text-ink-2 truncate max-w-[140px]">{r.phone ?? "—"}</td>
                         <td className="px-2 py-1.5 text-ink-2 truncate max-w-[160px]">{r.company ?? "—"}</td>
                         <td className="px-2 py-1.5 text-ink-3 truncate max-w-[160px]">{r.title ?? "—"}</td>
@@ -238,7 +238,7 @@ export default function ImportContactsDialog({ open, onOpenChange }: Props) {
               </table>
             </div>
 
-            <div className="bg-paper-2 rounded-md p-3 text-[11px] text-ink-3 flex items-start gap-2">
+            <div className="bg-paper-2 rounded-md p-3 text-2xs text-ink-3 flex items-start gap-2">
               <Icon name="info" size={12} className="text-amber-ink shrink-0 mt-0.5" />
               <p>
                 Selected contacts land in your <b className="text-ink-2">Contacts directory</b> at status{" "}

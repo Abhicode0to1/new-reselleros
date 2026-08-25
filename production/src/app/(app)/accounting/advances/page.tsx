@@ -74,19 +74,19 @@ export default function EmployeeAdvancesPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-5 border-l-4 border-l-amber">
-          <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Advance Money in Hands of Employees</p>
+          <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Advance Money in Hands of Employees</p>
           <p className="font-serif text-3xl text-amber-dark mt-1">{rupee(totalOutstandingBalance)}</p>
           <p className="text-xs text-ink-3 mt-1">{activeAdvances.length} active employee advances</p>
         </Card>
 
         <Card className="p-5 border-l-4 border-l-indigo">
-          <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Total Disbursed Advances</p>
+          <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Total Disbursed Advances</p>
           <p className="font-serif text-3xl text-indigo mt-1">{rupee(totalDisbursedActive)}</p>
           <p className="text-xs text-ink-3 mt-1">Total cash/bank given for expenses</p>
         </Card>
 
         <Card className="p-5 border-l-4 border-l-emerald">
-          <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Booked P&amp;L Expenses</p>
+          <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Booked P&amp;L Expenses</p>
           <p className="font-serif text-3xl text-emerald mt-1">{rupee(totalSpentActive)}</p>
           <p className="text-xs text-ink-3 mt-1">Expenses adjusted &amp; recorded in P&amp;L</p>
         </Card>
@@ -150,17 +150,17 @@ export default function EmployeeAdvancesPage() {
                 {/* Balance Progress Bar */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-paper-2/50 p-3 rounded-lg border border-hairline">
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-ink-3">Disbursed Advance</p>
+                    <p className="text-3xs uppercase tracking-wider text-ink-3">Disbursed Advance</p>
                     <p className="font-serif text-lg text-ink font-semibold">{rupee(adv.disbursed_amount)}</p>
                   </div>
 
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-ink-3">Total Spent &amp; Booked in P&amp;L</p>
+                    <p className="text-3xs uppercase tracking-wider text-ink-3">Total Spent &amp; Booked in P&amp;L</p>
                     <p className="font-serif text-lg text-emerald font-semibold">{rupee(adv.total_spent)}</p>
                   </div>
 
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-ink-3">Remaining Advance in Hand</p>
+                    <p className="text-3xs uppercase tracking-wider text-ink-3">Remaining Advance in Hand</p>
                     <p className="font-serif text-lg text-amber-dark font-bold">{rupee(adv.remaining_balance)}</p>
                   </div>
                 </div>
@@ -168,7 +168,7 @@ export default function EmployeeAdvancesPage() {
                 {/* Linked Expenses Breakdown */}
                 {adv.linked_expenses.length > 0 && (
                   <div className="pt-2">
-                    <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold mb-2">
+                    <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
                       Expenses Claimed &amp; Adjusted ({adv.linked_expenses.length})
                     </p>
                     <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
@@ -176,13 +176,13 @@ export default function EmployeeAdvancesPage() {
                         <div key={exp.id} className="flex items-center justify-between p-2.5 bg-paper rounded border border-hairline text-xs">
                           <div className="space-y-0.5">
                             <span className="font-semibold text-ink">{exp.category}</span>
-                            {exp.description && <p className="text-ink-3 text-[11px]">{exp.description}</p>}
-                            <span className="text-[10px] text-ink-3">{formatDate(exp.expense_date, "short")} {exp.vendor_name ? `· Vendor: ${exp.vendor_name}` : ""}</span>
+                            {exp.description && <p className="text-ink-3 text-2xs">{exp.description}</p>}
+                            <span className="text-3xs text-ink-3">{formatDate(exp.expense_date, "short")} {exp.vendor_name ? `· Vendor: ${exp.vendor_name}` : ""}</span>
                           </div>
 
                           <div className="text-right">
                             <span className="font-bold text-ink">{rupee(exp.amount)}</span>
-                            <p className="text-[10px] text-emerald font-medium">✓ Adjusted vs Advance</p>
+                            <p className="text-3xs text-emerald font-medium">✓ Adjusted vs Advance</p>
                           </div>
                         </div>
                       ))}
@@ -207,7 +207,7 @@ export default function EmployeeAdvancesPage() {
                     <span className="font-bold text-ink">{adv.employee_name}</span>
                     <Badge kind="success" size="sm">Settled</Badge>
                   </div>
-                  <p className="text-ink-3 text-[11px] mt-0.5">
+                  <p className="text-ink-3 text-2xs mt-0.5">
                     Disbursed: {rupee(adv.disbursed_amount)} · Spent: {rupee(adv.total_spent)} · Disbursed on {formatDate(adv.disbursed_date, "short")}
                   </p>
                 </div>

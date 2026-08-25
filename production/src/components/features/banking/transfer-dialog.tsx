@@ -125,7 +125,7 @@ export function TransferDialog({ open, onOpenChange, accounts, defaultFromId, de
                 </SelectContent>
               </Select>
               {sameAccount && (
-                <p className="mt-1 text-[11px] text-rose">Source and destination must differ.</p>
+                <p className="mt-1 text-2xs text-rose">Source and destination must differ.</p>
               )}
             </FormField>
 
@@ -142,7 +142,7 @@ export function TransferDialog({ open, onOpenChange, accounts, defaultFromId, de
               <Textarea id="note" rows={2} placeholder="e.g. Cash withdrawn for office petty cash" {...register("note")} />
             </FormField>
 
-            <p className="rounded-md bg-paper-2/40 border border-hairline px-3 py-2 text-[11px] text-ink-3 leading-relaxed">
+            <p className="rounded-md bg-paper-2/40 border border-hairline px-3 py-2 text-2xs text-ink-3 leading-relaxed">
               This records two entries: a debit on the source account and a matching credit
               on the destination — so no money is double-counted.
             </p>

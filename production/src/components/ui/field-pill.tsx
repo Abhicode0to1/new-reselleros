@@ -27,7 +27,7 @@ export function FieldPill({ check, className }: { check: FieldCheck; className?:
       {check.tone !== "empty" && (
         <p
           className={cn(
-            "inline-flex items-center gap-1 text-[11px] leading-snug",
+            "inline-flex items-center gap-1 text-2xs leading-snug",
             check.tone === "ok"     && "text-emerald",
             check.tone === "error"  && "text-rose",
             check.tone === "typing" && "text-ink-3",

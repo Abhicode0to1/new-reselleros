@@ -252,7 +252,7 @@ export function ImportGoogleSubsDialog({ open, onOpenChange, onComplete }: Props
             Add missing subscriptions from Google
           </DialogTitle>
           <DialogDescription className="break-words">
-            Upload the Google export with a <span className="font-mono text-[11px]">Customer Number</span> column added.
+            Upload the Google export with a <span className="font-mono text-2xs">Customer Number</span> column added.
             Each subscription is matched to an existing customer by that number (domain as fallback). MRR is an
             <b> estimate</b> (catalog × seats) — verify the rate.
           </DialogDescription>
@@ -266,7 +266,7 @@ export function ImportGoogleSubsDialog({ open, onOpenChange, onComplete }: Props
                 <p className="text-sm font-medium text-ink inline-flex items-center gap-1.5">
                   <Icon name="refresh" size={14} className="text-amber" /> Sync live from Google
                 </p>
-                <p className="text-[11px] text-ink-3 mt-0.5">
+                <p className="text-2xs text-ink-3 mt-0.5">
                   No file needed — pulls every subscription via the Reseller API (needs the API enabled + reseller scope).
                 </p>
               </div>
@@ -281,12 +281,12 @@ export function ImportGoogleSubsDialog({ open, onOpenChange, onComplete }: Props
               )}
             </div>
             {needsAuth && (
-              <p className="text-[11px] text-amber-ink -mt-1">
+              <p className="text-2xs text-amber-ink -mt-1">
                 Sign in with the reseller-admin Google account and approve the reseller permission, then click Sync again.
               </p>
             )}
 
-            <div className="flex items-center gap-3 text-[11px] text-ink-3">
+            <div className="flex items-center gap-3 text-2xs text-ink-3">
               <div className="h-px flex-1 bg-hairline" /> or upload the CSV <div className="h-px flex-1 bg-hairline" />
             </div>
 
@@ -299,7 +299,7 @@ export function ImportGoogleSubsDialog({ open, onOpenChange, onComplete }: Props
               <p className="text-xs text-ink-3 mt-1">Up to 8 MB · needs columns: Customer (domain), Sku, Purchased licenses, + your Customer Number</p>
               <input ref={fileRef} id="gsub-file" type="file" accept=".csv,text/csv" onChange={handleFile} className="sr-only" />
             </label>
-            <p className="text-[11px] text-ink-3">
+            <p className="text-2xs text-ink-3">
               No <b>Customer Number</b> column (or live sync)? Matching falls back to <b>domain</b> only, so customers without a
               backfilled domain won't link — most missing subs would then need new customers.
             </p>
@@ -359,7 +359,7 @@ export function ImportGoogleSubsDialog({ open, onOpenChange, onComplete }: Props
                   <tbody>
                     {shown.map((r) => (
                       <tr key={r.rowNum} className={cn("border-b border-hairline last:border-0", r.category === "in_app" && "opacity-50")}>
-                        <td className="p-2 font-mono text-[11px] text-ink">{r.domain}</td>
+                        <td className="p-2 font-mono text-2xs text-ink">{r.domain}</td>
                         <td className="p-2">
                           {r.category === "link"   && <Badge kind="success" size="sm">{r.customer_name}</Badge>}
                           {r.category === "new"    && <Badge kind="warning" size="sm">new customer</Badge>}
@@ -385,7 +385,7 @@ export function ImportGoogleSubsDialog({ open, onOpenChange, onComplete }: Props
               )}
             </div>
 
-            <p className="text-[11px] text-ink-3">
+            <p className="text-2xs text-ink-3">
               Adds into <b className="text-ink">{me?.tenantName ?? "your tenant"}</b> with vendor <b>google</b>.
               MRR is a catalog estimate — <b>verify the real rate</b> after import. Suspended-on-Google subs are added as <b>paused</b>.
             </p>
@@ -410,7 +410,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: "eme
   const color = tone === "emerald" ? "text-emerald" : tone === "amber" ? "text-amber-ink" : tone === "rose" ? "text-rose" : "text-ink";
   return (
     <div className="rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
       <div className={cn("text-sm font-semibold tabular-nums mt-0.5", color)}>{value}</div>
     </div>
   );

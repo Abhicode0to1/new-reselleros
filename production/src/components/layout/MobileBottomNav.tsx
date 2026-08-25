@@ -130,7 +130,7 @@ export function MobileBottomNav({ onMoreClick }: Props) {
               )}
             >
               <Icon name={item.icon} size={20} />
-              <span className="text-[10px] font-medium leading-tight">
+              <span className="text-3xs font-medium leading-tight">
                 {item.label}
               </span>
             </span>

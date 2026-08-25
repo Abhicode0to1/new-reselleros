@@ -104,13 +104,13 @@ export function LossReasonProvider({ children }: { children: React.ReactNode }) 
                 )}
               >
                 <div className="text-sm font-semibold text-ink">{r.label}</div>
-                <div className="text-[11px] text-ink-3 leading-snug mt-0.5">{r.hint}</div>
+                <div className="text-2xs text-ink-3 leading-snug mt-0.5">{r.hint}</div>
               </button>
             ))}
           </div>
 
           <div className="mt-1">
-            <label htmlFor="loss-note" className="text-[11px] font-medium text-ink-3">
+            <label htmlFor="loss-note" className="text-2xs font-medium text-ink-3">
               Note {picked === "other" ? <span className="text-rose">(required for “Other”)</span> : "(optional)"}
             </label>
             <textarea

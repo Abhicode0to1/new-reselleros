@@ -84,19 +84,19 @@ export default function EsiRegisterPage() {
           {/* Accrued vs paid */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card className="p-4">
-              <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">ESI accrued</div>
+              <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">ESI accrued</div>
               <div className="font-serif text-2xl text-ink mt-1">{rupee(data!.accrued)}</div>
-              <div className="text-[11px] text-ink-3 mt-0.5">employee + employer, all payslips</div>
+              <div className="text-2xs text-ink-3 mt-0.5">employee + employer, all payslips</div>
             </Card>
             <Card className="p-4">
-              <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Paid to ESIC</div>
+              <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Paid to ESIC</div>
               <div className="font-serif text-2xl text-ink mt-1">{rupee(data!.paid)}</div>
-              <div className="text-[11px] text-ink-3 mt-0.5">challans reconciled</div>
+              <div className="text-2xs text-ink-3 mt-0.5">challans reconciled</div>
             </Card>
             <Card className="p-4">
-              <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Still payable</div>
+              <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Still payable</div>
               <div className={`font-serif text-2xl mt-1 ${data!.outstanding > 0 ? "text-rose" : "text-emerald"}`}>{rupee(data!.outstanding)}</div>
-              <div className="text-[11px] text-ink-3 mt-0.5">accrued − paid</div>
+              <div className="text-2xs text-ink-3 mt-0.5">accrued − paid</div>
             </Card>
           </div>
 
@@ -118,7 +118,7 @@ export default function EsiRegisterPage() {
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+                    <thead className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">
                       <tr>
                         <th className="text-left px-4 py-2">Employee</th>
                         <th className="text-left px-4 py-2">ESI no.</th>

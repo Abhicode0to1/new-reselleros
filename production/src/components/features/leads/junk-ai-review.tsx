@@ -96,7 +96,7 @@ export function JunkAIReview({ leads }: { leads: Lead[] }) {
                   >
                     <span
                       className={cn(
-                        "shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                        "shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-3xs font-semibold",
                         v.suspect ? "bg-rose-soft text-rose" : "bg-emerald-soft text-emerald",
                       )}
                     >
@@ -107,7 +107,7 @@ export function JunkAIReview({ leads }: { leads: Lead[] }) {
                       <span className="block text-sm text-ink truncate">
                         {lead.company || lead.contact_name || "Unnamed lead"}
                       </span>
-                      <span className="block text-[11px] text-ink-3 truncate">{v.reason}</span>
+                      <span className="block text-2xs text-ink-3 truncate">{v.reason}</span>
                     </span>
                     {isJunk ? (
                       <button

@@ -48,7 +48,7 @@ export function DeleteBlockedDialog({
 
         {links.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Handle it here</p>
+            <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Handle it here</p>
             {links.map((l) => (
               <a
                 key={l.href}

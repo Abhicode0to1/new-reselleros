@@ -173,7 +173,7 @@ export function ImportDomainsDialog({ open, onOpenChange, onComplete }: Props) {
             <Icon name="link" size={18} className="text-amber" /> Link domains to customers
           </DialogTitle>
           <DialogDescription className="break-words">
-            CSV with <span className="font-mono text-[11px]">Customer Number</span> + <span className="font-mono text-[11px]">Domain</span> (e.g. a Zoho subscription export).
+            CSV with <span className="font-mono text-2xs">Customer Number</span> + <span className="font-mono text-2xs">Domain</span> (e.g. a Zoho subscription export).
             Each domain is attached to the customer with that number — a customer can own many domains.
           </DialogDescription>
         </DialogHeader>
@@ -219,7 +219,7 @@ export function ImportDomainsDialog({ open, onOpenChange, onComplete }: Props) {
                   <tbody>
                     {shown.map((r) => (
                       <tr key={r.domain} className="border-b border-hairline last:border-0">
-                        <td className="p-2 font-mono text-[11px] text-ink">{r.domain}</td>
+                        <td className="p-2 font-mono text-2xs text-ink">{r.domain}</td>
                         <td className="p-2 text-ink-2">{r.customer_name ?? <span className="text-ink-3">{r.customer_number}</span>}</td>
                         <td className="p-2">
                           {r.status === "new" && <Badge kind="success" size="sm">will link</Badge>}
@@ -239,7 +239,7 @@ export function ImportDomainsDialog({ open, onOpenChange, onComplete }: Props) {
               )}
             </div>
 
-            <p className="text-[11px] text-ink-3">
+            <p className="text-2xs text-ink-3">
               <b>No customer</b> = that Customer Number isn&apos;t in your customers (import that customer first). Only <b>will link</b> rows are written.
             </p>
           </div>
@@ -262,7 +262,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: "eme
   const color = tone === "emerald" ? "text-emerald" : tone === "amber" ? "text-amber-ink" : "text-ink";
   return (
     <div className="rounded-md border border-hairline bg-paper-2/40 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
+      <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">{label}</div>
       <div className={cn("text-sm font-semibold tabular-nums mt-0.5", color)}>{value}</div>
     </div>
   );

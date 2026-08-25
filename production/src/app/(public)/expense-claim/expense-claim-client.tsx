@@ -51,7 +51,7 @@ export function ExpenseClaimClient({
           </div>
           <div>
             <div className="font-serif text-base leading-none text-ink">{brandName}</div>
-            <div className="mt-1 text-[10px] text-ink-3">Expense claim</div>
+            <div className="mt-1 text-3xs text-ink-3">Expense claim</div>
           </div>
         </div>
 
@@ -73,7 +73,7 @@ export function ExpenseClaimClient({
           )}
         </div>
 
-        <p className="mt-4 text-center text-[11px] text-ink-3">
+        <p className="mt-4 text-center text-2xs text-ink-3">
           Every submission is reviewed by the office before it is recorded.
         </p>
       </div>
@@ -121,7 +121,7 @@ function IdentifyStep({
   return (
     <>
       <div className="mb-5">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-3">Expense advance</p>
+        <p className="text-3xs font-semibold uppercase tracking-wider text-ink-3">Expense advance</p>
         <h1 className="mt-1 font-serif text-2xl leading-tight text-ink">Log your expenses</h1>
         <p className="mt-1 text-sm text-ink-3">
           Enter your PIN once, then add as many expenses as you need. The office reviews them.
@@ -287,7 +287,7 @@ function LogStep({
       {/* Who + remaining */}
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-3">Logging for</p>
+          <p className="text-3xs font-semibold uppercase tracking-wider text-ink-3">Logging for</p>
           <h1 className="mt-0.5 font-serif text-xl leading-tight text-ink">{employeeName}</h1>
         </div>
         <button type="button" onClick={onSwitch} className="text-xs text-ink-3 underline hover:text-ink">
@@ -301,7 +301,7 @@ function LogStep({
           <span className="font-serif text-2xl text-ink">{rupee(remaining)}</span>
         </div>
         {logged.length > 0 && (
-          <div className="mt-1 text-[11px] text-ink-3">{logged.length} logged this session · {rupee(spent)}</div>
+          <div className="mt-1 text-2xs text-ink-3">{logged.length} logged this session · {rupee(spent)}</div>
         )}
       </div>
 
@@ -374,7 +374,7 @@ function LogStep({
       {/* Session list */}
       {logged.length > 0 && (
         <div className="mt-6 border-t border-hairline pt-4">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-3">Submitted just now</p>
+          <p className="mb-2 text-3xs font-semibold uppercase tracking-wider text-ink-3">Submitted just now</p>
           <ul className="space-y-1.5">
             {logged.map((l) => (
               <li key={l.id} className="flex items-center justify-between gap-2 rounded-md bg-paper-2 px-3 py-2 text-sm">
@@ -383,7 +383,7 @@ function LogStep({
                     <span className="text-ink-2">{l.category}</span>
                     <span className="font-mono text-ink">{rupee(l.amount)}</span>
                   </div>
-                  {l.purpose && <div className="truncate text-[11px] text-ink-3">{l.purpose}</div>}
+                  {l.purpose && <div className="truncate text-2xs text-ink-3">{l.purpose}</div>}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button type="button" onClick={() => startEdit(l)} aria-label="Edit"

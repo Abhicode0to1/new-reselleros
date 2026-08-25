@@ -180,12 +180,12 @@ export default function CashFlowPage() {
             <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-paper-2 border-b border-hairline">
                 <tr>
-                  <th className="text-left  px-3 py-2.5 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">Month</th>
-                  <th className="text-left  px-3 py-2.5 text-[10px] font-semibold text-ink-3 uppercase tracking-wider w-[38%]">In vs out</th>
-                  <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">Cash in</th>
-                  <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">Cash out</th>
-                  <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">Net</th>
-                  <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">Cumulative</th>
+                  <th className="text-left  px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Month</th>
+                  <th className="text-left  px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider w-[38%]">In vs out</th>
+                  <th className="text-right px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Cash in</th>
+                  <th className="text-right px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Cash out</th>
+                  <th className="text-right px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Net</th>
+                  <th className="text-right px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Cumulative</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
@@ -223,7 +223,7 @@ export default function CashFlowPage() {
         </Card>
       )}
 
-      <p className="text-[11px] text-ink-3 mt-3 leading-relaxed">
+      <p className="text-2xs text-ink-3 mt-3 leading-relaxed">
         Cash flow = actual bank credits (in) minus debits (out) per month, from your imported/connected statements.
         This is different from Profit (P&amp;L), which counts invoices whether or not the cash has arrived.
       </p>

@@ -167,7 +167,7 @@ export default function BankAccountDetailPage() {
           >
             <Icon name="arrow_left" size={11} /> All accounts
           </Link>
-          <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+          <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">
             {account.bank_name}
           </p>
           <h1 className="font-serif text-3xl md:text-4xl leading-tight">{account.name}</h1>
@@ -224,30 +224,30 @@ export default function BankAccountDetailPage() {
       <Card className="mb-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Balance in bank</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Balance in bank</p>
             <p className={`font-serif text-2xl mt-1 ${bankBalance >= 0 ? "text-ink" : "text-rose"}`}>
               {rupee(bankBalance)}
             </p>
-            <p className="text-[10px] text-ink-3 mt-0.5">Per imported statement</p>
+            <p className="text-3xs text-ink-3 mt-0.5">Per imported statement</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Balance in app</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Balance in app</p>
             <p className={`font-serif text-2xl mt-1 ${appBalance >= 0 ? "text-ink" : "text-rose"}`}>
               {rupee(appBalance)}
             </p>
-            <p className="text-[10px] text-ink-3 mt-0.5">Reconciled in your books</p>
+            <p className="text-3xs text-ink-3 mt-0.5">Reconciled in your books</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">Opening balance</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Opening balance</p>
             <p className="font-serif text-2xl text-ink-2 mt-1">{rupee(account.opening_balance)}</p>
-            <p className="text-[10px] text-ink-3 mt-0.5">as of {formatDate(account.opening_balance_date)}</p>
+            <p className="text-3xs text-ink-3 mt-0.5">as of {formatDate(account.opening_balance_date)}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">To reconcile</p>
+            <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">To reconcile</p>
             <p className={`font-serif text-2xl mt-1 ${counts.unmatched > 0 ? "text-rose" : "text-emerald"}`}>
               {counts.unmatched === 0 ? "✓" : rupee(toReconcile)}
             </p>
-            <p className="text-[10px] text-ink-3 mt-0.5">
+            <p className="text-3xs text-ink-3 mt-0.5">
               {counts.unmatched === 0 ? "Bank = app, all reconciled" : `${counts.unmatched} txns not yet in books`}
             </p>
           </div>
@@ -334,7 +334,7 @@ export default function BankAccountDetailPage() {
                   {BANK_COL_ORDER.map((id) => <col key={id} style={{ width: colW[id] }} />)}
                 </colgroup>
                 <thead className="[&>tr>th]:sticky [&>tr>th]:top-0 [&>tr>th]:z-10 [&>tr>th]:bg-paper-2">
-                  <tr className="border-b border-hairline text-left text-[11px] uppercase tracking-wider text-ink-3">
+                  <tr className="border-b border-hairline text-left text-2xs uppercase tracking-wider text-ink-3">
                     <th className="px-4 py-2 font-semibold whitespace-nowrap">Date</th>
                     <th className="px-4 py-2 font-semibold whitespace-nowrap">Description</th>
                     <th className="px-4 py-2 font-semibold text-right whitespace-nowrap">Nikasi (Dr.)</th>
@@ -429,7 +429,7 @@ function TransactionRow({
             width — no need to widen the column and push other columns off. */}
         <div className="font-medium text-ink break-words leading-snug">{txn.description}</div>
         {txn.reference && (
-          <div className="text-[10px] text-ink-3 font-mono mt-0.5 break-all">{txn.reference}</div>
+          <div className="text-3xs text-ink-3 font-mono mt-0.5 break-all">{txn.reference}</div>
         )}
       </td>
       <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap font-medium text-rose">
@@ -444,7 +444,7 @@ function TransactionRow({
           // un-reconciling one leg would orphan it, so no action here.
           <div className="flex flex-col items-end gap-0.5">
             <Badge kind="success" size="sm" dot>Inter-account</Badge>
-            <span className="text-[10px] text-ink-3">Auto</span>
+            <span className="text-3xs text-ink-3">Auto</span>
           </div>
         ) : txn.matched_to_type ? (
           // Reconciled: show WHAT it matched (this replaces the Status column)
@@ -454,7 +454,7 @@ function TransactionRow({
             <button
               type="button"
               onClick={() => reconcile.mutate({ transactionId: txn.id, matchedToType: null, matchedToId: null })}
-              className="text-[10px] text-ink-3 hover:text-rose"
+              className="text-3xs text-ink-3 hover:text-rose"
               disabled={reconcile.isPending}
             >
               Un-reconcile
@@ -482,7 +482,7 @@ function TransactionCard({ txn, onReconcile }: { txn: BankTransactionRow; onReco
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-sm font-medium leading-snug text-ink break-words">{txn.description}</div>
-            <div className="mt-0.5 text-[11px] text-ink-3">
+            <div className="mt-0.5 text-2xs text-ink-3">
               {formatDate(txn.txn_date)}
               {txn.reference ? <span className="font-mono"> · {txn.reference}</span> : ""}
             </div>
@@ -494,7 +494,7 @@ function TransactionCard({ txn, onReconcile }: { txn: BankTransactionRow; onReco
         <div className="mt-2 flex items-center justify-between gap-2">
           <TxnStatusBadge txn={txn} />
           {txn.matched_to_type === "transfer" ? (
-            <span className="text-[11px] text-ink-3">Auto</span>
+            <span className="text-2xs text-ink-3">Auto</span>
           ) : txn.matched_to_type ? (
             <button
               type="button"

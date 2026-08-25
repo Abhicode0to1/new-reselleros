@@ -39,7 +39,7 @@ export function DealHealthCard({ health, onBookFollowUp }: {
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] uppercase tracking-wider text-ink-3 font-semibold">Deal health</p>
+          <p className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Deal health</p>
           <p className="text-sm font-medium text-ink mt-0.5">{BAND_TEXT[health.band]}</p>
         </div>
         <div className="text-right shrink-0">
@@ -53,7 +53,7 @@ export function DealHealthCard({ health, onBookFollowUp }: {
           >
             {badge.label}
           </p>
-          <p className="text-[10px] text-ink-3 mt-0.5">out of 100</p>
+          <p className="text-3xs text-ink-3 mt-0.5">out of 100</p>
         </div>
       </div>
 
@@ -74,14 +74,14 @@ export function DealHealthCard({ health, onBookFollowUp }: {
         <button
           type="button"
           onClick={onBookFollowUp}
-          className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper px-2.5 py-1.5 text-[11px] font-semibold text-ink hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+          className="mt-2.5 inline-flex items-center gap-1.5 rounded-md border border-hairline bg-paper px-2.5 py-1.5 text-2xs font-semibold text-ink hover:bg-paper-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
         >
           <Icon name="calendar" size={12} /> Book a follow-up
         </button>
       )}
 
       {health.incomplete && (
-        <p className="mt-2 text-[10px] leading-snug text-ink-3">
+        <p className="mt-2 text-3xs leading-snug text-ink-3">
           The <b>+</b> means part of this could not be measured, so the real score is at least this high.
         </p>
       )}

@@ -51,7 +51,7 @@ export function ProvisioningCard({ tasks, quoteId, tenantId, lines, quoteDomain,
   return (
     <Card title="Setting up" sub="Seats to create at the vendor">
       {/* The honesty line. First thing, every time. */}
-      <p className="mb-3 flex items-start gap-1.5 rounded-md bg-paper-2/60 px-2.5 py-2 text-[11px] leading-snug text-ink-2">
+      <p className="mb-3 flex items-start gap-1.5 rounded-md bg-paper-2/60 px-2.5 py-2 text-2xs leading-snug text-ink-2">
         <Icon name="alert" size={12} className="mt-px shrink-0 text-ink-3" />
         <span>
           No reseller API is connected on this account, so these seats are created by hand.
@@ -73,7 +73,7 @@ export function ProvisioningCard({ tasks, quoteId, tenantId, lines, quoteDomain,
           {plan.skipped.length > 0 && (
             <ul className="mt-2 space-y-0.5">
               {plan.skipped.map((s) => (
-                <li key={s.name} className="text-[11px] leading-snug text-ink-3">
+                <li key={s.name} className="text-2xs leading-snug text-ink-3">
                   · <b className="text-ink-2">{s.name}</b> — {s.reason}
                 </li>
               ))}
@@ -131,12 +131,12 @@ export function ProvisioningCard({ tasks, quoteId, tenantId, lines, quoteDomain,
                         mode: "manual",
                       })}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-ink-3">
+                    <p className="mt-0.5 text-2xs text-ink-3">
                       {vendorLabel((t.vendor ?? "other") as ProvisionVendor)}
                       {t.completed_at && ` · done ${new Date(t.completed_at).toLocaleDateString("en-IN")}`}
                     </p>
                     {t.error_message && (
-                      <p className="mt-1 text-[11px] leading-snug text-rose">{t.error_message}</p>
+                      <p className="mt-1 text-2xs leading-snug text-rose">{t.error_message}</p>
                     )}
                   </div>
                 </div>

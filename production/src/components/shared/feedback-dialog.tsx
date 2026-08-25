@@ -272,7 +272,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                   key={p}
                   type="button"
                   onClick={() => setPriority(p)}
-                  className={`py-1.5 px-2 rounded-md border text-[11px] font-bold uppercase tracking-wider transition-all ${
+                  className={`py-1.5 px-2 rounded-md border text-2xs font-bold uppercase tracking-wider transition-all ${
                     priority === p
                       ? p === "critical"
                         ? "bg-rose text-white border-rose shadow-sm"
@@ -304,7 +304,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                 onChange={(e) => setPromptText(e.target.value)}
                 required
               />
-              <div className="text-[11px] text-ink-4 mt-1 flex items-center justify-between">
+              <div className="text-2xs text-ink-4 mt-1 flex items-center justify-between">
                 <span>💡 Tip: Press <b>Ctrl + V</b> repeatedly to paste multiple screenshots!</span>
                 <span className="font-mono">{promptText.length} chars</span>
               </div>
@@ -318,7 +318,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
               <span>Current Page:</span>
               <span className="font-mono text-ink font-medium truncate">{pathname}</span>
             </div>
-            <span className="text-[10px] uppercase font-bold text-emerald flex-shrink-0 ml-2">Auto-Captured</span>
+            <span className="text-3xs uppercase font-bold text-emerald flex-shrink-0 ml-2">Auto-Captured</span>
           </div>
 
           {/* MULTIPLE Screenshot Attachments (Ctrl + V / Upload / Auto Capture) */}
@@ -346,7 +346,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-ink truncate">{s.name}</p>
-                    <p className="text-[10px] text-emerald font-bold flex items-center gap-1 mt-0.5">
+                    <p className="text-3xs text-emerald font-bold flex items-center gap-1 mt-0.5">
                       <Icon name="check" size={12} />
                       <span>Screen #{idx + 1} Attached & Ready</span>
                     </p>

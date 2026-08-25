@@ -155,12 +155,12 @@ export function InboundBillsQueue() {
                     <div className="text-sm text-ink truncate">
                       {f?.vendor_name || r.subject || "(no subject)"}
                     </div>
-                    <div className="text-[11px] text-ink-3 font-mono truncate">
+                    <div className="text-2xs text-ink-3 font-mono truncate">
                       {r.from_email} · {new Date(r.created_at).toLocaleDateString("en-IN")}
                     </div>
 
                     {f ? (
-                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink-2">
+                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-2">
                         <span>Bill no: <b>{f.bill_no || "—"}</b></span>
                         <span>Date: <b>{f.bill_date || "—"}</b></span>
                         <span>Subtotal: <b>{money(f.subtotal, cur)}</b></span>
@@ -169,7 +169,7 @@ export function InboundBillsQueue() {
                         {cur !== "INR" && <Badge kind="warning" size="sm">You&apos;ll enter today&apos;s ₹ rate</Badge>}
                       </div>
                     ) : (
-                      <div className="mt-1.5 text-[11px] text-amber-ink">
+                      <div className="mt-1.5 text-2xs text-amber-ink">
                         Could not be read automatically — open the file and enter it by hand.
                       </div>
                     )}

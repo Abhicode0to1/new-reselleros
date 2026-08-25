@@ -42,7 +42,7 @@ export function AmendmentHistory({ amendments, currentSeats }: {
   if (amendments.length === 0) {
     return (
       <div className="mt-4 border-t border-hairline pt-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Contract changes</p>
+        <p className="text-2xs font-semibold uppercase tracking-wider text-ink-3">Contract changes</p>
         <p className="mt-1 text-sm text-ink-3">
           Nothing has changed on this contract since the ledger started.
         </p>
@@ -53,14 +53,14 @@ export function AmendmentHistory({ amendments, currentSeats }: {
   return (
     <div className="mt-4 border-t border-hairline pt-4">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Contract changes</p>
-        <span className="text-[10px] text-ink-3">{amendments.length} recorded · cannot be edited</span>
+        <p className="text-2xs font-semibold uppercase tracking-wider text-ink-3">Contract changes</p>
+        <span className="text-3xs text-ink-3">{amendments.length} recorded · cannot be edited</span>
       </div>
 
       {reconciles === false && (
         <div className="mt-2 flex items-start gap-1.5 rounded-md border border-rose/40 bg-rose-soft/40 px-2.5 py-1.5">
           <Icon name="alert" size={11} className="mt-[3px] shrink-0 text-rose" />
-          <p className="text-[11px] leading-snug text-ink-2">
+          <p className="text-2xs leading-snug text-ink-2">
             The last recorded seat count does not match this subscription&apos;s {currentSeats}.
             Seats moved without being recorded — worth looking into before relying on this history.
           </p>
@@ -75,7 +75,7 @@ export function AmendmentHistory({ amendments, currentSeats }: {
               <div className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-hairline-strong" />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="text-[11px] font-medium text-ink-2">{formatDate(a.created_at)}</span>
+                  <span className="text-2xs font-medium text-ink-2">{formatDate(a.created_at)}</span>
                   {a.source === "system" && <Badge kind="muted" size="sm">automatic</Badge>}
                 </div>
                 {lines.map((l) => (
@@ -83,7 +83,7 @@ export function AmendmentHistory({ amendments, currentSeats }: {
                     {l.text}
                   </p>
                 ))}
-                <p className="text-[10px] text-ink-3">{amendmentActor(a)}</p>
+                <p className="text-3xs text-ink-3">{amendmentActor(a)}</p>
               </div>
             </li>
           );

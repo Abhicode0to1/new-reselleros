@@ -71,7 +71,7 @@ export function BulkMarkPaidDialog({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[10px] text-ink-3 mt-1">
+            <p className="text-3xs text-ink-3 mt-1">
               Paying by cash? Use each row&apos;s own <b>Mark paid</b> so the right petty-cash account is deducted.
             </p>
           </FormField>

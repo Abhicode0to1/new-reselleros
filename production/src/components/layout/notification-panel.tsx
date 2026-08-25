@@ -164,7 +164,7 @@ export function NotificationPanel({
         <SheetHeader className="!p-4 flex flex-row items-center justify-between gap-2 border-b border-hairline">
           <div>
             <SheetTitle className="text-base">Notifications</SheetTitle>
-            <SheetDescription className="text-[11px] mt-0.5">
+            <SheetDescription className="text-2xs mt-0.5">
               {items.length === 0
                 ? "You're all caught up"
                 : unreadCount > 0
@@ -235,7 +235,7 @@ export function NotificationPanel({
                     >
                       {n.title}
                     </div>
-                    <div className="text-[11px] text-ink-3 mt-1 leading-snug">{n.meta}</div>
+                    <div className="text-2xs text-ink-3 mt-1 leading-snug">{n.meta}</div>
                   </div>
                 </button>
                 {n.wishHref ? (
@@ -244,7 +244,7 @@ export function NotificationPanel({
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="shrink-0 self-center inline-flex items-center gap-1 rounded-md border border-emerald/30 text-emerald text-[11px] font-medium px-2 py-1 hover:bg-emerald-soft/50 transition-colors"
+                    className="shrink-0 self-center inline-flex items-center gap-1 rounded-md border border-emerald/30 text-emerald text-2xs font-medium px-2 py-1 hover:bg-emerald-soft/50 transition-colors"
                     aria-label="Send WhatsApp wish"
                   >
                     <Icon name="whatsapp" size={13} /> Wish

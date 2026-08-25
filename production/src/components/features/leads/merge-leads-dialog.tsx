@@ -121,7 +121,7 @@ export function MergeLeadsDialog({
                     ) : (
                       <Badge kind="muted" size="sm">will merge in</Badge>
                     )}
-                    <span className="text-[10px] font-mono text-ink-3">{l.id}</span>
+                    <span className="text-3xs font-mono text-ink-3">{l.id}</span>
                   </div>
                   <div className="text-xs text-ink-2 mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5">
                     <span className="truncate"><Icon name="user" size={10} className="inline text-ink-3 mr-1" />{l.contact_name || "—"}</span>
