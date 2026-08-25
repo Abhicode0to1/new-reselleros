@@ -39,6 +39,7 @@ import { renewalStateLabel, renewalStateTone } from "@/lib/renewals/cadence";
 import { TrialsExpiringCard } from "@/components/features/trials/trials-expiring-card";
 import { GettingStartedCard } from "@/components/features/dashboard/getting-started-card";
 import { MoneyHealthCard } from "@/components/features/dashboard/money-health-card";
+import { AiPerformanceCard } from "@/components/features/dashboard/ai-performance-card";
 import { PriorityActionHub } from "@/components/features/dashboard/priority-action-hub";
 import { PendingJoinRequestsCard } from "@/components/features/team/pending-join-requests-card";
 import { Badge } from "@/components/ui/badge";
@@ -563,6 +564,12 @@ export default function DashboardPage() {
           being collected and never recorded outranks every other thing on this
           page. Renders nothing for non-owners. */}
       <MoneyHealthCard />
+
+      {/* What the AI did. Renders nothing for a non-owner and nothing when it has done
+          nothing — see ai-performance-card.tsx. */}
+      <div className="mb-4">
+        <AiPerformanceCard />
+      </div>
 
       {/* People waiting to be let in. Above onboarding on purpose: every hour this
           sits unanswered is an hour a colleague is locked out, and their obvious
