@@ -37,6 +37,7 @@ import { createClient as createBareClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { createAdminClient } from "@/lib/supabase/server";
 import { decideAutoReply } from "./auto-reply";
+import { businessDomainFromEmail } from "@/lib/leads/grading";
 import { runSalesAgent, loadSalesCatalog, recordSalesTurn } from "./sales-agent.server";
 import { dispatchSalesDecision } from "./actions/quote-dispatcher";
 import { cancelPendingLoops, scheduleSalesLoop } from "./sales-loops.server";
@@ -154,9 +155,26 @@ export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<voi
     sellerName: args.sellerName,
     sellerEmail: args.fromEmail,
     extraAuthorisedTotals: quote.totals,
-    /* The customer own domain, so the agent can observe what their mail runs on today. The
-       lookup and its guard live in sales-agent.server.ts — see observeDomain there. */
-    domain: lead.domain ?? null,
+    /* The customer's own domain, so the agent can observe what their mail runs on today. The
+       lookup and its guard live in sales-agent.server.ts — see observeDomain there.
+
+       ─── THE COLUMN IS EMPTY ON EVERY LEAD THIS PATH EVER SEES ────────────────
+       Measured 25 Aug 2026: all 28 leads in the live table have `domain` NULL. It is only ever
+       written by the trial and public-checkout routes, which ask for it on a form — and this
+       function runs on leads created by the inbound EMAIL and WHATSAPP webhooks, which never
+       set it. So `observeDomain` has been receiving null on every real run, and the domain
+       observation and the switch/trade-in block have never once fired on the path they were
+       built for. Both looked finished and both were dark.
+
+       The domain was in the contact address the whole time. `businessDomainFromEmail` returns
+       null for a free mailbox rather than "gmail.com", because that domain is Google's and not
+       theirs — telling a customer what gmail.com's MX says would be a machine reading the
+       obvious back to them, and no part of a switch conversation applies to it.
+
+       The column still wins when it is set: a domain somebody typed on the checkout form is a
+       deliberate statement, while one derived from a `From:` header is an inference — and a
+       contact may well write from a different domain than the one they are buying for. */
+    domain: lead.domain?.trim() || businessDomainFromEmail(args.customerContact),
     /* Now needed TWICE and by two different guards. decideAutoSend uses it to refuse a quote
        built on a transcribed seat count; the qualifier uses it to refuse trusting one in the
        first place. Threading it here rather than only at the dispatcher means the doubt reaches
