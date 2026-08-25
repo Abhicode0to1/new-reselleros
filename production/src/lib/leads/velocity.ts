@@ -69,13 +69,16 @@ export function stageAge(
      problem, and flagging it would train people to ignore the badge. */
   const stale = isOpenStage(l.stage) && days >= slaDays;
 
+  /* `1 days` was showing on any lead one day into a stage. */
+  const d = days === 1 ? "1 day" : `${days} days`;
+
   return {
     days,
     stale,
     label: `${days}d in ${stageName}`,
     title: stale
-      ? `${days} days in ${stageName} with no stage movement — past the ${slaDays}-day mark. Either it moved and nobody recorded it, or it needs a nudge.`
-      : `${days} days in ${stageName}.`,
+      ? `${d} in ${stageName} with no stage movement — past the ${slaDays}-day mark. Either it moved and nobody recorded it, or it needs a nudge.`
+      : `${d} in ${stageName}.`,
   };
 }
 

@@ -31,7 +31,7 @@ import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead } from "@/lib/qu
 import { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { InlineCell } from "@/components/features/leads/inline-cell";
 import { LossReasonsCard } from "@/components/features/leads/loss-reasons-card";
-import { parseRupeeInput, parsePriority, parseFollowUpDate, PRIORITIES, type Priority } from "@/lib/leads/inline-edit";
+import { parseRupeeInput, parseFollowUpDate } from "@/lib/leads/inline-edit";
 import { looksLikeJunk } from "@/lib/leads/junk";
 import { MarkJunkDialog } from "@/components/features/leads/mark-junk-dialog";
 import { qualification } from "@/lib/leads/qualification";
@@ -55,7 +55,7 @@ import { LeadsSmartViews, type SmartView } from "@/components/features/leads/lea
 import { PriorityCallQueue } from "@/components/features/leads/priority-call-queue";
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
 import { localDateISO } from "@/lib/leads/outcomes";
-import { stageProbability, winRate } from "@/lib/leads/forecast";
+import { winRate } from "@/lib/leads/forecast";
 import { rowStageOptions, isStageLocked } from "@/lib/leads/stage-options";
 import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
 import { stageAge, staleDeals } from "@/lib/leads/velocity";
@@ -3229,10 +3229,10 @@ function daysSince(iso: string): number {
 // Contact folded under the company name and Last update went entirely, so their 21%
 // is redistributed — most of it to company, which now carries the name, the intent
 // badge and the contact line, and a little to stage, whose select was already tight.
-const LEADLIST_COL_ORDER = ["select", "company", "stage", "plan", "value", "priority", "followup", "closedate", "actions"];
+const LEADLIST_COL_ORDER = ["select", "company", "stage", "plan", "value", "followup", "actions"];
 const LEADLIST_COL_WIDTHS: Record<string, string> = {
-  select: "3%", company: "30%", stage: "12%", plan: "13%",
-  value: "10%", priority: "8%", followup: "8%", closedate: "9%", actions: "7%",
+  select: "3%", company: "28%", stage: "15%", plan: "22%",
+  value: "14%", followup: "9%", actions: "9%",
 };
 
 function LeadListView({
@@ -3490,17 +3490,7 @@ function LeadListView({
             <SortHeader col="stage" label="Stage" />
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Plan</th>
             <SortHeader col="value" label="Value" align="right" />
-            <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Priority</th>
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Follow-up</th>
-            {/* Close date is a SEPARATE column from Follow-up, not a rename of it. A deal
-                can be followed up weekly for two months and still be expected to close in
-                March; one column for both makes both unreadable. */}
-            <th
-              className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left"
-              title="When the rep expects this deal to close. Drives the weighted forecast."
-            >
-              Close date
-            </th>
             {/* Actions column — quick action icons on row hover. */}
             <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-right">
               <span className="sr-only">Quick actions</span>
@@ -3583,19 +3573,19 @@ function LeadListView({
                     <div className="min-w-0">
                       {/* Above the name rather than beside it: it reads first, and it cannot push a
                       long company name into an ellipsis the way an inline badge did. */}
-                      <span
-                      title={`${intent.label} — ${intent.reason}`}
-                      className={cn(
-                      "shrink-0 inline-flex items-center gap-0.5 rounded-full text-3xs font-semibold px-1.5 py-0.5 leading-none cursor-help",
-                      intent.tier === "hot"  && "bg-rose-soft text-rose-ink",
-                      intent.tier === "warm" && "bg-amber-soft text-amber-ink",
-                      intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
-                      )}
-                      >
-                      {intent.tier === "hot" ? "🔥" : intent.tier === "warm" ? "⚡" : "❄️"} {intent.label}
-                      </span>
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium text-ink truncate" title={lead.id}>{lead.company}</span>
+                        <span
+                        title={`${intent.label} — ${intent.reason}`}
+                        className={cn(
+                        "shrink-0 inline-flex items-center gap-0.5 rounded-full text-3xs font-semibold px-1.5 py-0.5 leading-none cursor-help",
+                        intent.tier === "hot"  && "bg-rose-soft text-rose-ink",
+                        intent.tier === "warm" && "bg-amber-soft text-amber-ink",
+                        intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
+                        )}
+                        >
+                        {intent.tier === "hot" ? "🔥" : intent.tier === "warm" ? "⚡" : "❄️"} {intent.label}
+                        </span>
                         {/* Intent tier — replaces the old binary "Hot" pill.
                             Cold deliberately outranks Hot (see heat.ts): a big
                             deal nobody has touched in 10 days is at risk, not
@@ -3625,11 +3615,17 @@ function LeadListView({
                       {/* Contact under the name, as /customers does. The lead's internal id used to sit
                           here; it is on the company name's tooltip now — a handle for support, not
                           something anyone reads down a column of rows. */}
+                      {/* Name and number on one line, email on its own beneath — asked for on 26 Aug.
+                          It puts the cell back to three lines (~85px a row against ~65px), which is a
+                          real cost on a page whose complaint was that leads had no room; Pardeep's call,
+                          made after seeing both. Empty parts drop out rather than leaving stray dots. */}
                       <div className="text-2xs text-ink-3 truncate">
-                        {[lead.contact_name?.trim(), lead.contact_phone?.trim(), lead.contact_email?.trim()]
-                          .filter(Boolean)
-                          .join(" · ") || "no contact details"}
+                        {[lead.contact_name?.trim(), lead.contact_phone?.trim()].filter(Boolean).join(" · ") ||
+                          "no contact name or number"}
                       </div>
+                      {lead.contact_email?.trim() ? (
+                        <div className="text-2xs text-ink-3 truncate">{lead.contact_email.trim()}</div>
+                      ) : null}
                       {(() => {
                         const tk = openTaskByLead.get(lead.id);
                         if (!tk) return null;
@@ -3758,30 +3754,6 @@ function LeadListView({
                   />
                 </td>
                 {/* Priority — inline select. */}
-                <td className="px-3 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
-                  <InlineCell<Priority>
-                    value={(lead.priority ?? "medium") as Priority}
-                    ariaLabel={`Priority for ${lead.company}`}
-                    toInput={(v) => v}
-                    parse={parsePriority}
-                    options={PRIORITIES.map((p) => ({ value: p, label: p[0].toUpperCase() + p.slice(1) }))}
-                    onSave={(v) => updateLead.mutate({ id: lead.id, patch: { priority: v } })}
-                    display={
-                      <span className={cn(
-                        "inline-flex items-center gap-1 text-xs",
-                        lead.priority === "high" ? "text-rose font-semibold"
-                        : lead.priority === "low" ? "text-ink-3"
-                        : "text-ink-2",
-                      )}>
-                        <span className={cn(
-                          "w-1.5 h-1.5 rounded-full",
-                          lead.priority === "high" ? "bg-rose" : lead.priority === "low" ? "bg-slate" : "bg-amber",
-                        )} />
-                        {(lead.priority ?? "medium").replace(/^./, (c) => c.toUpperCase())}
-                      </span>
-                    }
-                  />
-                </td>
                 {/* Follow-up date — inline date picker. Overdue reads rose so the
                     column doubles as a "who needs chasing today" scan. */}
                 <td className="px-3 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
@@ -3807,24 +3779,6 @@ function LeadListView({
                 {/* Expected close date. An empty one is not styled as an error — most
                     leads legitimately have none — but the forecast counts it as undated
                     and says so, so the gap is visible somewhere rather than nowhere. */}
-                <td className="px-3 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
-                  <InlineCell<string | null>
-                    value={lead.expected_close_date ?? null}
-                    ariaLabel={`Expected close date for ${lead.company}`}
-                    inputType="date"
-                    toInput={(v) => v ?? ""}
-                    parse={parseFollowUpDate}
-                    onSave={(v) => updateLead.mutate({ id: lead.id, patch: { expected_close_date: v } })}
-                    display={
-                      lead.expected_close_date
-                        ? <span className="text-xs tabular-nums text-ink-2">
-                            {formatDate(lead.expected_close_date)}
-                            <span className="ml-1 text-ink-4">· {stageProbability(lead.stage)}%</span>
-                          </span>
-                        : <span className="text-ink-4 text-xs" title="No date set — counted as undated in the forecast">—</span>
-                    }
-                  />
-                </td>
                 {/* Quick actions — dark panel that opens from the ⋯ (hover/click/
                     focus) and stays open while the panel itself is hovered. */}
                 <RowActions lead={lead} isSelected={isSelected} onSendQuote={onSendQuote} onFollowUp={onFollowUp} onWhatsApp={onWhatsApp} />
