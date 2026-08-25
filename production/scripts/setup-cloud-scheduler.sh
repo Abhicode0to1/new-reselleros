@@ -103,6 +103,24 @@ JOBS=(
   # above: the dial stops what the app sends OUT to other people, and must never be able to
   # silence what the app says TO US.
   "resellersos-ai-support-sla|*/15 * * * *|/api/cron/ai-support-sla|Close silent support tickets; alert on unassigned escalations"
+  # 10:30 IST, once a day, weekdays only — and every part of that is deliberate.
+  #
+  # ONCE: the job selects subscriptions renewing on an EXACT date five days out, so each one
+  # is a candidate exactly once. A second run the same day would find the same cohort and,
+  # were it not for the 24-hour gap in decideTelecall, ring them twice.
+  #
+  # 10:30, not 09:00 like the mail crons: this one RINGS A PHONE. Nine in the morning is
+  # somebody's commute. It also has to sit inside the quiet-hours window the app already
+  # obeys (09:00–19:00 IST) with room to spare, because a run that starts near the edge of
+  # that window has its later calls refused by the clock.
+  #
+  # Mon–Fri, not Mon–Sat: quietHoursDecision treats Saturday as a weekend and would refuse
+  # every call, so a Saturday entry would be a job that exists to be turned down.
+  #
+  # Safe to enable before anybody trusts it: `telecall.place` ships as `hold`, so until
+  # somebody moves that dial from /automation this job prepares each call — number, script,
+  # the figures it is allowed to quote — files it on the call record, and dials nothing.
+  "resellersos-ai-telecall-renewals|30 10 * * 1-5|/api/cron/ai-telecall-renewals|AI voice reminder for subscriptions renewing in 5 days"
 )
 
 echo "Region:  $REGION"

@@ -124,6 +124,33 @@ export const AI_ACTIONS = {
     today: "hold",
     supports: ["off", "hold", "auto"],
   },
+  "telecall.place": {
+    label: "Ring a customer with the AI voice agent",
+    /* WAS not declared at all, because nothing could ring anybody. Built on 25 Aug 2026 —
+       lib/ai/telecaller-prompt.ts, lib/telecall/provider.ts and the two /api/v1/telecalling
+       routes — so the action exists now and has to be declarable.
+
+       `hold`, and of everything in this registry it is the one to leave there longest. Each
+       action above sends TEXT: an email or a WhatsApp message, which the customer reads at
+       their own moment, which can be followed by a correction sitting next to the original,
+       and which exists as a draft a person can read before it goes. A phone call has none of
+       those properties. It interrupts, it cannot be edited, it cannot be recalled, and the
+       first draft a human ever sees is a transcript of something the customer already heard.
+
+       So `hold` here means something specific and useful rather than "off with extra steps":
+       the app resolves the number, reads the catalogue, builds the whole script and the
+       dynamic variables, writes the row to `ai_telecall_logs` with status `held` — and dials
+       nothing. The operator opens that row, sees exactly what would have been said and to
+       whom, and rings by hand in the meantime. That is the same bargain `support.reply.send`
+       made: useful at hold, so nobody is tempted to move the dial just to get the value.
+
+       There is a second reason, and it is not ours to overrule. An unsolicited commercial
+       call in India is the CALLER's regulatory problem, not the telephony vendor's. Moving
+       this to `auto` is a decision about the company's exposure, and it belongs to Pardeep at
+       /automation rather than to whoever merges this. */
+    today: "hold",
+    supports: ["off", "hold", "auto"],
+  },
   /* There is deliberately NO entry for the escalation notice or the SLA breach alert, and it
      is the same rule that removed `compliance.send`: those go to OUR OWN support desk — "this
      ticket has waited 40 minutes and nobody has taken it" — not to a customer. This dial stops
