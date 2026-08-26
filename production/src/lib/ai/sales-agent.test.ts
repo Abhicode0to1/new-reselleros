@@ -734,6 +734,74 @@ describe("the two claims the prompt authorises", () => {
     expect(maskAuthorisedSellingPoints("24x7 support")).not.toContain("24x7");
     expect(maskAuthorisedSellingPoints("24 * 7 support")).not.toMatch(/24\s*\*\s*7/);
   });
+
+  /* ── The rate card's own volume discount (26 Aug 2026) ──────────────────────
+     Measured on Q-ADPL-2026-27-0017, the first real quotation this agent sent: the email
+     said "70 seats at Rs 3,240 per seat per year, plus 18% GST" — Rs 2,67,624 by the
+     reader's own arithmetic — while the document totalled Rs 2,54,243, because the 5% band
+     for 51–100 seats was applied and never mentioned.
+
+     The prompt now requires naming it. Without the mask that instruction would hand over
+     EVERY discounted quotation, which is the dead-feature shape this whole function exists
+     to prevent. The tests that matter here are the four that must still HOLD. */
+
+  const AUTHORISED = 5;
+
+  it("excuses the slab this deal actually gets", () => {
+    const body = "Rs 3,240 per seat per year, less the 5% volume discount for 51-100 seats.";
+    expect(maskAuthorisedSellingPoints(body, AUTHORISED)).not.toMatch(/\bdiscount\b/i);
+  });
+
+  it("STILL HOLDS a discount with no percentage — 'I can give you a discount'", () => {
+    /* The sentence a salesperson is allowed to say and a machine is not. No figure means
+       nothing the app computed, so there is nothing authorised to excuse. */
+    const body = "I can give you a discount on this.";
+    expect(maskAuthorisedSellingPoints(body, AUTHORISED)).toMatch(/\bdiscount\b/i);
+  });
+
+  it("STILL HOLDS a percentage the rate card did not give — 10% when the slab is 5%", () => {
+    /* The model rounding up, or inventing, or conceding to win an argument. This is the case
+       the whole guard exists for, and the exemption must not reach it. */
+    const body = "As a special case I can offer a 10% discount.";
+    expect(maskAuthorisedSellingPoints(body, AUTHORISED)).toMatch(/\bdiscount\b/i);
+  });
+
+  it("STILL HOLDS when the slab authorises nothing — 1-20 seats is list price", () => {
+    /* Under 21 seats the rate card gives 0%. A reply naming any discount there is inventing
+       one, so the caller passes null and nothing is excused. */
+    const body = "Happy to apply a 5% discount for you.";
+    expect(maskAuthorisedSellingPoints(body, null)).toMatch(/\bdiscount\b/i);
+    expect(maskAuthorisedSellingPoints(body, 0)).toMatch(/\bdiscount\b/i);
+    expect(maskAuthorisedSellingPoints(body)).toMatch(/\bdiscount\b/i);
+  });
+
+  it("STILL HOLDS a discount in a DIFFERENT sentence from the authorised figure", () => {
+    /* Sentence-scoped, like the migration/`free` rule above it. Otherwise one authorised
+       percentage anywhere in the mail would excuse every other promise in it. */
+    const body = "The volume rate is 5% for this band. I can also throw in a discount.";
+    expect(maskAuthorisedSellingPoints(body, AUTHORISED)).toMatch(/\bdiscount\b/i);
+  });
+
+  it("does not accept a near-miss figure — 5.5% against an authorised 5", () => {
+    /* The slabs are whole percents. Accepting a decimal that merely starts with the right
+       digits is precisely the widening this file warns about elsewhere. */
+    const body = "Applying a 5.5% discount for this size.";
+    expect(maskAuthorisedSellingPoints(body, AUTHORISED)).toMatch(/\bdiscount\b/i);
+  });
+
+  it("reads 'per cent' and 'percent' as well as '%'", () => {
+    for (const w of ["5%", "5 percent", "5 per cent"]) {
+      const body = `A ${w} volume discount applies at this seat count.`;
+      expect(maskAuthorisedSellingPoints(body, AUTHORISED), w).not.toMatch(/\bdiscount\b/i);
+    }
+  });
+
+  it("changes nothing when no discount word is present", () => {
+    /* The mask must stay a no-op on the ordinary reply — same character-for-character rule
+       the test above pins for the other two exemptions. */
+    const body = "Rs 3,240 per seat per year, plus 18% GST. Shall I raise the quotation?";
+    expect(maskAuthorisedSellingPoints(body, AUTHORISED)).toBe(body);
+  });
 });
 
 /* ─────────────────────────────────────────────────────────────────────────────

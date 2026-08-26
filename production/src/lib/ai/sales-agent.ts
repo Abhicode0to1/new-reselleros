@@ -515,6 +515,18 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
     slabLines().join("\n"),
     "You do not decide a discount; you read it off this table by seat count. Never invent a",
     "percentage, never round one up, and never offer a discount to win an argument.",
+    /* ── STATE the slab, do not silently apply it (26 Aug 2026) ────────────────
+       Measured on the first real quotation this agent sent, Q-ADPL-2026-27-0017: the email
+       said "70 seats at Rs 3,240 per seat per year, plus 18% GST" — which reads as
+       Rs 2,67,624 — while the quote it referenced totalled Rs 2,54,243, because the rate
+       card's 5% band for 51–100 seats had been applied to the document and never mentioned
+       in the words.
+       Nothing was overcharged; the customer's own arithmetic simply did not reach our
+       number, and a quotation the reader cannot reconcile is one they have to ask about.
+       Naming it also sells: 5% off list is a reason to buy, and we were hiding it. */
+    "When the table gives this seat count a discount, SAY SO in the reply — name the",
+    "percentage and the list price it comes off, so the total can be checked by hand. A",
+    "quotation whose arithmetic the reader cannot follow is one they have to query.",
     "",
     ...(domainFacts && domainFacts.length > 0
       ? [
@@ -700,19 +712,76 @@ export interface HandoverResult {
  * pinning that boundary. Same shape as `support-agent.ts`'s maskSupportIdioms, which exists
  * for the same reason on the support side.
  */
-export function maskAuthorisedSellingPoints(text: string): string {
+export function maskAuthorisedSellingPoints(
+  text: string,
+  /**
+   * The rate card's OWN discount for this deal's seat count, or null when the slab gives
+   * none. Passing it is what makes the third exemption below narrow enough to be safe —
+   * without it, no discount sentence is ever exempt, which is the behaviour before 26 Aug.
+   */
+  authorisedDiscountPct?: number | null,
+): string {
   /* Round-the-clock support. `24 x 7` and `24*7` included because a model writes all three. */
   let out = text.replace(/\b24\s*[/x*]\s*7\b/gi, "round-the-clock");
 
   /* Sentence by sentence, so "free" is exempt only where migration is the subject. Splitting
      on the punctuation KEEPS it (lookbehind), so re-joining reproduces the text exactly —
-     a mask that reflows the body would change what the promise check reads elsewhere. */
-  out = out
-    .split(/(?<=[.!?\n])/)
+     a mask that reflows the body would change what the promise check reads elsewhere.
+
+     `(?!\d)` — do NOT break on a full stop that sits inside a number. Found by this file's own
+     test: without it "a 5.5% discount" splits into "a 5.5" + "5% discount…", and the second
+     fragment then BEGINS with what looks like a whole authorised 5% — so a 5.5% concession the
+     app never computed would have been excused by the rule below. The same trap applies here:
+     a decimal could push "free" out of the migration sentence it belongs to. */
+  const sentences = (s: string): string[] => s.split(/(?<=[.!?\n])(?!\d)/);
+
+  out = sentences(out)
     .map((sentence) =>
       /\bmigrat/i.test(sentence) ? sentence.replace(/\bfree\b/gi, "included") : sentence,
     )
     .join("");
+
+  /* ── THIRD EXEMPTION: the rate card's own volume discount (26 Aug 2026) ─────
+     The prompt now REQUIRES the reply to name the slab it applied, because a quotation whose
+     arithmetic the reader cannot follow is one they have to query — measured on
+     Q-ADPL-2026-27-0017, where the words said Rs 3,240 + 18% GST and the document totalled
+     Rs 2,54,243 after an unmentioned 5%.
+     Without this mask that instruction would hand over EVERY discounted quotation, exactly as
+     "24/7" and "free migration" once did. The prompt authorising a phrase and the guard
+     refusing it is the same dead-feature shape this function was written to fix.
+
+     ⚠️ HOW NARROW, AND WHY THAT MATTERS MORE THAN THE FEATURE:
+     the sentence must name THIS deal's authorised percentage. So:
+
+       "5% volume discount for 51–100 seats"  slab 5  → exempt
+       "I can give you a discount"            no pct  → still holds
+       "10% off for you"                      slab 5  → still holds
+       "5% discount"                          slab 0  → still holds (nothing authorised)
+
+     A discount the model invented, rounded up, or offered to win an argument is refused as
+     before. Only the figure the APP itself computed and applied to the document is excused,
+     which is the same principle as `allowedMoney`: the guard trusts a number the app derived,
+     never one the model chose. */
+  if (typeof authorisedDiscountPct === "number" && authorisedDiscountPct > 0) {
+    /* The lookbehind is the whole guard, and the test that demanded it is worth keeping in
+       mind: `\b5\s*%` MATCHES "5.5%" — the boundary sits between the dot and the second 5, so
+       an authorised 5 would have excused a 5.5% concession the app never computed. Exactly
+       the widening this file warns about elsewhere, found by its own test.
+
+       So: no digit and no decimal point may precede the figure. The slabs are whole percents;
+       anything with a fraction in it did not come from `slabFor`. */
+    const pct = new RegExp(
+      String.raw`(?<![\d.])${authorisedDiscountPct}\s*(?:%|per\s*cent\b|percent\b)`,
+      "i",
+    );
+    out = sentences(out)
+      .map((sentence) =>
+        pct.test(sentence)
+          ? sentence.replace(/\bdiscount(?:s|ed|ing)?\b/gi, "volume rate")
+          : sentence,
+      )
+      .join("");
+  }
 
   return out;
 }
@@ -794,11 +863,18 @@ export function applyHandoverRules(input: HandoverInput): HandoverResult {
      no authorised price list can excuse: a DATE we would have to meet, a DISCOUNT nobody
      approved, and a GUARANTEE we never gave. */
   const RELEVANT_PROMISE_KINDS = new Set(["date", "discount", "guarantee"]);
+  /* This deal's authorised slab percent, read from the SAME `slabFor` the quote path uses —
+     never a number written here. If those two ever disagreed, the guard would either refuse a
+     discount the document applied or excuse one it did not. */
+  const slabHere = effectiveSeats !== null ? slabFor(effectiveSeats) : null;
+  const authorisedDiscountPct =
+    slabHere && slabHere.kind === "slab" ? slabHere.slab.percent : null;
+
   const promises = findPromises(
     /* The prompt's own promise list, hidden from the check that would refuse it. Measured on
        the first live message: without this, "24/7" and "free migration" handed over every
        reply. See maskAuthorisedSellingPoints. */
-    maskAuthorisedSellingPoints(decision.generated_response.body_text),
+    maskAuthorisedSellingPoints(decision.generated_response.body_text, authorisedDiscountPct),
   ).findings.filter((f) => RELEVANT_PROMISE_KINDS.has(f.kind));
   if (promises.length > 0) {
     const what = promises.map((f) => `"${f.matched}"`).slice(0, 3).join("; ");
