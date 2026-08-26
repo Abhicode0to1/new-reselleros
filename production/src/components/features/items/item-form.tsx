@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { agentQuoteBlocker, headlineTier } from "@/lib/items/agent-sellable";
 import { Icon } from "@/components/ui/icon";
 import { useCreateItem, useUpdateItem } from "@/lib/queries/items";
 import { rupee } from "@/lib/utils";
@@ -175,8 +176,10 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item, reset]);
 
-  // Headline tier = annual if set, else monthly (used to populate legacy msrp/wholesale)
-  const headlineTier = prices.annual ?? prices.monthly ?? blankTier;
+  /* Neeche dikhne wale price preview ke liye. Yahan wahi `headlineTier()` chalta hai jo
+     save aur guard chalate hain — pehle is line par usi ka ek haath se likha copy tha, aur
+     do copy ka matlab hota ki ek din screen ek daam dikhaye aur DB me doosra jaye. */
+  const headlinePreview = headlineTier(prices);
 
   const onSubmit = async (data: FormData) => {
     // Strip tiers where both prices are 0 (treat as "not offered")
@@ -194,14 +197,30 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
       return;
     }
 
+    /* ── Guard: aisa Main plan save na ho jise AI kabhi quote na kar sake ──────────
+       Poori wajah aur naapi hui kahani `lib/items/agent-sellable.ts` me hai. Chhota roop:
+       `msrp` koi field nahi hai jo user bharta ho — wo sirf Annual/Monthly se banta hai,
+       aur USD headline nahi banta. To sirf USD bharne par item chup-chaap `msrp = 0` ke
+       saath save ho jata tha, list me dikhta tha, aur agent ke liye maujood hi nahi hota.
+
+       Faisla yahan nahi, us file me hai — taaki test use pakad sake. Guard `headline` ki
+       wahi value dekhta hai jo neeche save hoti hai; do alag hisaab do alag jawab dete. */
+    const headline = headlineTier(cleanPrices);
+    const blocker = agentQuoteBlocker(data.kind, cleanPrices);
+    if (blocker) {
+      alert(blocker);
+      return;
+    }
+
     // Distributor sanity: if marked partner-visible, must have a partner price
     if (isDistributor && isPartnerVisible && partnerPrice <= 0) {
       alert("Partner price required when SKU is marked visible to sub-resellers");
       return;
     }
 
-    // Auto-set legacy msrp/wholesale from the headline tier so downstream code keeps working
-    const headline = cleanPrices.annual ?? cleanPrices.monthly ?? blankTier;
+    /* `headline` upar tay ho chuka hai, guard ke saath — dekho wahan ka comment. Pehle wo
+       yahan bana tha, guard ke BAAD, aur isi kram ki wajah se guard likhna hi bhool gaya
+       tha: jis waqt validation hoti thi, us waqt `msrp` ka pata hi nahi hota tha. */
 
     // Partner fields only apply for distributor tenants. For other tenants we
     // leave them untouched (so sub-reseller catalogs don't get accidentally
@@ -506,12 +525,12 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
           )}
 
           {/* Headline summary */}
-          {headlineTier.msrp > 0 && (
+          {headlinePreview.msrp > 0 && (
             <div className="text-2xs text-ink-3 flex items-center gap-1.5">
               <Icon name="info" size={11} />
               Headline rate{" "}
-              <b className="text-ink">{rupee(headlineTier.msrp)}/seat/mo</b>{" "}
-              (= <b className="text-ink">{rupee(headlineTier.msrp * 12)}/seat/yr</b>){" "}
+              <b className="text-ink">{rupee(headlinePreview.msrp)}/seat/mo</b>{" "}
+              (= <b className="text-ink">{rupee(headlinePreview.msrp * 12)}/seat/yr</b>){" "}
               will appear in quotes, dashboards and the customer-facing PDF.
             </div>
           )}
