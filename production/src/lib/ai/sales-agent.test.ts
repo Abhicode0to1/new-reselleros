@@ -930,6 +930,25 @@ describe("handover_reason", () => {
     expect(SALES_AGENT_SYSTEM_PROMPT).toContain("no monthly rate in the catalogue");
   });
 
+  it("a handover writes the DRAFT to the timeline, not just the reason", () => {
+    /* 26 Aug 2026: a 60-seat enquiry handed over with "the draft says discount" and the draft
+       was discarded. Two costs, and the second is worse: the operator could not send it after
+       a read, and nobody could see WHICH sentence tripped the guard — which is the only thing
+       that says whether the guard was right. I hit this while debugging my own exemption rule.
+
+       The held-by-dial branch already did this and its comment already made the argument. This
+       pins the same thing for handover, where it matters more. */
+    const code = readFileSync(
+      join(process.cwd(), "src", "lib", "ai", "actions", "quote-dispatcher.ts"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+    /* Both branches must carry the body. Asserting a COUNT rather than presence, because the
+       failure mode was one branch having it and the other not. */
+    expect(code.match(/generated_response\.body_text/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(code).toMatch(/stopped and asked for a person[\s\S]{0,200}body_text/);
+  });
+
   it("the dispatcher stops claiming low confidence for a chosen handover", () => {
     /* Source scan: dispatchSalesDecision writes to the DB, so there is no unit seam. What is
        being protected is a SENTENCE an operator reads at 11pm to decide whether to take a lead

@@ -120,9 +120,27 @@ async function handOver(args: DispatchArgs, reason: string): Promise<DispatchRes
     return { outcome: "failed", detail: `Handover flag failed — ${flagged.error}`, followUp: null };
   }
 
+  /* ── The DRAFT goes on the timeline too, not just the reason ────────────────
+     The held-by-dial path a few lines below already does this, and its comment makes the
+     argument: "a held reply that only logged 'held' would tell the operator it happened and
+     never what it would have said." That argument was never carried across to handover, and
+     handover is the branch where it matters MORE — a dial-held reply is one a person meant to
+     review, while a handover is the agent saying it cannot finish this itself.
+
+     Measured 26 Aug 2026: a 60-seat enquiry handed over with "the draft says discount", and the
+     draft was gone. So neither the operator could send it after a read, nor could anyone see
+     WHICH sentence tripped the guard — and that sentence is the only thing that would say
+     whether the guard was right. I had to stop and add this before I could debug my own
+     exemption rule, which is the clearest possible sign it should have been here first.
+
+     `generated_response` is written even on HANDOVER_TO_HUMAN: the model drafts first and
+     chooses the action second, so there is a real reply here in almost every case. */
   await admin.from("lead_activities").insert({
     tenant_id: tenantId, lead_id: leadId, kind: "note",
-    detail: `AI sales agent stopped and asked for a person — ${reason}`,
+    detail:
+      `AI sales agent stopped and asked for a person — ${reason}\n\n` +
+      `Subject: ${args.decision.generated_response.email_subject}\n\n` +
+      args.decision.generated_response.body_text,
   });
 
   await logAiAction({
