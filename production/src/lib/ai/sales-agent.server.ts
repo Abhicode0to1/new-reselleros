@@ -22,7 +22,7 @@
  */
 import { createClient as createBareClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/supabase/database.types";
+import type { Database, ItemPrices } from "@/lib/supabase/database.types";
 import { resolveGeminiConfig, geminiJson } from "./gemini";
 import { lookupDomainMx } from "@/lib/dns/domain-inspect.server";
 import { identifyProvider, inspectionFacts } from "@/lib/dns/domain-inspect";
@@ -71,12 +71,33 @@ function bare(): SupabaseClient | null {
 /* ── The catalogue ───────────────────────────────────────────────────────── */
 
 /** Row shape we read out of `items`. Narrow on purpose — see loadSalesCatalog. */
+/**
+ * The monthly-flex tier's ₹/seat/MONTH, or null when the row has none.
+ *
+ * ─── WHY THE AGENT NEEDS THIS, 26 Aug 2026 ──────────────────────────────────
+ * A customer answered "monthly" on an 80-seat quotation and the agent handed over, because
+ * `SalesCatalogEntry` carried one rate — the annual tier — and it correctly refused to invent
+ * a monthly price. Meanwhile its own email had asked "annual or monthly billing?", so it was
+ * putting a question to customers that it could not act on either way.
+ *
+ * Per MONTH, not per year, and deliberately not run through `perSeatPerYear`: a monthly line's
+ * rate IS one month (commitment-rate.ts). Multiplying it here would hand the agent a
+ * twelvefold figure to quote, which is the error that file exists to police.
+ *
+ * A 0 is "not recorded", not "free" — the same reading `discountedRate` takes of a 0 cost.
+ */
+function flexRate(prices: ItemPrices | null): number | null {
+  const m = prices?.monthly;
+  return m && typeof m.msrp === "number" && m.msrp > 0 ? m.msrp : null;
+}
+
 interface CatalogRow {
   id: string | null;
   name: string | null;
   vendor: string | null;
   msrp: number | null;
   wholesale: number | null;
+  prices: ItemPrices | null;
 }
 
 /**
@@ -100,7 +121,7 @@ export async function loadSalesCatalog(
 ): Promise<SalesCatalogEntry[]> {
   const { data, error } = await admin
     .from("items")
-    .select("id, name, vendor, msrp, wholesale")
+    .select("id, name, vendor, msrp, wholesale, prices")
     .eq("tenant_id", tenantId)
     .eq("kind", "main")
     .eq("is_active", true)
@@ -126,6 +147,7 @@ export async function loadSalesCatalog(
       msrpPerSeatPerYear: perSeatPerYear(r.msrp),
       wholesalePerSeatPerYear:
         typeof r.wholesale === "number" ? perSeatPerYear(r.wholesale) : 0,
+      monthlyFlexPerSeatPerMonth: flexRate(r.prices),
     };
 
     /* Dropped, not corrected and not passed through. The agent can only quote what it can

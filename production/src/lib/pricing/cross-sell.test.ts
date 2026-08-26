@@ -18,6 +18,10 @@ const item = (name: string, vendor: string, msrp: number, wholesale: number): Sa
   vendor,
   msrpPerSeatPerYear: perSeatPerYear(msrp),
   wholesalePerSeatPerYear: perSeatPerYear(wholesale),
+  /* Null: these fixtures have no monthly-flex tier, which is what the live catalogue looked
+     like for most rows. Cross-sell prices off the annual rate, so a monthly figure here would
+     be an input the function under test never reads. */
+  monthlyFlexPerSeatPerMonth: null,
 });
 
 const CATALOG: SalesCatalogEntry[] = [

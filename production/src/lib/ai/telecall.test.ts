@@ -247,9 +247,9 @@ describe("classifyCall", () => {
 describe("authorisedCallFigures", () => {
   const CATALOGUE = [
     { sku: "GW-STD", name: "Google Workspace Business Standard", vendor: "google",
-      msrpPerSeatPerYear: 10368, wholesalePerSeatPerYear: 7440 },
+      msrpPerSeatPerYear: 10368, wholesalePerSeatPerYear: 7440, monthlyFlexPerSeatPerMonth: null },
     { sku: "GW-STR", name: "Google Workspace Business Starter", vendor: "google",
-      msrpPerSeatPerYear: 3240, wholesalePerSeatPerYear: 1320 },
+      msrpPerSeatPerYear: 3240, wholesalePerSeatPerYear: 1320, monthlyFlexPerSeatPerMonth: null },
   ];
 
   it("authorises the per-seat rates and anything the app computed itself", () => {

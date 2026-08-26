@@ -43,6 +43,7 @@ const CATALOGUE: SalesCatalogEntry[] = [
     vendor: "google",
     msrpPerSeatPerYear: 270,
     wholesalePerSeatPerYear: 110,
+    monthlyFlexPerSeatPerMonth: null,
   },
   {
     sku: "gw-standard",
@@ -50,6 +51,7 @@ const CATALOGUE: SalesCatalogEntry[] = [
     vendor: "google",
     msrpPerSeatPerYear: 864,
     wholesalePerSeatPerYear: 620,
+    monthlyFlexPerSeatPerMonth: null,
   },
 ];
 
@@ -214,7 +216,7 @@ describe("the prompt carries the catalogue and nothing it should not", () => {
       history: [],
       incoming: "How much?",
       /* 5% off 100 is exactly 95, which is this item's cost. */
-      catalog: [{ sku: "X", name: "Thin", vendor: "other", msrpPerSeatPerYear: 100, wholesalePerSeatPerYear: 95 }],
+      catalog: [{ sku: "X", name: "Thin", vendor: "other", msrpPerSeatPerYear: 100, wholesalePerSeatPerYear: 95, monthlyFlexPerSeatPerMonth: null }],
       sellerName: "ANUTECH",
       sellerEmail: "sales@anutech.in",
     });
@@ -833,6 +835,70 @@ describe("the two claims the prompt authorises", () => {
    finding that, and the log had pointed away from it the whole time.
    ───────────────────────────────────────────────────────────────────────────── */
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   The agent can answer a monthly-billing request.
+
+   Before this it could not. `SalesCatalogEntry` carried one rate — the annual tier — so when a
+   customer answered "monthly" on an 80-seat quotation the agent handed over, correctly
+   refusing to invent a price. Meanwhile its own email asked "annual or monthly billing?", so it
+   was putting a question to customers it could not act on either way.
+
+   Live figures, confirmed by Pardeep before any of this changed: annual ₹270/seat/month,
+   monthly-flex ₹325.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("the monthly-flex rate reaches the agent", () => {
+  const FLEX: SalesCatalogEntry[] = [
+    { ...CATALOGUE[0], msrpPerSeatPerYear: 3_240, monthlyFlexPerSeatPerMonth: 325 },
+  ];
+  const build = (catalog: SalesCatalogEntry[]) =>
+    buildSalesAgentPrompt({
+      lead: { ...LEAD, seats: 80 },
+      history: [],
+      incoming: "can we do monthly billing?",
+      catalog,
+      sellerName: "ANUTECH DIGITAL PVT LTD",
+      sellerEmail: "sales@anutech.in",
+    });
+
+  it("states the monthly rate, and says PER MONTH", () => {
+    /* The unit is the assertion. This field is per MONTH while its neighbours are per YEAR, and
+       reading one as the other is precisely the 24 Aug twelvefold under-quote. */
+    const p = build(FLEX);
+    expect(p.user).toContain("Rs 325");
+    expect(p.user).toMatch(/325[^\n]*per seat per MONTH/);
+  });
+
+  it("authorises 325 in allowedMoney — or the guard would refuse what we told it to say", () => {
+    /* Every entry in that list is there for this reason, and this file has learned it the hard
+       way twice: a figure the prompt supplies and the guard refuses hands over 100% of the
+       time, and the feature is dead the day it ships. */
+    expect(build(FLEX).allowedMoney).toContain(325);
+  });
+
+  it("does NOT authorise a monthly total, only the rate", () => {
+    /* 80 × 325 = 26,000 is a figure `planQuoteFromEnquiry` computes, not this file. Authorising
+       totals from a second source is the 24 Aug failure exactly: the guard's list and the
+       document came from different arithmetic and it approved a below-cost number. */
+    expect(build(FLEX).allowedMoney).not.toContain(26_000);
+  });
+
+  it("tells the model plainly when there is NO monthly price, instead of staying silent", () => {
+    /* Silence is what produced the handover with no reason. With no rate on file the agent must
+       still be able to answer — by saying a colleague will confirm it. */
+    const p = build([CATALOGUE[0]]);   // monthlyFlexPerSeatPerMonth: null
+    expect(p.user).toContain("NO monthly price is on file");
+    expect(p.user).toContain("a colleague will confirm");
+  });
+
+  it("never puts the monthly rate in the customer-facing per-YEAR position", () => {
+    /* A regression here would read as ₹325/seat/YEAR — a twelfth of the real price, quoted to
+       a customer. Cheap to assert, expensive to miss. */
+    const p = build(FLEX);
+    expect(p.user).not.toMatch(/Rs 325 per seat per year/i);
+  });
+});
+
 describe("handover_reason", () => {
   const raw = {
     customer_intent: "wants monthly billing",
@@ -905,7 +971,7 @@ describe("THIS DEAL'S VOLUME RATE is computed, not looked up", () => {
       lead: { ...LEAD, seats: 80 },
       history: [],
       incoming: "quote please",
-      catalog: [{ ...CATALOGUE[0], msrpPerSeatPerYear: 3240, wholesalePerSeatPerYear: 1320 }],
+      catalog: [{ ...CATALOGUE[0], msrpPerSeatPerYear: 3240, wholesalePerSeatPerYear: 1320, monthlyFlexPerSeatPerMonth: null }],
       sellerName: "ANUTECH DIGITAL PVT LTD",
       sellerEmail: "sales@anutech.in",
     }).user;
@@ -947,7 +1013,7 @@ describe("THIS DEAL'S VOLUME RATE is computed, not looked up", () => {
     /* discountedRate REFUSES a slab that lands at or below cost, and returns appliedPercent 0.
        Naming a discount the quote will not apply is the SAME bug this block fixes, in mirror
        image: words the document contradicts. Cost 3,100 against a 5%-discounted 3,078. */
-    const thin = [{ ...CATALOGUE[0], wholesalePerSeatPerYear: 3100 }];
+    const thin = [{ ...CATALOGUE[0], wholesalePerSeatPerYear: 3100, monthlyFlexPerSeatPerMonth: null }];
     const p = buildSalesAgentPrompt({
       lead: { ...LEAD, seats: 80 },
       history: [],
@@ -1054,8 +1120,8 @@ describe("a SKU priced below its own cost is withheld from the agent", () => {
 
 describe("authorised totals", () => {
   const CATALOG = [
-    { sku: "GW-STD", name: "Google Workspace Business Standard", vendor: "google", msrpPerSeatPerYear: 10368, wholesalePerSeatPerYear: 7440 },
-    { sku: "GW-PLS", name: "Google Workspace Business Plus", vendor: "google", msrpPerSeatPerYear: 16560, wholesalePerSeatPerYear: 13800 },
+    { sku: "GW-STD", name: "Google Workspace Business Standard", vendor: "google", msrpPerSeatPerYear: 10368, wholesalePerSeatPerYear: 7440, monthlyFlexPerSeatPerMonth: null },
+    { sku: "GW-PLS", name: "Google Workspace Business Plus", vendor: "google", msrpPerSeatPerYear: 16560, wholesalePerSeatPerYear: 13800, monthlyFlexPerSeatPerMonth: null },
   ];
 
   it("works out seats × price for the product on the lead", () => {

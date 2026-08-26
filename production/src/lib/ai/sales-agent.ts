@@ -146,6 +146,19 @@ export interface SalesCatalogEntry {
   msrpPerSeatPerYear: number;
   /** ₹/seat/YEAR we pay the vendor — `items.wholesale × 12`. Never shown to the customer. */
   wholesalePerSeatPerYear: number;
+  /**
+   * The monthly-flex tier's ₹/seat/**MONTH**, or null when the catalogue has none.
+   *
+   * PER MONTH while its two neighbours are per YEAR, and that asymmetry is the domain's, not a
+   * slip: a `monthly` commitment line carries one month's rate (commitment-rate.ts). Naming the
+   * unit in the field is the only defence — the 24 Aug under-quote was exactly a per-month
+   * figure read as per-year.
+   *
+   * Null means the agent must not name a monthly price. It then says a colleague will confirm
+   * one, which is what it did for every monthly request before this field existed — only now
+   * it says so on purpose rather than by handing over with no reason.
+   */
+  monthlyFlexPerSeatPerMonth: number | null;
 }
 
 export interface SalesAgentTurn {
@@ -464,6 +477,13 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
   const catalogueLines = catalog.map(
     (c) =>
       `- ${c.name} (${c.vendor}) — customer pays ${rupees(c.msrpPerSeatPerYear)} per seat per year` +
+      /* The flex tier, when there is one. Stated as per-MONTH in the same breath as the
+         per-year figure, because the model has to keep the two apart and the unit is the only
+         thing that tells them apart. Absent when the catalogue has none — and then the line
+         below tells the model plainly that it may not name one. */
+      (c.monthlyFlexPerSeatPerMonth !== null
+        ? `, or ${rupees(c.monthlyFlexPerSeatPerMonth)} per seat per MONTH on monthly billing (no commitment)`
+        : `, and NO monthly price is on file — if they want monthly billing, say a colleague will confirm the rate`) +
       ` [our cost ${rupees(c.wholesalePerSeatPerYear)} — INTERNAL, never state]`,
   );
 
@@ -657,6 +677,17 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
          flagged the upgrade price it had just told the agent to state would hand over every
          reply that mentioned one — the "24/7"/"free" failure, in money. */
       ...authorisedOfferFigures(offers, catalog),
+      /* The monthly-flex rate, for the same reason as every entry above it: the catalogue block
+         now TELLS the agent this price, so a guard that then refused it would hand over every
+         monthly reply — the feature dead on the day it shipped, which is the shape this file
+         keeps having to relearn.
+
+         Rate only, no multiples. A monthly TOTAL is `seats × rate`, and authorising totals here
+         would put a figure in the list that `planQuoteFromEnquiry` never computed — the 24 Aug
+         failure, where the guard's list came from a different source than the document. */
+      ...catalog.flatMap((c) =>
+        c.monthlyFlexPerSeatPerMonth !== null ? [c.monthlyFlexPerSeatPerMonth] : [],
+      ),
     ],
     authorisedTotals: [...totals],
   };

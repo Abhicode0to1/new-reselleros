@@ -200,13 +200,99 @@ describe("the term, and whether it was assumed", () => {
     expect(stated.assumption).toMatch(/as stated in the mail/);
   });
 
-  it("a monthly quote is a twelfth of the annual one, exactly", () => {
+  it("with NO monthly tier recorded, a monthly quote is a twelfth of the annual one", () => {
     /* Guards the direction of the ×12. A sign or a reciprocal error here quotes 12× or
-       1/12 of the deal, and both look plausible on their own. */
+       1/12 of the deal, and both look plausible on their own.
+
+       ⚠️ NARROWED 26 Aug 2026. This used to be stated unconditionally, and that was only ever
+       true because `CatalogueItemPrice` could not see the monthly tier. With one recorded the
+       twelfth relationship is WRONG on purpose — the flex tier costs more. `STARTER` has no
+       `prices`, so this test now pins the FALLBACK, which is a real path: most of the
+       pre-reset catalogue had no price matrix. The tier case is pinned below. */
     const m = planQuoteFromEnquiry({ item: STARTER, seats: 50, term: "monthly", newLineId: id });
     const a = planQuoteFromEnquiry({ item: STARTER, seats: 50, term: "annual",  newLineId: id });
     expect(m.ok && a.ok).toBe(true);
     if (!m.ok || !a.ok) return;
     expect(m.subtotal * 12).toBe(a.subtotal);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   The monthly-flex tier is its own price.
+
+   Found on the live catalogue, 26 Aug 2026: `GWBStarter` carries annual ₹270/seat/month and
+   monthly ₹325. Before this, a monthly quote was built at `msrp` — the ANNUAL rate on a
+   monthly line, about 17% under. commitment-rate.ts's own header says why that direction is
+   the wrong one: "the monthly tier usually costs MORE per month than a twelfth of the annual
+   rate". ₹325 confirmed by Pardeep before the code changed; nothing here guesses a price.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("the monthly-flex tier", () => {
+  /** The live row: annual 270/110, monthly 325/300. */
+  const TIERED: CatalogueItemPrice = {
+    ...STARTER,
+    prices: {
+      annual:  { msrp: 270, wholesale: 110 },
+      monthly: { msrp: 325, wholesale: 300 },
+    },
+  };
+
+  it("prices a monthly term at 325, NOT the annual tier's 270", () => {
+    const p = planQuoteFromEnquiry({ item: TIERED, seats: 50, term: "monthly", newLineId: id });
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.items[0].rate).toBe(325);
+    expect(p.items[0].cost).toBe(300);
+    expect(p.items[0].commitment).toBe("monthly");
+    expect(p.subtotal).toBe(16_250);   // 50 × 325
+  });
+
+  it("leaves the ANNUAL term exactly as it was — 270 × 12", () => {
+    /* The blast radius matters as much as the fix. Every annual quote ever built came through
+       this line, and the monthly tier must not touch it. */
+    const tiered = planQuoteFromEnquiry({ item: TIERED, seats: 50, term: "annual", newLineId: id });
+    const plain  = planQuoteFromEnquiry({ item: STARTER, seats: 50, term: "annual", newLineId: id });
+    expect(tiered.ok && plain.ok).toBe(true);
+    if (!tiered.ok || !plain.ok) return;
+    expect(tiered.items[0].rate).toBe(3_240);
+    expect(tiered.subtotal).toBe(plain.subtotal);
+  });
+
+  it("a monthly quote is NOT a twelfth of the annual one — that is the whole point", () => {
+    /* The inverse of the fallback test above, and the reason this tier exists: no commitment
+       costs more. If these two ever came out as ×12 again, the tier is being ignored. */
+    const m = planQuoteFromEnquiry({ item: TIERED, seats: 50, term: "monthly", newLineId: id });
+    const a = planQuoteFromEnquiry({ item: TIERED, seats: 50, term: "annual",  newLineId: id });
+    expect(m.ok && a.ok).toBe(true);
+    if (!m.ok || !a.ok) return;
+    expect(m.subtotal * 12).not.toBe(a.subtotal);
+    expect(m.subtotal * 12).toBeGreaterThan(a.subtotal);
+  });
+
+  it("names the rate it actually used, and admits the fallback when it fell back", () => {
+    /* A note that explains the line with a DIFFERENT rate than the line carries is the same
+       failure as the email that omitted the volume discount — words the document contradicts. */
+    const tiered = planQuoteFromEnquiry({ item: TIERED, seats: 50, term: "monthly", newLineId: id });
+    const plain  = planQuoteFromEnquiry({ item: STARTER, seats: 50, term: "monthly", newLineId: id });
+    expect(tiered.ok && plain.ok).toBe(true);
+    if (!tiered.ok || !plain.ok) return;
+    expect(tiered.assumption).toContain("325");
+    expect(tiered.assumption).not.toContain("270");
+    expect(plain.assumption).toContain("270");
+    expect(plain.assumption).toMatch(/no monthly tier recorded/);
+  });
+
+  it("ignores a zero or absent monthly tier rather than quoting nothing", () => {
+    /* `item-form.tsx` strips a tier whose prices are both 0, but a half-filled matrix reaches
+       here from older rows. A 0 must fall back, not become the rate — that would be a free
+       quote on a GST document. */
+    const zero: CatalogueItemPrice = {
+      ...STARTER,
+      prices: { monthly: { msrp: 0, wholesale: 0 } },
+    };
+    const p = planQuoteFromEnquiry({ item: zero, seats: 50, term: "monthly", newLineId: id });
+    expect(p.ok).toBe(true);
+    if (!p.ok) return;
+    expect(p.items[0].rate).toBe(270);
   });
 });

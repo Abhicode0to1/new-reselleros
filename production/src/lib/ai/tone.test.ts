@@ -320,6 +320,7 @@ describe("the tone block reaches the responder's prompt", () => {
       vendor: "google",
       msrpPerSeatPerYear: 3240,
       wholesalePerSeatPerYear: 1320,
+      monthlyFlexPerSeatPerMonth: null,
     },
   ];
   const lead = {

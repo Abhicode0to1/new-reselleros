@@ -35,13 +35,34 @@
  */
 
 import { slabFor, discountedRate } from "@/lib/pricing/volume-slabs";
+import type { ItemPrices } from "@/lib/supabase/database.types";
 
 /** ₹ per seat per MONTH, as the `items` table stores them (whole rupees — AGENTS.md). */
 export interface CatalogueItemPrice {
   id: string;
   name: string;
+  /**
+   * The ANNUAL tier's ₹/seat/month. `item-form.tsx` copies the headline tier — annual when
+   * set, else monthly — into this legacy column, so for a normally-priced product this is the
+   * annual rate and `× 12` is the annual line.
+   */
   msrp: number | null;
   wholesale: number | null;
+  /**
+   * The full price matrix. Needed because the MONTHLY-flex tier is its own number and is not
+   * `msrp`.
+   *
+   * ─── THE BUG THIS FIELD EXISTS TO FIX, 26 Aug 2026 ──────────────────────────
+   * Before it, a monthly quote was built as `rate: monthlyMsrp` — the ANNUAL tier's rate on a
+   * monthly-flex line. Live figures: annual ₹270/seat/month, monthly ₹325. So every monthly
+   * quote the AI path produced was about 17% under, and `commitment-rate.ts`'s own header says
+   * why that direction is wrong on purpose:
+   *
+   *   "the monthly tier usually costs MORE per month than a twelfth of the annual rate"
+   *
+   * Confirmed as ₹325 by Pardeep before this changed. Nothing here guesses a monthly price.
+   */
+  prices?: ItemPrices | null;
 }
 
 /** One quote line, shaped exactly as `buildWorkspaceLines` shapes it. */
@@ -150,13 +171,30 @@ export function planQuoteFromEnquiry(input: PlanQuoteInput): EnquiryQuotePlan {
   const term = input.term ?? "annual";
   const annual = term === "annual";
 
+  /* ── The monthly-flex tier is its OWN price ─────────────────────────────────
+     Not `msrp`. Live: annual ₹270/seat/month, monthly ₹325 — the flex tier costs more because
+     there is no commitment behind it, which is the whole point of having two.
+
+     ⚠️ THE FALLBACK KEEPS THE UNIT, NOT THE PRICE. With no monthly tier recorded we use
+     `msrp` — under-priced, but ₹/seat/MONTH on a monthly line. The alternative failure is a
+     ₹/seat/YEAR figure on a monthly line, which is a twelvefold error on a GST document;
+     commitment-rate.ts made the same choice for the same reason and says so at length. Under
+     by a tier is a commercial mistake somebody can spot on the quote. Out by 12× is not.
+
+     Deliberately NOT refusing to quote when the tier is missing: 71 of the pre-reset
+     catalogue's rows had no `prices` matrix at all, so refusing would have taken the whole
+     monthly path down for most products to avoid an under-price on some. */
+  const flexTier = item.prices?.monthly ?? null;
+  const flexMsrp = flexTier && flexTier.msrp > 0 ? flexTier.msrp : monthlyMsrp;
+  const flexCost = flexTier && flexTier.wholesale > 0 ? flexTier.wholesale : monthlyCost;
+
   const newId = input.newLineId ?? (() => globalThis.crypto.randomUUID());
   const items: EnquiryQuoteLine[] = [{
     id:         newId(),
     name:       item.name,
     qty:        seats,
-    rate:       annual ? monthlyMsrp * 12 : monthlyMsrp,
-    cost:       annual ? monthlyCost * 12 : monthlyCost,
+    rate:       annual ? monthlyMsrp * 12 : flexMsrp,
+    cost:       annual ? monthlyCost * 12 : flexCost,
     commitment: annual ? "annual_yearly" : "monthly",
   }];
 
@@ -204,11 +242,18 @@ export function planQuoteFromEnquiry(input: PlanQuoteInput): EnquiryQuotePlan {
     discountPct,
     discountNote: priced.note,
     termAssumed,
+    /* The rate named here must be the one actually on the line. It said `monthlyMsrp` for both
+       terms, so a monthly quote priced at the flex tier would have described itself with the
+       ANNUAL rate — the note contradicting the line it explains. Same class as the email that
+       omitted the volume discount, one field further in. */
     assumption:
       (termAssumed
         ? `Term ASSUMED annual (₹${monthlyMsrp}/seat/month × 12). The mail did not say ` +
           "monthly or annual — check this line before sending."
-        : `Term ${term.toUpperCase()}, as stated in the mail (₹${monthlyMsrp}/seat/month` +
-          `${annual ? " × 12" : ""}).`) + (slabNote ? `\n${slabNote}` : ""),
+        : annual
+          ? `Term ANNUAL, as stated in the mail (₹${monthlyMsrp}/seat/month × 12).`
+          : `Term MONTHLY, as stated in the mail (₹${flexMsrp}/seat/month, the flex tier` +
+            `${flexTier ? "" : " — no monthly tier recorded, so the annual rate was used"}).`) +
+      (slabNote ? `\n${slabNote}` : ""),
   };
 }

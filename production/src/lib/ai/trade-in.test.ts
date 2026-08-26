@@ -331,6 +331,7 @@ describe("the trade-in block reaches the prompt", () => {
           vendor: "google",
           msrpPerSeatPerYear: 3240,
           wholesalePerSeatPerYear: 1320,
+          monthlyFlexPerSeatPerMonth: null,
         },
       ],
       sellerName: "ANUTECH DIGITAL",

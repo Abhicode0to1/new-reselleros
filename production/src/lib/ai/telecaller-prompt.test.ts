@@ -19,6 +19,7 @@ const CATALOGUE: SalesCatalogEntry[] = [
     vendor: "google",
     msrpPerSeatPerYear: perSeatPerYear(270),
     wholesalePerSeatPerYear: perSeatPerYear(110),
+    monthlyFlexPerSeatPerMonth: null,
   },
   {
     sku: "GW-STD-fbb",
@@ -26,6 +27,7 @@ const CATALOGUE: SalesCatalogEntry[] = [
     vendor: "google",
     msrpPerSeatPerYear: perSeatPerYear(864),
     wholesalePerSeatPerYear: perSeatPerYear(620),
+    monthlyFlexPerSeatPerMonth: null,
   },
 ];
 

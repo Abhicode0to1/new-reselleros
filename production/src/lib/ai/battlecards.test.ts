@@ -11,11 +11,11 @@ import type { SalesCatalogEntry } from "./sales-agent";
    and Google Workspace Business Starter are within ten rupees a MONTH of each other — the fact
    the Zoho card is built on. */
 const CATALOGUE: SalesCatalogEntry[] = [
-  { sku: "GW-STR", name: "Google Workspace Business Starter",  vendor: "google",    msrpPerSeatPerYear: 3_240,  wholesalePerSeatPerYear: 1_320 },
-  { sku: "GW-STD", name: "Google Workspace Business Standard", vendor: "google",    msrpPerSeatPerYear: 10_368, wholesalePerSeatPerYear: 7_440 },
-  { sku: "ZW-STD", name: "Zoho Workplace Standard",            vendor: "zoho",      msrpPerSeatPerYear: 1_440,  wholesalePerSeatPerYear: 1_140 },
-  { sku: "ZW-PRO", name: "Zoho Workplace Professional",        vendor: "zoho",      msrpPerSeatPerYear: 3_360,  wholesalePerSeatPerYear: 2_640 },
-  { sku: "M365-BS", name: "Microsoft 365 Business Standard",   vendor: "microsoft", msrpPerSeatPerYear: 11_880, wholesalePerSeatPerYear: 9_840 },
+  { sku: "GW-STR", name: "Google Workspace Business Starter",  vendor: "google",    msrpPerSeatPerYear: 3_240,  wholesalePerSeatPerYear: 1_320, monthlyFlexPerSeatPerMonth: null },
+  { sku: "GW-STD", name: "Google Workspace Business Standard", vendor: "google",    msrpPerSeatPerYear: 10_368, wholesalePerSeatPerYear: 7_440, monthlyFlexPerSeatPerMonth: null },
+  { sku: "ZW-STD", name: "Zoho Workplace Standard",            vendor: "zoho",      msrpPerSeatPerYear: 1_440,  wholesalePerSeatPerYear: 1_140, monthlyFlexPerSeatPerMonth: null },
+  { sku: "ZW-PRO", name: "Zoho Workplace Professional",        vendor: "zoho",      msrpPerSeatPerYear: 3_360,  wholesalePerSeatPerYear: 2_640, monthlyFlexPerSeatPerMonth: null },
+  { sku: "M365-BS", name: "Microsoft 365 Business Standard",   vendor: "microsoft", msrpPerSeatPerYear: 11_880, wholesalePerSeatPerYear: 9_840, monthlyFlexPerSeatPerMonth: null },
 ];
 
 describe("detectObjections", () => {

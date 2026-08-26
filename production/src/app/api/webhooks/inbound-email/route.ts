@@ -687,7 +687,7 @@ export async function POST(request: NextRequest) {
        did. `extractEntities` ignores the extra columns. */
     const { data: catalogue } = await admin
       .from("items")
-      .select("id, name, msrp, wholesale")
+      .select("id, name, msrp, wholesale, prices")
       .eq("tenant_id", tenantId)
       .eq("is_active", true);
 
@@ -893,7 +893,7 @@ export async function POST(request: NextRequest) {
   const freshForFacts = stripQuoted(text).text || text;
   const { data: priceCatalogue } = await admin
     .from("items")
-    .select("id, name, msrp, wholesale")
+    .select("id, name, msrp, wholesale, prices")
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
   const catalogueForFacts = (priceCatalogue ?? []) as {
