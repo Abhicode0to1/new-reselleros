@@ -46,6 +46,13 @@ steps:
       - build
       - --tag=$_IMAGE:$SHORT_SHA
       - --tag=$_IMAGE:latest
+      # Wahi SHA ANDAR bhi, taaki chalti hui app /api/version par bata sake ki wo kaun sa
+      # commit hai. Tag pehle se yahi kehta tha, par sirf repo me — is file ka apna comment
+      # kehta hai "which build is live should never be a guess", aur 26 Aug 2026 ko wo
+      # teen baar guess hi rahi. Dockerfile me ye runner stage ke aakhir me padta hai, to
+      # badalta SHA build cache nahi todta.
+      - --build-arg=BUILD_SHA=$SHORT_SHA
+      - --build-arg=BUILD_ID=$BUILD_ID
       # Reuse the previous image's layers so a typical build is minutes, not tens of them.
       - --cache-from=$_IMAGE:latest
       - .

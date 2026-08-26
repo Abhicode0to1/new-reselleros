@@ -83,6 +83,29 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# ─── Which build is this? ─────────────────────────────────────────────────────
+# 26 Aug 2026. "Kya deploy aa gaya?" ka jawab aaj TEEN baar kahin se nahi mila:
+# `gcloud` ka auth expire tha (aur `gcloud auth login` interactive hai), Cloud Build
+# GitHub par commit status report nahi karta, aur app ke andar kuch nahi batata tha ki
+# wo kaun sa commit chala rahi hai. Do baar timer par bharosa karna pada, jo naap nahi
+# hai — aur ek baar wo andaza galat bhi nikla.
+#
+# `cloudbuild.yaml` pehle se image ko `$SHORT_SHA` se tag karta hai, aur uska comment
+# kehta hai: "which build is live should never be a guess." Ye us iraade ko poora karta
+# hai — tag repo me dikhta tha, chalti hui app me nahi.
+#
+# ⚠️ JAGAH SOCH KAR CHUNI HAI: ye COPY ke BAAD aur runner stage ke andar hai. Har commit
+# par SHA badalta hai; upar rakhne par `npm install` aur `npm run build` ka cache har baar
+# tootta aur deploy minute se badh kar bahut lamba ho jata. Yahan sirf ye do chhoti layer
+# banti hain.
+#
+# NEXT_PUBLIC_ jaan-boojh kar NAHI — ye sirf server par chahiye. NEXT_PUBLIC_ hone par
+# poore client bundle me chala jata, bina kisi faayde ke.
+ARG BUILD_SHA="dev"
+ARG BUILD_ID=""
+ENV BUILD_SHA=$BUILD_SHA
+ENV BUILD_ID=$BUILD_ID
+
 USER nextjs
 EXPOSE 8080
 
