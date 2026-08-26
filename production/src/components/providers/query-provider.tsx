@@ -63,7 +63,12 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
           THE COST: no devtools on a narrow window. Widen the window to get them back. */}
       {process.env.NODE_ENV === "development" && (
         <div className="hidden md:block">
-          <ReactQueryDevtools initialIsOpen={false} buttonPosition="top-left" />
+          {/* `bottom-left`, `top-left` NAHI. 26 Aug 2026: is button ka palm-tree logo
+              theek sidebar/header ke brand mark par baithta tha, aur Pardeep ne use apni
+              company ka logo samajh kar do baar "logo show nahi kar raha" bataya. Wo
+              dev-only hai aur production me jata bhi nahi — par jo cheez dev me galat
+              sawaal khadi karti hai, uski keemat asli hai. */}
+          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
         </div>
       )}
     </QueryClientProvider>
