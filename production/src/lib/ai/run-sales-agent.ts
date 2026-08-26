@@ -87,6 +87,45 @@ export interface RunSalesAgentArgs {
  * duplicate, and the mail would be gone.
  */
 export async function runSalesAgentForLead(args: RunSalesAgentArgs): Promise<void> {
+  /* ── "Never throws" is a PROMISE, and nothing was keeping it ────────────────
+     The docstring above has said this since the function was written, and the body was never
+     wrapped. Both call sites are `void runSalesAgentForLead(...)` with a `.catch` that goes to
+     console — which on Cloud Run means the operator sees nothing at all.
+
+     Measured 27 Aug 2026, 00:09. A customer replied "monthly", the requote ran and produced a
+     correct monthly quote, and the agent left NO row in `ai_action_log` — not held, not
+     failed, nothing. Every early return in here logs, so the only remaining explanation was a
+     throw, and the throw was invisible. I could not tell WHAT crashed, only that something
+     had; `gcloud` could not read the container log either.
+
+     So a crash now lands where every other outcome lands. The reason string carries the
+     message because the alternative — "sales agent crashed" — is the same dead end again, one
+     step further in. */
+  try {
+    await runSalesAgentForLeadInner(args);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[run-sales-agent] crashed:", err);
+    try {
+      await logAiAction({
+        tenantId: args.tenantId,
+        action: "reply.send",
+        outcome: "failed",
+        reason: `the sales agent crashed before it could answer — ${message}`,
+        mode: "hold",
+        entity: "lead",
+        entityId: args.leadId,
+        facts: { channel: args.channel },
+      });
+    } catch (logErr) {
+      /* The log is the last thing standing; if it fails too there is nowhere left to put
+         this, and throwing here would break the "never throws" contract all over again. */
+      console.error("[run-sales-agent] could not even log the crash:", logErr);
+    }
+  }
+}
+
+async function runSalesAgentForLeadInner(args: RunSalesAgentArgs): Promise<void> {
   const db = bare();
   if (!db) return;
 
