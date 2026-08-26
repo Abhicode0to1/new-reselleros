@@ -7,7 +7,10 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { googleOAuthCreds, originFromRequest, contactsRedirectUri, buildAuthUrl } from "@/lib/google/oauth";
+import {
+  googleOAuthCreds, originFromRequest, contactsRedirectUri, buildAuthUrl, GOOGLE_CONTACTS_SCOPES,
+} from "@/lib/google/oauth";
+import { unionScopes } from "@/lib/google/scope-union";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +26,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/settings?tab=integrations&google=notconfigured`);
   }
 
+  /* Ulti disha ka wahi bachaav jo gmail/connect me hai: pehle se granted scope request me
+     jod do, taaki Contacts dobara connect karna Gmail ka bhejna na tod de. 26 Aug 2026 ko
+     ye nuksaan doosri disha me ho chuka hai — dekho lib/google/scope-union.ts. */
+  const { data: prior } = await supabase
+    .from("user_google_tokens")
+    .select("scopes")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const scopes = unionScopes(GOOGLE_CONTACTS_SCOPES, (prior as { scopes?: string | null } | null)?.scopes);
+
   const state = crypto.randomUUID();
-  const url = buildAuthUrl(creds.clientId, contactsRedirectUri(origin), state);
+  const url = buildAuthUrl(creds.clientId, contactsRedirectUri(origin), state, scopes);
 
   const res = NextResponse.redirect(url);
   // Short-lived, httpOnly CSRF cookie verified in the callback.

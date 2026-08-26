@@ -23,6 +23,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   googleOAuthCreds, originFromRequest, gmailRedirectUri, buildAuthUrl, GMAIL_SEND_SCOPES,
 } from "@/lib/google/oauth";
+import { unionScopes } from "@/lib/google/scope-union";
 
 export const dynamic = "force-dynamic";
 
@@ -37,8 +38,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/settings?tab=integrations&gmail=notconfigured`);
   }
 
+  /* ── Jo pehle se granted hai, use REQUEST me hi maang lo ──────────────────
+     Contacts aur Gmail ek hi `user_google_tokens` row likhte hain. `buildAuthUrl` me
+     `include_granted_scopes: "true"` pehle se hai, par wo ek UMEED hai — is route ke apne
+     callback ka comment kehta hai ki "the consent screen lets a user untick individual
+     permissions". 26 Aug 2026 ko theek wahi hua: is flow ne Pardeep ka contacts grant
+     dhak diya aur sync 11 din chup-chaap 403 deta raha.
+
+     Union maang kar consent screen dono cheezein dikhata hai, aur Google ko union karna
+     hi nahi padta. Poori naap lib/google/scope-union.ts me. */
+  const { data: prior } = await supabase
+    .from("user_google_tokens")
+    .select("scopes")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const scopes = unionScopes(GMAIL_SEND_SCOPES, (prior as { scopes?: string | null } | null)?.scopes);
+
   const state = crypto.randomUUID();
-  const url = buildAuthUrl(creds.clientId, gmailRedirectUri(origin), state, GMAIL_SEND_SCOPES);
+  const url = buildAuthUrl(creds.clientId, gmailRedirectUri(origin), state, scopes);
 
   const res = NextResponse.redirect(url);
   res.cookies.set("g_gmail_oauth_state", state, {

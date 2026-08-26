@@ -17,6 +17,7 @@ import {
   googleOAuthCreds, originFromRequest, gmailRedirectUri, exchangeCode, fetchGoogleEmail,
 } from "@/lib/google/oauth";
 import { canSendWithScopes } from "@/lib/email/provider";
+import { scopesLost, scopeLossMessage } from "@/lib/google/scope-union";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,20 @@ export async function GET(request: NextRequest) {
     const admin = createAdminClient();
     const expiry = new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString();
 
+    /* ── Kya is consent ne PEHLE SE mili koi permission cheen li? ─────────────
+       Upar ka scope-check dekhta hai ki `gmail.send` AAYA — par ye nahi dekhta ki contacts
+       BACHI. 26 Aug 2026 ko wahi hua: ye flow chala, gmail.send mila, aur Pardeep ka
+       contacts grant chup-chaap gir gaya. Sync 11 din 403 deta raha, aur us baare me kisi
+       screen par ek shabd nahi tha — pakda tab gaya jab DB ki `last_error` padhi gayi.
+
+       Connect route ab union maangta hai, par user consent screen par checkbox untick kar
+       sakta hai (isi file ka upar wala comment yahi kehta hai). To umeed ke bharose nahi —
+       naap kar likh dete hain. */
+    const { data: before } = await admin
+      .from("user_google_tokens").select("scopes").eq("user_id", user.id).maybeSingle();
+    const lost = scopesLost((before as { scopes?: string | null } | null)?.scopes, tokens.scope);
+    const lossNote = scopeLossMessage(lost);
+
     // Same row as the contacts flow (one per user_id). refresh_token only comes
     // back on first consent, so an absent one must not overwrite the stored one
     // — doing that is how an integration works until the next token refresh and
@@ -74,7 +89,9 @@ export async function GET(request: NextRequest) {
       access_token: tokens.access_token,
       token_expiry: expiry,
       scopes: tokens.scope ?? null,
-      last_error: null,
+      /* Nuksaan hua to wahi likho, `null` nahi. Ye wo jagah hai jahan ek toota hua
+         integration apni wajah khud batata hai — usi field ne 26 Aug ko ye bug pakdaya. */
+      last_error: lossNote,
       ...(tokens.refresh_token ? { refresh_token: tokens.refresh_token } : {}),
     };
 
@@ -83,7 +100,11 @@ export async function GET(request: NextRequest) {
       .upsert(patch, { onConflict: "user_id" });
     if (error) throw error;
 
-    const res = NextResponse.redirect(`${settings}&gmail=connected`);
+    /* Gmail jud gaya, par doosra integration toot gaya — to "connected" kehkar bhej dena
+       aadha sach hoga. Settings page ko farak bata dete hain. */
+    const res = NextResponse.redirect(
+      `${settings}&gmail=${lossNote ? "connected_scopelost" : "connected"}`,
+    );
     res.cookies.delete("g_gmail_oauth_state");
     return res;
   } catch (e) {

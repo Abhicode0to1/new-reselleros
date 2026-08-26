@@ -1,0 +1,93 @@
+/**
+ * Ek Google connection doosre ko na tode.
+ *
+ * ─── YE KYUN BANA ───────────────────────────────────────────────────────────
+ * 26 Aug 2026. Pardeep ka Google Contacts sync chup-chaap band tha —
+ * `user_google_tokens.last_error` me People API ka
+ * `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT` pada tha. Naapa gaya:
+ *
+ *     token bana          08 Aug 20:10   (contacts grant)
+ *     Gmail send flow     13 Aug 23:41
+ *     aakhri safal sync   15 Aug 18:00
+ *     ab scopes           gmail.send userinfo.email openid   ← contacts gayab
+ *
+ * Contacts aur Gmail EK HI row likhte hain (`user_google_tokens`, ek per user).
+ * `buildAuthUrl` me `include_granted_scopes: "true"` pehle se tha — theek isi trap ke
+ * liye, aur uska comment usi 403 ka naam leta hai. Guard Gmail flow SE PEHLE se maujood
+ * tha, aur phir bhi ye hua.
+ *
+ * Wajah usi repo me likhi hui thi, doosri file me — gmail callback ka comment:
+ *
+ *     "Google can return a token for FEWER scopes than were asked for: the consent
+ *      screen lets a user untick individual permissions."
+ *
+ * Yaani `include_granted_scopes` ek UMEED hai, guarantee nahi. Us par poora bharosa karke
+ * hum ek aisa token store kar rahe the jo perfectly authenticate hota hai aur doosre
+ * integration ko mar deta hai — bina kisi error ke, kisi screen par.
+ *
+ * ─── HAL: union MAANGO, umeed mat karo ──────────────────────────────────────
+ * Naya connect karte waqt jo scope pehle se granted hain unhe REQUEST me hi jod dete hain.
+ * Tab consent screen dono cheezein dikhata hai, user dono dekh kar haan kehta hai, aur
+ * Google ko union khud karna hi nahi padta.
+ *
+ * Aur callback me naapte hain ki kuch KHOYA to nahi — kyunki user ab bhi untick kar sakta
+ * hai, aur us haalat me chup rehna wahi bug hai jise ye file theek karne aayi hai.
+ */
+
+/** `contacts` ke bina sync 403 deta hai — People API isi ko maangti hai. */
+export const CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts";
+/** Iske bina bhejna 403 deta hai. */
+export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+
+const split = (s: string | null | undefined): string[] =>
+  (s ?? "").split(/\s+/).map((x) => x.trim()).filter(Boolean);
+
+/**
+ * Jo maang rahe hain + jo pehle se mila hua hai, ek space-separated string me.
+ *
+ * Kram sthir rakha gaya hai (pehle `wanted`, phir naye purane) — badalta kram ek diff ko
+ * bina wajah shor bana deta hai, aur ye value DB me likhi jaati hai.
+ */
+export function unionScopes(
+  wanted: string,
+  existing: string | null | undefined,
+): string {
+  const out = split(wanted);
+  for (const s of split(existing)) if (!out.includes(s)) out.push(s);
+  return out.join(" ");
+}
+
+/**
+ * Naye token ne kaun si PEHLE SE MAUJOOD scope kho di?
+ *
+ * Khaali array = kuch nahi khoya. Ye sirf un scopes ko dekhta hai jo asli me kaam karti
+ * hain (`contacts`, `gmail.send`) — `openid`/`email` ke aane-jaane par shor machana
+ * bekaar hai, unse koi feature nahi tootta.
+ */
+export function scopesLost(
+  before: string | null | undefined,
+  after: string | null | undefined,
+): string[] {
+  const had = split(before);
+  const has = split(after);
+  return [CONTACTS_SCOPE, GMAIL_SEND_SCOPE].filter(
+    (s) => had.includes(s) && !has.includes(s),
+  );
+}
+
+/**
+ * Us nuksaan ko aadmi ki bhasha me — CLAUDE.md §24: kya hua, kyun, ab kya karein.
+ * `null` jab kuch nahi khoya.
+ */
+export function scopeLossMessage(lost: readonly string[]): string | null {
+  if (lost.length === 0) return null;
+  const names = lost.map((s) =>
+    s === CONTACTS_SCOPE ? "Google Contacts sync" : "Gmail se bhejna",
+  );
+  return (
+    `Ye connection ne ${names.join(" aur ")} ki permission hata di. ` +
+    `Google ke consent screen par wo permission untick reh gayi thi. ` +
+    `Dobara connect kariye aur SAARE checkbox tick rehne dijiye — warna ye feature ` +
+    `403 deta rahega aur screen par kuch nahi dikhega.`
+  );
+}
