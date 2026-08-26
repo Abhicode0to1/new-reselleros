@@ -321,6 +321,13 @@ export type InboundEmailRow = {
   body_text:  string | null;
   body_html:  string | null;
   created_at: string;
+  // ── Thread headers (migration 20260826190000) ──────────────────────────────
+  // Inse tay hota hai ki jaane-pehchane sender ka mail purani lead par jude ya nayi lead
+  // bane — dekho lib/inbound/thread-match.ts. NULL = forwarder ne nahi bheja.
+  /** RFC 5322 `In-Reply-To`. */
+  in_reply_to:       string | null;
+  /** RFC 5322 `References`. Naam `references` NAHI — wo Postgres ka reserved keyword hai. */
+  thread_references: string | null;
   // ── Mailbox state (migration 20260817140000) ───────────────────────────────
   // What a PERSON did, kept apart from `status`, which is what the webhook did.
   // They move independently: an email can be lead_created AND unread AND starred.
@@ -353,6 +360,8 @@ type InboundEmailInsert = {
   body_text?:  string | null;
   body_html?:  string | null;
   created_at?: string;
+  in_reply_to?:       string | null;
+  thread_references?: string | null;
   read_at?:       string | null;
   starred?:       boolean;
   snoozed_until?: string | null;

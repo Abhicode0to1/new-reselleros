@@ -82,6 +82,38 @@ export interface DispositionInput {
    * it has to be stated in the subject. Everything unmarked still skips exactly as before.
    */
   isSelfTest?: boolean;
+  /**
+   * Kya ye email us khuli lead ki CHAL RAHI baatcheet ka hissa hai?
+   * `lib/inbound/thread-match.ts` isko naapta hai — headers, `Re:` prefix, ya subject match.
+   *
+   * ─── YE INPUT 26 Aug 2026 KO JUDA, AUR EK ASLI GAP BHARTA HAI ─────────────
+   * Iske pehle neeche wali `leadId` shakha BINA SHART chalti thi: bhejne wale ki khuli lead
+   * mili to email usi par jud jata tha. Pardeep ne gap pakda:
+   *
+   *   "ek email id se to customer mujhse kai baar quote maang sakta hai, kai reseller aise
+   *    hain jo apne multiple clients ke liye quote maangte hain"
+   *
+   * Wo sahi tha, aur uske apne data me ye ho chuka tha: 30 minute ke faasle par do alag
+   * subject wale email, dono ek hi lead par jud gaye, aur seats overwrite hote rahe. Ek
+   * email id se doosra sauda shuru karna namumkin tha.
+   *
+   * ─── `undefined` ka matlab: NAYI LEAD. Ye Pardeep ka faisla hai ─────────────
+   * Jab pata na chale, do taraf galti ho sakti hai, aur unki keemat barabar NAHI hai:
+   *
+   *   • Galat JOD dena — do sauda chup-chaap ek lead me mil jate hain. Seats aur value ek
+   *     doosre ko dabate hain, forecast galat hota hai, aur screen par koi nishaan nahi
+   *     hota. Baad me alag karna bhi mushkil.
+   *   • Galat NAYI LEAD banana — ek duplicate saamne dikhta hai, aur app me `MergeLeadsDialog`
+   *     pehle se hai.
+   *
+   * Dikhne wali aur sudhaari ja sakne wali galti, chupi hui galti se sasti hai. Isliye shak
+   * me nayi lead.
+   *
+   * ⚠️ Aur dhyaan dijiye ki is shakha me `isEnquiry` ab bhi NAHI poochha jata. Jaane-pehchane
+   * sender ka mail kabhi Spam me nahi jayega — na jud kar, na nayi lead ban kar. 22 Aug ka
+   * nuksaan (zaroori message Spam me chala gaya) is badlav se wapas nahi aata.
+   */
+  continuesOpenLead?: boolean;
 }
 
 export function decideDisposition(input: DispositionInput): InboundDisposition {
@@ -102,12 +134,23 @@ export function decideDisposition(input: DispositionInput): InboundDisposition {
   const leadId = (input.openLeadId ?? "").trim();
 
   /* Asked FIRST, and this ordering IS the fix. Note what is NOT consulted here:
-     `isEnquiry`. Somebody mid-conversation with us does not get their reply graded. */
+     `isEnquiry`. Somebody mid-conversation with us does not get their reply graded —
+     whichever way this branch goes. */
   if (leadId) {
+    if (input.continuesOpenLead === true) {
+      return {
+        action: "append",
+        leadId,
+        reason: "reply from a contact with an open lead — filed on that conversation",
+      };
+    }
+    /* Wahi sender, par naya thread — yaani naya sauda. Dekho `continuesOpenLead` ka
+       comment: `false` aur `undefined` dono yahan aate hain, aur wo jaan-boojhkar hai. */
     return {
-      action: "append",
-      leadId,
-      reason: "reply from a contact with an open lead — filed on that conversation",
+      action: "create",
+      reason: input.continuesOpenLead === false
+        ? "a fresh thread from a contact we already have an open lead with — a second deal, not a reply"
+        : "could not tell whether this continues the open lead, so treated as a new deal (a duplicate is visible and mergeable; a silent merge is neither)",
     };
   }
 

@@ -6,19 +6,53 @@ describe("decideDisposition", () => {
     /* THE REPORTED BUG. The route asked "is this an enquiry?" before "do we know this
        person?", so a mid-thread reply — "actually I need 20 users of Standard, not 50 of
        Starter" — was correctly judged "not a new enquiry" and filed under Spam / System.
-       It was the most important message in the thread. */
-    const d = decideDisposition({ openLeadId: "L-MT4HUR6P", isEnquiry: false });
+       It was the most important message in the thread.
+
+       `continuesOpenLead: true` 26 Aug 2026 ko juda, aur wo is test ko kamzor nahi karta:
+       wo asli message THREAD KE BEECH KA REPLY tha, to reality me ye signal `true` hi
+       aata (In-Reply-To header ya `Re:` prefix se — dekho thread-match.ts). Test ab wahi
+       haalat banata hai jo us din thi, pehle se zyada theek. */
+    const d = decideDisposition({ openLeadId: "L-MT4HUR6P", isEnquiry: false, continuesOpenLead: true });
     expect(d.action).toBe("append");
     expect(d.action === "append" && d.leadId).toBe("L-MT4HUR6P");
   });
 
-  it("never skips a message from someone we have an open lead with", () => {
-    /* Swept across every classifier value, because the whole point is that this input
-       is not consulted when a conversation already exists. */
+  it("never SKIPS a message from someone we have an open lead with — koi bhi raasta le", () => {
+    /* Ye is file ka sabse zaroori invariant hai, aur 26 Aug ke badlav ke baad iski shakl
+       badli hai. Pehle ye "hamesha append" kehta tha. Ab jaane-pehchane sender ka mail do
+       jagah ja sakta hai — purani lead par, ya nayi lead par — par **Spam me kabhi nahi**.
+
+       Isliye assert ab `append` par nahi, `!== "skip"` par hai. Yahi wo cheez thi jo 22 Aug
+       ko toota tha (zaroori message Spam me chala gaya), aur yahi bachani hai. Classifier
+       ka har jawab aur thread ka har signal — sabhi sweep me. */
     for (const isEnquiry of [true, false, null, undefined]) {
-      const d = decideDisposition({ openLeadId: "L-1", isEnquiry });
-      expect(d.action, `isEnquiry=${String(isEnquiry)}`).toBe("append");
+      for (const continuesOpenLead of [true, false, undefined]) {
+        const d = decideDisposition({ openLeadId: "L-1", isEnquiry, continuesOpenLead });
+        expect(d.action, `isEnquiry=${String(isEnquiry)} continues=${String(continuesOpenLead)}`)
+          .not.toBe("skip");
+      }
     }
+  });
+
+  it("ek hi sender ka NAYA thread doosri lead banata hai — Pardeep ka maamla", () => {
+    /* 26 Aug 2026: "ek email id se to customer mujhse kai baar quote maang sakta hai, kai
+       reseller aise hain jo apne multiple clients ke liye quote maangte hain".
+
+       Uske apne data me ye ho chuka tha: 18:08 aur 18:38 par do alag subject wale email,
+       dono ek hi lead par jud gaye, aur lead ke seats overwrite hote rahe. */
+    const d = decideDisposition({ openLeadId: "L-1", isEnquiry: true, continuesOpenLead: false });
+    expect(d.action).toBe("create");
+    expect(d.reason).toMatch(/second deal|fresh thread/i);
+  });
+
+  it("pata na chale to NAYI lead — aur classifier tab bhi nahi poochha jata", () => {
+    /* Faisla Pardeep ka: chupi hui galti (do sauda ek lead me mil jana) dikhne wali galti
+       (ek duplicate lead) se mehngi hai, aur duplicate ke liye Merge leads maujood hai.
+
+       `isEnquiry: false` bhi saath hai jaan-boojhkar: wo `create` ko `skip` me badalna NAHI
+       chahiye. Jaane-pehchane sender ka mail Spam me nahi jata. */
+    const d = decideDisposition({ openLeadId: "L-1", isEnquiry: false });
+    expect(d.action).toBe("create");
   });
 
   it("creates a lead for a genuine enquiry from a stranger", () => {
@@ -134,10 +168,17 @@ describe("the operator testing the pipeline from their own address", () => {
 
   it("files a self-test onto an open lead when one exists, like any other sender", () => {
     /* Once past the guard it is an ordinary message, so the identity-before-classification
-       ordering applies unchanged — a second test from the same address lands on the first
-       test's lead rather than making a new one. */
-    const d = decideDisposition({ senderIsOurs: true, isSelfTest: true, openLeadId: "L-1", isEnquiry: true });
-    expect(d.action).toBe("append");
+       ordering applies unchanged.
+
+       Is test ki asli baat "hamesha append" nahi thi — wo ye thi ki **self-test ko koi
+       khaas chhoot nahi milti**. 26 Aug 2026 ke baad wo baat aur saaf ho gayi: self-test
+       bhi wahi thread ka niyam maanta hai jo baaki sab maante hain. Dono shakhaayein
+       neeche pinned hain, taaki koi galti se self-test ke liye ek alag raasta na bana de. */
+    const cont = decideDisposition({ senderIsOurs: true, isSelfTest: true, openLeadId: "L-1", isEnquiry: true, continuesOpenLead: true });
+    expect(cont.action).toBe("append");
+
+    const fresh = decideDisposition({ senderIsOurs: true, isSelfTest: true, openLeadId: "L-1", isEnquiry: true, continuesOpenLead: false });
+    expect(fresh.action).toBe("create");
   });
 
   it("does not let the self-test flag rescue a message the classifier rejected", () => {

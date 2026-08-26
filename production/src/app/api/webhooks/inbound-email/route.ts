@@ -33,6 +33,7 @@ import { sendEmail } from "@/lib/email/send";
 import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
 import { decideInboundRoute } from "@/lib/inbound/routing";
 import { decideDisposition } from "@/lib/inbound/disposition";
+import { continuesThread } from "@/lib/inbound/thread-match";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { isSelfTest, selfTestMarkerMisplaced, SELF_TEST_MARKER } from "@/lib/inbound/self-test";
 import { acceptedSecrets, secretMatches } from "@/lib/inbound/verify-secret";
@@ -233,6 +234,17 @@ export async function POST(request: NextRequest) {
   const messageId = str("messageId", "message_id", "Message-Id", "MessageID", "Message-ID")
     || `noid-${fromEmail}-${subject}`.slice(0, 200);
 
+  /* ── Thread ke headers (RFC 5322) ─────────────────────────────────────────
+     26 Aug 2026 ko joda. Ye batate hain ki mail kisi cheez ka JAWAB hai — aur usi par tay
+     hota hai ki jaane-pehchane sender ka mail purani lead par jude ya nayi lead bane.
+     Poori wajah lib/inbound/thread-match.ts me.
+
+     `rawHeaders` pehle se bana hua hai (lowercased keys) aur pehle se do jagah jaata hai;
+     ye sirf usme se do khaane padh raha hai. `str()` bhi try kiya jaata hai kyunki kuch
+     provider inhe top-level field ki tarah bhejte hain, header map me nahi. */
+  const inReplyTo  = (rawHeaders["in-reply-to"] ?? str("inReplyTo", "in_reply_to") ?? "").trim();
+  const references = (rawHeaders["references"]  ?? str("references")               ?? "").trim();
+
   if (!fromEmail) {
     return NextResponse.json({ error: "Missing sender email" }, { status: 400 });
   }
@@ -257,6 +269,11 @@ export async function POST(request: NextRequest) {
     subject:    subject || null,
     body_text:  text || null,
     body_html:  html || null,
+    /* Thread ke headers. Faisla inhe padhe bina bhi ho jata hai (subject se), par darj hone
+       par do cheezein milti hain: ek galat faisle ko baad me naapa ja sakta hai, aur ye
+       pata chalta hai ki forwarder headers bhejta hai ya nahi — jo abhi maloom NAHI hai. */
+    in_reply_to:       inReplyTo || null,
+    thread_references: references || null,
     status:     "received",
   });
   if (claimErr) {
@@ -570,10 +587,37 @@ export async function POST(request: NextRequest) {
      addresses skips exactly as it did before this existed. */
   const selfTest = isSelfTest({ senderIsOurs, subject });
 
+  /* ── Purani baatcheet ka jawab, ya naya sauda? ────────────────────────────
+     26 Aug 2026, Pardeep: "ek email id se to customer mujhse kai baar quote maang sakta
+     hai, kai reseller aise hain jo apne multiple clients ke liye quote maangte hain".
+
+     Uske pehle neeche wali `openLeadId` shakha bina shart chalti thi, to ek email id se
+     doosra sauda shuru karna namumkin tha. Niyam ab lib/inbound/thread-match.ts me hai.
+
+     Ye query SIRF tab chalti hai jab koi khuli lead mili ho — warna ek bemaani round-trip
+     har ajnabi ke mail par lagta. */
+  let leadSubjects: string[] = [];
+  if (existing?.id) {
+    const { data: prior } = await admin
+      .from("inbound_emails")
+      .select("subject")
+      .eq("tenant_id", tenantId)
+      .eq("lead_id", existing.id)
+      .order("created_at", { ascending: false })
+      .limit(25);
+    leadSubjects = ((prior ?? []) as { subject?: string | null }[])
+      .map((r) => r.subject ?? "")
+      .filter(Boolean);
+  }
+  const continuesOpenLead = existing?.id
+    ? continuesThread({ inReplyTo, references, subject, leadSubjects })
+    : undefined;
+
   const disposition = decideDisposition({
     senderIsOurs,
     isSelfTest: selfTest,
     openLeadId: existing?.id ?? null,
+    continuesOpenLead,
     /* `ai` is null when Gemini did not run. Passing extracted.isEnquiry here would
        pass the webhook's default-TRUE fallback and hide that distinction — and the
        difference between "the model said no" and "the model never answered" is the
