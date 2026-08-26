@@ -300,11 +300,26 @@ export async function dispatchSalesDecision(args: DispatchArgs): Promise<Dispatc
   try {
     if (decision.action_required === "HANDOVER_TO_HUMAN") {
       /* The overrule reason when a rule fired, the model's own read when it chose this
-         itself. The operator wants the specific sentence, not "handover". */
+         itself. The operator wants the specific sentence, not "handover".
+
+         ─── THE OLD FALLBACK NAMED THE WRONG REASON, 26 Aug 2026 ───────────────
+         It said "the agent was not confident enough to answer this itself" for EVERY
+         unoverruled handover. But an unoverruled handover is precisely the case where the
+         model chose to hand over on its own judgement — and a customer answering "monthly"
+         on an 80-seat quote was logged that way at confidence 0.95, against a 0.7 threshold.
+         The real reason was that the agent has no monthly rate and refused to invent one.
+         Debugging that cost an hour, and the log had pointed away from it the whole time.
+
+         So: the model's own `handover_reason` first, and when it did not give one, a sentence
+         that states what actually happened and carries the confidence so the reader can see
+         for themselves that it was not the problem. */
+      const chose = decision.handover_reason
+        ? `the agent handed this over: ${decision.handover_reason}`
+        : `the agent chose to hand this over (confidence ${decision.confidence_score.toFixed(2)})`;
       const reason =
         args.overruled && args.overruleReason
           ? args.overruleReason
-          : `the agent was not confident enough to answer this itself (it read the enquiry as: ${decision.customer_intent})`;
+          : `${chose} — it read the enquiry as: ${decision.customer_intent}`;
       return await handOver(args, reason);
     }
 

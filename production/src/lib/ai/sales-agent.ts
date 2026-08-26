@@ -279,6 +279,8 @@ export interface SalesAgentDecision {
   perceived_sentiment: string;
   confidence_score: number;
   action_required: SalesAgentAction;
+  /** WHY it chose HANDOVER_TO_HUMAN, in its own words. Null otherwise — see SALES_AGENT_SCHEMA. */
+  handover_reason: string | null;
   generated_response: SalesAgentResponse;
   /** Null when the agent does not want to be reminded — a closed thread, or a handover. */
   next_followup_loop: SalesAgentFollowUp | null;
@@ -383,6 +385,14 @@ export const SALES_AGENT_SYSTEM_PROMPT = [
   /* "0 to 1", not "0-1": the hyphenated form is date-shaped and findPromises reads it as one.
      Nothing in this prompt may contain a token the guard would refuse, because anything here
      can end up echoed in a reply — see the test that scans this whole string. */
+  /* Asked for in words as well as in the JSON shape, because this is the field an operator
+     reads at 11pm to decide whether to take the lead over. 26 Aug 2026: without it a handover
+     the model chose at 0.95 confidence was logged as "not confident enough" — the one thing it
+     was not. Name the missing FACT, not a feeling. */
+  "handover_reason — when action_required is HANDOVER_TO_HUMAN, one sentence on WHY, naming the",
+  "fact you lacked or the decision that is not yours: 'no monthly rate in the catalogue',",
+  "'asked for a discount beyond the rate card', 'contract wording'. Null for any other action.",
+  "",
   "confidence_score is YOUR honest 0 to 1 read of how well you understood this message and how",
   "safe your reply is to send with nobody checking it. Be harsh. A low score costs the",
   "company one salesperson-minute; a confident wrong answer costs a customer.",
@@ -397,6 +407,9 @@ export const SALES_AGENT_SYSTEM_PROMPT = [
   "Reply with ONE JSON object and nothing else:",
   '{"customer_intent":string,"perceived_sentiment":string,"confidence_score":number,',
   '"action_required":"REPLY"|"GENERATE_QUOTE_AND_SEND"|"HANDOVER_TO_HUMAN",',
+  /* Asked for explicitly, because the fallback that stood in for it reported the wrong
+     reason for an hour — see SALES_AGENT_SCHEMA's handover_reason. */
+  '"handover_reason":string|null,',
   '"generated_response":{"email_subject":string,"body_text":string,"whatsapp_summary":string},',
   '"next_followup_loop":{"in_hours":number,"trigger_condition":string}|null,',
   '"seats_discussed":number|null}',
@@ -666,6 +679,25 @@ export const SALES_AGENT_SCHEMA = z.object({
   perceived_sentiment: z.string().trim().min(1).max(120),
   confidence_score: z.coerce.number().finite().transform((n) => Math.min(1, Math.max(0, n))),
   action_required: z.enum(["REPLY", "GENERATE_QUOTE_AND_SEND", "HANDOVER_TO_HUMAN"]),
+  /**
+   * WHY the agent chose HANDOVER_TO_HUMAN, in its own words. Null otherwise.
+   *
+   * ─── THE HOUR THIS COST, 26 Aug 2026 ───────────────────────────────────────
+   * A customer answered "monthly" on an 80-seat quotation. The agent handed over, and the
+   * operator's log said:
+   *
+   *   "the agent was not confident enough to answer this itself"
+   *
+   * Its confidence was **0.95**, and the threshold is 0.7. That sentence is a FALLBACK used
+   * whenever no overrule rule fired — so it fires exactly when the model chose to hand over
+   * on its own judgement, and then reports the one thing that was not the reason. It sent me
+   * looking at confidence thresholds for a while; the real reason was that the agent has no
+   * monthly rate and correctly refused to invent one.
+   *
+   * Nullable and defaulted, not required: an older or terser model reply must still parse.
+   * A missing reason costs a vaguer log line; a schema error costs the whole reply.
+   */
+  handover_reason: z.string().trim().min(1).max(300).nullable().default(null),
   generated_response: z.object({
     email_subject: z.string().trim().min(1).max(200),
     body_text: z.string().trim().min(1).max(8000),

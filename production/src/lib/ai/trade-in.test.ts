@@ -272,6 +272,7 @@ describe("the disparagement guard holds the draft", () => {
   const decisionWith = (body: string): SalesAgentDecision => ({
     customer_intent: "wants to move from GoDaddy",
     perceived_sentiment: "neutral",
+    handover_reason: null,
     confidence_score: 0.95,
     action_required: "REPLY",
     generated_response: { email_subject: "Re: email", body_text: body, whatsapp_summary: "hi" },

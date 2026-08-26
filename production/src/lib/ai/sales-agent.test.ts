@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   applyHandoverRules,
   buildSalesAgentPrompt,
@@ -68,6 +70,7 @@ function decision(over: Partial<SalesAgentDecision> = {}): SalesAgentDecision {
     perceived_sentiment: "interested",
     confidence_score: 0.9,
     action_required: "REPLY",
+    handover_reason: null,
     generated_response: {
       email_subject: "Your Google Workspace quote",
       body_text: "Namaste Asha,\n\nStarter is ₹270 per seat per year.\n\nRegards,\nANUTECH",
@@ -816,6 +819,68 @@ describe("the two claims the prompt authorises", () => {
    band, do the arithmetic, remember to mention it. So the figures are computed here and the
    model only repeats them — the shape `authorisedTotals` already uses for rupee totals.
    ───────────────────────────────────────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   A handover says WHY, and the log stops guessing.
+
+   26 Aug 2026. A customer answered "monthly" on an 80-seat quotation. The agent handed over
+   and the operator's log read "the agent was not confident enough to answer this itself".
+   Its confidence was 0.95 against a 0.7 threshold. That sentence was a fallback used for
+   EVERY unoverruled handover — which is exactly the case where the model chose to hand over
+   deliberately, so it reported the one thing that was not the reason.
+
+   The real reason: the agent has no monthly rate and refused to invent one. An hour went into
+   finding that, and the log had pointed away from it the whole time.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("handover_reason", () => {
+  const raw = {
+    customer_intent: "wants monthly billing",
+    perceived_sentiment: "neutral",
+    confidence_score: 0.95,
+    action_required: "HANDOVER_TO_HUMAN",
+    generated_response: { email_subject: "s", body_text: "b", whatsapp_summary: "w" },
+    next_followup_loop: null,
+    seats_discussed: 80,
+  };
+
+  it("is carried through when the model gives one", () => {
+    const r = parseSalesAgentDecision({ ...raw, handover_reason: "no monthly rate in the catalogue" });
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.decision.handover_reason).toBe("no monthly rate in the catalogue");
+  });
+
+  it("defaults to null rather than failing the parse", () => {
+    /* A terser model reply must still produce a usable decision. A missing reason costs a
+       vaguer log line; a schema error costs the entire reply — and this schema sits between a
+       customer's message and any answer at all. */
+    const r = parseSalesAgentDecision(raw);
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.decision.handover_reason).toBeNull();
+  });
+
+  it("the prompt asks for it, and names a FACT not a feeling", () => {
+    expect(SALES_AGENT_SYSTEM_PROMPT).toContain("handover_reason");
+    expect(SALES_AGENT_SYSTEM_PROMPT).toContain("no monthly rate in the catalogue");
+  });
+
+  it("the dispatcher stops claiming low confidence for a chosen handover", () => {
+    /* Source scan: dispatchSalesDecision writes to the DB, so there is no unit seam. What is
+       being protected is a SENTENCE an operator reads at 11pm to decide whether to take a lead
+       over — and the old one sent me to the wrong place for an hour. */
+    const code = readFileSync(
+      join(process.cwd(), "src", "lib", "ai", "actions", "quote-dispatcher.ts"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+    expect(code).toContain("decision.handover_reason");
+    /* The exact old string must not come back. */
+    expect(code).not.toContain("was not confident enough to answer this itself");
+    /* And when the model gave no reason, the line carries the confidence so the reader can
+       see for themselves that it was not the problem. */
+    expect(code).toContain("confidence_score.toFixed(2)");
+  });
+});
 
 describe("THIS DEAL'S VOLUME RATE is computed, not looked up", () => {
   const build = (seats: number | null, plan: string | null = "Google Workspace Business Starter") =>

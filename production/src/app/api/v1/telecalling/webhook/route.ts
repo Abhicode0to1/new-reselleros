@@ -287,6 +287,10 @@ export async function POST(req: NextRequest) {
          `heardNotWritten` is now passed below, which is the guard the comment claimed. */
       confidence_score: 1,
       action_required: "GENERATE_QUOTE_AND_SEND",
+      /* Null because this path never hands over — the action above is fixed, and there is no
+         model here to have a reason. Set explicitly rather than left to a default, so a future
+         handover branch on this path has to decide what to say. */
+      handover_reason: null,
       generated_response: {
         email_subject: "The quotation you asked for on our call",
         body_text:
