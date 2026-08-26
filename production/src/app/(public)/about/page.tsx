@@ -8,6 +8,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { PublicShell } from "../_components/public-shell";
+import { PLATFORM_OPERATOR } from "@/lib/platform";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -25,7 +26,7 @@ export default function AboutPage() {
           <Badge kind="info" dot className="mb-4">The story</Badge>
           <p className="text-lg leading-relaxed text-ink-2">
             ResellerOS was born out of frustration. After 12+ years running{" "}
-            <b>Excel Technologies</b> — a Mumbai-based Google Workspace, Microsoft
+            <b>ANUTECH DIGITAL</b> — a Delhi-based Google Workspace, Microsoft
             365, and Zoho reseller — I was juggling 5-7 disconnected tools just
             to run the business: a spreadsheet for leads, Tally for invoices,
             Zoho Books for accounting, WhatsApp for follow-ups, email for
@@ -83,7 +84,7 @@ export default function AboutPage() {
         <section className="rounded-md border border-amber/30 bg-amber-soft/30 p-5">
           <Badge kind="warning" size="sm" dot className="mb-2">Dogfooding</Badge>
           <p className="text-base text-ink-2 leading-relaxed">
-            <b>Excel Technologies is our first customer.</b> Every feature you
+            <b>ANUTECH DIGITAL is our first customer.</b> Every feature you
             see has been battle-tested against our own operations — quotes
             we&rsquo;ve sent, payments we&rsquo;ve received, GST returns
             we&rsquo;ve filed, customers we&rsquo;ve renewed. If it doesn&rsquo;t
@@ -96,12 +97,12 @@ export default function AboutPage() {
           <h2 className="font-serif text-2xl mb-4">Founded by</h2>
           <div className="rounded-md border border-hairline bg-paper-2/30 p-5 flex items-start gap-4">
             <div className="w-14 h-14 rounded-full bg-amber-soft flex items-center justify-center text-amber-ink font-serif text-xl shrink-0">
-              PA
+              PS
             </div>
             <div className="min-w-0">
-              <p className="font-medium text-ink">Pardeep A</p>
+              <p className="font-medium text-ink">Pardeep Sharma</p>
               <p className="text-sm text-ink-3 mt-0.5">
-                Founder · Excel Technologies Pvt Ltd · Mumbai
+                Founder · ANUTECH DIGITAL PVT LTD · Delhi
               </p>
               <p className="text-[13px] text-ink-2 mt-2 leading-relaxed">
                 12+ years as a Google Workspace + M365 reseller. Built ResellerOS
@@ -116,9 +117,12 @@ export default function AboutPage() {
         <section>
           <h2 className="font-serif text-2xl mb-3">Company facts</h2>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <Fact label="Legal entity"      value="Excel Technologies Pvt Ltd" />
+            {/* "Hosted in Mumbai" neeche JAAN-BOOJHKAR raha — wo Google Cloud ka region
+                hai, company ka sheher nahi. Company Delhi ki hai. */}
+            <Fact label="Legal entity"      value={PLATFORM_OPERATOR.legalName} />
+            <Fact label="GSTIN"             value={PLATFORM_OPERATOR.gstin} />
             <Fact label="Country"           value="India" />
-            <Fact label="Headquarters"      value="Mumbai, Maharashtra" />
+            <Fact label="Headquarters"      value="Rohini, Delhi" />
             <Fact label="Hosted in"         value="Google Cloud, Mumbai (asia-south1)" />
             <Fact label="Database"          value="Supabase Postgres (Mumbai)" />
             <Fact label="Payments"          value="Razorpay (PCI-DSS compliant)" />

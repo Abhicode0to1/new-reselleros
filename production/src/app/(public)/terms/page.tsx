@@ -16,21 +16,25 @@ import type { Metadata } from "next";
 import {
   PublicShell, Intro, TOC, Section, Callout, FooterMeta,
 } from "../_components/public-shell";
+import { PLATFORM_OPERATOR } from "@/lib/platform";
 
 export const metadata: Metadata = {
   title: "Terms of Service — ResellerOS",
   description: "Terms governing your use of ResellerOS.",
 };
 
-const LAST_UPDATED = "28 May 2026";
+/* 26 Aug 2026: operator entity badli (dekho privacy/page.tsx ka wahi comment). Terms me
+   "Company" ka matlab hi badal gaya, isliye taareekh badalna zaroori hai — nahi to
+   dastavez kehta hai ki ye shartein May se kisi AUR company ke saath thin. */
+const LAST_UPDATED = "26 Aug 2026";
 
 export default function TermsPage() {
   return (
     <PublicShell title="Terms of Service" subtitle={`Last updated: ${LAST_UPDATED}`}>
       <Intro>
-        These Terms govern your access to and use of <b>ResellerOS</b> — a
-        software-as-a-service platform operated by <b>Excel Technologies
-        Pvt Ltd</b> (&ldquo;Company&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;)
+        These Terms govern your access to and use of <b>{PLATFORM_OPERATOR.productName}</b> — a
+        software-as-a-service platform operated by <b>{PLATFORM_OPERATOR.legalName}</b>{" "}
+        (GSTIN {PLATFORM_OPERATOR.gstin}) (&ldquo;Company&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;)
         for cloud resellers in India. By creating an account or using the
         Service, you agree to these Terms. If you don&rsquo;t agree, please
         do not use the Service.
@@ -120,8 +124,8 @@ export default function TermsPage() {
 
       <Section id="our-ip" n={5} title="Our intellectual property">
         <p>
-          ResellerOS&rsquo;s software, design, content, brand, logos, and
-          documentation are owned by Excel Technologies Pvt Ltd. We grant you
+          {PLATFORM_OPERATOR.productName}&rsquo;s software, design, content, brand, logos, and
+          documentation are owned by {PLATFORM_OPERATOR.legalName}. We grant you
           a <b>non-exclusive, non-transferable, revocable licence</b> to use
           the Service for your business while your subscription is active.
         </p>
@@ -213,8 +217,8 @@ export default function TermsPage() {
 
       <Section id="contact" n={13} title="Contact">
         <p className="space-y-1">
-          <strong className="text-ink">Excel Technologies Pvt Ltd</strong><br />
-          Mumbai, Maharashtra, India<br />
+          <strong className="text-ink">{PLATFORM_OPERATOR.legalName}</strong><br />
+          {PLATFORM_OPERATOR.address}<br />
           General:{" "}
           <a href="mailto:hello@resellersos.in" className="text-amber underline">hello@resellersos.in</a><br />
           Legal:{" "}

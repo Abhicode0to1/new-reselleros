@@ -171,9 +171,12 @@ export default function SignupPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <FormField label="Company name" required htmlFor="companyName">
+          {/* Placeholder SIGN UP karne wale ki apni company ke liye hai, hamari nahi.
+              Isliye yahan "ANUTECH DIGITAL" likhna bhi galat hota — naya user ANUTECH nahi
+              hai. Ek aam-sa naam hi theek hai. */}
           <Input
             id="companyName"
-            placeholder="e.g. Excel Technologies Pvt Ltd"
+            placeholder="e.g. Sharma Cloud Solutions Pvt Ltd"
             error={errors.companyName?.message}
             disabled={!configured}
             {...register("companyName")}

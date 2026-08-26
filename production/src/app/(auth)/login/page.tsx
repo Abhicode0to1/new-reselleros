@@ -26,9 +26,17 @@ type FormData = z.infer<typeof schema>;
 // tenants in Supabase — when a tenant is added/removed or its password
 // rotated, update this list. Hidden in production builds.
 const DEMO_USERS: Array<{ label: string; email: string; password: string }> = [
-  { label: "Anutech Digital",                email: "pardeep@anutech.in",            password: "ResellerOS@2026" },
-  { label: "Excel Technologies · Owner",     email: "pardeep@exceltechnologies.in",  password: "ExcelTech@2026"  },
-  { label: "Excel Technologies · Darshan (sales)", email: "darshan@exceltechnologies.in", password: "ExcelSales@2026" },
+  /* 26 Aug 2026: yahan teesri entry thi — `darshan@exceltechnologies.in`. DB me wo user
+     MAUJOOD NAHI HAI, to wo button dabane par sirf login fail hota tha. Upar likha comment
+     ("kept in sync with the actual tenants in Supabase") sach nahi nikla, jo aisi list ke
+     saath hota hi hai.
+
+     Aur dono bachi entry ke naam SAHI hain: "Excel Technologies" yahan purana naam nahi
+     hai — wo ek ASLI doosra tenant hai (uska apna GSTIN aur apna paisa hai). Baaki public
+     pages par wahi naam hata diya gaya kyunki wahan wo ResellerOS ko CHALANE WALI entity
+     bata raha tha, jo wo nahi hai. Ek hi shabd, do bilkul alag matlab. */
+  { label: "Anutech Digital",            email: "pardeep@anutech.in",           password: "ResellerOS@2026" },
+  { label: "Excel Technologies · Owner", email: "pardeep@exceltechnologies.in", password: "ExcelTech@2026"  },
 ];
 
 function LoginPageInner() {

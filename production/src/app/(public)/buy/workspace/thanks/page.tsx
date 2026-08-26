@@ -9,7 +9,7 @@
  * Security posture
  *   Quote IDs (Q-2025-26-NNNN) are guessable, so we ONLY render order
  *   details when:
- *     • the quote belongs to BUY_PAGE_TENANT_ID (Excel Tech's tenant)
+ *     • the quote belongs to BUY_PAGE_TENANT_ID (ANUTECH's tenant)
  *     • payment_status is 'received' (paid) or 'partial'
  *   Anything else → friendly fallback page with no leaked data.
  */

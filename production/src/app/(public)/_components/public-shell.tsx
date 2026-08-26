@@ -7,6 +7,7 @@
  * cross-page imports that confuse the dev compiler.
  */
 import Link from "next/link";
+import { PLATFORM_OPERATOR } from "@/lib/platform";
 
 export function PublicShell({
   title, subtitle, children,
@@ -34,8 +35,21 @@ export function PublicTopBar() {
   return (
     <header className="border-b border-hairline">
       <div className="max-w-5xl mx-auto px-5 py-4 flex items-center justify-between">
-        <Link href="/" className="font-serif text-xl text-ink hover:text-amber transition-colors">
-          ResellerOS
+        {/* Landing page ke header jaisa hi lockup — logo, product, phir company. */}
+        <Link href="/" className="flex items-center gap-2.5 text-ink hover:text-amber transition-colors">
+          <img
+            src={PLATFORM_OPERATOR.logo}
+            alt=""
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0 rounded-full"
+          />
+          <span className="flex flex-col leading-none">
+            <span className="font-serif text-xl">{PLATFORM_OPERATOR.productName}</span>
+            <span className="mt-1 text-2xs font-medium uppercase tracking-wider text-ink-3">
+              by {PLATFORM_OPERATOR.shortName}
+            </span>
+          </span>
         </Link>
         <nav className="flex gap-5 text-sm text-ink-3">
           <Link href={"/pricing" as never} className="hover:text-ink">Pricing</Link>
@@ -51,8 +65,17 @@ export function PublicFooter() {
   return (
     <footer className="border-t border-hairline mt-16">
       <div className="max-w-5xl mx-auto px-5 py-8 flex flex-col md:flex-row gap-4 md:items-center md:justify-between text-[12px] text-ink-3">
-        <div>
-          © {new Date().getFullYear()} Excel Technologies Pvt Ltd · Mumbai, India
+        <div className="flex items-center gap-2.5">
+          <img
+            src={PLATFORM_OPERATOR.logo}
+            alt={`${PLATFORM_OPERATOR.legalName} logo`}
+            width={24}
+            height={24}
+            className="h-6 w-6 rounded-full"
+          />
+          <span>
+            © {new Date().getFullYear()} {PLATFORM_OPERATOR.legalName} · {PLATFORM_OPERATOR.city}
+          </span>
         </div>
         <nav className="flex gap-4">
           <Link href={"/privacy" as never} className="hover:text-ink">Privacy</Link>
@@ -126,9 +149,8 @@ export function FooterMeta() {
   return (
     <p className="text-[12px] text-ink-3 italic border-t border-hairline pt-6 mt-8">
       This document is provided for transparency and compliance with the DPDP
-      Act 2023. It is not a substitute for legal advice. Excel Technologies Pvt
-      Ltd reserves the right to update this policy as our practices or
-      applicable law evolves.
+      Act 2023. It is not a substitute for legal advice. {PLATFORM_OPERATOR.legalName}{" "}
+      reserves the right to update this policy as our practices or applicable law evolves.
     </p>
   );
 }

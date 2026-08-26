@@ -133,7 +133,7 @@ function SitePromoBanner({ promo }: { promo: SitePromoRow }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Pardeep / Excel Tech contact constants — used everywhere we link to
+// Pardeep / ANUTECH contact constants — used everywhere we link to
 // WhatsApp or phone. Single source of truth.
 // ──────────────────────────────────────────────────────────────────────
 const PARDEEP_PHONE         = "9999930300";              // raw, for tel: + wa.me
@@ -735,7 +735,7 @@ function FounderHero({ waMessage }: { waMessage: string }) {
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-serif text-xl text-ink leading-tight">Pardeep Sharma</div>
-            <div className="text-sm text-ink-3 mt-0.5">Founder, Excel Technologies</div>
+            <div className="text-sm text-ink-3 mt-0.5">Founder, ANUTECH DIGITAL PVT LTD</div>
             <div className="text-2xs text-amber-ink mt-1 font-medium">
               Google Premier Partner · since 2014
             </div>
@@ -792,7 +792,7 @@ function FounderHero({ waMessage }: { waMessage: string }) {
  *      └─────────────────────────────────┘
  */
 // "Google Workspace includes" — 16 product chips with real Google brand
-// icons. Excel Tech is an authorised Google Premier Partner; partner brand
+// icons. ANUTECH DIGITAL is an authorised Google Premier Partner; partner brand
 // guidelines permit display of Google product marks when reselling those
 // products. Icon URLs point to public Wikimedia Commons assets (the same
 // approach used in the prototype). Fallback letter chip is shown when an
@@ -1274,7 +1274,7 @@ export function BuyWorkspaceClient({
               R
             </div>
             <div className="hidden sm:block">
-              <div className="font-serif text-base leading-none">Excel Technologies</div>
+              <div className="font-serif text-base leading-none">ANUTECH DIGITAL</div>
               <div className="text-3xs text-ink-3 mt-1">Cloud Reseller · India</div>
             </div>
           </div>
@@ -1608,7 +1608,7 @@ export function BuyWorkspaceClient({
               <span className="text-amber">a person who picks up your call.</span>
             </h2>
             <p className="text-base text-ink-3 max-w-2xl mx-auto leading-relaxed">
-              Excel Tech and Google direct have the same MRP. The difference
+              ANUTECH DIGITAL and Google direct have the same MRP. The difference
               is what&apos;s wrapped around the price.
             </p>
           </div>
@@ -1622,7 +1622,7 @@ export function BuyWorkspaceClient({
                     <div className="text-3xs uppercase tracking-wider font-semibold text-amber-ink mb-1">
                       Recommended
                     </div>
-                    <h3 className="font-serif text-xl text-ink">Excel Technologies</h3>
+                    <h3 className="font-serif text-xl text-ink">ANUTECH DIGITAL</h3>
                   </div>
                   <div className="font-serif text-2xl text-ink">₹1,080</div>
                 </div>
@@ -1907,7 +1907,7 @@ export function BuyWorkspaceClient({
             <div className="w-7 h-7 bg-ink text-paper rounded grid place-items-center font-serif text-sm">
               R
             </div>
-            <div className="font-serif text-sm">Excel Technologies Pvt Ltd</div>
+            <div className="font-serif text-sm">ANUTECH DIGITAL PVT LTD</div>
           </div>
           <div className="text-xs text-ink-3 font-mono">
             Made in India · GSTIN registered · Google Premier Partner
@@ -2917,7 +2917,7 @@ function BuyNowDialog({
       key:         json.razorpayKeyId,
       amount:      json.amount,
       currency:    json.currency ?? "INR",
-      name:        "Excel Technologies",
+      name:        "ANUTECH DIGITAL PVT LTD",
       description: `Google Workspace ${json.tierName ?? tier.name} · ${json.seats ?? seats} users (annual)`,
       order_id:    json.orderId,
       prefill: {

@@ -17,19 +17,26 @@ import type { Metadata } from "next";
 import {
   PublicShell, Intro, TOC, Section, Callout, FooterMeta,
 } from "../_components/public-shell";
+import { PLATFORM_OPERATOR } from "@/lib/platform";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — ResellerOS",
   description: "How ResellerOS collects, uses, and protects your data. DPDP Act 2023 compliant.",
 };
 
-const LAST_UPDATED = "28 May 2026";
+/* 26 Aug 2026 ko badla kyunki SERVICE CHALANE WALI ENTITY badli: dastavez pehle "Excel
+   Technologies Pvt Ltd" ko operator batata tha, jo ek doosri legal entity hai (uska GSTIN
+   ek proprietorship ka hai — dekho lib/platform.ts). Privacy Policy me operator ka naam
+   badalna aur taareekh purani chhod dena wahi jhooth hai jise ye badlav theek karne aaya
+   hai — padhne wale ko lagega ki May se yahi likha tha. */
+const LAST_UPDATED = "26 Aug 2026";
 
 export default function PrivacyPage() {
   return (
     <PublicShell title="Privacy Policy" subtitle={`Last updated: ${LAST_UPDATED}`}>
       <Intro>
-        ResellerOS is operated by <b>Excel Technologies Pvt Ltd</b> (&ldquo;ResellerOS&rdquo;,
+        {PLATFORM_OPERATOR.productName} is operated by <b>{PLATFORM_OPERATOR.legalName}</b>{" "}
+        (GSTIN {PLATFORM_OPERATOR.gstin}) (&ldquo;ResellerOS&rdquo;,
         &ldquo;we&rdquo;, &ldquo;us&rdquo;, &ldquo;our&rdquo;). This Privacy Policy explains how
         we collect, use, store, and share information when you use our SaaS platform
         for cloud resellers — accessible via <code>resellersos.in</code> and related
@@ -174,9 +181,9 @@ export default function PrivacyPage() {
       <Section id="contact" n={9} title="Grievance contact / DPO">
         <p className="space-y-1">
           <strong className="text-ink">Data Protection Officer:</strong><br />
-          Pardeep A<br />
-          Excel Technologies Pvt Ltd<br />
-          Mumbai, Maharashtra, India<br />
+          {PLATFORM_OPERATOR.directors[0]}<br />
+          {PLATFORM_OPERATOR.legalName}<br />
+          {PLATFORM_OPERATOR.address}<br />
           Email:{" "}
           <a href="mailto:privacy@resellersos.in" className="text-amber underline">
             privacy@resellersos.in

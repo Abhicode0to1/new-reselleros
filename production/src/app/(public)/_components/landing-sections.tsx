@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
+import { PLATFORM_OPERATOR } from "@/lib/platform";
 import React from "react";
 
 /* ───────────────────────────────────────────────────────────────
@@ -116,7 +117,11 @@ export function TrustRibbon() {
         <Dot />
         <span className="text-emerald font-semibold">⚡ 1-Click Excel & Tally Migration</span>
         <Dot />
-        <span>🇮🇳 Built in Mumbai</span>
+        {/* Company Delhi ki hai (ANUTECH DIGITAL PVT LTD, Rohini — lib/platform.ts).
+            Neeche "Google Cloud Mumbai" JAAN-BOOJHKAR waisa hi hai: wo server ka region
+            hai (`ap-south-1`) aur wo sach hai. Do alag Mumbai — "Mumbai" ka blanket
+            replace ek sahi baat tod deta. */}
+        <span>🇮🇳 Built in Delhi</span>
         <Dot />
         <span>GST + HSN 998313</span>
         <Dot />
@@ -402,7 +407,7 @@ export function WhyUs() {
     {
       num: "01",
       title: "Built by a reseller",
-      body: "12+ years running Excel Technologies — a Mumbai-based GW/M365/Zoho reseller. Every workflow comes from real operational pain, not feature-list bingo.",
+      body: "12+ years running ANUTECH DIGITAL — a Delhi-based GW/M365/Zoho reseller. Every workflow comes from real operational pain, not feature-list bingo.",
     },
     {
       num: "02",
@@ -411,8 +416,8 @@ export function WhyUs() {
     },
     {
       num: "03",
-      title: "No drift from Excel Tech",
-      body: "Excel Technologies is our first customer. If a feature doesn't work for us in production, it doesn't ship. Zero theoretical features.",
+      title: "No drift from our own desk",
+      body: "ANUTECH DIGITAL is our first customer. If a feature doesn't work for us in production, it doesn't ship. Zero theoretical features.",
     },
   ];
 
@@ -476,9 +481,9 @@ export function FounderSection() {
             <div className="mt-6 flex items-center gap-3">
               <div className="h-px w-10 bg-ink-3/40" />
               <div>
-                <p className="font-medium text-ink">Pardeep A</p>
+                <p className="font-medium text-ink">{PLATFORM_OPERATOR.directors[0]}</p>
                 <p className="font-mono text-2xs uppercase tracking-wider text-ink-3">
-                  Founder · Excel Technologies · Mumbai
+                  Founder · {PLATFORM_OPERATOR.legalName} · Delhi
                 </p>
               </div>
             </div>
@@ -494,10 +499,10 @@ export function FounderSection() {
           >
             <div className="mb-5 flex items-start gap-4">
               <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-amber-soft font-serif text-xl text-amber-ink shadow-inner">
-                PA
+                PS
               </div>
               <div>
-                <p className="font-medium text-ink">Pardeep A</p>
+                <p className="font-medium text-ink">Pardeep Sharma</p>
                 <p className="text-sm text-ink-3">
                   12+ years as a Google Workspace, M365 &amp; Zoho reseller
                 </p>
@@ -507,7 +512,7 @@ export function FounderSection() {
               Built ResellerOS from the real constraints of operating his own
               business — payments missed, renewals slipped, GST filings done at
               the eleventh hour. Now sharing the tool with other resellers
-              instead of keeping it inside Excel Tech.
+              instead of keeping it inside {PLATFORM_OPERATOR.shortName}.
             </p>
             <Link
               href={"/about" as never}
@@ -642,8 +647,11 @@ function DashboardMockup() {
     <div className="flex min-h-[420px]">
       {/* Sidebar */}
       <aside className="hidden w-[180px] shrink-0 border-r border-hairline/60 bg-paper-2/30 p-3 sm:block backdrop-blur-md">
+        {/* Mockup ke sidebar me operator ka apna workspace dikhta hai — page ka poora
+            dawa hi "hum ise khud chalate hain" hai. To naam bhi wahi hona chahiye jo asli
+            app me hai. */}
         <div className="mb-4 px-2 font-mono text-3xs uppercase tracking-wider text-ink-3 font-semibold">
-          Excel Tech
+          {PLATFORM_OPERATOR.shortName}
         </div>
         <SidebarItem icon="home"    label="Dashboard" active />
         <SidebarItem icon="target"  label="Leads"     badge="3" />

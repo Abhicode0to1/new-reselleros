@@ -124,7 +124,7 @@ export function ThanksClient({
               R
             </div>
             <div className="hidden sm:block">
-              <div className="font-serif text-base leading-none">Excel Technologies</div>
+              <div className="font-serif text-base leading-none">ANUTECH DIGITAL</div>
               <div className="text-3xs text-ink-3 mt-1">Cloud Reseller · India</div>
             </div>
           </Link>
@@ -334,7 +334,7 @@ export function ThanksClient({
       <footer className="py-8 text-center text-xs text-ink-3">
         <div className="max-w-[800px] mx-auto px-6 space-y-1">
           <div>
-            Excel Technologies Pvt Ltd · Google Premier Partner since 2014 ·
+            ANUTECH DIGITAL PVT LTD · Google Premier Partner since 2014 ·
             GSTIN registered · Indian SMEs trust us with their email.
           </div>
           <div>
