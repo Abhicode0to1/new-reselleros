@@ -1345,7 +1345,13 @@ export default function QuoteDetailPage() {
             `Your quote ${quote.id} for ${rupee(quote.amount)} is attached. ` +
             `You can also review and accept it online:\n` +
             `${typeof window !== "undefined" ? window.location.origin : ""}/quote/${quote.id}/accept?t=${encodeURIComponent(quote.public_token)}\n\n` +
-            `— ${me?.tenantName ?? "Excel Technologies"}`
+            /* Sign-off ka fallback HATA diya gaya, badla nahi. Pehle yahan
+               `?? "Excel Technologies"` tha — yaani `me` load na hone par ye WhatsApp
+               grahak ke paas ek AISI company ke naam se jaata jo use bheji hi nahi.
+               Wahi shreni jo lib/invoices/supplier-identity.ts poore comment ke saath
+               likhti hai: galat company ka naam likhne se behtar hai naam na likhna.
+               Naam pata ho to sign hota hai; na ho to line hi nahi aati. */
+            (me?.tenantName ? `— ${me.tenantName}` : "")
           }
           title={`Send quote ${quote.id} via WhatsApp`}
           attachQuoteId={quote.id}

@@ -405,7 +405,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
             <FormField label="Customer Company Name *" required htmlFor="custName">
               <Input
                 id="custName"
-                placeholder="e.g. Excel Technologies"
+                placeholder="e.g. Sharma Cloud Solutions"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 required

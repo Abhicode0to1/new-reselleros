@@ -311,7 +311,7 @@ export default function EmailSendingCard() {
               id="from-name"
               value={fromName}
               onChange={(e) => { setFromName(e.target.value); setDirty(true); }}
-              placeholder="Excel Technologies"
+              placeholder="Sharma Cloud Solutions"
             />
           </div>
         </div>

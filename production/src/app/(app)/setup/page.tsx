@@ -106,7 +106,7 @@ function StepCompany({
       <div className="grid grid-cols-2 gap-3">
         <Field label="Legal company name" className="col-span-2">
           <Input
-            placeholder="e.g. Excel Technologies Pvt Ltd"
+            placeholder="e.g. Sharma Cloud Solutions Pvt Ltd"
             value={data.companyName}
             onChange={(e) => update("companyName", e.target.value)}
           />

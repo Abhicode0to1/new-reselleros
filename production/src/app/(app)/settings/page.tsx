@@ -212,7 +212,7 @@ function CompanyTab() {
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Legal name *">
                   <Input
-                    placeholder="E.g., Excel Technologies Pvt Ltd"
+                    placeholder="E.g., Sharma Cloud Solutions Pvt Ltd"
                     error={errors.name?.message}
                     {...register("name")}
                   />

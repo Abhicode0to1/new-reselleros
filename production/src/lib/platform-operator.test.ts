@@ -24,6 +24,15 @@ import { PLATFORM_OPERATOR } from "./platform";
    ───────────────────────────────────────────────────────────────────────────── */
 
 const PUBLIC_FACING = [
+  /* ⚠️ `layout.tsx` is list me 26 Aug 2026 ko DEPLOY KE BAAD juda, aur wahi is list ka
+     sabak hai. Wo `authors: [{ name: ... }]` rakhta hai, jo HAR page par
+     `<meta name="author">` ban kar jaata hai — landing, privacy, terms, sab. Meri pehli
+     list me sirf 6 "public page" the, layout unme nahi tha, to test green raha aur purana
+     naam LIVE par baith gaya. Maine use curl se live HTML me pakda, test se nahi.
+
+     Sabak: "public-facing" ka matlab wo file nahi jise user KHOLTA hai — wo har file hai
+     jiska output user tak PAHUNCHTA hai. Layout, metadata aur manifest usme aate hain. */
+  ["root layout",  ["src", "app", "layout.tsx"]],
   ["landing",      ["src", "app", "page.tsx"]],
   ["public shell", ["src", "app", "(public)", "_components", "public-shell.tsx"]],
   ["landing bits", ["src", "app", "(public)", "_components", "landing-sections.tsx"]],
@@ -78,6 +87,23 @@ describe("public pages par purani entity ka naam nahi", () => {
       expect(codeOf(parts)).not.toMatch(/Excel Tech/i);
     });
   }
+
+  it("grahak ko jaane wale message me kisi doosri company ka naam nahi", () => {
+    /* Ye do jagah live deploy ke baad mili, aur dono UPAR wali list se bahar thin —
+       isliye alag se pinned hain:
+
+         • quotes/[id]/page.tsx — WhatsApp ka body, `me?.tenantName ?? "Excel Technologies"`.
+           `me` load na ho to quote us company ke naam se jaata jo usne bheji hi nahi.
+         • tds-detail-dialog.tsx — Form 16A maangne wala message, "Pardeep, Excel Tech" se
+           sign hota tha.
+
+       Dono ek hi shreni hain jise lib/invoices/supplier-identity.ts poore comment ke saath
+       likhti hai: galat company ka naam chhapne se behtar hai naam na chhapna. */
+    for (const p of [["src", "app", "(app)", "quotes", "[id]", "page.tsx"],
+                     ["src", "components", "features", "accounting", "tds-detail-dialog.tsx"]]) {
+      expect(codeOf(p), p.join("/")).not.toMatch(/Excel Tech/i);
+    }
+  });
 
   it("legal pages operator ka naam CONSTANT se lete hain, type karke nahi", () => {
     /* Yahi wo cheez hai jis se ye bug 55 file me phaila: har jagah naam type kiya gaya

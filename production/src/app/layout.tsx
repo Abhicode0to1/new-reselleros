@@ -4,6 +4,7 @@ import { DM_Serif_Display, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/g
 
 import "@/app/globals.css";
 import { cn } from "@/lib/utils";
+import { PLATFORM_OPERATOR } from "@/lib/platform";
 import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "@/components/providers";
 
@@ -40,7 +41,12 @@ export const metadata: Metadata = {
     "Razorpay billing",
     "Premier Partner",
   ],
-  authors: [{ name: "Excel Technologies Pvt Ltd" }],
+  /* 26 Aug 2026: live deploy ke baad ye chhoot pakdi gayi. Ye `<meta name="author">` HAR
+     page par jaata hai — landing, privacy, terms, sab — aur wo purani entity ka naam le
+     raha tha. Mera pehla test sirf 6 public page scan karta tha; root layout usme nahi
+     tha, to test green tha aur naam live par baitha tha. Test ki list ab is file ko bhi
+     dekhti hai. */
+  authors: [{ name: PLATFORM_OPERATOR.legalName }],
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   openGraph: {
     type: "website",

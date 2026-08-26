@@ -117,7 +117,7 @@ export function TdsDetailDialog({ open, onOpenChange, tds }: Props) {
   const chaseMessage = (() => {
     switch (tds.status) {
       case "pending_cert":
-        return `Hi ${tds.customer_name}, you deducted ₹${tds.tds_amount.toLocaleString("en-IN")} TDS (${tds.section} @ ${Number(tds.rate_pct).toFixed(2)}%) on our invoice. ${tds.fiscal_year} is closing — kindly share Form 16A certificate so I can claim it in my ITR. Thanks — Pardeep, Excel Tech`;
+        return `Hi ${tds.customer_name}, you deducted ₹${tds.tds_amount.toLocaleString("en-IN")} TDS (${tds.section} @ ${Number(tds.rate_pct).toFixed(2)}%) on our invoice. ${tds.fiscal_year} is closing — kindly share Form 16A certificate so I can claim it in my ITR. Thanks — Pardeep`;
       case "disputed":
         return `Hi ${tds.customer_name}, the ₹${tds.tds_amount.toLocaleString("en-IN")} TDS you deducted doesn't appear in my Form 26AS for ${tds.fiscal_year}. Could you confirm it was deposited with govt? BSR code / Challan number share kar do please — bohut zaruri hai. — Pardeep`;
       default:

@@ -114,7 +114,7 @@ export function CreateProjectDialog({ open, onOpenChange }: Props) {
 
         <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
           <FormField label="Customer" required htmlFor="p_customer">
-            <Input id="p_customer" autoFocus placeholder="e.g. Excel Technologies" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+            <Input id="p_customer" autoFocus placeholder="e.g. Sharma Cloud Solutions" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
           </FormField>
 
           <FormField label="Project title" required htmlFor="p_title">
