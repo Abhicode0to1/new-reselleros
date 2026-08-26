@@ -19,7 +19,7 @@
  * exists to prevent.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import {
   googleOAuthCreds, originFromRequest, gmailRedirectUri, buildAuthUrl, GMAIL_SEND_SCOPES,
 } from "@/lib/google/oauth";
@@ -47,7 +47,19 @@ export async function GET(request: NextRequest) {
 
      Union maang kar consent screen dono cheezein dikhata hai, aur Google ko union karna
      hi nahi padta. Poori naap lib/google/scope-union.ts me. */
-  const { data: prior } = await supabase
+  /* ⚠️ ADMIN client se, `supabase` (user client) se NAHI — aur ye load-bearing hai.
+     `user_google_tokens` par RLS ON hai aur uspar ZERO policy hai (naapa gaya 26 Aug 2026,
+     `pg_policies` se). Yaani user client us table se kuch bhi nahi padh sakta, aur wo
+     KHAALI lautata hai — error nahi.
+
+     Pehle maine yahi query user client se likhi thi. Nateeja: `prior.scopes` hamesha
+     khaali, union hamesha no-op, aur feature "chalta hua" dikhta rahega jabki kuch nahi
+     karta — phir consent grant ko sankuchit kar dega, theek wo bug jise ye rokne aaya tha.
+     Browser me pakda gaya: scope me `contacts` tha aur `gmail.send` nahi.
+
+     Yahi wo shreni hai jo is repo ko pehle bhi kaat chuki hai — tooti/khaali query chup-chaap
+     "data nahi hai" ban jaati hai. Gmail ka callback bhi isi table ko admin se padhta hai. */
+  const { data: prior } = await createAdminClient()
     .from("user_google_tokens")
     .select("scopes")
     .eq("user_id", user.id)

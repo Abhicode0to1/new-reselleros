@@ -6,7 +6,7 @@
  * access → refresh token). The matching callback stores the tokens.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import {
   googleOAuthCreds, originFromRequest, contactsRedirectUri, buildAuthUrl, GOOGLE_CONTACTS_SCOPES,
 } from "@/lib/google/oauth";
@@ -29,7 +29,11 @@ export async function GET(request: NextRequest) {
   /* Ulti disha ka wahi bachaav jo gmail/connect me hai: pehle se granted scope request me
      jod do, taaki Contacts dobara connect karna Gmail ka bhejna na tod de. 26 Aug 2026 ko
      ye nuksaan doosri disha me ho chuka hai — dekho lib/google/scope-union.ts. */
-  const { data: prior } = await supabase
+  /* ⚠️ ADMIN client se — wajah gmail/connect ke usi block me poori likhi hai. Chhota roop:
+     `user_google_tokens` par RLS ON hai aur ZERO policy hai, to user client hamesha khaali
+     lautata hai, bina error. Us haalat me union no-op ban jata hai aur ye route apne hi
+     maqsad ke ulat kaam karta hai. */
+  const { data: prior } = await createAdminClient()
     .from("user_google_tokens")
     .select("scopes")
     .eq("user_id", user.id)

@@ -129,6 +129,35 @@ describe("connect aur callback isi function se guzarte hain", () => {
     }
   });
 
+  it("purani scopes ADMIN client se padhi jaati hain — user client se nahi", () => {
+    /* Ye test pehli koshish ke fail hone ke baad juda, aur wo fail chup-chaap thi.
+       Maine ye query pehle user client (`supabase`) se likhi thi. Naapa gaya 26 Aug 2026:
+
+           user_google_tokens → RLS ON, policies 0
+
+       Zero policy ke saath user client us table se KUCH nahi padh sakta, aur khaali lautata
+       hai — error nahi. To `prior.scopes` hamesha khaali, union hamesha no-op, aur route
+       "chalta hua" dikhta rahega jabki wo apne hi maqsad ke ulat kaam karega: consent grant
+       sankuchit kar dega.
+
+       Browser me pakda gaya, test se nahi — contacts connect ka scope param me `contacts`
+       tha aur `gmail.send` nadarad. Isliye ab ye source par pinned hai.
+
+       `.eq("user_id", user.id)` hi suraksha hai (admin ke saath RLS nahi hota), aur wo
+       neeche wale assert me shamil hai. */
+    for (const p of [
+      ["src", "app", "api", "integrations", "google-gmail", "connect", "route.ts"],
+      ["src", "app", "api", "integrations", "google-contacts", "connect", "route.ts"],
+    ]) {
+      const src = read(p);
+      expect(src, p.join("/")).toMatch(
+        /createAdminClient\(\)\s*\n?\s*\.from\("user_google_tokens"\)/,
+      );
+      /* Bina is filter ke admin read kisi bhi user ki row de sakta hai. */
+      expect(src, p.join("/")).toContain('.eq("user_id", user.id)');
+    }
+  });
+
   it("gmail callback nuksaan ko DB me likhta hai, chup nahi rehta", () => {
     const cb = read(["src", "app", "api", "integrations", "google-gmail", "callback", "route.ts"]);
     expect(cb).toContain("scopesLost(");
