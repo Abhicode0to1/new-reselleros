@@ -805,6 +805,97 @@ describe("the two claims the prompt authorises", () => {
 });
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   The prompt hands over the FINISHED volume rate, it does not ask for a lookup.
+
+   Two live quotations, both wrong the same way:
+     Q-ADPL-2026-27-0017  70 seats — "Rs 3,240 per seat per year plus 18% GST", 5% unmentioned
+     Q-ADPL-2026-27-0018  80 seats — the same, AFTER an instruction telling it to say so
+
+   The second one is why this block exists. The instruction was deployed and verified live, and
+   the model still skipped it, because it asked for three things the app already knew: find the
+   band, do the arithmetic, remember to mention it. So the figures are computed here and the
+   model only repeats them — the shape `authorisedTotals` already uses for rupee totals.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+describe("THIS DEAL'S VOLUME RATE is computed, not looked up", () => {
+  const build = (seats: number | null, plan: string | null = "Google Workspace Business Starter") =>
+    buildSalesAgentPrompt({
+      lead: { ...LEAD, seats, plan },
+      history: [],
+      incoming: "quote please",
+      catalog: CATALOGUE,
+      sellerName: "ANUTECH DIGITAL PVT LTD",
+      sellerEmail: "sales@anutech.in",
+    }).user;
+
+  it("80 seats gets the 5% band with both rupee figures worked out", () => {
+    /* Its own catalogue, on purpose. The shared CATALOGUE fixture carries 270 in a field named
+       `msrpPerSeatPerYear` — a per-MONTH value in a per-year slot, which is the exact confusion
+       the "items.msrp is per MONTH" block below was written about. Asserting the live numbers
+       against that fixture would pass while proving nothing about the real deal.
+
+       These are Q-ADPL-2026-27-0018's actual figures: ₹270/month = ₹3,240/year list, less the
+       5% band for 51–100 seats = ₹3,078. */
+    const p = buildSalesAgentPrompt({
+      lead: { ...LEAD, seats: 80 },
+      history: [],
+      incoming: "quote please",
+      catalog: [{ ...CATALOGUE[0], msrpPerSeatPerYear: 3240, wholesalePerSeatPerYear: 1320 }],
+      sellerName: "ANUTECH DIGITAL PVT LTD",
+      sellerEmail: "sales@anutech.in",
+    }).user;
+    expect(p).toContain("THIS DEAL'S VOLUME RATE");
+    expect(p).toContain("5%");
+    expect(p).toMatch(/3,240/);
+    expect(p).toMatch(/3,078/);
+  });
+
+  it("21-50 seats gets 3%, not 5% — the band is read from slabFor, not written here", () => {
+    const p = build(30);
+    expect(p).toContain("3%");
+    expect(p).not.toMatch(/THIS DEAL'S VOLUME RATE[\s\S]{0,300}\b5%/);
+  });
+
+  it("1-20 seats gets NO block at all — inventing a discount there is the old bug", () => {
+    /* The rate card gives 0% under 21 seats. A block naming any discount would be telling the
+       model to promise something the quote will not apply. */
+    expect(build(12)).not.toContain("THIS DEAL'S VOLUME RATE");
+    expect(build(20)).not.toContain("THIS DEAL'S VOLUME RATE");
+  });
+
+  it("no seat count and no product mean no block", () => {
+    /* Without either there is no single rate to name. The rate-card TABLE is still in the
+       prompt for that case, which is what the model needs while it is still asking. */
+    expect(build(null)).not.toContain("THIS DEAL'S VOLUME RATE");
+    expect(build(80, null)).not.toContain("THIS DEAL'S VOLUME RATE");
+    expect(build(80, "A Product We Do Not Sell")).not.toContain("THIS DEAL'S VOLUME RATE");
+  });
+
+  it("above 100 seats there is no block — that deal is a person's job", () => {
+    /* slabFor returns a non-slab outcome above CUSTOM_PRICING_ABOVE, and applyHandoverRules
+       hands the deal over anyway. A discount line here would be drafting words for a reply
+       that must never be sent. */
+    expect(build(150)).not.toContain("THIS DEAL'S VOLUME RATE");
+  });
+
+  it("stays silent when the discount would reach our own cost", () => {
+    /* discountedRate REFUSES a slab that lands at or below cost, and returns appliedPercent 0.
+       Naming a discount the quote will not apply is the SAME bug this block fixes, in mirror
+       image: words the document contradicts. Cost 3,100 against a 5%-discounted 3,078. */
+    const thin = [{ ...CATALOGUE[0], wholesalePerSeatPerYear: 3100 }];
+    const p = buildSalesAgentPrompt({
+      lead: { ...LEAD, seats: 80 },
+      history: [],
+      incoming: "quote please",
+      catalog: thin,
+      sellerName: "ANUTECH DIGITAL PVT LTD",
+      sellerEmail: "sales@anutech.in",
+    }).user;
+    expect(p).not.toContain("THIS DEAL'S VOLUME RATE");
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
    The unit of `items.msrp`, pinned across BOTH paths that price from it.
 
    Found live on 24 Aug 2026. `loadSalesCatalog` copied `items.msrp` into a field named

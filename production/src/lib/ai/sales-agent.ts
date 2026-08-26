@@ -454,6 +454,44 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
       ` [our cost ${rupees(c.wholesalePerSeatPerYear)} — INTERNAL, never state]`,
   );
 
+  /* ── THIS deal's volume rate, worked out HERE ───────────────────────────────
+     The model is told the finished figures instead of the table plus a lookup. Why, in full,
+     at the prompt line that renders this. Short version: the instruction-shaped version of
+     this shipped, was verified live, and the very next quotation omitted the discount again —
+     three model steps (find the band, do the arithmetic, remember to say it) where the app
+     already knows the answer exactly.
+
+     Requires BOTH a seat count and the product, because without either there is no single
+     rate to name; the rate-card table above still covers that case. */
+  const dealItem =
+    lead.plan !== null ? catalog.find((c) => c.name === lead.plan) ?? null : null;
+  const dealSlab = lead.seats !== null ? slabFor(lead.seats) : null;
+  const dealSlabLines: string[] =
+    dealItem && dealSlab && dealSlab.kind === "slab" && dealSlab.slab.percent > 0
+      ? (() => {
+          const priced = discountedRate(
+            dealItem.msrpPerSeatPerYear,
+            dealSlab.slab.percent,
+            dealItem.wholesalePerSeatPerYear,
+          );
+          /* `appliedPercent` 0 means discountedRate REFUSED the slab — it lands at or below our
+             cost (see its own comment). Naming a discount the quote will not apply would put a
+             figure in the words that the document contradicts, which is the whole bug this
+             block exists to fix, in mirror image. */
+          return priced.appliedPercent === 0
+            ? []
+            : [
+                `THIS DEAL'S VOLUME RATE (already applied to the quotation — you MUST state it)`,
+                `- ${lead.seats} seats falls in the ${dealSlab.slab.label} band`,
+                `- list ${rupees(dealItem.msrpPerSeatPerYear)} per seat per year,` +
+                  ` less ${priced.appliedPercent}% = ${rupees(priced.rate)} per seat per year`,
+                `Say the ${priced.appliedPercent}% and both figures, so the customer can check the`,
+                `total by hand. Do not describe it as a concession you chose — it is our published`,
+                `rate for this volume.`,
+              ];
+        })()
+      : [];
+
   const transcript =
     history.length === 0
       ? "(this is their first message)"
@@ -515,18 +553,26 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
     slabLines().join("\n"),
     "You do not decide a discount; you read it off this table by seat count. Never invent a",
     "percentage, never round one up, and never offer a discount to win an argument.",
-    /* ── STATE the slab, do not silently apply it (26 Aug 2026) ────────────────
-       Measured on the first real quotation this agent sent, Q-ADPL-2026-27-0017: the email
-       said "70 seats at Rs 3,240 per seat per year, plus 18% GST" — which reads as
-       Rs 2,67,624 — while the quote it referenced totalled Rs 2,54,243, because the rate
-       card's 5% band for 51–100 seats had been applied to the document and never mentioned
-       in the words.
-       Nothing was overcharged; the customer's own arithmetic simply did not reach our
-       number, and a quotation the reader cannot reconcile is one they have to ask about.
-       Naming it also sells: 5% off list is a reason to buy, and we were hiding it. */
-    "When the table gives this seat count a discount, SAY SO in the reply — name the",
-    "percentage and the list price it comes off, so the total can be checked by hand. A",
-    "quotation whose arithmetic the reader cannot follow is one they have to query.",
+    "",
+    /* ── STATE the slab, do not silently apply it ──────────────────────────────
+       Measured on Q-ADPL-2026-27-0017: the email said "70 seats at Rs 3,240 per seat per
+       year, plus 18% GST" — Rs 2,67,624 by the reader's own arithmetic — while the document
+       totalled Rs 2,54,243, because the 5% band for 51–100 seats was applied to the quote and
+       never mentioned in the words. Nothing was overcharged; the customer simply cannot
+       reconcile the number, and 5% off list is a reason to buy that we were hiding.
+
+       ─── FIRST ATTEMPT FAILED, AND THE REASON MATTERS ───
+       On 26 Aug I first wrote this as an instruction: "when the table gives this seat count a
+       discount, SAY SO". Deployed, verified live, and then Q-ADPL-2026-27-0018 went out for
+       80 seats saying "Rs 3,240 per seat per year plus 18% GST" — the discount unmentioned
+       again. The instruction asked the model to do three things: find the band for 80 seats,
+       do the arithmetic, and remember to say it. Any one of them is a coin toss.
+
+       So it is now a FACT, not an instruction — the app does the lookup and the arithmetic and
+       hands over finished figures, exactly as `authorisedTotals` does for rupee totals. The
+       model has nothing left to work out; it only has to repeat what it was given. Every
+       money rule in this file that survived contact with a live message has this shape. */
+    ...dealSlabLines,
     "",
     ...(domainFacts && domainFacts.length > 0
       ? [
