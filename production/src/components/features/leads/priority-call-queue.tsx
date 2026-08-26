@@ -151,6 +151,7 @@ function QueueRow({
       <OutcomeChips
         className="mt-2"
         hasPhone={Boolean(num)}
+        stage={lead.stage}
         onPick={(o) => onOutcome(o, lead)}
       />
     </li>
@@ -206,22 +207,26 @@ export function PriorityCallQueue({
            the brand accent — existing tokens, no new colour (CLAUDE.md §5) — is enough to make it
            read as a container rather than a divider.
 
-           `py-3` rather than `py-2.5` for the second finding in the same element: the "N of M
-           due" line sat squeezed against the bottom edge. It is the count a rep keeps seeing when
-           the panel is folded, so it gets room. */
-        className="flex w-full items-center gap-2 border-l-2 border-amber bg-amber/5 px-4 py-3 text-left transition-colors hover:bg-amber/10"
+           ── 26 Aug 2026: DO line se EK line ──────────────────────────────────────────
+           Pehle title aur "N of M due" upar-neeche the aur band `py-3` leta tha — folded
+           haalat me bhi ~62px, jo leads ki jagah kha raha tha. Ab dono ek hi line par
+           hain aur `py-2` kaafi hai (~38px).
+
+           Count HATAYA nahi gaya, sirf bagal me aaya: wo wahi ginti hai jo rep folded
+           panel me bhi dekhta rehta hai, aur use gिराना is band ka matlab hi kam kar deta. */
+        className="flex w-full items-center gap-2 border-l-2 border-amber bg-amber/5 px-4 py-2 text-left transition-colors hover:bg-amber/10"
       >
         <Icon
           name="chevron_right"
           size={14}
           className={cn("shrink-0 text-ink-3 transition-transform", open && "rotate-90")}
         />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-semibold text-ink">
+        <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+          <span className="text-[13px] font-semibold text-ink">
             🔥 Today&apos;s priority call queue
           </span>
           {/* Stays visible when folded. This is the count a rep must keep seeing. */}
-          <span className="block text-2xs text-ink-3">
+          <span className="text-2xs text-ink-3">
             {queue.entries.length > 0
               ? `${queue.entries.length} of ${queue.dueCount} due`
               : "Everything due today is missing a phone number"}

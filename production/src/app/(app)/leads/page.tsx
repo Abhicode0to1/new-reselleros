@@ -54,9 +54,26 @@ import { QuickAddLeadForm } from "@/components/features/leads/quick-add-lead-for
 import { LeadsSmartViews, type SmartView } from "@/components/features/leads/leads-smart-views";
 import { PriorityCallQueue } from "@/components/features/leads/priority-call-queue";
 import { useLeadOutcome } from "@/lib/leads/use-outcome";
-import { localDateISO } from "@/lib/leads/outcomes";
+import { waitState, waitLabel, waitPriority } from "@/lib/leads/waiting";
+import { useLeadFirstReplies } from "@/lib/queries/lead-first-reply";
+import { useTeamMembers } from "@/lib/queries/team";
+import { Avatar } from "@/components/ui/avatar";
+
+/* `users.color` me token ka NAAM hota hai, CSS colour nahi. Jo token Avatar jaanta hai
+   sirf wahi bheje jate hain; anjaan naam `muted` par gir jata hai — warna wo chup-chaap
+   transparent circle bana deta hai (dekho owner cell ka comment). */
+type AvatarColor = "ink" | "amber" | "emerald" | "indigo" | "rose" | "slate" | "muted";
+const AVATAR_TOKENS: readonly string[] = ["ink", "amber", "emerald", "indigo", "rose", "slate", "muted"];
+import { useCallLog } from "@/components/features/leads/call-log-dialog";
+import { localDateISO, chipsForStage } from "@/lib/leads/outcomes";
+import {
+  widthAfterDrag, readStoredWidths, writeStoredWidths, autofitWidth, fitToContainer,
+  coversAllColumns,
+  MIN_COL_PX,
+  type ResizeStart,
+} from "@/lib/leads/use-column-widths";
 import { winRate } from "@/lib/leads/forecast";
-import { rowStageOptions, isStageLocked } from "@/lib/leads/stage-options";
+import { isStageLocked } from "@/lib/leads/stage-options";
 import { buildPlanCostIndex, dealMargin, marginBadge } from "@/lib/leads/deal-margin";
 import { stageAge, staleDeals } from "@/lib/leads/velocity";
 import { shortPlan, planWasShortened } from "@/lib/leads/short-plan";
@@ -79,7 +96,6 @@ import SendWhatsAppDialog from "@/components/features/whatsapp/send-whatsapp-dia
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { JunkAIReview } from "@/components/features/leads/junk-ai-review";
 import { EmptyState } from "@/components/shared/empty-state";
-import { AiDraftButton } from "@/components/shared/ai-draft-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button, IconButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -272,6 +288,9 @@ function LeadsPageInner() {
      chip does — one entry point, so the chips on the queue, the row and the mobile card
      cannot drift apart (the same reason use-change-stage.ts exists). */
   const runOutcome = useLeadOutcome();
+  /* Aur `callLog` wo doosra darwaza hai jo isi baat ko poora karta hai: chips ek jaise
+     chalein, aur "Call log" har jagah popup khole. */
+  const callLog    = useCallLog(runOutcome);
   const queueLog   = useLogLeadActivity();
 
 
@@ -300,7 +319,11 @@ function LeadsPageInner() {
     if (typeof window !== "undefined") window.localStorage.setItem("leads-view", view);
   }, [view]);
   // Sort state for the list view (kanban ignores this)
-  const [sortBy, setSortBy] = React.useState<"created" | "value" | "company" | "stage" | "age">("created");
+  /* Default `wait` — "jise action chahiye pehle". Pehle `created` tha (sabse nayi lead
+     upar), jiska nateeja ye tha ki teen din se ruki hui lead teesre panne par chali jati
+     thi. Research isi ko galat kehti hai: default order me wo cheez pehle honi chahiye
+     jispar kaam BAAKI hai. */
+  const [sortBy, setSortBy] = React.useState<SortCol>("wait");
   const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
   const [kpiOpen, setKpiOpen] = React.useState(false);
 
@@ -1112,15 +1135,19 @@ function LeadsPageInner() {
           It also self-hides, states how many due leads it is NOT showing, and names the
           ones with no phone number — see priority-call-queue.tsx for why each of those
           matters more than it sounds. */}
+      {/* `mb-3`: band aur table ke beech saans. Bina iske dono chipke hue the aur band
+          table ka hi ek header jaisa lagta tha — jabki wo alag cheez hai. */}
       {!isLoading && leads && leads.length > 0 && search.trim() === "" && (
+        <div className="mb-3">
         <PriorityCallQueue
           leads={workspaceLeads}
           tenantName={currentUser?.tenantName}
-          onOutcome={(o, l) => { void runOutcome(o, l); }}
+          onOutcome={(o, l) => callLog.run(o, l)}
           onOpen={(l) => setSelected(l)}
           onLogCall={(l) => queueLog.mutate({ leadId: l.id, kind: "call", detail: `Called ${l.contact_phone ?? ""}` })}
           onLogWhatsApp={(l) => queueLog.mutate({ leadId: l.id, kind: "whatsapp", detail: `WhatsApp to ${l.contact_phone ?? ""}` })}
         />
+        </div>
       )}
 
       {/* Error */}
@@ -1471,6 +1498,9 @@ function LeadsPageInner() {
 
       <StartTrialDialog open={trialOpen} onOpenChange={setTrialOpen} />
 
+      {/* Call queue ka "Call log" isme khulta hai — wahi popup jo drawer aur row me hai. */}
+      {callLog.dialog}
+
       <CampaignComposerDialog open={campaignOpen} onOpenChange={setCampaignOpen} />
 
       <GoogleContactsImportDialog open={googleImportOpen} onOpenChange={setGoogleImportOpen} />
@@ -1551,6 +1581,7 @@ function LeadDetailSheet({
   const confirm     = useConfirm();
   const { data: currentUser } = useCurrentUser();
   const logActivity = useLogLeadActivity();
+  /* Same entry point the row's chips use, so "Baat hui" means one thing everywhere. */
   /* Catalog costs for this drawer's margin figure. Same index the list builds — one
      source, so the pill on the row and the number in the drawer can never disagree. */
   const { data: drawerCatalog } = useItems();
@@ -1586,7 +1617,16 @@ function LeadDetailSheet({
     [activities],
   );
 
-  const [drawerTab, setDrawerTab] = React.useState<"email" | "details" | "followups" | "activity">("details");
+  /* ── Default "activity", "details" nahi (26 Aug 2026) ─────────────────────
+     Neeche wala auto-pick pehle se samajhdar hai: email thread ho to Email tab, warna
+     activity ho to Activity tab. Par jiske paas ABHI KUCH NAHI hai — ek nayi lead — wo
+     "details" par reh jati thi. Aur nayi lead ke saath pehla kaam theek wahi hota hai
+     jiske liye ye tab bana hai: call karo aur jo baat hui wo likho.
+
+     Yaani sabse aam kaam ek chhupe hue extra click ke peeche tha. Details ek form hai —
+     lead banane ke baad usme jaana kabhi-kabhi hi padta hai, aur uske ahem number
+     (plan, seats, value) waise bhi header aur table row me dikhte hain. */
+  const [drawerTab, setDrawerTab] = React.useState<"email" | "details" | "followups" | "activity">("activity");
   /* `convoView` lived here until 23 Aug 2026 — the segmented Everything/Email control
      inside the old merged Conversation tab. Email is a tab now, so the state went with the
      control: two ways to be on the email view would have drifted apart, and the tab is the
@@ -1681,6 +1721,12 @@ function LeadDetailSheet({
      rather than pretending the gap is not there. */
   /** Inline note composer state. Local to the drawer — a note is not worth a dialog. */
   const [noteDraft, setNoteDraft] = React.useState("");
+  const runOutcome  = useLeadOutcome();
+  /* Bola hua text note box me hi jata hai — mic ek alag box nahi kholta, kyunki phir
+     do jagah likha hua text jodna user ka kaam ban jata. */
+  /* Popup ka text aur mic ab `call-log-dialog.tsx` ke andar rehte hain. Yahan sirf
+     "kholo" bacha hai — aur wahi chaaron surface par ek jaisa hai. */
+  const callLog = useCallLog(runOutcome);
 
   const timeline = React.useMemo(
     () => buildTimeline({ activities, quotes: quotesForLead, tasks: tasksForLead }),
@@ -1956,6 +2002,50 @@ function LeadDetailSheet({
             <SheetDescription className="text-xs mt-1">
               {lead.id} · Stage: <b className="text-ink">{stageLabel}</b>
             </SheetDescription>
+
+            {/* ── Stage ka ekmatra manual raasta (26 Aug 2026) ────────────────────
+                Row ka dropdown hata diya gaya: stage ab us baat se badalta hai jo lead ke
+                saath sach me hui — "Baat hui", demo, trial, quote jana.
+
+                Par SIRF-automatic ek jaal hai. Lead pehle se demo stage par aa sakti hai,
+                ya koi chip galti se dab sakta hai, aur phir use theek karne ka koi tarika
+                nahi bachta — CLAUDE.md §24 aise dead-end ko saaf mana karta hai. Isliye
+                yahan raasta khula hai, par jaan-boojh kar MEHNGA: lead kholo, phir
+                confirm karo.
+
+                Ye peechhe bhi le ja sakta hai — yahi iska poora maqsad hai. Forward-only
+                guard chips par lagta hai, taaki ek tap galti se pipeline na hilaye; ye
+                insaan ka soch-samajh kar liya gaya faisla hai, tap nahi.
+
+                `changeStage` hi wo darwaza hai jo `lost` par loss-reason poochhta hai. */}
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <label htmlFor="lead-stage-override" className="text-3xs uppercase tracking-wider text-ink-3">
+                Stage badlein
+              </label>
+              <select
+                id="lead-stage-override"
+                value={lead.stage}
+                onChange={async (e) => {
+                  const next = e.target.value as Lead["stage"];
+                  if (next === lead.stage) return;
+                  const ok = await confirm({
+                    title: `Stage badal kar ${STAGE_LABEL[next]} karein?`,
+                    body:
+                      `${lead.company} abhi ${STAGE_LABEL[lead.stage]} par hai.\n\n` +
+                      "Aam taur par stage khud badalta hai — baat hone, demo, trial ya quote jane par. " +
+                      "Ye haath se badalna hai, isliye ye lead ke saath jo sach me hua uske khilaf ja sakta hai.",
+                    confirmLabel: "Haan, badlo",
+                  });
+                  if (ok) await changeStage(lead, next);
+                }}
+                aria-label={`Stage for ${lead.company}`}
+                className="text-2xs bg-transparent px-1 py-0.5 rounded border border-hairline hover:border-hairline-strong cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
+              >
+                {(Object.keys(STAGE_LABEL) as Lead["stage"][]).map((s) => (
+                  <option key={s} value={s}>{STAGE_LABEL[s]}</option>
+                ))}
+              </select>
+            </div>
 
             {/* Contact identity, moved up here 23 Aug 2026 out of a card at the top of
                 the scroll. The header does not scroll, and this is the one fact that must
@@ -2336,7 +2426,12 @@ function LeadDetailSheet({
                           <Icon name={meta.icon} size={12} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm text-ink truncate">{a.detail || meta.label}</div>
+                          {/* Same reason as the timeline entry below — a call's note lives
+                              in `detail`, and one-line truncate hid exactly the part a
+                              person wrote. Full text in `title` (a11y §4). */}
+                          <div className="line-clamp-3 break-words text-sm text-ink" title={a.detail || meta.label}>
+                            {a.detail || meta.label}
+                          </div>
                           <div className="text-2xs text-ink-3">
                             {meta.label} · {formatDate(a.created_at)} {fmtActTime(a.created_at)}
                           </div>
@@ -2370,11 +2465,19 @@ function LeadDetailSheet({
                 belong next to each other, and a composer below an unbounded list is a
                 composer you have to scroll to find.
 
-                LOG CALL IS NOT THE FOOTER'S CALL BUTTON. That one starts a call; this one
-                records a call that already happened — from a mobile, or before this lead
+                LOG CALL IS NOT THE FOOTER'S CALL BUTTON. That one starts a call; these
+                record a call that already happened — from a mobile, or before this lead
                 existed here. A call made and never logged is invisible to the timeline,
                 the stage-age badge and every forecast built on them, which is why this
                 survived the card and "Generate quote" did not.
+
+                Since 26 Aug 2026 it is TWO buttons, not one. The old single "Log call"
+                wrote an activity and left the stage alone, while the row's "Baat hui" chip
+                moved it — one act, two doors, two answers. The fix is not to make logging
+                move the stage: "record a call you made elsewhere" never said whether
+                anybody PICKED UP, and counting a rung-out phone as contact is the exact
+                lie outcomes.ts exists to prevent. So the buttons ask instead of assuming,
+                and both go through `runOutcome` — the same rule the row obeys.
 
                 The note box stays inline rather than behind a dialog: a note nobody can
                 write in two seconds is a note nobody writes. */}
@@ -2388,6 +2491,11 @@ function LeadDetailSheet({
                   aria-label={`Add a note about ${lead.company}`}
                   className="min-w-0 flex-1 resize-y rounded-md border border-hairline bg-paper px-2 py-1.5 text-xs text-ink placeholder:text-ink-4 focus:border-amber focus:outline-none focus:ring-1 focus:ring-amber"
                 />
+                {/* Mic yahan se hata diya gaya — wo ab "Call log" ke popup me hai
+                    (`call-log-dialog.tsx`). Ek hi dictation ke do mic do jagah dikhane ka
+                    matlab hota ek "sun raha hoon" state aur do button jo aapas me
+                    jhagadte. Ye box ab saaf note ke liye hai (typing + Save); call ka
+                    mazmoon popup me jata hai. */}
                 <button
                   type="button"
                   disabled={!noteDraft.trim()}
@@ -2407,39 +2515,84 @@ function LeadDetailSheet({
                 </button>
               </div>
 
+              {/* Ye hint line HATA di gayi. Wo kehti thi "Baat hui ya No answer dabaiye to
+                  ye isi call ke saath record hoga" — aur "Call log" ke popup me jane ke
+                  baad wo JHOOTH ho gayi: popup ka apna text hai, aur is box ka likha hua
+                  wahan nahi jata. Ek galat hidayat kisi hidayat se bura hai; box ka apna
+                  placeholder ("Add a note…") aur `Save` button hi kaafi hain. */}
+
               {/* flex, not a 2-col grid: the AI button is conditional on there being a
-                  phone or an email, and in a fixed grid its absence left Log call sitting
+                  phone or an email, and in a fixed grid its absence left the call buttons
                   at half width against dead space. */}
               <div className="flex gap-2">
+                {/* ── Ek "Log call" ki jagah do, aur wajah 26 Aug 2026 ki hai ──────────
+                    Yahan pehle ek hi button tha: "Log call". Wo activity likhta tha aur
+                    stage ko haath nahi lagata tha. Us din row ke chips stage badalna seekh
+                    gaye, aur isse ek ajeeb haalat ban gayi — EK HI kaam, do darwaze, alag
+                    nateeje. Pardeep ne wahi pakda: "jab is lead ne activity record ki to
+                    ye contacted me kyon nahi gaya".
+
+                    Aasan hal — "Log call ko bhi stage badalne do" — GALAT hota. Is button
+                    ke apne tooltip me likha tha "record a call you made elsewhere", aur
+                    usme ye kahin nahi tha ki BAAT HUI ya nahi. Bina uthi call ko sampark
+                    ginna wahi jhooth hai jise outcomes.ts ka poora header rokta hai.
+
+                    To button batata nahi, POOCHHTA hai. Dono `runOutcome` se guzarte hain,
+                    yaani wahi niyam jo row par lagta hai — ek hi shabdawali, ek hi
+                    bartaav, chahe rep kahin se bhi tap kare. */}
+                {/* ── "Call log" — ek popup kholta hai (26 Aug 2026) ──────────────────
+                    Pehle ye "Baat hui" tha aur seedha likh deta tha, us note ke saath jo
+                    upar wale box me pada ho. Do dikkat thin: naam se pata nahi chalta tha
+                    ki ye ek CALL darj karta hai, aur likhne ki jagah button se door thi —
+                    to aksar khaali call log ho jati thi.
+
+                    Popup dono theek karta hai: likhna aur bolna wahin, button ke saath,
+                    aur "Call log" naam wahi kehta hai jo ye karta hai. */}
                 <button
                   type="button"
-                  onClick={() => {
-                    logActivity.mutate({ leadId: lead.id, kind: "call",
-                      detail: `Call logged${lead.contact_phone ? ` · ${lead.contact_phone}` : ""}` });
-                    toast.success("Call logged");
-                  }}
-                  title="Record a call you made elsewhere — from your phone, or before this lead existed here"
-                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md border border-hairline bg-paper text-xs font-semibold text-ink-2 transition-colors hover:bg-paper-2"
+                  onClick={() => callLog.run("talked", lead)}
+                  title="Call darj karein — bolkar ya likhkar. Lead pehli baar Contacted par jayegi."
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md border border-amber/50 bg-paper text-xs font-semibold text-amber-ink transition-colors hover:bg-amber-soft/50"
                 >
-                  <Icon name="mobile" size={13} /> Log call
+                  <Icon name="mobile" size={13} /> Call log
                 </button>
-                {/* AI draft — the "what do I say?" moat. One tap = a Gemini-drafted
-                    WhatsApp/email follow-up tailored to THIS lead (plan, seats, stage,
-                    notes). Human-in-the-loop: the draft is editable and never sends
-                    itself. Sits beside Log call because both add to the thread — one
-                    records what was said, the other proposes what to say next. */}
-                {(lead.contact_phone || lead.contact_email) && (
-                  <AiDraftButton
-                    leadId={lead.id}
-                    channel={lead.contact_phone ? "whatsapp" : "email"}
-                    purpose="followup"
-                    phone={lead.contact_phone}
-                    label="✨ Draft with AI"
-                    variant="outline"
-                    className="min-h-11 flex-1 justify-center"
-                  />
-                )}
+                <button
+                  type="button"
+                  onClick={() => { void runOutcome("no_answer", lead, noteDraft); setNoteDraft(""); }}
+                  disabled={!lead.contact_phone}
+                  title={lead.contact_phone
+                    ? "Call ki, uthi nahi — koshish log hogi aur lead kal wapas aayegi. Stage nahi badlega."
+                    : "Is lead par phone number nahi hai — pehle jodiye."}
+                  className={cn(
+                    "inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md border bg-paper text-xs font-semibold transition-colors",
+                    lead.contact_phone
+                      ? "border-hairline text-ink-2 hover:bg-paper-2"
+                      : "cursor-not-allowed border-hairline text-ink-4 opacity-50",
+                  )}
+                >
+                  <Icon name="mobile" size={13} /> No answer
+                </button>
+                {/* "✨ Draft with AI" yahan se hata diya gaya (26 Aug 2026, Pardeep ke
+                    kehne par). Wo is jagah ka kaam nahi kar raha tha: ye teen button "jo
+                    HUA use darj karo" ke liye hain, aur wo "ab kya KEHNA hai" ka auzaar
+                    hai — do alag kaam ek hi kataar me.
+
+                    Feature khatm nahi hua, sirf galat jagah se hata: `ReplyComposer` (Email
+                    tab) me apna "Draft with AI" hai — reply-composer.tsx:210, jaancha gaya —
+                    aur wahan wo apni jagah par hai, kyunki wahan padhne ke liye thread bhi
+                    hoti hai. `AiDraftButton` khud renewals page par bhi zinda hai. */}
               </div>
+
+              {/* ── Call log ka popup ─────────────────────────────────────────────────
+                  Ye popup pehle yahin, is JSX ke andar likha tha. 26 Aug 2026 ko wo
+                  `call-log-dialog.tsx` me chala gaya, kyunki row ke ⋯ menu ka "Call log"
+                  isi naam se seedha log kar deta tha — ek naam, do bartaav. Popup ko
+                  dono jagah alag-alag likhna us bug ka doosra roop hota.
+
+                  Ab wo ek hi component hai aur `useCallLog` uska ek hi darwaza. Phone par
+                  ye khud bottom-sheet ban jata hai (CLAUDE.md §20) — aur call ke turant
+                  baad haath me phone hi hota hai. */}
+              {callLog.dialog}
             </div>
 
             {/* No segmented control here any more, and no "Everything that has happened"
@@ -2482,7 +2635,21 @@ function LeadDetailSheet({
                             </span>
                           )}
                         </div>
-                        {e.detail && <div className="truncate text-xs text-ink-2">{e.detail}</div>}
+                        {/* ── `truncate` NAHI, aur ye 26 Aug 2026 ko naapa gaya ──────────
+                            Us din call ka note isi detail me aana shuru hua ("Baat hui ·
+                            +91… · \"March me budget aayega\""). Ek-line truncate ne use
+                            theek us jagah kaat diya jahan aadmi ke shabd shuru hote the —
+                            screen par bacha "…— retrying tomor…". Baat record to hoti thi,
+                            padhi nahi ja sakti thi, yaani poora maqsad hi mar jata.
+
+                            3 line tak khulta hai (lamba paste timeline ko nigal na le), aur
+                            `title` me poora text — accessibility-review §4: jo truncate
+                            hua wo screen reader ke liye hamesha ke liye chala jata hai. */}
+                        {e.detail && (
+                          <div className="line-clamp-3 text-xs text-ink-2 break-words" title={e.detail}>
+                            {e.detail}
+                          </div>
+                        )}
                         <div className="text-2xs text-ink-3">
                           {formatDate(e.at)} {fmtActTime(e.at)}
                         </div>
@@ -3071,13 +3238,35 @@ function RowActions({
   const hasEmail = Boolean(lead.contact_email);
   const logActivity = useLogLeadActivity();
   const setJunk = useSetLeadJunk();
+  const runOutcome = useLeadOutcome();
+  const callLog = useCallLog(runOutcome);
+  const deleteLead = useDeleteLead();
+  const confirm = useConfirm();
   const [junkOpen, setJunkOpen] = React.useState(false);
 
   const itemCls = "gap-2.5 py-2 cursor-pointer";
 
+  /* ── "Kya hua" — wahi outcomes jo card ke ⋯ me hain (26 Aug 2026) ────────────
+     Stage ka dropdown row se hata diya gaya tha, aur outcome chips sirf card par the.
+     Table par switch karte hi stage badalne ka koi raasta hi nahi bachta — yaani ek
+     poora surface jahan pipeline aage nahi badh sakti.
+
+     `send_quote` aur `mark_junk` yahan se hataye gaye hain kyunki is menu me unke apne
+     item pehle se maujood hain ("Send quote", "Mark as junk…"). Ek hi menu me do baar
+     ek hi kaam dikhna wahi galti hai jo is file ne "Generate quote" hatate waqt theek
+     ki thi. */
+  const outcomeItems = chipsForStage(lead.stage).filter(
+    (c) => c.id !== "send_quote" && c.id !== "mark_junk",
+  );
+
   return (
     <td
-      className={cn("p-2", isSelected ? "bg-amber-soft" : "")}
+      /* Daayen kinare par jama hua — horizontal scroll par bhi ⋯ pahunch me rehta hai.
+         Background solid hona zaroori hai: iske neeche se baaki cells guzarti hain. */
+      className={cn(
+        "px-2 py-[var(--cell-py)]", STICK_R_ACTIONS,
+        isSelected ? "bg-amber-soft" : "bg-paper group-hover:bg-paper-2",
+      )}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-end gap-0.5">
@@ -3087,7 +3276,10 @@ function RowActions({
             <button
               type="button"
               aria-label="More actions"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-ink-3 transition-colors hover:bg-paper-2 hover:text-ink data-[state=open]:bg-paper-2 data-[state=open]:text-ink"
+              /* h-6, h-7 nahi: 28px ka button `compact` density (8px padding) me row ko
+                 36px par pin kar deta tha, yaani density switcher kuch nahi karta tha —
+                 padding badalti thi aur unchai wahi rehti thi. */
+              className="flex h-6 w-6 items-center justify-center rounded-md text-ink-3 transition-colors hover:bg-paper-2 hover:text-ink data-[state=open]:bg-paper-2 data-[state=open]:text-ink"
             >
               <Icon name="more_h" size={18} />
             </button>
@@ -3119,6 +3311,36 @@ function RowActions({
             <DropdownMenuItem className={itemCls} onClick={() => onSendQuote(lead)}>
               <Icon name="quote" size={20} className="text-amber" /> Send quote
             </DropdownMenuItem>
+
+            {outcomeItems.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
+                  Kya hua
+                </DropdownMenuLabel>
+                {outcomeItems.map((chip) => {
+                  const blocked = chip.needsPhone && !hasPhone;
+                  return (
+                    <DropdownMenuItem
+                      key={chip.id}
+                      disabled={blocked}
+                      title={blocked
+                        ? `${chip.hint}\n\nIs lead par phone number nahi hai — pehle jodiye.`
+                        : chip.hint}
+                      /* `callLog.run`, seedha `runOutcome` NAHI — warna "Call log" yahan
+                         chup-chaap log kar deta aur drawer me popup kholta. 26 Aug 2026:
+                         theek wahi hua tha. */
+                      onSelect={() => callLog.run(chip.id, lead)}
+                      className={cn(itemCls, chip.tone === "rose" && "text-rose")}
+                    >
+                      <Icon name={chip.icon} size={20} />
+                      {chip.label}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </>
+            )}
+
             <DropdownMenuSeparator />
             <DropdownMenuItem className={itemCls} onClick={() => onFollowUp(lead)}>
             <Icon name="reminder" size={20} /> Schedule follow-up
@@ -3174,6 +3396,32 @@ function RowActions({
               <Icon name="alert" size={20} /> Mark as junk…
             </DropdownMenuItem>
           )}
+            {/* ── Delete, row se bhi (26 Aug 2026, Pardeep ke kehne par) ─────────────
+                Delete drawer me pehle se tha, par row ke menu me nahi — to ek galat lead
+                mitane ke liye use pehle KHOLNA padta tha. Har row action ⋯ ke neeche hone
+                ka wada is menu ki apni hint line karti hai, aur delete uska apwad bana
+                hua tha.
+
+                Wahi confirm jo drawer me hai (`danger: true`), aur wahi shabd — ek hi
+                kaam do jagah do tarah se poochhe, to ek jagah par aadmi ka bharosa kam
+                hota hai. Aur "Mark as junk" ke NEECHE rakha gaya hai: junk wapas laya ja
+                sakta hai, delete nahi — to narm option pehle padha jata hai. */}
+            <DropdownMenuItem
+              className={cn(itemCls, "text-rose")}
+              onClick={async () => {
+                const ok = await confirm({
+                  title: `Permanently delete lead "${lead.company}"?`,
+                  body:
+                    "This cannot be undone.\n\n" +
+                    "Sirf hataana hai to \"Mark as junk\" behtar hai — wo Junk view se wapas aa jati hai.",
+                  confirmLabel: "Delete",
+                  danger: true,
+                });
+                if (ok) deleteLead.mutate(lead.id);
+              }}
+            >
+              <Icon name="trash" size={20} /> Delete lead…
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -3187,6 +3435,11 @@ function RowActions({
             setJunkOpen(false);
           }}
         />
+
+        {/* Menu ke BAAHAR, uske andar nahi — DropdownMenuItem ka `onSelect` menu band
+            karta hai, aur menu ke andar rakha popup usi ke saath unmount ho jata. Wahi
+            wajah hai jis se MarkJunkDialog bhi yahan hai. */}
+        {callLog.dialog}
       </div>
     </td>
   );
@@ -3197,7 +3450,12 @@ function RowActions({
 // Same data source + same row-click drawer as Kanban; just a different lens.
 // ============================================================
 
-type SortCol = "created" | "value" | "company" | "stage" | "age";
+/* Research (Pencil & Paper): har column par sort hona chahiye — pehle sirf teen the
+   (company, stage, value), aur baaki chhe par click kuch nahi karta tha, jo ek chup-chaap
+   toota hua control hai. "wait" naya hai aur DEFAULT hai — dekho `sorted` ka comment. */
+type SortCol =
+  | "wait" | "created" | "value" | "company" | "stage" | "age"
+  | "contact" | "email" | "phone" | "plan" | "seats" | "followup" | "owner";
 
 const STAGE_DOT: Record<Lead["stage"], string> = {
   new:     "bg-slate",
@@ -3230,10 +3488,123 @@ function daysSince(iso: string): number {
 // Contact folded under the company name and Last update went entirely, so their 21%
 // is redistributed — most of it to company, which now carries the name, the intent
 // badge and the contact line, and a little to stage, whose select was already tight.
-const LEADLIST_COL_ORDER = ["select", "company", "stage", "plan", "value", "followup", "actions"];
+/* Header cell — spreadsheet ki tarah: har column apni line se alag, aur wo line
+   header se chalti hui rows tak jaati hai. `border-r` hi wo ek cheez hai jo ek modern
+   list ko grid jaisa dikhata hai. */
+const GRID_TH =
+  "sticky top-0 z-10 bg-paper-2 border-r border-hairline px-2 py-1.5 text-3xs " +
+  "font-semibold text-ink-3 uppercase tracking-wider text-left whitespace-nowrap";
+
+/* Row ki unchai. Research (Pencil & Paper) teen padav deti hai — 40 / 48 / 56px — aur
+   kehti hai ki chunav USER ka hona chahiye, kyunki bade monitor par saans chahiye aur
+   chhote par zyada rows. Padding CSS variable se aati hai, warna 12 cell call-sites
+   badalne padte. */
+const DENSITY_PY: Record<"compact" | "regular" | "relaxed", string> = {
+  compact: "0.25rem", regular: "0.375rem", relaxed: "0.625rem",
+};
+
+/**
+ * Body cell — wahi vertical line, kam padding, aur `whitespace-nowrap`.
+ *
+ * Nowrap isliye ki bina uske "26 Aug 2026" teen line me tootta tha aur us ek row ki
+ * unchai baaki sab se alag ho jati thi. Spreadsheet ka aadha faayda hi ye hai ki har
+ * row barabar ho — aankh scan karti hai, padhti nahi. Jo cell me na samaye wo truncate
+ * hota hai aur poora `title` me milta hai.
+ *
+ * `overflow-hidden` uske saath HONA HI CHAHIYE, aur ye 26 Aug 2026 ko naapa gaya. Akela
+ * nowrap text ko lapetne se rokta hai par cell ki seema par kaatta NAHI — to lamba plan
+ * naam apne column se bahar nikal kar padosi par chadh gaya, aur screen par "Contacted"
+ * ke upar "GW · Busin…" likha dikha. Table gadbad nahi tha, sirf clip nahi ho raha tha.
+ */
+/**
+ * Body cell — lamba text WRAP hota hai, kata nahi.
+ *
+ * ─── Ye 26 Aug 2026 ko do baar palta, aur dono baar wajah thi ──────────────
+ * Pehle sab `whitespace-nowrap` tha. Us se "26 Aug 2026" teen tukdo me tootna band hua
+ * (row ki unchai barabar ho gayi), par nateeja ye nikla ki lamba email aur company ka
+ * naam ellipsis me kat jate the — aur kata hua naam poori pehchan hi le uda ta hai.
+ *
+ * Pardeep: "agar kisi column ka text bada hota hai to wrap kare".
+ *
+ * Isliye ab batwara hai, aur wo cheez ke SWABHAV se hai:
+ *   · TEXT (company, contact, email, plan) — wrap. Ye lambe hote hain aur poore padhne
+ *     layak hone chahiye.
+ *   · ATOMIC (phone, seats, value, follow-up, stage) — nowrap, `GRID_TD_ATOM`. "26 Aug
+ *     2026" ya "+91 99999 95482" ko todna use padhne me MUSHKIL karta hai, aasan nahi;
+ *     ye ek ikai hai, vaakya nahi.
+ *
+ * `align-top` isliye ki jab ek cell do line ka ho jaye, baaki cells uske beech me latak
+ * kar row ko tirchha na dikhayein.
+ */
+const GRID_TD =
+  "border-r border-hairline px-2 py-[var(--cell-py)] align-middle break-words overflow-hidden";
+
+/** Wo cells jinka text ek IKAI hai — date, number, phone. Inhe todna nahi. */
+const GRID_TD_ATOM =
+  "border-r border-hairline px-2 py-[var(--cell-py)] align-middle whitespace-nowrap overflow-hidden";
+
+/* ── Jame hue column (26 Aug 2026) ───────────────────────────────────────────
+   Pardeep: "check boxes aur three dots wale hamesha visible rahe chahe horizontal
+   scroller bhi aaye" — aur phir "company column bhi".
+
+   Wajah saaf hai: chaudai kheenchne ke baad table scroll karta hai, aur scroll karte hi
+   ye pata hi nahi chalta ki ye row KISKI hai. Ek grid jisme naam scroll ho jaye, wo
+   ginti to dikhata hai par pehchan nahi.
+
+   Do cheezein zaroori hain, aur dono bhoolne par bug lagta hai:
+
+   1. `bg-*` — sticky cell ke NEECHE se baaki cells guzarti hain. Bina apne background ke
+      wo aar-paar dikhti hain aur do text ek doosre par chhap jate hain.
+   2. z-index ka kram — header bhi sticky hai (top-0). Kone wale do cell (checkbox aur
+      company ka header) DONO taraf sticky hain, isliye unhe sabse upar rehna hoga,
+      warna scroll par wo apne hi body cell ke neeche chale jate hain. */
+const STICK_L_SELECT  = "sticky left-0 z-20";
+/** Company checkbox ke theek baad — isliye 40px, jo `select` ki fixed chaudai hai. */
+const STICK_L_COMPANY =
+  "sticky left-[40px] z-20 border-r-2 border-r-ink-4 " +
+  /* ── Jame hue hisse ka kinara, aur ye SAAF dikhna chahiye ──────────────────
+     Pehle yahan 0.08 alpha ki chhaya thi — naap kar dekha ki wo lagbhag dikhti hi nahi.
+     Uska nateeja ye tha ki thoda scroll karne par agla column company ke peeche sarakta
+     tha aur uska pehla akshar kat jata ("Susen" → "usen"), par kinara na dikhne ki wajah
+     se wo "scroll hua hai" jaisa nahi, "toot gaya hai" jaisa lagta tha — Pardeep ne isi
+     ko "sahi se kaam nahi kar raha" kaha.
+
+     Aadhi kati cell sticky column ka SWABHAV hai (spreadsheet me bhi wahi hota hai); jo
+     theek karne wali cheez thi wo ye batana tha ki kinara KAHAN hai. Isliye gehri lakeer
+     (border-r-2 ink-4) aur 0.18 alpha ki chhaya. */
+  "shadow-[8px_0_8px_-5px_rgba(0,0,0,0.18)]";
+const STICK_R_ACTIONS = "sticky right-0 z-20 border-l border-hairline";
+/** Header ke liye wahi jagah, par ooncha z — wo top-0 par bhi sticky hai. */
+const STICK_HEAD = "z-30";
+
+/* ── Excel-jaisi grid: har field ka APNA column (26 Aug 2026) ──────────────────
+   Pardeep: "ye ek table ki tarah show karo jiska header bhi ho… jaise excel sheet
+   banti hai".
+
+   Pehle contact ka naam, email aur phone teeno `company` cell ke andar thuse the — ek
+   card se aayi hui aadat, jahan wo teen line ban jate the. Spreadsheet me wo teen ALAG
+   column hote hain: tabhi aankh ek hi cheez ko upar-neeche scan kar sakti hai, aur
+   tabhi sort karne layak bhi banta hai.
+
+   Yogfal theek 100% rakha gaya hai. `table-fixed` ke saath ye colgroup hi ekmatra jagah
+   hai jo chaudai tay karti hai — aur yahi wo galti hai jo is file me do baar ho chuki
+   hai: column hatate waqt sirf `<th>`/`<td>` hataya aur colgroup chhod diya, jisse har
+   agla column apne padosi ki chaudai pehen leta hai. Column badlo to DONO badlo. */
+const LEADLIST_COL_ORDER = [
+  "select", "company", "wait", "owner", "contact", "email", "phone",
+  "stage", "plan", "seats", "value", "followup", "actions",
+];
 const LEADLIST_COL_WIDTHS: Record<string, string> = {
-  select: "3%", company: "28%", stage: "15%", plan: "22%",
-  value: "14%", followup: "9%", actions: "9%",
+  /* select FIXED px me — company ko uske bagal me jamana hai (sticky left), aur uske
+     liye baayen ki chaudai pakki honi chahiye. Spreadsheet me bhi row-select ka gutter
+     fixed hota hai; use kheenchne ki koi wajah bhi nahi banti. */
+  /* Wrap aane ke baad chaudai ka batwara badla (26 Aug 2026, naap kar):
+     `company` aur `email` ab TOOT sakte hain, isliye unse jagah lekar `stage` aur
+     `value` ko di gayi — wo dono nowrap hain, to unme kam jagah ka matlab KATNA hai.
+     Aur paisa katna sabse bura hai: "₹3,240" ka "₹3,2…" ban jana ek galat aankda
+     dikhata hai, khaali cell nahi. */
+  select: "40px", company: "16%", wait: "7%", owner: "9%", contact: "10%", email: "12%", phone: "10%",
+  stage: "11%", plan: "10%", seats: "5%", value: "9%", followup: "10%", actions: "40px",
 };
 
 function LeadListView({
@@ -3278,6 +3649,7 @@ function LeadListView({
      rules live in lib/leads/outcomes.ts, so there is nothing for two call sites to
      disagree about. */
   const runOutcome  = useLeadOutcome();
+  const callLog     = useCallLog(runOutcome);
 
   /* Catalog costs for the margin pill. Built once per render of the whole list rather
      than per row — the index is a Map over ~19 products, and rebuilding it 200 times
@@ -3361,6 +3733,21 @@ function LeadListView({
   // that group, overdue (older follow_up_date) comes first. After due-today,
   // the user's sort applies normally. This makes the "morning worklist"
   // mental model match the visual order without a separate filter.
+  /* Pehla jawab, poori list ke liye ek query me — dekho queries/lead-first-reply.ts.
+     Ek hi `now` sab rows par: har row apna `new Date()` lene par ek hi render me do rows
+     ka intezaar ek-do second alag nikalta, aur wo sort ko hila deta. */
+  const { data: firstReplies = new Map<string, string>() } = useLeadFirstReplies();
+
+  /* Owner ka naam — `useTeamMembers` isi ke liye hai ("show who owns what", team.ts:3).
+     Map isliye ki har row par `.find()` chalana 50 leads × 10 members = 500 chakkar hai
+     har render me. */
+  const { data: teamMembers = [] } = useTeamMembers();
+  const ownerById = React.useMemo(
+    () => new Map(teamMembers.map((m) => [m.id, m])),
+    [teamMembers],
+  );
+  const nowForWait = React.useMemo(() => new Date(), [firstReplies]);
+
   const sorted = React.useMemo(() => {
     const out = [...leads];
     const dir = sortDir === "asc" ? 1 : -1;
@@ -3368,18 +3755,57 @@ function LeadListView({
     // newest lead is always on top. (Due/overdue follow-ups are surfaced by the
     // banner + the Today/Overdue filter chips, so we don't secretly re-pin them
     // here — a sortable table should obey its sort.)
+    /* Khaali/gायab value HAMESHA neeche, dono direction me. `localeCompare` par null
+       bhejna crash karta hai, aur `?? ""` bhejne par khaali naam asc me sabse upar aa
+       jata hai — yaani sort ka pehla panna un rows se bharta hai jinme kuch likha hi
+       nahi. `text()` dono se bachata hai. */
+    const text = (v: string | null | undefined) => (v ?? "").trim();
+    const cmpText = (x: string | null | undefined, y: string | null | undefined) => {
+      const a2 = text(x), b2 = text(y);
+      if (!a2 && !b2) return 0;
+      if (!a2) return 1 * (sortDir === "asc" ? 1 : -1) * dir;   // khaali neeche
+      if (!b2) return -1 * (sortDir === "asc" ? 1 : -1) * dir;
+      return a2.localeCompare(b2) * dir;
+    };
+
     out.sort((a, b) => {
       switch (sortBy) {
-        case "value":   return ((a.value ?? 0) - (b.value ?? 0)) * dir;
-        case "company": return a.company.localeCompare(b.company) * dir;
-        case "stage":   return a.stage.localeCompare(b.stage) * dir;
-        case "age":     return (daysSince(a.updated_at) - daysSince(b.updated_at)) * dir;
+        /* Default. `waitPriority` ek hi number me do baatein rakhta hai — ruki hui leads
+           har jawab-di-gayi lead se upar, aur unme lambi wait pehle.
+
+           NISHAAN DHYAAN SE: `(pa - pb)`, `(pb - pa)` nahi. `sortDir` ka default `desc`
+           hai (dir = -1), to `(pa - pb) * -1` bada number pehle laata hai — yaani sabse
+           lambi wait upar. Pehle maine `(pb - pa)` likha tha aur wo chup-chaap ULTA chal
+           raha tha: 5 minute se ruki hui lead 22 minute me nipti hui lead ke NEECHE aa
+           gayi thi. Browser me dekhne par pakda, typecheck me nahi. */
+        case "wait": {
+          const pa = waitPriority(waitState(a.created_at, firstReplies.get(a.id) ?? null, nowForWait));
+          const pb = waitPriority(waitState(b.created_at, firstReplies.get(b.id) ?? null, nowForWait));
+          return (pa - pb) * dir;
+        }
+        case "value":    return ((a.value ?? 0) - (b.value ?? 0)) * dir;
+        case "seats":    return ((a.seats ?? 0) - (b.seats ?? 0)) * dir;
+        case "company":  return cmpText(a.company, b.company);
+        case "contact":  return cmpText(a.contact_name, b.contact_name);
+        case "email":    return cmpText(a.contact_email, b.contact_email);
+        case "phone":    return cmpText(a.contact_phone, b.contact_phone);
+        case "plan":     return cmpText(a.plan, b.plan);
+        case "followup": return cmpText(a.follow_up_date, b.follow_up_date);
+        /* Naam se sort, id se nahi — id ek random uuid hai, uspar sort karne se kram
+           bemani hota hai aur user ko lagta hai sort toota hua hai. */
+        case "owner":
+          return cmpText(
+            a.owner_id ? ownerById.get(a.owner_id)?.full_name : null,
+            b.owner_id ? ownerById.get(b.owner_id)?.full_name : null,
+          );
+        case "stage":    return a.stage.localeCompare(b.stage) * dir;
+        case "age":      return (daysSince(a.updated_at) - daysSince(b.updated_at)) * dir;
         case "created":
-        default:        return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir;
+        default:         return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir;
       }
     });
     return out;
-  }, [leads, sortBy, sortDir]);
+  }, [leads, sortBy, sortDir, firstReplies, nowForWait]);
 
   /* ── j / k over the list view ─────────────────────────────────────────────
      Keyed against `sorted`, so re-sorting a column re-clamps the cursor rather than
@@ -3400,12 +3826,310 @@ function LeadListView({
   // (the new component handles its own formatting). Desktop / tablet table
   // doesn't need them so they're gone from this file.
 
-  const SortHeader = ({ col, label, align = "left" }: { col: SortCol; label: string; align?: "left" | "right" }) => (
+  /* ── Kheench kar chaudai badalna (26 Aug 2026) ─────────────────────────────
+     Niyam aur storage `lib/leads/use-column-widths.ts` me hain (tested); yahan sirf
+     pointer ka kaam hai.
+
+     `colRefs` isliye ki pehle drag par saare column apni MAUJOODA pixel chaudai me jam
+     jayein. Bina us snapshot ke sirf kheencha hua column px me hota aur baaki % me —
+     aur browser bachi hui jagah baant kar padosi columns ko har drag par hilata rehta,
+     jo dekhne me table ka tootna lagta hai.
+
+     Pointer events, mouse nahi: capture ke saath drag chalta rehta hai chahe pointer
+     header se bahar chala jaye, aur touch/pen bhi apne aap kaam karte hain. */
+  /* Density aur chhupe hue column — dono localStorage me, wahi tarq jo chaudai ka hai:
+     ye is aadmi ki is machine ki pasand hai, uske business ka data nahi. */
+  const [density, setDensity] = React.useState<"compact" | "regular" | "relaxed">("regular");
+  const [hidden, setHidden] = React.useState<ReadonlySet<string>>(new Set());
+  React.useEffect(() => {
+    try {
+      const d = window.localStorage.getItem("resellersos.leads.density");
+      if (d === "compact" || d === "regular" || d === "relaxed") setDensity(d);
+      const h = window.localStorage.getItem("resellersos.leads.hiddenCols");
+      if (h) {
+        const parsed: unknown = JSON.parse(h);
+        if (Array.isArray(parsed)) setHidden(new Set(parsed.filter((x): x is string => typeof x === "string")));
+      }
+    } catch { /* private mode — pasand yaad na rehna asuvidha hai, kharabi nahi */ }
+  }, []);
+
+  const [colW, setColW] = React.useState<Record<string, number>>({});
+  const colRefs = React.useRef<Record<string, HTMLTableColElement | null>>({});
+  const dragRef = React.useRef<ResizeStart | null>(null);
+  const tableWrapRef = React.useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Us column ke sabse lambe text ki chaudai — autofit ke liye.
+   *
+   * ─── Clone karke naapa jata hai, canvas se NAHI ──────────────────────────
+   * Pehla prayaas canvas `measureText` par tha, cell ke computed font ke saath. Naap kar
+   * dekha: "susen@1234gmail.com" ke liye 273px aaya jabki 130px kaafi tha. Wajah ye ki
+   * font cell par nahi, uske ANDAR wale span par hai (`text-xs`) — cell khud badi
+   * inherited size rakhta hai. Canvas ko galat font diya, to naap 2x tak badi aayi.
+   *
+   * Clone me ye sawaal hi nahi rehta: nested font, badge, dot, icon — jo bhi cell me
+   * hai, wo apni asli chaudai ke saath ginta hai. `white-space: nowrap` lagane se wo
+   * chaudai milti hai jo text ko CHAHIYE, na ki wo jo aaj mili hui hai — aur wahi autofit
+   * ka poora sawaal hai. (`scrollWidth` yahan kaam nahi karta: cells par wrap aur
+   * `overflow-hidden` dono hain, to wo lipta hua text hi batata hai.)
+   *
+   * `null` lautta hai jab table na mile — us haalat me double-click kuch nahi karta, jo
+   * galat chaudai lagane se behtar hai.
+   */
+  const measureColumn = (col: string): number | null => {
+    const idx = LEADLIST_COL_ORDER.indexOf(col);
+    const table = tableWrapRef.current?.querySelector("table");
+    if (idx < 0 || !table) return null;
+
+    const pad = document.createElement("div");
+    /* Screen se bahar, par LAYOUT me — `display:none` par chaudai 0 aati hai. */
+    pad.style.cssText =
+      "position:absolute;left:-9999px;top:0;white-space:nowrap;visibility:hidden;pointer-events:none";
+    document.body.appendChild(pad);
+
+    const widths: number[] = [];
+    try {
+      /* Header bhi ginte hain — warna autofit ke baad column ka apna naam kat jata. */
+      const rows = [
+        ...table.querySelectorAll<HTMLTableRowElement>("thead tr"),
+        ...table.querySelectorAll<HTMLTableRowElement>("tbody tr"),
+      ];
+      for (const row of rows) {
+        const cell = row.children[idx] as HTMLElement | undefined;
+        if (!cell || !cell.innerText.trim()) continue;
+        const cs = getComputedStyle(cell);
+        /* Cell ka apna font pad par — taaki wo text bhi theek nape jo cell se font
+           virasat me leta hai (jaise `GRID_TD_ATOM + text-sm`). Andar ke span apni
+           class se ise khud override kar lete hain. */
+        pad.style.font = cs.font || `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        pad.innerHTML = cell.innerHTML;
+        widths.push(pad.getBoundingClientRect().width);
+      }
+    } finally {
+      /* `finally` — beech me kuch bhi ho, ye div DOM me peeche nahi rehna chahiye. */
+      pad.remove();
+    }
+
+    /* padding (px-2 = 8+8) + border + do pixel ki saans, taaki aakhri akshar na chhue. */
+    return autofitWidth(widths, 16 + 2 + 2);
+  };
+
+  /* ── Pehli baar: chaudai CONTENT se, andaze se nahi (26 Aug 2026) ────────────
+     `LEADLIST_COL_WIDTHS` ki percentage ab sirf ek fallback hai — pehle render ka, jab
+     tak naapa na jaye. Asli chaudai yahan se aati hai.
+
+     Ye badlav Pardeep ke us sawaal ka jawab hai ki ek baar me kyun nahi hota. Wajah ye
+     thi ki main percentage HAATH SE baant raha tha, aur naya column aane par 100% dobara
+     baantne me har baar kahin aur galti hoti — kabhi paisa katta, kabhi stage, kabhi
+     company do line me tootti. Content se naapne par wo poora bug-varg khatam ho jata
+     hai: column utna hi hota hai jitna uske text ko chahiye.
+
+     Ek hi baar chalta hai (`autofitted`), aur sirf jab user ne khud kuch na saheja ho —
+     uski kheenchi hui chaudai par chadhna uska kaam mitane jaisa hoga. */
+  const autofitted = React.useRef(false);
+  React.useEffect(() => {
+    const stored = readStoredWidths();
+    /* ── Saheji hui chaudai SIRF tab maani jaye jab wo poori ho (26 Aug 2026) ───
+       Ye bug Pardeep ne pakda: "lead ka owner kaun hai show hi nahi ho raha hai".
+
+       Owner column aaj bana. Uske browser me chaudai pehle se saheji hui thi (usne
+       kheenchi thi), aur us list me `owner` nahi tha. Table ki chaudai usi list ke YOGFAL
+       se tay hoti hai — to naye column ko 0px mili aur wo maujood hote hue bhi gायab
+       raha. `<col>` uske liye 9% maang raha tha, par table ke paas baantne ke liye
+       kuch bacha hi nahi tha.
+
+       Ye ek baar ki galti nahi thi: HAR naye column par wahi hota, aur sirf un logon ke
+       saath jinke paas purani chaudai saheji hui hai — yaani jo app ko sabse zyada use
+       karte hain. Isliye jaanch coverage ki hai, khaali-pan ki nahi: agar saheji hui list
+       aaj ke saare column nahi dhakti, to use chhod kar autofit chalta hai. User ki
+       kheenchi hui chaudai jaati hai — par ek gायab column usse bahut bada nuksaan hai. */
+    const covers = coversAllColumns(stored, LEADLIST_COL_ORDER);
+    if (covers) { setColW(stored); autofitted.current = true; return; }
+
+    if (autofitted.current || leads.length === 0) return;
+
+    /* ── Table taiyar hone tak KOSHISH KARTE RAHO ────────────────────────────
+       Pehla version ek hi `requestAnimationFrame` par naapta tha. Wo chup-chaap fail ho
+       raha tha: agar us frame par table abhi render nahi hui, `measureColumn` null
+       lautata, effect return ho jata — aur dobara kabhi nahi chalta, kyunki uske deps
+       nahi badalte. Nateeja browser me dikha: PLAN ka text teen line me tootta tha aur
+       row 73px ki thi, jabki autofit ke saath 45px aur ek line.
+
+       Ye wo kism ka bug hai jo timing par nirbhar hai — kabhi chalta hai, kabhi nahi —
+       aur isi liye ek baar "verify" karke chhod dena kaafi nahi tha. */
+    let frame = 0;
+    let id = 0;
+    const attempt = () => {
+      if (autofitted.current) return;
+      const fitted: Record<string, number> = {};
+      let ready = true;
+      for (const col of LEADLIST_COL_ORDER) {
+        /* `select` aur `actions` me CONTROL hai, text nahi — checkbox aur ⋯ button. Unhe
+           text se naapne par autofit MIN_COL_PX (32px) de deta hai, aur checkbox ko
+           padding + border ke saath 40px chahiye, to wo apne hi column me kat jata.
+           Inki chaudai LEADLIST_COL_WIDTHS me px me likhi hai — wahi sahi hai. */
+        if (col === "select" || col === "actions") {
+          fitted[col] = parseFloat(LEADLIST_COL_WIDTHS[col]);
+          continue;
+        }
+        const w = measureColumn(col);
+        if (w == null) { ready = false; break; }
+        fitted[col] = w;
+      }
+
+      if (!ready) {
+        /* 30 frame ≈ half second. Uske baad chhod dete hain: fallback percentage waise
+           bhi kaam ki hai, aur hamesha ke liye rAF chalate rehna ek chhupa hua leak hai. */
+        if (frame++ < 30) { id = requestAnimationFrame(attempt); }
+        return;
+      }
+      autofitted.current = true;
+      setColW(fitToContainer(fitted, tableWrapRef.current?.clientWidth ?? 0));
+    };
+
+    id = requestAnimationFrame(attempt);
+    return () => cancelAnimationFrame(id);
+  }, [leads.length]);
+
+  /* ── Save state ke SAATH bandha hai, drag ke ant par nahi (26 Aug 2026) ──────
+     Pehle `endResize` likhta tha. Naap kar dekha: ek asli drag me CONTACT 403px ho gaya
+     aur localStorage me purani value padi rahi — yaani reload par mehnat gायab. Wajah ye
+     ki `pointerup` hamesha grip par nahi girta (capture chhoot jaye, pointer window se
+     bahar nikal jaye, ya browser drag cancel kar de).
+
+     Effect us poore sawaal ko hata deta hai: jo state me hai wahi disk par hai, chahe
+     drag kaise bhi khatam ho. `hydrated` ise pehle render par chalne se rokta hai, warna
+     mount ke waqt ka khaali `{}` sahi saheji hui chaudai ko mita deta. */
+  const hydrated = React.useRef(false);
+  React.useEffect(() => {
+    if (!hydrated.current) { hydrated.current = true; return; }
+    writeStoredWidths(colW);
+  }, [colW]);
+
+  /* ── Drag WINDOW par sunta hai, grip par nahi (26 Aug 2026) ──────────────────
+     Pehla version `setPointerCapture` + grip ke apne onPointerMove par chalta tha, aur
+     asli maus se wo "thoda hilta phir ruk jata" tha. Wajah React me thi, browser me
+     nahi: `ResizeGrip` is component ke ANDAR bana hai, to har `colW` badalne par — yaani
+     har pointermove par — uska component-type naya hota hai. React purana <span> unmount
+     karke naya mount karta hai, aur unmount hote hi pointer capture aur uske handlers
+     dono chale jate hain. Drag pehle move par hi mar jata tha.
+
+     Window par lage listeners ko is se koi farak nahi padta: wo grip ke zinda hone par
+     nirbhar hi nahi hain. Isi wajah se pointer header se bahar chala jaye tab bhi drag
+     chalta rehta hai — jo kheenchte waqt hota hi hai. */
+  const moveRef = React.useRef<((e: PointerEvent) => void) | null>(null);
+  const upRef   = React.useRef<(() => void) | null>(null);
+
+  const stopListening = React.useCallback(() => {
+    if (moveRef.current) window.removeEventListener("pointermove", moveRef.current);
+    if (upRef.current) {
+      window.removeEventListener("pointerup", upRef.current);
+      window.removeEventListener("pointercancel", upRef.current);
+    }
+    moveRef.current = null;
+    upRef.current = null;
+    dragRef.current = null;
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+  }, []);
+
+  /* Component gायab ho jaye drag ke beech me (route badla, view toggle) to listener
+     peeche na reh jaye — warna wo ek hate hue component ka state set karta rehta. */
+  React.useEffect(() => stopListening, [stopListening]);
+
+  const beginResize = (id: string) => (e: React.PointerEvent<HTMLSpanElement>) => {
+    e.preventDefault();
+    e.stopPropagation();          // header ka sort click na chale
+
+    const snapshot: Record<string, number> = { ...colW };
+    for (const key of LEADLIST_COL_ORDER) {
+      if (snapshot[key] == null) {
+        /* Round: getBoundingClientRect 27.725 jaisi value deta hai, aur aadha pixel
+           gridlines par har render me hilta dikhta hai. */
+        snapshot[key] = Math.round(colRefs.current[key]?.getBoundingClientRect().width ?? MIN_COL_PX);
+      }
+    }
+    setColW(snapshot);
+    dragRef.current = { id, startX: e.clientX, startWidth: snapshot[id] };
+
+    /* Drag ke dauran text select hona aur cursor ka badalna — dono zaroori hain. Bina
+       `userSelect: none` ke kheenchna poore header ko neela kar deta hai, jo tootne
+       jaisa dikhta hai. */
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+
+    const onMove = (ev: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      setColW((w) => ({ ...w, [d.id]: widthAfterDrag(d, ev.clientX) }));
+    };
+    const onUp = () => stopListening();
+
+    moveRef.current = onMove;
+    upRef.current = onUp;
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
+  /* Sab chaudai default par wapas. Ye zaroori hai, sajावat nahi: grip patti 8px ki hai
+     aur header ke kinare par baithi hai, to sort ke liye click karte waqt uspar haath lag
+     jana aasan hai — aur ek galti se 400px ka ho gaya column bina wapsi ke raaste ke wahi
+     dead-end hai jise CLAUDE.md §24 mana karta hai. */
+  const resetWidths = () => {
+    setColW({});
+  };
+
+  /**
+   * Header ke daayen kinare par pakadne ki patti.
+   *
+   * Double-click sirf USI column ko default par lauta deta hai — spreadsheet me yahi
+   * aadat hai, aur ye poori list reset karne se sasta hai jab galti ek hi column me hui ho.
+   */
+  const ResizeGrip = ({ col }: { col: string }) => (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`${col} column ki chaudai badlein — double-click se default`}
+      title="Kheench kar chaudai badlein · double-click se text ke naap ka"
+      /* Sirf pointerdown. Move/up window par sunte hain — dekho `beginResize` ka comment:
+         ye span har render par remount hota hai, to uspar lage move/up handler drag ke
+         pehle hi step me gायab ho jate the. */
+      onPointerDown={beginResize(col)}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        /* AUTOFIT — column utna hi jitna uska sabse lamba text (26 Aug 2026, Pardeep:
+           "column ke divider par double click karne par jitna text hai maximum utna
+           expand ho jaye"). Pehle ye default chaudai par lautata tha, jo Excel ka
+           bartaav nahi hai aur kam kaam ka tha. */
+        setColW((w) => {
+          const fit = measureColumn(col);
+          if (fit == null) return w;
+          /* Snapshot zaroori hai: agar baaki column abhi % me hain, to akele is column ko
+             px dena mila-jula haalat bana deta hai aur browser bachi jagah baant kar
+             padosi columns hila deta. Wahi bug double-click par pehle bhi mila tha. */
+          const next: Record<string, number> = { ...w };
+          for (const key of LEADLIST_COL_ORDER) {
+            if (next[key] == null) {
+              next[key] = Math.round(colRefs.current[key]?.getBoundingClientRect().width ?? MIN_COL_PX);
+            }
+          }
+          next[col] = fit;
+          return next;
+        });
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize touch-none hover:bg-amber/40 active:bg-amber/60"
+    />
+  );
+
+  const SortHeader = ({ col, label, align = "left", sticky = false }: { col: SortCol; label: string; align?: "left" | "right"; sticky?: boolean }) => (
     <th
       onClick={() => onSort(col)}
       className={cn(
-        "sticky top-0 z-10 bg-paper-2 p-3 text-xs font-semibold text-ink-3 uppercase tracking-wider cursor-pointer select-none hover:text-ink",
-        align === "right" ? "text-right" : "text-left",
+        GRID_TH, "relative cursor-pointer select-none hover:text-ink",
+        align === "right" && "text-right",
+        sticky && cn("bg-paper-2", STICK_L_COMPANY, STICK_HEAD),
       )}
     >
       <span className="inline-flex items-center gap-1">
@@ -3414,11 +4138,17 @@ function LeadListView({
           <Icon name={sortDir === "asc" ? "chevron_up" : "chevron_down"} size={11} />
         )}
       </span>
+      <ResizeGrip col={col} />
     </th>
   );
 
   return (
     <>
+    {/* Mobile card ka "Call log" isme khulta hai. Card ke ANDAR nahi: swipe par card
+        khud animate/unmount hota hai, aur uske andar rakha popup uske saath gायab ho
+        jata. */}
+    {callLog.dialog}
+
     {/* Adaptive card list — viewports < 1280px */}
     {/* ── THE CARD LIST MUST SCROLL ITSELF ──────────────────────────────────────
         `flex-1 min-h-0 overflow-y-auto` is not styling, it is the difference between
@@ -3436,7 +4166,17 @@ function LeadListView({
         is exactly why this went unseen: on a monitor ≥1280px the list works. The bug lived
         only under `xl` — the tablet and narrow-laptop band CLAUDE.md §20 warns about, and
         where a phone-shaped card list is the ONLY way to read this page. */}
-    <ul className="xl:hidden flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-3 pb-2 pr-0.5">
+    {/* ── Card list ab `lg` se NEECHE (26 Aug 2026) ─────────────────────────────
+        Pehle ye `xl` (1280px) tha, yaani laptop par bhi card dikhta tha aur table kabhi
+        nahi. Pardeep ne header wali table maangi — aur wo pehle se bani hui thi, bas uske
+        saamne kabhi aayi hi nahi.
+
+        `lg` (1024px) par utar rahe hain, `md` par nahi: 7 column 768px me thoosne ka
+        matlab hai har cell ka ellipsis me badal jana, jo CLAUDE.md §20 ka apna
+        anti-pattern hai ("hiding important columns… operator still loses data"). 1024 se
+        neeche card hi rehta hai, isliye §20 ka "table ko card ka jodidaar chahiye" niyam
+        bhi kayam hai. */}
+    <ul className="lg:hidden flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-3 pb-2 pr-0.5">
       {sorted.map((lead) => {
         // `stale` used to be computed here on a >14-day rule and passed in. The
         // card now derives it from lib/leads/heat itself, so phone and desktop
@@ -3449,7 +4189,7 @@ function LeadListView({
             onTap={onRowClick}
             onChangeStage={(s) => void changeStage(lead, s)}
             onSendQuote={onSendQuote}
-            onOutcome={(o, l) => { void runOutcome(o, l); }}
+            onOutcome={(o, l) => callLog.run(o, l)}
           />
         );
       })}
@@ -3460,18 +4200,68 @@ function LeadListView({
     {/* ─── End of mobile list — old inline card markup retired ─── */}
 
     {/* Desktop / tablet power table — viewports >= 1280px */}
-    <div className="hidden xl:block w-full max-w-full border border-hairline rounded-md overflow-auto bg-paper flex-1 min-h-0">
+    <div ref={tableWrapRef} className="hidden lg:block w-full max-w-full border border-hairline rounded-md overflow-auto bg-paper flex-1 min-h-0">
       {/* Fluid percentage columns — the table fills the container width with no
           horizontal scrollbar at desktop widths. */}
-      <table className="w-full table-fixed">
+      {/* Jab tak koi column kheencha nahi gaya, table container bhar deta hai (`w-full`).
+          Ek baar kheenchne ke baad chaudai user ki hai.
+
+          `width` SAAF-SAAF dena zaroori hai, aur ye naap kar pata chala: sirf `w-full`
+          hata dene se chaudai state aur localStorage me to badalti thi par screen par
+          nahi — email 328px saheja gaya aur 206px render hua, kyunki `table-fixed` table
+          `width:auto` par apne container me nichud jata hai. Yogfal dene par wo bahar
+          nikalta hai aur wrapper ka `overflow-auto` use horizontal scroll de deta hai —
+          theek jaise spreadsheet me hota hai. */}
+      <table
+        className={cn("leads-grid table-fixed", Object.keys(colW).length === 0 && "w-full")}
+        style={{
+          ...(Object.keys(colW).length === 0
+            ? {}
+            : {
+                /* Sirf DIKHNE WALE column gine jate hain — chhupe hue ko jodne par table
+                   apni jagah se chauda reh jata aur daayen ek khaali patti bach jati. */
+                width: LEADLIST_COL_ORDER
+                  .filter((id) => !hidden.has(id))
+                  .reduce((sum, id) => sum + (colW[id] ?? 0), 0),
+              }),
+          /* Har cell isi ko padhta hai — dekho DENSITY_PY. */
+          ["--cell-py" as string]: DENSITY_PY[density],
+        } as React.CSSProperties}
+      >
+        {/* ── Chhupe hue column, CSS se ────────────────────────────────────────────
+            Har cell par `{!hidden.has(...) && ...}` lagane ka matlab hota 12 cells ko
+            dobara likhna — aur is file me wahi kaam do baar galat ho chuka hai (column
+            hatate waqt colgroup chhoot jata tha, aur phir har agla column apne padosi ki
+            chaudai pehen leta tha).
+
+            `display:none` cell ko layout se poori tarah nikaal deta hai, to browser bache
+            hue cells se columns dobara ginta hai — aur colgroup me se bhi wahi hataye gaye
+            hain, isliye dono ka kram mel khata hai. Ek jagah se dono. */}
+        {hidden.size > 0 && (
+          <style>{LEADLIST_COL_ORDER
+            .map((id, i) => (hidden.has(id)
+              ? `.leads-grid > * > tr > *:nth-child(${i + 1}){display:none}`
+              : ""))
+            .filter(Boolean)
+            .join("")}</style>
+        )}
+        {/* Chaudai: user ne kheenchi hui (px) pehle, warna default (%). Jab tak koi drag
+            nahi hua, table container ke saath bada-chhota hota hai — jo aam haalat me
+            sahi hai. */}
         <colgroup>
-          {LEADLIST_COL_ORDER.map((id) => <col key={id} style={{ width: LEADLIST_COL_WIDTHS[id] }} />)}
+          {LEADLIST_COL_ORDER.filter((id) => !hidden.has(id)).map((id) => (
+            <col
+              key={id}
+              ref={(el) => { colRefs.current[id] = el; }}
+              style={{ width: colW[id] != null ? `${colW[id]}px` : LEADLIST_COL_WIDTHS[id] }}
+            />
+          ))}
         </colgroup>
         <thead className="bg-paper-2 border-b border-hairline">
           <tr>
             {/* Select-all checkbox — checked when every row is selected,
                 indeterminate when only some are. */}
-            <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2">
+            <th className={cn("sticky top-0 bg-paper-2 px-3 py-2", STICK_L_SELECT, STICK_HEAD)}>
               <input
                 type="checkbox"
                 aria-label="Select all leads"
@@ -3487,13 +4277,26 @@ function LeadListView({
                 className="w-4 h-4 accent-amber cursor-pointer"
               />
             </th>
-            <SortHeader col="company" label="Company" />
+            {/* Company jama hua hai (sticky) — scroll karte waqt yahi batata hai ki row
+                kiski hai. Dekho STICK_L_COMPANY. */}
+            <SortHeader col="company" label="Company" sticky />
+            {/* Intezaar — company ke theek baad, kyunki ye hi tay karta hai ki aaj kis
+                row par kaam karna hai. Research: 5 minute me jawab = 21 guna sambhavna. */}
+            <SortHeader col="wait" label="Wait" />
+            {/* Owner — ye pehle se FILTER chalata tha ("My assigned", unassigned ki ginti)
+                par kahin dikhta nahi tha. Jis cheez par filter lagta hai, wo dikhni
+                chahiye. */}
+            <SortHeader col="owner" label="Owner" />
+            <SortHeader col="contact" label="Contact" />
+            <SortHeader col="email" label="Email" />
+            <SortHeader col="phone" label="Phone" />
             <SortHeader col="stage" label="Stage" />
-            <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Plan</th>
+            <SortHeader col="plan" label="Plan" />
+            <SortHeader col="seats" label="Seats" align="right" />
             <SortHeader col="value" label="Value" align="right" />
-            <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-left">Follow-up</th>
+            <SortHeader col="followup" label="Follow-up" />
             {/* Actions column — quick action icons on row hover. */}
-            <th className="sticky top-0 z-10 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-right">
+            <th className={cn("sticky top-0 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-right", STICK_R_ACTIONS, STICK_HEAD)}>
               <span className="sr-only">Quick actions</span>
             </th>
           </tr>
@@ -3547,12 +4350,31 @@ function LeadListView({
                   "border-b border-hairline last:border-0 cursor-pointer transition-colors group",
                   // Selected rows pick up the brand accent. Hover state
                   // layered on top so it still reacts to mouse-over.
+                  /* Solid rang, aadhe-paardarshi nahi. Sticky cell ke neeche se baaki
+                     cells guzarti hain, to use apna OPAQUE background chahiye — aur wo
+                     row se hu-ba-hu milna chahiye. Aadhi opacity (`bg-amber-soft/60`,
+                     `bg-paper-2/40`) ko cell par dohraya nahi ja sakta — cell ke paas
+                     pehle se `bg-paper` hai aur do background ek saath nahi lagte, to
+                     dono taraf solid rakha gaya. Nateeja thoda gehra hai, par mila hua
+                     hai; aur na-mila hua
+                     solid. Nateeja thoda gehra hai, par mila hua hai; aur na-mila hua
+                     sticky column tootne jaisa dikhta hai. */
                   isSelected
-                    ? "bg-amber-soft/60 hover:bg-amber-soft"
-                    : "hover:bg-paper-2/40",
+                    ? "bg-amber-soft"
+                    : "hover:bg-paper-2",
                 )}
               >
-                <td className={cn("p-3", railCls)} onClick={(e) => e.stopPropagation()}>
+                {/* Checkbox aur company — dono jame hue (sticky). Background row ki
+                    haalat se hu-ba-hu milta hai; dekho tr ka comment upar. */}
+                <td
+                  className={cn(
+                    /* px-2, p-3 nahi: p-3 (24px) + border-l-4 + checkbox 16px = 44px,
+                       jo 40px ke column se bahar nikal kar padosi cell me jhalakta tha. */
+                    "px-2 py-[var(--cell-py)]", railCls, STICK_L_SELECT, "overflow-hidden",
+                    isSelected ? "bg-amber-soft" : "bg-paper group-hover:bg-paper-2",
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <input
                     type="checkbox"
                     aria-label={`Select ${lead.company}`}
@@ -3561,7 +4383,12 @@ function LeadListView({
                     className="w-4 h-4 accent-amber cursor-pointer"
                   />
                 </td>
-                <td className="p-3">
+                <td
+                  className={cn(
+                    GRID_TD, STICK_L_COMPANY,
+                    isSelected ? "bg-amber-soft" : "bg-paper group-hover:bg-paper-2",
+                  )}
+                >
                   <div className="flex items-center gap-2">
                     {/* The stale signal now rides as a labelled badge next to the
                         company name (with the day count), so this second, unlabelled
@@ -3575,22 +4402,30 @@ function LeadListView({
                       {/* Above the name rather than beside it: it reads first, and it cannot push a
                       long company name into an ellipsis the way an inline badge did. */}
                       <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-ink truncate" title={lead.id}>{lead.company}</span>
+                        {/* ── Heat: company ke naam se PEHLE, apna column nahi ──────────
+                            Ye do baar hila hai, aur dono baar sahi wajah se. Pehle ye
+                            "⚡ Warm" wali pill thi jo 166px ke cell ki aadhi jagah kha kar
+                            naam ko doosri line me tod deti thi — isliye alag column me
+                            gayi. Phir label hata kar ye sirf 16px ka indicator ban gaya,
+                            aur us naap par ek poore column ki koi wajah nahi bachi.
+
+                            Emoji hai, rang ka dot nahi: sirf rang se matlab batana
+                            colour-blind padhne wale ke liye teeno ko ek jaisa kar deta hai
+                            (WCAG 1.4.1). 🔥/⚡/❄️ shakl se alag hain.
+
+                            Poora matlab do jagah: hover par tooltip, aur screen reader ke
+                            liye `sr-only` — kyunki emoji khud "high voltage sign" bolta
+                            hai, wo baat nahi jo hum keh rahe hain. */}
                         <span
-                        title={`${intent.label} — ${intent.reason}`}
-                        className={cn(
-                        "shrink-0 inline-flex items-center gap-0.5 rounded-full text-3xs font-semibold px-1.5 py-0.5 leading-none cursor-help",
-                        intent.tier === "hot"  && "bg-rose-soft text-rose-ink",
-                        intent.tier === "warm" && "bg-amber-soft text-amber-ink",
-                        intent.tier === "cold" && "bg-paper-3 text-ink-3 border border-hairline",
-                        )}
+                          title={`${intent.label} — ${intent.reason}`}
+                          className="shrink-0 cursor-help text-sm leading-none"
                         >
-                        {intent.tier === "hot" ? "🔥" : intent.tier === "warm" ? "⚡" : "❄️"} {intent.label}
+                          <span aria-hidden="true">
+                            {intent.tier === "hot" ? "🔥" : intent.tier === "warm" ? "⚡" : "❄️"}
+                          </span>
+                          <span className="sr-only">{intent.label}</span>
                         </span>
-                        {/* Intent tier — replaces the old binary "Hot" pill.
-                            Cold deliberately outranks Hot (see heat.ts): a big
-                            deal nobody has touched in 10 days is at risk, not
-                            on fire. */}
+                        <span className="min-w-0 font-medium text-ink" title={lead.id}>{lead.company}</span>
                         {/* Stale nudge — fires at 7 days, BEFORE Cold at 10, so
                             there is still a window to save the deal. */}
                         {stale7 && (
@@ -3613,20 +4448,11 @@ function LeadListView({
                           </button>
                         )}
                       </div>
-                      {/* Contact under the name, as /customers does. The lead's internal id used to sit
-                          here; it is on the company name's tooltip now — a handle for support, not
-                          something anyone reads down a column of rows. */}
-                      {/* Name and number on one line, email on its own beneath — asked for on 26 Aug.
-                          It puts the cell back to three lines (~85px a row against ~65px), which is a
-                          real cost on a page whose complaint was that leads had no room; Pardeep's call,
-                          made after seeing both. Empty parts drop out rather than leaving stray dots. */}
-                      <div className="text-2xs text-ink-3 truncate">
-                        {[lead.contact_name?.trim(), lead.contact_phone?.trim()].filter(Boolean).join(" · ") ||
-                          "no contact name or number"}
-                      </div>
-                      {lead.contact_email?.trim() ? (
-                        <div className="text-2xs text-ink-3 truncate">{lead.contact_email.trim()}</div>
-                      ) : null}
+                      {/* Contact ka naam, email aur phone yahan se NIKAL kar apne-apne
+                          column me chale gaye (26 Aug 2026, "jaise excel sheet banti
+                          hai"). Ek cell me teen line ka matlab tha ~85px ki row; grid me
+                          wo ek line hai, aur aankh ek hi cheez ko upar-neeche scan kar
+                          sakti hai — spreadsheet ka poora faayda yahi hai. */}
                       {(() => {
                         const tk = openTaskByLead.get(lead.id);
                         if (!tk) return null;
@@ -3644,40 +4470,155 @@ function LeadListView({
                     </div>
                   </div>
                 </td>
-                {/* Stage — 2nd column so pipeline status reads at a glance. Editable
-                    inline; stopPropagation so the select doesn't trigger the row click. */}
-                <td className="p-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+
+                {/* ── Intezaar ka waqt ────────────────────────────────────────────────
+                    Do alag cheezein, ek column: jawab ja chuka hai to KITNI DER LAGI (ek
+                    record, muted), aur jawab baaki hai to KAB SE RUKI HAI (aaj ka kaam,
+                    rang ke saath). Inhe ek jaisa dikhana wahi galti hoti jo
+                    `follow_up_date` ke saath hui — wo yojana hai, ye karz. */}
+                <td className={cn(GRID_TD_ATOM, "text-right")}>
+                  {(() => {
+                    const w = waitState(lead.created_at, firstReplies.get(lead.id) ?? null, nowForWait);
+                    if (w.kind === "unknown") return <span className="text-2xs text-ink-4">—</span>;
+                    if (w.kind === "answered") {
+                      return (
+                        <span
+                          className="text-2xs tabular-nums text-ink-3"
+                          title={`Pehla jawab ${waitLabel(w.minutes)} me chala gaya tha`}
+                        >
+                          ✓ {waitLabel(w.minutes)}
+                        </span>
+                      );
+                    }
+                    return (
+                      <span
+                        title={
+                          `Is lead ka jawab ${waitLabel(w.minutes)} se baaki hai.\n\n` +
+                          "Research (MIT/InsideSales): 5 minute me jawab dene par lead qualify " +
+                          "hone ki sambhavna 30 minute se 21 guna hoti hai, aur 78% B2B customer " +
+                          "us vendor se khareedte hain jo pehle jawab deta hai."
+                        }
+                        className={cn(
+                          "inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
+                          w.band === "fresh"    && "bg-emerald-soft text-emerald-ink",
+                          w.band === "slipping" && "bg-amber-soft text-amber-ink",
+                          w.band === "late"     && "bg-rose-soft text-rose-ink",
+                          /* `cold` par rang HATA diya gaya, gehra nahi kiya. Industry ka
+                             average 42 ghante hai, to `cold` aam haalat hai — use sabse
+                             chamakdar dikhane par poori list laal ho jati aur rang ka
+                             matlab hi khatam ho jata. */
+                          w.band === "cold"     && "border border-hairline text-ink-3",
+                        )}
+                      >
+                        {waitLabel(w.minutes)}
+                      </span>
+                    );
+                  })()}
+                </td>
+
+                {/* ── Owner ─────────────────────────────────────────────────────────────
+                    Initials ka rang `users.color` se aata hai — wahi jo /team aur tasks
+                    par lagta hai, isliye ek hi aadmi har screen par ek jaisa dikhta hai.
+
+                    Bina owner wali lead "—" nahi, "Unassigned" dikhati hai: khaali cell
+                    "data nahi hai" jaisa padha jata hai, jabki bina owner hona ek ASLI
+                    haalat hai jispar kaam karna hai (page ki apni "unassigned" ginti isi
+                    par chalti hai). */}
+                <td className={GRID_TD_ATOM}>
+                  {(() => {
+                    const o = lead.owner_id ? ownerById.get(lead.owner_id) : undefined;
+                    if (!lead.owner_id) {
+                      return <span className="text-2xs text-ink-4">Unassigned</span>;
+                    }
+                    if (!o) {
+                      /* owner_id hai par us naam ka user nahi mila — nikala hua ya
+                         deactivate kiya gaya member. Chup rehne se behtar hai kehna. */
+                      return <span className="text-2xs text-ink-4" title={lead.owner_id}>Unknown user</span>;
+                    }
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1.5"
+                        title={`${o.full_name ?? "—"}${o.email ? ` · ${o.email}` : ""}`}
+                      >
+                        {/* ── `<Avatar>`, apna gol daayra NAHI (26 Aug 2026) ────────────
+                            Pehla version ek haath se bana span tha jo `o.color` ko seedha
+                            `backgroundColor` me daal deta tha. Wo TOOTA hua tha, aur
+                            Pardeep ne pakda: "owner ko alag sa show kyo kar raha hai" —
+                            ek row me badge tha, doosri me nahi.
+
+                            Wajah: `users.color` me CSS colour nahi, TOKEN ka naam hai.
+                            `indigo` sanyog se ek asli CSS colour bhi hai (isliye Darshan
+                            ka circle ban gaya), par `amber` CSS me hai hi nahi — to
+                            Pardeep ka circle transparent ho gaya. Ek adha-chalta hua bug,
+                            jo isi wajah se "styling ki asangati" jaisa dikha.
+
+                            `<Avatar>` isi ke liye bana hai — uske apne docstring ka example
+                            `<Avatar initials="PA" color="amber" />` hai. Maine use dekha hi
+                            nahi (CLAUDE.md §14: pehle maujood component dhoondho), aur
+                            uske saath ek hardcoded `#6b7280` bhi daal diya tha, jo §5 saaf
+                            mana karta hai. Dono galtiyan ek hi line me thin. */}
+                        <Avatar
+                          size="xs"
+                          initials={o.initials ?? undefined}
+                          name={o.full_name ?? o.email ?? undefined}
+                          color={AVATAR_TOKENS.includes(o.color ?? "") ? (o.color as AvatarColor) : "muted"}
+                        />
+                        <span className="truncate text-xs text-ink-2">{o.full_name ?? o.email ?? "—"}</span>
+                      </span>
+                    );
+                  })()}
+                </td>
+
+                {/* Contact · Email · Phone — teen alag column. Har ek `truncate` ke saath
+                    `title` bhi rakhta hai: jo cell me kata, wo hover par poora milta hai
+                    (accessibility-review §4 — truncate kiya hua text screen reader ke
+                    liye hamesha ke liye chala jata hai). Khaali par "—" chhapta hai, kyunki
+                    khaali cell aur "data hai par dikha nahi" grid me ek jaise lagte hain. */}
+                <td className={GRID_TD}>
+                  <span className="block text-xs text-ink-2" title={lead.contact_name ?? ""}>
+                    {lead.contact_name?.trim() || "—"}
+                  </span>
+                </td>
+                <td className={GRID_TD}>
+                  <span className="block break-all text-xs text-ink-2" title={lead.contact_email ?? ""}>
+                    {lead.contact_email?.trim() || "—"}
+                  </span>
+                </td>
+                <td className={GRID_TD_ATOM}>
+                  <span className="block truncate text-xs text-ink-2 tabular-nums" title={lead.contact_phone ?? ""}>
+                    {lead.contact_phone?.trim() || "—"}
+                  </span>
+                </td>
+
+                {/* ── Stage: PADHNE ke liye, badalne ke liye nahi (26 Aug 2026) ────────
+                    Pehle yahan ek <select> tha. Pardeep ne use hataane ko kaha: stage us
+                    baat se badle jo lead ke saath sach me hui, kisi dropdown se nahi.
+
+                    Ab stage sirf teen jagah se hilta hai, aur teeno ek asli ghatna hain:
+                      · outcome chips  — "Baat hui", "Demo hua", "Trial shuru", "Lost"
+                      · quote bhejna   — stage-after-quote-sent.ts
+                      · swipe (mobile) — swipe-gesture.ts
+
+                    Sudhaar ka raasta band nahi hai: lead kholne par drawer me override
+                    maujood hai, confirmation ke saath. Wo jaan-boojh kar ek soch-samajh
+                    kar kiya jane wala kaam hai, table cell nahi (CLAUDE.md §24 — koi
+                    dead end nahi). Wahi tarq jo pehle se `won` par lagta tha, ab har
+                    stage par lagta hai. */}
+                {/* Stage ek ikai hai ("Quote Sent" ko todna use padhne me mushkil karta
+                    hai), isliye ATOM. */}
+                <td className={GRID_TD_ATOM}>
                   <div className="flex items-center gap-1.5 flex-nowrap">
                     <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", STAGE_DOT[lead.stage])} />
-                    {isStageLocked(lead.stage) ? (
-                      /* Won renders as text, not a control. Un-winning a deal means money
-                         already recorded against it — that is a deliberate act with a
-                         confirmation, not a table cell one row from the scrollbar. */
-                      <span
-                        className="text-xs px-1 py-0.5 font-medium"
-                        title="Closed. Reopening a won deal touches recorded money, so it cannot be done from this cell."
-                      >
-                        {STAGE_LABEL[lead.stage]}
-                      </span>
-                    ) : (
-                      <select
-                        value={lead.stage}
-                        onChange={(e) => {
-                          const stage = e.target.value as Lead["stage"];
-                          void changeStage(lead, stage);
-                          if (stage === "lost") {
-                            toast.success(`${lead.company} marked Lost`);
-                          }
-                        }}
-                        title="Change stage"
-                        aria-label={`Stage for ${lead.company}`}
-                        className="text-xs bg-transparent -ml-1 px-1 py-0.5 rounded border border-transparent hover:border-hairline cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber focus:border-amber"
-                      >
-                        {rowStageOptions(lead.stage).map((s) => (
-                          <option key={s} value={s}>{STAGE_LABEL[s]}</option>
-                        ))}
-                      </select>
-                    )}
+                    <span
+                      className="text-xs px-1 py-0.5 font-medium"
+                      title={
+                        isStageLocked(lead.stage)
+                          ? "Closed. Reopening a won deal touches recorded money, so it cannot be done from this cell."
+                          : "Stage khud badalta hai — baat hone, demo, trial ya quote jane par. Badalna ho to lead kholiye."
+                      }
+                    >
+                      {STAGE_LABEL[lead.stage]}
+                    </span>
                     {/* How long it has sat here. Beside the stage, because "Quote Sent"
                         and "Quote Sent for 20 days" are different facts and only the
                         second one asks for action. Unknown ages render as nothing at all
@@ -3702,24 +4643,29 @@ function LeadListView({
                 {/* Email is kept off the row to keep it tight — it shows on hover
                     (title) with a small mail glyph as the cue. Phone stays visible
                     as it's the primary call-to-action in the pipeline. */}
-                {/* Plan + seats folded together — saves a column, keeps both
-                    facts. Seats bold so quantity reads at a glance. */}
-                <td className="px-3 py-2 text-sm text-ink-2">
+                {/* Plan. Seats yahan se apne column me chale gaye (26 Aug 2026) — pehle
+                    dono ek cell me the aur us cell ki doosri line har row ko unchi kar
+                    deti thi. Grid me har cell ek line ka hona chahiye. */}
+                <td className={cn(GRID_TD,"text-sm text-ink-2")}>
                   {/* Vendor shortened, never dropped: this catalogue has a Google, a Microsoft AND a
                       Zoho "Standard", so stripping the vendor would print the same label for three
                       different products on a page of rupee figures. See short-plan.ts. */}
-                  <span className="block truncate" title={planWasShortened(lead.plan) ? (lead.plan ?? undefined) : undefined}>
+                  <span className="block" title={planWasShortened(lead.plan) ? (lead.plan ?? undefined) : undefined}>
                     {shortPlan(lead.plan) || "—"}
                   </span>
-                  {lead.seats != null && (
-                    <span className="text-2xs text-ink-3"><span className="font-semibold text-ink-2 tabular-nums">{lead.seats}</span> seats</span>
-                  )}
+                </td>
+
+                {/* Seats — apna column, daayen taraf aligned kyunki ye ginti hai. "seats"
+                    shabd header me hai, isliye har cell me dohrana sirf jagah kha raha
+                    tha (aur 10 rows me wo 10 baar chhapta tha). */}
+                <td className={cn(GRID_TD_ATOM, "text-right text-sm tabular-nums text-ink-2")}>
+                  {lead.seats ?? "—"}
                 </td>
                 {/* Value — the money, given visual precedence (serif, bold), and
                     editable in place. Parsing lives in lib/leads/inline-edit.ts:
                     this figure feeds the Open Pipeline KPI, so an unparseable
                     entry is refused rather than coerced. */}
-                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                <td className={cn(GRID_TD_ATOM,"text-right tabular-nums")} onClick={(e) => e.stopPropagation()}>
                   <InlineCell<number | null>
                     value={lead.value ?? null}
                     ariaLabel={`Deal value for ${lead.company}`}
@@ -3762,7 +4708,10 @@ function LeadListView({
                 {/* Priority — inline select. */}
                 {/* Follow-up date — inline date picker. Overdue reads rose so the
                     column doubles as a "who needs chasing today" scan. */}
-                <td className="px-3 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
+                {/* Follow-up. `GRID_TD` ka nowrap zaroori hai — iske bina "26 Aug 2026"
+                    83px me teen tukdo me tootta tha aur us ek row ki unchai baaki sab se
+                    alag ho jati thi. */}
+                <td className={cn(GRID_TD_ATOM, "text-sm")} onClick={(e) => e.stopPropagation()}>
                   <InlineCell<string | null>
                     value={lead.follow_up_date ?? null}
                     ariaLabel={`Follow-up date for ${lead.company}`}
@@ -3798,7 +4747,97 @@ function LeadListView({
       )}
       <div className="px-3 py-2 border-t border-hairline bg-paper-2/40 text-2xs text-ink-3 flex items-center gap-2">
         <Icon name="info" size={11} />
-        Click any row to open the drawer · Tick a checkbox to enable bulk actions · Every row action lives under the ⋯ at its right · a red left edge means it needs you today, green means high value
+        <span className="min-w-0 flex-1">
+          Click any row to open the drawer · Tick a checkbox to enable bulk actions · Every row action lives under the ⋯ at its right · a red left edge means it needs you today, green means high value
+        </span>
+        {/* Reset SIRF tab dikhta hai jab kuch kheencha gaya ho — warna ye har waqt ek
+            aisa button hota jo kuch na kare. Dikhna zaroori hai: double-click wala raasta
+            tabhi kaam aata hai jab pata ho ki wo hai, aur galat drag ka pata aksar tab
+            chalta hai jab layout pehle hi bikhar chuka ho. */}
+        {/* ── Row ki unchai — teen padav, chunav user ka ─────────────────────────
+            Research: bade monitor par saans chahiye, chhote par zyada rows. Ye faisla
+            screen ke saath badalta hai, isliye ek hardcoded 45px sabke liye galat hi
+            rehta. */}
+        <div className="flex shrink-0 items-center gap-1 rounded border border-hairline p-0.5">
+          {([
+            ["compact", "Ghana", 40],
+            ["regular", "Aam", 48],
+            ["relaxed", "Khula", 56],
+          ] as const).map(([key, label, px]) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={density === key}
+              title={`Row ki unchai ~${px}px`}
+              onClick={() => {
+                setDensity(key);
+                try { window.localStorage.setItem("resellersos.leads.density", key); } catch { /* ok */ }
+              }}
+              className={cn(
+                "rounded px-1.5 py-0.5 font-semibold",
+                density === key ? "bg-ink text-paper" : "text-ink-3 hover:bg-paper-2",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Column chhupana ────────────────────────────────────────────────────
+            Research: column hide/reorder ke saath ek saaf reset bhi hona chahiye. Reorder
+            jaan-boojh kar nahi banaya — wo drag-and-drop ka apna poora kaam hai, aur is
+            table par asli dard "bahut zyada column" tha, "galat kram" nahi. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="shrink-0 rounded border border-hairline px-1.5 py-0.5 font-semibold text-ink-2 hover:bg-paper-2"
+            >
+              Column {hidden.size > 0 ? `(${hidden.size} chhupe)` : ""}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[12rem]">
+            <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
+              Kaun se column dikhein
+            </DropdownMenuLabel>
+            {LEADLIST_COL_ORDER
+              /* `select` aur `actions` chhupaye nahi ja sakte: checkbox ke bina bulk
+                 action pahunch se bahar ho jata aur ⋯ ke bina row ka koi action nahi
+                 bachta — yaani ek dead end (CLAUDE.md §24). */
+              .filter((id) => id !== "select" && id !== "actions")
+              .map((id) => (
+                <DropdownMenuItem
+                  key={id}
+                  className="cursor-pointer gap-2.5 py-2 capitalize"
+                  onSelect={(e) => {
+                    e.preventDefault();          // menu khula rahe, kai toggle ek saath
+                    setHidden((h) => {
+                      const next = new Set(h);
+                      if (next.has(id)) next.delete(id); else next.add(id);
+                      try {
+                        window.localStorage.setItem("resellersos.leads.hiddenCols", JSON.stringify([...next]));
+                      } catch { /* ok */ }
+                      return next;
+                    });
+                  }}
+                >
+                  <Icon name={hidden.has(id) ? "square" : "check_circle"} size={14}
+                    className={hidden.has(id) ? "text-ink-4" : "text-emerald"} />
+                  {id === "followup" ? "Follow-up" : id === "wait" ? "Wait" : id}
+                </DropdownMenuItem>
+              ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {Object.keys(colW).length > 0 && (
+          <button
+            type="button"
+            onClick={resetWidths}
+            className="shrink-0 rounded border border-hairline px-1.5 py-0.5 font-semibold text-ink-2 hover:bg-paper-2"
+          >
+            Chaudai reset
+          </button>
+        )}
       </div>
     </div>
 

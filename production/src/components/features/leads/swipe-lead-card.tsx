@@ -52,8 +52,7 @@ import { rupee, cn, formatDate } from "@/lib/utils";
 import { intentMeta, staleWarning } from "@/lib/leads/heat";
 import { heatScore, heatBadge } from "@/lib/leads/heat-score";
 import { decideSwipe, SWIPE_TRIGGER_PX } from "@/lib/leads/swipe-gesture";
-import { OutcomeChips } from "./outcome-chips";
-import type { LeadOutcome } from "@/lib/leads/outcomes";
+import { chipsForStage, type LeadOutcome } from "@/lib/leads/outcomes";
 import type { Lead } from "@/lib/supabase/database.types";
 
 // LEAD_STAGES mirrors the array in leads/page.tsx — kept here as a small
@@ -104,16 +103,11 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
   const stale7 = staleWarning(lead);
   const stageMeta = LEAD_STAGES.find((s) => s.id === lead.stage);
 
-  // Quote-first funnel gating (mirrors the drawer + desktop row select):
-  //  • Pre-quote lead (new/contact): only New / Contacted / Lost. To advance
-  //    you must Send a quote (the 📄 icon), which moves it into Deals.
-  //  • Post-quote deal: the deal stages only (no going back to the inbox).
-  const isPreQuote = lead.stage === "new" || lead.stage === "contact";
-  const stageOptions = LEAD_STAGES.filter((s) =>
-    isPreQuote
-      ? s.id === "new" || s.id === "contact" || s.id === "lost"
-      : s.id !== "new" && s.id !== "contact",
-  );
+  /* Yahan "quote-first funnel gating" ka ek `stageOptions` list tha, jo card ke stage
+     dropdown ko khilata tha. Wo dropdown 26 Aug 2026 ko hata diya gaya — stage ab kaam se
+     badalta hai, haath se nahi — isliye ye list bhi gayi. Us niyam ka asli ghar ab
+     `lib/leads/stage-advance.ts` hai, jahan wo tested hai aur teeno surface ek jaisa
+     bartaav karte hain. */
 
   // Phone normalisation for wa.me + tel: — assume Indian +91 if 10 digits.
   const phoneDigits = (lead.contact_phone ?? "").replace(/\D/g, "");
@@ -244,10 +238,18 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleCardTap(); } }}
           className="block w-full text-left p-3 active:bg-paper-2/50 rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber/50"
         >
-          {/* Row 1 — priority dot + company + ₹ value + seats. */}
+          {/* ── Row 1 — poori pehchan EK line me (26 Aug 2026, Pardeep ke kehne par) ────
+              Pehle ye do line thi: company upar, "contact · phone" neeche, aur email
+              kahin bhi nahi. Ab company, contact ka naam, email aur mobile ek hi line me
+              hain — card ki ek poori line bach gayi.
+
+              `flex-wrap` jaan-boojh kar: 1200px par ye sach me ek line hai, par 375px ke
+              phone par paanch cheezein ek line me nahi aa saktin. Wahan `truncate` lagane
+              ka matlab hota email ya number ka aadha gायab hona — yaani wahi cheez chhup
+              jati jise dikhane ke liye ye badla gaya. Wrap hone dena imaandar hai. */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
                 <span className={cn("w-2 h-2 rounded-full shrink-0", prio.color)} title={prio.title} />
                 <p className="font-medium text-ink truncate text-[15px]">{lead.company}</p>
                 {/* Intent tier + stale nudge — same lib/leads/heat helpers the
@@ -285,15 +287,18 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
                     {stale7.days}d
                   </span>
                 )}
+                {/* Contact ki teen cheezein, usi line me. Separator sirf UN cheezo ke
+                    beech aata hai jo maujood hain — warna bina email wali lead par
+                    "Pardeep sharma ·  · +91…" jaisa latakta hua dot bachta hai. */}
+                {[lead.contact_name, lead.contact_email, lead.contact_phone]
+                  .filter((v): v is string => Boolean(v && v.trim()))
+                  .map((v, i) => (
+                    <span key={v} className="min-w-0 max-w-full truncate text-xs text-ink-3" title={v}>
+                      {i > 0 && <span className="text-ink-4"> · </span>}
+                      {v}
+                    </span>
+                  ))}
               </div>
-              {/* Row 2 — contact name + phone, compact. */}
-              {(lead.contact_name || lead.contact_phone) && (
-                <p className="text-xs text-ink-3 truncate mt-0.5">
-                  {lead.contact_name}
-                  {lead.contact_phone && lead.contact_name && " · "}
-                  {lead.contact_phone}
-                </p>
-              )}
               {task && (
                 <span className={cn(
                   "mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-3xs font-medium",
@@ -320,46 +325,23 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               All laid on a single line to compress the card height. */}
           <div className="flex items-center justify-between gap-2 mt-2 min-w-0">
             <div className="flex items-center gap-2 min-w-0 flex-1">
+              {/* ── Stage: padhne ke liye, badalne ke liye nahi (26 Aug 2026) ──────────
+                  Yahan ek "Move {company} to…" wala dropdown tha. Desktop table row se wo
+                  us din hata diya gaya tha, par YE chhoot gaya — aur 1280px se chhoti
+                  window par card hi dikhta hai, table nahi. Yaani Pardeep ki screen par
+                  manual stage change poore din zinda raha jabki maine use hata diya
+                  samajh liya tha.
+
+                  Stage ab kaam se badalta hai — ⋯ menu ke outcome, quote jana, ya
+                  right-swipe. Sudhaarna ho to lead kholiye: drawer me override hai. */}
               {stageMeta && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-3xs font-medium text-ink-2 px-1.5 py-0.5 rounded hover:bg-paper-2 active:bg-paper-2/70 cursor-pointer shrink-0"
-                    >
-                      <span className={cn("w-1.5 h-1.5 rounded-full", stageMeta.dot)} />
-                      {stageMeta.label}
-                      <Icon name="chevron_down" size={10} className="text-ink-3" />
-                    </span>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  >
-                    <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
-                      Move {lead.company} to…
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {stageOptions.map((s) => (
-                      <DropdownMenuItem
-                        key={s.id}
-                        disabled={s.id === lead.stage}
-                        onSelect={() => onChangeStage(s.id)}
-                        className="text-sm"
-                      >
-                        <span className={cn("w-2 h-2 rounded-full mr-2", s.dot)} />
-                        {s.label}
-                        {s.id === lead.stage && (
-                          <span className="ml-auto text-3xs text-ink-3">current</span>
-                        )}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <span
+                  title="Stage khud badalta hai — baat hone, demo, trial ya quote jane par. Badalna ho to lead kholiye."
+                  className="inline-flex items-center gap-1 text-3xs font-medium text-ink-2 px-1.5 py-0.5 shrink-0"
+                >
+                  <span className={cn("w-1.5 h-1.5 rounded-full", stageMeta.dot)} />
+                  {stageMeta.label}
+                </span>
               )}
               {followUp && (
                 <span
@@ -380,88 +362,135 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               </span>
             </div>
 
-            {/* Inline CONTACT icons — Phone / WhatsApp / Email. ~32px tap targets, Apple
-                HIG minimum.
+            {/* ── Ek ⋯ menu, jaisa /customers par hai (26 Aug 2026, Pardeep ke kehne par)
+                Pehle yahan teen contact icon the (Call / WhatsApp / Email) aur neeche ek
+                alag line me saat outcome chips. Do alag jagah, aur card ki teen line me
+                se ek poori unhi me chali jati thi.
 
-                The 📄 Send-quote icon that used to lead this row is GONE — the outcome
-                chip below does the same thing with a readable label, and two controls
-                with aria-label "Send quote" on one card meant a screen reader announced
-                it twice.
+                LAAGAT SAAF KEHNI CHAHIYE: chips 1-tap the, ab do tap hain. Ek rep call
+                list par kaam karte waqt ye mehsoos karega. Do cheezein isse sambhal leti
+                hain — right-swipe abhi bhi seedha "contacted" karta hai (neeche hint
+                maujood hai), aur menu me sirf wahi outcome aate hain jo is stage par
+                sach me agla kadam hain, isliye list chhoti rehti hai.
 
-                Call / WhatsApp / Email STAY. They are contact actions, not outcomes, and
-                they are the only ones of their kind on the card: right-swipe used to dial
-                and now marks contacted, so removing this row would leave a call-first
-                sales tool with no way to place a call from a lead card. The priority
-                queue's big Call button only covers the three leads due today. */}
-            <div className="flex items-center gap-1 shrink-0">
-              {hasPhone && (
-                <a
-                  href={`tel:${lead.contact_phone}`}
+                Ek hi menu me dono kism: pehle "abhi karo" (call/WhatsApp/email), phir
+                "jo hua wo darj karo" (outcomes). Alag-alag menu banane se wahi do-jagah
+                wali dikkat wapas aa jati. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${lead.company} ke liye actions`}
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-md text-emerald hover:bg-emerald-soft/40 active:bg-emerald-soft/60"
-                  aria-label="Call"
+                  className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-ink-3 hover:bg-paper-2 active:bg-paper-2/70"
                 >
-                  <Icon name="mobile" size={15} />
-                </a>
-              )}
-              {hasPhone && (
-                <a
-                  href={`https://wa.me/${waNumber}?text=${encodeURIComponent(waMessage)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-md text-emerald hover:bg-emerald-soft/40 active:bg-emerald-soft/60"
-                  aria-label="WhatsApp"
-                >
-                  <Icon name="whatsapp" size={15} />
-                </a>
-              )}
-              {hasEmail && (
-                <a
-                  href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(lead.contact_email ?? "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-md text-indigo hover:bg-indigo-50 active:bg-indigo/10"
-                  aria-label="Email"
-                >
-                  <Icon name="mail" size={15} />
-                </a>
-              )}
-            </div>
+                  <Icon name="more_h" size={16} />
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="min-w-[13rem]"
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                {(hasPhone || hasEmail) && (
+                  <>
+                    <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
+                      Sampark karein
+                    </DropdownMenuLabel>
+                    {hasPhone && (
+                      <DropdownMenuItem asChild className="cursor-pointer gap-2.5 py-2">
+                        <a href={`tel:${lead.contact_phone}`}>
+                          <Icon name="mobile" size={15} className="text-emerald" /> Call
+                        </a>
+                      </DropdownMenuItem>
+                    )}
+                    {hasPhone && (
+                      <DropdownMenuItem asChild className="cursor-pointer gap-2.5 py-2">
+                        <a
+                          href={`https://wa.me/${waNumber}?text=${encodeURIComponent(waMessage)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Icon name="whatsapp" size={15} className="text-emerald" /> WhatsApp
+                        </a>
+                      </DropdownMenuItem>
+                    )}
+                    {hasEmail && (
+                      <DropdownMenuItem asChild className="cursor-pointer gap-2.5 py-2">
+                        <a
+                          href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(lead.contact_email ?? "")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Icon name="mail" size={15} className="text-indigo" /> Email
+                        </a>
+                      </DropdownMenuItem>
+                    )}
+                  </>
+                )}
+
+                {onOutcome && (hasPhone || hasEmail) && <DropdownMenuSeparator />}
+
+                {/* Outcomes — wahi component ke rules jo desktop row aur call queue par
+                    lagte hain, sirf render alag hai. `chipsForStage` isliye ki menu me
+                    wahi cheez aaye jo is stage par sach me agla kadam hai; baaki ko niyam
+                    waise bhi mana kar deta, yaani wo aisa button hota jo kuch na kare. */}
+                {onOutcome && (
+                  <>
+                    <DropdownMenuLabel className="text-3xs uppercase tracking-wider text-ink-3">
+                      Kya hua
+                    </DropdownMenuLabel>
+                    {chipsForStage(lead.stage).map((chip) => {
+                      const blocked = chip.needsPhone && !hasPhone;
+                      return (
+                        <DropdownMenuItem
+                          key={chip.id}
+                          disabled={blocked}
+                          title={blocked
+                            ? `${chip.hint}\n\nIs lead par phone number nahi hai — pehle jodiye.`
+                            : chip.hint}
+                          onSelect={() => {
+                            /* "Send quote" caller ka apna handler pasand karta hai: page ka
+                               goSendQuote contact naam, email aur phone bhi quote builder
+                               me le jata hai — use-outcome.ts ki generic navigation se
+                               zyada. */
+                            if (chip.id === "send_quote" && onSendQuote) { onSendQuote(lead); return; }
+                            onOutcome(chip.id, lead);
+                          }}
+                          className={cn(
+                            "cursor-pointer gap-2.5 py-2 text-sm",
+                            chip.tone === "rose" && "text-rose",
+                          )}
+                        >
+                          <Icon name={chip.icon} size={15} />
+                          {chip.label}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
-          {/* The four outcome chips — the same component and the same rules the call
-              queue and the desktop row use. A rep who learns these four once knows them
-              everywhere.
+          {/* ── Gesture hint: SIRF touch device par (26 Aug 2026) ────────────────────
+              Ye line har card par chhapti thi, aur Pardeep ne theek poochha — "iski yahan
+              kya jarurat hai".
 
-              They matter MORE on mobile than the gestures do: a gesture is invisible
-              until someone tells you it exists, and nobody reads release notes. The
-              chips are the discoverable path; the swipes are the shortcut for whoever
-              finds them. */}
-          {onOutcome && (
-            <OutcomeChips
-              className="mt-2 border-t border-hairline pt-2"
-              hasPhone={hasPhone}
-              /* "Send quote" prefers the caller's own handler when it has one. The page's
-                 goSendQuote carries contact name, email and phone into the quote builder
-                 as well as the plan and seats — more than the generic navigation in
-                 use-outcome.ts. Routing through it keeps the chip and the desktop row's
-                 icon doing exactly the same thing. */
-              onPick={(o) => {
-                if (o === "send_quote" && onSendQuote) { onSendQuote(lead); return; }
-                onOutcome(o, lead);
-              }}
-            />
-          )}
+              Wajah ye thi ki ye card `xl` se NEECHE har width par render hota hai, aur
+              usme laptop bhi aa jaate hain. Mouse se swipe hoti hi nahi. Yaani ek laptop
+              par ye teen shabd ek aise feature ka vigyapan the jo wahan chal hi nahi
+              sakta — aur card ki chauthi line kha rahe the.
 
-          {/* And the gestures, said out loud once per card. Cheap, and the only reason
-              anyone will discover a three-way swipe. */}
+              Width se nahi, POINTER se pooch rahe hain. `pointer: coarse` ka matlab ungli
+              (phone/tablet); mouse wale device par ye line hoti hi nahi. Hatayi isliye
+              nahi ki phone par swipe ka pata sirf isi se chalta hai — gesture apne aap me
+              invisible hota hai jab tak koi bataye na. */}
           {hasPhone && (
-            <p className="mt-1.5 text-3xs leading-none text-ink-3">
+            <p className="mt-1.5 hidden text-3xs leading-none text-ink-3 [@media(pointer:coarse)]:block">
               Swipe → contacted · ← tomorrow · ↑ WhatsApp
             </p>
           )}

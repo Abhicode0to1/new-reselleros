@@ -214,24 +214,65 @@ describe("the contact card, dissolved by what each part is for", () => {
     expect(code).toMatch(/title=\{`GSTIN \$\{lead\.gstin\}`\}/);
   });
 
-  it("moves the note box and Log call into the Activity tab", () => {
+  it("moves the note box and the call buttons into the Activity tab", () => {
     /* They put things INTO the record, so they belong with the record. Above all three
-       tabs they were visible on Details and Follow-ups too, where they were only height. */
+       tabs they were visible on Details and Follow-ups too, where they were only height.
+
+       26 Aug 2026: the single "Log call" became "Baat hui" + "No answer". The assertion
+       now anchors on "Baat hui" — the placement rule is unchanged, only the label is. */
     const activityTab = code.indexOf('{drawerTab === "activity" && (');
     const note = code.indexOf('placeholder="Add a note');
-    const logCall = code.indexOf("Log call");
+    const callButton = code.indexOf("Call log");
     expect(activityTab).toBeGreaterThan(0);
     expect(note).toBeGreaterThan(activityTab);
-    expect(logCall).toBeGreaterThan(activityTab);
+    expect(callButton).toBeGreaterThan(activityTab);
     expect(note).toBeGreaterThan(code.indexOf('{drawerTab === "details" && ('));
   });
 
-  it("keeps Log call, which the footer's Call button does not replace", () => {
-    /* One starts a call, the other records one that already happened elsewhere. A call
+  it("keeps call logging, which the footer's Call button does not replace", () => {
+    /* One starts a call, the others record one that already happened elsewhere. A call
        made and never logged is invisible to the timeline, the stage-age badge and every
        forecast built on them. */
     expect(page).toContain("LOG CALL IS NOT THE FOOTER'S CALL BUTTON");
     expect(code).toMatch(/kind: "call"/);
+  });
+
+  it("the drawer asks whether anybody PICKED UP, instead of assuming", () => {
+    /* The bug this locks down, reported by Pardeep on 26 Aug 2026: "jab is lead ne
+       activity record ki to ye contacted me kyon nahi gaya".
+
+       The row's chip moved the stage and the drawer's "Log call" did not — one act, two
+       doors, two answers. Both buttons now route through `runOutcome`, so the rule lives
+       in outcomes.ts and cannot drift per surface. A future edit that logs an activity
+       here directly would silently bring the split back. */
+    expect(code).toContain('callLog.run("talked"');
+    expect(code).toContain('runOutcome("no_answer"');
+    expect(code).not.toContain("Log call</");
+  });
+
+  it("HAR surface ka Call log popup kholta hai — koi seedha log nahi karta", () => {
+    /* Pardeep ne 26 Aug 2026 ko pakda: "ye to ab yahi dikha raha hai mujhe jaise panel
+       me voice ke though typing hoti vaise hi chahiye". Drawer ka "Call log" popup
+       kholta tha; row ke ⋯ menu me wahi naam seedha log kar deta tha. Ek naam, do
+       bartaav.
+
+       Ye test us bartaav ko chaaron surface par baandhta hai — drawer, row ka menu, call
+       queue, aur mobile card. Chaaron `callLog.run` se guzarte hain, aur wo `talked` ko
+       popup par bhejta hai (call-log-dialog.tsx).
+
+       Sabse zaroori assert AAKHRI wala hai: page me `runOutcome("talked"` kahin nahi
+       hona chahiye. Wahi ek line thi jo popup ko chup-chaap bypass karti thi, aur wahi
+       agli baar bhi karegi. */
+    expect(code).toContain('callLog.run("talked"');      // drawer ka button
+    expect(code).toContain("callLog.run(chip.id, lead)"); // row ka ⋯ menu
+    expect(code).toMatch(/onOutcome=\{\(o, l\) => callLog\.run\(o, l\)\}/); // queue + card
+
+    /* Chaaron ke liye popup mount hona chahiye. Ek surface par bhoolne ka matlab hota
+       button dabta hai aur kuch nahi hota — jo seedha log karne se bhi bura hai. */
+    expect(code.match(/\{callLog\.dialog\}/g)?.length).toBe(4);
+
+    expect(code).not.toContain('runOutcome("talked"');
+    expect(code).not.toMatch(/onOutcome=\{\(o, l\) => \{ void runOutcome/);
   });
 
   it("drops the duplicate Generate quote button", () => {

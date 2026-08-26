@@ -34,8 +34,24 @@ const nextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // camera=(self): the attendance kiosk needs the camera for check-in
           // selfies. Empty () would block getUserMedia in EVERY browser
-          // regardless of OS/site settings. mic/geolocation stay disabled.
-          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+          // regardless of OS/site settings. geolocation stays disabled.
+          //
+          // ── microphone: () → (self), 26 Aug 2026 ──────────────────────────
+          // The leads drawer now dictates call notes (lib/voice/use-dictation.ts), and
+          // `microphone=()` blocked it at the DOCUMENT level — above Chrome's own
+          // permission. That produced the worst possible symptom: Chrome's site panel
+          // said "Microphones — Allowed" with a live input meter, while
+          // `navigator.permissions.query` returned `denied` and no prompt ever appeared.
+          // Pardeep spent an hour in Chrome settings and across 11 profiles chasing a
+          // block that was in this file.
+          //
+          // The comment above already warned that `()` blocks getUserMedia "regardless of
+          // OS/site settings" — it was written for camera and was right about mic too.
+          // Nothing read it, because nothing needed the mic until today.
+          //
+          // `(self)` — same-origin only, so an embedded third-party frame still cannot
+          // reach the mic. That is the point of the header, and it is kept.
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=()" },
         ],
       },
     ];

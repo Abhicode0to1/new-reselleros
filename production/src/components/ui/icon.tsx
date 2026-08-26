@@ -22,6 +22,7 @@ import {
   Smartphone, Sun, Moon, Building2, Briefcase, SlidersHorizontal,
   List, Grid3x3, Send,
   Eye, Bug, Wallet, Printer, Laptop, Camera, Menu, Circle, Image as ImageIcon,
+  Mic, MicOff, Square,
   type LucideIcon,
 } from "lucide-react";
 
@@ -124,6 +125,12 @@ const ICON_MAP: Record<string, LucideIcon> = {
   sun: Sun,
   moon: Moon,
   mobile: Smartphone,
+  /* Bolkar likhne ke liye — pehle iski jagah `mobile` (Smartphone) use hua tha, jo
+     dictation button par phone jaisa dikhta tha aur "call" padha jata tha. */
+  mic: Mic,
+  mic_off: MicOff,
+  /* Column-hide menu me "chhupa hua" dikhane ke liye — khaali dabba. */
+  square: Square,
 
   // ── Added 2026-08-13 ────────────────────────────────────────────────────────
   // Every one of these was being called somewhere in the app but was absent from

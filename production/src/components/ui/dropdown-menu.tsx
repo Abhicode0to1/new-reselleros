@@ -64,13 +64,27 @@ DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayNam
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
+>(({ className, sideOffset = 4, collisionPadding = 8, ...props }, ref) => (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={sideOffset}
+      /* Window ke kinare se 8px door rukta hai. Bina iske menu screen ki seema se chipak
+         jata hai aur aakhri item aadha kata dikhta hai. */
+      collisionPadding={collisionPadding}
       className={cn(
-        "z-50 min-w-[10rem] overflow-hidden rounded-md border border-hairline bg-paper p-1 shadow-md text-ink",
+        /* ── `overflow-y-auto`, `overflow-hidden` NAHI (26 Aug 2026) ──────────────
+           Pehle yahan `overflow-hidden` tha, aur wo lambe menu ko CHUP-CHAAP KAAT deta
+           tha: leads row ka menu 13 item ka hai, aur screen ke neeche wale item —
+           "Lost", "Mark as junk" — dikhte hi nahi the. Kata hua menu aur chhota menu
+           ek jaise dikhte hain, isliye ye bug reported hone tak zinda raha.
+
+           `--radix-dropdown-menu-content-available-height` Radix khud naapta hai:
+           trigger se screen ke kinare tak kitni jagah bachi hai. Us par max-height
+           baandhne se menu utna hi lamba hota hai jitni jagah hai, aur baaki scroll ho
+           jata hai — kata nahi. */
+        "z-50 min-w-[10rem] overflow-y-auto rounded-md border border-hairline bg-paper p-1 shadow-md text-ink",
+        "max-h-[var(--radix-dropdown-menu-content-available-height)]",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
