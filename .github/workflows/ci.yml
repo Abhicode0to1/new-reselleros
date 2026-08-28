@@ -1,7 +1,22 @@
 name: CI
+# ─── THE TRIGGERS NAMED BRANCHES THAT DO NOT EXIST ───────────────────────────
+# Until 27 Aug 2026 this said `branches: [master, v3-dev]`. Measured against the repo that
+# day, the branches are: main, deploy, session/money-spine-hardening-jun1,
+# integrate-custom-panel. `master` was renamed to `main` at some point and this file was
+# never updated, so the push trigger matched NOTHING and CI only ever ran on a pull request.
+#
+# The cost was not theoretical. On 26 Aug, eleven commits went straight to `deploy` with no
+# PR, so CI ran on none of them — the last run on GitHub was 15 Aug. Every one of those
+# deploys was gated only by somebody running the commands on their laptop.
+#
+# ⚠️ AND THIS STILL NOTIFIES RATHER THAN PREVENTS. Cloud Build watches the `deploy` branch
+# itself (cloudbuild.yaml), so it starts the moment the push lands — in PARALLEL with this
+# workflow, not after it. A red CI here tells you within ~2 minutes that what is deploying is
+# broken; it does not stop it. Making it a real gate means either moving the deploy into
+# Actions (so it can `needs: checks`) or merging to `deploy` only through a PR.
 on:
   push:
-    branches: [master, v3-dev]
+    branches: [main, deploy, 'session/**']
   pull_request:
 jobs:
   checks:
@@ -21,6 +36,25 @@ jobs:
       - run: npm run test
       - run: npm run lint
         continue-on-error: true
+
+      # ── The build, and why the other three do not cover it ──────────────────
+      # CLAUDE.md §25.2, written after a deploy attempt found the build broken while
+      # typecheck, test and lint were all green: `next.config` sets
+      # `experimental.typedRoutes`, and Next generates those route types AT BUILD TIME. So
+      # `tsc --noEmit` checks against types that do not exist yet and happily passes a
+      # `<Link href="...">` the build rejects. Vitest never renders it; ESLint does not
+      # type-check. The cost of leaving it out was not a red tick — it was a production
+      # release that could not happen, with nothing in the gate saying so.
+      #
+      # Env: the SAME two publishable values production/Dockerfile:38-39 already sets, so
+      # this build is the build that ships rather than a different one. They are public by
+      # definition (anon key) and already committed there — this is not a new exposure.
+      # ⚠️ It IS a second copy: if the Dockerfile's values change, change these too.
+      - name: Build (catches what typecheck cannot — see comment)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://ontpnqjoysjgrlsukecm.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_M1d2SCgCNq5QXLVAOsBPUA_UwLutFUK"
+        run: npm run build
 
   # ── No-auth E2E smoke ──────────────────────────────────────────────
   # Runs the auth-free Playwright specs (smoke.spec.ts + money-spine public
@@ -55,7 +89,23 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Run no-auth E2E smoke
         env:
-          PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || 'https://resellersos-490252291080.asia-south1.run.app' }}
+          # ─── THE OLD DEFAULT POINTED AT A DEAD SERVICE ─────────────────────
+          # It was resellersos-490252291080.asia-south1.run.app. Measured 27 Aug 2026: that
+          # host answers 500 (503 on / and /login), while the live service answers 200. The
+          # number in the middle is the GCP PROJECT NUMBER, so a stale one is a different
+          # project entirely, not a redirect.
+          #
+          # This job is `continue-on-error: true`, which is why nobody noticed: a canary that
+          # cannot reach the app fails exactly like a canary reporting bad news, and neither
+          # blocks anything. It had been watching nothing since the project moved.
+          #
+          # The host below is the CANONICAL one — measured 28 Aug 2026 from
+          # `gcloud run services describe`, and it is what the service's own
+          # NEXT_PUBLIC_APP_URL is set to, so it is the host in OAuth redirects and in every
+          # link the app emails out. `resellersos-1005662057478.asia-south1.run.app` is a
+          # live ALIAS for the same service and is what the Cloud Scheduler jobs call — do
+          # not "fix" those to match this one.
+          PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || 'https://resellersos-njvk4nxhdq-el.a.run.app' }}
         run: npx playwright test smoke.spec.ts money-spine.spec.ts --project=chromium
       - name: Upload Playwright report on failure
         if: failure()
