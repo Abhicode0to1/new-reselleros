@@ -36,7 +36,7 @@ import { decideDisposition } from "@/lib/inbound/disposition";
 import { continuesThread } from "@/lib/inbound/thread-match";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { isSelfTest, selfTestMarkerMisplaced, SELF_TEST_MARKER } from "@/lib/inbound/self-test";
-import { acceptedSecrets, secretMatches } from "@/lib/inbound/verify-secret";
+import { acceptedSecrets, secretMatches, readInboundSecret, querySecretAllowed, querySecretWarning } from "@/lib/inbound/verify-secret";
 import { extractEntities } from "@/lib/inbound/extract";
 import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
 import { shouldRequoteOnReply } from "@/lib/quotes/requote-on-reply";
@@ -140,9 +140,11 @@ async function extractWithGemini(apiKey: string, model: string, subject: string,
 
 export async function POST(request: NextRequest) {
   // ── 1. Secret guard (fail closed) ──────────────────────────────────────
-  const url = new URL(request.url);
-  const provided = (url.searchParams.get("key") ?? request.headers.get("x-inbound-secret") ?? "").trim();
-  /* A LIST, so the secret can be rotated with no window. `INBOUND_EMAIL_SECRET` accepts
+  /* Header pehle, query baad me — aur query aane par LOG me chetavni, kyunki Cloud Run
+     poora URL `httpRequest.requestUrl` me likhta hai aur secret wahan cleartext baith jata
+     hai. Faisla lib/inbound/verify-secret.ts me hai, teeno route ke liye ek hi jagah.
+
+     A LIST, so the secret can be rotated with no window. `INBOUND_EMAIL_SECRET` accepts
      "old,new" — set that, update the forwarder, then drop the old one.
 
      Why this matters more here than on a normal endpoint: the Apps Script forwarder labels
@@ -150,11 +152,16 @@ export async function POST(request: NextRequest) {
      is not retried — the thread is marked done and the enquiry is gone. A rotation window
      would be minutes of silently dropped customers, not minutes of failed requests.
 
-     Still fails closed on an empty value, and now compares in constant time — see
-     lib/inbound/verify-secret.ts. */
-  if (!secretMatches(provided, acceptedSecrets(INBOUND_SECRET))) {
+     Still fails closed on an empty value, and compares in constant time. */
+  const secret = readInboundSecret(request);
+  if (secret.fromQuery && !querySecretAllowed()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!secretMatches(secret.value, acceptedSecrets(INBOUND_SECRET))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  /* Sahi secret ke BAAD, taaki galat key thokne wala apne aap log na bhar sake. */
+  if (secret.fromQuery) console.warn(querySecretWarning("webhooks/inbound-email"));
 
   // ── 2. Normalise payload across common inbound-parse providers ─────────
   let body: Record<string, unknown>;

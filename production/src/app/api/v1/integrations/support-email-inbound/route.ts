@@ -40,7 +40,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { acceptedSecrets, secretMatches } from "@/lib/inbound/verify-secret";
+import { acceptedSecrets, secretMatches, readInboundSecret, querySecretAllowed, querySecretWarning } from "@/lib/inbound/verify-secret";
 import { normaliseSupportEmail } from "@/lib/inbound/support-inbound";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { localPart } from "@/lib/inbound/routing";
@@ -89,15 +89,14 @@ const MACHINE_SENDERS = new Set([
 
 export async function POST(request: NextRequest) {
   // ── 1. Secret guard (fail closed) ──────────────────────────────────────
-  const url = new URL(request.url);
-  const provided = (
-    url.searchParams.get("key") ??
-    request.headers.get("x-inbound-secret") ??
-    ""
-  ).trim();
-  if (!secretMatches(provided, acceptedSecrets(INBOUND_SECRET))) {
+  const secret = readInboundSecret(request);
+  if (secret.fromQuery && !querySecretAllowed()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!secretMatches(secret.value, acceptedSecrets(INBOUND_SECRET))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (secret.fromQuery) console.warn(querySecretWarning("v1/integrations/support-email-inbound"));
 
   // ── 2. Normalise the payload ───────────────────────────────────────────
   let body: Record<string, unknown>;

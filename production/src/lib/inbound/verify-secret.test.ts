@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { acceptedSecrets, secretMatches } from "./verify-secret";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  acceptedSecrets, secretMatches,
+  readInboundSecret, querySecretAllowed, querySecretWarning,
+} from "./verify-secret";
 
 describe("acceptedSecrets", () => {
   it("reads a single secret", () => {
@@ -73,5 +78,123 @@ describe("secretMatches", () => {
   it("handles non-ASCII without crashing", () => {
     expect(secretMatches("पासवर्ड", ["पासवर्ड"])).toBe(true);
     expect(secretMatches("पासवर्ड", ["password"])).toBe(false);
+  });
+});
+
+/* ══ 28 Aug 2026 — URL me secret = LOG me secret ══════════════════════════════
+   gcloud ka access khula aur pehli hi log query me ye dikha (secret yahan kaata hua):
+
+       GET /api/webhooks/inbound-email?key=t81t_…       500
+       GET /api/webhooks/inbound-purchase?key=b051…     500
+
+   Cloud Run har request ka poora URL `httpRequest.requestUrl` me likhta hai, to jab tak
+   secret query me jata hai wo cleartext me log me baitha rehta hai.
+
+   Query turant band karna galat hota: forwarder POST ke baad thread ko `erp-sent` label
+   kar deta hai bina response code dekhe, yaani ek 401 = ek enquiry hamesha ke liye gayi.
+   Isliye header ko tarjeeh, query chalti rahe, aur query aane par log me chetavni.
+   ══════════════════════════════════════════════════════════════════════════════ */
+describe("readInboundSecret — header pehle, aur query ka hisaab rakho", () => {
+  const req = (url: string, headers: Record<string, string> = {}) =>
+    ({ url, headers: new Headers(headers) });
+
+  it("header se aaye to fromQuery false", () => {
+    const r = readInboundSecret(req("https://x.in/api/webhooks/inbound-email", { "x-inbound-secret": "s3cr3t" }));
+    expect(r).toEqual({ value: "s3cr3t", fromQuery: false });
+  });
+
+  it("query se aaye to pakadta hai — ASLI MAAMLA", () => {
+    const r = readInboundSecret(req("https://x.in/api/webhooks/inbound-email?key=s3cr3t"));
+    expect(r).toEqual({ value: "s3cr3t", fromQuery: true });
+  });
+
+  it("dono ho to HEADER jeetta hai, aur query ka daag nahi lagta", () => {
+    /* Ulta kram — jo pehle tha — ka matlab hota ki forwarder migrate karne ke baad bhi,
+       agar purana query param URL me reh gaya, to secret log me jata rehta. */
+    const r = readInboundSecret(req("https://x.in/a?key=purana", { "x-inbound-secret": "naya" }));
+    expect(r).toEqual({ value: "naya", fromQuery: false });
+  });
+
+  it("kuch na ho to khaali, aur fromQuery false", () => {
+    expect(readInboundSecret(req("https://x.in/a"))).toEqual({ value: "", fromQuery: false });
+  });
+
+  it("khaali key= ko 'query se aaya' nahi maanta", () => {
+    /* `?key=` par chetavni likhna shor hai — usme secret hai hi nahi. */
+    expect(readInboundSecret(req("https://x.in/a?key="))).toEqual({ value: "", fromQuery: false });
+  });
+
+  it("aas-paas ka space hata deta hai, dono taraf", () => {
+    expect(readInboundSecret(req("https://x.in/a", { "x-inbound-secret": "  s  " })).value).toBe("s");
+    expect(readInboundSecret(req("https://x.in/a?key=%20s%20")).value).toBe("s");
+  });
+});
+
+describe("querySecretAllowed — cut-over bina naye deploy ke", () => {
+  it("default khula hai, warna aaj hi mail ruk jaati", () => {
+    expect(querySecretAllowed(undefined)).toBe(true);
+    expect(querySecretAllowed("")).toBe(true);
+    expect(querySecretAllowed("0")).toBe(true);
+  });
+
+  it("INBOUND_REQUIRE_HEADER=1 par band", () => {
+    expect(querySecretAllowed("1")).toBe(false);
+    expect(querySecretAllowed(" 1 ")).toBe(false);
+  });
+});
+
+describe("querySecretWarning — chetavni me secret nahi jata", () => {
+  it("secret ko log me nahi likhta — warna wahi galti doosre darwaze se", () => {
+    const w = querySecretWarning("webhooks/inbound-email");
+    expect(w).toContain("webhooks/inbound-email");
+    expect(w).not.toMatch(/key=/);
+    expect(w).toMatch(/x-inbound-secret/);          // ab kya karein
+    expect(w).toMatch(/INBOUND_REQUIRE_HEADER/);    // aur uske baad kya
+  });
+});
+
+/* ══ Teeno route ek hi faisla use karein ═════════════════════════════════════ */
+describe("teeno inbound route ek hi jagah se secret padhein", () => {
+  const read = (p: string) =>
+    readFileSync(join(process.cwd(), ...p.split("/")), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  const ROUTES = [
+    "src/app/api/webhooks/inbound-email/route.ts",
+    "src/app/api/webhooks/inbound-purchase/route.ts",
+    "src/app/api/v1/integrations/support-email-inbound/route.ts",
+  ];
+
+  it("koi bhi route khud searchParams se key nahi nikalta", () => {
+    for (const p of ROUTES) {
+      expect(read(p), p).not.toMatch(/searchParams\.get\(["']key["']\)/);
+      expect(read(p), p).toContain("readInboundSecret(request)");
+    }
+  });
+
+  it("teeno rotation-wali list se compare karte hain — purchase yahi chhod gaya tha", () => {
+    /* inbound-purchase `provided !== INBOUND_SECRET` kar raha tha. Do nateeje: env var
+       "old,new" hone par wo route poori string maangta (yaani rotation chup-chaap tootta),
+       aur compare constant-time nahi tha. Teen ek jaisi copy me ek ka alag hona aankh se
+       nahi pakda jata — isliye ye assert source par pinned hai. */
+    for (const p of ROUTES) {
+      expect(read(p), p).toContain("secretMatches(secret.value, acceptedSecrets(INBOUND_SECRET))");
+      expect(read(p), p).not.toMatch(/provided\s*!==\s*INBOUND_SECRET/);
+    }
+  });
+
+  it("teeno INBOUND_REQUIRE_HEADER ko maante hain", () => {
+    for (const p of ROUTES) expect(read(p), p).toContain("querySecretAllowed()");
+  });
+
+  it("chetavni sahi secret ke BAAD likhi jaati hai", () => {
+    /* Warna koi bhi galat key thok kar log bhar sakta hai. */
+    for (const p of ROUTES) {
+      const src = read(p);
+      const guard = src.indexOf("secretMatches(secret.value");
+      const warn = src.indexOf("querySecretWarning(");
+      expect(guard, p).toBeGreaterThan(-1);
+      expect(warn, `${p}: chetavni guard se pehle hai`).toBeGreaterThan(guard);
+    }
   });
 });

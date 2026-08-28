@@ -58,3 +58,70 @@ export function secretMatches(provided: string | null | undefined, accepted: rea
   }
   return ok;
 }
+
+/**
+ * Secret kahan se aaya — aur yahi is file ka doosra kaam hai.
+ *
+ * ─── URL ME SECRET = LOG ME SECRET ──────────────────────────────────────────
+ * 28 Aug 2026 ko gcloud ka access khula aur pehli hi log query me ye dikha (yahan secret
+ * jaan-boojhkar kaat diya gaya hai):
+ *
+ *     GET /api/webhooks/inbound-email?key=t81t_…      500
+ *     GET /api/webhooks/inbound-purchase?key=b051…    500
+ *
+ * Cloud Run har request ka POORA URL `httpRequest.requestUrl` me likhta hai. Yaani jab tak
+ * secret query me jata hai, wo **cleartext me Cloud Logging me** baitha rehta hai, retention
+ * period tak, aur jiske paas log ka access ho use dikh jata hai. Ye is file ke apne comment
+ * ko jhootha kar deta tha — usme likha tha "a small consideration for a shared secret in a
+ * query string", jabki asli baat ye hai ki query string hi wo jagah hai jahan se leak hota
+ * hai.
+ *
+ * ─── HEADER PEHLE, PAR QUERY ABHI BAND NAHI ─────────────────────────────────
+ * Query ko turant mana karna aasan tha aur galat hota: Pardeep ki Apps Script abhi query
+ * bhejti hai, aur wo forwarder POST ke baad thread ko `erp-sent` label kar deta hai BINA
+ * response code dekhe. Yaani ek 401 retry nahi hota — wo enquiry hamesha ke liye chali
+ * jaati hai. Isliye kram ulta hai: pehle header ko tarjeeh, query chalti rahe, aur jab query
+ * aaye tab LOG me chetavni — taaki naapa ja sake ki forwarder migrate hua ya nahi.
+ *
+ * Jab log me chetavni aana band ho jaye, `INBOUND_REQUIRE_HEADER=1` set kar dena — us din
+ * se query wala raasta 401 dega, bina naye deploy ke.
+ */
+export interface ProvidedSecret {
+  /** Jo mila (ho sakta hai khaali). */
+  value: string;
+  /**
+   * `true` jab secret URL se aaya — yaani wo abhi request log me cleartext likha ja chuka
+   * hai. Ye jaankari route ko chetavni likhne ke liye chahiye.
+   */
+  fromQuery: boolean;
+}
+
+/**
+ * Teeno inbound route ke liye ek hi jagah.
+ *
+ * Pehle ye faisla teen file me copy tha, aur teesri (`inbound-purchase`) usi copy-paste me
+ * `secretMatches` chhod kar raw string compare kar rahi thi — jisse rotation wahan chup-chaap
+ * toot jata. Ek jagah rakhne se wo shakl dobara nahi ban sakti.
+ */
+export function readInboundSecret(request: { url: string; headers: Headers }): ProvidedSecret {
+  const header = (request.headers.get("x-inbound-secret") ?? "").trim();
+  if (header) return { value: header, fromQuery: false };
+  const query = (new URL(request.url).searchParams.get("key") ?? "").trim();
+  return { value: query, fromQuery: query.length > 0 };
+}
+
+/** `INBOUND_REQUIRE_HEADER=1` ke baad query wala raasta band. Default: khula. */
+export function querySecretAllowed(raw: string | null | undefined = process.env.INBOUND_REQUIRE_HEADER): boolean {
+  return (raw ?? "").trim() !== "1";
+}
+
+/**
+ * Log ke liye ek line — aur isme secret NAHI hota.
+ *
+ * Poora point hi secret ko log se bahar rakhna hai; use chetavni me likh dena wahi galti
+ * doosre darwaze se karna hoga.
+ */
+export function querySecretWarning(label: string): string {
+  return `[${label}] shared secret URL me aaya, isliye wo is request ke log me cleartext hai. ` +
+    `Bhejne wale ko \`x-inbound-secret\` header par le jaao, phir INBOUND_REQUIRE_HEADER=1 set karo.`;
+}

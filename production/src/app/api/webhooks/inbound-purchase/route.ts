@@ -12,6 +12,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { acceptedSecrets, secretMatches, readInboundSecret, querySecretAllowed, querySecretWarning } from "@/lib/inbound/verify-secret";
 import { resolveGeminiConfig } from "@/lib/ai/gemini";
 
 export const dynamic = "force-dynamic";
@@ -84,11 +85,19 @@ async function extractWithGemini(apiKey: string, model: string, subject: string,
 
 export async function POST(request: NextRequest) {
   // 1. Secret (fail closed)
-  const url = new URL(request.url);
-  const provided = (url.searchParams.get("key") ?? request.headers.get("x-inbound-secret") ?? "").trim();
-  if (!INBOUND_SECRET || provided !== INBOUND_SECRET) {
+  /* ⚠️ Ye jagah `secretMatches` use NAHI kar rahi thi — seedha `provided !== INBOUND_SECRET`
+     tha. Do nateeje: rotation yahan chup-chaap tootta tha (env var "old,new" hone par ye
+     route poori string "old,new" ko hi secret maanta), aur compare constant-time nahi tha.
+     Sibling route me dono theek the, isliye galti ek hi jaisi dikhne wali teen copy me
+     chhup gayi — ab faisla ek hi jagah hai. */
+  const secret = readInboundSecret(request);
+  if (secret.fromQuery && !querySecretAllowed()) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!secretMatches(secret.value, acceptedSecrets(INBOUND_SECRET))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (secret.fromQuery) console.warn(querySecretWarning("webhooks/inbound-purchase"));
 
   // 2. Normalise payload
   let body: Record<string, unknown>;
