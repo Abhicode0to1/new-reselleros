@@ -27,7 +27,9 @@
     "db:compare": "node scripts/db-compare.mjs",
     "migration:new": "node scripts/new-migration.mjs",
     "verify:deploy": "node scripts/verify-deploy.mjs",
-    "build:check": "node scripts/build-check.mjs"
+    "build:check": "node scripts/build-check.mjs",
+    "db:cols": "node scripts/db-cols.mjs",
+    "health:prod": "node scripts/health-prod.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
