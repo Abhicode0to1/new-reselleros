@@ -329,3 +329,27 @@ export function killSwitchFor(automationOn: boolean): boolean {
 export function needsConfirmation(automationOn: boolean): boolean {
   return automationOn;
 }
+
+/**
+ * Ek dial badalne par log me kya likha jaye.
+ *
+ * ─── YE ALAG FUNCTION KYUN HAI ──────────────────────────────────────────────
+ * Ye line route ke andar inline ban sakti thi, aur tab iska koi test na hota — 28 Aug 2026
+ * ko isi shakl ki do galtiyan pakdi ja chuki hain (card ka faisla page me inline tha,
+ * expired-sync-token ki pehchan listConnections me inline thi; dono ke test khokhle nikle).
+ *
+ * ─── AUR ISME `from` KYUN HAI ───────────────────────────────────────────────
+ * "ab auto hai" adhoora jawab hai. Ek hafte baad log padhne wale ka sawaal ye hota hai ki
+ * "us quote ke jane se pehle kya badla tha" — aur uska jawab `hold → auto` hai, `auto` nahi.
+ */
+export function autonomyChangeReason(
+  label: string,
+  previous: AutonomyMode,
+  next: AutonomyMode,
+): string {
+  /* Dobara wahi value save karna galti nahi hai (screen par do baar click), par use "badla"
+     likhna jhooth hoga — log me ek aisa badlav dikhta jo hua hi nahi. */
+  return previous === next
+    ? `a person re-saved "${label}" as ${next} — it was already ${next}`
+    : `a person changed "${label}" from ${previous} to ${next}`;
+}

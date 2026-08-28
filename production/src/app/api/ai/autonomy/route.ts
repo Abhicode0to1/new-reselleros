@@ -21,7 +21,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { AI_ACTIONS, type AiAction, type AutonomyMode } from "@/lib/ai/autonomy";
+import { AI_ACTIONS, autonomyChangeReason, type AiAction, type AutonomyMode } from "@/lib/ai/autonomy";
 import { loadAutonomyPolicy, setAutonomy, logAiAction } from "@/lib/ai/autonomy.server";
 
 export const dynamic = "force-dynamic";
@@ -129,9 +129,43 @@ export async function PUT(request: NextRequest) {
     );
   }
 
+  /* Purana mode SAVE SE PEHLE padha jata hai — baad me wo mit chuka hota. Log ka asli sawaal
+     "ab kya hai" nahi, "kya BADLA" hai; naye mode ke saath purana na ho to ek hafte baad
+     padhne wale ko sirf aadha jawab milta hai. */
+  const before = await loadAutonomyPolicy(me.tenantId);
+  const previous = before.modes?.[action] ?? AI_ACTIONS[action].today;
+
   const ok = await setAutonomy.mode(me.tenantId, action, mode, me.userId);
   if (!ok) {
     return NextResponse.json({ error: "Could not save that setting. Nothing changed." }, { status: 500 });
   }
+
+  /* ── EK DIAL BADALNA BHI EK FAISLA HAI ────────────────────────────────────
+     Kill switch pehle se log hota tha, aur uski wajah upar likhi hai: "somebody reading the
+     log a week later needs to know the gap was a decision and not an outage." Wahi baat ek
+     dial par bhi lagti hai, aur zyada — kill switch sab kuch rokta hai aur turant dikh jata
+     hai, jabki `quote.send` ka `hold → auto` chup-chaap ek quote grahak tak pahuncha deta
+     hai. Us din ke log me wo faisla dikhna chahiye, warna wo bhejna bina wajah ka lagta hai.
+
+     28 Aug 2026 ko Pardeep ne `quote.send` auto kiya aur log me kuch nahi aaya — sirf
+     `ai_autonomy.updated_at` me waqt bacha, wajah nahi. Ye us kami ka jawab hai.
+
+     Save ke BAAD, taaki jo hua nahi wo darj na ho. Aur `logAiAction` khud kabhi throw nahi
+     karta, isliye log ka fail hona setting ko fail nahi karta. */
+  await logAiAction({
+    tenantId: me.tenantId,
+    action,
+    /* `did` nahi — kuch bheja nahi gaya. Ye ek settei badli, aur `skipped` wahi shabd hai jo
+       kill switch bhi use karta hai: "jaan-boojhkar, koi kaam nahi hua". */
+    outcome:  "skipped",
+    /* Shabd lib/ai/autonomy.ts me hain, jahan unka test hai. */
+    reason:   autonomyChangeReason(spec.label, previous, mode),
+    /* Naya mode, kyunki ab yahi lagu hai. */
+    mode,
+    entity:   "workspace",
+    entityId: me.tenantId,
+    facts:    { setting: action, from: previous, to: mode, changedBy: me.userId },
+  });
+
   return NextResponse.json({ ok: true, action, mode });
 }

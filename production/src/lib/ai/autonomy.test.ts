@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
-import {
+import { autonomyChangeReason,
   resolveAutonomy,
   mayActUnattended,
   killSwitchFor,
@@ -184,5 +186,85 @@ describe("the UI switch versus the stored column — they are opposites", () => 
     expect(resolveAutonomy("renewal.send", policy).mode).toBe("off");
     const back: AutonomyPolicy = { killSwitch: killSwitchFor(true) };
     expect(resolveAutonomy("renewal.send", back).mode).toBe("auto");
+  });
+});
+
+/* ══ 28 Aug 2026 — dial badla, aur log me kuch nahi aaya ═════════════════════
+   Pardeep ne `quote.send` ko `hold` se `auto` kiya. `ai_autonomy` me mode badal gaya, par
+   `ai_action_log` me ek line bhi nahi — kyunki route sirf KILL SWITCH ka badlav log karta
+   tha, ek-ek dial ka nahi.
+
+   Us route ka apna comment kill switch ke baare me yahi kehta hai: *"somebody reading the
+   log a week later needs to know the gap was a decision and not an outage."* Wahi baat ek
+   dial par zyada lagti hai — kill switch sab rok deta hai aur turant dikhta hai, jabki
+   `quote.send` ka `hold → auto` chup-chaap ek quote grahak tak pahuncha deta hai. Us din ke
+   log me wo faisla na ho to bhejna bina wajah ka lagta hai.
+   ══════════════════════════════════════════════════════════════════════════════ */
+describe("autonomyChangeReason", () => {
+  it("ASLI MAAMLA: hold se auto — dono taraf ka mode likhta hai", () => {
+    const r = autonomyChangeReason("Email a drafted quote to the customer", "hold", "auto");
+    expect(r).toContain("hold");
+    expect(r).toContain("auto");
+    expect(r).toContain("Email a drafted quote to the customer");
+  });
+
+  it("PURANA mode chhoota nahi — wahi asli sawaal ka jawab hai", () => {
+    /* "ab auto hai" adhoora hai. Ek hafte baad sawaal hota hai "us quote ke jane se pehle
+       kya badla tha", aur uska jawab `hold → auto` hai. Sirf `auto` likhna wo jawab nahi
+       deta, aur ye assert usi ko pakadta hai. */
+    for (const from of ["off", "hold", "auto"] as const) {
+      if (from === "auto") continue;
+      expect(autonomyChangeReason("X", from, "auto"), from).toContain(from);
+    }
+  });
+
+  it("dobara wahi value save karna 'badla' nahi kehta", () => {
+    /* Screen par do baar click ho sakta hai. Use "changed from auto to auto" likhna log me
+       ek aisa badlav dikhata jo hua hi nahi — aur audit trail ka poora matlab yahi hai ki
+       usme sirf wo ho jo sach me hua. */
+    const r = autonomyChangeReason("X", "auto", "auto");
+    expect(r).toMatch(/already/);
+    expect(r).not.toMatch(/from auto to auto/);
+  });
+
+  it("aadmi ne kiya, ye saaf likha hai", () => {
+    /* Log me app ke apne faisle bhi hain. "a person" ke bina ye line unme ghul jati hai. */
+    expect(autonomyChangeReason("X", "off", "auto")).toMatch(/a person/);
+  });
+
+  it("har jodi par kuch na kuch kehta hai, khaali nahi", () => {
+    const modes = ["off", "hold", "auto"] as const;
+    for (const a of modes) for (const b of modes) {
+      const r = autonomyChangeReason("Send a written reply to a customer", a, b);
+      expect(r.length, `${a}→${b}`).toBeGreaterThan(20);
+      expect(r, `${a}→${b}`).toContain("Send a written reply to a customer");
+    }
+  });
+});
+
+describe("route us faisle ko sach me likhta hai", () => {
+  const src = readFileSync(
+    join(process.cwd(), "src", "app", "api", "ai", "autonomy", "route.ts"), "utf8");
+
+  it("dial badalne par logAiAction bulaya jata hai", () => {
+    /* Pehle sirf kill-switch wali shakh me tha. */
+    expect((src.match(/logAiAction\(/g) || []).length).toBeGreaterThanOrEqual(2);
+    expect(src).toContain("autonomyChangeReason(spec.label, previous, mode)");
+  });
+
+  it("purana mode SAVE SE PEHLE padha jata hai", () => {
+    /* Kram hi sab kuch hai: save ke baad padha to `previous` naya mode hoga aur log
+       hamesha "auto se auto" jaisa jhooth likhega. Ye grep us kram ko pin karta hai. */
+    const readAt = src.indexOf("const previous =");
+    const saveAt = src.indexOf("await setAutonomy.mode(");
+    expect(readAt, "previous padha hi nahi jata").toBeGreaterThan(-1);
+    expect(saveAt).toBeGreaterThan(-1);
+    expect(readAt, "purana mode save ke BAAD padha ja raha hai").toBeLessThan(saveAt);
+  });
+
+  it("log SAVE KE BAAD hota hai — jo hua nahi wo darj na ho", () => {
+    const saveAt = src.indexOf("await setAutonomy.mode(");
+    const logAt  = src.indexOf("autonomyChangeReason(");
+    expect(logAt).toBeGreaterThan(saveAt);
   });
 });
