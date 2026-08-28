@@ -7,6 +7,19 @@ const nextConfig = {
   // standalone output produces a self-contained server bundle that Cloud Run
   // can run with a tiny Node image — no node_modules at runtime.
   output: "standalone",
+  /**
+   * `next dev` aur `next build` DONO `.next` likhte hain, to gate chalane ke liye kiya
+   * gaya ek build chalte dev server ka bundle mita deta hai — page apne hi chunk par 404
+   * deta hai aur "toota hua" dikhta hai, jabki kuch toota nahi.
+   *
+   * 28 Aug 2026 ko iski keemat saaf dikhi: build karne ke liye Pardeep ka chalta dev
+   * server band karna pada, aur baad me wapas chalu karna pada.
+   *
+   * Isliye distDir env se badla ja sakta hai. Docker aur Cloud Build ise SET NAHI karte,
+   * to prod ke liye kuch nahi badla — ye sirf local gate ke liye ek alag folder hai
+   * (`npm run build:check`).
+   */
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   experimental: {
     typedRoutes: true,
     // Force-enable instrumentation hook. Next 14.0.4+ enables it by default,

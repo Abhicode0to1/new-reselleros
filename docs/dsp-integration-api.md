@@ -13,7 +13,7 @@ Phase 2 (outbound webhooks for instant lock/unlock) — planned, not yet built.
 
 | | |
 |---|---|
-| **Production base** | `https://resellersos-490252291080.asia-south1.run.app/api/v1` |
+| **Production base** | `https://resellersos-1005662057478.asia-south1.run.app/api/v1` |
 | **Auth** | `Authorization: Bearer <API_KEY>`  (or `X-API-Key: <API_KEY>`) |
 | **Format** | REST / JSON / UTF-8 |
 | **Errors** | HTTP status + `{ "error": "message", "code": "..." }` |

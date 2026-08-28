@@ -111,7 +111,7 @@ These don't block charging, but every prospect will ask about them in week 1. Fi
 
 ### 2.1 — Custom domain `resellersos.in`
 
-**What's missing**: Live URL is `https://resellersos-490252291080.asia-south1.run.app` — unmemorable, looks like an internal staging site.
+**What's missing**: Live URL is `https://resellersos-1005662057478.asia-south1.run.app` — unmemorable, looks like an internal staging site.
 
 **Effort**: S (5 min Pardeep + 30 min me)
 

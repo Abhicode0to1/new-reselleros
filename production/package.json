@@ -25,7 +25,9 @@
     "db:studio": "supabase status -o env | grep STUDIO || supabase status",
     "db:rebuild": "node scripts/rebuild-db.mjs --local",
     "db:compare": "node scripts/db-compare.mjs",
-    "migration:new": "node scripts/new-migration.mjs"
+    "migration:new": "node scripts/new-migration.mjs",
+    "verify:deploy": "node scripts/verify-deploy.mjs",
+    "build:check": "node scripts/build-check.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

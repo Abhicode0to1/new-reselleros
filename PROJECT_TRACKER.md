@@ -13,7 +13,7 @@
 | **Product** | ResellerOS — multi-tenant SaaS for Indian cloud resellers (Google Workspace, M365, Zoho) |
 | **Owner** | Pardeep A (Excel Technologies Pvt Ltd) |
 | **Stack** | Next.js 14 + Supabase Postgres + Cloud Run + Razorpay + Resend |
-| **Live URL** | https://resellersos-490252291080.asia-south1.run.app |
+| **Live URL** | https://resellersos-1005662057478.asia-south1.run.app |
 | **Repo** | https://github.com/Pardeep-byte1/resellersos |
 | **Supabase project ID** | `ontpnqjoysjgrlsukecm` |
 | **Cloud Run region** | `asia-south1` (Mumbai) |
@@ -275,9 +275,9 @@ Legend: ✅ shipped · 🟡 partial · 🔴 missing · 🅿️ parked
 
 | Purpose | URL |
 |---|---|
-| Live app | https://resellersos-490252291080.asia-south1.run.app |
-| Login page | https://resellersos-490252291080.asia-south1.run.app/login |
-| Banking module | https://resellersos-490252291080.asia-south1.run.app/accounting/banking |
+| Live app | https://resellersos-1005662057478.asia-south1.run.app |
+| Login page | https://resellersos-1005662057478.asia-south1.run.app/login |
+| Banking module | https://resellersos-1005662057478.asia-south1.run.app/accounting/banking |
 | GitHub repo | https://github.com/Pardeep-byte1/resellersos |
 | Supabase project | https://supabase.com/dashboard/project/ontpnqjoysjgrlsukecm |
 | Cloud Run console | https://console.cloud.google.com/run/detail/asia-south1/resellersos/metrics?project=resellsubsos-prod |

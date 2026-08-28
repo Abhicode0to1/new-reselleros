@@ -72,7 +72,7 @@ Cloud Run will auto-redeploy with new env. ~2 minutes downtime-free rollout.
 
 ```bash
 # Test from any terminal:
-curl -i https://resellersos-490252291080.asia-south1.run.app/api/sentry-test
+curl -i https://resellersos-1005662057478.asia-south1.run.app/api/sentry-test
 # Should return HTTP 500 with our intentional error
 
 # Within ~10 seconds, the error appears in:
@@ -102,7 +102,7 @@ After login, **+ Create Monitor**:
 | Field | Value |
 |---|---|
 | Monitor type | **HTTP/S** |
-| URL to check | `https://resellersos-490252291080.asia-south1.run.app` (or `resellersos.in` after domain) |
+| URL to check | `https://resellersos-1005662057478.asia-south1.run.app` (or `resellersos.in` after domain) |
 | Check frequency | **3 minutes** (free tier minimum) |
 | Recovery period | 1 minute |
 | HTTP status code | 200-299 expected |

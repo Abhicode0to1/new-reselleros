@@ -22,16 +22,31 @@ automatically). Do not duplicate them here; a second copy is a second thing to g
 | MCP `supabase-db` (user-scoped) | ✅ but **read-only** | quick reads, schema, `pg_policies` |
 | MCP `supabase` (project `.mcp.json`) | ❌ **always `Unauthorized`** | nothing — see below |
 
-**Every CLI command needs `env -u SUPABASE_ACCESS_TOKEN`.** That variable is set to a wrong
-value on this machine and the CLI reads it *before* the stored login:
+**`env -u SUPABASE_ACCESS_TOKEN` is no longer needed. Measured 28 Aug 2026.** The variable
+is set NOWHERE — not in the shell, not in the Windows User env, not in Machine env — and
+`npx supabase projects list` returned all three projects with no prefix at all.
+
+> This paragraph previously read "**Every CLI command needs `env -u SUPABASE_ACCESS_TOKEN`**
+> — that variable is set to a wrong value on this machine and the CLI reads it *before* the
+> stored login." That was true when written. It is the third claim in this file to go stale,
+> which is the point §2 makes below: **do not remember the door, try it.**
+
+The prefix is harmless if you keep typing it, so old copy-pasted commands are not wrong —
+just be clear that it treats a disease this machine no longer has.
 
 ```bash
-env -u SUPABASE_ACCESS_TOKEN npx supabase db query --linked "select 1"
+npx supabase db query --linked "select 1"
 ```
 
-Without it: `Invalid access token format`. This is **not** a version problem — same CLI
-2.115.0 on both machines. It can also break mid-session, so if a command that worked earlier
-starts failing, try `env -u` first before theorising.
+If `Invalid access token format` ever appears again, check the variable FIRST — it is not a
+version problem (same CLI 2.115.0 on both machines):
+
+```powershell
+[Environment]::GetEnvironmentVariable("SUPABASE_ACCESS_TOKEN","User")
+```
+
+And keep the two failures apart: that error is a bad token, while
+`LegacyDbConfigLoginRoleNetworkError` is transient — **retry once** before diagnosing.
 
 **Retry once before diagnosing.** Measured 24 Aug: `migration repair` failed with
 `LegacyDbConfigLoginRoleNetworkError: failed to initialise login role: TransportError` and the
