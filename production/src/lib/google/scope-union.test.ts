@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   unionScopes, scopesLost, scopeLossMessage, CONTACTS_SCOPE, GMAIL_SEND_SCOPE,
+  hasContactsScope, hasGmailSendScope, CONTACTS_SCOPE_MISSING_MESSAGE,
 } from "./scope-union";
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -164,5 +165,127 @@ describe("connect aur callback isi function se guzarte hain", () => {
     /* `last_error: null` wapas aana matlab nuksaan phir chup ho gaya — 11 din wala haal. */
     expect(cb).toContain("last_error: lossNote");
     expect(cb).not.toContain("last_error: null");
+  });
+});
+
+/* ══ 28 Aug 2026 — wahi bug, teesri shakl ════════════════════════════════════
+   Pardeep ne Contacts dobara connect kiya (token 13:03 par likha gaya) aur "Sync now"
+   dabaya. Toast me Google ka kaccha JSON aaya: 403 ACCESS_TOKEN_SCOPE_INSUFFICIENT.
+
+   DB me us waqt:
+       scopes      gmail.send userinfo.email openid     ← contacts phir bhi nadarad
+       updated_at  28 Aug 13:03                          ← flow poora hua tha
+
+   Upar ke saare test paas the, aur ek bhi is haalat ko nahi dekh raha tha — kyunki wo sab
+   "kuch KHOYA?" poochhte hain. Yahan khoya kuch nahi (purane token me bhi contacts nahi
+   thi). MILA kuch nahi, aur wo ek alag sawaal hai jo koi nahi poochh raha tha.
+
+   Isliye card ne hara "Connected" dikhaya, "Sync now" ne 403 laaya, aur wajah sirf DB me
+   padi rahi — theek wahi jagah jahan 26 Aug ko padi thi.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+/** Jo 28 Aug 13:03 par asli row me tha — reconnect ke BAAD. */
+const AFTER_RECONNECT_28AUG = "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email openid";
+
+describe("hasContactsScope — 'jo chahiye tha wo mila?'", () => {
+  it("28 Aug ka asli token sync nahi kar sakta — ASLI MAAMLA", () => {
+    expect(hasContactsScope(AFTER_RECONNECT_28AUG)).toBe(false);
+  });
+
+  it("aur scopesLost is haalat me chup rehta hai — isliye doosri jaanch chahiye thi", () => {
+    /* Ye assert is poore fix ki wajah hai: purani scopes me bhi contacts nahi thi, to
+       "nuksaan" shunya hai aur scopeLossMessage null deta hai. Sirf uske bharose card
+       hara "Connected" dikhata raha. */
+    expect(scopesLost(AFTER_RECONNECT_28AUG, AFTER_RECONNECT_28AUG)).toEqual([]);
+    expect(scopeLossMessage(scopesLost(AFTER_RECONNECT_28AUG, AFTER_RECONNECT_28AUG))).toBeNull();
+  });
+
+  it("contacts mili ho to haan", () => {
+    expect(hasContactsScope(CONTACTS_ONLY)).toBe(true);
+    expect(hasContactsScope(unionScopes(CONTACTS_ONLY, AFTER_RECONNECT_28AUG))).toBe(true);
+  });
+
+  it("khaali/null par jhoothi haan nahi", () => {
+    expect(hasContactsScope(null)).toBe(false);
+    expect(hasContactsScope(undefined)).toBe(false);
+    expect(hasContactsScope("")).toBe(false);
+  });
+
+  it("contacts.readonly ko contacts nahi maanta", () => {
+    /* App `auth/contacts` (read+write) maangti hai kyunki sync do-tarfa hai — push bhi
+       karta hai. readonly aa jaye to pull chalega aur push 403 dega, jo aadha-toota
+       integration hai. Aadhe ko "connected" kehna wahi jhoot hai jo ye fix hata raha hai. */
+    expect(hasContactsScope(`openid email ${CONTACTS_SCOPE}.readonly`)).toBe(false);
+  });
+
+  it("gmail send ka jodidar bhi wahi jawab deta hai", () => {
+    expect(hasGmailSendScope(AFTER_RECONNECT_28AUG)).toBe(true);
+    expect(hasGmailSendScope(CONTACTS_ONLY)).toBe(false);
+  });
+});
+
+describe("CONTACTS_SCOPE_MISSING_MESSAGE — §24, aur Google ki bhasha me nahi", () => {
+  it("kya hua, kyun, ab kya — teenon", () => {
+    const m = CONTACTS_SCOPE_MISSING_MESSAGE;
+    expect(m).toMatch(/Contacts/);                    // kya
+    expect(m).toMatch(/checkbox|tick/i);              // kyun
+    expect(m).toMatch(/[Rr]econnect|dobara connect/); // ab kya
+  });
+
+  it("na JSON, na scope ka URL, na Google ka error code", () => {
+    /* Yahi string card par dikhti hai. Pardeep ko ACCESS_TOKEN_SCOPE_INSUFFICIENT
+       padhwana koi jawab nahi hai — 28 Aug ko toast me theek wahi aaya tha. */
+    for (const leak of ["ACCESS_TOKEN_SCOPE_INSUFFICIENT", "PERMISSION_DENIED", "403", "googleapis.com", "{"]) {
+      expect(CONTACTS_SCOPE_MISSING_MESSAGE, leak).not.toContain(leak);
+    }
+  });
+});
+
+describe("contacts flow ke chaar chokepoint is jaanch se jude rahein", () => {
+  const read2 = (p: readonly string[]) =>
+    readFileSync(join(process.cwd(), ...p), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("contacts callback 'mila?' bhi naapta hai, sirf 'khoya?' nahi", () => {
+    const cb = read2(["src", "app", "api", "integrations", "google-contacts", "callback", "route.ts"]);
+    expect(cb).toContain("hasContactsScope(");
+    expect(cb).toContain("scopesLost(");
+    /* `last_error: null` wapas aana matlab wajah phir chup ho gayi. */
+    expect(cb).not.toContain("last_error: null");
+    /* Aur "connected" bolna band ho jab contacts na aayi ho. */
+    expect(cb).toContain("noscope");
+  });
+
+  it("sync ka chokepoint People API se PEHLE rok deta hai", () => {
+    /* getFreshAccessToken se manual sync aur nightly cron dono guzarte hain — ek hi
+       jagah par jaanch dono ko dhakti hai. */
+    const c = read2(["src", "lib", "google", "contacts.ts"]);
+    expect(c).toContain("hasContactsScope(tok.scopes)");
+    expect(c).toContain("CONTACTS_SCOPE_MISSING_MESSAGE");
+    /* Jaanch ke liye scope column select hona zaroori hai, warna hamesha undefined. */
+    expect(c).toMatch(/select\("access_token, refresh_token, token_expiry, scopes"\)/);
+  });
+
+  it("status route 'row hai' aur 'kaam hoga' ko alag rakhta hai", () => {
+    const r = read2(["src", "app", "api", "integrations", "google-contacts", "route.ts"]);
+    expect(r).toContain("can_sync");
+    /* Derivation SHARED helper se — server aur card do jagah do tarah se ye tay karein,
+       wahi drift hai jisse "Connected" ka jhoot paida hua tha. */
+    expect(r).toContain("canSyncWithScopes(");
+    /* Scope string browser ko nahi bhejte — jawab bhejte hain, saboot nahi. */
+    expect(r).not.toMatch(/scopes:\s*data/);
+  });
+
+  it("card us haalat me Sync ki jagah Reconnect deta hai", () => {
+    /* "Sync now" dena ek 403 laane wala button dena hai — §24 kehta hai wahi jagah
+       dikhao jahan cheez theek hoti hai.
+
+       Card ka BAAKI vyavhaar yahan grep se nahi naapa jata — dekho
+       contacts-card-state.test.ts. Wo file isliye bani ki is jagah ki ek grep-test ek
+       feature-marne wali mutation par bhi green rah gayi thi. */
+    const s = read2(["src", "app", "(app)", "settings", "page.tsx"]);
+    expect(s).toContain("contactsCardState(status)");
+    expect(s).toContain("google-contacts/connect");
+    expect(s).toMatch(/needsReconsent\s*\?[\s\S]{0,400}Reconnect/);
   });
 });

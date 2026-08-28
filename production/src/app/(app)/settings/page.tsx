@@ -29,6 +29,7 @@ import { NotificationsCard } from "@/components/features/settings/notifications-
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useUpdateTenant, useSetTenantLogo } from "@/lib/queries/tenant";
 import { isValidGstin, gstStateFromGstin, validateGstin, formatDate } from "@/lib/utils";
+import { contactsCardState } from "@/lib/google/contacts-card-state";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import SandboxConfigureDialog  from "@/components/features/integrations/sandbox-configure-dialog";
 import WhatsAppConfigureDialog from "@/components/features/integrations/whatsapp-configure-dialog";
@@ -736,9 +737,14 @@ function GoogleContactsIntegrationCard() {
       return res.ok ? res.json() : null;
     },
   });
-  const configured = Boolean(status?.configured);
-  const connected = Boolean(status?.connected);
-  const lastSynced: string | null = status?.last_synced_at ?? null;
+  /* Faisla yahan INLINE nahi hai — lib/google/contacts-card-state.ts me hai, aur wahan
+     uske test asli payload par baithe hain. Wo file ek fail hui mutation se bani: jab ye
+     branch yahan inline thi, use `false` kar dene par bhi saare test green rehte the. */
+  const state = contactsCardState(status);
+  const configured = state.kind !== "unconfigured";
+  const needsReconsent = state.kind === "needs_reconsent";
+  const connected = needsReconsent || state.kind === "ready";
+  const lastSynced: string | null = state.kind === "ready" ? state.lastSyncedAt : null;
 
   async function syncNow() {
     setBusy(true);
@@ -761,11 +767,16 @@ function GoogleContactsIntegrationCard() {
     } finally { setBusy(false); }
   }
 
-  const sub = !configured
+  /* Jab permission hi nahi hai to "sales@anutech.in · synced 15 Aug" likhna sach hai aur
+     bekaar hai — CLAUDE.md §24 kehta hai: kya hua, kyun, ab kya karein. Wo teeno baatein
+     `last_error` me pehle se hain, isliye wahi dikhate hain. */
+  const sub = state.kind === "unconfigured"
     ? "Add Google OAuth keys in env to enable"
-    : connected
-      ? (status?.email ? `${status.email}` : "Connected") + (lastSynced ? ` · synced ${formatDate(lastSynced)}` : " · not synced yet")
-      : "Two-way sync with your Google Contacts";
+    : state.kind === "needs_reconsent"
+      ? state.reason
+      : state.kind === "ready"
+        ? (state.email ?? "Connected") + (lastSynced ? ` · synced ${formatDate(lastSynced)}` : " · not synced yet")
+        : "Two-way sync with your Google Contacts";
 
   return (
     <div className="flex items-center justify-between rounded-lg border border-hairline p-3">
@@ -776,16 +787,29 @@ function GoogleContactsIntegrationCard() {
         <div className="min-w-0">
           <p className="text-sm font-medium text-ink inline-flex items-center gap-1.5">
             Google Contacts
-            {connected
-              ? <Badge size="sm" kind="success">Connected</Badge>
-              : configured
-                ? <Badge size="sm" kind="warning">Connect</Badge>
-                : <Badge size="sm" kind="muted">Setup</Badge>}
+            {needsReconsent
+              ? <Badge size="sm" kind="warning">Permission needed</Badge>
+              : connected
+                ? <Badge size="sm" kind="success">Connected</Badge>
+                : configured
+                  ? <Badge size="sm" kind="warning">Connect</Badge>
+                  : <Badge size="sm" kind="muted">Setup</Badge>}
           </p>
-          <p className="text-xs text-ink-3 truncate">{sub}</p>
+          {/* Wajah wali line ko truncate NAHI karte — wahi ek line hai jo batati hai ki
+              ab kya karna hai. Baaki haalat me line chhoti hai, to title= kaafi hai. */}
+          <p className={needsReconsent ? "text-xs text-ink-2" : "text-xs text-ink-3 truncate"} title={sub}>{sub}</p>
         </div>
       </div>
-      {connected ? (
+      {needsReconsent ? (
+        /* "Sync now" yahan mat do — wo Google se 403 laane wala ek button hai. §24:
+           blocked haalat me wahi jagah pe le jao jahan cheez theek hoti hai. */
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button asChild variant="primary" size="sm">
+            <a href="/api/integrations/google-contacts/connect">Reconnect</a>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={disconnect} disabled={busy}>Disconnect</Button>
+        </div>
+      ) : connected ? (
         <div className="flex items-center gap-1.5 shrink-0">
           <Button variant="primary" size="sm" onClick={syncNow} loading={busy}>{busy ? "Syncing…" : "Sync now"}</Button>
           <Button variant="ghost" size="sm" onClick={disconnect} disabled={busy}>Disconnect</Button>

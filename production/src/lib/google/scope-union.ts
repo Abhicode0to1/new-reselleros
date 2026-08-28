@@ -91,3 +91,34 @@ export function scopeLossMessage(lost: readonly string[]): string | null {
     `403 deta rahega aur screen par kuch nahi dikhega.`
   );
 }
+
+/**
+ * Kya is token se Contacts sync ho sakta hai?
+ *
+ * `scopesLost` se ALAG sawaal hai, aur 28 Aug 2026 ko yahi farak mehnga pada. Us din
+ * Pardeep ne Contacts dobara connect kiya; Google ne `contacts` NAHI di (sirf pehle se
+ * granted `gmail.send` wapas ki). `scopesLost` chup raha — theek raha, kyunki purane
+ * token me bhi contacts nahi thi, to KHOYA kuch nahi. Par MILA bhi kuch nahi, aur uska
+ * poochne wala koi nahi tha: card ne hara "Connected" dikhaya aur "Sync now" ne Google ka
+ * kaccha 403 JSON toast me ugal diya.
+ *
+ * Do jaanch chahiye, ek nahi: "kuch khoya?" AUR "jo chahiye tha wo mila?".
+ */
+export function hasContactsScope(scopes: string | null | undefined): boolean {
+  return split(scopes).includes(CONTACTS_SCOPE);
+}
+
+/** Wahi sawaal bhejne ke liye. `lib/email/provider` ka `canSendWithScopes` isi ka jodidar hai. */
+export function hasGmailSendScope(scopes: string | null | undefined): boolean {
+  return split(scopes).includes(GMAIL_SEND_SCOPE);
+}
+
+/**
+ * §24 ki shakl me — kya hua, kyun, ab kya karein. Ye string DB ki `last_error` me jaati
+ * hai aur seedha Settings card par dikhti hai, to isme JSON ya scope ka URL nahi hai:
+ * Pardeep ko `ACCESS_TOKEN_SCOPE_INSUFFICIENT` padhwana koi jawab nahi hai.
+ */
+export const CONTACTS_SCOPE_MISSING_MESSAGE =
+  "Google ne Contacts padhne ki permission nahi di, isliye sync nahi ho sakta. " +
+  "Consent screen par contacts wala checkbox tick nahi hua tha. " +
+  "Reconnect kariye aur Google ki screen par SAARE checkbox tick rehne dijiye.";

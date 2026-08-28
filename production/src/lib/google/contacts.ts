@@ -24,6 +24,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, ContactChannel } from "@/lib/supabase/database.types";
 import { googleOAuthCreds, refreshAccessToken } from "@/lib/google/oauth";
+import { hasContactsScope, CONTACTS_SCOPE_MISSING_MESSAGE } from "@/lib/google/scope-union";
 
 type Admin = SupabaseClient<Database>;
 
@@ -125,8 +126,13 @@ function simplePerson(name: string | null, org: string | null, email: string | n
 // ── Token ─────────────────────────────────────────────────────────────────
 export async function getFreshAccessToken(admin: Admin, userId: string): Promise<string> {
   const { data: tok } = await admin
-    .from("user_google_tokens").select("access_token, refresh_token, token_expiry").eq("user_id", userId).maybeSingle();
+    .from("user_google_tokens").select("access_token, refresh_token, token_expiry, scopes").eq("user_id", userId).maybeSingle();
   if (!tok || (!tok.access_token && !tok.refresh_token)) throw new Error("Google Contacts not connected");
+  /* Scope ki jaanch REFRESH SE PEHLE, aur yahan — kyunki har People API call isi function se
+     token leti hai, to manual sync aur nightly cron dono ek hi badlav se dhak jaate hain.
+     Iske bina Google ka kaccha `403 ACCESS_TOKEN_SCOPE_INSUFFICIENT` JSON seedha toast me
+     pahunchta hai (28 Aug 2026 ko wahi dikha) — jo sach hai par kisi ke kaam ka nahi. */
+  if (!hasContactsScope(tok.scopes)) throw new Error(CONTACTS_SCOPE_MISSING_MESSAGE);
   const exp = tok.token_expiry ? Date.parse(tok.token_expiry) : 0;
   if (tok.access_token && exp > Date.now() + 60_000) return tok.access_token;
   if (!tok.refresh_token) throw new Error("No refresh token — please reconnect Google Contacts");
