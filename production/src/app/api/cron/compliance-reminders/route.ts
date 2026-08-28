@@ -33,6 +33,7 @@ import { buildComplianceRows } from "@/lib/compliance/obligations";
 import { dueReminders, renderReminder, type PlannedReminder } from "@/lib/compliance/reminders";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
+import { reportCron } from "@/lib/ops/cron-report";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -192,5 +193,5 @@ async function handle(req: Request) {
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("compliance-reminders", result));
 }

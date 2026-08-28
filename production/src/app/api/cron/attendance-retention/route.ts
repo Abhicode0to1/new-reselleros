@@ -11,6 +11,7 @@ import "@/lib/sentry";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
+import { reportCron } from "@/lib/ops/cron-report";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -91,5 +92,5 @@ async function handle(req: Request): Promise<NextResponse<RetentionResult | { er
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("attendance-retention", result));
 }

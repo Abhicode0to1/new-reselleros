@@ -37,6 +37,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { plannedInstalments, instalmentSkip, instalmentsDue } from "@/lib/billing/instalments";
+import { reportCron } from "@/lib/ops/cron-report";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -221,5 +222,5 @@ async function handle(req: Request): Promise<NextResponse<BillingCronResult | { 
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("billing", result));
 }

@@ -35,6 +35,7 @@ import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { istNow, decideAttendanceReminder } from "@/lib/attendance/reminders";
 import { isWorkingDay, SIX_DAY_WEEK_SUNDAY_OFF } from "@/lib/attendance/working-day";
 import { sendPushToUsers } from "@/lib/push/send";
+import { reportCron } from "@/lib/ops/cron-report";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -220,12 +221,12 @@ async function handle(req: Request) {
     else failures.push({ userId: person.userId, error: result.problem ?? "no device reached" });
   }
 
-  return NextResponse.json({
+  return NextResponse.json(reportCron("attendance-reminders", {
     istDate: now.date,
     considered: (users ?? []).length,
     due: due.length,
     pushed,
     alreadyRemindedToday: alreadyDone,
     failures,
-  });
+  }));
 }

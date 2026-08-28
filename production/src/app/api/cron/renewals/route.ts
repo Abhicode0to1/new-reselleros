@@ -43,6 +43,7 @@ import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { quoteAcceptUrl } from "@/lib/quotes/accept-link";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
+import { reportCron } from "@/lib/ops/cron-report";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -450,7 +451,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("renewals", result));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

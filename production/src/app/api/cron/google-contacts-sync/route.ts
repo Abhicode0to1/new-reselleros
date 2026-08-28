@@ -10,6 +10,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { syncUserContacts } from "@/lib/google/contacts";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
+import { reportCron } from "@/lib/ops/cron-report";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,6 +32,7 @@ async function handle(req: NextRequest) {
 
   let ok = 0;
   let failed = 0;
+  const errors: string[] = [];
   const totals = { pulled: 0, pushed: 0, created: 0, deleted: 0 };
   for (const r of rows ?? []) {
     try {
@@ -42,11 +44,18 @@ async function handle(req: NextRequest) {
       ok++;
     } catch (e) {
       failed++;
-      await admin.from("user_google_tokens").update({ last_error: (e as Error).message }).eq("user_id", r.user_id);
+      /* Wajah do jagah jaati hai. DB wala `last_error` UI ke liye hai; `errors` isliye
+         ki reportCron use stderr par likh sake — 13 din tak ye wajah sirf column me thi
+         aur usme koi nahi dekh raha tha. */
+      const why = (e as Error).message;
+      errors.push(why);
+      await admin.from("user_google_tokens").update({ last_error: why }).eq("user_id", r.user_id);
     }
   }
 
-  return NextResponse.json({ ok: true, users: (rows ?? []).length, synced: ok, failed, totals });
+  return NextResponse.json(reportCron("google-contacts-sync", {
+    ok: true, users: (rows ?? []).length, synced: ok, failed, errors, totals,
+  }));
 }
 
 export async function GET(req: NextRequest) { return handle(req); }

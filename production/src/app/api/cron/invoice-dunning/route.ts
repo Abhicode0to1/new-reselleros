@@ -30,6 +30,7 @@ import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { dunningLogStatus, reachedNobody } from "@/lib/invoices/dunning-log-status";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { rupee, formatDate } from "@/lib/utils";
+import { reportCron } from "@/lib/ops/cron-report";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -258,7 +259,7 @@ automatically. Decide whether to call them, agree a plan, or pause the service.`
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("invoice-dunning", result));
 }
 
 export async function GET(req: Request)  { return handle(req); }

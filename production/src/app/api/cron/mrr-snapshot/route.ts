@@ -21,6 +21,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
+import { reportCron } from "@/lib/ops/cron-report";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -120,7 +121,7 @@ async function handle(req: Request): Promise<NextResponse<SnapshotResult | { err
   }
 
   console.info(`[mrr-snapshot] ${period}: ${rows.length} customers, ₹${result.total_mrr}/mo across ${result.tenants} tenants`);
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("mrr-snapshot", result));
 }
 
 export async function GET(req: Request)  { return handle(req); }

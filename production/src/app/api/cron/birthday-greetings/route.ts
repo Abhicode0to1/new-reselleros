@@ -22,6 +22,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
+import { reportCron } from "@/lib/ops/cron-report";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -189,5 +190,5 @@ async function handle(req: Request): Promise<NextResponse<GreetingResult | { err
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("birthday-greetings", result));
 }
