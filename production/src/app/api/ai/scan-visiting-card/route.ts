@@ -27,7 +27,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { resolveGeminiConfig } from "@/lib/ai/gemini";
+import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 import { mapScannedCard, filledCount, type ScannedCard } from "@/lib/customers/card-fields";
 
 const bodySchema = z.union([
@@ -62,34 +62,28 @@ async function askGemini(
   apiKey: string, model: string,
   part: { text: string } | { inlineData: { mimeType: string; data: string } },
 ): Promise<ScannedCard | null> {
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: PROMPT }, part] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0 },
-        }),
-        // The brief asks for under 3 seconds. That is not ours to promise —
-        // it is Google's latency. What IS ours is refusing to hang the form:
-        // a slow read must fail fast so the operator can type instead of wait.
-        signal: AbortSignal.timeout(15_000),
-      },
-    );
-    if (!res.ok) {
-      console.error("[scan-visiting-card] Gemini failed:", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) return null;
-    return JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, "").trim()) as ScannedCard;
-  } catch (err) {
-    console.error("[scan-visiting-card] Gemini crashed:", (err as Error).message);
-    return null;
-  }
+  /* Pehle yahan apna `fetch` tha. Timeout iske paas THA (15s), par circuit breaker aur
+     retry nahi — aur wo comment neeche bacha hua hai kyunki wo aaj bhi sach hai.
+
+     Prompt `user` part me hi rehta hai, system me nahi: GSTIN "character by character"
+     copy karne wala rule is prompt ki jaan hai, aur use doosri jagah le jaana output badal
+     sakta hai. Isliye geminiJson ka `system` optional hai. */
+  const isImage = "inlineData" in part;
+  return geminiJson<ScannedCard>({
+    apiKey, model,
+    /* Text wali shakl me doosra part bhi text hi hai, to dono ko jod dete hain — request
+       ka matlab wahi rehta hai (Gemini do text parts ko jodkar hi padhta hai). */
+    user: isImage ? PROMPT : `${PROMPT}\n\n${part.text}`,
+    attachment: isImage
+      ? { mimeType: part.inlineData.mimeType, base64: part.inlineData.data }
+      : undefined,
+    temperature: 0,
+    // The brief asks for under 3 seconds. That is not ours to promise —
+    // it is Google's latency. What IS ours is refusing to hang the form:
+    // a slow read must fail fast so the operator can type instead of wait.
+    timeoutMs: 15_000,
+    label: "scan-visiting-card",
+  });
 }
 
 export async function POST(request: NextRequest) {

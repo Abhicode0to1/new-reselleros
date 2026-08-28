@@ -18,7 +18,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { resolveGeminiConfig } from "@/lib/ai/gemini";
+import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 import { looksLikeJunk } from "@/lib/leads/junk";
 
 const bodySchema = z.object({
@@ -77,29 +77,13 @@ async function classifyWithGemini(apiKey: string, model: string, leads: LeadCtx[
       })),
     );
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: "user", parts: [{ text: user }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0 },
-        }),
-      },
-    );
-    if (!res.ok) {
-      console.error("[ai/classify-junk] Gemini failed:", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) return null;
-    const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-    const arr = JSON.parse(cleaned) as Array<Partial<Verdict>>;
-    if (!Array.isArray(arr)) return null;
+  {
+    /* Pehle yahan apna `fetch` tha — geminiJson ki hu-ba-hu copy, uski suraksha ke bina:
+       na timeout, na circuit breaker, na retry. Dekho lib/ai/gemini.ts. */
+    const arr = await geminiJson<Array<Partial<Verdict>>>({
+      apiKey, model, system, user, temperature: 0, label: "ai/classify-junk",
+    });
+    if (!arr || !Array.isArray(arr)) return null;
     // Keep only well-formed rows whose id matched an input lead.
     const ids = new Set(leads.map((l) => l.id));
     const verdicts: Verdict[] = [];
@@ -114,10 +98,10 @@ async function classifyWithGemini(apiKey: string, model: string, leads: LeadCtx[
       });
     }
     return verdicts.length ? verdicts : null;
-  } catch (err) {
-    console.error("[ai/classify-junk] Gemini crashed:", err);
-    return null;
   }
+  /* try/catch chala gaya: geminiJson khud "never throws" hai — timeout, HTTP error,
+     kharab JSON, khula breaker, sab par `null`. Ek aur catch rakhna ek aisi cheez ka
+     bachaav hota jo ho hi nahi sakti, aur wo padhne wale ko jhootha sanket deta hai. */
 }
 
 export async function POST(request: NextRequest) {

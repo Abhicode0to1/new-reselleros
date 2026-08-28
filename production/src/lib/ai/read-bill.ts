@@ -17,6 +17,7 @@
  * because nobody was looking when it arrived.
  */
 import "server-only";
+import { geminiJson } from "./gemini";
 import type { ExtractedBill } from "@/app/api/ai/extract-bill/sanitize";
 
 export const BILL_PROMPT =
@@ -63,35 +64,26 @@ export async function readBillWithGemini(args: {
   mimeType: string;
   base64:   string;
 }): Promise<ExtractedBill | null> {
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(args.model)}:generateContent?key=${args.apiKey}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            role: "user",
-            parts: [
-              { text: BILL_PROMPT },
-              { inlineData: { mimeType: args.mimeType, data: args.base64 } },
-            ],
-          }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0 },
-        }),
-      },
-    );
-    if (!res.ok) {
-      console.error("[read-bill] Gemini failed:", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) return null;
-    const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-    return JSON.parse(cleaned) as ExtractedBill;
-  } catch (err) {
-    console.error("[read-bill] Gemini crashed:", err);
-    return null;
-  }
+  /* ── PEHLE YAHAN APNA `fetch` THA, AUR USME TIMEOUT BHI NAHI ──────────────
+     Ye vendor ka bill padhta hai (image ya PDF) aur uska nateeja `inbound_purchases` me
+     jata hai, jahan se aage kharcha/GST banta hai. Iske paas na timeout tha, na circuit
+     breaker, na retry — aur ise inbound webhook AWAIT karta hai, yaani Gemini atke to
+     request atke, aur forwarder POST ke baad thread label kar deta hai bina jawab dekhe.
+
+     Prompt JAHAN THA WAHIN HAI — `user` part me, bina systemInstruction. Use system me
+     sarkane se model ka output badal sakta tha, aur ye paise ka data padhta hai; isliye
+     geminiJson ka `system` field optional banaya gaya (dekho lib/ai/gemini.ts).
+
+     Timeout 30s, 15s nahi: pehle KOI nahi tha, aur PDF/image ka jawab text se dheema aata
+     hai. 30s ek asli bound hai jahan pehle anant tha — 15s karke ek chalte flow ko todna
+     is fix ka maqsad nahi. */
+  return geminiJson<ExtractedBill>({
+    apiKey: args.apiKey,
+    model: args.model,
+    user: BILL_PROMPT,
+    attachment: { mimeType: args.mimeType, base64: args.base64 },
+    temperature: 0,
+    timeoutMs: 30_000,
+    label: "read-bill",
+  });
 }

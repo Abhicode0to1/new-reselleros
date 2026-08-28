@@ -12,7 +12,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { resolveGeminiConfig } from "@/lib/ai/gemini";
+import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -95,21 +95,25 @@ function buildPlanPrompt(b: z.infer<typeof bodySchema>): string {
   );
 }
 
-async function genWithGemini(apiKey: string, model: string, prompt: string): Promise<any> {
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) },
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    const cleaned = String(raw).replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-    return JSON.parse(cleaned);
-  } catch (err) {
-    console.error("[ai/plan-project] Gemini crashed:", err);
-    return null;
-  }
+/**
+ * Model ka jawab — SAB kuch optional.
+ *
+ * `Promise<any>` tha, aur CLAUDE.md §17 `any` se mana karta hai. `unknown` bhi theek nahi
+ * baitha: caller `.questions` / `.tasks` / `.explanation` padhta hai, to shape ka pata hai —
+ * bas uska AANA pakka nahi hai. Isliye har field optional: ye batata hai ki model kuch bhi
+ * chhod sakta hai, aur caller ke `Array.isArray(...)` wale check zaroori hain, faltu nahi.
+ */
+type GeminiPlanReply = {
+  questions?: unknown;
+  explanation?: string;
+  clientProposal?: string;
+  tasks?: unknown;
+};
+
+async function genWithGemini(apiKey: string, model: string, prompt: string): Promise<GeminiPlanReply | null> {
+  /* Pehle apna `fetch` tha, bina `responseMimeType: application/json`, bina timeout, bina
+     circuit breaker. geminiJson wo teeno deta hai. */
+  return geminiJson<GeminiPlanReply>({ apiKey, model, user: prompt, label: "ai/plan-project" });
 }
 
 const STUB_QUESTIONS: QuestionItem[] = [

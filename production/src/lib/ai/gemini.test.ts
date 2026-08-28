@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { geminiJson, __resetGeminiBreaker } from "./gemini";
 
@@ -514,5 +514,141 @@ describe("inbound-email ka extract geminiJson se guzre", () => {
       join(process.cwd(), "src", "app", "api", "webhooks", "inbound-email", "route.ts"), "utf8");
     expect(src).toContain("geminiJson<Partial<ExtractedLead>>");
     expect(src).not.toContain("generativelanguage.googleapis.com");
+  });
+});
+
+/* ══ 28 Aug 2026 — Gemini ka ek hi darwaza ═══════════════════════════════════
+   Us din tak AATH jagah apna `fetch` karke Gemini bulati thi. Har ek geminiJson ki
+   lagbhag hu-ba-hu copy thi — wahi request shape, wahi ```json fence ka safai — bas uski
+   suraksha ke bina: **na timeout, na circuit breaker, na retry**.
+
+   Keemat log me naapi gayi: 23 Aug ko `[inbound-email] Gemini failed: 429` SAAT SECOND ME
+   AATH BAAR. Free-tier ka quota 5-per-minute tha; geminiJson ka breaker 3 lagatar failure
+   ke baad ruk jata hai, par us jagah breaker hi nahi tha.
+
+   Aur timeout ka na hona isse bura tha: read-bill aur ai/extract-statement ke paas KOI
+   timeout nahi tha, aur wo dono paise ka data padhte hain (vendor bill, bank statement).
+
+   Meri apni ginti bhi pehle GALAT thi — maine `Gemini failed:` message se grep kiya tha,
+   URL se nahi, aur teen jagah chhoot gayi thi. Isliye ye test message par nahi, **URL par**
+   baitha hai.
+   ══════════════════════════════════════════════════════════════════════════════ */
+describe("Gemini ka ek hi darwaza", () => {
+  const SRC = join(process.cwd(), "src");
+
+  /** Har .ts/.tsx file, test files chhod kar. */
+  function walk(dir: string, out: string[] = []): string[] {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p, out);
+      else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) out.push(p);
+    }
+    return out;
+  }
+
+  /**
+   * Ek chhoot, aur uski wajah us file me likhi hai: key-test route ko apna fetch chahiye,
+   * kyunki breaker module-scoped hai — doosre feature ke teen failure ke baad ye page
+   * "aapki key kaam nahi karti" keh deta, jabki key theek hai.
+   */
+  const ALLOWED = [
+    join("src", "lib", "ai", "gemini.ts"),
+    join("src", "app", "api", "integrations", "gemini", "test", "route.ts"),
+  ];
+
+  it("gemini.ts aur key-test ke ALAWA koi seedha Gemini API nahi bulata", () => {
+    const offenders = walk(SRC)
+      .filter((p) => readFileSync(p, "utf8").includes("generativelanguage.googleapis.com"))
+      .filter((p) => !ALLOWED.some((a) => p.endsWith(a)));
+    expect(offenders.map((p) => p.slice(p.indexOf("src")))).toEqual([]);
+  });
+
+  it("chhoot wali dono file asli me maujood hain", () => {
+    /* Warna ek rename is test ko chup-chaap khokhla kar deta: allow-list kisi cheez se
+       mel nahi khati, aur offenders hamesha khaali. */
+    for (const a of ALLOWED) {
+      expect(existsSync(join(process.cwd(), a)), a).toBe(true);
+    }
+  });
+});
+
+/* ══ attachment aur optional system — request ka BODY naapo ══════════════════
+   Ye block ek bache hue mutation se bana. Maine `args.attachment` ko band kar diya (parts
+   me se inlineData nikal gaya) aur 45 me se 45 test green rahe — kyunki koi test request
+   ke ANDAR nahi dekh raha tha.
+
+   Chup-chaap yahi tootta: read-bill aur ai/extract-statement sirf prompt bhejne lagte,
+   bina image/PDF, aur model kuch bhi bana kar de deta. Dono paise ka data padhte hain
+   (vendor bill, bank statement), to "chup-chaap galat" sabse bura nateeja hai.
+   ══════════════════════════════════════════════════════════════════════════════ */
+describe("request ka body — attachment aur system", () => {
+  /** Jo body Gemini ko bheji gayi, parse karke. */
+  function sentBody(spy: ReturnType<typeof vi.fn>) {
+    const init = spy.mock.calls[0][1] as { body: string };
+    return JSON.parse(init.body) as {
+      systemInstruction?: { parts: Array<{ text: string }> };
+      contents: Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    };
+  }
+
+  it("attachment inlineData part ban kar jata hai — ASLI MAAMLA", async () => {
+    const spy = vi.fn(async () => ok('{"ok":true}'));
+    vi.stubGlobal("fetch", spy);
+    await geminiJson({
+      ...ARGS,
+      attachment: { mimeType: "application/pdf", base64: "JVBERi0xLjQK" },
+    });
+    const parts = sentBody(spy).contents[0].parts;
+    expect(parts).toHaveLength(2);
+    expect(parts[0]).toEqual({ text: ARGS.user });
+    expect(parts[1]).toEqual({ inlineData: { mimeType: "application/pdf", data: "JVBERi0xLjQK" } });
+  });
+
+  it("attachment na ho to sirf text — koi khaali part nahi", async () => {
+    /* Ek khaali/undefined part Gemini ko 400 deta hai, to purane callers ka shape bilkul
+       waisa hi rehna chahiye. */
+    const spy = vi.fn(async () => ok('{"ok":true}'));
+    vi.stubGlobal("fetch", spy);
+    await geminiJson(ARGS);
+    expect(sentBody(spy).contents[0].parts).toEqual([{ text: ARGS.user }]);
+  });
+
+  it("system diya ho to systemInstruction jata hai", async () => {
+    const spy = vi.fn(async () => ok('{"ok":true}'));
+    vi.stubGlobal("fetch", spy);
+    await geminiJson({ ...ARGS, system: "be brief" });
+    expect(sentBody(spy).systemInstruction).toEqual({ parts: [{ text: "be brief" }] });
+  });
+
+  it("system NA diya ho to systemInstruction bhejta hi nahi", async () => {
+    /* Teen callers apna poora prompt `user` me rakhte hain. Unhe khaali systemInstruction
+       bhejna prompt ki jagah badal dene jaisa hai, aur do me se ek bank statement padhta
+       hai — output badalne ka khatra bina wajah nahi lena. */
+    const spy = vi.fn(async () => ok('{"ok":true}'));
+    vi.stubGlobal("fetch", spy);
+    const { system: _drop, ...noSystem } = { ...ARGS, system: undefined };
+    await geminiJson(noSystem);
+    expect(sentBody(spy)).not.toHaveProperty("systemInstruction");
+  });
+
+  it("retry par bhi attachment saath jata hai", async () => {
+    /* Retry `{...args}` se banta hai, par ek aisa retry jo attachment gira de wo pehli
+       koshish se ALAG cheez bhej raha hoga — aur uska nateeja "kabhi-kabhi galat" hota,
+       jo pakadna sabse mushkil hai. */
+    let first = true;
+    const spy = vi.fn(async () => {
+      if (first) { first = false; return { ok: false, status: 503, text: async () => "{}", json: async () => ({}) } as unknown as Response; }
+      return ok('{"ok":true}');
+    });
+    vi.stubGlobal("fetch", spy);
+    await geminiJson({ ...ARGS, attachment: { mimeType: "image/png", base64: "iVBORw0K" } });
+    expect(spy).toHaveBeenCalledTimes(2);
+    /* `vi.fn(async () => ...)` ke params khaali hain, to TS uske call tuple ko `[]` samajhta
+       hai aur index 1 par error deta hai. `unknown` se guzar kar cast karna hi tarika hai. */
+    const calls = spy.mock.calls as unknown as Array<[string, { body: string }]>;
+    const second = JSON.parse(calls[1][1].body) as {
+      contents: Array<{ parts: Array<Record<string, unknown>> }>;
+    };
+    expect(second.contents[0].parts[1]).toEqual({ inlineData: { mimeType: "image/png", data: "iVBORw0K" } });
   });
 });

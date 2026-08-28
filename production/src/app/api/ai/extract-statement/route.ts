@@ -13,7 +13,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { resolveGeminiConfig } from "@/lib/ai/gemini";
+import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 
 const bodySchema = z.object({
   fileBase64: z.string().min(20, "Empty file"),
@@ -75,32 +75,25 @@ function sanitizeRows(rows: AiRow[]) {
 }
 
 async function extractWithGemini(apiKey: string, model: string, mimeType: string, base64: string): Promise<AiRow[] | null> {
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: PROMPT }, { inlineData: { mimeType, data: base64 } }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0 },
-        }),
-      },
-    );
-    if (!res.ok) {
-      console.error("[ai/extract-statement] Gemini failed:", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) return null;
-    const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-    const json = JSON.parse(cleaned) as { rows?: AiRow[] };
-    return Array.isArray(json.rows) ? json.rows : [];
-  } catch (err) {
-    console.error("[ai/extract-statement] Gemini crashed:", err);
-    return null;
-  }
+  /* Pehle yahan apna `fetch` tha — aur iske paas timeout bhi nahi tha. Ye bank statement
+     padhta hai, yaani seedha paise ka data, aur ek atki hui call operator ko spinner par
+     baithaye rakhti.
+
+     Prompt `user` part me hi rehta hai (systemInstruction nahi) — statement padhne ka
+     prompt column-order aur date-format ke bahut se niyam rakhta hai, aur use doosri jagah
+     sarkane se nateeja badal sakta tha. Isliye geminiJson ka `system` optional hai.
+
+     Timeout 30s: pehle KOI nahi tha, aur PDF ka jawab text se dheema aata hai. */
+  const json = await geminiJson<{ rows?: AiRow[] }>({
+    apiKey, model,
+    user: PROMPT,
+    attachment: { mimeType, base64 },
+    temperature: 0,
+    timeoutMs: 30_000,
+    label: "ai/extract-statement",
+  });
+  if (!json) return null;
+  return Array.isArray(json.rows) ? json.rows : [];
 }
 
 export async function POST(request: NextRequest) {

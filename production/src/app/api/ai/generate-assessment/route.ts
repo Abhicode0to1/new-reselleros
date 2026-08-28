@@ -11,7 +11,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { resolveGeminiConfig } from "@/lib/ai/gemini";
+import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 import type { AssessmentQuestion } from "@/lib/assessments/grade";
 
 const bodySchema = z.object({
@@ -119,21 +119,15 @@ const SOFTWARE_SAMPLE: AssessmentQuestion[] = [
 ];
 
 async function genWithGemini(apiKey: string, model: string, prompt: string): Promise<AssessmentQuestion[] | null> {
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      },
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    const cleaned = String(raw).replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-    const arr = JSON.parse(cleaned) as AssessmentQuestion[];
-    if (!Array.isArray(arr)) return null;
+  {
+    /* Pehle apna `fetch` tha, aur usme `responseMimeType: application/json` bhi nahi tha —
+       ye sirf prompt ki umeed par JSON maang raha tha aur phir fence khud kaat raha tha.
+       geminiJson wo mimeType set karta hai (yaani model se saaf JSON aata hai), aur uske
+       saath timeout, circuit breaker aur retry bhi deta hai. */
+    const arr = await geminiJson<AssessmentQuestion[]>({
+      apiKey, model, user: prompt, label: "ai/generate-assessment",
+    });
+    if (!arr || !Array.isArray(arr)) return null;
     // Sanitise: keep only well-formed MCQs with a valid correct index.
     return arr
       .filter((x) => x && typeof x.q === "string" && Array.isArray(x.options) && x.options.length >= 2)
@@ -151,10 +145,8 @@ async function genWithGemini(apiKey: string, model: string, prompt: string): Pro
         }
         return out;
       });
-  } catch (err) {
-    console.error("[ai/generate-assessment] Gemini crashed:", err);
-    return null;
   }
+  /* try/catch chala gaya — geminiJson khud "never throws" hai. */
 }
 
 export async function POST(request: NextRequest) {

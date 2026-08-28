@@ -229,8 +229,25 @@ function failureReason(status: number, body: string): string {
 export async function geminiJson<T>(args: {
   apiKey: string;
   model: string;
-  system: string;
+  /**
+   * OPTIONAL, aur jaan-boojhkar.
+   *
+   * Teen callers (read-bill, scan-visiting-card, ai/extract-statement) apna poora prompt
+   * `user` part me bhejte the aur `systemInstruction` bhejte hi nahi the. Prompt ko user se
+   * system me sarka dena model ke output ko badal sakta hai — aur unme se do PAISE ka data
+   * padhte hain (vendor bill, bank statement). Unhe geminiJson par laate waqt shakl bilkul
+   * waisi hi rakhi gayi jaisi thi; isliye ye field optional hai, aur khaali hone par
+   * `systemInstruction` request me jata hi nahi.
+   */
+  system?: string;
   user: string;
+  /**
+   * Image ya PDF, `user` text ke saath.
+   *
+   * Iske bina ye teen callers geminiJson par nahi aa sakte the — aur unke paas timeout,
+   * circuit breaker aur retry me se kuch bhi nahi tha.
+   */
+  attachment?: { mimeType: string; base64: string };
   temperature?: number;
   timeoutMs?: number;
   /** Prefix for server logs, e.g. "ai/draft-followup". */
@@ -258,8 +275,14 @@ export async function geminiJson<T>(args: {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: args.system }] },
-          contents: [{ role: "user", parts: [{ text: args.user }] }],
+          /* system khaali ho to bhejte hi nahi — dekho `system` field ka comment. */
+          ...(args.system ? { systemInstruction: { parts: [{ text: args.system }] } } : {}),
+          contents: [{
+            role: "user",
+            parts: args.attachment
+              ? [{ text: args.user }, { inlineData: { mimeType: args.attachment.mimeType, data: args.attachment.base64 } }]
+              : [{ text: args.user }],
+          }],
           generationConfig: {
             responseMimeType: "application/json",
             temperature: args.temperature ?? 0.7,

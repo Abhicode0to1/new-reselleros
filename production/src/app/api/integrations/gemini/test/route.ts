@@ -3,6 +3,19 @@
  * works by issuing one tiny generateContent ping. Owner-only. Never returns the
  * key. Uses the resolver so it tests exactly what the AI features will use
  * (tenant key → env fallback).
+ *
+ * ─── YE JAAN-BOOJHKAR `geminiJson` SE NAHI GUZARTA ──────────────────────────
+ * 28 Aug 2026 ko baaki SAARE Gemini call `lib/ai/gemini.ts` par le aaye gaye, taaki sabko
+ * timeout, circuit breaker aur retry mile. Ye ek route apna `fetch` rakhta hai, aur wajah
+ * seedhi hai: is route ka kaam hi "abhi, is key se, kya hota hai" batana hai.
+ *
+ * Breaker module-scoped hai. Agar kisi doosre feature ne abhi teen baar fail kiya hai, to
+ * breaker khula hoga aur geminiJson bina Google ko chhue `null` laut ayega — aur ye page
+ * "aapki key kaam nahi karti" dikha dega, jabki key bilkul theek hai. Ek diagnostic ko
+ * doosre feature ki haalat par nirbhar karna use diagnostic hi nahi rehne deta.
+ *
+ * Isi tarah retry bhi nahi chahiye: yahan ek koshish ka SACH chahiye, chhupa hua dobara
+ * prayaas nahi.
  */
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";

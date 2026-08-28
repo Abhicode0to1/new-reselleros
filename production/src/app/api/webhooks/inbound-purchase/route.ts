@@ -13,7 +13,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { acceptedSecrets, secretMatches, readInboundSecret, querySecretAllowed, querySecretWarning } from "@/lib/inbound/verify-secret";
-import { resolveGeminiConfig } from "@/lib/ai/gemini";
+import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -48,24 +48,14 @@ async function extractWithGemini(apiKey: string, model: string, subject: string,
     `{"isPurchase":boolean,"orderId":string,"orderDate":"YYYY-MM-DD","currency":string,"total":number,"gst":number,"items":[{"name":string,"qty":number,"amount":number}]}. ` +
     "total = grand total paid incl. taxes. gst = total GST/tax (0 if unknown). Empty string / 0 / [] when unknown.";
   const user = `SUBJECT: ${subject}\nFROM: ${from}\n\nBODY:\n${body.slice(0, 6000)}`;
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: "user", parts: [{ text: user }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
-        }),
-      },
-    );
-    if (!res.ok) { console.error("[inbound-purchase] Gemini failed:", res.status); return null; }
-    const data = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) return null;
-    const p = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, "").trim()) as Partial<ExtractedPurchase>;
+  {
+    /* Pehle yahan apna `fetch` tha — geminiJson ki copy, uski suraksha ke bina. Ye route
+       vendor ke bill padhta hai, aur ek atki hui call yahan bhi wahi keemat rakhti hai:
+       forwarder POST ke baad thread label kar deta hai bina jawab dekhe. */
+    const p = await geminiJson<Partial<ExtractedPurchase>>({
+      apiKey, model, system, user, temperature: 0.1, label: "inbound-purchase/extract",
+    });
+    if (!p) return null;
     return {
       isPurchase: p.isPurchase === true,
       orderId:    (p.orderId ?? "").toString().trim(),
@@ -77,10 +67,8 @@ async function extractWithGemini(apiKey: string, model: string, subject: string,
         name: (i?.name ?? "").toString().slice(0, 200), qty: Number(i?.qty) || 1, amount: Number(i?.amount) || 0,
       })) : [],
     };
-  } catch (err) {
-    console.error("[inbound-purchase] Gemini crashed:", err);
-    return null;
   }
+  /* try/catch chala gaya — geminiJson khud "never throws" hai. */
 }
 
 export async function POST(request: NextRequest) {

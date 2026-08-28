@@ -18,7 +18,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { resolveGeminiConfig } from "@/lib/ai/gemini";
+import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -115,33 +115,17 @@ ${prompt}
 
 Return ONLY the JSON object as specified.`;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
-      {
-        method:  "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.8 },
-        }),
-      },
-    );
-
-    if (!res.ok) {
-      console.error("[ai-generate] Gemini API failed:", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    const data = await res.json() as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) return null;
-
-    // Strip accidental markdown fences just in case
-    const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-    const parsed = JSON.parse(cleaned) as GenResult;
+  {
+    /* Pehle apna `fetch` tha — geminiJson ki hu-ba-hu copy, uski suraksha ke bina.
+       Fence kaatna bhi wahin ho chuka hai. */
+    const parsed = await geminiJson<GenResult>({
+      apiKey, model,
+      system: SYSTEM_PROMPT,
+      user: userPrompt,
+      temperature: 0.8,
+      label: "campaigns/ai-generate",
+    });
+    if (!parsed) return null;
 
     if (!parsed.subject || !parsed.body_html) return null;
     return {
@@ -150,10 +134,8 @@ Return ONLY the JSON object as specified.`;
       body_html: parsed.body_html,
       body_text: parsed.body_text ?? "",
     };
-  } catch (err) {
-    console.error("[ai-generate] Gemini call crashed:", err);
-    return null;
   }
+  /* try/catch chala gaya — geminiJson khud "never throws" hai. */
 }
 
 export async function POST(req: Request) {
