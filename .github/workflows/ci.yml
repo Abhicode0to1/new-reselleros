@@ -54,6 +54,16 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: "https://ontpnqjoysjgrlsukecm.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_M1d2SCgCNq5QXLVAOsBPUA_UwLutFUK"
+          # ─── THE RUNNER'S NODE HEAP IS SMALLER THAN THIS MACHINE'S ─────────
+          # First real CI run, 28 Aug 2026: exit 134, "Ineffective mark-compacts near heap
+          # limit", dying at 1898 of 2078 MB. That ceiling is Node's default old-space cap,
+          # which it picks from available RAM — a laptop with plenty gets a bigger one, so
+          # `npm run build` passes locally and dies here. Nothing about the code changed.
+          #
+          # Worth being precise about the blast radius: this never affected production.
+          # Cloud Build runs the Docker build with its own resources and has been green
+          # throughout. It is CI, and only CI, that needed the bigger heap.
+          NODE_OPTIONS: --max-old-space-size=4096
         run: npm run build
 
   # ── No-auth E2E smoke ──────────────────────────────────────────────
