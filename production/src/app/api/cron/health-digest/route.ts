@@ -1,7 +1,9 @@
 /**
  * GET|POST /api/cron/health-digest — production ke logs padho, kuch bigda ho to email karo.
  *
- * Schedule: roz 08:30 IST, Cloud Scheduler se. `?hours=` se khidki badal sakti hai.
+ * Schedule: roz 08:30 IST, Cloud Scheduler job `resellersos-health-digest` (GET — baaki 11
+ *   cron bhi GET hain, aur khaali body wala POST Google ke front-end se 411 kha jata hai).
+ *   `?hours=` se khidki badal sakti hai, 1 se 168 tak.
  * Haath se: `curl -H "Authorization: Bearer <CRON_SECRET>" .../api/cron/health-digest`
  *
  * ─── YE KYUN HAI ────────────────────────────────────────────────────────────
@@ -18,16 +20,18 @@
  * hai. Isliye email sirf tab jab kuch kehne layak ho — aur response hamesha poora digest
  * lautata hai, taaki haath se chalane par sab dikhe.
  *
- * ─── IAM ────────────────────────────────────────────────────────────────────
- * Cloud Run ka runtime service account Cloud Logging padh sake, iske liye ek role chahiye:
+ * ─── IAM: KUCH NAHI CHAHIYE, AUR YE NAAPA HUA HAI ───────────────────────────
+ * Likhte waqt maine maan liya tha ki runtime service account ko `roles/logging.viewer`
+ * dena padega — uske paas project-level roles me wo nahi hai (artifactregistry.writer,
+ * cloudbuild.builds.builder, iam.serviceAccountUser, run.admin). Us aadhaar par ye route
+ * 403 par ek grant command lautata tha aur commit me bhi wahi likha gaya tha.
  *
- *   gcloud projects add-iam-policy-binding resellsubsos-prod \
- *     --member="serviceAccount:1005662057478-compute@developer.gserviceaccount.com" \
- *     --role="roles/logging.viewer" --condition=None
+ * 28 Aug 2026 ko live par thok kar dekha: **200, poora digest, koi 403 nahi.** Padhne ki
+ * pahunch un maujooda role me se hi aa rahi hai. Command ki zaroorat nahi thi.
  *
- * Wo role na ho to ye 403 par saaf yahi command lautata hai — chup-chaap khaali digest nahi
- * deta, kyunki "kuch nahi mila" aur "padh hi nahi paya" ek jaise dikhne se hi aaj ke teen
- * bug hafton chhupe rahe the.
+ * 403 wala raasta phir bhi rakha gaya hai — role kabhi hataya ja sakta hai, aur us din ye
+ * saaf batayega ki kya karna hai. Wo jaanch chalti rahni chahiye kyunki "kuch nahi mila"
+ * aur "padh hi nahi paya" ek jaise dikhne se hi aaj ke teen bug hafton chhupe rahe the.
  *
  * Koi nayi dependency nahi: token metadata server se, logs REST se (CLAUDE.md §17).
  */
