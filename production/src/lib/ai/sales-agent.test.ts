@@ -930,6 +930,42 @@ describe("handover_reason", () => {
     expect(SALES_AGENT_SYSTEM_PROMPT).toContain("no monthly rate in the catalogue");
   });
 
+  it("the quote path reads items directly — it never converts the agent's per-YEAR view", () => {
+    /* ─── THE TWELVEFOLD QUOTE, 27 Aug 2026 ─────────────────────────────────
+       run-sales-agent built the dispatcher's catalogue like this:
+
+           msrp: c.msrpPerSeatPerYear      // into a field documented as per MONTH
+
+       `planQuoteFromEnquiry` then multiplied the annual term by 12 again. Live result on
+       Q-ADPL-2026-27-0027: 40 seats at Rs 38,880/seat/year = Rs 17,80,082, where the correct
+       figure was Rs 1,48,340. It reached no customer only because `quote.send` was on hold.
+
+       TYPECHECK CANNOT CATCH THIS AND NEVER COULD — both sides are `number` and the unit
+       lives in a comment. A test on the wiring is the only thing that can, which is why this
+       one reads the source rather than a value.
+
+       Asserting the ABSENCE of the conversion, not the presence of the read: a ÷12 "fix"
+       would pass any test that merely checked the numbers came out right today, and would be
+       the same bug waiting for a rounding case. */
+    const code = readFileSync(
+      join(process.cwd(), "src", "lib", "ai", "run-sales-agent.ts"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+    /* The per-YEAR unit must not appear in this file's CODE at all.
+       My first version of this assertion was `/msrp:\s*c\.msrpPerSeatPerYear/` — pinned to the
+       variable being called `c`. A mutation using a different name walked straight past it,
+       and the mutation test is what showed me: I had written a guard against one spelling of
+       the bug rather than against the bug. Binding to the UNIT NAME instead catches every
+       spelling, including a `/ 12` "fix" that would re-cross the same boundary. */
+    expect(code).not.toMatch(/msrpPerSeatPerYear/);
+    expect(code).not.toMatch(/wholesalePerSeatPerYear/);
+    /* It reads the same columns, from the same table, as the webhook's quote path. */
+    expect(code).toContain('.select("id, name, msrp, wholesale, prices")');
+    /* And it no longer pulls the agent's per-year view in for this purpose at all. */
+    expect(code).not.toContain("loadSalesCatalog");
+  });
+
   it("a handover writes the DRAFT to the timeline, not just the reason", () => {
     /* 26 Aug 2026: a 60-seat enquiry handed over with "the draft says discount" and the draft
        was discarded. Two costs, and the second is worse: the operator could not send it after

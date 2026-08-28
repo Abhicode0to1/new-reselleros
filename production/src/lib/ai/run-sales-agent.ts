@@ -38,7 +38,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { createAdminClient } from "@/lib/supabase/server";
 import { decideAutoReply } from "./auto-reply";
 import { businessDomainFromEmail } from "@/lib/leads/grading";
-import { runSalesAgent, loadSalesCatalog, recordSalesTurn } from "./sales-agent.server";
+/* `loadSalesCatalog` is deliberately NOT imported here any more. `runSalesAgent` calls it
+   itself (sales-agent.server.ts:432) to build the PROMPT, where per-year is the right unit.
+   This file's only remaining need was the QUOTE path, and converting the agent's per-year
+   view back down is exactly what produced the twelvefold quote — see the read below. */
+import { runSalesAgent, recordSalesTurn } from "./sales-agent.server";
 import { dispatchSalesDecision } from "./actions/quote-dispatcher";
 import { cancelPendingLoops, scheduleSalesLoop } from "./sales-loops.server";
 import { logAiAction } from "./autonomy.server";
@@ -288,14 +292,32 @@ async function runSalesAgentForLeadInner(args: RunSalesAgentArgs): Promise<void>
   }
 
   /* ── 5. Act ── */
-  const catalogue: CatalogueItemPrice[] = (
-    await loadSalesCatalog(args.admin, args.tenantId)
-  ).map((c) => ({
-    id: c.sku,
-    name: c.name,
-    msrp: c.msrpPerSeatPerYear,
-    wholesale: c.wholesalePerSeatPerYear,
-  }));
+  /* ── READ THE ROWS, DO NOT CONVERT THE AGENT'S VIEW ─────────────────────────
+     This block used to be:
+
+         .map((c) => ({ ..., msrp: c.msrpPerSeatPerYear, wholesale: c.wholesalePerSeatPerYear }))
+
+     `CatalogueItemPrice.msrp` is ₹/seat/MONTH. `msrpPerSeatPerYear` is ₹/seat/YEAR. Assigning
+     one to the other type-checks perfectly — both are `number`, and the unit lives only in a
+     comment — and then `planQuoteFromEnquiry` multiplies the annual term by 12 again.
+
+     Measured 27 Aug 2026 on Q-ADPL-2026-27-0027: 40 seats at ₹38,880/seat/year (= 3,240 × 12)
+     for ₹17,80,082, where the right figure was ₹1,48,340. TWELVE TIMES. It never reached the
+     customer only because `quote.send` happened to be on hold.
+
+     So the conversion is gone rather than corrected. The quote path now reads the same rows,
+     the same way, as the webhook's own quote path (route.ts:689) — one shape, one source, no
+     arithmetic in between. A ÷12 here would have been the same bug waiting for a rounding
+     case; the fix for a unit mismatch is to stop crossing the unit, not to cross it carefully.
+
+     `is_active` only, matching that other path exactly, so an agent-built quote and a
+     webhook-built quote for the same product cannot come from different rows. */
+  const { data: rawItems } = await args.admin
+    .from("items")
+    .select("id, name, msrp, wholesale, prices")
+    .eq("tenant_id", args.tenantId)
+    .eq("is_active", true);
+  const catalogue = (rawItems ?? []) as CatalogueItemPrice[];
 
   const dispatched = await dispatchSalesDecision({
     admin: args.admin,
