@@ -26,7 +26,7 @@ bhej deta hai, aur bheji hui mail ko ek label laga deta hai taaki dubara na jaye
  * phir thread par "ERP-Forwarded" label laga deti hai (dubara na bheje).
  * Secret Script Properties se aata hai — code me kabhi mat likhna.
  */
-var WEBHOOK_URL     = 'https://resellersos-1005662057478.asia-south1.run.app/api/webhooks/inbound-email';
+var WEBHOOK_URL     = 'https://resellersos-njvk4nxhdq-el.a.run.app/api/webhooks/inbound-email';
 var PROCESSED_LABEL = 'ERP-Forwarded';
 
 function forwardNewEmailsToERP() {

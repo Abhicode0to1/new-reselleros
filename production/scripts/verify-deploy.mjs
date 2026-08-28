@@ -19,8 +19,18 @@
  *      "deploy ho raha hai" NAHI — wo andaza hai, naap nahi.
  */
 
-/** Prod. Number GCP ka PROJECT NUMBER hai, isliye galat number = doosra project. */
-export const PROD_URL = "https://resellersos-1005662057478.asia-south1.run.app";
+/**
+ * Prod — wahi host jo Cloud Run khud batata hai (`services describe`) aur jo service ke
+ * apne `NEXT_PUBLIC_APP_URL` me set hai, yaani OAuth redirect aur email ke link isi par
+ * bante hain.
+ *
+ * Ek ALIAS bhi zinda hai — `resellersos-1005662057478.asia-south1.run.app` — aur Cloud
+ * Scheduler ke jobs usi ko call karte hain, to use "galat" samajh kar theek karne mat baith
+ * jao. Par likhne ke liye ye host behtar hai: usme PROJECT NUMBER nahi hai, aur theek wahi
+ * number aaj 10 minute kha gaya tha, kyunki purane project ka wahi shakl ka host 503 deta
+ * hai aur dono ek jaise dikhte hain.
+ */
+export const PROD_URL = "https://resellersos-njvk4nxhdq-el.a.run.app";
 
 /** 28 Aug 2026 tak zinda tha, ab 503 deta hai — dobara na likha jaye. */
 const DEAD_URL = "https://resellersos-490252291080.asia-south1.run.app";

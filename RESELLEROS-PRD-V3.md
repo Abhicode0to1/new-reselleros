@@ -4,7 +4,7 @@
 > **Date:** 2026-05-29
 > **Status:** Current state — reflects production codebase at commit `7e0bd49`
 > **Target user:** Indian cloud resellers (Google Workspace, Microsoft 365, Zoho)
-> **Live URL:** https://resellersos-1005662057478.asia-south1.run.app
+> **Live URL:** https://resellersos-njvk4nxhdq-el.a.run.app
 > **Repo:** https://github.com/Pardeep-byte1/resellersos
 > **Replaces:** `docs/archive/LEADOS-RESELLER-CRM-V2-PRD.md` (V2, Firebase plan, archived)
 
