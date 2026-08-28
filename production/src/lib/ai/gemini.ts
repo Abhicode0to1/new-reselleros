@@ -301,11 +301,53 @@ export async function geminiJson<T>(args: {
     return parsed;
   } catch (err) {
     // AbortError (timeout), network failure, or malformed JSON all land here.
-    const why = (err as Error)?.name === "TimeoutError" || (err as Error)?.name === "AbortError"
+    const name = (err as Error)?.name;
+    const isTimeout = name === "TimeoutError" || name === "AbortError";
+    /* SyntaxError = JSON.parse ne model ka jawab reject kiya. Wo transport ki galti NAHI
+       hai, aur usme dobara poora model call karna mehnga bhi hai aur bekaar bhi. */
+    const isTransport = isTimeout || name === "TypeError" || name === "FetchError";
+    const why = isTimeout
       ? `timed out after ${args.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms`
       : (err as Error)?.message;
+
+    /* ── TIMEOUT BHI RETRY HOTA HAI — 28 Aug 2026 ────────────────────────────
+       Upar 429/5xx par retry lagi hai, aur uski wajah wahin likhi hai: "one transient
+       upstream blip and the reply was gone." Timeout usi jaati ka blip hai, par wo is
+       catch me girta tha jahan koi retry nahi thi.
+
+       Us din prod me: 14:09:34 par `ai/sales-agent` ka call 15s par timeout hua, aur
+       14:09:40 par `ai_action_log` me `reply.send failed` likha gaya. Ek asli lead ka
+       jawab nahi gaya.
+
+       Keemat imaandari se: retry sabse bure haal me 15s aur jodti hai. Ye theek hai kyunki
+       inbound-email webhook agent ko `void` karke chhodta hai (koi intezaar nahi kar raha),
+       aur ek hi caller ise await karta hai — WhatsApp webhook — jahan Cloud Run ki apni
+       request limit 300s hai. Ek retry, loop nahi. */
+    if (isTransport && !args.__isRetry) {
+      /* recordFailure yahan NAHI — bilkul 5xx wali shakh ki tarah. Ek logical call ek hi
+         failure ginni chahiye, warna 3 ka threshold do call me hi trip kar jata hai. */
+      console.warn(`[${args.label}] retrying once after ${why}`);
+      await new Promise((r) => setTimeout(r, 900));
+      return geminiJson<T>({ ...args, __isRetry: true });
+    }
+
     console.error(`[${args.label}] Gemini call failed — ${why}`);
     recordFailure(now);
+    /* ── AUR WAJAH BATAO ─────────────────────────────────────────────────────
+       Is function ka apna docstring kehta hai ki `onFailure` "every failure path" par
+       bulaya jata hai. Ye shakh use nahi bulati thi, aur yahi wo shakh hai jo prod me
+       chali. Nateeja lead ke log me chhap gaya, apne hi shabdon me:
+
+           "The AI did not answer, and gave no reason."
+
+       Upar hi likha hai ki `null` akela hi wo cheez thi "that made four different faults
+       read identically" — aur ye path abhi tak theek wahi kar raha tha. */
+    args.onFailure?.(
+      isTimeout
+        ? `Gemini ne ${Math.round((args.timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000)} second me jawab nahi diya, ` +
+          "dobara koshish ke baad bhi. Thodi der baad phir se try kariye."
+        : `Gemini se baat nahi ho payi — ${why || "wajah nahi mili"}.`,
+    );
     return null;
   }
 }

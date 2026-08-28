@@ -293,3 +293,119 @@ describe("the failure reason reaches the caller", () => {
     await expect(geminiJson(ARGS)).resolves.toBeNull();
   });
 });
+
+/* ══ 28 Aug 2026 — timeout wahi blip hai, par uska koi retry nahi tha ═══════════
+   Prod me naapa gaya, us din:
+
+     14:09:34   [ai/sales-agent] Gemini call failed — timed out after 15000ms
+     14:09:40   ai_action_log → reply.send | failed | L-MTCMLH
+                reason: "The AI did not answer, and gave no reason."
+
+   Ek asli lead ka jawab nahi gaya. Do alag defect ek saath chale:
+
+     1. 429/5xx retry hote the, timeout NAHI — jabki wo usi jaati ka transient blip hai.
+        Upar wale retry ka apna comment yahi kehta hai: "one transient upstream blip and
+        the reply was gone."
+     2. `onFailure` is catch shakh me bulaya hi nahi jata tha, jabki docstring kehta hai
+        "every failure path". Isliye caller ke paas `null` tha aur koi wajah nahi — aur
+        wahi "gave no reason" ban kar lead ke log me chhap gaya.
+
+   Jad (root cause) alag hai aur infra me hai: agent `void` karke response ke BAAD chalta
+   hai, aur Cloud Run par CPU throttling default ON hai — dono timeout tab hue jab instance
+   par koi request open nahi thi. Ye test us jad ko theek nahi karte; ye ye pakka karte
+   hain ki jab bhi wo blip aaye, ek retry mile aur wajah kabhi gaayab na ho.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+describe("timeout — 28 Aug ka prod maamla", () => {
+  /** Wahi cheez jo AbortSignal.timeout deadline par phenkti hai. */
+  const timeoutErr = () => {
+    const e = new Error("The operation was aborted due to timeout");
+    e.name = "TimeoutError";
+    return e;
+  };
+
+  it("timeout par ek baar retry karta hai, aur phir kaamyab ho sakta hai — ASLI MAAMLA", async () => {
+    let first = true;
+    const spy = vi.fn(async () => {
+      if (first) { first = false; throw timeoutErr(); }
+      return ok('{"message":"hi"}');
+    });
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson({ ...ARGS, timeoutMs: 10 })).resolves.toEqual({ message: "hi" });
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("retry ke baad bhi timeout ho to null — par LOOP nahi", async () => {
+    const spy = vi.fn(async () => { throw timeoutErr(); });
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson({ ...ARGS, timeoutMs: 10 })).resolves.toBeNull();
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("do baar timeout = EK breaker failure, do nahi", async () => {
+    /* Wahi jaal jo 5xx retry me pehle phans chuka hai: ek logical call do failure ginne
+       lage to 3 ka threshold dedh call me trip kar jata hai. */
+    vi.stubGlobal("fetch", vi.fn(async () => { throw timeoutErr(); }));
+    await geminiJson({ ...ARGS, timeoutMs: 10 });   // 1
+    await geminiJson({ ...ARGS, timeoutMs: 10 });   // 2 — abhi khula rehna chahiye
+
+    const spy = vi.fn(async () => ok('{"message":"still calling"}'));
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson({ ...ARGS, timeoutMs: 10 })).resolves.toEqual({ message: "still calling" });
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it("network error bhi retry hota hai — wo bhi transport ki galti hai", async () => {
+    let first = true;
+    const spy = vi.fn(async () => {
+      if (first) { first = false; const e = new Error("fetch failed"); e.name = "TypeError"; throw e; }
+      return ok('{"message":"hi"}');
+    });
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson(ARGS)).resolves.toEqual({ message: "hi" });
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("khraab JSON par retry NAHI — wo transport ki galti nahi hai", async () => {
+    /* Model ne jawab diya, bas wo JSON nahi tha. Dobara poora model call karna mehnga hai
+       aur usi jawab ke dobara aane ki poori umeed hai. */
+    const spy = vi.fn(async () => ok("this is not json"));
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson(ARGS)).resolves.toBeNull();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("WAJAH deta hai — 'gave no reason' dobara na chhape", async () => {
+    /* Yahi wo line thi jo lead ke log me gayi thi. */
+    vi.stubGlobal("fetch", vi.fn(async () => { throw timeoutErr(); }));
+    let reason = "";
+    await geminiJson({ ...ARGS, timeoutMs: 15_000, onFailure: (r) => { reason = r; } });
+    expect(reason).not.toBe("");
+    expect(reason).toMatch(/15 second|jawab nahi/i);
+    expect(reason).toMatch(/dobara koshish|phir se/i);   // §24: ab kya karein
+  });
+
+  it("network error par bhi wajah deta hai", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { const e = new Error("socket hang up"); e.name = "TypeError"; throw e; }));
+    let reason = "";
+    await geminiJson({ ...ARGS, onFailure: (r) => { reason = r; } });
+    expect(reason).toContain("socket hang up");
+  });
+
+  it("har failure path wajah deta hai — docstring ka dava, ab naapa hua", async () => {
+    /* Docstring kehta hai "every failure path". Pehle catch shakh chhoot gayi thi, aur
+       theek wahi shakh prod me chali. */
+    const paths: Array<[string, () => void]> = [
+      ["timeout",  () => vi.stubGlobal("fetch", vi.fn(async () => { throw timeoutErr(); }))],
+      ["http 403", () => vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 403, text: async () => "{}", json: async () => ({}) } as unknown as Response)))],
+      ["bad json", () => vi.stubGlobal("fetch", vi.fn(async () => ok("nope")))],
+      ["khaali",   () => vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ candidates: [] }), text: async () => "" } as unknown as Response)))],
+    ];
+    for (const [name, setup] of paths) {
+      __resetGeminiBreaker();
+      setup();
+      let reason = "";
+      await geminiJson({ ...ARGS, timeoutMs: 10, onFailure: (r) => { reason = r; } });
+      expect(reason, `${name} ne wajah nahi di`).not.toBe("");
+    }
+  });
+});
