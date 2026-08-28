@@ -53,9 +53,12 @@ function forwardNewEmailsToERP() {
         messageId: msg.getId()
       };
 
-      var res = UrlFetchApp.fetch(WEBHOOK_URL + '?key=' + encodeURIComponent(secret), {
+      // Secret HEADER me jata hai, URL me nahi. Cloud Run har request ka poora URL apne
+      // log me likhta hai, to '?key=' + secret ka matlab hai secret cleartext me log me.
+      var res = UrlFetchApp.fetch(WEBHOOK_URL, {
         method:             'post',
         contentType:        'application/json',
+        headers:            { 'x-inbound-secret': secret },
         payload:            JSON.stringify(payload),
         muteHttpExceptions: true
       });
