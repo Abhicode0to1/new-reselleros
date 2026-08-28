@@ -774,8 +774,28 @@ fails. It is deliberately **non-blocking** — it makes a red suite impossible t
 without trapping a turn in a fix-loop over a pre-existing failure. `typecheck` and
 `lint` are still manual (typecheck is ~40s; too slow to run every turn).
 
-Also: the 28 SQL regression tests in `supabase/tests/` are **not in CI and not in the
-hook**. Any DB/RPC change means running them by hand, or it isn't verified.
+Also: the SQL regression tests in `supabase/tests/` are **not in CI and not in the
+hook**. ⚠️ **Corrected 29 Aug 2026** — this said "28" and there are **42**, and there was no
+way to run them together at all, so they had never been run as a suite. There is now:
+
+```bash
+cd production && npm run test:sql          # sab 42 · ~3.5 min · production par, sab rollback
+cd production && npm run test:sql payment  # naam se chhaan kar
+```
+
+It refuses to start unless every file has `rollback` and no `commit`, and it runs a **canary**
+first — a file that must fail. Canary green means `raise exception` is not being surfaced and
+every pass below it would be a lie, so the run aborts instead of reporting 42/42.
+
+First suite run: **39/42**. All three reds were in the tests, not the product —
+`create_project_direct_invoice` had an assertion that had never executed (`r.quote_id` on a
+record with no such field, so the block died at 42703 one line before the end),
+`subscriptions_item_id` pinned itself to a catalog row somebody has since deleted, and
+`sandbox_tenant_isolation`'s control read a table its tenant has zero rows in. All three fixed
+and mutation-checked; the suite is 42/42.
+
+Still not in CI: that needs DB credentials in GitHub Actions, which is a decision, not a
+cleanup. Run it by hand before any DB/RPC change lands.
 
 *Note for hook authoring on this machine: `jq` is NOT installed, so the usual
 `jq`-based hook recipes will silently fail. Use `grep`/`printf`, or `node -e`.*

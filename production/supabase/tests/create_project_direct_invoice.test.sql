@@ -91,8 +91,18 @@ begin
   if v_proj <> 'active' then raise exception 'FAIL: project status %, expected active', v_proj; end if;
 
   /* Exactly one invoice. The function composes three steps; if it ever raises twice the
-     tenant gets two GST documents for one sale and a gap-free series stops being gap-free. */
-  select count(*) into n from public.invoices where quote_id = r.quote_id;
+     tenant gets two GST documents for one sale and a gap-free series stops being gap-free.
+
+     Counted on this transaction's own synthetic tenant, not on a quote id. This line read
+     `where quote_id = r.quote_id` until 29 Aug 2026 and had never run: the function is
+     `RETURNS TABLE(invoice_id text, project_id uuid)`, so `r` has no `quote_id` and the
+     block died with 42703 before reaching any assertion. Every assertion above it was
+     passing and nobody could see that the last one was not.
+
+     The tenant is created a few lines up and lives only inside this transaction, so any
+     invoice under it came from the call being tested — which is exactly what "raised twice"
+     would show up in, and it does not depend on how project → quote → invoice is linked. */
+  select count(*) into n from public.invoices where tenant_id = 'c0de0005-0000-4000-8000-000000000001';
   if n <> 1 then raise exception 'FAIL: % invoices raised for one project sale, expected 1', n; end if;
 
   raise notice 'PASS: project active, one pending invoice, 18%% GST on 200000';

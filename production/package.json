@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:sql": "node scripts/test-sql.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "setup": "node scripts/setup.mjs",

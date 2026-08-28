@@ -176,7 +176,7 @@ select set_config('request.jwt.claims',
   '{"sub":"3caa0f07-44d1-42ee-91b3-2123e04853b1","role":"authenticated"}', true);
 
 do $$
-declare v_item text; v_items int;
+declare v_item text; v_items int; v_expect text; v_plan text;
 begin
   -- Sanity: can this user see its own catalog at all under RLS? If not, the link
   -- failure below would look like a matching bug instead of a permissions one.
@@ -185,16 +185,43 @@ begin
     raise exception 'FAIL 9: authenticated user sees 0 items — RLS or current_tenant_id() is the problem, not the matcher';
   end if;
 
+  /* The catalog row is CHOSEN, not named.
+
+     This block hardcoded plan 'Google Workspace Business Standard' expecting item
+     'GW-STD-fbb', and on 29 Aug 2026 it failed with "got <null>". Nothing was broken:
+     that row is simply not in the catalog any more, and this tenant's only active Google
+     item today is Business Starter. The trigger declined because there was nothing to
+     match — which is what it is supposed to do.
+
+     A test that names a live catalog row goes red the day somebody edits the catalog, and
+     a security-adjacent file that cries wolf gets discounted on the day it means
+     something. So pick any active Google row whose plan_key is unique in this tenant, and
+     assert the trigger links to THAT. Same thing proved — RLS + INVOKER rights let the
+     trigger read `items` from a real client session — with nothing pinned to a row a
+     human can delete. */
+  select i.id, i.name into v_expect, v_plan
+    from public.items i
+   where i.vendor = 'google' and i.is_active
+     and (select count(*) from public.items j
+           where j.vendor = i.vendor and j.is_active
+             and public.plan_key(j.name) = public.plan_key(i.name)) = 1
+   order by i.id
+   limit 1;
+  if v_expect is null then
+    raise exception 'FAIL 9: no unambiguous active Google item in this catalog, so the trigger has nothing it could link — add one, or this case cannot run';
+  end if;
+
   insert into public.subscriptions (id, tenant_id, customer_name, plan, vendor, seats, mrr, status)
     values ('bbbb0248-9999-0000-0000-000000000009','fbb976f1-9090-4f10-9726-0901bd144e42',
-            'RLS Probe','Google Workspace Business Standard','google',10,8640,'active');
+            'RLS Probe', v_plan, 'google', 10, 8640, 'active');
 
   select item_id into v_item from public.subscriptions
    where id='bbbb0248-9999-0000-0000-000000000009';
-  if v_item is distinct from 'GW-STD-fbb' then
-    raise exception 'FAIL 9: as authenticated, got % (expected GW-STD-fbb)', coalesce(v_item,'<null>');
+  if v_item is distinct from v_expect then
+    raise exception 'FAIL 9: as authenticated, plan % linked to % (expected %)',
+      v_plan, coalesce(v_item,'<null>'), v_expect;
   end if;
-  raise notice 'PASS 9: linked correctly as authenticated, through RLS';
+  raise notice 'PASS 9: % linked to % as authenticated, through RLS', v_plan, v_item;
 end $$;
 
 rollback;

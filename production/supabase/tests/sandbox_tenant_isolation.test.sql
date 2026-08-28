@@ -37,6 +37,24 @@ insert into public.users (id, tenant_id, email, full_name, role, is_active) valu
    '7e57e57e-0000-4000-8000-000000000001',            -- ZZ TESTING SANDBOX
    'sandbox-tester@example.test', 'Sandbox Tester', 'owner', true);
 
+/* One catalog row for the sandbox, so case 2 below has something it SHOULD see.
+
+   Case 2 is the control: it reads a table the tester is entitled to and fails if the
+   answer is empty, because otherwise case 1's zeros could mean "the wall holds" or "this
+   session is dead" and the file could not tell them apart.
+
+   On 29 Aug 2026 the control itself went red — "the tester sees NO items at all". The
+   session was fine. The sandbox tenant simply has an empty catalog (0 items; the live
+   tenant has 1). So the control was resting on a row nobody had promised to keep, and it
+   would have gone red again on the day anyone cleared the catalog.
+
+   Creating the row here fixes that at the root: it exists for exactly this transaction,
+   the tester's own tenant owns it, and it is gone at rollback. Inserted BEFORE the role
+   switch, so it is setup and not part of what is being measured. */
+insert into public.items (id, tenant_id, name, vendor, msrp, wholesale) values
+  ('5a5a5a5a-sandbox-control-item', '7e57e57e-0000-4000-8000-000000000001',
+   'Sandbox Control Item', 'google', 100, 50);
+
 -- `authenticated` is the role a real browser token arrives as, so RLS is genuinely
 -- enforced from here on. A superuser connection bypasses RLS and would prove nothing.
 set local role authenticated;
@@ -103,7 +121,7 @@ begin
   -- Without this, every zero above could be a broken session rather than a wall.
   select count(*) into n from public.items;
   if n = 0 then
-    raise exception 'FAIL 2: the tester sees NO items at all — this session is blocked outright, so the zeros above prove nothing about tenant isolation';
+    raise exception 'FAIL 2: the tester cannot see even the catalog row this test just created for their own tenant — this session is blocked outright, so the zeros above prove nothing about tenant isolation';
   end if;
   select count(*) into n from public.items where tenant_id <> v_sandbox;
   if n <> 0 then raise exception 'FAIL 2: the tester sees % item(s) belonging to another tenant', n; end if;
