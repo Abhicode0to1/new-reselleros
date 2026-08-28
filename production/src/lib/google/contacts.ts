@@ -145,6 +145,29 @@ export async function getFreshAccessToken(admin: Admin, userId: string): Promise
 }
 
 // ── People API ──────────────────────────────────────────────────────────────
+/**
+ * Kya ye jawab "sync token expire ho gaya" hai?
+ *
+ * ─── 410 AUR 400, DONO ──────────────────────────────────────────────────────
+ * Iska ilaaj `syncUserContacts` me pehle se hai (poora pull dobara), par wo sirf `410`
+ * par lagta tha — aur Google **400** bhejta hai:
+ *
+ *     400 FAILED_PRECONDITION
+ *     "Sync token is expired. Clear local cache and retry call without the sync token."
+ *     reason: EXPIRED_SYNC_TOKEN
+ *
+ * 28 Aug 2026 ko prod me naapa gaya, Pardeep ke Contacts reconnect ke turant baad.
+ * Nateeja seedha tha: reconnect kaamyab, scope sahi, aur phir bhi sync har baar fail —
+ * cursor 13 din purana tha aur uske apne aap saaf hone wala raasta status code ki wajah se
+ * chalta hi nahi tha. Ek nazar me lagta ki reconnect hi bekaar gaya.
+ *
+ * Isliye pehchan REASON se hoti hai, sirf status se nahi. 410 bhi rakha hai — Google ka
+ * apna doc wahi kehta hai, aur dono me se koi bhi aa sakta hai.
+ */
+export function isExpiredSyncToken(status: number, body: string): boolean {
+  return status === 410 || body.includes("EXPIRED_SYNC_TOKEN");
+}
+
 class SyncTokenExpired extends Error {}
 
 async function listConnections(accessToken: string, syncToken: string | null): Promise<{ people: GPerson[]; nextSyncToken: string | null }> {
@@ -156,8 +179,11 @@ async function listConnections(accessToken: string, syncToken: string | null): P
     if (syncToken) p.set("syncToken", syncToken);
     if (pageToken) p.set("pageToken", pageToken);
     const res = await fetch(`${BASE}/people/me/connections?${p.toString()}`, { headers: { authorization: `Bearer ${accessToken}` } });
-    if (res.status === 410) throw new SyncTokenExpired();
-    if (!res.ok) throw new Error(`People list failed: ${res.status} ${await res.text().catch(() => "")}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      if (isExpiredSyncToken(res.status, body)) throw new SyncTokenExpired();
+      throw new Error(`People list failed: ${res.status} ${body}`);
+    }
     const data = (await res.json()) as { connections?: GPerson[]; nextPageToken?: string; nextSyncToken?: string };
     if (data.connections) people.push(...data.connections);
     pageToken = data.nextPageToken;
