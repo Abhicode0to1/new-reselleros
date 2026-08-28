@@ -71,11 +71,15 @@ function forwardEnquiries() {
         text:      m.getPlainBody().slice(0, 8000),
         messageId: m.getId(),                 // webhook also de-dupes on this
       };
+      // Secret HEADER me jata hai, URL me nahi. Cloud Run har request ka poora URL apne
+      // log me likhta hai, to '?key=' + SECRET ka matlab hai secret cleartext me log me,
+      // retention period tak, jiske paas log access ho use dikhta hua.
       const res = UrlFetchApp.fetch(
-        WEBHOOK_URL + '?key=' + encodeURIComponent(SECRET),
+        WEBHOOK_URL,
         {
           method: 'post',
           contentType: 'application/json',
+          headers: { 'x-inbound-secret': SECRET },
           payload: JSON.stringify(payload),
           muteHttpExceptions: true,
         }

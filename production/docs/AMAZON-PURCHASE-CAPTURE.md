@@ -49,6 +49,7 @@ function forwardAmazon() {
   const done = GmailApp.getUserLabelByName('erp-purchase') || GmailApp.createLabel('erp-purchase');
   const threads = GmailApp.search(SEARCH + ' -label:erp-purchase', 0, 25);
   threads.forEach(function (thread) {
+    var allDelivered = true;                  // ← see the warning under this block
     thread.getMessages().forEach(function (m) {
       const payload = {
         from:      m.getFrom(),
@@ -56,16 +57,43 @@ function forwardAmazon() {
         text:      m.getPlainBody().slice(0, 10000),
         messageId: m.getId(),
       };
+      // Secret HEADER me jata hai, URL me nahi. Cloud Run har request ka poora URL apne
+      // log me likhta hai, to '?key=' + SECRET secret ko cleartext me log me daal deta hai.
       const res = UrlFetchApp.fetch(
-        WEBHOOK_URL + '?key=' + encodeURIComponent(SECRET),
+        WEBHOOK_URL,
         { method: 'post', contentType: 'application/json',
+          headers: { 'x-inbound-secret': SECRET },
           payload: JSON.stringify(payload), muteHttpExceptions: true });
-      Logger.log(m.getSubject() + ' → ' + res.getResponseCode());
+      const code = res.getResponseCode();
+      Logger.log(m.getSubject() + ' → ' + code + ' ' + res.getContentText());
+      if (code < 200 || code >= 300) allDelivered = false;
     });
-    thread.addLabel(done);   // don't re-process
+    // ONLY label a thread the app actually accepted. See the warning below.
+    if (allDelivered) thread.addLabel(done);
   });
 }
 ```
+
+> ### ⚠️ `addLabel` yahan bina jawab dekhe chalta tha — 7 invoice isi se gaye
+>
+> Upar ka version **theek kiya gaya hai**. Purane version me `thread.addLabel(done)` POST
+> ke turant baad chalta tha, **jawab dekhe bina** — aur `-label:erp-purchase` hi wo cheez
+> hai jo thread ko dobara uthne se rokti hai. Yaani koi bhi non-2xx — 401, 500, deploy ka
+> restart — thread ko "ho gaya" mark kar deta tha aur **wo invoice hamesha ke liye chala
+> jata tha.** Der se nahi: gaya.
+>
+> Ye andaza nahi hai, naapa hua hai. 28 Aug 2026 ko Cloud Run ke log me:
+>
+> ```
+> 9–23 Aug     200   chal raha tha
+> 24–27 Aug    401   saat request, saari reject
+> ```
+>
+> App ki taraf ka bug (`inbound-purchase` secret ki jaanch rotation-list ke saath tootti
+> thi) 28 Aug ko theek ho gaya. Par un **7 email** ko label lag chuka hai, isliye wo apne
+> aap dobara nahi aayenge — Gmail me se `erp-purchase` label hatana padega.
+>
+> `if (allDelivered)` ke saath wahi haalat sirf **der** karti hai, nuksaan nahi.
 
 ---
 
