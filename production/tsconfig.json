@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
@@ -20,7 +24,9 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     },
     "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true,
@@ -28,6 +34,16 @@
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "playwright-report", "test-results"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next-check/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "playwright-report",
+    "test-results"
+  ]
 }
