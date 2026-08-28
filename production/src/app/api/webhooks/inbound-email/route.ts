@@ -28,7 +28,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { resolveGeminiConfig } from "@/lib/ai/gemini";
+import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 import { sendEmail } from "@/lib/email/send";
 import { decideFollowUp, type FollowUpInput } from "@/lib/inbound/follow-up";
 import { decideInboundRoute } from "@/lib/inbound/routing";
@@ -102,40 +102,37 @@ async function extractWithGemini(apiKey: string, model: string, subject: string,
     "company/contactName/phone/product = empty string if unknown. summary = one short line of what they want.";
   const user = `SUBJECT: ${subject}\nFROM: ${from}\n\nBODY:\n${body.slice(0, 4000)}`;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: "user", parts: [{ text: user }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
-        }),
-      },
-    );
-    if (!res.ok) {
-      console.error("[inbound-email] Gemini failed:", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    const data = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) return null;
-    const cleaned = raw.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-    const p = JSON.parse(cleaned) as Partial<ExtractedLead>;
-    return {
-      isEnquiry:   p.isEnquiry === true,
-      company:     (p.company ?? "").toString().trim(),
-      contactName: (p.contactName ?? "").toString().trim(),
-      phone:       (p.phone ?? "").toString().trim(),
-      product:     (p.product ?? "").toString().trim(),
-      summary:     (p.summary ?? "").toString().trim(),
-    };
-  } catch (err) {
-    console.error("[inbound-email] Gemini crashed:", err);
-    return null;
-  }
+  /* ── PEHLE YE APNA `fetch` KARTA THA ──────────────────────────────────────
+     Wo `geminiJson` ki lagbhag hu-ba-hu copy thi — wahi request shape, wahi ```json fence
+     ka safai — bas uski SAARI suraksha ke bina: **koi timeout nahi, koi circuit breaker
+     nahi, koi retry nahi**. Aur ye har inbound email ke raaste par hai.
+
+     23 Aug 2026 ko iski keemat log me dikhi: `[inbound-email] Gemini failed: 429` —
+     **7 second me 8 baar**. Free-tier ka quota `GenerateRequestsPerMinutePerProjectPerModel`
+     hai aur uski limit **5 per minute** hai. `geminiJson` ka breaker 3 lagatar failure ke
+     baad haath rok deta hai; ye bina breaker tha, isliye quota par hathauda maarta raha.
+
+     Aur timeout ka na hona isse bhi bura tha: Gemini agar fail na ho kar ATAK jaye, to ye
+     request uske saath atak jaati — aur ise Apps Script forwarder bulata hai, jo POST ke
+     baad thread par label laga deta hai bina jawab dekhe. Yaani ek atki hui call = ek
+     enquiry hamesha ke liye gayi.
+
+     Ab ek hi darwaza: lib/ai/gemini.ts. */
+  const p = await geminiJson<Partial<ExtractedLead>>({
+    apiKey, model, system, user,
+    temperature: 0.2,
+    label: "inbound-email/extract",
+  });
+  if (!p) return null;
+
+  return {
+    isEnquiry:   p.isEnquiry === true,
+    company:     (p.company ?? "").toString().trim(),
+    contactName: (p.contactName ?? "").toString().trim(),
+    phone:       (p.phone ?? "").toString().trim(),
+    product:     (p.product ?? "").toString().trim(),
+    summary:     (p.summary ?? "").toString().trim(),
+  };
 }
 
 export async function POST(request: NextRequest) {

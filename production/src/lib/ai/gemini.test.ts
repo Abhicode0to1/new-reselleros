@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { geminiJson, __resetGeminiBreaker } from "./gemini";
 
 const ARGS = { apiKey: "k".repeat(20), model: "gemini-2.5-flash", system: "s", user: "u", label: "test" };
@@ -407,5 +409,110 @@ describe("timeout — 28 Aug ka prod maamla", () => {
       await geminiJson({ ...ARGS, timeoutMs: 10, onFailure: (r) => { reason = r; } });
       expect(reason, `${name} ne wajah nahi di`).not.toBe("");
     }
+  });
+});
+
+/* ══ 28 Aug 2026 — free-tier quota, aur ek retry jo fail hona hi tha ══════════
+   Prod log se poora 429 payload (23 Aug 16:11, 7 second me 8 baar):
+
+       quotaId    GenerateRequestsPerMinutePerProjectPerModel-FreeTier
+       quotaValue 5
+       model      gemini-3.7-flash
+       retryDelay 29s
+
+   Retry 900ms baad hota tha. 29 second wale quota ke saamne wo fail hona hi tha — aur
+   fail hone se pehle wo ek quota slot kha leta tha, jo kisi doosri asli call ko mil sakta
+   tha. Rate limit par hathauda maarna use theek nahi karta.
+   ══════════════════════════════════════════════════════════════════════════════ */
+describe("429 — Google ka retryDelay maano", () => {
+  /** Asli payload ki shakl, chhota karke. */
+  const quota429 = (retryDelay: string | null) => ({
+    ok: false, status: 429,
+    text: async () => JSON.stringify({
+      error: {
+        code: 429,
+        message: "You exceeded your current quota, please check your plan and billing details.",
+        status: "RESOURCE_EXHAUSTED",
+        details: [
+          { "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+            violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier", quotaValue: "5" }] },
+          ...(retryDelay ? [{ "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay }] : []),
+        ],
+      },
+    }),
+    json: async () => ({}),
+  });
+
+  it("29s wala 429 retry NAHI hota — ASLI MAAMLA", async () => {
+    const spy = vi.fn(async () => quota429("29s"));
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson(ARGS)).resolves.toBeNull();
+    expect(spy, "29 second ke quota par dobara maarna ek slot barbaad karta hai")
+      .toHaveBeenCalledTimes(1);
+  });
+
+  it("dashamlav wala delay bhi padhta hai — Google '29.430997524s' bhejta hai", async () => {
+    const spy = vi.fn(async () => quota429("29.430997524s"));
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson(ARGS)).resolves.toBeNull();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("chhota delay (1s) par retry HOTA hai — wo asli transient blip hai", async () => {
+    let first = true;
+    const spy = vi.fn(async () => {
+      if (first) { first = false; return quota429("1s"); }
+      return ok('{"message":"hi"}');
+    });
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson(ARGS)).resolves.toEqual({ message: "hi" });
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("retryDelay bilkul na ho to purana vyavhaar — retry", async () => {
+    /* Har 429 me RetryInfo nahi hota. Us haalat me "pata nahi" ka jawab "koshish kar lo"
+       hai, kyunki pehle bhi wahi hota tha aur wo ek transient 429 ko bachata hai. */
+    const spy = vi.fn(async () => quota429(null));
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson(ARGS)).resolves.toBeNull();
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("5xx par ye shart NAHI lagti — wo quota nahi, upstream ki hichki hai", async () => {
+    /* Ek 503 jiske saath bada retryDelay bhi ho, tab bhi retry hona chahiye. */
+    let first = true;
+    const spy = vi.fn(async () => {
+      if (first) {
+        first = false;
+        return { ok: false, status: 503,
+          text: async () => JSON.stringify({ error: { details: [{ "@type": "x", retryDelay: "60s" }] } }),
+          json: async () => ({}) };
+      }
+      return ok('{"message":"hi"}');
+    });
+    vi.stubGlobal("fetch", spy);
+    await expect(geminiJson(ARGS)).resolves.toEqual({ message: "hi" });
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("quota ka jawab paise ki baat karta hai, aur wajah caller tak jaati hai", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => quota429("29s")));
+    let reason = "";
+    await geminiJson({ ...ARGS, onFailure: (r) => { reason = r; } });
+    expect(reason).toMatch(/quota|rate limit/i);
+    expect(reason).toMatch(/paid key|free-tier/i);   // ab kya karein
+  });
+});
+
+/* ══ Hot path apna khud ka fetch na kare ════════════════════════════════════ */
+describe("inbound-email ka extract geminiJson se guzre", () => {
+  it("apna fetch nahi karta — breaker aur timeout usi se milte hain", () => {
+    /* 23 Aug ko yahi jagah 7 second me 8 baar 429 kha gayi thi, kyunki iske paas breaker
+       hi nahi tha. Aur timeout na hone ka matlab tha: Gemini atke to ye request atke, aur
+       forwarder POST ke baad thread label kar deta hai — yaani enquiry gayi. */
+    const src = readFileSync(
+      join(process.cwd(), "src", "app", "api", "webhooks", "inbound-email", "route.ts"), "utf8");
+    expect(src).toContain("geminiJson<Partial<ExtractedLead>>");
+    expect(src).not.toContain("generativelanguage.googleapis.com");
   });
 });

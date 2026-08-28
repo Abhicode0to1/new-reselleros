@@ -163,6 +163,26 @@ function recordFailure(now: number) {
  * waiting a second, the fourth by waiting a day or paying — and "the AI did not return a
  * reply" points at none of them.
  */
+/**
+ * Google ke 429 me `retryDelay` hota hai — "Please retry in 29.43s".
+ *
+ * Ye batata hai ki quota kab khulega, aur isi se tay hota hai ki retry ka koi matlab hai
+ * ya nahi. `null` jab body me kuch na ho.
+ */
+function retryDelaySeconds(body: string): number | null {
+  try {
+    const j = JSON.parse(body) as { error?: { details?: Array<Record<string, unknown>> } };
+    for (const d of j.error?.details ?? []) {
+      /* "29s" ya "29.43s" — dono. Sirf seconds aata hai is API me. */
+      if (typeof d.retryDelay === "string") {
+        const n = Number.parseFloat(d.retryDelay);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+  } catch { /* non-JSON body: kuch nahi keh sakte */ }
+  return null;
+}
+
 function failureReason(status: number, body: string): string {
   let msg = "";
   let retryDelay: string | null = null;
@@ -267,7 +287,27 @@ export async function geminiJson<T>(args: {
          second-long backoff twice. 429 is included — a rate limit is by definition
          temporary — and the breaker still counted the first failure, so a genuine outage
          still trips it rather than being papered over by retries. */
-      const retryable = res.status === 429 || res.status >= 500;
+      /* ── 429 par retry SIRF tab jab Google kehta hai ki jaldi khul jayega ─────
+         28 Aug 2026 ko log me poora 429 payload padha gaya:
+
+             quotaId    GenerateRequestsPerMinutePerProjectPerModel-FreeTier
+             quotaValue 5
+             retryDelay 29s
+
+         Yaani retry 900ms baad hota tha jabki quota 29 SECOND me khulta hai. Wo retry
+         fail hona hi tha — aur usse do nuksaan the: ek bekaar request, aur us request ne
+         ek quota slot kha liya jo kisi doosri asli call ko mil sakta tha. Rate limit par
+         hathauda maarna use theek nahi karta.
+
+         Isliye ab Google ka apna `retryDelay` padha jata hai. Chhota (≤2s) ho to retry —
+         wo asli transient blip hai. Bada ho to seedha stub par, kyunki 29 second rukna is
+         raaste ke liye behtar nahi: `geminiJson` ko webhook bhi bulate hain, aur stub
+         pehle se kaafi accha hai (`extracted` ka fallback lead banata hi hai).
+
+         5xx par ye shart nahi lagti — wo quota nahi, upstream ki hichki hai. */
+      const delay = retryDelaySeconds(body);
+      const quotaShutForAWhile = res.status === 429 && delay !== null && delay > 2;
+      const retryable = (res.status === 429 && !quotaShutForAWhile) || res.status >= 500;
       if (retryable && !args.__isRetry) {
         /* NOT counted as a breaker failure here — the retry records the final outcome.
            The first version of this recorded one on the way past AND one on the retry, so a
