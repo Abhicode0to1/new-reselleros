@@ -29,7 +29,8 @@
     "verify:deploy": "node scripts/verify-deploy.mjs",
     "build:check": "node scripts/build-check.mjs",
     "db:cols": "node scripts/db-cols.mjs",
-    "health:prod": "node scripts/health-prod.mjs"
+    "health:prod": "node scripts/health-prod.mjs",
+    "apps-script:read": "node scripts/apps-script.mjs read"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
