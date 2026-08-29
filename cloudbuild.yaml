@@ -111,23 +111,30 @@ options:
   # The Next.js build is memory-hungry; the default machine has run out on this project's
   # size of app before.
   #
-  # ─── 8 se 32, aur ye ginti kahan se aayi ────────────────────────────────────
-  # 29 Aug 2026 ko ek asli build ko step-dar-step naapa. Kul 567s, aur usme:
+  # ─── 32 CORE AAZMAYE JA CHUKE HAIN. FAAYDA NAHI HUA. DOBARA MAT KARNA. ──────
+  # 29 Aug 2026: ek build step-dar-step naapa (567s), aur 60% waqt akele `next build` me
+  # mila. Lagta tha ki 8 vCPU kam hai — 128 page, 152 API route, 885 file.
   #
-  #     docker build 431s  ├ npm ci 43s · COPY node_modules 29s
-  #                        ├ next compile        156s
-  #                        └ compile ke baad     185s   (typecheck, 280 route ka data,
-  #     push          33s                                standalone output)
-  #     deploy        79s
+  # E2_HIGHCPU_32 par chala kar dekha:
   #
-  # Yaani 60% waqt akele `next build` me. App 128 page + 152 API route + 885 file ki hai,
-  # aur wo 8 vCPU par bani ja rahi thi. Compile ka phase core ke saath scale karta hai.
+  #                        8 vCPU   32 vCPU
+  #     npm ci                43s       38s
+  #     COPY node_modules     29s       27s
+  #     next compile         156s      131s
+  #     compile ke baad      185s      167s   ← sabse bada hissa, mushkil se hila
+  #     ─────────────────────────────────────
+  #     KUL                  567s      505s
   #
-  # Bada machine per-minute mehnga hai (4 guna vCPU), par chalta kam der hai — isliye kul
-  # kharcha 4 guna nahi badhta. Ye Pardeep ka faisla tha, andaze ke saath liya gaya
-  # (~₹12-15 se ~₹25-30 prati deploy), aur agla build naap kar dekha jayega.
+  # 4 guna core, 11% farq. Aur ye 11% bharose layak bhi nahi: 8-core wale pichhle 6 build
+  # **455s se 607s** ke beech the, aur 505 usi range ke andar hai. Ek sample us farq ko shor
+  # se alag nahi kar sakta.
   #
-  # Faayda na dikhe to ye wapas `E2_HIGHCPU_8` kar dena — ek line, aur kuch aur nahi badla.
-  machineType: E2_HIGHCPU_32
+  # Wajah bhi tabel me dikh rahi hai. Sabse bada hissa compile ke BAAD hai — typecheck, 280
+  # route ka data ikattha karna, standalone output. Wo core ke saath nahi badhta. `next
+  # build` yahan CPU se bandha hua hai hi nahi.
+  #
+  # Isliye wapas 8 par. Agar kabhi phir se badhane ka mann ho, to pehle ye tabel padhna —
+  # aur ek nahi, dono taraf ke KAI build naapna, warna jawab shor hi milega.
+  machineType: E2_HIGHCPU_8
 
 timeout: 1800s
