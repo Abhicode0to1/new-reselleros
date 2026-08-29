@@ -4074,6 +4074,29 @@ export type Database = {
         };
       };
       /**
+       * service_role ONLY (migration 20260829040000). Har tenant ka sabse naya snapshot,
+       * taaki nightly cron use database ke BAHAR Cloud Storage par rakh sake —
+       * `backup.snapshots` usi project me hai jiska wo backup hai.
+       *
+       * Ye ek hi call me poore platform ka data lautata hai, isliye pahunch grant se bandhi
+       * hai (`revoke ... from anon, authenticated`) aur function ki body me ek doosra pehra
+       * bhi hai. `supabase/tests/offsite_export_service_role_only.test.sql` dono ko alag-alag
+       * naapta hai — is schema me ye akela function hai jispar wo zaroori hai.
+       */
+      export_snapshots_for_offsite: {
+        Args: { p_since: string };
+        Returns: Array<{
+          tenant_id:   string;
+          tenant_name: string | null;
+          snapshot_id: string;
+          created_at:  string;
+          label:       string | null;
+          kind:        string | null;
+          table_count: number | null;
+          payload:     Json;
+        }>;
+      };
+      /**
        * Owner-only (migration 0241). Takes a pre-reset snapshot and clears the selected
        * sections IN ONE TRANSACTION — either both happen or neither.
        *
