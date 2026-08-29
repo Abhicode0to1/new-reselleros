@@ -213,6 +213,23 @@ const DialogContent = React.forwardRef<
         // `!`, `right-0` from mobile bleeds into md and forces the dialog
         // against the right edge of the viewport.
         "fixed left-0 right-0 bottom-0 z-50 grid w-full",
+        /* ── `[&>*]:min-w-0` — grid ka bachcha sikud sake (29 Aug 2026) ─────────
+           CSS grid me har item ka default `min-width: auto` hota hai, yaani wo apne
+           content se CHHOTA hota hi nahi. Andar ka koi lamba text — Amazon ke product
+           ka 180-akshar wala naam — poore dialog ko chauda kar deta hai, aur dialog
+           apni hi jagah se bahar nikal jata hai.
+
+           Naapa hua, Add Expense par: dabba 559px ka tha aur content 1,382px maang
+           raha tha — **823px bahar**. Screen par uska matlab ye tha ki heading kati
+           hui thi, "GST invoice" ka button aadha bahar tha, aur ek horizontal
+           scrollbar aa gaya tha. Browser me `min-width: 0` lagate hi 1,382 → 559 aur
+           overflow ZERO ho gaya.
+
+           `min-w-0` sirf sikudne DETA hai — wo apne aap kuch chauda nahi karta,
+           isliye kisi dialog ka layout is se toot nahi sakta; sirf wo dialog theek
+           hote hain jo pehle bahar nikal rahe the. Isi kism ka jaal flex me bhi hai,
+           jahan `truncate` bina `min-w-0` ke chup-chaap bekaar rehta hai. */
+        "[&>*]:min-w-0",
         "max-h-[90vh] overflow-y-auto",
         "gap-4 border-t border-hairline bg-paper p-5 pb-6 shadow-2xl",
         "rounded-t-2xl",

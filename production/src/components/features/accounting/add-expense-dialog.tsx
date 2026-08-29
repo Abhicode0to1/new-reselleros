@@ -733,28 +733,57 @@ export function AddExpenseDialog({
                         <span>Isi bill{` (${pending.billNo ? `#${pending.billNo}` : `${formatDate(dupInReview.expense_date)} · ${rupee(dupInReview.amount)}`})`} ki ek entry pehle se hai. Agar ye <b>alag category ka hissa</b> hai to theek — warna duplicate ho jayega.</span>
                       </div>
                     )}
-                    <div className="space-y-1 text-[12px] text-ink-2">
-                      <div className="flex justify-between gap-2">
-                        <span className="text-ink-3">Vendor</span>
-                        <span className="text-ink text-right flex items-center gap-1.5 justify-end flex-wrap">
-                          {pending.vendorName || "—"}
-                          {existing
-                            ? <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald/10 text-emerald px-1.5 py-0.5 text-3xs font-medium"><Icon name="check_circle" size={10} /> Existing</span>
-                            : (pending.vendorName && <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-soft text-amber-ink px-1.5 py-0.5 text-3xs font-medium"><Icon name="plus" size={10} /> New</span>)}
-                        </span>
-                      </div>
-                      {shownGstin && <div className="flex justify-between gap-2"><span className="text-ink-3">GSTIN</span><span className="font-mono text-ink text-right">{shownGstin}</span></div>}
-                      {pending.billNo && <div className="flex justify-between gap-2"><span className="text-ink-3">Bill no.</span><span className="font-mono text-ink text-right">{pending.billNo}</span></div>}
-                      <div className="flex justify-between gap-2"><span className="text-ink-3">Bill date</span><span className="text-right">{pending.billDate || "—"}</span></div>
-                      <div className="flex justify-between gap-2"><span className="text-ink-3">Total{pending.currency !== "INR" ? ` (${pending.currency})` : ""}</span><span className="font-mono text-ink text-right">{pending.total != null ? fmt(pending.total) : "—"}{pending.gst > 0 ? ` · GST ${fmt(pending.gst)}` : ""}</span></div>
-                    </div>
+                    {/* ── Label ke SAATH value, dono kinaron par nahi (29 Aug 2026) ──────
+                        Har row `flex justify-between` thi. Chaudi screen par wo label ko
+                        bilkul baayen aur value ko bilkul daayen phenk deti thi. Pardeep ne
+                        pakda; naapa to haal ye tha:
+
+                            Vendor    1,089px khaali    Coca Industries
+                            GSTIN     1,143px           23EZFPS9892N2Z7
+                            Bill no.  1,185px           TLTK-4450
+
+                        Poore ek hazaar pixel se zyada khaali jagah — aankh label aur uski
+                        value ko jod hi nahi paati. Aur ye panel ka poora kaam hi yahi hai:
+                        aadmi ise PADHKAR confirm karta hai, aur uske baad ye aankde seedha
+                        uski books me jaate hain. Jo jodi padhi na ja sake, wo jaanchi bhi
+                        nahi ja sakti.
+
+                        Ab do-column grid: label utni hi chaudi jitna uska text, value
+                        uske theek baad. `max-w-xl` isliye ki dialog chahe kitna bhi chauda
+                        ho, padhne ki chaudai ek hi rehti hai.
+
+                        `<dl>/<dt>/<dd>` isliye ki ye sach me ek definition list hai —
+                        screen reader ko bhi wahi jodi milti hai jo aankh ko. */}
+                    <dl className="grid max-w-xl grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-[12px] text-ink-2">
+                      <dt className="text-ink-3">Vendor</dt>
+                      <dd className="min-w-0 text-ink flex items-center gap-1.5 flex-wrap">
+                        <span className="break-words">{pending.vendorName || "—"}</span>
+                        {existing
+                          ? <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald/10 text-emerald px-1.5 py-0.5 text-3xs font-medium"><Icon name="check_circle" size={10} /> Existing</span>
+                          : (pending.vendorName && <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-soft text-amber-ink px-1.5 py-0.5 text-3xs font-medium"><Icon name="plus" size={10} /> New</span>)}
+                      </dd>
+                      {shownGstin && <><dt className="text-ink-3">GSTIN</dt><dd className="min-w-0 font-mono text-ink break-all">{shownGstin}</dd></>}
+                      {pending.billNo && <><dt className="text-ink-3">Bill no.</dt><dd className="min-w-0 font-mono text-ink break-all">{pending.billNo}</dd></>}
+                      <dt className="text-ink-3">Bill date</dt>
+                      <dd className="min-w-0">{pending.billDate || "—"}</dd>
+                      <dt className="text-ink-3">Total{pending.currency !== "INR" ? ` (${pending.currency})` : ""}</dt>
+                      <dd className="min-w-0 font-mono text-ink">{pending.total != null ? fmt(pending.total) : "—"}{pending.gst > 0 ? ` · GST ${fmt(pending.gst)}` : ""}</dd>
+                    </dl>
                     {pending.items.length > 0 && (
                       <div className="mt-2 border-t border-hairline pt-2">
                         <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{pending.items.length} item{pending.items.length > 1 ? "s" : ""}</p>
+                        {/* `min-w-0` ke bina `truncate` kuch nahi karta: flex ka bachcha apne
+                            content se chhota hota hi nahi, aur wo lamba naam poore panel ko
+                            bahar dhakel deta hai — yahi 56px ka overflow tha (Amazon ka
+                            product naam 180+ akshar ka hota hai).
+
+                            `title` isliye ki jo kata wo hover par poora mile — a11y §4. */}
                         <ul className="space-y-0.5 max-h-28 overflow-y-auto">
                           {pending.items.map((it, i) => (
                             <li key={i} className="flex justify-between gap-2 text-2xs">
-                              <span className="text-ink-2 truncate">{it.description || "—"}{it.qty ? ` × ${it.qty}` : ""}</span>
+                              <span className="min-w-0 truncate text-ink-2" title={it.description || undefined}>
+                                {it.description || "—"}{it.qty ? ` × ${it.qty}` : ""}
+                              </span>
                               <span className="font-mono text-ink-3 shrink-0">{it.amount ? fmt(Number(it.amount)) : "—"}</span>
                             </li>
                           ))}
