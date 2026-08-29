@@ -404,7 +404,12 @@ export function AddExpenseDialog({
   const catText = showItems ? itemText : noteText;
   React.useEffect(() => {
     if (categoryTouched || categoryAuto) return;
-    const s = suggestCategory(`${catText} ${vendorNameWatch}`);
+    /* Itemise mode me `catText` bill ki item-line se aata hai — wo PRODUCT ka naam hai,
+       operator ka likha note nahi. Us farq ko bataana zaroori hai: ek 180-akshar ke Amazon
+       title me "Travel" ya "Gadi" jaise shabd product ka varnan karte hain, kharche ka
+       nahi. Wajah lib/queries/expenses.ts me likhi hai. */
+    const s = suggestCategory(`${catText} ${vendorNameWatch}`,
+      showItems ? { source: "product" } : undefined);
     if (s) { setValue("category", s); setCategoryAuto(true); }
   }, [catText, vendorNameWatch, categoryTouched, categoryAuto, setValue]);
 

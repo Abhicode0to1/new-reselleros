@@ -80,10 +80,70 @@ const CATEGORY_KEYWORDS: [RegExp, (typeof EXPENSE_CATEGORIES)[number]][] = [
   [/\b(bank ?charge|bank ?fee|processing ?fee|neft|rtgs|imps ?charge|transaction ?fee|convenience ?fee)\b/i, "Bank Charges"],
 ];
 
-export function suggestCategory(text: string): (typeof EXPENSE_CATEGORIES)[number] | null {
+/**
+ * Wo aam angrezi shabd jo kisi PRODUCT ke naam me aa jate hain bina us kharche ke baare me
+ * kuch kahe.
+ *
+ * ─── YE KYUN BANI (29 Aug 2026) ─────────────────────────────────────────────
+ * Pardeep ne screen par pakda: ek gadde ki category "Travel" chuni gayi thi. Product ka
+ * poora naam tha —
+ *
+ *     "NEXTGO Single Bed Cotton Mattress 2.5 x 6.5 Feet | Foldable Lightweight Tufted
+ *      Ruyi Gadi with 1 Pillow & Zipper Cover | Guest Bachelor TRAVEL Floor Sleeping
+ *      Mattress | Blend Pink Multi Color"
+ *
+ * Travel wala rule table me DOOSRE number par hai, aur pehla match jeet jata hai. Us 180+
+ * akshar ke naam me kahin "Travel" aaya, aur gadda safar ka kharcha ban gaya — jo seedha
+ * P&L me galat khaate me jata.
+ *
+ * Is file ka apna test pehle se kehta hai: "suggestCategory's patterns are \b-anchored
+ * because it was written for text an OPERATOR TYPES". Wo sach hai, aur wahi jad hai —
+ * ab ise wo text bhi khilaya jaata hai jo Amazon ke bill se nikalta hai, aur wo alag kism
+ * ka text hai. Operator likhta hai "cab to client" (16 akshar); Amazon likhta hai 180.
+ *
+ * Isliye ye shabd sirf CHHOTE text me ginte hain. Lambe product naam me ye product ka
+ * varnan kar rahe hote hain, kharche ka nahi.
+ */
+const WEAK_IN_PRODUCT_NAMES =
+  /\b(travel|stay|bus|table|cover|copy|register|party|gift|supplies|service ?charge|power|data|gadi|gaadi)\b/i;
+
+/* `gadi` ka yahan hona "travel" se bhi behtar samjhata hai ki ye list kyun chahiye.
+   Us gadde ka poora naam tha "… Foldable Lightweight Tufted **Ruyi Gadi** with 1 Pillow …"
+   Hindi me "gaddi/gadi" ek gadda hi hota hai. Par CATEGORY_KEYWORDS me `gadi` isliye likha
+   gaya tha ki Hinglish note me "gaadi" = vehicle ("gaadi ka petrol"). Ek hi shabd, do
+   bilkul alag cheezein — aur us bill par galat wala jeet gaya.
+
+   Pehle maine maana ki "Travel" shabd hi jad hai. Test ne wo galat sabit kiya: "travel"
+   hataane ke baad bhi row Travel hi rahi, kyunki asli match `gadi` par tha. */
+
+/** Isse lamba text ek note nahi, ek product ka naam hai. */
+const NOTE_MAX_CHARS = 60;
+
+/**
+ * @param opts.source `"product"` = ye text kisi bill ki item-line se aaya hai (product ka
+ *   naam), operator ne likha nahi hai. Aise text me kamzor shabd anadekhe kar diye jate
+ *   hain. Chhoda gaya to purana vyavhaar waisa hi rehta hai — banking wala layer aur baaki
+ *   sab call site bina badle chalte hain.
+ */
+export function suggestCategory(
+  text: string,
+  opts?: { source?: "note" | "product" },
+): (typeof EXPENSE_CATEGORIES)[number] | null {
   const t = (text || "").toLowerCase();
   if (!t.trim()) return null;
-  for (const [re, cat] of CATEGORY_KEYWORDS) if (re.test(t)) return cat;
+
+  /* Kamzor shabd sirf tab anadekhe jab text product ka naam HO — chhota note likhne wale
+     ka "travel to client" pehle jaisa hi chalta rahe. */
+  const ignoreWeak = opts?.source === "product" || t.length > NOTE_MAX_CHARS;
+
+  for (const [re, cat] of CATEGORY_KEYWORDS) {
+    if (!re.test(t)) continue;
+    if (!ignoreWeak) return cat;
+    /* Ye rule match to hua — par kya sirf kisi kamzor shabd ki wajah se? Agar us rule ka
+       koi aur (pakka) shabd bhi mila, to wo bharose layak hai. */
+    const withoutWeak = t.replace(new RegExp(WEAK_IN_PRODUCT_NAMES.source, "gi"), " ");
+    if (re.test(withoutWeak)) return cat;
+  }
   return null;
 }
 
