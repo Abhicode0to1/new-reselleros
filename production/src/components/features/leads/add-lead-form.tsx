@@ -194,9 +194,21 @@ const optionalIntField = (max: number) =>
     z.coerce.number().int().min(0).max(max).optional(),
   );
 
+/* ── Contact ZAROORI, company nahi (29 Aug 2026) ─────────────────────────────
+   Ye theek ulta tha: `company` min(2) maangta tha aur `contact_name` optional tha.
+
+   Pardeep: "bina company ke lead ban sakti hai, par bina contact ke lead nahi ban sakti."
+   Aur wo sirf pasand nahi hai — app khud ise sabit karti hai. Enquiry form wala inbound
+   raasta `company: (p.company ?? "").toString().trim()` likhta hai
+   (inbound-email/route.ts:130), yaani jisne company nahi bharee uski lead `company = ""`
+   ke saath aati hai. `NOT NULL` khaali string nahi rokta.
+
+   To ek taraf app kehti thi "company ke bina lead nahi banegi", aur doosri taraf khud
+   waisi lead banati thi. Ab form wahi maangta hai jo har lead par sach me hota hai —
+   aadmi ka naam. */
 const schema = z.object({
-  company:       z.string().min(2, "Company name is required"),
-  contact_name:  z.string().optional(),
+  company:       z.string().optional().or(z.literal("")),
+  contact_name:  z.string().min(2, "Contact name is required"),
   contact_email: z.string().email("Invalid email").optional().or(z.literal("")),
   contact_phone: z.string().optional(),
   gstin:         z.string().optional().or(z.literal("")),
@@ -536,7 +548,10 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
       const valueVal = (data.value !== undefined && data.value !== null && !Number.isNaN(data.value) && data.value > 0) ? data.value : null;
 
       const sharedPatch = {
-        company:        data.company,
+        /* `leads.company` DB me NOT NULL hai, aur form ab use optional maanta hai.
+           Isliye yahan khaali string — wahi shakl jo inbound raasta pehle se likhta hai
+           (inbound-email/route.ts:130), taaki dono taraf se aayi lead ek jaisi dikhe. */
+        company:        data.company?.trim() ?? "",
         contact_name:   data.contact_name  || null,
         contact_email:  data.contact_email || null,
         contact_phone:  data.contact_phone || null,
@@ -694,12 +709,13 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
 
           <Step show={!useSteps || step === 1}>
 
-          {/* Company name */}
-          <FormField label="Company name" required htmlFor="company">
+          {/* Company name — ab MARZI se. Contact zaroori hai, wajah schema par likhi hai.
+              `autoFocus` bhi contact par chala gaya: cursor us khaane me khulna chahiye jise
+              bharna hi hai. */}
+          <FormField label="Company name" htmlFor="company">
             <Input
               id="company"
-              autoFocus
-              placeholder="e.g. Acme Corp Pvt Ltd"
+              placeholder="e.g. Acme Corp Pvt Ltd (marzi se)"
               error={errors.company?.message}
               {...register("company")}
             />
@@ -751,10 +767,12 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
 
           {/* Contact info — 3 fields in grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <FormField label="Contact name" htmlFor="contact_name">
+            <FormField label="Contact name" required htmlFor="contact_name">
               <Input
                 id="contact_name"
+                autoFocus
                 placeholder="e.g. Rajesh K"
+                error={errors.contact_name?.message}
                 {...register("contact_name")}
               />
             </FormField>

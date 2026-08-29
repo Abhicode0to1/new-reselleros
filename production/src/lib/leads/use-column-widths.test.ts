@@ -204,3 +204,91 @@ describe("writeStoredWidths", () => {
     ).not.toThrow();
   });
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   29 Aug 2026. Leads table se `email` aur `phone` column hataye gaye. Jis browser me
+   pehle kabhi column kheencha gaya tha, wahan purani px-chaudai chalti rahi — table
+   1247px ki jagah me 1086px ki reh gayi (161px khaali), aur bache hue column phir bhi
+   tange rahe. Purana `readStoredWidths` har positive number maan leta tha, chahe us naam
+   ka column ab maujood ho ya na ho.
+   ───────────────────────────────────────────────────────────────────────────── */
+describe("readStoredWidths — purane column ka saved layout", () => {
+  const store = (obj: unknown) => ({ getItem: () => JSON.stringify(obj) });
+  const TODAY = ["select", "company", "wait", "owner", "contact", "actions"] as const;
+
+  it("anjaan column milte hi POORA layout chhod deta hai — ASLI MAAMLA", () => {
+    /* Sirf `email` girana kaafi nahi hota: bachi hui chaudai ek TERAH-column wali table
+       ke liye chuni gayi thi, aur wo GYARAH column ko kabhi nahi bharti. */
+    const out = readStoredWidths(store({ company: 228, email: 210, phone: 118 }), TODAY);
+    expect(out).toEqual({});
+  });
+
+  it("sab naam pehchane hue hon to layout bachta hai", () => {
+    /* User ka kheencha hua naap uski apni cheez hai — bina wajah nahi girana. */
+    const out = readStoredWidths(store({ company: 300, owner: 140 }), TODAY);
+    expect(out).toEqual({ company: 300, owner: 140 });
+  });
+
+  it("`known` na do to purana vyavhaar waisa hi rehta hai", () => {
+    /* Doosre call site na toote — ye parameter jodne ka matlab tha, badalne ka nahi. */
+    expect(readStoredWidths(store({ email: 210 }))).toEqual({ email: 210 });
+  });
+
+  it("khaali `known` par kuch nahi girata", () => {
+    /* Khaali list "koi column nahi" nahi hai — wo "pata nahi" hai. Us par sab gira dena
+       har saved layout ko chup-chaap mita deta. */
+    expect(readStoredWidths(store({ email: 210 }), [])).toEqual({ email: 210 });
+  });
+
+  it("kachra value phir bhi ruk jaati hai, chahe naam sahi ho", () => {
+    const out = readStoredWidths(store({ company: 0, owner: -5, wait: 90 }), TODAY);
+    expect(out).toEqual({ wait: 90 });
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   29 Aug 2026. `actions` (⋯) column `sticky right-0` hai. Jab table container se sirf
+   thodi si chaudi hoti hai, wo apni asli jagah par nahi baithta — kinare par chipak kar
+   padosi ke upar chadh jata hai. Browser me naapa: Follow-up 1423→1514 thi aur actions
+   1464 par chipka tha, yaani Follow-up ke aakhri 50px dab gaye. Screen par header
+   `FOLLC` dikha aur tareekh `28 Au(` — aur wo tareekh is screen ki sabse kaam ki cheez hai.
+   ───────────────────────────────────────────────────────────────────────────── */
+describe("fitToContainer — shrink", () => {
+  it("bina shrink ke bada rehne deta hai — purana vyavhaar nahi badla", () => {
+    /* User ne kheencha ho to uski chaudai uski hai; wahan scroll hi sahi jawab hai. */
+    const out = fitToContainer({ a: 600, b: 600 }, 1000);
+    expect(out).toEqual({ a: 600, b: 600 });
+  });
+
+  it("shrink par container me utaar deta hai — ASLI MAAMLA", () => {
+    const out = fitToContainer({ a: 600, b: 600 }, 1000, { shrink: true });
+    expect(out.a + out.b).toBe(1000);
+  });
+
+  it("anupaat bana rehta hai — chaudi column chaudi hi rehti hai", () => {
+    const out = fitToContainer({ big: 900, small: 300 }, 600, { shrink: true });
+    expect(out.big).toBeGreaterThan(out.small);
+    expect(out.big + out.small).toBe(600);
+  });
+
+  it("jodh THEEK container jitna hota hai, ek pixel kam-zyada nahi", () => {
+    /* Ek pixel ka farq daayen kinare par patli khaali lakeer banata hai, aur wahi 50px
+       wala overlap chhoti shakl me wapas le aata hai. */
+    for (const c of [777, 1000, 1247, 1568]) {
+      const out = fitToContainer({ a: 411, b: 333, c: 222, d: 555 }, c, { shrink: true });
+      expect(Object.values(out).reduce((s, v) => s + v, 0), `container ${c}`).toBe(c);
+    }
+  });
+
+  it("pehle se chhota ho to shrink kuch nahi bigadta", () => {
+    /* Chhota hone par purana raasta chalta hai: bachi jagah baant do. */
+    const a = fitToContainer({ a: 100, b: 100 }, 400);
+    const b = fitToContainer({ a: 100, b: 100 }, 400, { shrink: true });
+    expect(b).toEqual(a);
+  });
+
+  it("container 0 ho to kuch nahi karta", () => {
+    /* Mount par clientWidth 0 aa sakti hai — us par har column MIN par gir jata. */
+    expect(fitToContainer({ a: 600, b: 600 }, 0, { shrink: true })).toEqual({ a: 600, b: 600 });
+  });
+});

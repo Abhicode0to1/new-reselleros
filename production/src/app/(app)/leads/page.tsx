@@ -85,6 +85,7 @@ import { useItems } from "@/lib/queries/items";
 import { MergeLeadsDialog } from "@/components/features/leads/merge-leads-dialog";
 import { computeDuplicates } from "@/lib/leads/duplicates";
 import { isHotLead, isHighValueLead, intentMeta, staleWarning } from "@/lib/leads/heat";
+import { leadDisplayName, leadContactLines, leadCompanyCell } from "@/lib/leads/display-name";
 import { SALES_FOLDERS, inSalesFolder, salesFolderCounts, type SalesFolder } from "@/lib/leads/folders";
 import { SwipeLeadCard } from "@/components/features/leads/swipe-lead-card";
 import { ImportCsvDialog } from "@/components/features/leads/import-csv-dialog";
@@ -3559,8 +3560,9 @@ const GRID_TD_ATOM =
       company ka header) DONO taraf sticky hain, isliye unhe sabse upar rehna hoga,
       warna scroll par wo apne hi body cell ke neeche chale jate hain. */
 const STICK_L_SELECT  = "sticky left-0 z-20";
-/** Company checkbox ke theek baad — isliye 40px, jo `select` ki fixed chaudai hai. */
-const STICK_L_COMPANY =
+/** Pehchan wala column, checkbox ke theek baad — isliye 40px, jo `select` ki fixed
+    chaudai hai. (29 Aug 2026 tak isme Company thi, ab Contact.) */
+const STICK_L_IDENTITY =
   "sticky left-[40px] z-20 border-r-2 border-r-ink-4 " +
   /* ── Jame hue hisse ka kinara, aur ye SAAF dikhna chahiye ──────────────────
      Pehle yahan 0.08 alpha ki chhaya thi — naap kar dekha ki wo lagbhag dikhti hi nahi.
@@ -3586,13 +3588,25 @@ const STICK_HEAD = "z-30";
    column hote hain: tabhi aankh ek hi cheez ko upar-neeche scan kar sakti hai, aur
    tabhi sort karne layak bhi banta hai.
 
-   Yogfal theek 100% rakha gaya hai. `table-fixed` ke saath ye colgroup hi ekmatra jagah
-   hai jo chaudai tay karti hai — aur yahi wo galti hai jo is file me do baar ho chuki
-   hai: column hatate waqt sirf `<th>`/`<td>` hataya aur colgroup chhod diya, jisse har
-   agla column apne padosi ki chaudai pehen leta hai. Column badlo to DONO badlo. */
+   `table-fixed` ke saath ye colgroup hi ekmatra jagah hai jo chaudai tay karti hai — aur
+   yahi wo galti hai jo is file me ab TEEN baar ho chuki hai: column hatate waqt sirf
+   `<th>`/`<td>` hataya aur colgroup chhod diya, jisse har agla column apne padosi ki
+   chaudai pehen leta hai. Column badlo to DONO badlo.
+
+   ⚠️ Yahan pehle likha tha "Yogfal theek 100% rakha gaya hai". **Wo sach nahi tha** —
+   29 Aug 2026 ko jodkar dekha to 109% nikla, aur `table-fixed` us farq ko table ko chauda
+   kar ke poora karta hai. Ye ek aisa comment tha jo apni hi file ki galti chhupa raha tha.
+   Ginti neeche likh di gayi hai; agli baar comment padhne ke bajaye JODNA. */
+/* ── CONTACT pehle, COMPANY baad me (29 Aug 2026) ────────────────────────────
+   Pardeep: "bina company ke lead ban sakti hai, par bina contact ke lead nahi ban sakti."
+   Isliye jama hua (sticky) pehla column — jo scroll karte waqt batata hai ki row KISKI
+   hai — ab contact ka hai. Jo cheez har lead par hoti hai, wahi pehchan ban sakti hai.
+
+   Aur ye sirf table ka badlav nahi hai: dono lead form bhi usi din badle: pehle
+   `company` min(2) maangta tha aur `contact_name` optional tha — theek ulta. */
 const LEADLIST_COL_ORDER = [
-  "select", "company", "wait", "owner", "contact", "email", "phone",
-  "stage", "plan", "seats", "value", "followup", "actions",
+  "select", "contact", "wait", "company",
+  "stage", "plan", "seats", "value", "followup", "owner", "actions",
 ];
 const LEADLIST_COL_WIDTHS: Record<string, string> = {
   /* select FIXED px me — company ko uske bagal me jamana hai (sticky left), aur uske
@@ -3603,8 +3617,26 @@ const LEADLIST_COL_WIDTHS: Record<string, string> = {
      `value` ko di gayi — wo dono nowrap hain, to unme kam jagah ka matlab KATNA hai.
      Aur paisa katna sabse bura hai: "₹3,240" ka "₹3,2…" ban jana ek galat aankda
      dikhata hai, khaali cell nahi. */
-  select: "40px", company: "16%", wait: "7%", owner: "9%", contact: "10%", email: "12%", phone: "10%",
-  stage: "11%", plan: "10%", seats: "5%", value: "9%", followup: "10%", actions: "40px",
+  /* ⚠️ YOGFAL 100% NAHI THA — 29 Aug 2026 ko pakda gaya.
+     Upar likha hai "Yogfal theek 100% rakha gaya hai". Wo galat tha: purani ginti
+     16+7+9+10+12+10+11+10+5+9+10 = **109%** thi. `table-fixed` us 9% ko kahin se
+     nikalta nahi — table ko CHAUDA kar deta hai. Browser me naapa: table 1414px maang
+     rahi thi jabki jagah 1247px thi, yaani 167px daayin taraf bahar. Isi wajah se
+     Follow-up ki tareekh — is screen par sabse kaam ki cheez — scroll ke peeche chhupi
+     thi, aur do column hatane par bhi wo 167px waisa hi raha.
+
+     Ab: 20+6+11+16+11+12+5+9+10 = 100. Ginti badle to JODNA — comment par bharosa nahi. */
+  select: "40px",
+  contact:  "20%",   // Ab ye PEHCHAN wala column hai — naam, email, intent badge, sab yahin.
+  wait:      "6%",   // Sabse chhoti maang (73px); yahan se hi jagah nikli.
+  company:  "16%",   // Ab ek saada vivaran — khaali bhi ho sakta hai.
+  stage:    "11%",   // waisa hi
+  plan:     "12%",   // 10 → 12. "GW · Business Starter" 161px par do line me toot raha tha.
+  seats:     "5%",   // waisa hi
+  value:     "9%",   // waisa hi — nowrap hai, aur paisa katna sabse bura hai
+  followup: "10%",   // waisa hi, par ab wo DIKHTA hai — pehle scroll ke peeche tha
+  owner:    "11%",   // Aakhri data column (29 Aug) — dekha tab jata hai jab kaam kisi aur ko dena ho
+  actions:  "40px",
 };
 
 function LeadListView({
@@ -3928,7 +3960,10 @@ function LeadListView({
      uski kheenchi hui chaudai par chadhna uska kaam mitane jaisa hoga. */
   const autofitted = React.useRef(false);
   React.useEffect(() => {
-    const stored = readStoredWidths();
+    /* Aaj ke column bhi bhejo. Saved layout me koi anjaan naam mila (jaise `email`/`phone`,
+       jo 29 Aug 2026 ko hata diye gaye) to wo poora layout chhod diya jata hai — wo ek
+       aur hi table ka naap tha. Wajah `readStoredWidths` par likhi hai. */
+    const stored = readStoredWidths(undefined, LEADLIST_COL_ORDER);
     /* ── Saheji hui chaudai SIRF tab maani jaye jab wo poori ho (26 Aug 2026) ───
        Ye bug Pardeep ne pakda: "lead ka owner kaun hai show hi nahi ho raha hai".
 
@@ -3984,7 +4019,11 @@ function LeadListView({
         return;
       }
       autofitted.current = true;
-      setColW(fitToContainer(fitted, tableWrapRef.current?.clientWidth ?? 0));
+      /* `shrink` sirf YAHAN. Ye pehli baar khud chaudai chun raha hai, aur agar jodh
+         container se bada raha to sticky `⋯` column apne padosi ke upar chadh kar
+         Follow-up ki tareekh dhak deta hai. Wajah `fitToContainer` par likhi hai.
+         User ke kheenchne wale raaste par ye NAHI jata — wahan scroll hi sahi hai. */
+      setColW(fitToContainer(fitted, tableWrapRef.current?.clientWidth ?? 0, { shrink: true }));
     };
 
     id = requestAnimationFrame(attempt);
@@ -4129,7 +4168,7 @@ function LeadListView({
       className={cn(
         GRID_TH, "relative cursor-pointer select-none hover:text-ink",
         align === "right" && "text-right",
-        sticky && cn("bg-paper-2", STICK_L_COMPANY, STICK_HEAD),
+        sticky && cn("bg-paper-2", STICK_L_IDENTITY, STICK_HEAD),
       )}
     >
       <span className="inline-flex items-center gap-1">
@@ -4277,24 +4316,51 @@ function LeadListView({
                 className="w-4 h-4 accent-amber cursor-pointer"
               />
             </th>
-            {/* Company jama hua hai (sticky) — scroll karte waqt yahi batata hai ki row
-                kiski hai. Dekho STICK_L_COMPANY. */}
-            <SortHeader col="company" label="Company" sticky />
+            {/* CONTACT jama hua hai (sticky) — scroll karte waqt yahi batata hai ki row
+                kiski hai. 29 Aug 2026 tak yahan Company thi; badla isliye ki bina company
+                ke lead ban sakti hai, bina contact ke nahi. Dekho STICK_L_IDENTITY. */}
+            <SortHeader col="contact" label="Contact" sticky />
             {/* Intezaar — company ke theek baad, kyunki ye hi tay karta hai ki aaj kis
                 row par kaam karna hai. Research: 5 minute me jawab = 21 guna sambhavna. */}
             <SortHeader col="wait" label="Wait" />
-            {/* Owner — ye pehle se FILTER chalata tha ("My assigned", unassigned ki ginti)
-                par kahin dikhta nahi tha. Jis cheez par filter lagta hai, wo dikhni
-                chahiye. */}
-            <SortHeader col="owner" label="Owner" />
-            <SortHeader col="contact" label="Contact" />
-            <SortHeader col="email" label="Email" />
-            <SortHeader col="phone" label="Phone" />
+            {/* Contact — naam AUR email ek hi column me, do line par. Phone table se
+                nikal gaya (29 Aug 2026).
+
+                Kyun: us din browser me naapa gaya ki 13 column us jagah me aate hi nahi.
+                Table ko 1414px chahiye the aur mili 1247px — 167px bahar. Aur ye sirf
+                kinare ki dikkat nahi thi: **har ek content column apni zaroorat se chhota
+                tha.**
+
+                    Company  chahiye 366, mili 228      Contact   150 / 113
+                    Email            277 / 210          Phone     152 / 118
+                    Owner            171 / 109          Follow-up 120 /  90
+                    Value            146 /  70          Plan      186 / 161
+
+                Yaani Company ka naam bhi poora nahi dikh raha tha, aur Follow-up ki tareekh
+                — jo is screen par sabse kaam ki cheez hai — daayin taraf scroll ke peeche
+                chhupi thi. Chaudai thoda-thoda badalne se ye theek nahi hota; kam column
+                hi ek matra hal hai.
+
+                Email ko Contact ke neeche rakha, hataya nahi — wo scan karne ke liye
+                zaroori hai (kaun sa lead kis domain se aaya). Phone HATAYA gaya kyunki wo
+                sirf padhne ke liye tha: row ke menu me "Call" (`tel:`) pehle se maujood
+                hai, aur poora number lead kholne par Details me hai. Ek number jo dekha
+                hi jata hai, dial nahi — usko 118px dena mehnga sauda tha. */}
+            <SortHeader col="company" label="Company" />
             <SortHeader col="stage" label="Stage" />
             <SortHeader col="plan" label="Plan" />
             <SortHeader col="seats" label="Seats" align="right" />
             <SortHeader col="value" label="Value" align="right" />
             <SortHeader col="followup" label="Follow-up" />
+            {/* Owner — ye pehle se FILTER chalata tha ("My assigned", unassigned ki ginti)
+                par kahin dikhta nahi tha. Jis cheez par filter lagta hai, wo dikhni chahiye.
+
+                29 Aug 2026: SABSE AAKHIR me chala gaya (Pardeep ke kehne par). Wo ek baar
+                pehle bhi hil chuka hai, aur dono baar wajah ek hi hai — is screen par baayen
+                se daayen kram "kaun · kab · kya" hai, aur owner un teeno me nahi aata. Row
+                par kaam karne ka faisla naam, intezaar aur tareekh se hota hai; owner tab
+                dekha jata hai jab kaam kisi aur ko dena ho. */}
+            <SortHeader col="owner" label="Owner" />
             {/* Actions column — quick action icons on row hover. */}
             <th className={cn("sticky top-0 bg-paper-2 px-3 py-2 text-xs font-semibold text-ink-3 uppercase tracking-wider text-right", STICK_R_ACTIONS, STICK_HEAD)}>
               <span className="sr-only">Quick actions</span>
@@ -4314,6 +4380,12 @@ function LeadListView({
             // lib/leads/heat so the badge, the warning and the smart-view chips
             // can never disagree about the same lead.
             const intent = intentMeta(lead);
+            /* Row ki pehchan: company, warna contact ka naam, warna email. Kahan se aaya
+               ye bhi saath aata hai — dono cell use alag dikhate hain. Dekho
+               lib/leads/display-name.ts. */
+            const leadName     = leadDisplayName(lead);
+            const contactLines = leadContactLines(lead, leadName.source);
+            const companyCell  = leadCompanyCell(lead, leadName.source);
             const stale7 = staleWarning(lead);
             /* Hot first: high value is a fact about the deal, hot is a job for today. 4px
                rather than 2 because at 2 it was there and nobody saw it. */
@@ -4385,7 +4457,7 @@ function LeadListView({
                 </td>
                 <td
                   className={cn(
-                    GRID_TD, STICK_L_COMPANY,
+                    GRID_TD, STICK_L_IDENTITY,
                     isSelected ? "bg-amber-soft" : "bg-paper group-hover:bg-paper-2",
                   )}
                 >
@@ -4401,7 +4473,7 @@ function LeadListView({
                     <div className="min-w-0">
                       {/* Above the name rather than beside it: it reads first, and it cannot push a
                       long company name into an ellipsis the way an inline badge did. */}
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-start gap-1.5">
                         {/* ── Heat: company ke naam se PEHLE, apna column nahi ──────────
                             Ye do baar hila hai, aur dono baar sahi wajah se. Pehle ye
                             "⚡ Warm" wali pill thi jo 166px ke cell ki aadhi jagah kha kar
@@ -4425,7 +4497,48 @@ function LeadListView({
                           </span>
                           <span className="sr-only">{intent.label}</span>
                         </span>
-                        <span className="min-w-0 font-medium text-ink" title={lead.id}>{lead.company}</span>
+                        {/* ── Company khaali ho to bhi row ki PEHCHAN rahe (29 Aug 2026) ──
+                            Pardeep: "kai baar contact ka naam to hota hai lekin company ka
+                            naam nahi hota". Enquiry form wala raasta `company: ""` bharta
+                            hai (inbound-email/route.ts:130) — `NOT NULL` khaali string nahi
+                            rokta — aur us row me sabse zaroori column khaali reh jata tha.
+
+                            Naam `lib/leads/display-name.ts` chunta hai, yahan nahi: wo
+                            batata bhi hai ki naam KAHAN se aaya. Contact ka naam chup-chaap
+                            company ke khaane me daal dena jhooth hota — wahi naam aage quote
+                            aur invoice par company ban kar jayega. Isliye majboori wale naam
+                            ka rang alag hai aur hover par wajah likhi hai.
+
+                            Lamba naam DO line me tootta hai, teen me nahi.
+                            `break-words` pehle se tha, to naam tootta to tha — par bina
+                            hadd ke. Ek chaar-shabdon wala naam row ko teen-chaar line ka
+                            kar deta, aur us row ke saath baaki har cell bhi lamba ho jata,
+                            jisse grid ki wo ek khoobi hi chali jati jiske liye wo banaya
+                            gaya tha: aankh ka ek hi cheez ko upar-neeche scan karna.
+                            `line-clamp-2` do line deta hai aur uske baad "…", to har row
+                            ki oonchai ki ek hadd hai.
+
+                            `items-center` ki jagah `items-start` (parent me) isliye ki do
+                            line ke saath badge naam ke BEECH me chipak jate the.
+
+                            ⚠️ `title` yahan `lead.id` tha — yaani hover par company ka naam
+                            nahi, ek UUID dikhta tha. Jo cell me kata, wo hover par poora
+                            milna chahiye (accessibility-review §4); ek id dikhana us waade
+                            ko poora karta hua LAGTA hai aur karta nahi. */}
+                        <span
+                          className={cn(
+                            "min-w-0 font-medium line-clamp-2",
+                            /* Sirf CONTACT hi asli pehchan hai. Baaki teeno (company, email,
+                               "(no name)") majboori hain, aur italic + halka rang batata hai
+                               ki ye wo naam nahi hai jo hona chahiye tha. Ye shart 29 Aug ko
+                               `company` par thi — swap ke baad wo hi na badalne se har row
+                               italic ho gayi thi, aur wo screen par turant dikh gaya. */
+                            leadName.source === "contact" ? "text-ink" : "text-ink-2 italic",
+                          )}
+                          title={leadName.hint ?? leadName.label}
+                        >
+                          {leadName.label}
+                        </span>
                         {/* Stale nudge — fires at 7 days, BEFORE Cold at 10, so
                             there is still a window to save the deal. */}
                         {stale7 && (
@@ -4448,11 +4561,27 @@ function LeadListView({
                           </button>
                         )}
                       </div>
-                      {/* Contact ka naam, email aur phone yahan se NIKAL kar apne-apne
-                          column me chale gaye (26 Aug 2026, "jaise excel sheet banti
-                          hai"). Ek cell me teen line ka matlab tha ~85px ki row; grid me
-                          wo ek line hai, aur aankh ek hi cheez ko upar-neeche scan kar
-                          sakti hai — spreadsheet ka poora faayda yahi hai. */}
+                      {/* Email — naam ke theek neeche, DOOSRI line par (29 Aug 2026).
+                          Apna column nahi: teen alag column (contact · email · phone) hi wo
+                          wajah the jinse table 167px bahar nikal rahi thi aur Follow-up ki
+                          tareekh scroll ke peeche chhup jati thi.
+
+                          Yahan hone ki wajah ye hai ki ye USI aadmi ki cheez hai jiska naam
+                          upar likha hai — do line, ek pehchan. Rang se alag, size se nahi:
+                          is screen par pehle se 2,000+ element 12px se neeche hain, aur ek
+                          aur chhota size padhna aasan nahi karta.
+
+                          Jo naam pehle hi upar chhap chuka ho wo yahan dobara nahi aata —
+                          `leadContactLines` wahi tay karta hai. */}
+                      {contactLines.email ? (
+                        <span className="block truncate text-xs text-ink-3" title={contactLines.email}>
+                          {contactLines.email}
+                        </span>
+                      ) : null}
+                      {/* Contact ka naam aur phone 26 Aug 2026 ko yahan se NIKAL kar apne
+                          column me gaye the ("jaise excel sheet banti hai"). Naam 29 Aug ko
+                          wapas AAYA — par pehchan bankar, ek line ke roop me nahi; aur phone
+                          nahi aaya, wo row ke menu me "Call" ban kar rehta hai. */}
                       {(() => {
                         const tk = openTaskByLead.get(lead.id);
                         if (!tk) return null;
@@ -4516,78 +4645,34 @@ function LeadListView({
                   })()}
                 </td>
 
-                {/* ── Owner ─────────────────────────────────────────────────────────────
-                    Initials ka rang `users.color` se aata hai — wahi jo /team aur tasks
-                    par lagta hai, isliye ek hi aadmi har screen par ek jaisa dikhta hai.
 
-                    Bina owner wali lead "—" nahi, "Unassigned" dikhati hai: khaali cell
-                    "data nahi hai" jaisa padha jata hai, jabki bina owner hona ek ASLI
-                    haalat hai jispar kaam karna hai (page ki apni "unassigned" ginti isi
-                    par chalti hai). */}
-                <td className={GRID_TD_ATOM}>
-                  {(() => {
-                    const o = lead.owner_id ? ownerById.get(lead.owner_id) : undefined;
-                    if (!lead.owner_id) {
-                      return <span className="text-2xs text-ink-4">Unassigned</span>;
-                    }
-                    if (!o) {
-                      /* owner_id hai par us naam ka user nahi mila — nikala hua ya
-                         deactivate kiya gaya member. Chup rehne se behtar hai kehna. */
-                      return <span className="text-2xs text-ink-4" title={lead.owner_id}>Unknown user</span>;
-                    }
-                    return (
-                      <span
-                        className="inline-flex items-center gap-1.5"
-                        title={`${o.full_name ?? "—"}${o.email ? ` · ${o.email}` : ""}`}
-                      >
-                        {/* ── `<Avatar>`, apna gol daayra NAHI (26 Aug 2026) ────────────
-                            Pehla version ek haath se bana span tha jo `o.color` ko seedha
-                            `backgroundColor` me daal deta tha. Wo TOOTA hua tha, aur
-                            Pardeep ne pakda: "owner ko alag sa show kyo kar raha hai" —
-                            ek row me badge tha, doosri me nahi.
+                {/* Contact — naam upar, email neeche. Ek column, do line. Header par
+                    wajah aur naap likhe hain.
 
-                            Wajah: `users.color` me CSS colour nahi, TOKEN ka naam hai.
-                            `indigo` sanyog se ek asli CSS colour bhi hai (isliye Darshan
-                            ka circle ban gaya), par `amber` CSS me hai hi nahi — to
-                            Pardeep ka circle transparent ho gaya. Ek adha-chalta hua bug,
-                            jo isi wajah se "styling ki asangati" jaisa dikha.
-
-                            `<Avatar>` isi ke liye bana hai — uske apne docstring ka example
-                            `<Avatar initials="PA" color="amber" />` hai. Maine use dekha hi
-                            nahi (CLAUDE.md §14: pehle maujood component dhoondho), aur
-                            uske saath ek hardcoded `#6b7280` bhi daal diya tha, jo §5 saaf
-                            mana karta hai. Dono galtiyan ek hi line me thin. */}
-                        <Avatar
-                          size="xs"
-                          initials={o.initials ?? undefined}
-                          name={o.full_name ?? o.email ?? undefined}
-                          color={AVATAR_TOKENS.includes(o.color ?? "") ? (o.color as AvatarColor) : "muted"}
-                        />
-                        <span className="truncate text-xs text-ink-2">{o.full_name ?? o.email ?? "—"}</span>
-                      </span>
-                    );
-                  })()}
-                </td>
-
-                {/* Contact · Email · Phone — teen alag column. Har ek `truncate` ke saath
-                    `title` bhi rakhta hai: jo cell me kata, wo hover par poora milta hai
-                    (accessibility-review §4 — truncate kiya hua text screen reader ke
+                    `title` dono par rakha hai: jo cell me kata, wo hover par poora milta
+                    hai (accessibility-review §4 — truncate kiya hua text screen reader ke
                     liye hamesha ke liye chala jata hai). Khaali par "—" chhapta hai, kyunki
-                    khaali cell aur "data hai par dikha nahi" grid me ek jaise lagte hain. */}
+                    khaali cell aur "data hai par dikha nahi" grid me ek jaise lagte hain.
+
+                    Farq rang se hai, size se nahi. Dono line `text-xs` hain — naam `ink-2`,
+                    email `ink-3`. Chhota size dena aasan tha, par is screen par pehle se
+                    2,000+ element 12px se neeche hain aur WCAG AA ka 4.5:1 unpar poora
+                    lagta hai; ek aur size jodne se wo ginti badhti, padhna nahi. */}
+                {/* Company — ab ek saada vivaran, pehchan nahi (29 Aug 2026). Khaali ho
+                    sakti hai, aur us par "—" chhapta hai: khaali cell aur "data hai par
+                    dikha nahi" grid me ek jaise lagte hain.
+
+                    Jab company hi pehchan ban kar upar chali gayi ho (contact ka naam nahi
+                    tha), to yahan DOBARA nahi chhapti — ek hi naam ek row me do baar
+                    dikhna galti jaisa lagta hai. Faisla `leadCompanyCell` karta hai. */}
                 <td className={GRID_TD}>
-                  <span className="block text-xs text-ink-2" title={lead.contact_name ?? ""}>
-                    {lead.contact_name?.trim() || "—"}
-                  </span>
-                </td>
-                <td className={GRID_TD}>
-                  <span className="block break-all text-xs text-ink-2" title={lead.contact_email ?? ""}>
-                    {lead.contact_email?.trim() || "—"}
-                  </span>
-                </td>
-                <td className={GRID_TD_ATOM}>
-                  <span className="block truncate text-xs text-ink-2 tabular-nums" title={lead.contact_phone ?? ""}>
-                    {lead.contact_phone?.trim() || "—"}
-                  </span>
+                  {companyCell ? (
+                    <span className="block truncate text-xs text-ink-2" title={companyCell}>
+                      {companyCell}
+                    </span>
+                  ) : (
+                    <span className="block text-xs text-ink-3">—</span>
+                  )}
                 </td>
 
                 {/* ── Stage: PADHNE ke liye, badalne ke liye nahi (26 Aug 2026) ────────
@@ -4734,6 +4819,59 @@ function LeadListView({
                 {/* Expected close date. An empty one is not styled as an error — most
                     leads legitimately have none — but the forecast counts it as undated
                     and says so, so the gap is visible somewhere rather than nowhere. */}
+                {/* ── Owner ─────────────────────────────────────────────────────────────
+                    Initials ka rang `users.color` se aata hai — wahi jo /team aur tasks
+                    par lagta hai, isliye ek hi aadmi har screen par ek jaisa dikhta hai.
+
+                    Bina owner wali lead "—" nahi, "Unassigned" dikhati hai: khaali cell
+                    "data nahi hai" jaisa padha jata hai, jabki bina owner hona ek ASLI
+                    haalat hai jispar kaam karna hai (page ki apni "unassigned" ginti isi
+                    par chalti hai). */}
+                <td className={GRID_TD_ATOM}>
+                  {(() => {
+                    const o = lead.owner_id ? ownerById.get(lead.owner_id) : undefined;
+                    if (!lead.owner_id) {
+                      return <span className="text-2xs text-ink-4">Unassigned</span>;
+                    }
+                    if (!o) {
+                      /* owner_id hai par us naam ka user nahi mila — nikala hua ya
+                         deactivate kiya gaya member. Chup rehne se behtar hai kehna. */
+                      return <span className="text-2xs text-ink-4" title={lead.owner_id}>Unknown user</span>;
+                    }
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1.5"
+                        title={`${o.full_name ?? "—"}${o.email ? ` · ${o.email}` : ""}`}
+                      >
+                        {/* ── `<Avatar>`, apna gol daayra NAHI (26 Aug 2026) ────────────
+                            Pehla version ek haath se bana span tha jo `o.color` ko seedha
+                            `backgroundColor` me daal deta tha. Wo TOOTA hua tha, aur
+                            Pardeep ne pakda: "owner ko alag sa show kyo kar raha hai" —
+                            ek row me badge tha, doosri me nahi.
+
+                            Wajah: `users.color` me CSS colour nahi, TOKEN ka naam hai.
+                            `indigo` sanyog se ek asli CSS colour bhi hai (isliye Darshan
+                            ka circle ban gaya), par `amber` CSS me hai hi nahi — to
+                            Pardeep ka circle transparent ho gaya. Ek adha-chalta hua bug,
+                            jo isi wajah se "styling ki asangati" jaisa dikha.
+
+                            `<Avatar>` isi ke liye bana hai — uske apne docstring ka example
+                            `<Avatar initials="PA" color="amber" />` hai. Maine use dekha hi
+                            nahi (CLAUDE.md §14: pehle maujood component dhoondho), aur
+                            uske saath ek hardcoded `#6b7280` bhi daal diya tha, jo §5 saaf
+                            mana karta hai. Dono galtiyan ek hi line me thin. */}
+                        <Avatar
+                          size="xs"
+                          initials={o.initials ?? undefined}
+                          name={o.full_name ?? o.email ?? undefined}
+                          color={AVATAR_TOKENS.includes(o.color ?? "") ? (o.color as AvatarColor) : "muted"}
+                        />
+                        <span className="truncate text-xs text-ink-2">{o.full_name ?? o.email ?? "—"}</span>
+                      </span>
+                    );
+                  })()}
+                </td>
+
                 {/* Quick actions — dark panel that opens from the ⋯ (hover/click/
                     focus) and stays open while the panel itself is hovered. */}
                 <RowActions lead={lead} isSelected={isSelected} onSendQuote={onSendQuote} onFollowUp={onFollowUp} onWhatsApp={onWhatsApp} />

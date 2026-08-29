@@ -50,9 +50,12 @@ import { Icon } from "@/components/ui/icon";
 import { useCreateLead } from "@/lib/queries/leads";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
+/* Contact zaroori, company nahi — wajah `add-lead-form.tsx` ke schema par likhi hai.
+   Dono form ek saath badle gaye: do jagah ek hi niyam ka aadha lagu hona sabse aasan
+   tarika hai us niyam ko chup-chaap todne ka. */
 const schema = z.object({
-  company:       z.string().min(2, "Company name is required"),
-  contact_name:  z.string().optional(),
+  company:       z.string().optional().or(z.literal("")),
+  contact_name:  z.string().min(2, "Contact name is required"),
   contact_email: z.string().email("Invalid email").optional().or(z.literal("")),
   contact_phone: z.string().optional(),
 });
@@ -129,7 +132,10 @@ export function QuickAddLeadForm({ open, onOpenChange }: QuickAddLeadFormProps) 
       // as a raw lead awaiting qualification.
       await createLead.mutateAsync({
         id,
-        company:        data.company,
+        /* `leads.company` DB me NOT NULL hai, aur form ab use optional maanta hai.
+           Isliye yahan khaali string — wahi shakl jo inbound raasta pehle se likhta hai
+           (inbound-email/route.ts:130), taaki dono taraf se aayi lead ek jaisi dikhe. */
+        company:        data.company?.trim() ?? "",
         contact_name:   data.contact_name  || null,
         contact_email:  data.contact_email || null,
         contact_phone:  data.contact_phone || null,
@@ -143,7 +149,9 @@ export function QuickAddLeadForm({ open, onOpenChange }: QuickAddLeadFormProps) 
       });
 
       toast.dismiss();
-      toast.success(`${data.company} added to your inbox`, {
+      /* Naam contact ka, company ka nahi. Company ab khaali ho sakti hai, aur tab ye
+         toast " added to your inbox" ban jata — ek khaali naam, jo bug jaisa dikhta hai. */
+      toast.success(`${data.contact_name} added to your inbox`, {
         description: "Qualify it later with plan + seats from the lead drawer",
         duration: 5000,
         action: {
@@ -181,12 +189,13 @@ export function QuickAddLeadForm({ open, onOpenChange }: QuickAddLeadFormProps) 
           className="flex flex-col flex-1 min-h-0 min-w-0 w-full"
         >
           <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
-          {/* Company */}
-          <FormField label="Company name" required htmlFor="q-company">
+          {/* Company — ab MARZI se. Contact zaroori hai, wajah schema par likhi hai.
+              `autoFocus` bhi contact par chala gaya: cursor us khaane me khulna chahiye
+              jise bharna hi hai, us me nahi jise chhoda ja sakta hai. */}
+          <FormField label="Company name" htmlFor="q-company">
             <Input
               id="q-company"
-              autoFocus
-              placeholder="e.g. Acme Corp Pvt Ltd"
+              placeholder="e.g. Acme Corp Pvt Ltd (marzi se)"
               error={errors.company?.message}
               {...register("company")}
             />
@@ -213,10 +222,12 @@ export function QuickAddLeadForm({ open, onOpenChange }: QuickAddLeadFormProps) 
           )}
 
           {/* Contact name */}
-          <FormField label="Contact name" htmlFor="q-contact-name">
+          <FormField label="Contact name" required htmlFor="q-contact-name">
             <Input
               id="q-contact-name"
+              autoFocus
               placeholder="e.g. Rajesh K"
+              error={errors.contact_name?.message}
               {...register("contact_name")}
             />
           </FormField>
