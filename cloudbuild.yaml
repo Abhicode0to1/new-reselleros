@@ -53,7 +53,24 @@ steps:
       # badalta SHA build cache nahi todta.
       - --build-arg=BUILD_SHA=$SHORT_SHA
       - --build-arg=BUILD_ID=$BUILD_ID
-      # Reuse the previous image's layers so a typical build is minutes, not tens of them.
+      # ⚠️ YE FLAG LAGI HUI HAI PAR KABHI CHALI NAHI. 29 Aug 2026 par naapa: ek build ke
+      # poore log me **ek bhi `CACHED` line nahi** — har layer har baar naye sire se banti
+      # hai. Yahan pehle likha tha "Reuse the previous image's layers so a typical build is
+      # minutes, not tens of them", jo kabhi sach nahi tha.
+      #
+      # Wajah Cloud Build ka jaana-maana jaal hai: `--cache-from` tab hi chalta hai jab wo
+      # image pehle `docker pull` ki gayi ho, aur har build ek KHAALI machine par shuru hota
+      # hai. Yahan koi pull step hai hi nahi.
+      #
+      # Jaan-boojhkar theek NAHI kiya gaya. Faayda sirf `npm ci` (43s) aur
+      # `COPY --from=deps` (29s) tak hai — 431s me se 72s, aur wo bhi tab jab
+      # package-lock.json na badla ho (pichhle 30 commit me 8 baar badla). Uske liye teen
+      # naye step chahiye (deps stage ka apna tag, do pull, do cache-from), aur DEPLOY KA
+      # RAASTA TODNA 72 SECOND SE KAHIN MEHNGA HAI. Asli waqt `next build` me jaata hai
+      # (341s) — wo machineType se ladа gaya, neeche dekhein.
+      #
+      # Flag isliye chhodi hai ki wo nuksaan nahi karti, aur jis din pull step judega us din
+      # kaam karne lagegi.
       - --cache-from=$_IMAGE:latest
       - .
 
@@ -93,6 +110,24 @@ options:
   logging: CLOUD_LOGGING_ONLY
   # The Next.js build is memory-hungry; the default machine has run out on this project's
   # size of app before.
-  machineType: E2_HIGHCPU_8
+  #
+  # ─── 8 se 32, aur ye ginti kahan se aayi ────────────────────────────────────
+  # 29 Aug 2026 ko ek asli build ko step-dar-step naapa. Kul 567s, aur usme:
+  #
+  #     docker build 431s  ├ npm ci 43s · COPY node_modules 29s
+  #                        ├ next compile        156s
+  #                        └ compile ke baad     185s   (typecheck, 280 route ka data,
+  #     push          33s                                standalone output)
+  #     deploy        79s
+  #
+  # Yaani 60% waqt akele `next build` me. App 128 page + 152 API route + 885 file ki hai,
+  # aur wo 8 vCPU par bani ja rahi thi. Compile ka phase core ke saath scale karta hai.
+  #
+  # Bada machine per-minute mehnga hai (4 guna vCPU), par chalta kam der hai — isliye kul
+  # kharcha 4 guna nahi badhta. Ye Pardeep ka faisla tha, andaze ke saath liya gaya
+  # (~₹12-15 se ~₹25-30 prati deploy), aur agla build naap kar dekha jayega.
+  #
+  # Faayda na dikhe to ye wapas `E2_HIGHCPU_8` kar dena — ek line, aur kuch aur nahi badla.
+  machineType: E2_HIGHCPU_32
 
 timeout: 1800s
