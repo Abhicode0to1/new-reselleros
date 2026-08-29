@@ -7,6 +7,8 @@
  */
 
 // A single line on the bill (product/service the supplier charged for).
+import { EXPENSE_CATEGORIES } from "@/lib/accounting/expense-categories";
+
 export interface ExtractedLine {
   description?: string | null;
   qty?:         number | null;
@@ -28,6 +30,8 @@ export interface ExtractedBill {
   total?:        number | null;   // incl tax, in the bill's currency
   line_items?:   ExtractedLine[] | null;
   category_guess?: string | null;
+  /** Overhead kharche ki category — sirf EXPENSE_CATEGORIES me se ek, warna null. */
+  expense_category?: string | null;
 }
 
 // Keep decimals — foreign bills (USD) need cents; INR gets rounded in the form.
@@ -56,6 +60,20 @@ export function normaliseCurrency(v: unknown): string {
  * Pure sanitiser for the Gemini payload → the fields the form consumes.
  * Amounts stay in the bill's own currency; the form converts to ₹ for the books.
  */
+/**
+ * AI ne jo category kahi, use app ki apni list se milao.
+ *
+ * Bade-chhote akshar aur aage-peeche ke space maaf hain (model "office supplies" bhi likh
+ * sakta hai aur "Office Supplies" bhi). Uske alawa kuch nahi — jo list me nahi, wo `null`.
+ * Aur "Salaries" kabhi nahi, chahe model kitna hi pakka ho: tankhwah Payroll se aati hai,
+ * aur use ek aam kharcha bana dena payroll ke saare pehre (TDS, PF, payslip) chhod dena hai.
+ */
+export function matchExpenseCategory(v: unknown): string | null {
+  const t = (typeof v === "string" ? v : "").trim().toLowerCase();
+  if (!t || t === "salaries") return null;
+  return EXPENSE_CATEGORIES.find((c) => c.toLowerCase() === t) ?? null;
+}
+
 export function sanitizeExtractedBill(ai: ExtractedBill) {
   const lines = Array.isArray(ai.line_items) ? ai.line_items : [];
   return {
@@ -78,5 +96,9 @@ export function sanitizeExtractedBill(ai: ExtractedBill) {
       }))
       .filter((l) => l.description || l.amount !== 0),
     category_guess: (ai.category_guess ?? "").toString().trim() || null,
+    /* AI ka jawab list se MILAYA jata hai, seedha liya nahi. Ye field aage P&L me jaati
+       hai; ek anjaan string wahan pahunch kar ek naya khaata bana degi jise kisi ne
+       manzoor nahi kiya. "Salaries" yahan se kabhi nahi — wo Payroll ka kaam hai. */
+    expense_category: matchExpenseCategory(ai.expense_category),
   };
 }

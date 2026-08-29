@@ -42,6 +42,29 @@ export const BILL_PROMPT =
   '    { "description": string, "qty": number|null, "unit_price": number|null, "amount": number }\n' +
   "  ],\n" +
   '  "category_guess": string|null      // "COGS-Workspace" Google, "COGS-M365" Microsoft, "COGS-Zoho" Zoho, else "COGS-Other" or null\n' +
+  /* ── Expense ki category BHI yahin se (30 Aug 2026) ─────────────────────────
+     Ye Pardeep ka sujhav tha — "isme AI ko use nahi kar sakte?" — aur wo theek tha.
+
+     Pehle ye kaam ek keyword-table karta tha (`suggestCategory`), jo OPERATOR ke likhe
+     chhote note ke liye bana tha. Amazon ke 180-akshar wale product title par wo tootta
+     hai: ek gadda "Travel" ban gaya, kyunki uske naam me "Ruyi Gadi" tha aur table me
+     `gadi` = gaadi (vehicle) likha hai. Us bug ko theek karne ke BAAD bhi, 6 asli item me
+     se 3 par koi jawab nahi aaya, ek galat aaya (WiFi heater → Internet & Phone), aur do
+     lagbhag ek jaise bag ko do alag jawab mile.
+
+     AI ke paas POORA bill hai — vendor, har line item, HSN — jo ek regex se bahut zyada
+     hai. Aur ye usi call me aata hai jo pehle se ho rahi hai: koi nayi request nahi, koi
+     extra intezaar nahi, sirf ek aur field.
+
+     "Salaries" list me jaan-boojhkar NAHI hai — wo Payroll se aati hai, aur use yahan se
+     chhune dena tankhwah ko ek aam kharcha bana dega. */
+  '  "expense_category": string|null    // If this is an OVERHEAD / running-cost bill, pick EXACTLY ONE of:\n' +
+  '     Hosting, Software, Office Rent, Marketing, Advertising, Business Promotion, Staff Welfare,\n' +
+  '     Travel, Professional Services, Bank Charges, Internet & Phone, Utilities, Office Supplies,\n' +
+  '     Equipment, Repairs & Maintenance, Insurance, Other.\n' +
+  '     Judge by WHAT THE THING IS, not by words in its marketing name: a "Travel Backpack" bought\n' +
+  '     for the office is Office Supplies, not Travel. Travel means a journey actually taken.\n' +
+  '     Use null when unsure. NEVER "Salaries".\n' +
   "}\n" +
   "RULES: Keep amounts in the bill's OWN currency (do NOT convert). Keep decimals (e.g. 265.50). " +
   "Never invent a value — use null (or [] for line_items) if the bill does not clearly show it. " +

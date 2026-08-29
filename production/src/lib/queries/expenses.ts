@@ -26,26 +26,8 @@ export type Expense = ExpenseRow;
 // Welfare = spend on your own TEAM (birthday cake, staff lunch, Diwali gift to staff).
 // Note: GST ITC on gifts + food is blocked (CGST s.17(5)) — record such bills
 // with GST paid = 0.
-export const EXPENSE_CATEGORIES = [
-  "Hosting",
-  "Software",
-  "Salaries",
-  "Office Rent",
-  "Marketing",
-  "Advertising",
-  "Business Promotion",
-  "Staff Welfare",
-  "Travel",
-  "Professional Services",
-  "Bank Charges",
-  "Internet & Phone",
-  "Utilities",
-  "Office Supplies",
-  "Equipment",
-  "Repairs & Maintenance",
-  "Insurance",
-  "Other",
-] as const;
+export { EXPENSE_CATEGORIES } from "@/lib/accounting/expense-categories";
+import { EXPENSE_CATEGORIES } from "@/lib/accounting/expense-categories";
 
 /**
  * Guess an expense category from the free-text "what was this for?" note.

@@ -216,6 +216,8 @@ export function AddExpenseDialog({
     igst?:       number;
     cgst?:       number;
     sgst?:       number;
+    /** AI ki chuni hui category — list se milayi hui, warna undefined. */
+    aiCategory?: string;
     billType:    "gst" | "kaccha";
     items:       { description: string; qty: string; unit_price: string; amount: string }[];
   };
@@ -295,6 +297,7 @@ export function AddExpenseDialog({
         billDate:   f.bill_date   ? String(f.bill_date)   : undefined,
         currency:   cur,
         total:      f.total != null ? Number(f.total) : undefined,
+        aiCategory: typeof f.expense_category === "string" && f.expense_category ? f.expense_category : undefined,
         igst:       eIgst || undefined,
         cgst:       eCgst || undefined,
         sgst:       eSgst || undefined,
@@ -322,6 +325,11 @@ export function AddExpenseDialog({
     // Match the invoice's GSTIN (then name) against the Vendors master:
     //  match   → link to that existing vendor (no duplicate),
     //  no match → a new vendor is added on save (carrying this GSTIN).
+    /* AI ki category PEHLE. Wo poora bill dekh kar bolti hai — vendor, har line item, HSN —
+       jabki keyword-table sirf naam par chalti hai aur product ke naam par tootti hai (ek
+       gadda "Travel" ban gaya tha, kyunki uske naam me "Ruyi Gadi" tha). Keyword ab bhi
+       fallback hai, aur chhote note par wahi behtar rehti hai. */
+    if (pending.aiCategory) { setValue("category", pending.aiCategory); setCategoryAuto(true); }
     setAiHeads(
       pending.igst || pending.cgst || pending.sgst
         ? { igst: pending.igst ?? 0, cgst: pending.cgst ?? 0, sgst: pending.sgst ?? 0 }
