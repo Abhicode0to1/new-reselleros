@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * supabase/tests/ ke 42 SQL regression test ek saath chalao.
+ * supabase/tests/ ke saare SQL regression test ek saath chalao.
  *
  * ─── YE KYUN HAI ────────────────────────────────────────────────────────────
  * Ye test paise wale raaste ki hifazat karte hain — `record_payment` ka idempotency,
@@ -76,22 +76,69 @@ console.log("canary laal — harness sach me fail hota hai. ab asli test.\n");
 const list = only ? files.filter((f) => f.includes(only)) : files;
 if (!list.length) { console.error(`koi test "${only}" se mel nahi khata`); process.exit(2); }
 
+const nameOf = (f) => f.replace(/\.test\.sql$|\.sql$/, "");
+const t0 = Date.now();
+
+/* ── EK HI CALL, jab tak sab hara hai ──────────────────────────────────────
+ *
+ * 29 Aug 2026 par naapa: `select 1` bhi **4.5 second** leta hai. Poora waqt CLI ke shuru
+ * hone aur login-role ke handshake me jaata hai — SQL me nahi. Yaani 43 alag call ka 3+
+ * minute lagbhag poora intezaar tha, kaam nahi.
+ *
+ * Pehle process SAMANANTAR chalane ki koshish ki. Wo **dheemi** nikli — 220s se 281s — aur
+ * 6 test aapas ki takkar se laal ho gaye. Wo raasta chhod diya gaya, aur ye tippani isliye
+ * hai ki koi use dobara na aazmaye.
+ *
+ * Sab kuch ek file me jod kar EK call: **8 second**. Har test apne `begin; … rollback;` me
+ * lipta hai, isliye jodne se koi haalat ek se doosre me nahi behti.
+ *
+ * ── AUR YE KAISE PATA KI SAB CHALE ──
+ * Ek call me CLI sirf AAKHRI statement ka nateeja dikhata hai, to 43 "PASS" line dikhti hi
+ * nahi. Isliye sabse aakhir me ek MARKER lagta hai. Marker output me hai = script poori
+ * chali. Marker nahi hai = beech me kahin ruk gayi, chahe exit code kuch bhi kahe — aur us
+ * soorat me ye ek-ek karke dobara chalta hai, taaki naam pata chale.
+ *
+ * Yaani tez raasta sirf tab, jab sab hara ho. Kuch laal hua to poori keemat lagti hai —
+ * aur us waqt keemat maayne nahi rakhti, naam maayne rakhta hai. */
+const MARKER = "SQL_SUITE_REACHED_THE_END";
+const bundle = join(tmp, "bundle.sql");
+writeFileSync(
+  bundle,
+  list.map((f) => readFileSync(join(DIR, f), "utf8")).join("\n\n") +
+    `\n\nselect '${MARKER}' as marker;\n`,
+);
+
+const fast = runOne(bundle);
+const reachedEnd = fast.out.includes(MARKER);
+
 const failed = [];
-let n = 0;
-for (const f of list) {
-  n++;
-  const t0 = Date.now();
-  const r = runOne(join(DIR, f));
-  const secs = ((Date.now() - t0) / 1000).toFixed(1);
-  const name = f.replace(/\.test\.sql$|\.sql$/, "");
-  if (r.fatal) {
-    console.error(`\n RUKA [${n}/${list.length}] ${name} — ${r.fatal}`);
-    console.error(" Ye test ka fail nahi hai. Machine par process khatam ho gaye — dobara chalao.");
-    process.exit(4);
+if (fast.ok && reachedEnd) {
+  for (const f of list) console.log(` ok   ${nameOf(f)}`);
+} else {
+  console.log(
+    fast.ok
+      ? " ek-saath wala run beech me ruk gaya (marker nahi mila) — ab ek-ek karke\n"
+      : " ek-saath wale run me kuch laal hai — ab ek-ek karke, taaki naam pata chale\n",
+  );
+  let n = 0;
+  for (const f of list) {
+    n++;
+    const r = runOne(join(DIR, f));
+    if (r.fatal) {
+      console.error(`\n RUKA — ${nameOf(f)}: ${r.fatal}`);
+      console.error(" Ye test ka fail nahi hai. Machine par process khatam ho gaye — dobara chalao.");
+      process.exit(4);
+    }
+    console.log(`${r.ok ? " ok  " : " FAIL"} [${n}/${list.length}] ${nameOf(f)}`);
+    if (!r.ok) failed.push({ name: nameOf(f), out: r.out });
   }
-  console.log(`${r.ok ? " ok  " : " FAIL"} [${n}/${list.length}] ${name}  ${secs}s`);
-  if (!r.ok) failed.push({ name, out: r.out });
+  if (failed.length === 0) {
+    /* Ek saath laal, akele sab hare. Iska matlab test aapas me takra rahe hain — aur wo ek
+       asli baat hai, chhupane wali nahi. */
+    console.log("\n ⚠️  ek saath laal, akele sab hare — test aapas me takra rahe hain");
+  }
 }
+console.log(`\n${((Date.now() - t0) / 1000).toFixed(0)}s`);
 
 /* ── 4. Nateeja ── */
 console.log(`\n${list.length - failed.length}/${list.length} pass`);
