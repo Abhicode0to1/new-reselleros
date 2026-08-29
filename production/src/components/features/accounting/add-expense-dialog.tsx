@@ -198,6 +198,13 @@ export function AddExpenseDialog({
     currency:    string;
     total?:      number;
     gst:         number;
+    /* Kul ke SAATH batwara bhi (29 Aug 2026). Pehle sirf jod rakha jata tha aur teen
+       aankde ek me mil kar khatam ho jate the — jabki AI unhe alag hi deta hai. Uska
+       nateeja GST report me dikhta tha: har kharcha "intra-state" maan liya jata tha,
+       aur Amazon ke IGST wale bill galat khaane me chale jate the. */
+    igst?:       number;
+    cgst?:       number;
+    sgst?:       number;
     billType:    "gst" | "kaccha";
     items:       { description: string; qty: string; unit_price: string; amount: string }[];
   };
@@ -205,6 +212,10 @@ export function AddExpenseDialog({
   // Vendor GSTIN read from the invoice — saved to the Vendors master on save so
   // the supplier's tax details are captured (the expenses row itself has none).
   const [aiGstin, setAiGstin] = React.useState<string | null>(null);
+  /* Bill par likha GST ka batwara, confirm ke baad tak sambhala hua. `gst_paid` kul hi
+     rehta hai — ye uske SAATH jata hai, uski jagah nahi. NULL ka matlab "bill par tha hi
+     nahi", jo 0 ("naapa, shunya tha") se alag hai. Dekho lib/accounting/gst-heads.ts. */
+  const [aiHeads, setAiHeads] = React.useState<{ igst: number | null; cgst: number | null; sgst: number | null } | null>(null);
   // After a bill read, whether the invoice's GSTIN/name matched an existing
   // vendor (link to it) or is new (add to the master on save). Drives a hint.
   const [vendorMatch, setVendorMatch] = React.useState<{ kind: "existing" | "new"; name: string } | null>(null);
@@ -258,7 +269,12 @@ export function AddExpenseDialog({
       if (!res.ok) { setAiError(json.error ?? "Couldn't read the bill — fields haath se bhar do. 📎 bill attach ho jayega."); return; }
       const f = json.fields as Record<string, unknown>;
       const cur = String(f.currency ?? "INR").toUpperCase();
-      const gst = Number(f.cgst ?? 0) + Number(f.sgst ?? 0) + Number(f.igst ?? 0);
+      /* Teeno ALAG bhi rakhe jate hain, sirf jod kar nahi. `gst` kul hai (form aur
+         `gst_paid` usi par chalte hain), aur igst/cgst/sgst wo naapa hua batwara hai jo
+         GST report ko "maan-na" band karne deta hai. */
+      const num = (v: unknown) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : 0; };
+      const eIgst = num(f.igst), eCgst = num(f.cgst), eSgst = num(f.sgst);
+      const gst = eCgst + eSgst + eIgst;
       const items = Array.isArray(f.line_items) ? (f.line_items as Array<Record<string, unknown>>) : [];
       // Hold the read for the operator to CONFIRM — nothing fills the form yet.
       setPending({
@@ -268,6 +284,9 @@ export function AddExpenseDialog({
         billDate:   f.bill_date   ? String(f.bill_date)   : undefined,
         currency:   cur,
         total:      f.total != null ? Number(f.total) : undefined,
+        igst:       eIgst || undefined,
+        cgst:       eCgst || undefined,
+        sgst:       eSgst || undefined,
         gst,
         billType:   gst > 0 ? "gst" : "kaccha",
         items: items.map((it) => ({
@@ -292,6 +311,11 @@ export function AddExpenseDialog({
     // Match the invoice's GSTIN (then name) against the Vendors master:
     //  match   → link to that existing vendor (no duplicate),
     //  no match → a new vendor is added on save (carrying this GSTIN).
+    setAiHeads(
+      pending.igst || pending.cgst || pending.sgst
+        ? { igst: pending.igst ?? 0, cgst: pending.cgst ?? 0, sgst: pending.sgst ?? 0 }
+        : null,
+    );
     const gst = pending.gstin?.trim().toUpperCase();
     const nm  = pending.vendorName?.trim();
     const byGstin = gst ? (vendors ?? []).find((v) => (v.gstin ?? "").trim().toUpperCase() === gst) : undefined;
@@ -446,6 +470,12 @@ export function AddExpenseDialog({
       catch { /* keep saving the expense even if the file upload fails */ }
     }
     const shared = {
+      /* Bill se naapa hua GST batwara. Iske bina GST report har kharche ko intra-state
+         MAAN leti hai (aadha CGST, aadha SGST, IGST shunya) — aur Amazon jaise
+         doosre-rajya ke bill par wo galat khaana hai. Dekho lib/accounting/gst-heads.ts. */
+      igst: aiHeads?.igst ?? null,
+      cgst: aiHeads?.cgst ?? null,
+      sgst: aiHeads?.sgst ?? null,
       vendor_name:  payee || null,
       vendor_id:    vId,
       currency,
@@ -510,6 +540,13 @@ export function AddExpenseDialog({
           line_items: g.items,
           amount:     inr(g.amount + (isGstBill ? g.gst : 0)),   // subtotal + its GST share
           gst_paid:   isGstBill ? inr(g.gst) : 0,
+          /* Ek bill kai category me bant raha hai, aur har leg ko GST ka ek HISSA mila
+             hai. Poora batwara har leg par chipka dena use teen-guna gin lega. Aur use
+             anupaat me baant kar ek naya aankda banana bhi theek nahi — wo bill par likha
+             hi nahi hai. Isliye yahan NULL: report use saaf "maana hua" kahegi, jo sach
+             hai. Ek hi leg wala bill (aam soorat, aur Amazon wali) upar se batwara
+             poora leta hai. */
+          igst: null, cgst: null, sgst: null,
           description: g.items.map((it) => it.name).filter(Boolean).join(", ") || null,
           pettyCashAccountId: pettyCash,   // each leg deducts its share → total correct
           // TDS is one deduction for the whole bill — attach it to the first leg only.

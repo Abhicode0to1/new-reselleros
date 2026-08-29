@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Icon } from "@/components/ui/icon";
+import { expenseGstHeads } from "@/lib/accounting/gst-heads";
 import { rupee, formatDate, GST_STATE_BY_CODE } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Term } from "@/components/shared/term";
@@ -92,7 +93,11 @@ interface InputRow {
   vendorGstin:  string | null;
   taxableValue: number;        // pre-GST
   gst:          number;        // CGST + SGST + IGST or gst_paid
-  igst:         number;        // ITC head split — bills exact; expenses assumed intra
+  igst:         number;        // ITC head split. Bill se naapa hua, ya (jab bill par na ho) maana hua — `assumed` batata hai kaun sa.
+  /** `true` = ye batwara BILL se nahi aaya, maana gaya hai. Dekho lib/accounting/gst-heads.ts */
+  assumed?:     boolean;
+  /** Maana gaya ho to kyun — hover/worksheet me dikhane ke liye. */
+  assumption?:  string | null;
   cgst:         number;
   sgst:         number;
   category:     string;
@@ -209,7 +214,9 @@ function useGstReport(range: DateRange) {
         .gte("bill_date", range.from)
         .lte("bill_date", range.to);
 
+      /* Vendor bill me igst/cgst/sgst apne khaane me hote hain, isliye ye NAAPE hue hain. */
       const inputRowsBills: InputRow[] = (bills ?? []).map((b) => ({
+        assumed: false,
         source:       "bill",
         id:           b.id,
         date:         b.bill_date,
@@ -225,17 +232,32 @@ function useGstReport(range: DateRange) {
 
       const { data: expenses } = await supabase
         .from("expenses")
-        .select("id, expense_date, vendor_name, amount, gst_paid, category")
+        .select("id, expense_date, vendor_name, amount, gst_paid, igst, cgst, sgst, category")
         .gte("expense_date", range.from)
         .lte("expense_date", range.to)
         .gt("gst_paid", 0);
 
+      /* ── Ab MAANA nahi jata jab NAAPA hua maujood ho (29 Aug 2026) ──────────
+         Yahan pehle har kharche par ye chalta tha:
+
+             igst: 0,  cgst: Math.round(g / 2),  sgst: g - cgst
+
+         Yaani har GST aadha-aadha CGST/SGST maan liya jata tha aur IGST hamesha shunya.
+         Purana comment kehta tha ki ye "worksheet me flag" hoga — screen par dhoondha,
+         koi flag nahi tha. Padhne wale ko kabhi pata nahi chalta tha ki ye aankda naapa
+         hua hai ya maana hua.
+
+         Aur wo maan-na aksar galat hi tha. Us din ka asli bill: Amazon ka seller UP me
+         (GSTIN 09…), delivery Delhi (07…), Tax Type **IGST ₹274.42** — jise app CGST ₹137
+         + SGST ₹137 bata rahi thi. GSTR-3B ke Table 4(A)(5) me wo alag column hai, aur
+         GSTR-2B se mel nahi khata.
+
+         Ab batwara `expenses` me hi rakha jata hai (migration 20260829180000), aur faisla
+         `expenseGstHeads` karta hai — jahan bill se aaya ho wahan wahi, jahan na ho wahan
+         maan kar bhi SAAF likh kar. */
       const inputRowsExpenses: InputRow[] = (expenses ?? []).map((e) => {
-        // Expenses store only a GST total (no head split). Assume intra-state
-        // (CGST + SGST) — the common case for local overheads — and flag it in
-        // the worksheet so an inter-state / import (IGST) expense can be adjusted.
         const g = e.gst_paid ?? 0;
-        const cgst = Math.round(g / 2);
+        const h = expenseGstHeads(e);
         return {
           source:       "expense" as const,
           id:           e.id,
@@ -244,9 +266,11 @@ function useGstReport(range: DateRange) {
           vendorGstin:  null,
           taxableValue: (e.amount ?? 0) - g,
           gst:          g,
-          igst:         0,
-          cgst,
-          sgst:         g - cgst,
+          igst:         h.igst,
+          cgst:         h.cgst,
+          sgst:         h.sgst,
+          assumed:      !h.measured,
+          assumption:   h.assumption,
           category:     e.category ?? "Expense",
         };
       });
@@ -823,6 +847,43 @@ export default function GstReportPage() {
         onExport={exportInput}
         disabled={isLoading || !data || data.inputRows.length === 0}
       />
+
+      {/* ── Jo batwara MAANA gaya hai, wo saaf bolta hai (29 Aug 2026) ────────
+          Yahan kabhi kuch nahi likha tha. Har kharche ka GST aadha-aadha CGST/SGST maan
+          liya jata tha, IGST hamesha shunya, aur padhne wale ko pata hi nahi chalta tha.
+          Purane code me likha bhi tha ki ise "worksheet me flag" karna hai — kiya nahi
+          gaya tha, aur wo teen mahine chup raha.
+
+          Ginti ke saath RAQAM bhi, kyunki "3 row maani hui hain" kam batata hai: 3 row
+          ₹40 ki bhi ho sakti hain aur ₹40,000 ki bhi, aur return bharne wale ke liye wo
+          do bilkul alag baatein hain.
+
+          Sab naapa hua ho to ye kuch nahi dikhata — ek chetavni jo hamesha dikhti hai,
+          do hafte me dikhna band ho jaati hai. */}
+      {(() => {
+        const rows = data?.inputRows.filter((r) => r.assumed) ?? [];
+        if (rows.length === 0) return null;
+        const amount = rows.reduce((s, r) => s + r.gst, 0);
+        return (
+          <Card className="border-amber/40 bg-amber-soft/40">
+            <div className="flex items-start gap-2.5 p-3">
+              <Icon name="alert" size={15} className="text-amber-ink shrink-0 mt-0.5" />
+              <div className="min-w-0 space-y-1">
+                <p className="text-xs font-semibold text-ink">
+                  {rows.length} {rows.length === 1 ? "row ka" : "rows ka"} GST batwara MAANA hua hai — {rupee(amount)}
+                </p>
+                <p className="text-2xs text-ink-2">
+                  In par bill ka IGST/CGST batwara nahi mila, isliye intra-state maan kar aadha-aadha
+                  baanta gaya hai. <strong>GSTR-3B me IGST aur CGST/SGST alag column hain</strong> —
+                  agar inme koi doosre rajya ka bill hai (jaise Amazon), to uska credit galat khaane
+                  me chala jayega aur GSTR-2B se mel nahi khayega. Neeche table me aisi row par{" "}
+                  <span className="font-semibold">maana hua</span> likha hai.
+                </p>
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
       {isLoading ? (
         <Skeleton className="h-32 w-full" />
       ) : !data || data.inputRows.length === 0 ? (
@@ -857,6 +918,17 @@ export default function GstReportPage() {
                       }`}>
                         {r.source === "bill" ? "Bill" : "Expense"}
                       </span>
+                      {/* Jis row ka IGST/CGST batwara BILL se nahi aaya, wo khud bolti hai.
+                          Bina iske IGST ka column ek naapa hua shunya jaisa dikhta tha,
+                          jabki wo ek maan-na tha — aur return usi par bhar diya jata. */}
+                      {r.assumed ? (
+                        <span
+                          title={r.assumption ?? undefined}
+                          className="ml-1.5 inline-block cursor-help rounded-full border border-amber/30 bg-amber-soft/70 px-1.5 py-0.5 text-3xs font-semibold text-amber-ink"
+                        >
+                          maana hua
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-ink-2">{formatDate(r.date)}</td>
                     <td className="px-4 py-3 text-ink">{r.vendor}</td>

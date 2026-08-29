@@ -2162,7 +2162,13 @@ export type ExpenseRow = {
   bill_no:          string | null;           // migration 0182 — supplier invoice no. (duplicate detection)
   expense_date:     string;                  // YYYY-MM-DD
   amount:           number;
-  gst_paid:         number;
+  gst_paid:         number;                  // kul GST — 273 file iske call site hain, ye waisa hi hai
+  /* Naapa hua batwara (migration 20260829180000). NULL = "bill par tha hi nahi", jo 0 se
+     ALAG hai — 0 ka matlab "naapa, aur shunya tha". GST report ye farq dikhati hai; dekho
+     lib/accounting/gst-heads.ts, aur uska kaaran us file ke sir par likha hai. */
+  igst:             number | null;
+  cgst:             number | null;
+  sgst:             number | null;
   payment_method:   string | null;           // 'bank_transfer' | 'upi' | 'cash' | 'card' | 'cheque'
   paid:             boolean;                  // migration 0183 — false = payable (pay later)
   paid_date:        string | null;            // date settled (null while unpaid)
@@ -2197,6 +2203,9 @@ type ExpenseInsert = {
   expense_date:     string;
   amount:           number;
   gst_paid?:        number;
+  igst?:            number | null;
+  cgst?:            number | null;
+  sgst?:            number | null;
   payment_method?:  string | null;
   paid?:            boolean;
   paid_date?:       string | null;
