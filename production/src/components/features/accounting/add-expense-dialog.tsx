@@ -45,11 +45,22 @@ import { useAddReimbursement } from "@/lib/queries/reimbursements";
 import { toast } from "sonner";
 import { uploadBillAttachment } from "@/lib/queries/vendor-bills";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { expenseCategoryError } from "@/lib/accounting/expense-category";
 
 const CURRENCY_OPTIONS = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD", "CAD"] as const;
 
 const schema = z.object({
-  category:       z.string().min(2),
+  /* ⚠️ Yahan `z.string().min(2)` tha, aur wo ek CHUP dead end banata tha (29 Aug 2026).
+     Ye khaana screen par sirf simple mode me hai — `{!showItems && <FormField label="Category" …>}`.
+     Bill upload karte hi form itemise mode me chala jata hai aur khaana gायab ho jata hai,
+     par schema use phir bhi maangta tha. React Hook Form ek aise field par rukta tha jo
+     render hi nahi hota: koi error, koi toast, koi network request — kuch nahi. Sirf Save
+     dabao aur kuch na ho.
+
+     Zod itni baat nahi keh sakta ("itemise me item se, warna form se"), isliye wo shart
+     `lib/accounting/expense-category.ts` me hai aur onSubmit uspar rukta hai — ek AISE
+     sandesh ke saath jo dikhta hai. */
+  category:       z.string().optional(),
   vendor_name:    z.string().optional(),
   expense_date:   z.string().min(10, "Date required"),
   amount:         z.coerce.number().min(1, "Amount required"),
@@ -406,7 +417,9 @@ export function AddExpenseDialog({
   }, [vendorNameWatch, catText, watch("category")]);
 
   // Itemised totals + the category split preview.
-  const headerCategory = watch("category");
+  /* `category` schema me ab optional hai (wajah schema par likhi hai), isliye yahan
+     saaf khaali string — `undefined` neeche har jagah ghusta hai jahan string chahiye. */
+  const headerCategory = watch("category") ?? "";
   const itemiseActive = showItems && lines.some((l) => l.description.trim() || l.amount);
   const lineSubtotalNum = lines.reduce((s, l) => s + Number(l.amount || 0), 0);
   const splitGroups = React.useMemo(() => {
@@ -424,6 +437,16 @@ export function AddExpenseDialog({
   }, [itemiseActive, lineSubtotalNum, setValue]);
 
   async function onSubmit(values: FormData) {
+    /* Category ki shart yahan lagti hai, schema me nahi — wajah schema par likhi hai.
+       Sandesh TOAST par jata hai, kisi field ke neeche nahi: itemise mode me wo field
+       screen par hoti hi nahi, aur ek anddekha error hi ye poora bug tha. */
+    const catErr = expenseCategoryError({
+      itemised: itemiseActive,
+      formCategory: values.category,
+      itemCategories: lines.map((l) => l.category),
+    });
+    if (catErr) { toast.error(catErr); return; }
+
     // ── Someone else paid our expense → record as a REIMBURSEMENT (payable to
     //    that person). add_reimbursement books the expense + the payable together,
     //    so we do NOT also create an expense here. ──
@@ -434,8 +457,8 @@ export function AddExpenseDialog({
       if (amt <= 0) { toast.error("Amount daalo."); return; }
       await addReimb.mutateAsync({
         person,
-        purpose:    values.notes?.trim() || values.description?.trim() || values.category,
-        category:   values.category,
+        purpose:    values.notes?.trim() || values.description?.trim() || (values.category ?? ""),
+        category:   values.category ?? "",
         amount:     amt,
         gst:        isGstBill ? Math.round((values.gst_paid || 0) * rate) : 0,
         incurredOn: values.expense_date,
@@ -510,7 +533,7 @@ export function AddExpenseDialog({
       .map((l) => ({
         name:     l.description.trim(),
         amount:   Number(l.amount || 0),
-        category: l.category || values.category,
+        category: l.category || values.category || "",
         qty:      l.qty ? Number(l.qty) : undefined,
         rate:     l.unit_price ? Number(l.unit_price) : undefined,
       }))
@@ -566,7 +589,9 @@ export function AddExpenseDialog({
       ? inr(lineSubtotal) + gstAmt
       : inr(values.amount);
     const line_items = catLines.map((l) => ({ name: l.name, qty: l.qty, rate: l.rate, amount: l.amount }));
-    const category = showItems && catLines.length > 0 ? (catLines[0].category || values.category) : values.category;
+    /* Upar wali jaanch (`expenseCategoryError`) guarantee kar chuki hai ki in dono me se
+       ek to hai — warna hum yahan pahunchte hi nahi. */
+    const category = (showItems && catLines.length > 0 ? (catLines[0].category || values.category) : values.category) ?? "";
     const derivedDescription = line_items.map((l) => l.name).filter(Boolean).join(", ") || values.description?.trim() || null;
 
     // Duplicate guard — same vendor + bill no. + category (or vendor+date+amount).
