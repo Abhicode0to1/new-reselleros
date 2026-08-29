@@ -11,6 +11,13 @@ CLAUDE.md §0.9 requires this skill and it did not exist until 25 Aug 2026. §8 
 > input needs a `<Label>` · Use semantic HTML (`<nav>`, `<main>`, `<button>` not `<div onClick>`) ·
 > Color contrast WCAG 2.1 AA minimum"
 
+> ⚠️ **29 Aug 2026: this file's `aria-pressed` counts had gone stale** (11 → 20 app-wide, 1 → 10 on
+> `/leads`) because somebody fixed them. **Re-measure before reporting any number here.**
+>
+> Keyboard reach, focus visibility and contrast are this file's job. A control that is reachable and
+> readable but sits in a column the user cannot see is a different defect — that is **`layout-audit`**.
+> Run both.
+
 **Compute, do not eyeball.** A contrast judgement made by looking is a judgement that changes with
 the monitor. Every check below produces a number or a `file:line`.
 
@@ -86,9 +93,13 @@ Verified: on `/leads` the line grep said 30 unlabelled `truncate`; the element w
 A button that holds an on/off state and does not say so reads to a screen reader as a plain
 button. The user can press it and cannot tell it is now active.
 
-App-wide there are **11** uses of `aria-pressed`. On `/leads` there is **one**, across 24 files —
-while that screen has folder chips, motion filters, a view toggle and a status row, all of which
-hold state.
+⚠️ **Re-measured 29 Aug 2026, and the numbers had moved in the GOOD direction.** This said 11
+app-wide and **one** on `/leads`. Today: **20** app-wide and **10** on `/leads`. The gap this
+section was written about has largely been closed.
+
+That does not retire the check, it changes what a finding looks like: zero on a screen is still a
+finding; some-but-not-all is a question about which controls were missed. **Run the greps below.
+Do not quote the numbers in this paragraph** — they are dated, and dating them is the point.
 
 **⚠️ WIDE IS NOT THE SAME AS RIGHT, AND THIS SECTION HAS NOW ERRED BOTH WAYS.** The first version
 said "under-reporting is the worse error", which is true, and it produced a detector that matched
@@ -183,8 +194,8 @@ was written to catch does not currently exist here.
 
 ## 3. Icon-only buttons need a name
 
-**51** `<IconButton>` uses app-wide. Each renders a glyph and nothing else, so without a label a
-screen reader announces "button".
+**51** `<IconButton>` uses app-wide — re-measured 29 Aug 2026, unchanged. Each renders a glyph and
+nothing else, so without a label a screen reader announces "button".
 
 ```bash
 grep -n "<IconButton" $F | grep -v "aria-label" 
@@ -225,7 +236,8 @@ about a title on an element with room to spare is noise.
 
 ## 5. Contrast, computed from the tokens
 
-48 tokens in `globals.css`, and both themes matter — `:root` and the dark override.
+**52** tokens in `globals.css` (was 48 — re-measured 29 Aug 2026), and both themes matter —
+`:root` and the dark override.
 
 Compute rather than judge. In the browser, on the real screen:
 

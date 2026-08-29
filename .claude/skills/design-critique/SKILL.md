@@ -8,9 +8,22 @@ description: Review a screen or component against THIS app's design system — t
 CLAUDE.md §0.9 requires this skill and it did not exist until 25 Aug 2026. Six UI fixes shipped to
 `/leads` that day without it, because it could not be run.
 
+> ⚠️ **29 Aug 2026: §1 of this file was FALSE.** It named the missing type scale as the codebase's
+> largest problem; the scale had since been added and 1,963 call sites moved onto it. A skill that
+> quotes a count reports a solved problem as a live defect the day somebody fixes it — and the
+> reader who trusts it wastes an afternoon. **Re-measure every number before reporting it.** The
+> commands are all here; running them costs seconds.
+>
+> The layout defects this file does NOT cover — a table that does not fit, a sticky column covering
+> its neighbour, two places defining one width — are in **`layout-audit`**. Run both.
+
 **Report countable findings, never opinions.** "This feels cluttered" is what a person says; this
-skill says "153 arbitrary font sizes in 24 files". A check with no number produces a different
-answer on the second run, and a review nobody can reproduce is a review nobody acts on.
+skill says "the table needs 1,414px and has 1,247 — every column is short of what its text needs".
+A check with no number produces a different answer on the second run, and a review nobody can
+reproduce is a review nobody acts on.
+
+(That example replaced "153 arbitrary font sizes in 24 files" on 29 Aug 2026 — the number had
+become 17, which is the whole point of the warning above.)
 
 **Say CLEAN when clean, in one line.** A skill that always finds something teaches the reader to
 skim it — the same argument `money-health-card.tsx` makes for rendering nothing when healthy.
@@ -51,23 +64,46 @@ call before measuring. Same discipline as applying a migration and verifying it 
 (`resellersos-env` §2): a check that shares a call with the thing it is checking cannot fail.
 
 ---
-## 1. Arbitrary font sizes — the largest single problem in this codebase
+## 1. Arbitrary font sizes — ⚠️ THIS SECTION WAS FALSE. RE-MEASURED 29 Aug 2026.
 
-`tailwind.config.ts` defines `colors`, `fontFamily`, `screens`, `borderRadius`, `animation` and
-`container`. It does **not** define `fontSize`. So there is no type scale, and 2,305 elements use
-`text-[Npx]` — 2,010 of them below 12px, across 273 of 370 `.tsx` files.
+**What this section used to say:** that `tailwind.config.ts` has no `fontSize` key, that there is
+therefore no type scale, that 2,305 elements use `text-[Npx]` with 2,010 of them below 12px across
+273 files, that any count above zero is a finding, and that the fix is to point at
+`docs/TYPE-SCALE-PROPOSAL.md`.
+
+**Every one of those is now wrong.** The work was done and this file was never updated:
+
+| | Skill said | Measured 29 Aug 2026 |
+|---|---|---|
+| `fontSize` in tailwind.config.ts | absent | **present** — `3xs` 10px, `2xs` 11px |
+| `text-[Npx]` app-wide | 2,305 | **291** |
+| …of those, below 12px | 2,010 | **0** |
+| Files affected | 273 of 370 | **91 of 371** |
+
+The scale exists, carries its own reasoning in `tailwind.config.ts:22-41`, and ~1,963 call sites
+were renamed onto it. The proposal doc describes finished work.
+
+**So the check changes shape.** A `text-[Npx]` is no longer automatically a finding — the two
+sizes the app actually needed now have names. What IS a finding is a **new** arbitrary size, or one
+that duplicates a rung that already exists:
 
 ```bash
 grep -ho "text-\[[0-9.]*px\]" $F | sort | uniq -c | sort -rn
+grep -ho "text-\[1[01]px\]" $F        # 10/11px — use text-3xs / text-2xs instead
 ```
 
-**Any count above zero is a finding**, and the fix is **not** the call site. Patching four
-instances makes the screen inconsistent with the other 2,301 and improves nothing measurable.
-Point at `docs/TYPE-SCALE-PROPOSAL.md` and report the count.
+Report `text-[10px]` and `text-[11px]` as fixable at the call site. Report anything below 10px as a
+question, not a fix: it is a new rung nobody agreed to. The remaining 291 sit at 12px and above,
+where Tailwind's own scale already reaches — worth naming as a count, not worth a mass rename.
 
-**Say this too, because it decides whether the fix is safe:** `text-[11px]` sets `font-size` only.
-`text-xs` sets `font-size` **and** `line-height`. 2,052 elements currently inherit their
-line-height, so a scale defined the normal Tailwind way changes vertical rhythm everywhere.
+**One thing from the old section is still true and still matters:** `text-[11px]` sets `font-size`
+only; `text-xs` sets `font-size` **and** `line-height`. That is exactly why `3xs`/`2xs` were defined
+font-size-only — giving them a `lineHeight` would have shifted the leading of every renamed element
+by 0.5px in the same commit as a mechanical rename. If you ever add a rung, add it the same way.
+
+**And the lesson this section is now an example of:** a skill that quotes a count goes stale the day
+somebody fixes it, and then it reports a solved problem as the screen's largest defect. **Re-measure
+before reporting any number in this file.** Every command needed is right here.
 
 ---
 
@@ -76,8 +112,9 @@ line-height, so a scale defined the normal Tailwind way changes vertical rhythm 
 > "Never hardcode colors in components. Use Tailwind tokens: `bg-paper` not `bg-white`,
 > `text-ink` not `text-black`, `border-hairline` not `border-gray-200`."
 
-48 tokens exist in `globals.css`. App-wide there are still **248** raw palette values and **98**
-bare `bg-white` / `text-black` / `bg-black` / `text-white`.
+**52** tokens exist in `globals.css` (was 48). App-wide there are still **247** raw palette values
+and **98** bare `bg-white` / `text-black` / `bg-black` / `text-white` — re-measured 29 Aug 2026, and
+these two barely moved while §1's numbers collapsed. Re-run the grep anyway; that is the point of §1.
 
 ```bash
 grep -hoE '\b(bg|text|border|ring)-(white|black|gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900|950)\b|\b(bg-white|text-black|bg-black|text-white)\b' $F | sort | uniq -c | sort -rn
@@ -93,8 +130,10 @@ the token form; `bg-black text-white` is not, and the difference shows in dark m
 
 ## 3. Raw `<button>` against the shared primitive
 
-`components/ui/button.tsx` is used **1,039** times app-wide. There are also **415** raw
-`<button>` elements carrying **83** distinct class combinations, **74** of them used exactly once.
+`components/ui/button.tsx` is used **1,044** times app-wide (29 Aug 2026). There are also **414**
+raw `<button>` elements. The "83 distinct class combinations, 74 used exactly once" figures were
+not re-measured that day — treat them as the shape of the problem, not a current count, and run the
+grep below before quoting either.
 
 ```bash
 echo "raw: $(grep -ho '<button' $F | wc -l) · primitive: $(grep -ho '<Button' $F | wc -l)"
