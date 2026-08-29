@@ -51,10 +51,23 @@ export function expenseCategoryError(o: ExpenseCategoryInput | null | undefined)
   if (!o) return "Category chuniye — bina uske ye kharcha kis khaate me jayega, ye tay nahi hota.";
 
   if (o.itemised) {
-    /* Itemise mode: ek bhi line ki category kaafi hai. Baaki line uski chhaya me chali
-       jaati hain (save par pehli category hi poore kharche ki ban-ti hai), aur har line par
-       zid karna us jagah rukavat banata jahan aam taur par sab ek hi khaate ka hota hai. */
-    const any = (o.itemCategories ?? []).some(ok);
+    /* Ek bhi line ki category kaafi hai — baaki line uski chhaya me chali jaati hain (save
+       par pehli category hi poore kharche ki ban-ti hai), aur har line par zid karna us
+       jagah rukavat banata jahan aam taur par sab ek hi khaate ka hota hai.
+
+       ⚠️ Aur upar wali (form ki) category BHI kaafi hai. Maine pehle iska ulta likha tha —
+       "itemise me form wali nahi bachati" — aur uske liye ek test bhi likh diya tha. Wo
+       maan-na GALAT tha, aur save ka apna code hamesha se ulta keh raha tha:
+
+           category: l.category || values.category                    // catLines banate waqt
+           catLines[0].category || values.category                    // save karte waqt
+
+       Form wali category wahan pehle se fallback hai. Pardeep ne isi ko screen par pakda:
+       AI ne bill padh kar "Staff Welfare" form me bhar di, save use khushi se le leta — par
+       meri jaanch usi ko rok rahi thi, ek aisi baat par jo maine code se poochhi nahi thi.
+
+       Jo jaanch save se ZYADA sakht ho, wo user ko us cheez par rokti hai jo ho sakti thi. */
+    const any = (o.itemCategories ?? []).some(ok) || ok(o.formCategory);
     return any
       ? null
       : "Har item ke saamne ek category chuniye — neeche items wali table me, har line ke aakhir me.";

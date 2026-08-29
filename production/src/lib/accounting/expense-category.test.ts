@@ -41,11 +41,27 @@ describe("expenseCategoryError — itemise mode", () => {
     expect(msg).toMatch(/item/i);
   });
 
-  it("upar wali category itemise mode me nahi bachati", () => {
-    /* Ye theek wo bharam hai jo bug ke ulat taraf hota: form me purani value padi ho aur
-       hum use "chal jayega" maan lein, jabki save par item ki category hi jaati hai. */
+  it("upar wali category itemise mode me BHI bachati hai — meri hi galti ka test", () => {
+    /* Ye test pehle ISKA ULTA kehta tha, aur wo galat tha.
+
+       Maine maan liya tha ki itemise mode me save sirf item ki category leta hai. Save ka
+       apna code hamesha se ulta keh raha tha:
+
+           category: l.category || values.category
+           catLines[0].category || values.category
+
+       Pardeep ne screen par pakda: AI ne bill padh kar "Staff Welfare" FORM me bhar di, save
+       use le leta — par meri jaanch usi ko rok rahi thi, ek aisi baat par jo maine code se
+       poochhi nahi thi. Jo jaanch save se zyada sakht ho, wo user ko us cheez par rokti hai
+       jo ho sakti thi. */
     expect(expenseCategoryError({
       itemised: true, formCategory: "Travel", itemCategories: ["", ""],
+    })).toBeNull();
+  });
+
+  it("na item par, na form par — tab hi rokta hai", () => {
+    expect(expenseCategoryError({
+      itemised: true, formCategory: "", itemCategories: ["", null],
     })).toBeTruthy();
   });
 });
