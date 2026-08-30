@@ -21,7 +21,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import {
-  googleOAuthCreds, originFromRequest, gmailRedirectUri, buildAuthUrl, GMAIL_SEND_SCOPES,
+  googleOAuthCreds, originFromRequest, gmailRedirectUri, buildAuthUrl,
+  GMAIL_SEND_SCOPES, GMAIL_READ_SCOPES,
 } from "@/lib/google/oauth";
 import { unionScopes } from "@/lib/google/scope-union";
 
@@ -64,7 +65,24 @@ export async function GET(request: NextRequest) {
     .select("scopes")
     .eq("user_id", user.id)
     .maybeSingle();
-  const scopes = unionScopes(GMAIL_SEND_SCOPES, (prior as { scopes?: string | null } | null)?.scopes);
+  /* ── READING IS ASKED FOR HERE TOO, FROM 30 AUG 2026 ─────────────────────
+     Enquiries used to arrive through an Apps Script inside Gmail. It broke silently — a
+     stale copy posting a secret Cloud Run no longer accepts, 401 on every run for two
+     days, while the mail sat labelled as delivered. The app now reads the mailbox itself
+     (/api/cron/gmail-inbox), which needs gmail.readonly.
+
+     Bundled into THIS button rather than given its own, and that is not the mistake the
+     header above describes. That one was "Send email on your behalf" appearing under a
+     button labelled Contacts — the label lied about the subject. "Connect Gmail" asking to
+     read and send the sales mailbox says exactly what it is: this integration IS that
+     mailbox, both directions, which is what it is for.
+
+     `unionScopes` still carries whatever was granted before, so reconnecting to add reading
+     cannot quietly drop contacts — the exact regression that cost eleven days in August. */
+  const scopes = unionScopes(
+    unionScopes(GMAIL_SEND_SCOPES, GMAIL_READ_SCOPES),
+    (prior as { scopes?: string | null } | null)?.scopes,
+  );
 
   const state = crypto.randomUUID();
   const url = buildAuthUrl(creds.clientId, gmailRedirectUri(origin), state, scopes);

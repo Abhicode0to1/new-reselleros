@@ -8,7 +8,14 @@ export default defineConfig({
   // Mirror the tsconfig `@/*` → `src/*` alias so tests can import modules that
   // use the `@` alias at runtime (not just as type-only imports).
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      /* `server-only` ka `exports` sirf `react-server` condition ke saath khulta hai, jo
+         Vitest ke paas nahi hai — us package ko import karte hi suite load hone se pehle
+         gir jaati hai. Wo package runtime par kuch karta bhi nahi; uska kaam build par hai.
+         Dekho src/test/server-only-stub.ts. */
+      "server-only": fileURLToPath(new URL("./src/test/server-only-stub.ts", import.meta.url)),
+    },
   },
   // Next.js compiles JSX with the automatic runtime, so components don't import
   // React. Vitest's esbuild defaults to the classic runtime, which made any

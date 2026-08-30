@@ -41,6 +41,42 @@ export const GMAIL_SEND_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
 ].join(" ");
 
+/**
+ * Reading the sales mailbox, so enquiries reach the app without a forwarder.
+ *
+ * ─── WHY THIS EXISTS (30 Aug 2026) ──────────────────────────────────────────
+ * Until today, mail reached the Enquiries screen through an Apps Script in Gmail that
+ * searched the mailbox on a 5-minute timer and POSTed each message to
+ * /api/webhooks/inbound-email. That chain has six links and it broke at a silent one:
+ * a stale copy of the script was posting an old `?key=` secret that matches nothing Cloud
+ * Run accepts, so every run 401'd, and the mail sat labelled `erp-sent` — marked delivered
+ * — while nothing reached the app for two days. Nobody could have seen it: the failure was
+ * a log line in a Google account nobody opens.
+ *
+ * The connection needed to remove that chain was already here. `user_google_tokens` holds
+ * a refresh token for google_email = sales@anutech.in — the exact mailbox — granted for
+ * gmail.send. Only the reading half was missing.
+ *
+ * ─── readonly, NOT modify ───────────────────────────────────────────────────
+ * `gmail.readonly` cannot label, archive or delete a single message. The forwarder needed
+ * `modify` because a label was its memory of what it had already sent; this does not,
+ * because `inbound_emails.message_id` is UNIQUE and Gmail's own message id goes in it. The
+ * de-duplication lives in the database, where it can be inspected, instead of in a mailbox
+ * label that only one script can see.
+ *
+ * That matters beyond tidiness: a label is a WRITE to the customer's mailbox, and the day
+ * that write went wrong is the day the mail stopped arriving.
+ *
+ * Kept separate from the other two for the reason the block above gives — a consent screen
+ * should say what it is asking for, and "read your mail" is not something to smuggle into a
+ * button labelled Contacts.
+ */
+export const GMAIL_READ_SCOPES = [
+  "openid",
+  "email",
+  "https://www.googleapis.com/auth/gmail.readonly",
+].join(" ");
+
 export function googleOAuthCreds(): { clientId: string; clientSecret: string } | null {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();

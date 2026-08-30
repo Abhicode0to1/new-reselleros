@@ -511,7 +511,7 @@ describe("inbound-email ka extract geminiJson se guzre", () => {
        hi nahi tha. Aur timeout na hone ka matlab tha: Gemini atke to ye request atke, aur
        forwarder POST ke baad thread label kar deta hai — yaani enquiry gayi. */
     const src = readFileSync(
-      join(process.cwd(), "src", "app", "api", "webhooks", "inbound-email", "route.ts"), "utf8");
+      join(process.cwd(), "src", "lib", "inbound", "ingest.ts"), "utf8");
     expect(src).toContain("geminiJson<Partial<ExtractedLead>>");
     expect(src).not.toContain("generativelanguage.googleapis.com");
   });

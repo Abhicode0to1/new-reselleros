@@ -22,7 +22,7 @@ import { join } from "node:path";
    ───────────────────────────────────────────────────────────────────────────── */
 
 const WEBHOOK = readFileSync(
-  join(process.cwd(), "src", "app", "api", "webhooks", "inbound-email", "route.ts"),
+  join(process.cwd(), "src", "lib", "inbound", "ingest.ts"),
   "utf8",
 );
 const code = WEBHOOK.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");

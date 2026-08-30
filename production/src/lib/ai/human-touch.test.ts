@@ -60,7 +60,7 @@ describe("the app's own writes really are anonymous", () => {
 
   it("the webhook's own activity inserts never set created_by", () => {
     const hook = strip(
-      readFileSync(join(SRC, "app", "api", "webhooks", "inbound-email", "route.ts"), "utf8"),
+      readFileSync(join(SRC, "lib", "inbound", "ingest.ts"), "utf8"),
     );
     const inserts = hook.split('from("lead_activities")').slice(1);
     expect(inserts.length).toBeGreaterThan(0);

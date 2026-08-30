@@ -129,7 +129,7 @@ describe("continuesThread — kuch pata na chale", () => {
    nahi; wahi tareeka autonomy-chokepoint.test.ts leta hai. */
 describe("inbound-email route is faisle se juda hai", () => {
   const route = readFileSync(
-    join(process.cwd(), "src", "app", "api", "webhooks", "inbound-email", "route.ts"),
+    join(process.cwd(), "src", "lib", "inbound", "ingest.ts"),
     "utf8",
   ).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
