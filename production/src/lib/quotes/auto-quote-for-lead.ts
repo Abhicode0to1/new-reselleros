@@ -94,6 +94,27 @@ export async function autoQuoteForLead(admin: Admin, args: AutoQuoteArgs): Promi
       seats:         args.seats,
       line_items:    plan.items,
       subtotal:      plan.subtotal,
+      /* ── THE COLUMN THE PDF BELIEVES, AND IT WAS NEVER SET ────────────────
+         This insert did not name `billing_cycle` at all, so every auto-quote took the
+         column default — `yearly` — however the line was priced.
+
+         Harmless while everything was quoted annually. The moment a monthly quote could be
+         raised (30 Aug 2026), it became a 12× error on a GST document: QuotePDF resolves
+         `billingCycle ?? cycleFromLegacyCommitment(firstCommitment)`, so the ROW wins over
+         the LINE. Q-ADPL-2026-27-0049, sent to a customer:
+
+           line   45 x Rs 325/seat/MONTH  ->  subtotal Rs 14,625  (correct, monthly)
+           row    billing_cycle "yearly"
+           PDF    Rs 27/seat/mo, Rs 1,219/mo, "Annual contract value Rs 16,739"
+
+         Rs 14,625 read as a year and divided by twelve. The true annual value is
+         Rs 1,75,500. The words on the document even said "Monthly (flex), billed monthly"
+         while the arithmetic said otherwise — the line and the row disagreed, and the row
+         is the one the renderer trusts.
+
+         `plan.items[0].commitment` is what the planner actually priced, so this is that
+         same fact rather than a second reading of the customer's words. */
+      billing_cycle: plan.items[0]?.commitment === "monthly" ? "monthly" : "yearly",
       total_cost:    plan.items.reduce((s, i) => s + i.qty * i.cost, 0),
       /* From the volume rate card, not a literal 0 any more. The planner decides it — it is
          the only place that knows the seat count, the list rate AND the vendor cost, and the
