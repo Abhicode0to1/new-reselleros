@@ -30,7 +30,18 @@
 import { execSync } from "node:child_process";
 
 export const SA    = "apps-script-agent@resellsubsos-prod.iam.gserviceaccount.com";
-export const SUB   = "pardeep@anutech.in";
+
+/**
+ * KISKE roop me. Domain ka koi bhi user, DWD ki wajah se.
+ *
+ * 30 Aug 2026: `pardeep@anutech.in` par atka hona ek asli bug chhupa gaya. Enquiry
+ * forwarder ko `sales@anutech.in` ke mailbox me chalna chahiye, aur wahan ek TEESRI script
+ * baithi thi — jo `pardeep@` ki list me dikhti hi nahi. Do din tak har enquiry 401 khaati
+ * rahi aur maine "sirf do script hain" maan kar dhoondha.
+ *
+ * Ek account dekh kar "aur kuch nahi hai" mat maano — `APPS_SCRIPT_AS` badal kar dekho.
+ */
+export const SUB = (process.env.APPS_SCRIPT_AS ?? "").trim() || "pardeep@anutech.in";
 const SCOPE = "https://www.googleapis.com/auth/script.projects";
 
 /** DWD se access token — koi key file nahi, IAM Credentials JWT sign karta hai. */
