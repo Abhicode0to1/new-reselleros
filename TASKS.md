@@ -62,9 +62,19 @@ me ye **dobara maange jaayenge**. Chaaron ka jawaab ek jagah likha hai taaki dob
 | Human rep ka jawaab (RLHF) | `lib/ai/gold-standard.ts` | **Wahi guards jo agent par lagte hain, phir aadmi ki haan** | Human ka jawaab acha hota hai kyunki **uske paas adhikar tha** |
 | Lost deals se seekhna | `lib/ai/loss-analysis.ts` | **Diagnosis ko sahi kism ke fix par bhejta hai** | Price aur delay ke **ulte fix** hain |
 
-**Chaaron ka ek hi asool:** kram badalna surakshit hai, **dawa jodna nahi.** Chaar module ab
-`AUTHORISED_CLAIMS` ka subset assert karte hain: `tone.ts`, `trade-in.ts`, `ab-test.ts`,
-`playbook.ts`.
+**Chaaron ka ek hi asool:** kram badalna surakshit hai, **dawa jodna nahi.** Ye module
+`AUTHORISED_CLAIMS` ka subset assert karte hain: `tone.ts`, `trade-in.ts`, `playbook.ts`.
+
+> ⚠️ **30 Aug 2026 — `ab-test.ts` aur `insights.ts` HATA diye gaye.** Dono kabhi kisi asli
+> code se nahi bulaye gaye — sirf apne test se. 598 + 553 line, aur unme se **ek bhi line
+> kabhi chali nahi**. Naapa gaya us din, jab poochha gaya ki "loop engineering" is app me
+> lagayi ja sakti hai ya nahi: jawab nikla ki loop pehle se bane the, bas chalu nahi the.
+>
+> Pada hua code padhne wale ko bhramit karta hai — wo maan leta hai ki feature maujood hai.
+> Git me sab bacha hai; zaroorat pade to wapas aa sakta hai.
+>
+> **`gold-standard.ts` bhi isi haal me hai** (253 line, sirf apna test) — abhi rakha gaya
+> hai, hataya nahi. Upar wali table me uska zikr isi liye bana hua hai.
 
 **Aur ek farq jo yaad rakhna:** `loss-analysis.ts` ka `safeToApplyAutomatically` **jhoota
 inkaar nahi hai.** Authorised claims ka kram automatic badalna **sach me surakshit hai** — sirf
