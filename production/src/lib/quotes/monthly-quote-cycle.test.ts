@@ -35,16 +35,30 @@ const ITEM = {
   prices: { monthly: { msrp: 325, wholesale: 300 } },
 } as Parameters<typeof planQuoteFromEnquiry>[0]["item"];
 
+/**
+ * `EnquiryQuotePlan` ek union hai — `{ok:false, reason}` ya `{ok:true, items, subtotal…}`.
+ *
+ * Ye helper `ok` par narrow karta hai AUR use assert bhi karta hai. Wo assert bekaar nahi:
+ * planner paanch alag wajahon se mana kar sakta hai, aur `ok:false` par neeche ka har
+ * expectation chup-chaap chhoot jata — ek test jo kuch jaanchta hi nahi, hara dikhta rehta.
+ */
+function priced(seats: number, term: "monthly" | "annual") {
+  const p = planQuoteFromEnquiry({ item: ITEM, seats, term });
+  expect(p.ok, p.ok ? "" : `planner ne mana kiya: ${p.reason}`).toBe(true);
+  if (!p.ok) throw new Error(p.reason);
+  return p;
+}
+
 describe("maasik line par daam MAHINE ka hota hai", () => {
   it("45 seats monthly → subtotal 14,625 (45 x 325), saalana nahi", () => {
-    const p = planQuoteFromEnquiry({ item: ITEM, seats: 45, term: "monthly" });
+    const p = priced(45, "monthly");
     expect(p.subtotal).toBe(14_625);
     expect(p.items[0].rate).toBe(325);
     expect(p.items[0].commitment).toBe("monthly");
   });
 
   it("wahi 45 seats annual par barah guna zyada", () => {
-    const p = planQuoteFromEnquiry({ item: ITEM, seats: 45, term: "annual" });
+    const p = priced(45, "annual");
     expect(p.items[0].rate).toBe(270 * 12);
     expect(p.subtotal).toBe(45 * 270 * 12);
     expect(p.items[0].commitment).toBe("annual_yearly");
@@ -53,8 +67,8 @@ describe("maasik line par daam MAHINE ka hota hai", () => {
   it("dono ka antar theek 12 ka nahi hota — flex tier apna daam hai", () => {
     /* 325 vs 270: bina commitment wale tier ka daam zyada hai, aur yahi do tier rakhne ka
        matlab hai. Isliye "monthly = annual / 12" wali koi bhi jaanch galat hogi. */
-    const m = planQuoteFromEnquiry({ item: ITEM, seats: 45, term: "monthly" });
-    const a = planQuoteFromEnquiry({ item: ITEM, seats: 45, term: "annual" });
+    const m = priced(45, "monthly");
+    const a = priced(45, "annual");
     expect(a.subtotal / 12).not.toBe(m.subtotal);
     expect(m.subtotal).toBeGreaterThan(a.subtotal / 12);
   });
