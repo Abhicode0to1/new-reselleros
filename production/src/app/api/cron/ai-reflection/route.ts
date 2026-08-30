@@ -26,6 +26,9 @@ import { createClient as createBareClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { reflect, type ReflectionInput } from "@/lib/ai/reflection";
+import { reflectionEmail, type ReflectionReport } from "@/lib/ai/reflection-digest";
+import { sendEmail } from "@/lib/email/send";
+import { createAdminClient } from "@/lib/supabase/server";
 import "@/lib/sentry";
 
 export const dynamic = "force-dynamic";
@@ -75,10 +78,12 @@ export async function GET(req: NextRequest) {
 
   /* Per tenant, because a reflection that mixed two resellers' pipelines would be worse than
      none — and because every table below is tenant-scoped with nothing generated to check it. */
-  const { data: tenantRows } = await db.from("tenants").select("id");
-  const tenantIds = ((tenantRows ?? []) as { id: string }[]).map((t) => t.id);
+  const { data: tenantRows } = await db.from("tenants").select("id, name");
+  const tenantRowsTyped = (tenantRows ?? []) as { id: string; name: string | null }[];
+  const tenantIds = tenantRowsTyped.map((t) => t.id);
+  const nameOf = new Map(tenantRowsTyped.map((t) => [t.id, t.name]));
 
-  const reports: { tenantId: string; leadsSeen: number; topStall: string | null; withheld: string }[] = [];
+  const reports: ReflectionReport[] = [];
 
   for (const tenantId of tenantIds) {
     const [turns, actions] = await Promise.all([
@@ -155,11 +160,53 @@ export async function GET(req: NextRequest) {
 
     reports.push({
       tenantId,
+      tenantName: nameOf.get(tenantId) ?? null,
       leadsSeen: report.leadsSeen,
       topStall: report.stalls[0]?.objection ?? null,
+      stalledCount: report.stalls[0]?.stalled ?? null,
+      topBlock: report.topBlock,
+      acceptedByBand: report.acceptedByBand.map((a) => ({ band: String(a.band), accepted: a.accepted })),
       withheld: report.unavailable,
     });
   }
 
-  return NextResponse.json({ ok: true, windowHours: WINDOW_HOURS, tenants: reports.length, reports });
+  /* ── AND IT HAS TO REACH A PERSON (30 Aug 2026) ──────────────────────────
+     Until today this route ended here: `console.info` and a JSON response. Cloud Scheduler
+     discards the response, so the reflection went to Cloud Logging and nowhere else. It was
+     switched on that morning and the very next question was the right one — where does the
+     answer go? It went nowhere anybody looks.
+
+     Not folded into `health-digest`, which returns early on `digest.clean` and sends nothing
+     when the app is healthy. Putting a learning note there would deliver it only on the days
+     something was ALSO broken.
+
+     `reflectionEmail` returns null when there is nothing to say, and that is the common case
+     while the pipeline is young — see its header. Null must stay silent: a note that arrives
+     every morning regardless is wallpaper by the end of the week. */
+  const mail = reflectionEmail(reports, WINDOW_HOURS);
+  if (!mail) {
+    return NextResponse.json({
+      ok: true, windowHours: WINDOW_HOURS, tenants: reports.length, emailed: false,
+      quiet: "nothing worth an email — no ranking, no block, no acceptance", reports,
+    });
+  }
+
+  /* Same recipient rule as health-digest: the platform owner, oldest first. This is an ops
+     note about the app's own behaviour, not a tenant-facing report. */
+  const { data: owner } = await createAdminClient()
+    .from("users").select("email").eq("role", "owner")
+    .order("created_at", { ascending: true }).limit(1).maybeSingle();
+  const to = (owner as { email?: string } | null)?.email ?? null;
+  if (!to) {
+    return NextResponse.json({
+      ok: true, windowHours: WINDOW_HOURS, tenants: reports.length, emailed: false,
+      reason: "no owner email on file", reports,
+    });
+  }
+
+  const sent = await sendEmail({ to, subject: mail.subject, text: mail.text });
+  return NextResponse.json({
+    ok: true, windowHours: WINDOW_HOURS, tenants: reports.length,
+    emailed: sent.status === "sent", to, emailError: sent.errorMessage, reports,
+  });
 }
