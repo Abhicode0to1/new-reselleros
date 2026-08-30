@@ -43,6 +43,7 @@
 import { z } from "zod";
 import { verifyDraftMoney } from "./money-guard";
 import { findPromises } from "./promise-check";
+import { unbackedQuoteClaim } from "./quote-claim";
 import { findDisparagement } from "./disparagement";
 import { CUSTOM_PRICING_ABOVE, authorisedRatesForItem, discountedRate, slabFor, slabLines } from "@/lib/pricing/volume-slabs";
 import { authorisedNetCostFigures, computeNetCost, netCostLines } from "@/lib/pricing/net-cost";
@@ -367,8 +368,20 @@ export const SALES_AGENT_SYSTEM_PROMPT = [
   "NEVER CLAIM SOMETHING HAPPENED THAT YOU CANNOT SEE",
   "- You cannot log into their account, change their DNS, or start a migration. Never write as",
   "  if you have.",
-  "- Never say a document was 'sent' or 'attached'. You do not control the envelope. Say the",
-  "  quotation has been prepared, and give its reference number if you were given one.",
+  "- Never say a document was 'sent' or 'attached'. You do not control the envelope.",
+  /* ── ONLY WITH A REFERENCE NUMBER (30 Aug 2026) ────────────────────────────
+     This line used to read: "Say the quotation has been prepared, and give its reference
+     number if you were given one." So the claim was unconditional and the reference was
+     optional — and a live reply said "The quotation for 40 seats ... has been prepared at
+     Rs 325 per seat per month" when no quotation existed at all. The auto-quote had
+     correctly refused (the product name did not match the catalogue), and nothing told the
+     agent. The facts block above already said "No quotation has been sent yet"; this line
+     talked over it.
+
+     The reference is now what LICENSES the claim, not a decoration on it. */
+  "- Say a quotation HAS BEEN PREPARED only if you were given its reference number, and then",
+  "  give that number. Were you given none, no quotation exists: say what you will do — 'I",
+  "  will prepare the quotation' — and never that one is ready, attached or enclosed.",
   "- Never invent a reference number, a date, or a person's name.",
   "",
   "END EVERY REPLY WITH THE ONE THING YOU NEED",
@@ -826,6 +839,13 @@ export interface HandoverInput {
   seats: number | null;
   /** Retail figures the prompt authorised, for the money guard. */
   allowedMoney: readonly number[];
+  /**
+   * The lead's REAL quotation id, or null when none exists.
+   *
+   * Without it a draft can tell a customer a quotation is ready when none is — measured
+   * live on 30 Aug 2026. See lib/ai/quote-claim.ts.
+   */
+  quoteRef?: string | null;
 }
 
 export interface HandoverResult {
@@ -1038,6 +1058,27 @@ export function applyHandoverRules(input: HandoverInput): HandoverResult {
     const what = promises.map((f) => `"${f.matched}"`).slice(0, 3).join("; ");
     return handover(
       `The draft commits us to something nobody authorised — it says ${what}. A promise in our name needs a person behind it.`,
+    );
+  }
+
+  /* ── DOES IT SAY A QUOTATION EXISTS THAT DOES NOT? (30 Aug 2026) ──────────
+     Live, to a real address: "The quotation for 40 seats ... has been prepared at Rs 325
+     per seat per month". No quotation existed — the auto-quote had correctly refused
+     because the mail's product name did not match the catalogue, and the agent was never
+     told. The facts block said "No quotation has been sent yet" and the draft said the
+     opposite, with a price beside it.
+
+     Unlike the money and promise checks this is not about what we PROMISED — it is about
+     what we said had already happened. A customer who asks for that document gets nothing,
+     and the sentence they were sent had a rupee figure in it.
+
+     Prompt fixed too, but a prompt is a request; twice today an instruction alone was a
+     coin toss. See lib/ai/quote-claim.ts for why future tense is deliberately allowed. */
+  const unbacked = unbackedQuoteClaim(decision.generated_response.body_text, input.quoteRef);
+  if (unbacked) {
+    return handover(
+      `The draft tells the customer a quotation exists — it says "${unbacked}" — and none does. ` +
+      `Draft the quote first, or say what you will do instead of what you have done.`,
     );
   }
 

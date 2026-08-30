@@ -555,6 +555,9 @@ export async function runSalesAgent(args: {
       : parsed.decision,
     seats: merged?.seats ?? args.lead.seats,
     allowedMoney: prompt.allowedMoney,
+    /* Lead ka ASLI quotation id. Iske bina draft customer se keh sakta hai ki quotation
+       taiyaar hai jabki koi hai hi nahi — 30 Aug 2026 ko live hua. */
+    quoteRef: args.lead.existingQuoteId,
   });
 
   return {
