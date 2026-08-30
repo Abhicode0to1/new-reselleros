@@ -42,6 +42,13 @@ export interface QuoteToInvoice {
   amount: number | null;
   /** Net-30 fallback applies when the quote carries none — see 20260822190000. */
   paymentTermsDays: number | null;
+  /**
+   * The BUYER's GSTIN, or null when they have none on file.
+   *
+   * Null is a perfectly valid invoice — see the reminder this drives below. It is on
+   * the quote's customer, not on the quote.
+   */
+  customerGstin?: string | null;
 }
 
 
@@ -115,6 +122,35 @@ export function issueConsequences(args: {
     out.push({
       tone: "fact",
       text: `Falls due in ${quote.paymentTermsDays} days, from the quote's own payment terms.`,
+    });
+  }
+
+  /* ── THE BUYER'S GSTIN — A REMINDER, NEVER A BLOCK ───────────────────────
+     Asked for by Pardeep on 30 Aug 2026, and he framed it exactly right: a GSTIN is
+     not needed to QUOTE, and it is not compulsory on an invoice either, "kyoki kai
+     logo ke pass gst number hota hi nahi".
+
+     He is right in law as well as in practice. CGST Rule 46(b)/(f) asks for the
+     recipient's GSTIN **where the recipient is registered**; a supply to an
+     unregistered person is a valid B2C tax invoice without one. Refusing to issue
+     would block a whole class of real customers.
+
+     But it matters, and only in one direction: a registered buyer whose GSTIN is
+     missing from the invoice **cannot claim the input tax credit**, and the invoice
+     cannot be edited afterwards (see the second consequence above). The correction is
+     a credit note and a fresh invoice. That is worth one line before the click, and
+     nothing after it.
+
+     `undefined` — the caller did not tell us — says nothing rather than guessing.
+     Silence is right there: a made-up warning on every invoice is a warning nobody
+     reads, and this one has to be readable on the day it is true. */
+  if (quote.customerGstin !== undefined && !quote.customerGstin?.trim()) {
+    out.push({
+      tone: "warning",
+      text:
+        `No GSTIN on file for ${quote.customerName || "this customer"}, so this goes out as a B2C invoice. ` +
+        `That is valid — but if they ARE GST-registered, add it before issuing: without it they cannot claim ` +
+        `input credit, and an issued invoice cannot be corrected except by a credit note.`,
     });
   }
 

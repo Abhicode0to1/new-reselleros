@@ -130,11 +130,19 @@ function InvoicesPageInner() {
 
   /** A pending quote in the shape `issueConsequences` needs. */
   const toIssuable = React.useCallback(
-    (q: { id: string; customer_name?: string | null; amount?: number | null; payment_terms_days?: number | null }) => ({
+    (q: {
+      id: string; customer_name?: string | null; amount?: number | null;
+      payment_terms_days?: number | null;
+      /* Decorated by useQuotesAwaitingInvoice. Absent (undefined) means "not asked", and
+         issue-consequences then says nothing rather than warning about a GSTIN nobody
+         looked for. */
+      customer_gstin?: string | null;
+    }) => ({
       id: q.id,
       customerName: q.customer_name ?? null,
       amount: q.amount ?? null,
       paymentTermsDays: q.payment_terms_days ?? null,
+      customerGstin: q.customer_gstin ?? null,
     }),
     [],
   );

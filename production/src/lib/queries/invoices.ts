@@ -98,11 +98,40 @@ export function useQuotesAwaitingInvoice() {
         }
       }
 
+      /* ── THE BUYER'S GSTIN, FOR A REMINDER AND NOTHING ELSE ────────────────
+         The issue dialog says so when a customer has none, because an issued invoice
+         cannot be edited and a registered buyer without their GSTIN on it cannot claim
+         input credit. It never blocks — a supply to an unregistered person is a valid B2C
+         invoice, and many real buyers have no GST number.
+
+         A separate query rather than `customers(gstin)` embedded in the select above.
+         The foreign key genuinely exists (`quotes_customer_id_fkey`, one and only one, so
+         PostgREST would not have answered PGRST201) — but the GENERATED types do not carry
+         the relationship, and the typed client rejects the embed at compile time with
+         "could not find the relation between quotes and customers". Regenerating
+         database.types.ts to add one reminder is a much larger change than one more read,
+         and this way the feature does not rest on a types file being fresh. */
+      const customerIds = [...new Set(quotes.map((q) => q.customer_id).filter(Boolean))] as string[];
+      const gstinByCustomer = new Map<string, string | null>();
+      if (customerIds.length > 0) {
+        const { data: custs, error: cErr } = await supabase
+          .from("customers")
+          .select("id, gstin")
+          .in("id", customerIds);
+        /* Not thrown. A missing GSTIN lookup must not take down the invoicing screen —
+           the reminder is worth having, and it is worth less than the page. `undefined`
+           below then means "not asked", and the dialog stays silent instead of warning
+           about a GSTIN nobody looked for. */
+        if (cErr) console.error("[useQuotesAwaitingInvoice] gstin lookup failed:", cErr.message);
+        for (const c of custs ?? []) gstinByCustomer.set(c.id, c.gstin ?? null);
+      }
+
       // Decorate each quote with its first_advance_at; sort by oldest first (most urgent)
       return quotes
         .map((q) => ({
           ...q,
           first_advance_at: firstAdvanceByQuote.get(q.id) ?? q.payment_received_at ?? null,
+          customer_gstin: q.customer_id ? gstinByCustomer.get(q.customer_id) ?? null : null,
         }))
         .sort((a, b) => {
           if (!a.first_advance_at) return 1;
