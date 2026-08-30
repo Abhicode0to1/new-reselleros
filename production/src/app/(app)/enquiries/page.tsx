@@ -425,6 +425,15 @@ export default function EnquiriesPage() {
                     type="button"
                     onClick={() => setFolder(f.id)}
                     aria-current={isActive ? "page" : undefined}
+                    /* Do number ko alag-alag naam mil jata hai — hover par aur screen
+                       reader par. Bina iske "2  14" sirf do ginti hain jinme se ek
+                       galat lagti hai; §8 waise bhi har control ka naam maangta hai. */
+                    title={`${f.label} — ${count} conversation${count === 1 ? "" : "s"}${
+                      badge > 0 ? `, ${badge} unread` : ""
+                    }`}
+                    aria-label={`${f.label}, ${count} conversation${count === 1 ? "" : "s"}${
+                      badge > 0 ? `, ${badge} unread` : ""
+                    }`}
                     className={cn(
                       "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] transition-colors",
                       isActive ? "bg-paper-2 font-semibold text-ink" : "text-ink-2 hover:bg-paper-2/60",
@@ -432,9 +441,27 @@ export default function EnquiriesPage() {
                   >
                     <span aria-hidden className="text-[15px] leading-none">{f.icon}</span>
                     <span className="min-w-0 flex-1 truncate">{f.label}</span>
-                    {badge > 0
-                      ? <Badge kind="danger" size="sm">{badge}</Badge>
-                      : count > 0 && <span className="text-2xs tabular-nums text-ink-3">{count}</span>}
+                    {/* ── DONO, YA TO NAHI — 30 Aug 2026 ────────────────────
+                        Ye pehle `badge > 0 ? unread : count` tha, yaani ya-to-ya. Jaise hi
+                        ek mail unread hua, kul ginti GAYAB ho gayi aur uski jagah laal
+                        unread aa gaya. Screen par bacha: rail par "2", aur uske theek bagal
+                        me list ka header "INBOX (14)".
+
+                        Dono sahi the — 14 baat-cheet, unme se 2 anpadhi — par saath-saath
+                        do bina-naam ke number ek doosre ko jhutlate hain. Aaj hi rail ki
+                        "17 vs 12" wali gadbad theek ki gayi thi, aur wo ise dekh kar dobara
+                        poochhi gayi: "kya ye theek hai?" Sawaal hi jawab hai.
+
+                        Ab dono dikhte hain, aur kul ginti hamesha wahi rehti hai jo header
+                        me hai — laal pill chahe ho ya na ho. */}
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {badge > 0 && (
+                        <Badge kind="danger" size="sm">{badge}</Badge>
+                      )}
+                      {count > 0 && (
+                        <span className="text-2xs tabular-nums text-ink-3">{count}</span>
+                      )}
+                    </span>
                   </button>
                 </li>
               );
