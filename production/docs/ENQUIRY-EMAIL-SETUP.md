@@ -1,5 +1,35 @@
 # Enquiries by email → Enquiries page (Google Workspace, no third-party)
 
+> ## ⚠️ ANUTECH ne ye tarika CHHOD diya hai — 30 Aug 2026
+>
+> **Neeche wali Apps Script ab mat banaiye.** App khud `sales@anutech.in` padhta hai —
+> `/api/cron/gmail-inbox`, har minute, Gmail connector se. Beech me koi script nahi.
+>
+> **Kyun chhoda, naapa hua:** 28 Aug 14:09 ke baad **do din tak ek bhi enquiry app tak nahi
+> pahunchi**, aur kisi screen par ek shabd nahi aaya. `sales@` ke account me is doc se banayi
+> gayi ek script padi thi jo secret `?key=` me bhejti thi. 28 Aug ko server par
+> `INBOUND_REQUIRE_HEADER=1` laga (kyunki Cloud Run poora URL log me likh deta hai aur secret
+> wahan khule me baith jata tha) — us din se uski **har request 401**. Aur neeche wale code me
+> ye line jawab dekhe **bina** chalti thi:
+>
+> ```js
+> thread.addLabel(done);
+> ```
+>
+> To mail par `erp-sent` lag jata tha chahe app ne use liya ho ya nahi, aur agli baar
+> `-label:erp-sent` use chhod deta. Gmail ke andar se sab "bhej diya" dikhta tha.
+>
+> **Is design me chhe hisse hain** — Gmail → filter → script → trigger → secret → webhook —
+> aur unme se ek dusre Google account ke andar baithta hai jahan koi nahi dekhta. Connector me
+> do hain, aur fail hone par wo bolta hai.
+>
+> **Ye doc phir bhi kyun rakha hai:** `/api/webhooks/inbound-email` zinda hai aur zinda
+> rahega — kisi doosre reseller ka inbound-parse provider (Postmark / Cloudflare / SendGrid)
+> isi se aayega, aur wahan Gmail OAuth ka raasta hai hi nahi. **Sirf tab use kijiye jab
+> connector ka raasta band ho.** Aur tab bhi: secret **header** (`x-inbound-secret`) me
+> bhejiye, `?key=` me kabhi nahi, aur label **sirf** tab lagaiye jab app ne mail le liya ho
+> (neeche §"Only label on success" me sudhra hua code hai).
+
 Goal: when someone emails a sales enquiry to your Google Workspace mailbox, it
 shows up on **Sales → Enquiries** (and genuine ones auto-become Leads).
 
@@ -12,7 +42,8 @@ Cloudflare, no MX changes, and no Gmail-API OAuth verification.
 
 ```
 someone emails  →  your Gmail (sales@anutech.in)  →  Apps Script (every 5 min)
-   →  POST JSON to  https://<YOUR-APP-URL>/api/webhooks/inbound-email?key=<SECRET>
+   →  POST JSON to  https://<YOUR-APP-URL>/api/webhooks/inbound-email
+      (secret HEADER me: x-inbound-secret — `?key=` ab 401 hai, dekho upar wala banner)
    →  app records it + triages  →  Enquiries page + auto-Lead
 ```
 
