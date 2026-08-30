@@ -38,6 +38,7 @@ import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { isSelfTest, selfTestMarkerMisplaced, SELF_TEST_MARKER } from "@/lib/inbound/self-test";
 import { extractEntities } from "@/lib/inbound/extract";
 import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
+import { matchProductWithAi } from "@/lib/quotes/product-match-ai";
 import { shouldRequoteOnReply } from "@/lib/quotes/requote-on-reply";
 import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
 import { runSupportAgentForMessage } from "@/lib/ai/run-support-agent";
@@ -924,9 +925,42 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
     body: freshForFacts,
     catalogue: catalogueForFacts.map((c) => ({ id: c.id, name: c.name })),
   });
-  const matchedItem = facts.product.value
+  let matchedItem = facts.product.value
     ? catalogueForFacts.find((c) => c.id === facts.product.value?.id) ?? null
     : null;
+
+  /* ── EXACT MATCHER CHOOKA? TAB AI SE POOCHHO (30 Aug 2026) ───────────────
+     `findProduct` poora catalogue naam maangta hai. Us din Pardeep ne likha "google
+     workspace starter" — catalogue me "Google Workspace Business Starter" hai — aur ek
+     shabd ki kami se koi quote bana hi nahi. Kisi bhi padhne wale insaan ko shak nahi hota
+     ki wo kya maang rahe the.
+
+     Pehle wahi pakka matcher chalta hai: muft, turant, aur nishchit. Ye uske BAAD aata hai,
+     sirf us haal me jo pehle chup-chaap haar maan leta tha.
+
+     Model CHUNTA hai, batata nahi: use catalogue dikhaya jata hai, aur uska jawab tabhi
+     maana jata hai jab wo list ke kisi naam se HU-BA-HU mile. Daam hamesha usi row se aata
+     hai — dekho lib/quotes/product-match-ai.ts. */
+  if (!matchedItem && catalogueForFacts.length > 0 && gemini.apiKey) {
+    try {
+      const picked = await matchProductWithAi({
+        apiKey: gemini.apiKey,
+        model: gemini.model,
+        /* Wahi matn jo baaki sab padhte hain — subject samet, kyunki asli maang aksar
+           wahin hoti hai (dekho `withSubject` ka comment). */
+        text: withSubject(freshForFacts),
+        catalogue: catalogueForFacts.map((c) => ({ id: c.id, name: c.name })),
+      });
+      if (picked) {
+        matchedItem = catalogueForFacts.find((c) => c.id === picked.id) ?? null;
+        console.log(`[inbound-email] product matched by AI: ${picked.name}`);
+      }
+    } catch (e) {
+      /* Ek na-mila product ka matlab pehle bhi "koi quote nahi" tha, aur ab bhi wahi hai.
+         Enquiry darj ho chuki hai; ye call uske raaste me nahi aani chahiye. */
+      console.error("[inbound-email] AI product match failed:", (e as Error).message);
+    }
+  }
 
   const leadId = "L-" + Date.now().toString(36).toUpperCase();
   const { error: leadErr } = await admin.from("leads").insert({
