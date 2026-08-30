@@ -20,6 +20,7 @@
  */
 import type { InboundEmailRow } from "@/lib/supabase/database.types";
 import { isSentReply } from "./sent";
+import { groupIntoThreads, type ThreadableEmail } from "./threads";
 
 export type MailFolder =
   | "inbox" | "starred" | "snoozed" | "leads" | "sent" | "done" | "spam";
@@ -50,6 +51,16 @@ export type FoldersRow = Pick<
   snoozed_until: string | null;
   archived_at:   string | null;
 };
+
+/**
+ * What counting needs on top of what filing needs.
+ *
+ * `inFolder` only ever asks whether ONE row belongs somewhere, so `FoldersRow` is
+ * deliberately small. Counting has to group rows into conversations first, and that
+ * needs the fields `threadKey` reads. Kept as a separate type so the filing rules do not
+ * quietly acquire a dependency they do not have.
+ */
+export type CountableRow = FoldersRow & ThreadableEmail;
 
 /**
  * Statuses that mean "the system decided this is not a sales enquiry".
@@ -115,18 +126,35 @@ export function inFolder(row: FoldersRow, folder: MailFolder, nowISO: string): b
   }
 }
 
-/** How many rows are in each folder — the numbers beside the folder names. */
+/**
+ * How many CONVERSATIONS are in each folder — the numbers beside the folder names.
+ *
+ * ─── THIS USED TO COUNT MESSAGES, AND THE TWO NUMBERS SAT SIDE BY SIDE ──────
+ * Measured on the live screen 30 Aug 2026: the rail said **Inbox 17** and the list
+ * header two centimetres to its right said **INBOX (12)**, above twelve rows. Both were
+ * correct — seventeen messages grouped into twelve conversations — and together they
+ * read as a bug, because nothing on the screen said the two words meant different
+ * things. On mobile it was worse: the folder picker said "Inbox (17)" and was the only
+ * number visible, sitting directly above twelve rows.
+ *
+ * The rail's number answers one question: *how much will I see if I click here.* The
+ * list shows conversations, so the answer is conversations. A number beside a folder
+ * name that does not match the rows behind it is not a second useful statistic, it is
+ * the same statistic said wrong.
+ *
+ * The grouping is `groupIntoThreads`, the same function the page uses to build the list
+ * — not a second implementation of "what counts as one conversation". That is the whole
+ * point: one of these numbers being computed a different way is how they disagreed.
+ */
 export function folderCounts(
-  rows: readonly FoldersRow[],
+  rows: readonly CountableRow[],
   nowISO: string,
 ): Record<MailFolder, number> {
   const counts = {
     inbox: 0, starred: 0, snoozed: 0, leads: 0, sent: 0, done: 0, spam: 0,
   } as Record<MailFolder, number>;
-  for (const row of rows) {
-    for (const f of MAIL_FOLDERS) {
-      if (inFolder(row, f.id, nowISO)) counts[f.id] += 1;
-    }
+  for (const f of MAIL_FOLDERS) {
+    counts[f.id] = groupIntoThreads(rows.filter((r) => inFolder(r, f.id, nowISO))).length;
   }
   return counts;
 }
@@ -176,8 +204,17 @@ export function snoozePresets(now: Date): SnoozePreset[] {
  * archived or snoozed inflates it with work already handled.
  */
 export function inboxUnread(
-  rows: readonly (FoldersRow & { read_at: string | null })[],
+  rows: readonly (CountableRow & { read_at: string | null })[],
   nowISO: string,
 ): number {
-  return rows.filter((r) => r.read_at == null && inFolder(r, "inbox", nowISO)).length;
+  /* Conversations, not messages — and the docstring above is why. "Twelve things to do"
+     has to survive a customer sending three mails in a row, which is one thing to read
+     and one thing to answer. Counting messages turned that into three.
+
+     A conversation counts once if ANY message in it is unread: opening the thread shows
+     the whole thing, so one visit clears it however many messages it holds. */
+  const inbox = rows.filter((r) => inFolder(r, "inbox", nowISO));
+  return groupIntoThreads(inbox).filter(
+    (t) => t.messages.some((m) => m.read_at == null),
+  ).length;
 }

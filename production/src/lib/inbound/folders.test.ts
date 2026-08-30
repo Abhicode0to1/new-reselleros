@@ -1,20 +1,33 @@
 import { describe, it, expect } from "vitest";
 import {
   MAIL_FOLDERS, inFolder, isSnoozed, isSpam, folderCounts, inboxUnread, snoozePresets,
-  type FoldersRow, type MailFolder,
+  type CountableRow, type MailFolder,
 } from "./folders";
 
 const NOW = "2026-08-17T09:00:00.000Z";
 
-const row = (over: Partial<FoldersRow & { read_at: string | null }> = {}) => ({
-  status:        "received",
-  lead_id:       null,
-  starred:       false,
-  snoozed_until: null,
-  archived_at:   null,
-  read_at:       null,
-  ...over,
-}) as FoldersRow & { read_at: string | null };
+/* Every row gets its OWN sender and subject unless a test deliberately reuses them.
+   The counts below group into conversations (30 Aug 2026 — see folders.ts), so a shared
+   sender+subject is no longer a neutral default: it would silently merge unrelated
+   fixtures into one thread and every count in this file would drop to 1. */
+let seq = 0;
+
+const row = (over: Partial<CountableRow & { read_at: string | null }> = {}) => {
+  seq += 1;
+  return {
+    id:            `e${seq}`,
+    from_email:    `person${seq}@customer.in`,
+    subject:       `Enquiry ${seq}`,
+    created_at:    NOW,
+    status:        "received",
+    lead_id:       null,
+    starred:       false,
+    snoozed_until: null,
+    archived_at:   null,
+    read_at:       null,
+    ...over,
+  } as CountableRow & { read_at: string | null };
+};
 
 describe("the folder names a salesperson reads", () => {
   it("has no developer jargon left in it", () => {
@@ -177,5 +190,53 @@ describe("counts", () => {
       row({ read_at: null, status: "skipped_non_enquiry" }),
     ];
     expect(inboxUnread(withRead, NOW)).toBe(1);
+  });
+});
+
+describe("counts — BAAT-CHEET ginte hain, message nahi", () => {
+  /* 30 Aug 2026, live screen: rail par "Inbox 17", uske bagal me "INBOX (12)", aur
+     neeche 12 row. Dono sahi the — 17 message, 12 baat-cheet — par saath-saath likhe
+     hone se ek doosre ko jhutla rahe the. Rail ka number ek hi sawaal ka jawab hai:
+     "yahan click karun to kitna dikhega". Isliye ab dono baat-cheet ginte hain. */
+
+  const talk = (n: number, over: Partial<CountableRow & { read_at: string | null }> = {}) =>
+    row({ from_email: "deepak@customer.in", subject: "Quote for 40 seats", id: `m${n}`, ...over });
+
+  it("ek hi bhejne wale ki teen mail = EK conversation", () => {
+    const c = folderCounts([talk(1), talk(2), talk(3)], NOW);
+    expect(c.inbox).toBe(1);
+  });
+
+  it("Re: laga hua jawab usi conversation me girta hai", () => {
+    const c = folderCounts([
+      talk(1),
+      row({ from_email: "deepak@customer.in", subject: "Re: Quote for 40 seats", id: "m2" }),
+    ], NOW);
+    expect(c.inbox).toBe(1);
+  });
+
+  it("alag bhejne wale alag conversation hain, chahe subject ek ho", () => {
+    const c = folderCounts([
+      row({ from_email: "a@x.in", subject: "Quote please", id: "m1" }),
+      row({ from_email: "b@x.in", subject: "Quote please", id: "m2" }),
+    ], NOW);
+    expect(c.inbox).toBe(2);
+  });
+
+  it("unread badge bhi conversation ginta hai — teen unread mail = EK kaam", () => {
+    /* Yahi wo ginti hai jise docstring "twelve things to do" kehti hai. Ek customer ke
+       teen mail padhne ka matlab ek thread kholna hai, teen nahi. */
+    const c = inboxUnread([
+      talk(1, { read_at: null }), talk(2, { read_at: null }), talk(3, { read_at: null }),
+    ], NOW);
+    expect(c).toBe(1);
+  });
+
+  it("thread me ek bhi unread ho to wo ginta hai", () => {
+    expect(inboxUnread([talk(1, { read_at: NOW }), talk(2, { read_at: null })], NOW)).toBe(1);
+  });
+
+  it("poora thread padha ja chuka ho to nahi ginta", () => {
+    expect(inboxUnread([talk(1, { read_at: NOW }), talk(2, { read_at: NOW })], NOW)).toBe(0);
   });
 });

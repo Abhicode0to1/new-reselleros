@@ -1,14 +1,24 @@
 import { describe, it, expect } from "vitest";
 import { SENT_REPLY_STATUS, isSentReply, sentFromNote } from "./sent";
-import { inFolder, folderCounts, MAIL_FOLDERS, type FoldersRow } from "./folders";
+import { inFolder, folderCounts, MAIL_FOLDERS, type CountableRow } from "./folders";
 
 const NOW = "2026-08-18T05:00:00.000Z";
 
-const row = (over: Partial<FoldersRow> = {}): FoldersRow => ({
-  status: "lead_created", lead_id: null,
-  starred: false, snoozed_until: null, archived_at: null,
-  ...over,
-});
+/* Each row gets its own sender and subject: `folderCounts` groups into conversations
+   (30 Aug 2026), so rows sharing both would merge into one and the counts below would
+   be testing the grouping rather than the folder rules. */
+let seq = 0;
+
+const row = (over: Partial<CountableRow> = {}): CountableRow => {
+  seq += 1;
+  return {
+    id: `e${seq}`, from_email: `person${seq}@customer.in`,
+    subject: `Enquiry ${seq}`, created_at: NOW,
+    status: "lead_created", lead_id: null,
+    starred: false, snoozed_until: null, archived_at: null,
+    ...over,
+  };
+};
 
 const SENT = row({ status: SENT_REPLY_STATUS, lead_id: "L-MST0UUN1" });
 

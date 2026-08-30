@@ -40,7 +40,8 @@ import { useLeads } from "@/lib/queries/leads";
 import { answeredState, answeredNote, quoteButtonLabel, answeredTone } from "@/lib/inbound/answered";
 import { matchQuotesToEnquiry, weakestBasis, basisCaveat } from "@/lib/inbound/quote-match";
 import { useInboundEmails, useConvertInboundToLead, useSetInboundState, useEmailSender } from "@/lib/queries/inbound-emails";
-import { inboundStatusMeta, canConvertToLead } from "@/lib/inbound/status";
+import { enquiryBadge, canConvertToLead } from "@/lib/inbound/status";
+import { isBounce, bouncedAddress } from "@/lib/inbound/bounce";
 import {
   MAIL_FOLDERS, inFolder, folderCounts, inboxUnread, snoozePresets, isSnoozed,
   type MailFolder,
@@ -333,6 +334,17 @@ export default function EnquiriesPage() {
   /* A reply WE sent is not something to convert, quote or reply to — it is a record of
      work already done, so the sales toolbar and the composer are hidden on it. */
   const viewingSentReply = selected != null && isSentReply(selected);
+
+  /* ── A BOUNCE IS NOT AN ENQUIRY, IT IS THE OPPOSITE ────────────────────────
+     Four of the seventeen mails in this Inbox on 30 Aug 2026 were delivery failures,
+     and the screen treated each as work owed to a customer: badge "ignored", and a
+     "Send quote" button aimed at mailer-daemon@googlemail.com.
+
+     The news is the reverse of that. A quote WE sent never arrived, so somebody is
+     waiting for a document they will never receive — and the longer it sits looking
+     like an enquiry, the longer nobody fixes the address. */
+  const viewingBounce = selected != null && isBounce(selected);
+  const bouncedTo     = React.useMemo(() => bouncedAddress(selected), [selected]);
   const { data: emailSender } = useEmailSender();
 
   const folderMeta = MAIL_FOLDERS.find((f) => f.id === folder)!;
@@ -612,15 +624,18 @@ export default function EnquiriesPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge kind={inboundStatusMeta(selected.status).kind} dot>
-                    {inboundStatusMeta(selected.status).label}
+                  {/* enquiryBadge, not inboundStatusMeta: a bounce and a no-reply security
+                      alert both carry status `ignored`, and they are opposite news. See
+                      lib/inbound/status.ts. */}
+                  <Badge kind={enquiryBadge(selected).kind} dot>
+                    {enquiryBadge(selected).label}
                   </Badge>
                   {/* `as Route` below: next.config sets experimental.typedRoutes and Next
                       generates those types at BUILD time, so tsc --noEmit passes against
                       types that do not exist yet and only `npm run build` rejects a
                       templated href (CLAUDE.md §25.2). */}
                   {selected.lead_id && (
-                    <Link href={`/leads?highlight=${selected.lead_id}` as Route} className="text-[12px] font-medium text-ink underline">
+                    <Link href={`/leads?lead=${selected.lead_id}` as Route} className="text-[12px] font-medium text-ink underline">
                       Open lead {selected.lead_id}
                     </Link>
                   )}
@@ -646,6 +661,34 @@ export default function EnquiriesPage() {
                   tick beside "you have already sent 2 quotes — check which one the customer
                   should keep" reads as reassurance for a sentence that is reporting a
                   mistake, and people scan the colour before they read the words. */}
+              {/* ── DELIVERY FAILED — WHAT / WHY / WHAT NEXT (§24) ───────────
+                  Placed ABOVE the "already answered" band on purpose. Both can appear at
+                  once, and if they do the order matters: "you already sent a quote" is
+                  reassuring right up until you learn the quote never arrived. */}
+              {viewingBounce && (
+                <div className="border-b border-rose/50 bg-rose-soft/40 px-4 py-2.5">
+                  <p className="text-[12px] leading-relaxed text-ink">
+                    <span className="font-semibold">Aapka bheja email wapas aa gaya.</span>{" "}
+                    {bouncedTo ? (
+                      <>Wo <span className="font-mono font-semibold">{bouncedTo}</span> tak nahi pahuncha.</>
+                    ) : (
+                      /* Same rule the extraction panel follows: say "not named" rather
+                         than guess. A bounce body holds several addresses, and the wrong
+                         one sends a rep to correct a record that is already right. */
+                      <>Kaunsa pata fail hua, wo is notice me likha nahi hai — neeche poora
+                        matn padhiye.</>
+                    )}{" "}
+                    Yaani us customer ne aapka quote dekha hi nahi, aur wo abhi bhi
+                    intezaar kar raha hai.
+                  </p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-ink-2">
+                    <span className="font-semibold text-ink">Ab kya karein:</span> lead par
+                    sahi email pata bhariye, phir wahin se quote dobara bhejiye. Ye notice
+                    nipat jaye to <span className="font-semibold">✅ Mark done</span> dabaiye.
+                  </p>
+                </div>
+              )}
+
               {!viewingSentReply && answeredNote(answered, rupee, answeredCaveat) && (
                 <div className={cn(
                   "flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-4 py-2",
@@ -688,7 +731,7 @@ export default function EnquiriesPage() {
                   </Button>
                 ) : selected.lead_id ? (
                   <Button size="sm" variant="ghost" asChild>
-                    <Link href={`/leads?highlight=${selected.lead_id}` as Route}>🎯 Open the lead</Link>
+                    <Link href={`/leads?lead=${selected.lead_id}` as Route}>🎯 Open the lead</Link>
                   </Button>
                 ) : null}
 
@@ -701,16 +744,27 @@ export default function EnquiriesPage() {
                     renegotiated, the first expired — and blocking it would make the app
                     wrong on a legitimate path to prevent a mistake the banner already
                     prevents. See lib/inbound/answered.ts. */}
+                {/* ── NOT ON A BOUNCE ──────────────────────────────────────
+                    "Send quote" and "WhatsApp" here would be addressed to the mail
+                    system that rejected the message, not to a customer. The live screen
+                    offered exactly that: 📄 Send quote, above a notice from
+                    mailer-daemon@googlemail.com.
+
+                    They are removed rather than disabled. A disabled button says "this
+                    is possible, just not now", and quoting a mail daemon is never the
+                    next step — the band above says what the next step is. */}
+                {!viewingBounce && (
                 <Button size="sm" variant="ghost" asChild>
                   <Link href={quoteHref(selected, entities) as Route}>
                     📄 {quoteButtonLabel(answered)}
                   </Link>
                 </Button>
+                )}
 
                 {/* No phone, no button that pretends. Opening wa.me with a blank
                     number lands the rep in an empty WhatsApp and looks like the app
                     lost the contact. */}
-                {waNumber ? (
+                {viewingBounce ? null : waNumber ? (
                   <Button size="sm" variant="ghost" asChild>
                     <a href={waHref!} target="_blank" rel="noopener noreferrer">💬 WhatsApp</a>
                   </Button>
