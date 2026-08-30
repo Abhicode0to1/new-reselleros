@@ -36,10 +36,27 @@ export interface RetryCandidate {
   leadId: string;
   /** When the agent last failed on this lead. */
   failedAt: string;
-  /** How many times it has failed since the last success. */
+  /** How many times it has failed since the last non-failure. */
   failures: number;
-  /** Last successful reply, or null. Compared against `failedAt`. */
-  lastSuccessAt: string | null;
+  /**
+   * When the agent last reached ANY conclusion other than failing — a reply sent, or a
+   * deliberate handover. Compared against `failedAt`.
+   *
+   * ─── "held" BELONGS HERE, AND LEAVING IT OUT COST A LOOP ──────────────────
+   * The first version of this read only `did` and `failed`, and treated `held` as though it
+   * had not happened. Live within the hour: lead L-MTFW5XKZ was re-run every five minutes
+   * from 20:45 to 21:16, the agent deliberately handed it over every time, and nothing here
+   * could see that — so the 19:47 failure stayed the newest event forever and MAX_RETRIES,
+   * counting only failures, never moved off 1.
+   *
+   * Nothing was emailed (a handover sends nothing), so no customer was troubled — it burned
+   * the tenant's Gemini quota every five minutes instead.
+   *
+   * And a handover is not a near-miss to try again: it is the agent saying a PERSON is
+   * needed. Retrying it is not merely wasteful, it is arguing with a decision that was
+   * correct.
+   */
+  resolvedAt: string | null;
   /** The newest customer message on this lead, or null when there is none to answer. */
   lastCustomerMessageAt: string | null;
   /** A person is on it — stage moved to something a human drives, or lead is junk. */
@@ -97,10 +114,15 @@ export function shouldRetryReply(c: RetryCandidate, nowISO: string): RetryVerdic
     return { retry: false, reason: "nothing_to_answer", detail: "no customer message on this lead to answer" };
   }
 
-  if (c.lastSuccessAt && c.lastSuccessAt > c.failedAt) {
-    /* The commonest exit, and the one that makes this queue self-clearing: something
-       already answered — a later inbound message, or a person. */
-    return { retry: false, reason: "already_answered", detail: "a reply went out after the failure" };
+  if (c.resolvedAt && c.resolvedAt > c.failedAt) {
+    /* The exit that makes this queue self-clearing, and the one whose first version was too
+       narrow: the agent has since REACHED a conclusion — sent a reply, or handed the lead to
+       a person. Either way there is nothing left for a retry to add. */
+    return {
+      retry: false,
+      reason: "already_resolved",
+      detail: "the agent reached a conclusion after the failure — replied, or handed it to a person",
+    };
   }
 
   if (c.failures >= MAX_RETRIES) {

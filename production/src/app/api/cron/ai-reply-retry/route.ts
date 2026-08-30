@@ -80,23 +80,34 @@ async function handle(req: NextRequest) {
     .from("ai_action_log")
     .select("tenant_id, entity_id, outcome, created_at")
     .eq("action", "reply.send")
-    .in("outcome", ["failed", "did"])
+    /* ── EVERY outcome, not a chosen two ─────────────────────────────────────
+       This filtered `["failed", "did"]` and left `held` out, and that single omission
+       produced a live loop within the hour: the agent handed lead L-MTFW5XKZ over every
+       five minutes from 20:45 to 21:16, and none of those handovers was visible here, so
+       the 19:47 failure stayed the newest event and the retry never stopped.
+
+       Nothing was sent — a handover emails nobody — so it cost the tenant's Gemini quota
+       rather than a customer's patience. An allow-list of outcomes is a bet that no third
+       one matters; this is the bet losing. */
     .gte("created_at", since)
     .order("created_at", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  type Seen = { tenantId: string; failedAt: string | null; failures: number; lastSuccessAt: string | null };
+  type Seen = { tenantId: string; failedAt: string | null; failures: number; resolvedAt: string | null };
   const byLead = new Map<string, Seen>();
   for (const a of (actions ?? []) as { tenant_id: string; entity_id: string | null; outcome: string; created_at: string }[]) {
     if (!a.entity_id) continue;
-    const s = byLead.get(a.entity_id) ?? { tenantId: a.tenant_id, failedAt: null, failures: 0, lastSuccessAt: null };
+    const s = byLead.get(a.entity_id) ?? { tenantId: a.tenant_id, failedAt: null, failures: 0, resolvedAt: null };
     if (a.outcome === "failed") {
       s.failedAt = a.created_at;
-      /* Counted since the last success, not for all time — a lead that failed twice last
-         week and works now must not be treated as exhausted. */
+      /* Counted since the last conclusion, not for all time — a lead that failed twice last
+         week and has worked since must not be treated as exhausted. */
       s.failures += 1;
     } else {
-      s.lastSuccessAt = a.created_at;
+      /* ANY other outcome is a conclusion: `did` (a reply went out) and `held` (the agent
+         deliberately fetched a person) both mean this message has been dealt with. Treating
+         only `did` as a conclusion is what made the loop above. */
+      s.resolvedAt = a.created_at;
       s.failures = 0;
     }
     byLead.set(a.entity_id, s);
@@ -136,7 +147,7 @@ async function handle(req: NextRequest) {
       leadId,
       failedAt: s.failedAt!,
       failures: s.failures,
-      lastSuccessAt: s.lastSuccessAt,
+      resolvedAt: s.resolvedAt,
       lastCustomerMessageAt: mail?.created_at ?? null,
       humanTookOver: Boolean(lead?.stage && HUMAN_STAGES.has(lead.stage)),
       isJunk: Boolean(lead?.is_junk),

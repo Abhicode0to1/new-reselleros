@@ -25,7 +25,7 @@ const cand = (over: Partial<RetryCandidate> = {}): RetryCandidate => ({
   leadId: "L-MTFW5XKZ",
   failedAt: minsAgo(10),
   failures: 1,
-  lastSuccessAt: null,
+  resolvedAt: null,
   lastCustomerMessageAt: minsAgo(11),
   humanTookOver: false,
   isJunk: false,
@@ -85,16 +85,52 @@ describe("katar khud saaf hoti hai — koi table mitani nahi padti", () => {
   it("fail ke BAAD koi jawab chala gaya → lead katar se nikal jati hai", () => {
     /* Yahi wo cheez hai jo bina nayi table ke kaam chalati hai: safalta ke baad lead is
        query se mel khana hi band kar deti hai. */
-    const v = shouldRetryReply(cand({ failedAt: minsAgo(10), lastSuccessAt: minsAgo(6) }), NOW);
+    const v = shouldRetryReply(cand({ failedAt: minsAgo(10), resolvedAt: minsAgo(6) }), NOW);
     expect(v.retry).toBe(false);
-    expect(v.reason).toBe("already_answered");
+    expect(v.reason).toBe("already_resolved");
   });
 
   it("safalta fail se PEHLE ki ho to wo maayne nahi rakhti", () => {
     /* Purani safalta katar se nahi nikalti — warna ek hi purani safal reply har aage aane
        wali kharabi ko hamesha ke liye dhak deti. */
-    const v = shouldRetryReply(cand({ failedAt: minsAgo(10), lastSuccessAt: minsAgo(40) }), NOW);
+    const v = shouldRetryReply(cand({ failedAt: minsAgo(10), resolvedAt: minsAgo(40) }), NOW);
     expect(v.retry).toBe(true);
+  });
+});
+
+describe("ASLI LOOP — 30 Aug 2026 ko ye mera hi bug tha", () => {
+  /* Retry cron chalu hone ke ek ghante ke andar: lead L-MTFW5XKZ har 5 minute par dobara
+     chala — 20:45, 20:50, 20:55, 21:00, 21:05, 21:10, 21:15 — aur har baar agent ne
+     soch-samajh kar insaan ko saunp diya (`held`).
+
+     Mera code sirf `did` ko "nateeja" maanta tha. `held` uske liye kuch hua hi nahi tha,
+     isliye 19:47 wali fail hamesha sabse nayi rahi, aur MAX_RETRIES — jo sirf fail ginta
+     tha — 1 se hila hi nahi.
+
+     Kuch bheja nahi gaya (handover kisi ko mail nahi karta), to customer ko takleef nahi
+     hui — par har 5 minute par tenant ka Gemini quota jalta raha.
+
+     Aur handover koi "lagbhag ho gaya tha" wali cheez nahi hai. Wo agent ka faisla hai ki
+     yahan INSAAN chahiye. Use dobara chalana bekaar nahi, GALAT hai — ek sahi faisle se
+     behas karna hai. */
+
+  it("handover ke baad retry NAHI — yahi loop rokti hai", () => {
+    const v = shouldRetryReply(
+      cand({ failedAt: minsAgo(90), resolvedAt: minsAgo(5) }), NOW);
+    expect(v.retry).toBe(false);
+    expect(v.reason).toBe("already_resolved");
+    /* Wajah dono surat batati hai, kyunki dono ka matlab ek hai: aage kuch karna nahi. */
+    expect(v.detail).toMatch(/handed it to a person/);
+  });
+
+  it("saat baar handover hone par bhi ek baar bhi retry nahi", () => {
+    /* Wo asli kram, waise ka waisa. Har baar handover fail se NAYA hai, to har baar rukna
+       chahiye — pehle koi bhi nahi rukta tha. */
+    for (const heldMinsAgo of [31, 26, 21, 16, 11, 6, 1]) {
+      const v = shouldRetryReply(
+        cand({ failedAt: minsAgo(90), resolvedAt: minsAgo(heldMinsAgo) }), NOW);
+      expect(v.retry, `held ${heldMinsAgo} min ago`).toBe(false);
+    }
   });
 });
 
