@@ -220,6 +220,35 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
   const { name: parsedName, email: fromEmail } = parseFrom(rawFrom);
   const fromName  = str("fromName", "from_name", "sender_name") || parsedName;
   const subject   = str("subject", "Subject");
+
+  /**
+   * What the SALES AGENT reads — subject line included.
+   *
+   * ─── THE SUBJECT WAS INVISIBLE TO IT, AND THAT LOST A REAL ENQUIRY ────────
+   * 30 Aug 2026, on production, minutes after the pipeline was fixed. Pardeep emailed
+   * sales@ with the whole request in the SUBJECT and nothing in the body:
+   *
+   *   Subject: mujhe 60 email ke liye quote chahiye google workspace business starter
+   *   Body:    "--  Regards, Pardeep Sharma | Sales Co-ordinator | sales@sriganga.com"
+   *
+   * The mail arrived in 63 seconds and became a lead. Then nothing. `ai_action_log` said
+   * `reply.send / held — "Qualifier requested a colleague to take over the lead"`.
+   *
+   * The agent was handed `incoming: fresh.text || text` — the BODY, and only the body. So
+   * all it could see was a signature reading "Sales Co-ordinator", and it concluded a
+   * colleague was passing a lead along. Given that input the handover was a sensible
+   * decision; the input was the bug.
+   *
+   * Writing the whole request in the subject and leaving the body empty is completely
+   * ordinary — Pardeep did it without thinking about it. `extractEntities` has always read
+   * subject AND body for exactly that reason (that is why seats still came out right); the
+   * agent alone was reading half the email.
+   *
+   * Labelled rather than concatenated, so the model can tell the two apart the way a person
+   * reading an inbox does.
+   */
+  const withSubject = (body: string): string =>
+    subject.trim() ? `Subject: ${subject.trim()}\n\n${body}`.trim() : body;
   const text      = str("text", "body-plain", "plain", "TextBody", "stripped-text", "body");
   const html      = str("html", "body-html", "HtmlBody", "stripped-html");
   const messageId = str("messageId", "message_id", "Message-Id", "MessageID", "Message-ID")
@@ -855,7 +884,7 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
       admin,
       tenantId: tenantId,
       leadId: existing.id,
-      incoming: fresh.text || text,
+      incoming: withSubject(fresh.text || text),
       customerContact: fromEmail,
       channel: "email",
       senderIsOurs,
@@ -988,7 +1017,7 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
     admin,
     tenantId,
     leadId,
-    incoming: freshForFacts,
+    incoming: withSubject(freshForFacts),
     customerContact: fromEmail,
     channel: "email",
     senderIsOurs,
