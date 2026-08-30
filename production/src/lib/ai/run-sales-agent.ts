@@ -43,6 +43,7 @@ import { businessDomainFromEmail } from "@/lib/leads/grading";
    This file's only remaining need was the QUOTE path, and converting the agent's per-year
    view back down is exactly what produced the twelvefold quote — see the read below. */
 import { runSalesAgent, recordSalesTurn } from "./sales-agent.server";
+import { findBillingTerm } from "@/lib/inbound/extract";
 import { dispatchSalesDecision } from "./actions/quote-dispatcher";
 import { cancelPendingLoops, scheduleSalesLoop } from "./sales-loops.server";
 import { logAiAction } from "./autonomy.server";
@@ -333,6 +334,17 @@ async function runSalesAgentForLeadInner(args: RunSalesAgentArgs): Promise<void>
     seats,
     catalogue,
     leadPlan,
+    /* ── THE TERM THE CUSTOMER ACTUALLY WROTE ────────────────────────────────
+       The dispatcher used to hardcode annual. On 30 Aug 2026 the app asked "monthly or
+       annual?", the customer answered "monthly", and the reply quoted Rs 325 per seat per
+       MONTH while the document attached to it was raised for a YEAR. The words and the
+       document disagreed, and the document is the half a customer keeps.
+
+       `findBillingTerm` is the inbound path's own reader, not a second keyword search —
+       so what this hears and what the webhook hears cannot drift apart. Null still means
+       annual; only an explicit term changes anything. */
+    term: findBillingTerm(args.incoming).value,
+    termSource: findBillingTerm(args.incoming).source,
     fromEmail: args.fromEmail,
     senderIsOurs: args.senderIsOurs,
     isSelfTest: args.isSelfTest,

@@ -439,7 +439,7 @@ export function extractEntities(input: {
     phone:   findPhone(haystack),
     seats:   findSeats(haystack, input.catalogue ?? []),
     product: findProduct(haystack, input.catalogue ?? []),
-    term:    findTerm(haystack),
+    term:    findBillingTerm(haystack),
   };
 }
 
@@ -461,7 +461,17 @@ export function extractEntities(input: {
 const ANNUAL_RE  = /\b(?:annual(?:ly)?|yearly|per\s*(?:year|annum)|a\s*year|for\s*(?:1|one)\s*year|12\s*months?|saalana)\b/i;
 const MONTHLY_RE = /\b(?:month(?:ly)?|per\s*month|a\s*month|p\.?m\.?|mahina|maheena)\b/i;
 
-function findTerm(text: string): Extracted<BillingTerm> {
+/**
+ * Did the customer name a billing term?
+ *
+ * EXPORTED 30 Aug 2026, because a second caller needed exactly this and had been guessing.
+ * `quote-dispatcher.ts` passed a hardcoded `term: "annual"` into every quote the sales agent
+ * raised — so a customer who wrote "monthly" got an email quoting Rs 325 per seat per MONTH
+ * and a document for Rs 1,11,255 a YEAR. Q-ADPL-2026-27-0045, sent.
+ *
+ * One function, two callers — not a second keyword search that agrees with this one today.
+ */
+export function findBillingTerm(text: string): Extracted<BillingTerm> {
   const annual  = ANNUAL_RE.exec(text);
   const monthly = MONTHLY_RE.exec(text);
 

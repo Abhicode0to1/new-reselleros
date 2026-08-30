@@ -63,6 +63,15 @@ export interface DispatchArgs {
   catalogue: readonly CatalogueItemPrice[];
   /** Product name on the lead, used when the agent named nothing recognisable. */
   leadPlan: string | null;
+  /**
+   * The billing term the CUSTOMER named, or null when they did not.
+   *
+   * Read with the inbound path's own `findBillingTerm`. Null keeps the previous behaviour
+   * (annual); an explicit "monthly" now reaches the document instead of only the words.
+   */
+  term?: "monthly" | "annual" | null;
+  /** The customer's own phrase, for the timeline. */
+  termSource?: string | null;
   /** Envelope sender for this deployment. */
   fromEmail: string;
   senderIsOurs: boolean;
@@ -354,14 +363,24 @@ export async function dispatchSalesDecision(args: DispatchArgs): Promise<Dispatc
         company: args.company,
         item,
         seats,
-        /* Annual. The agent may only choose GENERATE_QUOTE_AND_SEND once the customer has
-           named a product and a seat count, and every catalogue price it was shown is the
-           annual-commitment figure — so passing null here would let `planQuoteFromEnquiry`
-           record "term assumed" against a rate that was never ambiguous. */
-        term: "annual",
+        /* ── THE TERM THE CUSTOMER NAMED, NOT ALWAYS ANNUAL ──────────────────
+           This was hardcoded `term: "annual"`, and the reasoning was: the agent only
+           quotes once a product and a seat count are known, and every catalogue price it
+           was shown is the annual-commitment figure, so "annual" is never an assumption.
+
+           It missed the case that actually happened. 30 Aug 2026: the app asked "monthly
+           or annual?", the customer answered **"monthly"**, and the reply that went out
+           quoted "Rs 325 per seat per MONTH" — while the document attached to it,
+           Q-ADPL-2026-27-0045, was raised for Rs 1,11,255 a YEAR. The words and the
+           document disagreed, and the document is the half a customer keeps.
+
+           `findBillingTerm` is the same function the inbound path uses, not a second
+           keyword search that agrees with it today. Null still means annual, exactly as
+           before — the change is only that an explicit "monthly" is now honoured. */
+        term: args.term ?? "annual",
         seatsSource: seats === null ? null : `${seats} seats, from the conversation`,
         productSource: item ? `${item.name}, from the conversation` : null,
-        termSource: "annual commitment",
+        termSource: args.termSource ?? "annual commitment",
         recipient: args.customerContact,
         senderIsOurs: args.senderIsOurs,
         isSelfTest: args.isSelfTest,
