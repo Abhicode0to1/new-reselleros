@@ -25,6 +25,7 @@
  * Chalane ka tarika:
  *   node scripts/gmail.mjs labels
  *   node scripts/gmail.mjs find erp-purchase
+ *   node scripts/gmail.mjs show <id>                 # ek mail ka matn (padhne ke liye)
  *   node scripts/gmail.mjs unlabel erp-purchase <id> <id> ...
  */
 import { execSync } from "node:child_process";
@@ -102,6 +103,38 @@ if (cmd === "labels") {
     const h = Object.fromEntries((d.payload?.headers ?? []).map((x) => [x.name, x.value]));
     console.log(`  ${m.id}  ${(h.Date ?? "").slice(0, 16).padEnd(17)} ${(h.From ?? "").slice(0, 30).padEnd(31)} ${(h.Subject ?? "").slice(0, 50)}`);
   }
+
+} else if (cmd === "show") {
+  /* Ek mail ka matn — sirf padhne ke liye, kuch badalta nahi.
+     Ye isliye chahiye tha: `erp-purchase` par pade Amazon mail se ye jaanna tha ki wo
+     ANUTECH ke Amazon BUSINESS account se aaye hain ya aam consumer account se. Us farq
+     par ye tay hota hai ki GST invoice milega ya nahi — aur wo baat mail ke matn me hoti
+     hai, header me nahi. */
+  const id = rest[0];
+  if (!id) { console.error("node scripts/gmail.mjs show <id>"); process.exit(2); }
+  const tk = await token();
+  const d = await api(tk, `messages/${id}?format=full`);
+  const h = Object.fromEntries((d.payload?.headers ?? []).map((x) => [x.name, x.value]));
+  console.log(`From:    ${h.From}\nTo:      ${h.To}\nDate:    ${h.Date}\nSubject: ${h.Subject}\n`);
+
+  /* Body kai jagah chhupa hota hai — MIME ka ped chalna padta hai. */
+  const walk = (part, out = []) => {
+    if (part?.body?.data && /^text\/plain/.test(part.mimeType || "")) {
+      out.push(Buffer.from(part.body.data, "base64url").toString("utf8"));
+    }
+    (part?.parts ?? []).forEach((c) => walk(c, out));
+    return out;
+  };
+  const text = walk(d.payload).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  console.log(text.slice(0, 2500) || "(koi text/plain hissa nahi mila)");
+
+  const att = [];
+  const walkAtt = (part) => {
+    if (part?.filename) att.push(`${part.filename} (${part.mimeType})`);
+    (part?.parts ?? []).forEach(walkAtt);
+  };
+  walkAtt(d.payload);
+  console.log(`\nattachment: ${att.length ? att.join(", ") : "koi nahi"}`);
 
 } else if (cmd === "unlabel") {
   const [label, ...ids] = rest;

@@ -330,9 +330,26 @@ export function AddExpenseDialog({
        gadda "Travel" ban gaya tha, kyunki uske naam me "Ruyi Gadi" tha). Keyword ab bhi
        fallback hai, aur chhote note par wahi behtar rehti hai. */
     if (pending.aiCategory) { setValue("category", pending.aiCategory); setCategoryAuto(true); }
+    /* ── POORE RUPAYE. Bill par paise hote hain, khaana integer hai. ──────────
+       `expenses.igst/cgst/sgst` integer hain — theek `gst_paid` ki tarah, jo hamesha se
+       poore rupaye me hai. Bill par ₹295.63 likha hota hai, aur AI wahi lautata hai.
+
+       Bina round kiye Postgres seedha mana kar deta hai:
+
+           invalid input syntax for type integer: "295.63"
+
+       Ye 30 Aug 2026 ko Pardeep ne screen par pakda. Us se pehle main teen baar khud Save
+       chala chuka tha aur maan raha tha ki rukavat meri jaanch ka artefact hai — kyunki
+       mere paas wo toast dikha hi nahi. Wo asli bug tha, aur mera hi tha: naye khaane usi
+       raat maine jode the aur unhe `gst_paid` wala rounding dena bhool gaya.
+
+       Paise ka udna yahan naya nuksaan nahi hai — `gst_paid` pehle se poore rupaye rakhta
+       hai, aur GST return bhi rupaye me bharta hai. `expenseGstHeads` ka ±1 rupaye wala
+       jhukav theek isi liye likha gaya tha. */
+    const rupaye = (v: number | undefined) => (v ? Math.round(v) : 0);
     setAiHeads(
       pending.igst || pending.cgst || pending.sgst
-        ? { igst: pending.igst ?? 0, cgst: pending.cgst ?? 0, sgst: pending.sgst ?? 0 }
+        ? { igst: rupaye(pending.igst), cgst: rupaye(pending.cgst), sgst: rupaye(pending.sgst) }
         : null,
     );
     const gst = pending.gstin?.trim().toUpperCase();
