@@ -59,7 +59,7 @@ me ye **dobara maange jaayenge**. Chaaron ka jawaab ek jagah likha hai taaki dob
 |---|---|---|---|
 | Won deals se seekhna (Vector RAG) | `lib/ai/playbook.ts` | **Sirf sawaal seekhta hai, jawaab nahi** | Won-deal filter *asardaar* hone ka filter hai, *sach* hone ka nahi |
 | Raat ka reflection cron | `lib/ai/reflection.ts` + `api/cron/ai-reflection` | **Output prompt me KABHI nahi** | Reflection customer ka text padhta hai; prompt me guards hain → **prompt injection** |
-| Human rep ka jawaab (RLHF) | `lib/ai/gold-standard.ts` | **Wahi guards jo agent par lagte hain, phir aadmi ki haan** | Human ka jawaab acha hota hai kyunki **uske paas adhikar tha** |
+| ~~Human rep ka jawaab (RLHF)~~ | ~~`lib/ai/gold-standard.ts`~~ — **30 Aug 2026 ko hata diya** | Asool sahi tha: *wahi guards jo agent par lagte hain, phir aadmi ki haan* | Code kabhi chala hi nahi — 520 line, sirf apna test. Asool yahan likha hai; jis din ye feature banega, isse shuru karna |
 | Lost deals se seekhna | `lib/ai/loss-analysis.ts` | **Diagnosis ko sahi kism ke fix par bhejta hai** | Price aur delay ke **ulte fix** hain |
 
 **Chaaron ka ek hi asool:** kram badalna surakshit hai, **dawa jodna nahi.** Ye module
@@ -73,8 +73,12 @@ me ye **dobara maange jaayenge**. Chaaron ka jawaab ek jagah likha hai taaki dob
 > Pada hua code padhne wale ko bhramit karta hai — wo maan leta hai ki feature maujood hai.
 > Git me sab bacha hai; zaroorat pade to wapas aa sakta hai.
 >
-> **`gold-standard.ts` bhi isi haal me hai** (253 line, sirf apna test) — abhi rakha gaya
-> hai, hataya nahi. Upar wali table me uska zikr isi liye bana hua hai.
+> **`gold-standard.ts` bhi usi din hata diya** (520 line test samet, sirf apna test use
+> karta tha). Teeno milakar **1,671 line** — aur unme se ek bhi line kabhi nahi chali.
+>
+> **Jo hataya wo code hai, faisla nahi.** Upar wali table me teeno ka asool likha hua hai,
+> kaate hue roop me. Jis din inme se koi feature sach me banega, wo asool wahin se uthana
+> chahiye — kyunki wo asool sahi the; bas unhe kisi ne wire nahi kiya tha.
 
 **Aur ek farq jo yaad rakhna:** `loss-analysis.ts` ka `safeToApplyAutomatically` **jhoota
 inkaar nahi hai.** Authorised claims ka kram automatic badalna **sach me surakshit hai** — sirf
