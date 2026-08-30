@@ -32,7 +32,8 @@
     "build:check": "node scripts/build-check.mjs",
     "db:cols": "node scripts/db-cols.mjs",
     "health:prod": "node scripts/health-prod.mjs",
-    "apps-script:read": "node scripts/apps-script.mjs read"
+    "apps-script:read": "node scripts/apps-script.mjs read",
+    "dry-run": "node scripts/sales-dry-run.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
