@@ -610,6 +610,32 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
     "You do not decide a discount; you read it off this table by seat count. Never invent a",
     "percentage, never round one up, and never offer a discount to win an argument.",
     "",
+    /* ── THE WORD "discount" NEVER TRAVELS ALONE ──────────────────────────────
+       30 Aug 2026, live, 70 seats. The draft was correct and it was HELD:
+
+         "For 70 seats, our published 5% reseller volume discount applies."      ← exempt
+         "...Rs 3,078 per seat per year plus 18% GST after the discount."        ← HELD
+
+       The promise guard masks a discount sentence only when THAT sentence names this deal's
+       authorised percentage (`maskAuthorisedSellingPoints`). The first sentence carried "5%"
+       and passed; the second said "the discount" with no figure, so the guard read it as a
+       concession nobody approved and handed the whole reply to a human.
+
+       The guard is right and must not be widened — an unnumbered discount promise is exactly
+       what it exists to catch, and its own comments warn that loosening it is how a money
+       guard dies. But it makes the reply a coin toss: the same authorised 5% sends or holds
+       depending on whether the model happened to repeat the figure. The 100-seat reply an
+       hour earlier said "5% ... discount band" in every mention and went out.
+
+       So the rule moves here, where it costs nothing: carry the figure, or use another word.
+       Same lesson as the block below — do not ask the model to remember, tell it what to
+       write. */
+    "THE WORD \"discount\" MUST NEVER APPEAR WITHOUT ITS PERCENTAGE IN THE SAME SENTENCE.",
+    "Write \"the 5% volume discount\", never \"the discount\" or \"after the discount\". If a",
+    "sentence refers back to it, say \"the volume rate\" or repeat the figure. A bare",
+    "\"discount\" reads as a concession nobody approved, and the reply is held for a human —",
+    "so the customer waits for a price that was already correct and already authorised.",
+    "",
     /* ── STATE the slab, do not silently apply it ──────────────────────────────
        Measured on Q-ADPL-2026-27-0017: the email said "70 seats at Rs 3,240 per seat per
        year, plus 18% GST" — Rs 2,67,624 by the reader's own arithmetic — while the document
