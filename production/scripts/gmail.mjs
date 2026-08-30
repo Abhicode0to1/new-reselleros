@@ -29,7 +29,21 @@
  *   node scripts/gmail.mjs unlabel erp-purchase <id> <id> ...
  */
 import { execSync } from "node:child_process";
-import { SA, SUB } from "./apps-script-lib.mjs";
+import { SA, SUB as DEFAULT_SUB } from "./apps-script-lib.mjs";
+
+/**
+ * KISKA mailbox. Domain-wide delegation domain ke kisi bhi user ko impersonate kar sakti
+ * hai, aur 30 Aug 2026 ko wahi sawaal ka jawab nikla.
+ *
+ * Us din ye maana ja raha tha ki enquiry `pardeep@anutech.in` me aati hai. Naapa gaya to
+ * us mailbox me `to:sales@anutech.in` wale 18 mail the aur **satrah ke satrah SENT** —
+ * Pardeep ke apne bheje hue test. Ek bhi asli customer ka mail wahan tha hi nahi
+ * (`from:deepakandideepak@gmail.com` → 0), jabki wahi mail app me maujood hai.
+ *
+ * Yaani sales@ ek ALAG mailbox hai. Ek mailbox me dekh kar "mail aaya hi nahi" keh dena
+ * is din ki sabse aasan galti thi.
+ */
+const SUB = (process.env.GMAIL_AS ?? "").trim() || DEFAULT_SUB;
 
 /* `gmail.modify` — padhna aur label badalna. `gmail.readonly` kaafi nahi hai (label hatana
    hai), aur poora `https://mail.google.com/` bahut zyada hai (usme delete aa jata hai). */
@@ -104,6 +118,32 @@ if (cmd === "labels") {
     console.log(`  ${m.id}  ${(h.Date ?? "").slice(0, 16).padEnd(17)} ${(h.From ?? "").slice(0, 30).padEnd(31)} ${(h.Subject ?? "").slice(0, 50)}`);
   }
 
+} else if (cmd === "search") {
+  /* Gmail ki apni query, aur har mail ke LABEL bhi.
+     30 Aug 2026 ko ye isliye chahiye tha: `find` sirf label se dhoondhta hai, aur us din
+     ka sawaal ulta tha — "is naye email par label laga hai ya NAHI?". Label wali list me
+     wo mail hota hi nahi, aur uski GAIR-maujoodgi ko "label nahi hai" padhna galat hota:
+     list 50 par kat-ti hai. Isliye mail se poochho, label se nahi.
+
+     Padhne ke alawa ye kuch nahi karta. */
+  const q = rest.join(" ");
+  if (!q) { console.error('node scripts/gmail.mjs search "to:sales@anutech.in newer_than:1d"'); process.exit(2); }
+  const tk = await token();
+  const { labels = [] } = await api(tk, "labels");
+  const nameById = new Map(labels.map((l) => [l.id, l.name]));
+  const { messages = [], resultSizeEstimate = 0 } =
+    await api(tk, `messages?q=${encodeURIComponent(q)}&maxResults=25`);
+  console.log(`"${q}" → ${messages.length} mila (estimate ${resultSizeEstimate})\n`);
+  for (const m of messages) {
+    const d = await api(tk, `messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`);
+    const h = Object.fromEntries((d.payload?.headers ?? []).map((x) => [x.name, x.value]));
+    /* SYSTEM label (INBOX, UNREAD…) chhupaye nahi gaye — jab sawaal "ye mail gaya kahan"
+       ho, tab SPAM ya TRASH hi jawab hota hai. */
+    const ls = (d.labelIds ?? []).map((id) => nameById.get(id) ?? id).join(" ");
+    console.log(`  ${m.id}  ${(h.Date ?? "").slice(0, 22).padEnd(23)} ${(h.From ?? "").slice(0, 28).padEnd(29)} ${(h.Subject ?? "").slice(0, 44)}`);
+    console.log(`      label: ${ls || "(koi nahi)"}`);
+  }
+
 } else if (cmd === "show") {
   /* Ek mail ka matn — sirf padhne ke liye, kuch badalta nahi.
      Ye isliye chahiye tha: `erp-purchase` par pade Amazon mail se ye jaanna tha ki wo
@@ -158,6 +198,12 @@ if (cmd === "labels") {
   console.log(`\n${ids.length} message se label hata. Forwarder agli baar inhe dobara uthayega.`);
 
 } else {
-  console.log("node scripts/gmail.mjs labels | find <label> | unlabel <label> <id>...");
+  console.log(`node scripts/gmail.mjs labels | search "<query>" | find <label> | show <id> | unlabel <label> <id>...
+
+KISKA mailbox: default ${DEFAULT_SUB}. Badalne ke liye GMAIL_AS aage lagao —
+  GMAIL_AS=sales@anutech.in node scripts/gmail.mjs search "newer_than:1d"
+
+30 Aug 2026: sales@ ek ALAG mailbox hai. pardeep@ ke mailbox me asli enquiry hoti hi nahi —
+sirf uske apne bheje hue test. Ek mailbox dekh kar "mail aaya hi nahi" mat keh dena.`);
   process.exit(2);
 }
