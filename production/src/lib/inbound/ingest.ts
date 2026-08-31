@@ -36,9 +36,8 @@ import { decideDisposition } from "@/lib/inbound/disposition";
 import { continuesThread } from "@/lib/inbound/thread-match";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { isSelfTest, selfTestMarkerMisplaced, SELF_TEST_MARKER } from "@/lib/inbound/self-test";
-import { extractEntities } from "@/lib/inbound/extract";
 import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
-import { resolveProduct } from "@/lib/inbound/resolve-product";
+import { readEnquiryFacts } from "@/lib/inbound/read-enquiry";
 import { shouldRequoteOnReply } from "@/lib/quotes/requote-on-reply";
 import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
 import { runSupportAgentForMessage } from "@/lib/ai/run-support-agent";
@@ -537,6 +536,123 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
     summary:     subject || "Email enquiry",
   };
 
+  /* ── EVERYTHING THAT HAPPENS ONCE A LEAD ROW EXISTS ───────────────────────────
+     Timeline entry, follow-up task, quote, AI reply — in that order, for both branches.
+     It was written twice, and the two copies drifted every time something was added:
+
+       23 Aug 2026  the quote block existed on the create branch alone. A reply naming
+                    "50 Business Starter on annual billing" corrected the lead and priced
+                    nothing.
+       31 Aug 2026  the AI product matcher, added the day before for exactly the wording
+                    "google workspace starter", was on the create branch alone. `readEnquiryFacts`
+                    closed that half; this closes the other.
+
+     Twice the repair was "call it on both branches too", and twice a test was added to count
+     the call sites. That is a guard against forgetting, and forgetting was never the real
+     problem — having two places to remember was. One list of steps means the next capability
+     is added once and reaches both doors by construction.
+
+     The "Reply from X" / "Email from X" timeline line is NOT here, deliberately. It belongs
+     beside its own branch's lead write — the append branch files the mail before rewriting
+     the lead, the create branch after inserting it — and moving it in here would push it
+     BELOW the correction rows it explains ("Seats: (blank) -> 48, from the customer's reply").
+     A one-line insert next to the write it describes is not the kind of step that drifts.
+
+     A CLOSURE rather than a module: it reads tenantId, fromEmail, subject, text, rawHeaders,
+     ai, extracted, senderIsOurs and selfTest straight from this request's scope. Lifting it
+     out would mean threading nine unchanging values through a signature, which is its own way
+     of getting one wrong. The two branches differ ONLY in what they pass here. */
+  const afterLeadWritten = async (args: {
+    leadId: string;
+    company: string;
+    /** Changes what the follow-up task is told. The timeline line is written by the caller. */
+    isReply: boolean;
+    ownerId: string | null;
+    facts: import("@/lib/inbound/read-enquiry").EnquiryFacts["facts"];
+    item: import("@/lib/inbound/read-enquiry").EnquiryFacts["item"];
+    /** The seat count to price at — the LEAD's, once corrections have been applied. */
+    seats: number | null;
+    /** What the sales agent reads. Stripped of the quoted thread by the caller. */
+    incoming: string;
+    /**
+     * Null → draft a quote. A string → do not, and say this on the timeline instead.
+     *
+     * Only the reply branch ever fills it: `shouldRequoteOnReply` is what stops a
+     * five-message thread about the same fifty seats minting five GST documents, and a
+     * brand-new lead has nothing to compare against.
+     */
+    skipQuoteBecause: string | null;
+    /** Prefix for the draft's notes — lets a re-quote say why it was raised. */
+    notePrefix?: string;
+  }): Promise<void> => {
+    if (args.skipQuoteBecause) {
+      await admin.from("lead_activities").insert({
+        tenant_id: tenantId, lead_id: args.leadId, kind: "note",
+        detail: `No new quote from this reply — ${args.skipQuoteBecause}`,
+      });
+    } else {
+      /* Not awaited. A PDF render inside a webhook the provider is waiting on would trade
+         ingest reliability for latency, and the lead and the mail are committed by here. */
+      void autoQuoteForLead(admin, {
+        tenantId,
+        leadId:        args.leadId,
+        company:       args.company,
+        item:          args.item,
+        seats:         args.seats,
+        term:          args.facts.term.value,
+        seatsSource:   args.facts.seats.source,
+        productSource: args.facts.product.source,
+        termSource:    args.facts.term.source,
+        recipient:     fromEmail,
+        senderIsOurs,
+        isSelfTest:    selfTest,
+        fromEmail:     FROM_EMAIL,
+        notePrefix:    args.notePrefix,
+      }).catch((err) => console.error("[inbound-email] auto-quote crashed:", err));
+    }
+
+    /* `ownerId` null lands in the unassigned bucket, which is what 0007 designed it for —
+       a freshly captured email lead belongs to nobody yet. */
+    await createFollowUpTask(admin, args.leadId, args.ownerId, {
+      fromEmail, subject, bodyText: text,
+      /* `ai` is null when Gemini did not run. Passing `extracted.isEnquiry` would pass the
+         stub's default-true and let an unclassified email create a task on a guess. */
+      isEnquiry: ai ? ai.isEnquiry : null,
+      summary: extracted.summary,
+      headers: rawHeaders,
+      isReplyToExistingLead: args.isReply,
+    });
+
+    /* Answer them, if the answer promises nothing and the dial allows it. AFTER the quote
+       block, so a drafted-and-sent quote is already in the thread — a reply that says "I will
+       send a quotation" alongside the quotation is the kind of thing a customer notices.
+
+       ─── THIS WAS `runAutoReply` UNTIL 24 AUG 2026 ───────────────────────────
+       Now the AI sales agent (lib/ai/run-sales-agent.ts), and it is a SWAP, not an addition.
+       Running both would have meant two drafters answering one customer — two replies on
+       `auto`, two drafts on `hold` — which is the trust failure this repo cares most about.
+
+       The agent reuses `decideAutoReply` unchanged, so the own-address, they-wrote-last,
+       already-replied and human-is-handling-it gates all still apply, and it adds a
+       conversation transcript, an explicit quote decision, a handover for deals over 50 seats
+       or low confidence, and a scheduled follow-up.
+
+       Not awaited: a Gemini call inside a webhook the provider is waiting on would trade
+       ingest reliability for latency, and the mail is committed by here. */
+    void runSalesAgentForLead({
+      admin,
+      tenantId,
+      leadId: args.leadId,
+      incoming: args.incoming,
+      customerContact: fromEmail,
+      channel: "email",
+      senderIsOurs,
+      isSelfTest: selfTest,
+      fromEmail: FROM_EMAIL,
+      sellerName: SELLER_NAME,
+    }).catch((err) => console.error("[inbound-email] sales agent crashed:", err));
+  };
+
   /* ── Who is this from, before deciding what it is ──────────────────────────
      This lookup used to sit BELOW the `isEnquiry` gate, and that ordering was the
      bug reported on 22 Aug 2026 as "message aaya, show nahi ho raha". A mid-thread
@@ -706,12 +822,6 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
     /* msrp and wholesale added 23 Aug 2026: this branch now prices a quote as well as
        correcting the lead, and it used to select only id+name because correcting was all it
        did. `extractEntities` ignores the extra columns. */
-    const { data: catalogue } = await admin
-      .from("items")
-      .select("id, name, msrp, wholesale, prices")
-      .eq("tenant_id", tenantId)
-      .eq("is_active", true);
-
     const { data: leadFacts } = await admin
       .from("leads")
       .select("seats, plan")
@@ -719,40 +829,28 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
       .eq("tenant_id", tenantId)
       .maybeSingle();
 
-    /* Hoisted out of the planCorrections call, because the quote block below needs the same
-       entities. Extracting twice would risk the two reading different things from one mail —
-       the correction saying 50 seats while the quote priced 20. */
-    const priced = (catalogue ?? []) as {
-      id: string; name: string; msrp: number | null; wholesale: number | null;
-    }[];
-    const rawReplyFacts = extractEntities({
-      fromName, fromEmail, subject,
-      body: fresh.text,
-      catalogue: priced.map((c) => ({ id: c.id, name: c.name })),
-    });
-
     /* ── THE BRANCH THAT KEPT BEING FORGOTTEN ─────────────────────────────────
        31 Aug 2026, a real reply: "mujhe 48 email id google workspace starter ke liye qutoe
        chahiye monthly par". Seats, product and term, all three. The app answered with a
        price, promised a quotation — and drafted nothing, because `findProduct` wants the
-       whole catalogue name ("Google Workspace **Business** Starter") and the AI fallback
-       that exists for exactly this wording was wired into the CREATE branch only.
+       whole catalogue name ("Google Workspace BUSINESS Starter") and the AI fallback that
+       exists for exactly this wording was wired into the CREATE branch only.
 
-       That is the 23 Aug bug again in a new shape: the reply branch is where a customer is
-       actually waiting, and it is the one that keeps missing a capability. Resolving here —
-       BEFORE `planCorrections` — makes the whole chain agree: the correction writes the
-       catalogue's own name onto the lead, `shouldRequoteOnReply` then sees a product, and
-       the draft is priced from that row. */
-    const resolvedReply = await resolveProduct({
-      exact: rawReplyFacts.product.value,
-      text: withSubject(fresh.text),
-      catalogue: priced.map((c) => ({ id: c.id, name: c.name })),
-      gemini,
-    });
-    const replyFacts = resolvedReply && !rawReplyFacts.product.value
-      ? { ...rawReplyFacts,
-          product: { value: resolvedReply.entry, source: resolvedReply.source } }
-      : rawReplyFacts;
+       Both branches now read the mail through `readEnquiryFacts`, so there is one place to
+       add the next capability instead of two — and resolving BEFORE `planCorrections` makes
+       the rest of the chain agree: the correction writes the CATALOGUE's own name onto the
+       lead, `shouldRequoteOnReply` then sees a product, and the draft is priced from that
+       row.
+
+       NO `|| text` here, unlike the create branch: what sits under a reply's quote line is
+       our own earlier message, carrying the very numbers being corrected. */
+    const { catalogue: priced, facts: replyFacts, item: replyItem } =
+      await readEnquiryFacts(admin, {
+        tenantId, fromName, fromEmail, subject,
+        body: fresh.text,
+        bodyWithSubject: withSubject(fresh.text),
+        gemini,
+      });
 
     const plan = planCorrections({
       current: {
@@ -808,120 +906,67 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
          plan.skipped.map((s) => `${s.field}: ${s.reason}`).join("; "),
       );
     }
-    // A reply on a live deal is the case a follow-up task matters most for --
-    // someone is mid-conversation and waiting.
-    await createFollowUpTask(admin, existing.id, existing.owner_id ?? null, {
-      fromEmail, subject, bodyText: text,
-      // `ai` is null when Gemini did not run. Passing `extracted.isEnquiry`
-      // here would pass the webhook's default-true fallback and let an
-      // unclassified email create a task on an unchecked guess.
-      isEnquiry: ai ? ai.isEnquiry : null,
-      summary: extracted.summary,
-      headers: rawHeaders,
-      isReplyToExistingLead: true,
-    });
     await finalize("appended_to_lead", existing.id);
 
     /* ── RE-QUOTE, when the reply changed what they asked for ─────────────────
        THE BUG THE 23 AUG SELF-TEST FOUND, and it was mine. A mail asking for "50 Google
-       Workspace Business Starter users on annual billing" landed here, the extractor
-       rewrote the lead (seats 20 → 50, plan Standard → Starter), and nothing priced it —
-       because the quote block lived on the CREATE branch alone. A reply from somebody
-       already in conversation, naming a seat count and a plan, is the most quote-worthy
-       mail this app receives.
+       Workspace Business Starter users on annual billing" landed here, the extractor rewrote
+       the lead (seats 20 -> 50, plan Standard -> Starter), and nothing priced it — because
+       the quote block lived on the CREATE branch alone.
 
        `shouldRequoteOnReply` is asked FIRST and mostly says no. Without it a five-message
        thread about the same fifty seats would mint five GST documents, each taking an
-       irreversible number from the gapless Rule 46 series.
+       irreversible number from the gapless Rule 46 series. It is the ONE step that belongs
+       to this branch alone — a brand-new lead has no earlier quote to compare against —
+       which is why it is a decision passed INTO the shared steps rather than a second copy
+       of them.
 
-       The facts come from the lead AFTER the corrections above were applied — the reply's
-       own numbers when it changed them, the stored ones when it did not. */
-    {
-      const { data: freshLead } = await admin
-        .from("leads")
-        .select("company, seats, plan")
-        .eq("id", existing.id)
-        .eq("tenant_id", tenantId)
-        .maybeSingle();
-      const lf = (freshLead ?? {}) as { company?: string | null; seats?: number | null; plan?: string | null };
+       The facts come from the lead AFTER the corrections above were applied: the reply's own
+       numbers when it changed them, the stored ones when it did not. */
+    const { data: freshLead } = await admin
+      .from("leads")
+      .select("company, seats, plan")
+      .eq("id", existing.id)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    const lf = (freshLead ?? {}) as { company?: string | null; seats?: number | null; plan?: string | null };
 
-      const { data: lastQuote } = await admin
-        .from("quotes")
-        .select("id, status, seats, plan")
-        .eq("lead_id", existing.id)
-        .eq("tenant_id", tenantId)
-        .order("created_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    const { data: lastQuote } = await admin
+      .from("quotes")
+      .select("id, status, seats, plan")
+      .eq("lead_id", existing.id)
+      .eq("tenant_id", tenantId)
+      .order("created_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-      /* The reply's OWN product wins when it named one, and only then does the lead's
-         stored plan get used. Reading `lf.plan` alone was the second half of the same bug:
-         it is an exact string compare against whatever earlier free text was saved — for
-         this lead, "Google Workspace", which matches no catalogue row and never would. */
-      const matched = resolvedReply
-        ? priced.find((c) => c.id === resolvedReply.entry.id) ?? null
-        : priced.find((c) => c.name === lf.plan) ?? null;
-      const decision = shouldRequoteOnReply({
-        seats:       lf.seats ?? null,
-        productName: matched?.name ?? null,
-        latestQuote: (lastQuote ?? null) as { id: string; status: string | null; seats: number | null; plan: string | null } | null,
-      });
+    /* The reply's OWN product wins when it named one, and only then does the lead's stored
+       plan get used. Reading `lf.plan` alone was the second half of the 31 Aug bug: an exact
+       string compare against whatever earlier free text was saved — on that lead "Google
+       Workspace", which matches no catalogue row and never would. */
+    const matched = replyItem ?? priced.find((c) => c.name === lf.plan) ?? null;
+    const decision = shouldRequoteOnReply({
+      seats:       lf.seats ?? null,
+      productName: matched?.name ?? null,
+      latestQuote: (lastQuote ?? null) as { id: string; status: string | null; seats: number | null; plan: string | null } | null,
+    });
 
-      if (!decision.requote) {
-        await admin.from("lead_activities").insert({
-          tenant_id: tenantId, lead_id: existing.id, kind: "note",
-          detail: `No new quote from this reply — ${decision.reason}`,
-        });
-      } else {
-        void autoQuoteForLead(admin, {
-          tenantId,
-          leadId:        existing.id,
-          company:       lf.company ?? "Customer",
-          item:          matched,
-          seats:         lf.seats ?? null,
-          term:          replyFacts.term.value,
-          seatsSource:   replyFacts.seats.source,
-          productSource: replyFacts.product.source,
-          termSource:    replyFacts.term.source,
-          recipient:     fromEmail,
-          senderIsOurs,
-          isSelfTest:    selfTest,
-          fromEmail:     FROM_EMAIL,
-          notePrefix:    `Re-quoted from a customer reply — ${decision.reason}.`,
-        }).catch((err) => console.error("[inbound-email] re-quote crashed:", err));
-      }
-    }
-
-    /* STEP 2 — answer them, if the answer promises nothing and the dial allows it.
-       This branch matters more than the create branch below: a REPLY to an ongoing
-       conversation is where a customer is actually waiting, and where a human takes longest
-       to get to. `reply.send` ships as `hold`, so today this prepares the draft, files it on
-       the lead's timeline and logs the decision — Pardeep moves the dial when he believes it.
-
-       ─── THIS WAS `runAutoReply` UNTIL 24 AUG 2026 ───────────────────────────
-       Now the AI sales agent (lib/ai/run-sales-agent.ts), and it is a SWAP, not an addition.
-       Running both would have meant two drafters answering one customer — two replies on
-       `auto`, two drafts on `hold` — which is the trust failure this repo cares most about.
-
-       The agent is a superset of what it replaced: it reuses `decideAutoReply` unchanged, so
-       the own-address, they-wrote-last, already-replied and human-is-handling-it gates all
-       still apply, and it adds a conversation transcript, an explicit quote decision, a
-       handover for deals over 50 seats or low confidence, and a scheduled follow-up.
-
-       Not awaited. A Gemini call inside a webhook the provider is waiting on would trade
-       ingest reliability for latency, and the mail is already committed by here. */
-    void runSalesAgentForLead({
-      admin,
-      tenantId: tenantId,
-      leadId: existing.id,
+    await afterLeadWritten({
+      leadId:  existing.id,
+      company: lf.company ?? "Customer",
+      isReply: true,
+      ownerId: existing.owner_id ?? null,
+      facts:   replyFacts,
+      item:    matched,
+      /* The LEAD's seat count, not the reply's: a reply that changes only the product must
+         still price the seats the customer gave earlier. */
+      seats:   lf.seats ?? null,
       incoming: withSubject(fresh.text || text),
-      customerContact: fromEmail,
-      channel: "email",
-      senderIsOurs,
-      isSelfTest: selfTest,
-      fromEmail: FROM_EMAIL,
-      sellerName: SELLER_NAME,
-    }).catch((err) => console.error("[inbound-email] sales agent crashed:", err));
+      skipQuoteBecause: decision.requote ? null : decision.reason,
+      notePrefix: decision.requote
+        ? `Re-quoted from a customer reply — ${decision.reason}.`
+        : undefined,
+    });
 
     return NextResponse.json({ received: true, appendedToLead: existing.id });
   }
@@ -940,33 +985,19 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
 
      `stripQuoted` first, for the same reason the append path does it: a reply carries our
      own earlier numbers underneath, and reading THOSE would quote yesterday's figure. */
+  /* `|| text` is this branch's own answer and does not belong in the shared reader: a
+     forwarded enquiry is often quoted in its entirety, and stripping it would leave nothing
+     to read. The reply branch must NOT do that — there, what sits under the quote line is
+     our own earlier message, carrying the very numbers being corrected. */
   const freshForFacts = stripQuoted(text).text || text;
-  const { data: priceCatalogue } = await admin
-    .from("items")
-    .select("id, name, msrp, wholesale, prices")
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true);
-  const catalogueForFacts = (priceCatalogue ?? []) as {
-    id: string; name: string; msrp: number | null; wholesale: number | null;
-  }[];
-  const facts = extractEntities({
-    fromName, fromEmail, subject,
+  const { facts, item: matchedItem } = await readEnquiryFacts(admin, {
+    tenantId, fromName, fromEmail, subject,
     body: freshForFacts,
-    catalogue: catalogueForFacts.map((c) => ({ id: c.id, name: c.name })),
-  });
-  const resolvedCreate = await resolveProduct({
-    exact: facts.product.value
-      ? catalogueForFacts.find((c) => c.id === facts.product.value?.id) ?? null
-      : null,
     /* Wahi matn jo baaki sab padhte hain — subject samet, kyunki asli maang aksar wahin
        hoti hai (dekho `withSubject` ka comment). */
-    text: withSubject(freshForFacts),
-    catalogue: catalogueForFacts.map((c) => ({ id: c.id, name: c.name })),
+    bodyWithSubject: withSubject(freshForFacts),
     gemini,
   });
-  const matchedItem = resolvedCreate
-    ? catalogueForFacts.find((c) => c.id === resolvedCreate.entry.id) ?? null
-    : null;
 
   const leadId = "L-" + Date.now().toString(36).toUpperCase();
   const { error: leadErr } = await admin.from("leads").insert({
@@ -1010,61 +1041,20 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
     tenant_id: tenantId, lead_id: leadId, kind: "email_in",
     detail: `Email from ${fromEmail}${subject ? ` · ${subject}` : ""}`,
   });
-
-  /* ── 6b. Draft a quote, and send it if the rules allow ─────────────────────
-     130 lines used to sit here, and they only ran on THIS branch — which is the bug the
-     23 Aug self-test found. See lib/quotes/auto-quote-for-lead.ts: an appended reply
-     naming seats and a plan is the most quote-worthy mail this app gets, and it was the
-     one branch that priced nothing.
-
-     Not awaited. A PDF render inside a webhook a provider is waiting on would trade
-     ingest reliability for latency, and the lead and the mail are committed by here. */
-  void autoQuoteForLead(admin, {
-    tenantId,
+  await afterLeadWritten({
     leadId,
     company,
-    item:          matchedItem,
-    seats:         facts.seats.value,
-    term:          facts.term.value,
-    seatsSource:   facts.seats.source,
-    productSource: facts.product.source,
-    termSource:    facts.term.source,
-    recipient:     fromEmail,
-    senderIsOurs,
-    isSelfTest:    selfTest,
-    fromEmail:     FROM_EMAIL,
-  }).catch((err) => console.error("[inbound-email] auto-quote crashed:", err));
-  // owner_id is null on a freshly captured email lead, so the task lands in the
-  // unassigned bucket for the owner to hand out -- which is what 0007 designed
-  // that bucket for.
-  await createFollowUpTask(admin, leadId, null, {
-    fromEmail, subject, bodyText: text,
-    isEnquiry: ai ? ai.isEnquiry : null,
-    summary: extracted.summary,
-    headers: rawHeaders,
-    isReplyToExistingLead: false,
-  });
-
-  /* STEP 2 on a brand-new lead. Runs AFTER the quote block above, so if a quote was drafted
-     and sent the reply is written with that already in the thread — a reply that says "I
-     will send a quotation" alongside the quotation is the kind of thing a customer notices.
-
-     Same fire-and-forget shape and the same `hold` default as the append branch, and the same
-     swap from `runAutoReply` — see the append branch for why both had to move together. A
-     step wired to one branch and not the other is exactly the 23 Aug auto-quote bug, and
-     lib/quotes/auto-quote-wiring.test.ts pins both call sites for that reason. */
-  void runSalesAgentForLead({
-    admin,
-    tenantId,
-    leadId,
+    isReply: false,
+    /* Nobody owns a freshly captured email lead yet. */
+    ownerId: null,
+    facts,
+    item: matchedItem,
+    seats: facts.seats.value,
     incoming: withSubject(freshForFacts),
-    customerContact: fromEmail,
-    channel: "email",
-    senderIsOurs,
-    isSelfTest: selfTest,
-    fromEmail: FROM_EMAIL,
-    sellerName: SELLER_NAME,
-  }).catch((err) => console.error("[inbound-email] sales agent crashed:", err));
+    /* A brand-new lead has no earlier quote to compare against, so there is nothing to
+       refuse — `shouldRequoteOnReply` only makes sense on the reply branch. */
+    skipQuoteBecause: null,
+  });
 
   // ── 7. Notify the reseller owner (best-effort) ─────────────────────────
   const { data: tenant } = await admin.from("tenants").select("email, name").eq("id", tenantId).maybeSingle();

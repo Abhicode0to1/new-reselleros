@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -30,62 +30,61 @@ const code = WEBHOOK.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "
 /** Where the append branch ends — everything after is the create branch. */
 const APPEND_END = code.indexOf('appendedToLead: existing.id');
 
-describe("the auto-quote runs on both branches", () => {
-  it("is called twice, not once", () => {
+/* ─────────────────────────────────────────────────────────────────────────────
+   ⚠️ THIS BLOCK CHANGED SHAPE ON 31 AUG 2026, AND THAT IS THE POINT.
+
+   It used to assert that the quote and the AI reply were each called TWICE — once per
+   branch — because twice they had been wired to one branch only. Counting call sites is a
+   guard against forgetting, and forgetting was never the real problem: having two places to
+   remember was.
+
+   Both branches now run the same list of steps (`afterLeadWritten`), so each step is called
+   exactly ONCE. "Twice" is now the failure, not the pass. If you are here because a test
+   went red after you added a step, add it inside that function — not to a branch.
+   ───────────────────────────────────────────────────────────────────────────── */
+describe("lead ban-ne ke BAAD ke kadam ek hi jagah likhe hain", () => {
+  it("auto-quote ek hi baar — dono branch usi ek raaste se guzarte hain", () => {
     const calls = code.match(/autoQuoteForLead\(admin, \{/g) ?? [];
-    expect(calls.length, `autoQuoteForLead is called ${calls.length} time(s) — the 23 Aug bug was exactly one`).toBe(2);
+    expect(calls.length, `autoQuoteForLead ${calls.length} baar likha hai; ek hona chahiye`)
+      .toBe(1);
   });
 
-  it("is called on the APPEND branch — the one that was missing", () => {
-    /* A reply from somebody already in conversation, naming a seat count and a plan, is the
-       most quote-worthy mail this app receives. It was the branch that priced nothing. */
-    expect(APPEND_END).toBeGreaterThan(0);
-    const appendBranch = code.slice(0, APPEND_END);
-    expect(appendBranch).toContain("autoQuoteForLead(admin, {");
-  });
-
-  it("is called on the CREATE branch too", () => {
-    const createBranch = code.slice(APPEND_END);
-    expect(createBranch).toContain("autoQuoteForLead(admin, {");
-  });
-
-  it("asks shouldRequoteOnReply on the append branch and NOT on create", () => {
-    /* A brand-new lead has nothing to compare against, so the gate is meaningless there —
-       and asking it would need a fake "latest quote" to answer. On append it is what stops a
-       five-message thread about the same fifty seats minting five GST documents. */
-    const appendBranch = code.slice(0, APPEND_END);
-    const createBranch = code.slice(APPEND_END);
-    expect(appendBranch).toContain("shouldRequoteOnReply(");
-    expect(createBranch).not.toContain("shouldRequoteOnReply(");
-  });
-});
-
-describe("the AI sales agent also runs on both branches", () => {
-  /* This described `runAutoReply` until 24 Aug 2026. The webhook now calls
-     `runSalesAgentForLead` instead — a SWAP, not an addition, because two drafters answering
-     one customer means two replies. The assertion follows the step rather than the name, which
-     is what this block's original comment asked for: "whatever the next automated step is, it
-     gets a line here." */
-  it("is called twice, not once", () => {
+  it("AI sales agent bhi ek hi baar", () => {
+    /* Ye `runAutoReply` tha 24 Aug tak. Ab agent hai — SWAP, addition nahi: do drafter ek
+       customer ko jawab likhein to `auto` par uske paas do email jaate hain. */
     const calls = code.match(/runSalesAgentForLead\(\{/g) ?? [];
-    expect(calls.length, `runSalesAgentForLead is called ${calls.length} time(s) — both branches need it`).toBe(2);
+    expect(calls.length, `runSalesAgentForLead ${calls.length} baar likha hai; ek hona chahiye`)
+      .toBe(1);
   });
 
-  it("has fully replaced the old auto-reply — no call site is left behind", () => {
-    /* The failure this catches is the half-done swap: one branch on the agent, one still on
-       runAutoReply, so a customer replying to an existing thread gets a different system than
-       a new enquiry — and on `auto`, one of them gets two emails. */
+  it("follow-up task bhi ek hi baar", () => {
+    const calls = code.match(/createFollowUpTask\(admin,/g) ?? [];
+    expect(calls.length).toBe(1);
+  });
+
+  it("dono branch afterLeadWritten bulate hain", () => {
+    expect(APPEND_END).toBeGreaterThan(0);
+    expect(code.slice(0, APPEND_END), "APPEND branch — yahi baar-baar chhooti hai")
+      .toContain("afterLeadWritten({");
+    expect(code.slice(APPEND_END), "CREATE branch").toContain("afterLeadWritten({");
+  });
+
+  it("shouldRequoteOnReply sirf APPEND branch par poochha jata hai", () => {
+    /* Ek naye lead ke paas tulna karne ko kuch hai hi nahi, isliye wahan ye gate bematlab
+       hai. Reply par yahi ek paanch-message wali baat-cheet ko paanch GST document ban-ne se
+       rokta hai. Isiliye ye gate branch me hai aur uska NATEEJA shared function me jata hai —
+       kadam saanjhe, faisla apna. */
+    expect(code.slice(0, APPEND_END)).toContain("shouldRequoteOnReply(");
+    expect(code.slice(APPEND_END)).not.toContain("shouldRequoteOnReply(");
+  });
+
+  it("purana auto-reply kahin nahi bacha", () => {
+    /* Aadha-adhoora swap: ek branch agent par, doosri purane par — to purane thread wale
+       customer ko alag system milta, aur `auto` par do email. */
     expect(code).not.toMatch(/runAutoReply\(\{/);
   });
-
-  it("runs on the APPEND branch", () => {
-    expect(code.slice(0, APPEND_END)).toContain("runSalesAgentForLead({");
-  });
-
-  it("runs on the CREATE branch", () => {
-    expect(code.slice(APPEND_END)).toContain("runSalesAgentForLead({");
-  });
 });
+
 
 describe("no second copy of the money arithmetic", () => {
   it("the webhook does not build a quote row itself any more", () => {
@@ -105,7 +104,7 @@ describe("no second copy of the money arithmetic", () => {
   });
 });
 
-describe("product resolution runs on both branches — the 31 Aug repeat", () => {
+describe("mail EK hi tarike se padhi jati hai — 31 Aug ka asli sabak", () => {
   /* ─────────────────────────────────────────────────────────────────────────
      Wahi galti, teesri shakl me. 30 Aug ko AI product fallback joda gaya kyunki "google
      workspace starter" catalogue ke "Google Workspace Business Starter" se nahi milta tha.
@@ -113,31 +112,56 @@ describe("product resolution runs on both branches — the 31 Aug repeat", () =>
 
      31 Aug ko asli reply aayi: "mujhe 48 email id google workspace starter ke liye qutoe
      chahiye monthly par" — seats, product aur term, teeno. App ne daam bata diya, quotation
-     ka vaada bhi kar diya, aur draft kuch nahi kiya. Timeline par likha tha: "the reply does
-     not give both a seat count and a catalogue product".
+     ka vaada bhi kar diya, aur draft kuch nahi kiya.
 
-     Reply branch hi wo branch hai jahan customer asli me intezaar kar raha hota hai, aur
-     wahi baar-baar chhoot jati hai. Isliye ab ye ek FUNCTION hai aur dono taraf gina jata
-     hai. Branch bhoolne ki jagah hai; function nahi.
+     Do baar "dono jagah bulao" wala pehra lagane ke baad saaf hua ki pehra kaafi nahi hai:
+     asli dikkat ye thi ki mail DO alag tariko se padhi jati thi. Ab ek hi tarika hai —
+     `readEnquiryFacts` — aur ye block usi ko pakde rakhta hai.
      ───────────────────────────────────────────────────────────────────────── */
-  it("resolveProduct do baar bulaya jata hai, ek baar nahi", () => {
-    const calls = code.match(/resolveProduct\(\{/g) ?? [];
-    expect(calls.length, `resolveProduct ${calls.length} baar bulaya gaya — 31 Aug ki galti theek ek thi`)
+  it("readEnquiryFacts do baar bulaya jata hai — har branch ek baar", () => {
+    const calls = code.match(/readEnquiryFacts\(admin, \{/g) ?? [];
+    expect(calls.length, `readEnquiryFacts ${calls.length} baar bulaya gaya, 2 hona chahiye`)
       .toBe(2);
   });
 
-  it("APPEND branch par bhi — yahi wo taraf hai jo chhooti hai", () => {
+  it("APPEND branch par bhi — yahi wo taraf hai jo baar-baar chhooti hai", () => {
     expect(APPEND_END).toBeGreaterThan(0);
-    expect(code.slice(0, APPEND_END)).toContain("resolveProduct({");
+    expect(code.slice(0, APPEND_END)).toContain("readEnquiryFacts(admin, {");
   });
 
   it("CREATE branch par bhi", () => {
-    expect(code.slice(APPEND_END)).toContain("resolveProduct({");
+    expect(code.slice(APPEND_END)).toContain("readEnquiryFacts(admin, {");
   });
 
-  it("koi branch seedha matchProductWithAi nahi bulata", () => {
-    /* Do jagah do tarike se product dhoondhna hi ye poori galti thi. Ek hi darwaza rahe. */
+  it("webhook khud na extractEntities bulata hai, na resolveProduct", () => {
+    /* Yahi wo darwaza hai jise band rakhna hai. Ek branch me seedha extractor bula lena
+       wapas do tarike bana deta hai, aur agli capability phir ek hi taraf lagegi. */
+    expect(code).not.toContain("extractEntities(");
+    expect(code).not.toContain("resolveProduct(");
     expect(code).not.toContain("matchProductWithAi(");
+  });
+
+  it("poore src me resolveProduct sirf EK jagah se bulaya jata hai", () => {
+    /* Puri repo par ginti, sirf is file par nahi — warna koi doosra caller chup-chaap apna
+       raasta bana lega aur ye poora kaam wapas wahin pahunch jayega. */
+    const hits: string[] = [];
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(dir)) {
+        const f = join(dir, e);
+        if (statSync(f).isDirectory()) { walk(f); continue; }
+        if (!/\.tsx?$/.test(e) || /\.test\.tsx?$/.test(e)) continue;
+        if (f.endsWith("resolve-product.ts")) continue;
+        const src = readFileSync(f, "utf8")
+          .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+        if (/\bresolveProduct\(/.test(src)) hits.push(f);
+      }
+    };
+    const root = join(process.cwd(), "src");
+    walk(root);
+    /* Path ko `join` se hi banaya jata hai — Windows par separator ulta hota hai, aur use
+       haath se badalna hi is jaanch ko kisi doosri machine par lal kar deta. */
+    expect(hits.map((h) => h.slice(root.length + 1)))
+      .toEqual([join("lib", "inbound", "read-enquiry.ts")]);
   });
 
   it("append branch reply ka product lead ke purane plan se PEHLE dekhta hai", () => {
@@ -145,6 +169,6 @@ describe("product resolution runs on both branches — the 31 Aug repeat", () =>
        us free text par jo pehle save hua tha — is lead par "Google Workspace", jo kisi
        catalogue row se kabhi nahi milega. */
     expect(code.slice(0, APPEND_END))
-      .toMatch(/resolvedReply\s*\?\s*priced\.find\(\(c\) => c\.id === resolvedReply\.entry\.id\)/);
+      .toMatch(/replyItem \?\? priced\.find\(\(c\) => c\.name === lf\.plan\)/);
   });
 });
