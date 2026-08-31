@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { DomainSearch } from "@/components/home/DomainSearch";
+import { AgentChat } from "@/components/agent/AgentChat";
 import { Reveal, SectionHead, ImageSlot } from "@/components/ui/bits";
 import { CATALOGUE, CASES, REVIEWS, PROOF_POINTS } from "@/lib/data/copy";
 
@@ -16,6 +17,10 @@ export const metadata: Metadata = {
 export default function HomePage() {
   return (
     <>
+      {/* Live AI sales agent — launcher WhatsApp pill ke theek upar (Pardeep, 31 Aug 2026).
+         Home par hi, kyunki yahi wo darwaza hai jahan anjaan visitor pehli baar aata hai;
+         jawab app ke public agent se aate hain, live catalogue ke daam ke saath. */}
+      <AgentChat />
       {/* ── Hero: 1.05fr .95fr, h1 54px, search card right ─────────────────── */}
       <section className="section rise">
         <div className="wrap" style={{ display: "grid", gridTemplateColumns: "1.05fr .95fr", gap: 48, alignItems: "start" }} data-grid="hero">
