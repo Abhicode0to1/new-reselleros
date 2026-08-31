@@ -30,6 +30,7 @@ import type { QuoteLineItem, LineCommitment, BillingCycle } from "@/lib/supabase
 import {
   cycleInvoicesPerYear, cycleUnitLabel, cycleScheduleLabel, cycleFromLegacyCommitment,
 } from "@/lib/quotes/billing";
+import { perInvoiceDivisor, annualContractValue } from "./invoice-divisor";
 
 // ─── Billing helpers ───────────────────────────────────────────────────────
 // Frequency is a quote-level `billing_cycle` (migration 0161); a line's
@@ -387,8 +388,28 @@ export function QuotePDF(props: QuotePDFProps) {
   const dRound = (v: number) => (isForeign ? Math.round(v * 100) / 100 : Math.round(v));
   const toDisp = (inr: number) => (isForeign ? dRound(inr / fxRate) : inr);
   const fmtC   = (v: number) => (isForeign ? formatForeign(v, currency ?? "") : rupee(v));
-  const fmtInv = (annual: number) =>
-    perInvoice ? `${fmtC(dRound(annual / billingN))}${billingUnit}` : fmtC(annual);
+  /* ── TWO DIFFERENT THINGS BOTH LOOK LIKE "MONTHLY" ────────────────────────
+     Everything below used to divide every stored figure by `billingN`, on the assumption
+     that a stored figure is always an ANNUAL contract value. That is right for the common
+     case — an annual commitment billed in twelve instalments — and wrong for the other one:
+
+       annual_yearly + billing monthly   ->  subtotal is a YEAR.   Divide by 12.
+       monthly (flex) + billing monthly  ->  subtotal is a MONTH.  Divide by nothing.
+
+     `lib/quotes/commitment-rate.ts` documents that boundary and three SQL regression tests
+     pin it — a monthly line's rate is per seat per MONTH, and `record_payment` divides by
+     1.0 rather than 12.0 for exactly that reason. The renderer was the one place that had
+     not been told.
+
+     Measured on Q-ADPL-2026-27-0053, sent: 36 seats at Rs 325/seat/month, subtotal
+     Rs 11,700/month — printed as "Rs 27/mo · Rs 975/mo · Rs 13,392/yr". A twelfth of the
+     real price, on a GST document. The row was correct; only this line was not.
+
+     `billingCycle` alone cannot tell the two apart, because both say "monthly". The LINE's
+     own commitment can, and it is the same field the pricing planner set. */
+  const invoiceDivisor = perInvoiceDivisor(billingN, firstCommitment);
+  const fmtInv = (stored: number) =>
+    perInvoice ? `${fmtC(dRound(stored / invoiceDivisor))}${billingUnit}` : fmtC(stored);
 
   // Totals: for a FOREIGN quote, rebuild from the display-currency lines so the
   // printed lines + totals agree (qty × rate == amount, Σ lines == total). For a
@@ -583,14 +604,19 @@ export function QuotePDF(props: QuotePDFProps) {
                   </Text>
                   <Text style={s.grandValue}>
                     {perInvoice
-                      ? `${fmtC(dRound(dTotal / billingN))}${billingUnit}`
+                      ? `${fmtC(dRound(dTotal / invoiceDivisor))}${billingUnit}`
                       : fmtC(dTotal)}
                   </Text>
                 </View>
                 {perInvoice && (
                   <View style={s.perInvoiceRow}>
                     <Text>Annual contract value</Text>
-                    <Text>{fmtC(dTotal)}/yr</Text>
+                    {/* The mirror of the divisor above. On an annual commitment billed
+                        monthly, `dTotal` IS the year. On a monthly-flex line it is ONE
+                        MONTH, so the year is twelve of them — printing `dTotal` there
+                        published a contract value a twelfth of the truth, next to a
+                        correct per-month figure. */}
+                    <Text>{fmtC(annualContractValue(dTotal, billingN, firstCommitment))}/yr</Text>
                   </View>
                 )}
                 {isForeign && (
