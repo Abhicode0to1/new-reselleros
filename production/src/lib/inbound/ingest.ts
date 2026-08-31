@@ -38,7 +38,7 @@ import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { isSelfTest, selfTestMarkerMisplaced, SELF_TEST_MARKER } from "@/lib/inbound/self-test";
 import { extractEntities } from "@/lib/inbound/extract";
 import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
-import { matchProductWithAi } from "@/lib/quotes/product-match-ai";
+import { resolveProduct } from "@/lib/inbound/resolve-product";
 import { shouldRequoteOnReply } from "@/lib/quotes/requote-on-reply";
 import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
 import { runSupportAgentForMessage } from "@/lib/ai/run-support-agent";
@@ -725,11 +725,34 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
     const priced = (catalogue ?? []) as {
       id: string; name: string; msrp: number | null; wholesale: number | null;
     }[];
-    const replyFacts = extractEntities({
+    const rawReplyFacts = extractEntities({
       fromName, fromEmail, subject,
       body: fresh.text,
       catalogue: priced.map((c) => ({ id: c.id, name: c.name })),
     });
+
+    /* ── THE BRANCH THAT KEPT BEING FORGOTTEN ─────────────────────────────────
+       31 Aug 2026, a real reply: "mujhe 48 email id google workspace starter ke liye qutoe
+       chahiye monthly par". Seats, product and term, all three. The app answered with a
+       price, promised a quotation — and drafted nothing, because `findProduct` wants the
+       whole catalogue name ("Google Workspace **Business** Starter") and the AI fallback
+       that exists for exactly this wording was wired into the CREATE branch only.
+
+       That is the 23 Aug bug again in a new shape: the reply branch is where a customer is
+       actually waiting, and it is the one that keeps missing a capability. Resolving here —
+       BEFORE `planCorrections` — makes the whole chain agree: the correction writes the
+       catalogue's own name onto the lead, `shouldRequoteOnReply` then sees a product, and
+       the draft is priced from that row. */
+    const resolvedReply = await resolveProduct({
+      exact: rawReplyFacts.product.value,
+      text: withSubject(fresh.text),
+      catalogue: priced.map((c) => ({ id: c.id, name: c.name })),
+      gemini,
+    });
+    const replyFacts = resolvedReply && !rawReplyFacts.product.value
+      ? { ...rawReplyFacts,
+          product: { value: resolvedReply.entry, source: resolvedReply.source } }
+      : rawReplyFacts;
 
     const plan = planCorrections({
       current: {
@@ -831,7 +854,13 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
         .limit(1)
         .maybeSingle();
 
-      const matched = priced.find((c) => c.name === lf.plan) ?? null;
+      /* The reply's OWN product wins when it named one, and only then does the lead's
+         stored plan get used. Reading `lf.plan` alone was the second half of the same bug:
+         it is an exact string compare against whatever earlier free text was saved — for
+         this lead, "Google Workspace", which matches no catalogue row and never would. */
+      const matched = resolvedReply
+        ? priced.find((c) => c.id === resolvedReply.entry.id) ?? null
+        : priced.find((c) => c.name === lf.plan) ?? null;
       const decision = shouldRequoteOnReply({
         seats:       lf.seats ?? null,
         productName: matched?.name ?? null,
@@ -925,42 +954,19 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
     body: freshForFacts,
     catalogue: catalogueForFacts.map((c) => ({ id: c.id, name: c.name })),
   });
-  let matchedItem = facts.product.value
-    ? catalogueForFacts.find((c) => c.id === facts.product.value?.id) ?? null
+  const resolvedCreate = await resolveProduct({
+    exact: facts.product.value
+      ? catalogueForFacts.find((c) => c.id === facts.product.value?.id) ?? null
+      : null,
+    /* Wahi matn jo baaki sab padhte hain — subject samet, kyunki asli maang aksar wahin
+       hoti hai (dekho `withSubject` ka comment). */
+    text: withSubject(freshForFacts),
+    catalogue: catalogueForFacts.map((c) => ({ id: c.id, name: c.name })),
+    gemini,
+  });
+  const matchedItem = resolvedCreate
+    ? catalogueForFacts.find((c) => c.id === resolvedCreate.entry.id) ?? null
     : null;
-
-  /* ── EXACT MATCHER CHOOKA? TAB AI SE POOCHHO (30 Aug 2026) ───────────────
-     `findProduct` poora catalogue naam maangta hai. Us din Pardeep ne likha "google
-     workspace starter" — catalogue me "Google Workspace Business Starter" hai — aur ek
-     shabd ki kami se koi quote bana hi nahi. Kisi bhi padhne wale insaan ko shak nahi hota
-     ki wo kya maang rahe the.
-
-     Pehle wahi pakka matcher chalta hai: muft, turant, aur nishchit. Ye uske BAAD aata hai,
-     sirf us haal me jo pehle chup-chaap haar maan leta tha.
-
-     Model CHUNTA hai, batata nahi: use catalogue dikhaya jata hai, aur uska jawab tabhi
-     maana jata hai jab wo list ke kisi naam se HU-BA-HU mile. Daam hamesha usi row se aata
-     hai — dekho lib/quotes/product-match-ai.ts. */
-  if (!matchedItem && catalogueForFacts.length > 0 && gemini.apiKey) {
-    try {
-      const picked = await matchProductWithAi({
-        apiKey: gemini.apiKey,
-        model: gemini.model,
-        /* Wahi matn jo baaki sab padhte hain — subject samet, kyunki asli maang aksar
-           wahin hoti hai (dekho `withSubject` ka comment). */
-        text: withSubject(freshForFacts),
-        catalogue: catalogueForFacts.map((c) => ({ id: c.id, name: c.name })),
-      });
-      if (picked) {
-        matchedItem = catalogueForFacts.find((c) => c.id === picked.id) ?? null;
-        console.log(`[inbound-email] product matched by AI: ${picked.name}`);
-      }
-    } catch (e) {
-      /* Ek na-mila product ka matlab pehle bhi "koi quote nahi" tha, aur ab bhi wahi hai.
-         Enquiry darj ho chuki hai; ye call uske raaste me nahi aani chahiye. */
-      console.error("[inbound-email] AI product match failed:", (e as Error).message);
-    }
-  }
 
   const leadId = "L-" + Date.now().toString(36).toUpperCase();
   const { error: leadErr } = await admin.from("leads").insert({

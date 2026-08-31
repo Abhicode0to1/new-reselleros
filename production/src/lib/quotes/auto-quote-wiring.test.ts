@@ -104,3 +104,47 @@ describe("no second copy of the money arithmetic", () => {
     expect(lib).toContain('p_doc_type: "quote"');
   });
 });
+
+describe("product resolution runs on both branches — the 31 Aug repeat", () => {
+  /* ─────────────────────────────────────────────────────────────────────────
+     Wahi galti, teesri shakl me. 30 Aug ko AI product fallback joda gaya kyunki "google
+     workspace starter" catalogue ke "Google Workspace Business Starter" se nahi milta tha.
+     Wo fallback sirf CREATE branch me laga.
+
+     31 Aug ko asli reply aayi: "mujhe 48 email id google workspace starter ke liye qutoe
+     chahiye monthly par" — seats, product aur term, teeno. App ne daam bata diya, quotation
+     ka vaada bhi kar diya, aur draft kuch nahi kiya. Timeline par likha tha: "the reply does
+     not give both a seat count and a catalogue product".
+
+     Reply branch hi wo branch hai jahan customer asli me intezaar kar raha hota hai, aur
+     wahi baar-baar chhoot jati hai. Isliye ab ye ek FUNCTION hai aur dono taraf gina jata
+     hai. Branch bhoolne ki jagah hai; function nahi.
+     ───────────────────────────────────────────────────────────────────────── */
+  it("resolveProduct do baar bulaya jata hai, ek baar nahi", () => {
+    const calls = code.match(/resolveProduct\(\{/g) ?? [];
+    expect(calls.length, `resolveProduct ${calls.length} baar bulaya gaya — 31 Aug ki galti theek ek thi`)
+      .toBe(2);
+  });
+
+  it("APPEND branch par bhi — yahi wo taraf hai jo chhooti hai", () => {
+    expect(APPEND_END).toBeGreaterThan(0);
+    expect(code.slice(0, APPEND_END)).toContain("resolveProduct({");
+  });
+
+  it("CREATE branch par bhi", () => {
+    expect(code.slice(APPEND_END)).toContain("resolveProduct({");
+  });
+
+  it("koi branch seedha matchProductWithAi nahi bulata", () => {
+    /* Do jagah do tarike se product dhoondhna hi ye poori galti thi. Ek hi darwaza rahe. */
+    expect(code).not.toContain("matchProductWithAi(");
+  });
+
+  it("append branch reply ka product lead ke purane plan se PEHLE dekhta hai", () => {
+    /* Doosra aadha hissa: `priced.find(c => c.name === lf.plan)` ek exact string compare hai
+       us free text par jo pehle save hua tha — is lead par "Google Workspace", jo kisi
+       catalogue row se kabhi nahi milega. */
+    expect(code.slice(0, APPEND_END))
+      .toMatch(/resolvedReply\s*\?\s*priced\.find\(\(c\) => c\.id === resolvedReply\.entry\.id\)/);
+  });
+});
