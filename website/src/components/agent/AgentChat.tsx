@@ -21,6 +21,8 @@ interface Msg {
   role: "user" | "assistant";
   text: string;
   suggestQuote?: { tier: "starter" | "standard" | "plus"; seats: number; term: "annual" | "monthly" } | null;
+  /** Set when THIS reply filed the lead — renders the confirmation chip. */
+  leadCreated?: { quoteId: string | null } | null;
 }
 
 /** The /quote page's edition names for the agent's tier ids. */
@@ -32,7 +34,8 @@ const TIER_EDITION: Record<string, string> = {
 
 const GREETING: Msg = {
   role: "assistant",
-  text: "Namaste! Main Anutech ka AI sales assistant hoon — Google Workspace, M365 aur Zoho ke daam aur process ke sawaal poochh lijiye. Daam hamare live catalogue se aate hain.",
+  /* Pehla practical sawaal greeting me hi — discovery wahi se shuru hoti hai. */
+  text: "Namaste! Main Anutech ka AI sales assistant hoon — daam hamare live catalogue se aate hain. Bataiye, kitne logo ke liye business email chahiye?",
 };
 
 export function AgentChat() {
@@ -41,6 +44,9 @@ export function AgentChat() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  /* Ek chat, ek lead — server ko har request me batate hain ki lead ban chuki, taaki
+     model dobara lead field bhare to bhi doosri row na bane. */
+  const [leadCaptured, setLeadCaptured] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,12 +67,16 @@ export function AgentChat() {
         headers: { "Content-Type": "application/json" },
         /* The greeting is presentation, not conversation — the agent should not have to
            account for words the model never said. Only real turns travel. */
-        body: JSON.stringify({ messages: next.slice(1).slice(-16).map((m) => ({ role: m.role, text: m.text })) }),
+        body: JSON.stringify({
+          messages: next.slice(1).slice(-16).map((m) => ({ role: m.role, text: m.text })),
+          leadAlreadyCaptured: leadCaptured,
+        }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      const data = (await res.json()) as { reply?: string; suggestQuote?: Msg["suggestQuote"] };
+      const data = (await res.json()) as { reply?: string; suggestQuote?: Msg["suggestQuote"]; leadCreated?: { quoteId: string | null } | null };
       if (!data.reply) throw new Error("empty");
-      setMsgs((cur) => [...cur, { role: "assistant", text: data.reply!, suggestQuote: data.suggestQuote ?? null }]);
+      if (data.leadCreated) setLeadCaptured(true);
+      setMsgs((cur) => [...cur, { role: "assistant", text: data.reply!, suggestQuote: data.suggestQuote ?? null, leadCreated: data.leadCreated ?? null }]);
     } catch {
       setFailed(true);
       setMsgs((cur) => [
@@ -132,6 +142,16 @@ export function AgentChat() {
                 >
                   {m.text}
                 </div>
+                {m.leadCreated && (
+                  <div
+                    className="mono-label"
+                    style={{ marginTop: 6, display: "inline-block", padding: "6px 10px", borderRadius: 999, background: "#EEF7F0", color: "var(--success)", border: "1px solid var(--success)" }}
+                  >
+                    {m.leadCreated.quoteId
+                      ? `DETAILS MILE — QUOTATION ${m.leadCreated.quoteId} BAN GAYI`
+                      : "DETAILS MILE — HUMARI TEAM SAMPARK KAREGI"}
+                  </div>
+                )}
                 {m.suggestQuote && TIER_EDITION[m.suggestQuote.tier] && (
                   <Link
                     href={{

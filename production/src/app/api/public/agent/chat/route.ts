@@ -21,6 +21,7 @@ import {
   systemPrompt,
   guardReply,
   fallbackReply,
+  leadDetailsAppearInTranscript,
   type PublicChatReply,
 } from "@/lib/ai/public-sales-chat";
 
@@ -94,5 +95,80 @@ export async function POST(request: NextRequest) {
 
   if (!raw) return NextResponse.json(fallbackReply() satisfies PublicChatReply);
 
-  return NextResponse.json(guardReply(raw, facts.allowedFigures) satisfies PublicChatReply);
+  const guarded = guardReply(raw, facts.allowedFigures);
+
+  /* ── THE LEAD — the whole point of the chat, filed through the PROVEN path ──
+     Three conditions before anything is written:
+
+       1. guardReply validated the fields (shape, email regex, 10-digit phone).
+       2. The details literally appear in VISITOR turns — the model only ever sees the
+          transcript, so a true detail must be quoted from it. A hallucinated contact is
+          dropped silently and the visitor simply gets asked again later.
+       3. The widget has not already been credited (leadAlreadyCaptured) — one chat, one
+          lead. The app's own Duplicate? marker is the backstop behind that.
+
+     Then the enquiry goes to this deployment's OWN public enquiry endpoints — the same
+     machinery, gates, auto-quote and mails as the website form. Self-addressed via the
+     request's own origin rather than an env URL, because an env-configured self-URL in
+     this repo has already pointed at a dead service once. */
+  const alreadyCaptured = (body as Record<string, unknown>)?.leadAlreadyCaptured === true;
+  let leadCreated: { quoteId: string | null } | null = null;
+
+  if (guarded.lead && !alreadyCaptured && leadDetailsAppearInTranscript(guarded.lead, messages)) {
+    const L = guarded.lead;
+    const origin = request.nextUrl.origin;
+    const summary = messages
+      .filter((m) => m.role === "user")
+      .map((m) => m.text)
+      .join(" | ")
+      .slice(0, 1_500);
+    try {
+      if (L.tier && L.seats) {
+        const res = await fetch(new URL("/api/public/enquiry/workspace", origin), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName: L.fullName,
+            companyName: L.company || L.fullName,
+            email: L.email,
+            phone: L.phone,
+            seats: L.seats,
+            tierId: L.tier,
+            billing: L.term === "monthly" ? "monthly" : "annual",
+            message: `Via the website AI sales chat. Conversation: ${summary}`,
+          }),
+          signal: AbortSignal.timeout(15_000),
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { draftQuoteId?: string | null };
+          leadCreated = { quoteId: data.draftQuoteId ?? null };
+        }
+      } else {
+        const res = await fetch(new URL("/api/public/enquiry/general", origin), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName: L.fullName,
+            companyName: L.company || L.fullName,
+            email: L.email,
+            phone: L.phone,
+            product: "google-workspace",
+            ...(L.seats ? { seats: L.seats } : {}),
+            message: `Via the website AI sales chat. Conversation: ${summary}`,
+          }),
+          signal: AbortSignal.timeout(15_000),
+          cache: "no-store",
+        });
+        if (res.ok) leadCreated = { quoteId: null };
+      }
+    } catch (err) {
+      /* The chat reply still goes out — a failed lead write must not eat the answer. The
+         operator side loses nothing permanent: the visitor was told a person follows up,
+         and the transcript asks again on a later turn because the widget was not credited. */
+      console.error("[public/agent-chat] lead filing failed:", err);
+    }
+  }
+
+  return NextResponse.json({ ...guarded, leadCreated } satisfies PublicChatReply & { leadCreated: { quoteId: string | null } | null });
 }
