@@ -557,7 +557,9 @@ export async function runSalesAgent(args: {
     allowedMoney: prompt.allowedMoney,
     /* Lead ka ASLI quotation id. Iske bina draft customer se keh sakta hai ki quotation
        taiyaar hai jabki koi hai hi nahi — 30 Aug 2026 ko live hua. */
-    quoteRef: args.lead.existingQuoteId,
+    /* DELIVERED, not merely existing. `unbackedQuoteClaim` treats a non-null ref as "the
+       claim is true", and a draft made that false — see lib/quotes/quote-delivered.ts. */
+    quoteRef: args.lead.deliveredQuoteId,
   });
 
   return {

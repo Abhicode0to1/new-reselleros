@@ -411,7 +411,7 @@ describe("the offer reaches the prompt, and its prices reach the money guard", (
         plan,
         customerContact: "rahul@sharmatraders.in",
         channel: "email",
-        existingQuoteId: null,
+        existingQuoteId: null, deliveredQuoteId: null,
         gstin: null,
       },
       history: [],

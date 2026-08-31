@@ -72,7 +72,7 @@ describe.skipIf(!ON)("sukha chalan — AI kya likhta, aur jayega ya rukega", () 
       leadId: "L-DRYRUN", company: "Dry Run Pvt Ltd", contactName: "Pardeep",
       seats: SEATS, plan: catalog[0].name,
       customerContact: "dryrun@example.com", channel: "email" as const,
-      existingQuoteId: null,
+      existingQuoteId: null, deliveredQuoteId: null,
     };
 
     const built = buildSalesAgentPrompt({

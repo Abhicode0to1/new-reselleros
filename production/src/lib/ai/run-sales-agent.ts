@@ -49,6 +49,7 @@ import { cancelPendingLoops, scheduleSalesLoop } from "./sales-loops.server";
 import { logAiAction } from "./autonomy.server";
 import type { SalesChannel } from "./sales-agent";
 import type { CatalogueItemPrice } from "@/lib/quotes/quote-from-enquiry";
+import { quoteWasDelivered } from "@/lib/quotes/quote-delivered";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -202,6 +203,7 @@ async function runSalesAgentForLeadInner(args: RunSalesAgentArgs): Promise<void>
       customerContact: args.customerContact,
       channel: args.channel,
       existingQuoteId: quote.id,
+      deliveredQuoteId: quote.deliveredId,
       gstin: lead.gstin ?? null,
     },
     incoming: args.incoming,
@@ -385,18 +387,19 @@ async function latestQuote(
   admin: Admin,
   tenantId: string,
   leadId: string,
-): Promise<{ id: string | null; totals: number[] }> {
+): Promise<{ id: string | null; deliveredId: string | null; totals: number[] }> {
   const { data } = await admin
     .from("quotes")
-    .select("id, subtotal, amount")
+    .select("id, status, subtotal, amount")
     .eq("tenant_id", tenantId)
     .eq("lead_id", leadId)
     .order("created_date", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  const row = data as { id?: string; subtotal?: number | null; amount?: number | null } | null;
-  if (!row?.id) return { id: null, totals: [] };
+  const row = data as
+    { id?: string; status?: string | null; subtotal?: number | null; amount?: number | null } | null;
+  if (!row?.id) return { id: null, deliveredId: null, totals: [] };
 
   /* Both, because a covering email legitimately says either the pre-GST subtotal or the gross.
      Zero and null are dropped rather than authorised: "0" is already always allowed by the
@@ -404,7 +407,15 @@ async function latestQuote(
   const totals = [row.subtotal, row.amount].flatMap((n) =>
     typeof n === "number" && n > 0 ? [Math.round(n)] : [],
   );
-  return { id: row.id, totals };
+  /* TWO ids, because they license different sentences. `id` stops the agent raising a second
+     quotation; `deliveredId` is the only one that lets it tell the customer a reference
+     number. On 31 Aug 2026 a DRAFT filled both roles, and the customer was handed the number
+     of a document that had never been sent — see lib/quotes/quote-delivered.ts. */
+  return {
+    id: row.id,
+    deliveredId: quoteWasDelivered(row.status) ? row.id : null,
+    totals,
+  };
 }
 
 /**

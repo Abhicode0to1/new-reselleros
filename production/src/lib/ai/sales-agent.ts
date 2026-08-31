@@ -181,6 +181,15 @@ export interface SalesAgentLeadFacts {
   /** Quote id already on this lead, if any. Stops the agent quoting twice. */
   existingQuoteId: string | null;
   /**
+   * The newest quote the customer has ACTUALLY RECEIVED, or null.
+   *
+   * Separate from `existingQuoteId` because the two license different sentences: a draft is
+   * enough to stop a second quotation being raised, and not nearly enough to tell somebody a
+   * reference number. On 31 Aug 2026 one field did both jobs and a customer was given the id
+   * of a document that had never left the building.
+   */
+  deliveredQuoteId: string | null;
+  /**
    * `leads.gstin`. Decides whether the input-tax-credit line may be stated AT ALL.
    *
    * Measured on production 25 Aug 2026: 16 of 28 leads have none. ITC is worth nothing to an
@@ -578,9 +587,17 @@ export function buildSalesAgentPrompt(args: BuildPromptArgs): BuiltPrompt {
     `Seats mentioned so far: ${lead.seats === null ? "(not given)" : String(lead.seats)}`,
     `Product mentioned so far: ${lead.plan || "(not given)"}`,
     `Reply channel: ${lead.channel}`,
-    lead.existingQuoteId
-      ? `A quotation ALREADY exists on this lead (${lead.existingQuoteId}). Do not create a second one — refer to it.`
-      : "No quotation has been sent yet.",
+    /* Two facts, not one, and the order matters. The first stops a second document being
+       raised; only the second licenses a reference number in the email. A DRAFT gets the
+       first and is explicitly denied the second — that sentence is the whole fix for the
+       31 Aug mail that handed a customer the id of an unsent quotation. */
+    lead.deliveredQuoteId
+      ? `Quotation ${lead.deliveredQuoteId} has been SENT to this customer. You may refer to it by that number.`
+      : lead.existingQuoteId
+        ? "A quotation is DRAFTED on this lead but has NOT been sent. Do not create a second one. " +
+          "You have NOT been given a reference number — do not state one, and do not say a " +
+          "quotation has been prepared."
+        : "No quotation has been sent yet.",
   ].join("\n");
 
   const totals = args.authorisedTotals ?? [];

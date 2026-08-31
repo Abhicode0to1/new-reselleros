@@ -584,6 +584,13 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
     skipQuoteBecause: string | null;
     /** Prefix for the draft's notes — lets a re-quote say why it was raised. */
     notePrefix?: string;
+    /**
+     * Correct THIS unsent draft instead of taking a new document number.
+     *
+     * Only the reply branch fills it, and only when `shouldRequoteOnReply` found a draft
+     * priced on the other term. See lib/quotes/auto-quote-for-lead.ts.
+     */
+    repriceDraftId?: string;
   }): Promise<void> => {
     if (args.skipQuoteBecause) {
       await admin.from("lead_activities").insert({
@@ -608,6 +615,7 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
         isSelfTest:    selfTest,
         fromEmail:     FROM_EMAIL,
         notePrefix:    args.notePrefix,
+        repriceDraftId: args.repriceDraftId,
       }).catch((err) => console.error("[inbound-email] auto-quote crashed:", err));
     }
 
@@ -936,7 +944,7 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
 
     const { data: lastQuote } = await admin
       .from("quotes")
-      .select("id, status, seats, plan")
+      .select("id, status, seats, plan, billing_cycle")
       .eq("lead_id", existing.id)
       .eq("tenant_id", tenantId)
       .order("created_date", { ascending: false })
@@ -948,10 +956,20 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
        string compare against whatever earlier free text was saved — on that lead "Google
        Workspace", which matches no catalogue row and never would. */
     const matched = replyItem ?? priced.find((c) => c.name === lf.plan) ?? null;
+    const lq = lastQuote as
+      { id: string; status: string | null; seats: number | null; plan: string | null;
+        billing_cycle: string | null } | null;
     const decision = shouldRequoteOnReply({
       seats:       lf.seats ?? null,
       productName: matched?.name ?? null,
-      latestQuote: (lastQuote ?? null) as { id: string; status: string | null; seats: number | null; plan: string | null } | null,
+      /* The term the customer has NOW stated. Without it a reply saying "monthly" read as
+         "nothing changed", and an unsent draft priced on the assumed annual term sat there
+         for ever — see requote-on-reply.ts. */
+      term:        replyFacts.term.value,
+      latestQuote: lq
+        ? { id: lq.id, status: lq.status, seats: lq.seats, plan: lq.plan,
+            billingCycle: lq.billing_cycle }
+        : null,
     });
 
     await afterLeadWritten({
@@ -966,6 +984,10 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
       seats:   lf.seats ?? null,
       incoming: withSubject(fresh.text || text),
       skipQuoteBecause: decision.requote ? null : decision.reason,
+      /* Set only when the existing document is an unsent draft priced on the other term. Then
+         the same number gets the right price, instead of a second number being burned and the
+         reference already given to the customer going stale. */
+      repriceDraftId: decision.repriceDraftId,
       notePrefix: decision.requote
         ? `Re-quoted from a customer reply — ${decision.reason}.`
         : undefined,

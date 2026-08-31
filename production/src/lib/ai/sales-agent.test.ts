@@ -64,6 +64,7 @@ const LEAD = {
   customerContact: "asha@acme.in",
   channel: "email" as const,
   existingQuoteId: null,
+  deliveredQuoteId: null,
 };
 
 function decision(over: Partial<SalesAgentDecision> = {}): SalesAgentDecision {
@@ -269,10 +270,35 @@ describe("the prompt carries the catalogue and nothing it should not", () => {
     expect(p.user).not.toContain("message-0\n");
   });
 
-  it("says a quote already exists, so the agent does not mint a second", () => {
-    /* Every quote takes an irreversible number from the gapless CGST Rule 46 series. */
+  it("ek DRAFT maujood hai — doosra na bane, par number bataya bhi na jaye", () => {
+    /* ⚠️ Ye test 31 Aug 2026 ko badla, aur badlav hi asli baat hai.
+
+       Pehle ye maangta tha ki prompt me quote ka NUMBER ho. Usi number ne us din ek asli mail
+       me leak kiya: "Quotation Q-ADPL-2026-27-0055 has been prepared" — ek aise document ka
+       number jo bheja hi nahi gaya tha aur jiska daam app ne batane se mana kiya tha.
+
+       Prompt ek guzarish hai, hukum nahi. Jo number prompt me hai, wo email me aa sakta hai.
+       Isliye bina-bheje draft par number diya hi nahi jata — sirf itna kaha jata hai ki ek
+       draft hai, doosra na banao. */
     const p = buildSalesAgentPrompt({
-      lead: { ...LEAD, existingQuoteId: "Q-ADPL-2026-27-0007" },
+      lead: { ...LEAD, existingQuoteId: "Q-ADPL-2026-27-0007", deliveredQuoteId: null },
+      history: [],
+      incoming: "any update?",
+      catalog: CATALOGUE,
+      sellerName: "ANUTECH",
+      sellerEmail: "sales@anutech.in",
+    });
+    expect(p.user).toContain("Do not create a second one");
+    expect(p.user, "bina-bheje draft ka number prompt me nahi jana chahiye")
+      .not.toContain("Q-ADPL-2026-27-0007");
+    expect(p.user).toContain("NOT been given a reference number");
+  });
+
+  it("BHEJ diya gaya quote — number bataya ja sakta hai", () => {
+    /* Yahi wo surat hai jisme reference dena sach hai: customer ke paas document hai. */
+    const p = buildSalesAgentPrompt({
+      lead: { ...LEAD, existingQuoteId: "Q-ADPL-2026-27-0007",
+              deliveredQuoteId: "Q-ADPL-2026-27-0007" },
       history: [],
       incoming: "any update?",
       catalog: CATALOGUE,
@@ -280,7 +306,7 @@ describe("the prompt carries the catalogue and nothing it should not", () => {
       sellerEmail: "sales@anutech.in",
     });
     expect(p.user).toContain("Q-ADPL-2026-27-0007");
-    expect(p.user).toContain("Do not create a second one");
+    expect(p.user).toContain("has been SENT to this customer");
   });
 
   it("the system prompt refuses invented prices and unauthorised discounts", () => {

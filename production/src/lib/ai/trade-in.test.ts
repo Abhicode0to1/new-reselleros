@@ -319,7 +319,7 @@ describe("the trade-in block reaches the prompt", () => {
         plan: "Google Workspace Business Starter",
         customerContact: "rahul@sharmatraders.in",
         channel: "email",
-        existingQuoteId: null,
+        existingQuoteId: null, deliveredQuoteId: null,
         gstin: null,
       },
       history: [],

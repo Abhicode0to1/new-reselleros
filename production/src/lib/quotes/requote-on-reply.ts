@@ -39,18 +39,44 @@ export interface RequoteInput {
   seats: number | null;
   /** The catalogue product name now on the lead. Null when nothing matched. */
   productName: string | null;
+  /**
+   * The term the CUSTOMER has now stated, or null when they still have not said.
+   *
+   * Added 31 Aug 2026, and it was the missing fact. Q-ADPL-2026-27-0055 was drafted at 32
+   * seats on an ASSUMED annual term and correctly not sent, because monthly and annual differ
+   * by twelve. When the customer then wrote "monthly", this function saw the same seats and
+   * the same plan, answered "the reply does not change what they asked for", and the draft sat
+   * unsent for ever. The one fact that unblocks the send was not part of the decision.
+   */
+  term: "monthly" | "annual" | null;
   /** The most recent quote on this lead, whatever its status. */
   latestQuote: {
     id: string;
     status: string | null;
     seats: number | null;
     plan: string | null;
+    /** How that quote was priced. "monthly" is the flex tier; anything else is annual. */
+    billingCycle: string | null;
   } | null;
 }
 
 export interface RequoteDecision {
   requote: boolean;
   reason: string;
+  /**
+   * Re-price THIS draft in place instead of raising a new number.
+   *
+   * Pardeep's decision, 31 Aug 2026, asked with the alternative on the table. Every quote
+   * takes an irreversible number from the gapless CGST Rule 46 series; an UNSENT draft that
+   * was priced on a guess is not a document anybody has seen, so correcting it costs nothing
+   * and keeps the series tight. It also keeps a promise already made — the agent had told the
+   * customer that quotation's number.
+   *
+   * Only ever set for a quote whose status is `draft`. An issued document's figures are
+   * frozen; a customer who was SENT 20 seats and now wants 50 gets a new document, not a
+   * rewritten one.
+   */
+  repriceDraftId?: string;
 }
 
 export function shouldRequoteOnReply(input: RequoteInput): RequoteDecision {
@@ -74,6 +100,33 @@ export function shouldRequoteOnReply(input: RequoteInput): RequoteDecision {
   const samePlan  = samePlanOf(input.productName, q.plan);
 
   if (sameSeats && samePlan) {
+    /* ── THE TERM ARRIVING IS A CHANGE, EVEN WHEN NOTHING ELSE MOVED ──────────
+       Q-ADPL-2026-27-0055, 31 Aug 2026: 32 seats of Business Starter, drafted on an ASSUMED
+       annual term and correctly not sent. The customer then wrote "monthly" — same seats,
+       same plan — and everything below said "nothing changed", so the draft stayed annual and
+       unsent, and the reply promising a quotation was never kept.
+
+       The document is a DRAFT, so it can be corrected rather than replaced: same number, right
+       price. That keeps the gapless Rule 46 series tight and makes the reference the agent
+       already gave the customer true. An issued document is never touched — the guard below
+       is the `status` check, not a comment. */
+    const draftOnWrongTerm =
+      q.status === "draft" &&
+      input.term !== null &&
+      q.billingCycle !== null &&
+      (input.term === "monthly") !== (q.billingCycle === "monthly");
+
+    if (draftOnWrongTerm) {
+      return {
+        requote: true,
+        reason:
+          `${q.id} is an unsent draft priced ${q.billingCycle === "monthly" ? "monthly" : "annually"}` +
+          ` and the reply now says ${input.term} — re-pricing that draft rather than raising a` +
+          " second number",
+        repriceDraftId: q.id,
+      };
+    }
+
     /* THE ONE THAT SAVES DOCUMENT NUMBERS. A thread about the same 50 seats can run five
        messages long; without this, each one is a new GST document for a requirement that
        has not moved. */

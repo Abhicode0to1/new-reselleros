@@ -331,7 +331,7 @@ describe("the tone block reaches the responder's prompt", () => {
     plan: "Google Workspace Business Starter",
     customerContact: "rahul@sharmatraders.in",
     channel: "email" as const,
-    existingQuoteId: null,
+    existingQuoteId: null, deliveredQuoteId: null,
     gstin: null,
   };
   const build = (incoming: string) =>

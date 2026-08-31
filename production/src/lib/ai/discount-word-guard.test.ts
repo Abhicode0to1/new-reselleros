@@ -68,7 +68,7 @@ describe("prompt model se aankda dohrane ko kehta hai", () => {
       leadId: "L-TEST",
       company: "Sri Ganga Technologies", contactName: "Pardeep", seats: 70,
       plan: "Google Workspace Business Starter", customerContact: "p@x.in",
-      channel: "email" as const, existingQuoteId: null,
+      channel: "email" as const, existingQuoteId: null, deliveredQuoteId: null,
     },
     history: [],
     incoming: "mujje 70 email id ka quote chahiye google workspace business starter",

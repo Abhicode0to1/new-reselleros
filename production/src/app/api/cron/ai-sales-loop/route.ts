@@ -352,6 +352,8 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
           customerContact: contact,
           channel,
           existingQuoteId: null,
+          /* This cron chases a lead that has gone quiet; it never carries a delivered quote. */
+          deliveredQuoteId: null,
         },
         /* The brief now carries the STEP's intent as well as the loop's own reason, plus —
            for the expiry step — the quote's real date. Nothing here asserts a date or a
