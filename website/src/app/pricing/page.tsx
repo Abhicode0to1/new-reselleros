@@ -7,6 +7,10 @@ import { effectiveReg } from "@/lib/offers";
 
 export const metadata: Metadata = { title: "Every price" };
 
+/* Domains table ka offer-strike SERVER par render hota hai aur ye page static hai —
+   hourly revalidate ke bina 30 Sep ka strike October me bhi dikhta rehta. */
+export const revalidate = 3600;
+
 /** Four stacked tables, identical dark-header treatment — "every rate on one page". */
 export default function PricingPage() {
   return (
