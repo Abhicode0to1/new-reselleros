@@ -24,6 +24,7 @@ import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { renderQuotePDF } from "@/lib/pdf";
+import { replyToAddress } from "@/lib/email/reply-to";
 import { logoDataUri } from "@/lib/pdf/logo";
 import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
@@ -111,6 +112,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (!tenant) {
     return NextResponse.json({ error: "tenant not found" }, { status: 404 });
   }
+
+  /* The mailbox the app READS — Reply-To must land there, or the customer's answer never
+     reaches the pipeline. See lib/email/reply-to.ts. */
+  const { data: ingestBoxes } = await supabase
+    .from("user_google_tokens")
+    .select("google_email")
+    .eq("tenant_id", me.tenant_id);
 
   const { data: customer } = quote.customer_id
     ? await supabase
@@ -254,7 +262,9 @@ ${tenant.name}${tenant.phone ? `\n${tenant.phone}` : ""}${tenant.email ? `\n${te
     text:    messageBody,
     html:    htmlBody,
     from:    tenant.email ?? undefined,
-    replyTo: tenant.email ?? undefined,
+    /* The mailbox the app INGESTS — see lib/email/reply-to.ts. Pointing this at the owner's
+       address took every customer reply out of the pipeline, silently. */
+    replyTo: replyToAddress(ingestBoxes, tenant.email),
     attachments,
   });
 

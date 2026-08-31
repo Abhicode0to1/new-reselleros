@@ -30,6 +30,7 @@
  * sees "quote sent" in the pipeline and stops chasing.
  */
 import { sendEmail } from "@/lib/email/send";
+import { replyToAddress } from "@/lib/email/reply-to";
 import { renderQuotePDF } from "@/lib/pdf";
 import { logoDataUri } from "@/lib/pdf/logo";
 import { rupee } from "@/lib/utils";
@@ -108,6 +109,13 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
     .eq("id", args.tenantId).maybeSingle();
   const tenant = (t ?? {}) as TenantRow;
 
+  /* The mailbox the app READS. Reply-To has to be this, not the owner's address — see
+     lib/email/reply-to.ts for the reply that disappeared because it was not. */
+  const { data: ingestBoxes } = await admin
+    .from("user_google_tokens")
+    .select("google_email")
+    .eq("tenant_id", args.tenantId);
+
   const lineItems = (Array.isArray(quote.line_items) ? quote.line_items : []) as QuoteLineItem[];
   const subtotal    = quote.subtotal ?? 0;
   const discountPct = quote.discount_pct ?? 0;
@@ -176,9 +184,14 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
   const result = await sendEmail({
     to:      args.recipient,
     from:    args.fromEmail,
-    /* Replies go to the tenant, not to the envelope sender — a customer answering this
-       must reach a person. */
-    replyTo: tenant.email ?? undefined,
+    /* ── THE MAILBOX THE APP READS, not simply "a person" ────────────────────
+       This said `tenant.email` until 31 Aug 2026, with the reasoning "a customer answering
+       this must reach a person". True while mail left through Resend as onboarding@resend.dev,
+       which nobody can answer. False once the app began sending from AND reading the tenant's
+       own Gmail: at 14:32 a real reply to a quote went to pardeep@anutech.in, the connector
+       reads sales@anutech.in, and `inbound_emails` recorded nothing at all. A conversation
+       left the pipeline and no log said so. */
+    replyTo: replyToAddress(ingestBoxes, tenant.email),
     kind:    "auto_quote_from_email",
     route:   { tenantId: args.tenantId },
     /* Gated by the workspace kill switch + dial. This is the newest automated send in the
