@@ -4,6 +4,7 @@ import { CartProvider } from "@/components/cart/CartProvider";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { Header } from "@/components/chrome/Header";
 import { UtilityBar, Breadcrumb, CtaBand, Footer, WhatsAppButton, ConsentBanner } from "@/components/chrome/Chrome";
+import { AgentChat } from "@/components/agent/AgentChat";
 import "./globals.css";
 
 /* The handoff's two faces, and only these two: Archivo carries everything, IBM Plex Mono
@@ -44,6 +45,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <CtaBand />
           <Footer />
           <WhatsAppButton />
+          {/* Har page par (Pardeep, 1 Sep 2026: "poori website ke liye ready karo") — aur
+             layout me hone ka asli faayda: App Router me layout navigation par TIKA rehta
+             hai, to visitor page badle to bhi baat-cheet zinda rehti hai. Home-only mount
+             me link chhoote hi chat mit jati thi — wo naapa hua tha. */}
+          <AgentChat />
           <ConsentBanner />
           <CartDrawer />
         </CartProvider>

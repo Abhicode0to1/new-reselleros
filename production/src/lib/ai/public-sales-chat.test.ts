@@ -50,6 +50,14 @@ describe("facts ka page", () => {
     expect(facts.allowedFigures).not.toContain(300);
   });
 
+  it("poori site ka scope — par non-GW ke liye KOI aankda nahi, sirf page ka pata", () => {
+    /* Domains/hosting ke site-daam placeholder hain; facts me jate hi model unhe asli
+       bana kar bolta. Isliye scope hai, aankda nahi — aur ye pin hai. */
+    expect(facts.factsText).toContain("OTHER OFFERINGS (no figures here");
+    expect(facts.factsText).toContain("/domains");
+    expect(facts.factsText).toContain("never state a rupee figure");
+  });
+
   it("flex tier na ho to 'annual only' likhta hai — daam gadhta nahi", () => {
     const f = buildFacts([{ name: "GW X", annualPerSeatMo: 500, monthlyPerSeatMo: null }], COMPANY);
     expect(f.factsText).toContain("annual commitment only");

@@ -38,6 +38,24 @@ const GREETING: Msg = {
   text: "Namaste! Main Anutech ka AI sales assistant hoon — daam hamare live catalogue se aate hain. Bataiye, kitne logo ke liye business email chahiye?",
 };
 
+const STORE_KEY = "anutech.agentchat.v1";
+
+interface Stored { msgs: Msg[]; leadCaptured: boolean }
+
+function loadStored(): Stored | null {
+  /* try/catch har storage-touch par — private window me accessor khud throw karta hai,
+     aur ek chat jo page gira de wo khoi hui chat se buri hai. */
+  try {
+    const raw = window.sessionStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+    const j = JSON.parse(raw) as Stored;
+    if (!Array.isArray(j.msgs) || j.msgs.length === 0) return null;
+    return { msgs: j.msgs.slice(-24), leadCaptured: j.leadCaptured === true };
+  } catch {
+    return null;
+  }
+}
+
 export function AgentChat() {
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
@@ -48,6 +66,22 @@ export function AgentChat() {
      model dobara lead field bhare to bhi doosri row na bane. */
   const [leadCaptured, setLeadCaptured] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  /* Reload-proof: tab ke andar baat-cheet sessionStorage me rehti hai (layout-mount
+     navigation sambhalta hai; ye poora reload sambhalta hai). SESSION storage, local
+     nahi — kal tak visitor ke browser me padi baat-cheet uski umeed ke khilaaf hai. */
+  useEffect(() => {
+    const stored = loadStored();
+    if (stored) {
+      setMsgs(stored.msgs);
+      setLeadCaptured(stored.leadCaptured);
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(STORE_KEY, JSON.stringify({ msgs: msgs.slice(-24), leadCaptured }));
+    } catch { /* storage band — in-memory chat phir bhi chalti hai */ }
+  }, [msgs, leadCaptured]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });

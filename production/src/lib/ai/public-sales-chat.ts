@@ -99,6 +99,11 @@ export function buildFacts(items: readonly PublicWorkspaceItem[], company: Compa
     `LIVE PRICE LIST (from the company's own catalogue, GST 18% extra, stated separately on every invoice):`,
     ...(lines.length ? lines : ["- (price list temporarily unavailable — offer the quote page instead)"]),
     `STANDING TERMS: free migration done by us; setup and DNS (MX, SPF, DKIM, DMARC) free; GST invoice with GSTIN on every order; payment 100% in advance against the GST tax invoice.`,
+    /* Poori website ka scope — par daam SIRF unke jinke aankde catalogue (DB) se aaye.
+       Domains/hosting/mail/SSL ke site-wale daam abhi placeholder hain; unhe facts me
+       daalna model ke munh se nakli daam ko asli banakar bulwana hota. Asli rate card
+       catalogue me aate hi wo bhi upar ki LIVE list me khud aa jayenge. */
+    `OTHER OFFERINGS (no figures here — do not quote prices for these): domain registration (current promotions, if any, are shown on the /domains page), cPanel hosting (/hosting), Anutech Mail business email (/email), SSL certificates (/ssl), and Microsoft 365 / Zoho licences. For any of these, describe the offering, then send the visitor to that page or the Get-a-quote form — never state a rupee figure the facts above do not contain.`,
   ].join("\n");
 
   return { factsText, allowedFigures: [...allowed] };
