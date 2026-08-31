@@ -4,15 +4,33 @@
     {
       "name": "prototype",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["prototype/serve.js"],
+      "runtimeArgs": [
+        "prototype/serve.js"
+      ],
       "port": 8765
     },
     {
       "name": "ResellerOS",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "production"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "production"
+      ],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "website",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "website"
+      ],
+      "port": 3100
     }
   ]
 }
