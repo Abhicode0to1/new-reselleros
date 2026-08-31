@@ -214,8 +214,14 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
         )}
       </div>
 
-      {/* ── Live estimate document ───────────────────────────────────────── */}
-      <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+      {/* ── Live estimate document ───────────────────────────────────────────
+         Sticky: form lamba hai aur bharte waqt aankhein aankdon par rehni chahiye —
+         Pardeep: "form bharte jab neeche scroll kare to view uske saath scroll ho".
+         top 84 = sticky header (68) + saans. Grid parent par alignItems:start pehle se
+         hai — wahi sticky ko chalne deta hai. 980px se neeche grid ek column ho jata
+         hai aur sticky ke paas sarakne ki jagah hi nahi bachti, to wahan ye harmless
+         no-op hai. */}
+      <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", position: "sticky", top: 84 }}>
         <div style={{ background: "var(--dark)", color: "#fff", padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <span style={{ fontSize: 16, fontWeight: 700 }}>Anutech Digital</span>
           <span className="mono" style={{ fontSize: 13, color: "#9AA5B1" }}>

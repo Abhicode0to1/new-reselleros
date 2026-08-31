@@ -94,7 +94,8 @@ export function LicenceCalculator({
         />
       </div>
 
-      <div className="card" style={{ padding: 26 }}>
+      {/* Sticky — slider ghumate waqt hisaab saamne tika rahe. */}
+      <div className="card" style={{ padding: 26, position: "sticky", top: 84 }}>
         <Row label={edition.name} detail={`${seats} seats × ${rupee(perSeatShown)}/seat/${isAnnual ? "yr (annual commitment)" : "mo (flexible)"}`} amount={rupee(periodTotal)} />
         <Row label="Setup and DNS" detail="MX, SPF, DKIM, DMARC configured and tested" amount="Free" />
         <Row label="Migration" detail="Mail, folders and calendars moved by us" amount="Free" />

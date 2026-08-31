@@ -129,7 +129,8 @@ export default function CheckoutPage() {
           )}
         </div>
 
-        <aside className="card">
+        {/* Sticky — payment method chunte waqt total nazron me rahe. */}
+        <aside className="card" style={{ position: "sticky", top: 84 }}>
           {cart.lines.map((l) => (
             <div key={l.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border-hairline)" }}>
               <div>

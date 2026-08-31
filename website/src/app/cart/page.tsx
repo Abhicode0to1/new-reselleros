@@ -65,7 +65,8 @@ export default function CartPage() {
           ))}
         </div>
 
-        <aside className="card">
+        {/* Sticky, quote page ke estimate jaisa — lambi cart me total hamesha dikhe. */}
+        <aside className="card" style={{ position: "sticky", top: 84 }}>
           <label className="mono-label" style={{ color: "var(--text-muted)", display: "block", marginBottom: 8 }}>COUPON</label>
           <input
             value={cart.coupon}
