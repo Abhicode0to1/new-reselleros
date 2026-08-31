@@ -20,6 +20,11 @@ import {
 import { formatDate } from "@/lib/utils";
 import { pdfRupee } from "./pdf-money";
 
+import { PDF_FONT, PDF_FONT_BOLD, registerPdfFonts } from "./fonts";
+
+/* Styles ke BANNE se pehle. `StyleSheet.create` ab hi chal jata hai, aur `PDF_FONT`
+   ek `let` hai — baad me register karne par style purani value pakde rehti. */
+registerPdfFonts();
 /* ── THIS FILE KNEW, AND THE OTHERS DID NOT ───────────────────────────────────
    A local helper used to live here, with the right explanation: the built-in PDF fonts have
    no rupee glyph, so use "Rs ". It was correct, and it was only ever applied to the PAYSLIP.
@@ -127,7 +132,7 @@ const s = StyleSheet.create({
   page: {
     paddingHorizontal: 40,
     paddingVertical:   36,
-    fontFamily:        "Helvetica",
+    fontFamily:        PDF_FONT,
     fontSize:          10,
     color:             COLORS.ink,
     backgroundColor:   COLORS.paper,
@@ -143,15 +148,15 @@ const s = StyleSheet.create({
     paddingBottom:     12,
     marginBottom:      14,
   },
-  coName:  { fontFamily: "Helvetica-Bold", fontSize: 16, color: COLORS.ink },
+  coName:  { fontFamily: PDF_FONT_BOLD, fontSize: 16, color: COLORS.ink },
   coMeta:  { fontSize: 9, color: COLORS.ink3, marginTop: 2, lineHeight: 1.4 },
   coMono:  { fontFamily: "Courier", fontSize: 9, color: COLORS.ink3, marginTop: 1 },
   slipBox: { alignItems: "flex-end" },
   slipEyebrow: {
     fontSize: 8, letterSpacing: 1.5, color: COLORS.ink3,
-    fontFamily: "Helvetica-Bold", textTransform: "uppercase",
+    fontFamily: PDF_FONT_BOLD, textTransform: "uppercase",
   },
-  slipTitle:  { fontFamily: "Helvetica-Bold", fontSize: 15, color: COLORS.amber, marginTop: 2 },
+  slipTitle:  { fontFamily: PDF_FONT_BOLD, fontSize: 15, color: COLORS.amber, marginTop: 2 },
   slipPeriod: { fontSize: 11, color: COLORS.ink2, marginTop: 2 },
 
   // Employee meta block
@@ -165,10 +170,10 @@ const s = StyleSheet.create({
   metaCol:   { flex: 1, paddingHorizontal: 4 },
   metaLabel: {
     fontSize: 7.5, letterSpacing: 1, color: COLORS.ink3,
-    fontFamily: "Helvetica-Bold", textTransform: "uppercase", marginBottom: 2,
+    fontFamily: PDF_FONT_BOLD, textTransform: "uppercase", marginBottom: 2,
   },
   metaValue:     { fontSize: 10, color: COLORS.ink, marginBottom: 8 },
-  metaValueBold: { fontSize: 11, color: COLORS.ink, marginBottom: 8, fontFamily: "Helvetica-Bold" },
+  metaValueBold: { fontSize: 11, color: COLORS.ink, marginBottom: 8, fontFamily: PDF_FONT_BOLD },
   metaMono:      { fontFamily: "Courier", fontSize: 9.5 },
 
   // Earnings / deductions
@@ -182,7 +187,7 @@ const s = StyleSheet.create({
   },
   colHeadText: {
     fontSize: 8.5, letterSpacing: 1.2, color: COLORS.ink2,
-    fontFamily: "Helvetica-Bold", textTransform: "uppercase",
+    fontFamily: PDF_FONT_BOLD, textTransform: "uppercase",
   },
   row: {
     flexDirection: "row", justifyContent: "space-between",
@@ -197,8 +202,8 @@ const s = StyleSheet.create({
     paddingVertical: 7, paddingHorizontal: 10,
     borderTopWidth: 1, borderTopColor: COLORS.ink,
   },
-  subLabel: { fontSize: 9.5, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 0.8 },
-  subValue: { fontSize: 11, fontFamily: "Helvetica-Bold" },
+  subLabel: { fontSize: 9.5, fontFamily: PDF_FONT_BOLD, textTransform: "uppercase", letterSpacing: 0.8 },
+  subValue: { fontSize: 11, fontFamily: PDF_FONT_BOLD },
   emptyLine: { fontSize: 9.5, color: COLORS.ink3, fontStyle: "italic", paddingVertical: 5, paddingHorizontal: 10 },
 
   // Net pay
@@ -211,8 +216,8 @@ const s = StyleSheet.create({
     marginBottom:     14,
   },
   netRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  netLabel: { fontSize: 11, fontFamily: "Helvetica-Bold", color: "#047857", textTransform: "uppercase", letterSpacing: 1 },
-  netValue: { fontSize: 22, fontFamily: "Helvetica-Bold", color: COLORS.ink },
+  netLabel: { fontSize: 11, fontFamily: PDF_FONT_BOLD, color: "#047857", textTransform: "uppercase", letterSpacing: 1 },
+  netValue: { fontSize: 22, fontFamily: PDF_FONT_BOLD, color: COLORS.ink },
   netWords: { fontSize: 9.5, color: COLORS.ink2, marginTop: 6, fontStyle: "italic" },
   netPaid:  { fontSize: 9, color: COLORS.ink3, marginTop: 4 },
 
@@ -221,7 +226,7 @@ const s = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: COLORS.hairline,
     paddingTop: 10, marginTop: 6,
   },
-  footerBold: { fontFamily: "Helvetica-Bold", fontSize: 9.5, color: COLORS.ink2, marginBottom: 3 },
+  footerBold: { fontFamily: PDF_FONT_BOLD, fontSize: 9.5, color: COLORS.ink2, marginBottom: 3 },
   footerLine: { fontSize: 8.5, color: COLORS.ink3, lineHeight: 1.4 },
 });
 

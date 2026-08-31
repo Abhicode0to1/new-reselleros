@@ -15,6 +15,23 @@ import type { InvoicePDFProps } from "./InvoicePDF";
 import type { ReceiptVoucherPDFProps } from "./ReceiptVoucherPDF";
 import type { PayslipPDFProps } from "./PayslipPDF";
 
+/* ─── FONT PEHLE, COMPONENT BAAD ME ─────────────────────────────────────────
+   Har render function ke andar `await ensurePdfFonts()` component ke dynamic import se
+   PEHLE aata hai, aur ye tarteeb maayne rakhti hai: component ka module load hote hi uska
+   `StyleSheet.create` chal jata hai, aur wo `PDF_FONT` ki JO value us waqt hai wahi
+   hamesha ke liye pakad leta hai. Font baad me register karne se style purani hi rehti —
+   flag "haan" kehta aur document Helvetica par bana rehta. Wahi galti aaj ek baar ho chuki
+   hai (`fonts.ts` ka header).
+
+   Server par ye sirf sync `registerPdfFonts()` bulata hai; browser par `/fonts/…` ko
+   HEAD se jaanch kar register karta hai. Dono jagah asset gayab hone par chitthi "Rs" par
+   wapas chali jati hai — render fail nahi hota.
+
+   `./fonts` ko bhi DYNAMIC import kiya gaya hai, static nahi. Wajah bundle hai: `fonts.ts`
+   `Font` ko seedha `@react-pdf/renderer` se leta hai (usko sync hona hi hai — `fonts.ts`
+   ka header dekho), aur is file ko client page import karte hain. Static hota to 500 KB ka
+   renderer initial bundle me aa jata — theek wahi cheez jise ye file bachati hai. */
+
 // ─── Quote ────────────────────────────────────────────────────────────────
 
 export async function downloadQuotePDF(props: QuotePDFProps): Promise<Blob> {
@@ -26,6 +43,8 @@ export async function downloadQuotePDF(props: QuotePDFProps): Promise<Blob> {
 export async function renderQuotePDF(props: QuotePDFProps): Promise<Blob> {
   // Lazy import keeps the ~500 KB renderer out of the initial bundle.
   const { pdf } = await import("@react-pdf/renderer");
+  const { ensurePdfFonts } = await import("./fonts");
+  await ensurePdfFonts();
   const { QuotePDF } = await import("./QuotePDF");
   return await pdf(<QuotePDF {...props} />).toBlob();
 }
@@ -60,6 +79,8 @@ export async function downloadInvoicePDF(props: InvoicePDFProps): Promise<Blob> 
 
 export async function renderInvoicePDF(props: InvoicePDFProps): Promise<Blob> {
   const { pdf } = await import("@react-pdf/renderer");
+  const { ensurePdfFonts } = await import("./fonts");
+  await ensurePdfFonts();
   const { InvoicePDF } = await import("./InvoicePDF");
   return await pdf(<InvoicePDF {...props} />).toBlob();
 }
@@ -75,6 +96,8 @@ export async function downloadReceiptVoucherPDF(props: ReceiptVoucherPDFProps): 
 
 export async function renderReceiptVoucherPDF(props: ReceiptVoucherPDFProps): Promise<Blob> {
   const { pdf } = await import("@react-pdf/renderer");
+  const { ensurePdfFonts } = await import("./fonts");
+  await ensurePdfFonts();
   const { ReceiptVoucherPDF } = await import("./ReceiptVoucherPDF");
   return await pdf(<ReceiptVoucherPDF {...props} />).toBlob();
 }
@@ -89,6 +112,8 @@ export async function downloadPayslipPDF(props: PayslipPDFProps, filename: strin
 
 export async function renderPayslipPDF(props: PayslipPDFProps): Promise<Blob> {
   const { pdf } = await import("@react-pdf/renderer");
+  const { ensurePdfFonts } = await import("./fonts");
+  await ensurePdfFonts();
   const { PayslipPDF } = await import("./PayslipPDF");
   return await pdf(<PayslipPDF {...props} />).toBlob();
 }

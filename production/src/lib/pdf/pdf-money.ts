@@ -34,7 +34,7 @@
  * "12675" for one amount is how a document comes to disagree with the row behind it.
  */
 import { rupee } from "@/lib/utils";
-import { pdfText } from "./pdf-text";
+import { pdfText, rupeeIsDrawable } from "./pdf-text";
 
 /** What replaces `₹`. A trailing space is included so "Rs 325" reads correctly. */
 export const PDF_RUPEE_PREFIX = "Rs ";
@@ -62,6 +62,9 @@ export function pdfSafeMoney(text: string): string {
      cannot draw, and an audit on 31 Aug found `✓` on the invoice plus every field of text the
      TENANT types. This function stays because money has one more rule than text does: the
      grouping must come from `rupee()` and not be re-derived. */
+  /* With an embedded font the sign draws, so nothing is replaced — `pdfText` still runs,
+     because the rest of a money string (a stray no-break space from a paste) still needs it. */
+  if (rupeeIsDrawable()) return pdfText(text);
   return pdfText(text.split(new RegExp(`${RUPEE_SIGN}\\s?`, "g")).join(PDF_RUPEE_PREFIX));
 }
 

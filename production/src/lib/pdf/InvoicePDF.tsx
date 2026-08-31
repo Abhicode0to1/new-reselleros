@@ -30,6 +30,12 @@ import type {
   InvoiceAdvanceAdjustment,
 } from "@/lib/supabase/database.types";
 
+import { PDF_FONT, PDF_FONT_BOLD, registerPdfFonts } from "./fonts";
+
+/* Styles ke BANNE se pehle. `StyleSheet.create` ab hi chal jata hai, aur `PDF_FONT`
+   ek `let` hai — baad me register karne par style purani value pakde rehti. */
+registerPdfFonts();
+
 // ─── Props ────────────────────────────────────────────────────────────────
 
 export interface InvoicePDFProps {
@@ -99,7 +105,7 @@ const s = StyleSheet.create({
   page: {
     paddingHorizontal: 40,
     paddingVertical:   36,
-    fontFamily:        "Helvetica",
+    fontFamily:        PDF_FONT,
     fontSize:          10,
     color:             COLORS.ink,
     backgroundColor:   COLORS.paper,
@@ -121,11 +127,11 @@ const s = StyleSheet.create({
     fontSize:      8,
     letterSpacing: 1.5,
     color:         COLORS.ink3,
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     textTransform: "uppercase",
   },
   titleMain: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: PDF_FONT_BOLD,
     fontSize:   22,
     marginTop:  2,
   },
@@ -157,12 +163,12 @@ const s = StyleSheet.create({
     fontSize:      8,
     letterSpacing: 1.5,
     color:         COLORS.ink3,
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     textTransform: "uppercase",
     marginBottom:  4,
   },
   partyName: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: PDF_FONT_BOLD,
     fontSize:   13,
     color:      COLORS.ink,
   },
@@ -189,7 +195,7 @@ const s = StyleSheet.create({
     fontSize:      8,
     letterSpacing: 1.2,
     color:         COLORS.ink3,
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     textTransform: "uppercase",
     marginBottom:  2,
   },
@@ -225,21 +231,21 @@ const s = StyleSheet.create({
     paddingVertical:  6,
     paddingHorizontal: 6,
   },
-  thNum:  { width: 18, fontFamily: "Helvetica-Bold", fontSize: 8, textTransform: "uppercase" },
-  thDesc: { flex: 4, fontFamily: "Helvetica-Bold", fontSize: 8, textTransform: "uppercase" },
-  thHsn:  { width: 50, fontFamily: "Helvetica-Bold", fontSize: 8, textTransform: "uppercase" },
-  thQty:  { width: 36, fontFamily: "Helvetica-Bold", fontSize: 8, textTransform: "uppercase", textAlign: "right" },
-  thRate: { width: 60, fontFamily: "Helvetica-Bold", fontSize: 8, textTransform: "uppercase", textAlign: "right" },
-  thAmt:  { width: 70, fontFamily: "Helvetica-Bold", fontSize: 8, textTransform: "uppercase", textAlign: "right" },
+  thNum:  { width: 18, fontFamily: PDF_FONT_BOLD, fontSize: 8, textTransform: "uppercase" },
+  thDesc: { flex: 4, fontFamily: PDF_FONT_BOLD, fontSize: 8, textTransform: "uppercase" },
+  thHsn:  { width: 50, fontFamily: PDF_FONT_BOLD, fontSize: 8, textTransform: "uppercase" },
+  thQty:  { width: 36, fontFamily: PDF_FONT_BOLD, fontSize: 8, textTransform: "uppercase", textAlign: "right" },
+  thRate: { width: 60, fontFamily: PDF_FONT_BOLD, fontSize: 8, textTransform: "uppercase", textAlign: "right" },
+  thAmt:  { width: 70, fontFamily: PDF_FONT_BOLD, fontSize: 8, textTransform: "uppercase", textAlign: "right" },
 
   tdNum:  { width: 18, fontSize: 9,  color: COLORS.ink3 },
   tdDesc: { flex: 4 },
   tdHsn:  { width: 50, fontFamily: "Courier", fontSize: 9, color: COLORS.ink2 },
   tdQty:  { width: 36, fontSize: 10, textAlign: "right" },
   tdRate: { width: 60, fontSize: 10, textAlign: "right" },
-  tdAmt:  { width: 70, fontSize: 10, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  tdAmt:  { width: 70, fontSize: 10, textAlign: "right", fontFamily: PDF_FONT_BOLD },
 
-  lineName: { fontFamily: "Helvetica-Bold", fontSize: 10 },
+  lineName: { fontFamily: PDF_FONT_BOLD, fontSize: 10 },
 
   emptyRow: {
     paddingVertical: 18,
@@ -277,17 +283,17 @@ const s = StyleSheet.create({
     marginTop:       4,
   },
   grandLabel: {
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     fontSize:      9,
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
   grandValue: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: PDF_FONT_BOLD,
     fontSize:   18,
   },
-  netLabel:   { fontFamily: "Helvetica-Bold", fontSize: 10, color: COLORS.ink },
-  netValue:   { fontFamily: "Helvetica-Bold", fontSize: 13 },
+  netLabel:   { fontFamily: PDF_FONT_BOLD, fontSize: 10, color: COLORS.ink },
+  netValue:   { fontFamily: PDF_FONT_BOLD, fontSize: 13 },
   totalLabel: { color: COLORS.ink3 },
   totalValue: { color: COLORS.ink },
   totalValueAccent: { color: COLORS.emerald },
@@ -305,7 +311,7 @@ const s = StyleSheet.create({
     fontSize:      8,
     letterSpacing: 1.2,
     color:         "#047857",
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     textTransform: "uppercase",
     marginBottom:  6,
   },
@@ -320,7 +326,7 @@ const s = StyleSheet.create({
   advVoucher: { width: 100, fontFamily: "Courier" },
   advDate:    { width: 80 },
   advMethod:  { flex: 1 },
-  advAmount:  { width: 70, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  advAmount:  { width: 70, textAlign: "right", fontFamily: PDF_FONT_BOLD },
   advTotal: {
     flexDirection:   "row",
     justifyContent:  "space-between",
@@ -329,7 +335,7 @@ const s = StyleSheet.create({
     paddingTop:      6,
     borderTopWidth:  1,
     borderTopColor:  "#A7F3D0",
-    fontFamily:      "Helvetica-Bold",
+    fontFamily:      PDF_FONT_BOLD,
   },
 
   // Footer
@@ -345,7 +351,7 @@ const s = StyleSheet.create({
     marginBottom: 3,
     lineHeight:   1.4,
   },
-  footerBold:   { fontFamily: "Helvetica-Bold", color: COLORS.ink2 },
+  footerBold:   { fontFamily: PDF_FONT_BOLD, color: COLORS.ink2 },
 
   // Scan-to-pay block. ~28mm square at 72dpi — comfortably scannable from a
   // printed page, without dominating a document whose job is to be a tax record.
@@ -359,14 +365,14 @@ const s = StyleSheet.create({
   },
   upiQr:    { width: 78, height: 78, marginRight: 10 },
   upiText:  { flex: 1 },
-  upiTitle: { fontSize: 10, fontFamily: "Helvetica-Bold", color: COLORS.ink2, marginBottom: 2 },
+  upiTitle: { fontSize: 10, fontFamily: PDF_FONT_BOLD, color: COLORS.ink2, marginBottom: 2 },
   upiSub:   { fontSize: 8, color: COLORS.ink3, lineHeight: 1.4 },
-  upiVpa:   { fontSize: 9, fontFamily: "Helvetica-Bold", color: COLORS.ink2, marginTop: 2, marginBottom: 2 },
+  upiVpa:   { fontSize: 9, fontFamily: PDF_FONT_BOLD, color: COLORS.ink2, marginTop: 2, marginBottom: 2 },
   reverseCharge: {
     fontSize:      9,
     color:         COLORS.ink2,
     marginTop:     6,
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
   },
 });
 
@@ -583,7 +589,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
         {/* ── Footer ───────────────────────────────────────────── */}
         <View style={s.footer}>
           <Text style={s.reverseCharge}>
-            Whether tax is payable under reverse charge: <Text style={{ fontFamily: "Helvetica" }}>No</Text>
+            Whether tax is payable under reverse charge: <Text style={{ fontFamily: PDF_FONT }}>No</Text>
           </Text>
           <Text style={[s.footerLine, { marginTop: 6 }]}>
             <Text style={s.footerBold}>HSN/SAC: </Text>
@@ -620,7 +626,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
               {termsConditions.trim()}
             </Text>
           ) : null}
-          <Text style={[s.footerLine, { marginTop: 8, fontFamily: "Helvetica-Bold", color: COLORS.ink2 }]}>
+          <Text style={[s.footerLine, { marginTop: 8, fontFamily: PDF_FONT_BOLD, color: COLORS.ink2 }]}>
             For {tenantName}
           </Text>
           <Text style={[s.footerLine, { fontSize: 8 }]}>

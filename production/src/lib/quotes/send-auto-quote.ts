@@ -63,6 +63,10 @@ interface QuoteRow {
   discount_pct: number | null;
   tax_rate: number | null;
   amount: number | null;
+  /* Chitthi ki "Dated" line. Typecheck ne ise pakda — aur ye do galtiyan ek saath thi:
+     type me column nahi tha, AUR neeche ke `select` me bhi nahi tha. Sirf type theek
+     karne se value `undefined` aati aur chitthi chup chaap bina date ke jati. */
+  created_date: string | null;
   expires_date: string | null;
   notes: string | null;
   is_renewal: boolean | null;
@@ -88,7 +92,7 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
 
   const { data: q } = await admin
     .from("quotes")
-    .select("id, customer_name, line_items, subtotal, discount_pct, tax_rate, amount, expires_date, notes, is_renewal, status, billing_cycle")
+    .select("id, customer_name, line_items, subtotal, discount_pct, tax_rate, amount, created_date, expires_date, notes, is_renewal, status, billing_cycle")
     .eq("id", args.quoteId)
     .eq("tenant_id", args.tenantId)
     .maybeSingle();
@@ -107,7 +111,7 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
   }
 
   const { data: t } = await admin
-    .from("tenants").select("name, email, phone, gstin, address, logo_url")
+    .from("tenants").select("name, email, phone, gstin, address, state, logo_url")
     .eq("id", args.tenantId).maybeSingle();
   const tenant = (t ?? {}) as TenantRow;
 
@@ -179,6 +183,9 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
   }
 
   const seller  = tenant.name?.trim() || "Your reseller";
+  /* `tenants.state` is select me nahi tha — ise jodna PDF ke place-of-supply se mel
+     khata hai. Null ho to wo line chhoot jati hai, galat nahi chhapti. */
+  const tenantState = (tenant as { state?: string | null }).state ?? null;
 
 
   const result = await sendEmail({
@@ -204,16 +211,35 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
 quoteEmailBody({
       quoteId:      quote.id,
       customerName: quote.customer_name,
-      sellerName:   seller,
+      /* Supplier ki poori pehchan — GSTIN, address, state. Ek GST document ki chitthi me ye
+         hona chahiye; padhne wale ko PDF kholna na pade ki bech kaun raha hai aur kis tax
+         head par. */
+      supplier: {
+        name:    seller,
+        gstin:   tenant.gstin,
+        address: tenant.address,
+        state:   tenantState,
+        email:   tenant.email,
+        phone:   tenant.phone,
+      },
       lineItems,
       billingCycle: quote.billing_cycle,
       subtotal, discountPct, discount, taxRate, tax, total,
+      /* Lead-quote par customer ka record nahi hota, to place of supply tenant ka apna hai —
+         wahi jawab jo PDF me jata hai. */
+      interState:   false,
+      createdDate:  quote.created_date,
       expiresDate:  quote.expires_date,
-      /* The tenant's standing offer, passed in rather than baked into the template — "free
-         migration" is a commercial promise, and this repo does not let a model invent one, so
-         a template should not either. Today it is ANUTECH's own line, the same one the AI's
-         replies already carry; a second reseller may not offer it. */
-      migrationOffer: "Your existing mail and data are migrated at no extra charge.",
+      /* ── VAADE, TATHYA NAHI ─────────────────────────────────────────────────
+         Ye chaar cheezein tenant ki apni shartein hain, template ki nahi. Isi wajah se ye
+         parameter hain: "free migration" jaisa vaada ye repo model ko gadhne nahi deta, to
+         template ko bhi nahi dena chahiye. Doosre reseller ki shartein alag hongi, aur tab ye
+         yahan se badalni hain — chitthi ke andar se nahi. */
+      terms: {
+        payment:      "100% in advance against our GST tax invoice",
+        provisioning: "Accounts are provisioned within one working day of payment confirmation",
+        migration:    "Existing mail and data are migrated at no extra charge",
+      },
     }),
     attachments,
   });

@@ -61,6 +61,38 @@ export function drawableInWinAnsi(codePoint: number): boolean {
  * Each one earns its place by having appeared, or by being a plausible paste into a Terms
  * box. Anything not listed is dropped — see the header for why that is the safer default.
  */
+/**
+ * Is the rupee sign drawable right now?
+ *
+ * False by default, because the base-14 fonts cannot draw it — see the header. It becomes
+ * true only when `pdf/fonts.ts` has actually registered an embedded face, and that module
+ * sets it by CALLING the setter below rather than this file importing it.
+ *
+ * The direction of that dependency is the whole point. `fonts.ts` requires
+ * `@react-pdf/renderer`, a ~500 KB dependency; if this file imported it, every bundle that
+ * merely formats a rupee would pull the renderer in. So the flow is fonts → text, one way.
+ */
+let rupeeDrawable = false;
+
+/** Called once by `registerPdfFonts()` after a face carrying ₹ is genuinely registered. */
+export function setRupeeDrawable(value: boolean): void {
+  rupeeDrawable = value;
+}
+
+/** For tests and for `pdf-money.ts`, which must not import `fonts.ts` either. */
+export function rupeeIsDrawable(): boolean {
+  return rupeeDrawable;
+}
+
+/**
+ * The two characters that stop needing a stand-in once a real font is embedded.
+ *
+ * Only these two. Noto Sans was checked byte by byte: it carries ₹, and it does NOT carry
+ * `✓` — so the tick keeps its `+` whether the font loaded or not. A blanket "font loaded,
+ * substitute nothing" would have put an invisible glyph back on the invoice.
+ */
+const RUPEE_CHARS = new Set(["₹", "₨"]);
+
 const SUBSTITUTES: Readonly<Record<string, string>> = {
   "₹": "Rs ",   // ₹  the one that started this
   "₨": "Rs ",   // ₨  the older rupee ligature
@@ -92,6 +124,10 @@ export function pdfText(value: string | null | undefined): string {
   if (value == null) return "";
   let out = "";
   for (const ch of value) {
+    /* An embedded font draws ₹ itself; substituting it then would print "Rs " on a
+       document that could have shown the real symbol. Every OTHER substitute still applies —
+       the font's coverage is not universal. */
+    if (rupeeDrawable && RUPEE_CHARS.has(ch)) { out += ch; continue; }
     const sub = SUBSTITUTES[ch];
     if (sub !== undefined) { out += sub; continue; }
     if (drawableInWinAnsi(ch.codePointAt(0) ?? 0)) { out += ch; continue; }
@@ -106,6 +142,7 @@ export function undrawable(value: string): string[] {
   const out: string[] = [];
   for (const ch of value) {
     const cp = ch.codePointAt(0) ?? 0;
+    if (rupeeDrawable && RUPEE_CHARS.has(ch)) continue;
     if (!drawableInWinAnsi(cp) && SUBSTITUTES[ch] === undefined) out.push(ch);
   }
   return out;

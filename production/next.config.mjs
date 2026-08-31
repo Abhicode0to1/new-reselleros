@@ -20,6 +20,31 @@ const nextConfig = {
    * (`npm run build:check`).
    */
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  /**
+   * Client bundle me `fs` ek khaali module ban jata hai, build fail nahi hota.
+   *
+   * Wajah ek asli build failure hai: `lib/pdf/fonts.ts` server par font ki file
+   * `existsSync` se jaanchta hai, aur wahi module client tak pahunchta hai — kyunki
+   * `accounting/payroll/screens.tsx` ek client component hai aur `lib/pdf/index.tsx`
+   * ke zariye `PayslipPDF` tak jata hai. Webpack ne kaha:
+   *
+   *     Module not found: Can't resolve 'fs'
+   *
+   * `fs` ka istemaal us function ke andar `typeof window !== "undefined"` ke peeche hai,
+   * to browser me wo line kabhi chalti hi nahi — sirf webpack ko module HAL karna padta hai.
+   * Yahi Next ka apna suggested hal hai (`resolve.fallback`), aur sirf client build par
+   * lagta hai; server build me asli `fs` waisa hi rehta hai.
+   *
+   * ⚠️ Iska matlab ye NAHI hai ki client code me `fs` use kiya ja sakta hai. Client par
+   * module khaali hai — koi bhi call `undefined is not a function` degi, build ke waqt
+   * nahi, chalte app me. Server-only kaam ko `typeof window` ke peeche rakhna hi padega.
+   */
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = { ...config.resolve.fallback, fs: false };
+    }
+    return config;
+  },
   experimental: {
     typedRoutes: true,
     // Force-enable instrumentation hook. Next 14.0.4+ enables it by default,

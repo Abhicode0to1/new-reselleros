@@ -27,6 +27,12 @@ import { pdfText } from "./pdf-text";
 import { isRenderableLogo } from "./logo";
 import type { Payment } from "@/lib/supabase/database.types";
 
+import { PDF_FONT, PDF_FONT_BOLD, registerPdfFonts } from "./fonts";
+
+/* Styles ke BANNE se pehle. `StyleSheet.create` ab hi chal jata hai, aur `PDF_FONT`
+   ek `let` hai — baad me register karne par style purani value pakde rehti. */
+registerPdfFonts();
+
 // ─── Props ────────────────────────────────────────────────────────────────
 
 export interface ReceiptVoucherPDFProps {
@@ -79,7 +85,7 @@ const s = StyleSheet.create({
   page: {
     paddingHorizontal: 40,
     paddingVertical:   36,
-    fontFamily:        "Helvetica",
+    fontFamily:        PDF_FONT,
     fontSize:          10,
     color:             COLORS.ink,
     backgroundColor:   COLORS.paper,
@@ -101,11 +107,11 @@ const s = StyleSheet.create({
     fontSize:      8,
     letterSpacing: 1.5,
     color:         COLORS.ink3,
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     textTransform: "uppercase",
   },
   titleMain: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: PDF_FONT_BOLD,
     fontSize:   22,
     marginTop:  2,
   },
@@ -131,12 +137,12 @@ const s = StyleSheet.create({
     fontSize:      8,
     letterSpacing: 1.5,
     color:         COLORS.ink3,
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     textTransform: "uppercase",
     marginBottom:  4,
   },
   partyName: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: PDF_FONT_BOLD,
     fontSize:   13,
     color:      COLORS.ink,
   },
@@ -163,7 +169,7 @@ const s = StyleSheet.create({
     fontSize:      8,
     letterSpacing: 1.2,
     color:         COLORS.ink3,
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     textTransform: "uppercase",
     marginBottom:  2,
   },
@@ -197,23 +203,23 @@ const s = StyleSheet.create({
     paddingVertical:  10,
     paddingHorizontal: 10,
   },
-  thDesc: { flex: 1, fontFamily: "Helvetica-Bold", fontSize: 9, textTransform: "uppercase", letterSpacing: 1 },
-  thAmt:  { width: 110, fontFamily: "Helvetica-Bold", fontSize: 9, textTransform: "uppercase", letterSpacing: 1, textAlign: "right" },
+  thDesc: { flex: 1, fontFamily: PDF_FONT_BOLD, fontSize: 9, textTransform: "uppercase", letterSpacing: 1 },
+  thAmt:  { width: 110, fontFamily: PDF_FONT_BOLD, fontSize: 9, textTransform: "uppercase", letterSpacing: 1, textAlign: "right" },
   tdDesc: { flex: 1 },
-  tdAmt:  { width: 110, fontSize: 10, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  tdAmt:  { width: 110, fontSize: 10, textAlign: "right", fontFamily: PDF_FONT_BOLD },
 
-  lineName: { fontFamily: "Helvetica-Bold", fontSize: 10 },
+  lineName: { fontFamily: PDF_FONT_BOLD, fontSize: 10 },
   lineMeta: { fontSize: 9, color: COLORS.ink3, marginTop: 2 },
 
   taxLine: { fontSize: 10, color: COLORS.ink2 },
 
   totalLabel: {
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     fontSize:      9,
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
-  totalAmount: { fontFamily: "Helvetica-Bold", fontSize: 18 },
+  totalAmount: { fontFamily: PDF_FONT_BOLD, fontSize: 18 },
 
   // Amount in words
   inWords: {
@@ -223,7 +229,7 @@ const s = StyleSheet.create({
     lineHeight:  1.4,
   },
   inWordsLabel: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: PDF_FONT_BOLD,
     color:      COLORS.ink2,
   },
 
@@ -238,7 +244,7 @@ const s = StyleSheet.create({
   },
   gstNoticeTitle: {
     fontSize:      9,
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     color:         COLORS.amberInk,
     marginBottom:  4,
   },
@@ -274,7 +280,7 @@ const s = StyleSheet.create({
     fontSize:      8,
     letterSpacing: 1.2,
     color:         COLORS.ink3,
-    fontFamily:    "Helvetica-Bold",
+    fontFamily:    PDF_FONT_BOLD,
     textTransform: "uppercase",
     marginBottom:  30,
   },
@@ -414,17 +420,17 @@ export function ReceiptVoucherPDF(props: ReceiptVoucherPDFProps) {
           {interState ? (
             <View style={s.tableRow}>
               <Text style={[s.tdDesc, s.taxLine]}>IGST @ {gstRate}%</Text>
-              <Text style={[s.tdAmt, { fontFamily: "Helvetica" }]}>{pdfRupee(igst)}</Text>
+              <Text style={[s.tdAmt, { fontFamily: PDF_FONT }]}>{pdfRupee(igst)}</Text>
             </View>
           ) : (
             <>
               <View style={s.tableRow}>
                 <Text style={[s.tdDesc, s.taxLine]}>CGST @ {gstRate / 2}%</Text>
-                <Text style={[s.tdAmt, { fontFamily: "Helvetica" }]}>{pdfRupee(cgst)}</Text>
+                <Text style={[s.tdAmt, { fontFamily: PDF_FONT }]}>{pdfRupee(cgst)}</Text>
               </View>
               <View style={s.tableRow}>
                 <Text style={[s.tdDesc, s.taxLine]}>SGST @ {gstRate / 2}%</Text>
-                <Text style={[s.tdAmt, { fontFamily: "Helvetica" }]}>{pdfRupee(sgst)}</Text>
+                <Text style={[s.tdAmt, { fontFamily: PDF_FONT }]}>{pdfRupee(sgst)}</Text>
               </View>
             </>
           )}

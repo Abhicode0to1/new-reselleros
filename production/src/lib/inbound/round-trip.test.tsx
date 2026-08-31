@@ -212,7 +212,17 @@ describe("chakkar: seats + product + term, sab ek mail me", () => {
        jayegi aur koi nahi jaanega. */
     expect(r.pdfProps.notes ?? "", "notes me ₹ nahi hai — to sanitiser kuch nahi kar raha")
       .toContain("₹");
-    expect(pdfText(r.pdfProps.notes ?? "")).toContain("Rs 325");
+
+    /* ── AUR CONTROL, kyunki ab do duniya hain ──────────────────────────────
+       Pehle yahan `toContain("Rs 325")` likha tha. Ab QuotePDF import karte hi embedded
+       font register ho jata hai, to `pdfText` `₹` ko chhod deta hai — aur wo assertion
+       laal ho gayi. Wo sahi laal thi: nateeja badla hai, kami nahi aayi.
+
+       Iski jagah wo baat pin ki hai jo DONO duniya me sach hai — sanitiser chal raha hai —
+       aur wo `✓` se naapi jati hai, jo Noto Sans me bhi NAHI hai. Yahi CONTROL hai: agar
+       `pdfText` chupchaap identity function ban jaye, ye line pakad legi. */
+    expect(pdfText("✓"), "pdfText kuch nahi kar raha — sanitiser mar chuka hai").toBe("+");
+    expect(pdfText(r.pdfProps.notes ?? "")).toContain("325");
   }, 60_000);
 });
 
