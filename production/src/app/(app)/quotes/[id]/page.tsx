@@ -61,6 +61,7 @@ import { useLogLeadActivity } from "@/lib/queries/lead-activities";
 import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { rupee, formatDate, daysBetween, toWhatsAppDigits } from "@/lib/utils";
+import { logoDataUri } from "@/lib/pdf/logo";
 import { cn } from "@/lib/utils";
 import type { Quote, QuoteLineItem, Payment } from "@/lib/supabase/database.types";
 
@@ -465,6 +466,10 @@ export default function QuoteDetailPage() {
       tenantEmail:   me?.tenantEmail,
       tenantPhone:   me?.tenantPhone,
       tenantAddress: me?.tenantAddress,
+      /* Browser fetch of the public logo bucket. Same helper as the server paths so the
+         downloaded file matches what the customer is emailed — a logo on one and a monogram
+         on the other is the kind of difference nobody reports and everybody notices. */
+      tenantLogo:    await logoDataUri(me?.tenantLogoUrl),
       quoteId:       quote.id,
       customerName:  quote.customer_name,
       contactName:   null,
@@ -1367,6 +1372,7 @@ export default function QuoteDetailPage() {
               tenantEmail:   me?.tenantEmail,
               tenantPhone:   me?.tenantPhone,
               tenantAddress: me?.tenantAddress,
+              tenantLogo:    await logoDataUri(me?.tenantLogoUrl),
               quoteId:       quote.id,
               customerName:  quote.customer_name,
               contactName:   customer?.contact_name ?? lead?.contact_name ?? null,

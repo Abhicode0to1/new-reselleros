@@ -11,6 +11,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { shrinkLogo } from "@/lib/images/shrink-logo";
 import type { Database } from "@/lib/supabase/database.types";
 
 type TenantUpdate = Database["public"]["Tables"]["tenants"]["Update"];
@@ -63,14 +64,32 @@ export function useSetTenantLogo() {
     mutationFn: async (file: File | null) => {
       // Server-side upload (admin client) — avoids browser→storage RLS quirks.
       const form = new FormData();
-      if (file) form.append("file", file);
+      /* Shrink BEFORE upload, not after. Two reasons, both measured 31 Aug 2026: a 940 KB
+         logo made every emailed quote PDF 938 KB against 4.5 KB without one, and the upload
+         route accepts webp/svg which the PDF renderer cannot draw at all — so an SVG logo
+         silently produced a monogram forever, with nothing on screen to say why. Re-encoding
+         to PNG fixes both, and shrinkLogo returns the ORIGINAL file on any failure, so it can
+         never turn a working upload into a broken one. */
+      const sent = file ? await shrinkLogo(file) : null;
+      if (sent) form.append("file", sent);
       const res = await fetch("/api/settings/logo", { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error ?? "Upload failed");
+      /* Returned so the toast can SAY it happened. Resizing a file somebody chose is the kind
+         of silent helpfulness that reads as a bug the day it goes wrong — and the owner is
+         the one person who would notice their logo looking soft. */
+      return file && sent && sent.size < file.size
+        ? { from: file.size, to: sent.size }
+        : null;
     },
-    onSuccess: (_r, file) => {
+    onSuccess: (shrunk, file) => {
       qc.invalidateQueries({ queryKey: ["current-user"] });
-      toast.success(file ? "Logo updated" : "Logo removed");
+      const kb = (n: number) => `${Math.max(1, Math.round(n / 1024))} KB`;
+      toast.success(
+        !file ? "Logo removed"
+          : shrunk ? `Logo updated — resized ${kb(shrunk.from)} → ${kb(shrunk.to)}`
+          : "Logo updated",
+      );
     },
     onError: (err) => toast.error(`Logo update failed: ${(err as Error).message}`),
   });

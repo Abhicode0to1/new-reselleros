@@ -31,6 +31,7 @@ import {
   cycleInvoicesPerYear, cycleUnitLabel, cycleScheduleLabel, cycleFromLegacyCommitment,
 } from "@/lib/quotes/billing";
 import { lineIsPerInvoice, perInvoiceDivisor, annualContractValue } from "./invoice-divisor";
+import { isRenderableLogo } from "./logo";
 
 // ─── Billing helpers ───────────────────────────────────────────────────────
 // Frequency is a quote-level `billing_cycle` (migration 0161); a line's
@@ -50,6 +51,15 @@ export interface QuotePDFProps {
   tenantEmail?:   string | null;
   tenantPhone?:   string | null;
   tenantAddress?: string | null;
+  /**
+   * The company logo, ALREADY RESOLVED to a `data:image/...` URI by `logoDataUri()`.
+   *
+   * Not a URL. A URL here would make the renderer fetch it mid-render with no deadline, on a
+   * path that runs inside the inbound-mail webhook — so resolution happens once at the call
+   * site, where a failure can be caught and turned into "no logo". `isRenderableLogo`
+   * enforces that: anything which is not a data URI draws the monogram instead.
+   */
+  tenantLogo?:    string | null;
 
   // Quote
   quoteId:       string;
@@ -136,6 +146,16 @@ const s = StyleSheet.create({
     textAlign:        "center",
     paddingTop:       7,
     marginRight:      10,
+  },
+  brandLogo: {
+    /* Height is fixed and width is not: a logo is any shape, and `objectFit: contain`
+       with only one dimension set lets a wide wordmark stay wide instead of being squeezed
+       into the monogram's 36pt square. maxWidth stops a very wide one from pushing the
+       company name off the header. */
+    height:      36,
+    maxWidth:    150,
+    objectFit:   "contain",
+    marginRight: 10,
   },
   brandName: {
     fontFamily: "Helvetica-Bold",
@@ -355,7 +375,7 @@ const s = StyleSheet.create({
 
 export function QuotePDF(props: QuotePDFProps) {
   const {
-    tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress,
+    tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress, tenantLogo,
     quoteId, customerName, contactName, contactEmail, contactPhone,
     createdDate, expiresDate, validityDays,
     lineItems, subtotal, discountPct, discount, taxable, taxRate, tax, total,
@@ -364,6 +384,10 @@ export function QuotePDF(props: QuotePDFProps) {
   } = props;
 
   const brandInitial = (tenantName?.trim()?.[0] ?? "?").toUpperCase();
+  /* The monogram was never a placeholder waiting to be replaced — it is the fallback, and it
+     stays the fallback. A logo that failed to fetch, or that turned out to be an SVG, must
+     leave a document that still looks deliberate. */
+  const hasLogo = isRenderableLogo(tenantLogo);
   const created = createdDate ? new Date(createdDate) : new Date();
   const expires = expiresDate
     ? new Date(expiresDate)
@@ -438,7 +462,9 @@ export function QuotePDF(props: QuotePDFProps) {
         {/* ── Header ──────────────────────────────────────────────── */}
         <View style={s.header}>
           <View style={s.brandBlock}>
-            <Text style={s.brandMonogram}>{brandInitial}</Text>
+            {hasLogo
+              ? <Image src={tenantLogo} style={s.brandLogo} />
+              : <Text style={s.brandMonogram}>{brandInitial}</Text>}
             <View>
               <Text style={s.brandName}>{tenantName}</Text>
               {tenantGstin && (

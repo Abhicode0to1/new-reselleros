@@ -24,6 +24,7 @@ import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { renderQuotePDF } from "@/lib/pdf";
+import { logoDataUri } from "@/lib/pdf/logo";
 import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
 import { quoteAmountDue } from "@/lib/payments/amount-due";
@@ -104,7 +105,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // ── 4. Tenant + customer info ────────────────────────────────────
   const { data: tenant } = await supabase
     .from("tenants")
-    .select("name, email, phone, gstin, address, state, state_code, upi_vpa, upi_payee_name")
+    .select("name, email, phone, gstin, address, state, state_code, upi_vpa, upi_payee_name, logo_url")
     .eq("id", me.tenant_id)
     .single();
   if (!tenant) {
@@ -207,6 +208,7 @@ ${tenant.name}${tenant.phone ? `\n${tenant.phone}` : ""}${tenant.email ? `\n${te
   let attachments: { filename: string; content: Buffer; contentType: string }[] | undefined;
   try {
     const blob = await renderQuotePDF({
+      tenantLogo:    await logoDataUri((tenant as { logo_url?: string | null }).logo_url),
       upiQrDataUrl: upi?.dataUrl ?? null,
       upiVpa:       upi?.vpa ?? null,
       tenantName:    tenant.name,

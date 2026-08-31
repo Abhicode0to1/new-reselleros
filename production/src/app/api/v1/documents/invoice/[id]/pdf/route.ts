@@ -39,14 +39,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     inv.customer_id
       ? admin.from("customers").select("*").eq("id", inv.customer_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from("tenants").select("name, gstin, email, phone, address, state, state_code, upi_vpa, upi_payee_name").eq("id", inv.tenant_id).maybeSingle(),
+    admin.from("tenants").select("name, gstin, email, phone, address, state, state_code, upi_vpa, upi_payee_name, logo_url").eq("id", inv.tenant_id).maybeSingle(),
   ]);
 
   const props = buildInvoicePdfProps({
     invoice:  inv,
     quote:    (quote as Quote) ?? null,
     customer: (customer as Customer) ?? null,
-    tenant:   (tenant as TenantPdfInfo) ?? { name: inv.customer_name, gstin: null, email: null, phone: null, address: null, state: null, state_code: null },
+    tenant:   (tenant as TenantPdfInfo) ?? { name: inv.customer_name, gstin: null, email: null, phone: null, address: null, state: null, state_code: null, logo_url: null },
   });
 
   // Scan-to-pay QR — see invoiceAmountDue(): advances AND receipts both reduce

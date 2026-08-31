@@ -39,6 +39,7 @@ import { renderTemplate } from "@/lib/renewals/templates";
 import { createOrGetRenewalQuote } from "@/lib/renewals/create-renewal-quote";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { renderQuotePDF } from "@/lib/pdf";
+import { logoDataUri } from "@/lib/pdf/logo";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
 import { quoteAcceptUrl } from "@/lib/quotes/accept-link";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
@@ -170,7 +171,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
       // ── Per-tenant info: grace_period + tenant email (for from-address fallback) ──
       const { data: tenant } = await supabase
         .from("tenants")
-        .select("name, email, phone, gstin, address, grace_period_days, state_code")
+        .select("name, email, phone, gstin, address, grace_period_days, state_code, logo_url")
         .eq("id", sub.tenant_id)
         .single();
       if (!tenant) continue;
@@ -337,6 +338,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
         if (renewalQuote && lineItems.length > 0) {
           try {
             const blob = await renderQuotePDF({
+              tenantLogo:    await logoDataUri((tenant as { logo_url?: string | null }).logo_url),
               tenantName:    tenant.name,
               tenantGstin:   tenant.gstin,
               tenantEmail:   tenant.email,

@@ -8,6 +8,7 @@ import { type NextRequest } from "next/server";
 import { createElement } from "react";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyPdfToken } from "@/lib/pdf/pdf-token";
+import { logoDataUri } from "@/lib/pdf/logo";
 import { buildQuotePdfProps, type TenantPdfInfo } from "@/lib/pdf/build-props";
 import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
 import { quoteAmountDue } from "@/lib/payments/amount-due";
@@ -36,13 +37,18 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     q.customer_id
       ? admin.from("customers").select("*").eq("id", q.customer_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from("tenants").select("name, gstin, email, phone, address, state, state_code, upi_vpa, upi_payee_name").eq("id", q.tenant_id).maybeSingle(),
+    admin.from("tenants").select("name, gstin, email, phone, address, state, state_code, upi_vpa, upi_payee_name, logo_url").eq("id", q.tenant_id).maybeSingle(),
   ]);
 
+  /* Fetched here, not inside the renderer: `logoDataUri` carries a 4s deadline and swallows
+     every failure, so a slow or missing logo costs the monogram and never the document. */
+  const logo = await logoDataUri((tenant as { logo_url?: string | null } | null)?.logo_url);
+
   const props = buildQuotePdfProps({
+    logoDataUri: logo,
     quote:    q,
     customer: (customer as Customer) ?? null,
-    tenant:   (tenant as TenantPdfInfo) ?? { name: q.customer_name, gstin: null, email: null, phone: null, address: null, state: null, state_code: null },
+    tenant:   (tenant as TenantPdfInfo) ?? { name: q.customer_name, gstin: null, email: null, phone: null, address: null, state: null, state_code: null, logo_url: null },
   });
 
   // Scan-to-pay. quoteAmountDue() decides whether this quote can be collected at

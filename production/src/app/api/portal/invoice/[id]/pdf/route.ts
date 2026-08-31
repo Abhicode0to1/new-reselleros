@@ -57,7 +57,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       : Promise.resolve({ data: null }),
     admin
       .from("tenants")
-      .select("name, gstin, email, phone, address, state, state_code, upi_vpa, upi_payee_name")
+      .select("name, gstin, email, phone, address, state, state_code, upi_vpa, upi_payee_name, logo_url")
       .eq("id", inv.tenant_id)
       .maybeSingle(),
   ]);
@@ -68,7 +68,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     customer: (customer as Customer) ?? null,
     tenant:   (tenant as TenantPdfInfo) ?? {
       name: inv.customer_name, gstin: null, email: null,
-      phone: null, address: null, state: null, state_code: null,
+      phone: null, address: null, state: null, state_code: null, logo_url: null,
     },
   });
 

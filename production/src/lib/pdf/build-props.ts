@@ -25,6 +25,19 @@ export interface TenantPdfInfo {
   address:     string | null;
   state:       string | null;
   state_code:  string | null;
+  /**
+   * REQUIRED, not optional, and that is the point: every caller has to add `logo_url` to its
+   * tenant select and decide what to do about it.
+   *
+   * The column has been populated since July 2026 and no PDF read it until 31 Aug, because
+   * the logo was never anywhere a caller could forget it. `quotes.billing_cycle` was silently
+   * defaulted the same way and that one printed a twelfth of the price on a GST document.
+   * A field nobody is forced to fill is a field nobody fills.
+   *
+   * This is the STORED URL. It is not renderable — run it through `logoDataUri()` and pass
+   * the result as `logoDataUri` below.
+   */
+  logo_url:    string | null;
 }
 
 interface Amounts {
@@ -125,6 +138,14 @@ export function buildQuotePdfProps(args: {
   quote:    Quote;
   customer: Customer | null;
   tenant:   TenantPdfInfo;
+  /**
+   * The logo as a `data:` URI, from `await logoDataUri(tenant.logo_url)`.
+   *
+   * Resolved by the CALLER because this module is pure and synchronous, and because fetching
+   * an image belongs where a deadline and a failure can be handled — not inside a renderer
+   * running on the inbound-mail webhook. Omitted → the document draws its monogram.
+   */
+  logoDataUri?: string | null;
 }): QuotePDFProps {
   const { quote, customer, tenant } = args;
   const a = quoteAmounts(quote);
@@ -139,6 +160,7 @@ export function buildQuotePdfProps(args: {
     tenantEmail:   tenant.email,
     tenantPhone:   tenant.phone,
     tenantAddress: tenant.address,
+    tenantLogo:    args.logoDataUri ?? null,
     quoteId:       quote.id,
     customerName:  quote.customer_name,
     contactName:   customer?.contact_name ?? null,

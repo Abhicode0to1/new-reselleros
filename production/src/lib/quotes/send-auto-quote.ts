@@ -31,6 +31,7 @@
  */
 import { sendEmail } from "@/lib/email/send";
 import { renderQuotePDF } from "@/lib/pdf";
+import { logoDataUri } from "@/lib/pdf/logo";
 import { rupee } from "@/lib/utils";
 import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import type { createAdminClient } from "@/lib/supabase/server";
@@ -72,6 +73,7 @@ interface TenantRow {
   phone: string | null;
   gstin: string | null;
   address: string | null;
+  logo_url: string | null;
 }
 
 export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Promise<void> {
@@ -102,7 +104,7 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
   }
 
   const { data: t } = await admin
-    .from("tenants").select("name, email, phone, gstin, address")
+    .from("tenants").select("name, email, phone, gstin, address, logo_url")
     .eq("id", args.tenantId).maybeSingle();
   const tenant = (t ?? {}) as TenantRow;
 
@@ -128,6 +130,11 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
       tenantEmail:   tenant.email,
       tenantPhone:   tenant.phone,
       tenantAddress: tenant.address,
+      /* This is the quote the AI sends on its own, so it is the one a customer is most likely
+         to see first. Resolved here rather than in the renderer: `logoDataUri` has a deadline
+         and returns null on every failure, so a logo can cost the monogram but never the
+         send — and this whole block already sits inside a try that degrades to no PDF. */
+      tenantLogo:    await logoDataUri(tenant.logo_url),
       quoteId:       quote.id,
       customerName:  quote.customer_name ?? "",
       contactName:   null,

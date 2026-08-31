@@ -24,6 +24,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendWhatsApp } from "@/lib/whatsapp/client";
 import { classifySendFailure } from "@/lib/whatsapp/send-failure";
 import { renderQuotePDF } from "@/lib/pdf";
+import { logoDataUri } from "@/lib/pdf/logo";
 import { buildQuoteUpiQr } from "@/lib/pdf/upi-qr";
 import { quoteAmountDue } from "@/lib/payments/amount-due";
 import { isInterStateSupply } from "@/lib/gst/place-of-supply";
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
 
       const { data: tenant } = await admin
         .from("tenants")
-        .select("name, email, phone, gstin, address, state_code, upi_vpa, upi_payee_name")
+        .select("name, email, phone, gstin, address, state_code, upi_vpa, upi_payee_name, logo_url")
         .eq("id", me.tenant_id)
         .single();
       const { data: customer } = quote.customer_id
@@ -146,6 +147,7 @@ export async function POST(req: NextRequest) {
         upiQrDataUrl:  upi?.dataUrl ?? null,
         upiVpa:        upi?.vpa ?? null,
         tenantName:    tenant?.name    ?? "Workspace",
+        tenantLogo:    await logoDataUri((tenant as { logo_url?: string | null } | null)?.logo_url),
         tenantGstin:   tenant?.gstin   ?? null,
         tenantEmail:   tenant?.email   ?? null,
         tenantPhone:   tenant?.phone   ?? null,
