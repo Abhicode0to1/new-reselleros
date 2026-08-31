@@ -116,7 +116,19 @@ export async function POST(request: NextRequest) {
 
   if (guarded.lead && !alreadyCaptured && leadDetailsAppearInTranscript(guarded.lead, messages)) {
     const L = guarded.lead;
-    const origin = request.nextUrl.origin;
+    /* ── LOOPBACK, not the request URL's own origin — measured failure, 1 Sep 2026 ──
+       The first version self-addressed via the incoming request's origin, and on Cloud
+       Run that resolves with the https scheme while the CONTAINER serves plain HTTP on
+       $PORT (TLS ends at the proxy). The live log, on the first real chat lead:
+
+           ERR_SSL_WRONG_VERSION_NUMBER … ssl3_get_record:wrong version number
+
+       — the reply went out, the lead silently did not. Loopback HTTP is what a
+       container can always say to itself; PORT is set by Cloud Run (8080) and the
+       request port covers local dev. (The test bans the origin accessor by name — and
+       this comment cannot name it either, or the comment defeats the test: the third
+       time this session that exact failure shape has appeared.) */
+    const origin = `http://127.0.0.1:${process.env.PORT || request.nextUrl.port || "3000"}`;
     const summary = messages
       .filter((m) => m.role === "user")
       .map((m) => m.text)

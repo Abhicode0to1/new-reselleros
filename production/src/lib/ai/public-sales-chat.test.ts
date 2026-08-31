@@ -194,6 +194,11 @@ describe("lead — model ka daawa, transcript ka saboot", () => {
     expect(route).toContain("/api/public/enquiry/general");
     expect(route).toContain("leadAlreadyCaptured");
     expect(route).toContain("leadDetailsAppearInTranscript(guarded.lead, messages)");
+    /* Self-call LOOPBACK HTTP par — nextUrl.origin Cloud Run par https bolta hai jabki
+       container plain HTTP sunta hai; pehli asli chat-lead isi par giri thi
+       (ERR_SSL_WRONG_VERSION_NUMBER, live log). */
+    expect(route).toContain("http://127.0.0.1:");
+    expect(route.includes("request.nextUrl.origin")).toBe(false);
   });
 
   it("prompt: sawaal ek-ek karke, contact ka IMANDAAR kaaran, daam kabhi lock nahi", () => {
