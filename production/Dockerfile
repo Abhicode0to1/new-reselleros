@@ -64,6 +64,24 @@ ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY="BD4DQzE6L6cSqpFJH8_409BbMpIZ4tyQ6PpToNVqviGN2v
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# ── THE BUILD RAN OUT OF MEMORY — 31 Aug 2026 ────────────────────────────────
+# Build bf623310 died with "FATAL ERROR: Ineffective mark-compacts near heap limit
+# Allocation failed - JavaScript heap out of memory", and the deploy simply did not happen.
+# The same commit had built locally minutes earlier in 201s — a laptop has more headroom, so
+# nothing in the gate could see this coming.
+#
+# It is NOT a shortage of machine. `cloudbuild.yaml` is E2_HIGHCPU_8, which is 8 vCPU and
+# 8 GB, and the comment there already records that 32 cores bought 11% and was reverted. The
+# shortage is Node's own heap: it sizes old-space from a fraction of what it detects and, in a
+# container, that lands near 2 GB — a quarter of the RAM sitting there unused.
+#
+# 6 GB leaves ~2 GB for the OS, npm and the compiler's own child processes. Raising the
+# machine instead would cost money for RAM Node was never going to ask for.
+#
+# If this returns, the next lever is real: 128 pages and 152 API routes type-checked in one
+# pass. Splitting that is work, and buying heap first is the cheap half.
+ENV NODE_OPTIONS=--max-old-space-size=6144
+
 RUN npm run build
 
 # ── Stage 3: minimal production image ───────────────────────────────
