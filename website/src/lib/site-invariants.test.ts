@@ -88,9 +88,28 @@ describe("quote form ka enquiry contract", () => {
       expect(proxy.includes(`payload.${field}`) || proxy.includes(`{ fullName`) || proxy.includes(field),
         `proxy ${field} nahi bhejta`).toBe(true);
     }
-    /* message REQUIRED hai app me — proxy use hamesha bhare, khaali chhodne par 400. */
-    expect(proxy).toContain("payload.message = message");
+    /* message REQUIRED hai app me — dono path use hamesha bharte hain. */
+    expect(proxy).toContain("message");
     expect(proxy).toContain("ENQUIRY_API");
+  });
+
+  it("GW auto-quote path bhi app ke source se milta hai — tierId, billing, seats", () => {
+    /* Wahi sabak dobara nahi: workspace endpoint ka schema USKE route se padho, yaad se nahi. */
+    const appRoute = readFileSync(
+      join(process.cwd(), "..", "production", "src", "app", "api", "public", "enquiry", "workspace", "route.ts"),
+      "utf8",
+    );
+    for (const field of ["tierId", "billing", "seats", "message", "draftQuoteId"]) {
+      expect(appRoute.includes(field), `app workspace schema me ${field} nahi — contract badla?`).toBe(true);
+    }
+    /* Enum values jo proxy bhejta hai, app me maujood hon. */
+    for (const v of ['"starter"', '"standard"', '"plus"', '"monthly"', '"annual"']) {
+      expect(appRoute.includes(v), `app me enum ${v} nahi`).toBe(true);
+    }
+    const proxy = read(join(SRC, "app", "api", "enquiry", "route.ts"));
+    for (const field of ["tierId", "billing", "ENQUIRY_WORKSPACE_API", "gwTierFor", "draftQuoteId"]) {
+      expect(proxy.includes(field), `proxy me ${field} nahi`).toBe(true);
+    }
   });
 
   it("QuoteBuilder seedha app ko nahi, /api/enquiry ko POST karta hai (CORS)", () => {

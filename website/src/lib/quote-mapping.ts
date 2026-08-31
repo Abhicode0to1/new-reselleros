@@ -20,3 +20,24 @@ export function apiProductFor(name: string): ApiProduct {
   if (n.includes("zoho")) return "zoho";
   return "other";
 }
+
+/**
+ * Which Google Workspace TIER an edition name is, for the app's auto-quote endpoint
+ * (`/api/public/enquiry/workspace` — tierId enum starter|standard|plus|enterprise).
+ *
+ * Null means "not auto-quotable as Workspace" and the enquiry takes the general path
+ * instead. Enterprise is deliberately never returned: the app itself refuses to auto-
+ * quote it (custom pricing, hand-priced by the operator), so sending it would draft
+ * nothing and the general path is the honest one.
+ */
+export type GwTier = "starter" | "standard" | "plus";
+
+export function gwTierFor(name: string): GwTier | null {
+  if (apiProductFor(name) !== "google-workspace") return null;
+  const n = name.toLowerCase();
+  /* "plus" pehle — "standard plus" jaisa naam standard se pehle plus par girna chahiye. */
+  if (n.includes("plus")) return "plus";
+  if (n.includes("standard")) return "standard";
+  if (n.includes("starter")) return "starter";
+  return null;
+}

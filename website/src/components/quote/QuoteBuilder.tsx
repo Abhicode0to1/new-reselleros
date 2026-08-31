@@ -54,6 +54,8 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
   const [phone, setPhone] = useState("");
   const [provider, setProvider] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "issued" | "failed">("idle");
+  /* Auto-quote path se aaya draft ka number — green panel isse NAAM se batata hai. */
+  const [quoteId, setQuoteId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const edition = list.find((e) => e.name === product) ?? null;
@@ -127,10 +129,15 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
           product: apiProductFor(product),
           seats,
           requirement,
+          /* GW edition + term → proxy inhe dekh kar AUTO-QUOTE raaste par bhejta hai:
+             app me lead ke saath catalog-priced draft quotation banti hai. */
+          edition: edition?.name,
+          term: effectiveTerm,
         }),
       });
-      const data = (await res.json()) as { ok: boolean; error?: string };
+      const data = (await res.json()) as { ok: boolean; error?: string; quoteId?: string | null };
       if (!data.ok) throw new Error(data.error || "refused");
+      setQuoteId(data.quoteId ?? null);
       setState("issued");
     } catch (e) {
       setState("failed");
@@ -203,9 +210,14 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
           <div style={{ marginTop: 16, border: "1px solid var(--success)", background: "#EEF7F0", borderRadius: 8, padding: 16 }}>
             <div className="mono-label" style={{ color: "var(--success)", marginBottom: 6 }}>ENQUIRY RECORDED</div>
             <p style={{ fontSize: 14, lineHeight: 1.5, margin: 0, color: "var(--text-secondary)" }}>
-              The estimate on the right is indicative. The formal GST quotation — numbered, CGST/SGST
-              split, PDF attached — is prepared in our system and emailed to {email || "you"}, usually
-              within minutes in working hours.
+              {quoteId ? (
+                <>Quotation <b className="mono">{quoteId}</b> has been drafted in our system with the
+                catalogue price — it reaches {email || "you"} after a quick review, usually within
+                working hours the same day.</>
+              ) : (
+                <>The estimate on the right is indicative. We price the requirement in our system and
+                the formal GST quotation reaches {email || "you"} the same working day.</>
+              )}
             </p>
             <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={() => window.print()}>
               Print this estimate

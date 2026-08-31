@@ -1,24 +1,33 @@
 /**
  * POST /api/enquiry — the bridge between this website and ResellerOS.
  *
- * The quote form posts HERE, and this route forwards server-side to the app's public
- * lead-capture API (`/api/public/enquiry/general`). Why a proxy and not a direct browser
- * call: the app's public API sends no CORS headers (checked 31 Aug 2026 — no
- * `Access-Control-*` anywhere under src/app/api/public), so a cross-origin fetch from this
- * site would be refused by the browser. Server-to-server has no CORS, and it also keeps the
- * app's URL out of the page source.
+ * The quote form posts HERE, and this route forwards server-side to the app. Server-side
+ * because the app's public API sends no CORS headers (checked 31 Aug 2026) — a browser
+ * call would be refused; a proxy needs no app change at all.
  *
- * What happens on the other side: the app creates a `leads` row in the ANUTECH tenant
- * (stage "new", source "enquiry-form") and notifies the operator. From there the app's own
- * machinery — the AI sales agent, auto-quote, follow-up tasks — takes over. This is the
- * whole point of the website: every quote generated here becomes a lead there.
+ * ─── TWO PATHS, PICKED BY WHAT WAS ASKED FOR ────────────────────────────────
+ * A Google Workspace edition (Starter/Standard/Plus) goes to
+ * `/api/public/enquiry/workspace` — the AUTO-QUOTE path. That endpoint creates the lead
+ * AND a catalog-priced draft quotation (the same pricing module the app's checkout uses),
+ * alerts the operator with a deep-link to it, and acknowledges the customer. Its
+ * `draftQuoteId` comes back through us so the form can name the document.
  *
- * Validation here is deliberately the same shape the app enforces (Zod on that side):
- * forwarding junk just to have it rejected across the network wastes the visitor's time
- * with a worse error message.
+ * Everything else (M365, Zoho, Anutech Mail, Hosting, Domains) goes to
+ * `/api/public/enquiry/general` — lead + notification, priced by a person. The app has no
+ * auto-quote path for those vendors yet, and inventing one here would mean website-side
+ * price arithmetic, which is exactly what this design avoids.
+ *
+ * ─── FIELD NAMES COME FROM THE APP'S SOURCE, NOT FROM MEMORY ────────────────
+ * Pardeep's first real submit failed with 400 "Invalid form data: Required" because this
+ * proxy sent `requirement` where the app's Zod says `message` — a field name I had
+ * GUESSED after reading only the schema's first 50 lines, with a test that pinned my own
+ * guess. Both schemas are now read IN FULL and site-invariants.test.ts checks this proxy
+ * against the app's actual route sources; if the app's contract changes shape, the suite
+ * goes red instead of visitors getting silent 400s.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { ENQUIRY_API } from "@/lib/config";
+import { ENQUIRY_API, ENQUIRY_WORKSPACE_API } from "@/lib/config";
+import { gwTierFor } from "@/lib/quote-mapping";
 
 interface EnquiryBody {
   fullName: string;
@@ -28,6 +37,10 @@ interface EnquiryBody {
   product?: "google-workspace" | "microsoft-365" | "zoho" | "other";
   seats?: number;
   requirement?: string;
+  /** The exact edition chip the visitor chose — decides the path. */
+  edition?: string;
+  /** annual | monthly — the workspace endpoint's `billing`. */
+  term?: string;
 }
 
 const PRODUCTS = new Set(["google-workspace", "microsoft-365", "zoho", "other"]);
@@ -52,22 +65,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const payload: Record<string, unknown> = { fullName, companyName, email, phone };
-  if (typeof body.product === "string" && PRODUCTS.has(body.product)) payload.product = body.product;
-  if (Number.isFinite(body.seats) && (body.seats as number) >= 1) payload.seats = Math.floor(body.seats as number);
-  /* ── FIELD KA NAAM 'message' HAI, 'requirement' NAHI ──────────────────────
-     Pardeep ke pehle asli submit par upstream ne 400 diya: "Invalid form data: Required".
-     App ka Zod free-text ko `message` (required, min 5) kehta hai; maine schema ki
-     pehli 50 line padh kar naam ANDAZE se likha tha, aur mera test mere hi andaze ko pin
-     kar raha tha. Ab ye naam app ke route-source se test hota hai (site-invariants) —
-     wahan ka schema badle to yahan laal hoga, chupchaap 400 nahi. */
-  const message = typeof body.requirement === "string" && body.requirement.trim()
-    ? body.requirement.trim().slice(0, 2000)
-    : "Quote request from the website form.";
-  payload.message = message;
+  const seats =
+    Number.isFinite(body.seats) && (body.seats as number) >= 1 ? Math.floor(body.seats as number) : null;
+  const message =
+    typeof body.requirement === "string" && body.requirement.trim()
+      ? body.requirement.trim().slice(0, 2000)
+      : "Quote request from the website form.";
 
-  try {
-    const res = await fetch(ENQUIRY_API, {
+  const tier = typeof body.edition === "string" ? gwTierFor(body.edition) : null;
+
+  const fail = () =>
+    NextResponse.json(
+      { ok: false, error: "Could not record the enquiry right now. WhatsApp us and we will price it by hand." },
+      { status: 502 },
+    );
+
+  const post = async (url: string, payload: Record<string, unknown>) =>
+    fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -76,19 +90,45 @@ export async function POST(req: NextRequest) {
       signal: AbortSignal.timeout(10_000),
       cache: "no-store",
     });
-    if (!res.ok) {
-      console.error("[enquiry-proxy] upstream refused:", res.status, await res.text().catch(() => ""));
-      return NextResponse.json(
-        { ok: false, error: "Could not record the enquiry right now. WhatsApp us and we will price it by hand." },
-        { status: 502 },
-      );
+
+  try {
+    /* ── AUTO-QUOTE PATH: a GW edition with a seat count ──────────────────────
+       The workspace endpoint REQUIRES seats and tierId; if either is missing the general
+       path still records the lead — a degraded enquiry beats a rejected one. */
+    if (tier && seats) {
+      const res = await post(ENQUIRY_WORKSPACE_API, {
+        fullName,
+        companyName,
+        email,
+        phone,
+        seats,
+        tierId: tier,
+        billing: body.term === "monthly" ? "monthly" : "annual",
+        message,
+      });
+      if (!res.ok) {
+        console.error("[enquiry-proxy] workspace upstream refused:", res.status, await res.text().catch(() => ""));
+        return fail();
+      }
+      const data = (await res.json()) as { success?: boolean; draftQuoteId?: string | null };
+      /* draftQuoteId can be null (doc-number retries exhausted) — the lead still exists
+         and the operator was alerted, so that is a success with no number to show. */
+      return NextResponse.json({ ok: true, quoteId: data.draftQuoteId ?? null });
     }
-    return NextResponse.json({ ok: true });
+
+    /* ── GENERAL PATH: everything else ────────────────────────────────────── */
+    const payload: Record<string, unknown> = { fullName, companyName, email, phone, message };
+    if (typeof body.product === "string" && PRODUCTS.has(body.product)) payload.product = body.product;
+    if (seats) payload.seats = seats;
+
+    const res = await post(ENQUIRY_API, payload);
+    if (!res.ok) {
+      console.error("[enquiry-proxy] general upstream refused:", res.status, await res.text().catch(() => ""));
+      return fail();
+    }
+    return NextResponse.json({ ok: true, quoteId: null });
   } catch (err) {
     console.error("[enquiry-proxy] upstream unreachable:", err);
-    return NextResponse.json(
-      { ok: false, error: "Could not record the enquiry right now. WhatsApp us and we will price it by hand." },
-      { status: 502 },
-    );
+    return fail();
   }
 }

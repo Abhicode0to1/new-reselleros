@@ -27,6 +27,14 @@ export const OS_DEMO = `${RESELLEROS_URL}/login`;
 export const ENQUIRY_API = `${RESELLEROS_URL}/api/public/enquiry/general`;
 
 /**
+ * The AUTO-QUOTE path for Google Workspace enquiries: this one creates the lead AND a
+ * catalog-priced draft quotation (tier + seats + billing), alerts the operator with a
+ * deep-link to it, and acknowledges the customer. The proxy routes GW editions here and
+ * everything else to the general endpoint.
+ */
+export const ENQUIRY_WORKSPACE_API = `${RESELLEROS_URL}/api/public/enquiry/workspace`;
+
+/**
  * PLACEHOLDER — the handoff marks the phone number as fake on purpose
  * ("+91 98xxx xxxxx"). Replace with the real number before launch; the wa.me link is
  * built from it, so a fake number here means a dead WhatsApp button.
