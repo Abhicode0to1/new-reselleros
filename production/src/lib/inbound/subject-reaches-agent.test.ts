@@ -42,14 +42,32 @@ const CODE = INGEST
 
 describe("sales agent ko poora email milta hai", () => {
   it("dono call site subject ke saath bulate hain", () => {
-    /* Do call site hain — CREATE wala aur APPEND wala. Ek par lagana aur doosre par
-       bhool jana theek wahi 23 Aug wala auto-quote bug hai, jise auto-quote-wiring.test.ts
-       isi wajah se dono par pin karta hai. */
-    const calls = CODE.match(/incoming:\s*[^\n]*/g) ?? [];
-    expect(calls.length).toBeGreaterThanOrEqual(2);
-    for (const c of calls) {
-      expect(c).toMatch(/withSubject\(/);
+    /* ⚠️ 31 Aug 2026 ko ye laal hua, aur galti mere refactor ki thi — niyam ki nahi.
+       Dono branch ab ek hi `afterLeadWritten` se guzarte hain, to `incoming:` ab TEEN shakl
+       me milta hai: type ka khaana, closure ka aage badhana, aur do ASLI feed. Pehle regex
+       teeno ko ek jaisa maan rahi thi aur type ke khaane par lal ho gayi.
+
+       Niyam waise ka waisa hai: jo bhi jagah matn BANATI hai, wo subject ke saath banaye.
+       Ek par lagana aur doosri par bhool jana theek wahi 23 Aug wala auto-quote bug hai. */
+    const lines = CODE.match(/incoming:\s*[^\n]*/g) ?? [];
+    expect(lines.length, "koi `incoming:` mila hi nahi — jaanch tooti hai")
+      .toBeGreaterThanOrEqual(3);
+
+    /* Type ka khaana aur closure ka forward — ye matn banate nahi, aage bhejte hain. */
+    const feeds = lines.filter((l) =>
+      !/incoming:\s*string;/.test(l) && !/incoming:\s*args\.incoming,/.test(l));
+
+    expect(feeds.length, `matn banane wali jagahen ${feeds.length} mili, 2 honi chahiye`)
+      .toBe(2);
+    for (const f of feeds) {
+      expect(f, "ye call site subject ke bina bula raha hai").toMatch(/withSubject\(/);
     }
+  });
+
+  it("closure sirf aage bhejta hai — apna matn nahi banata", () => {
+    /* Agar `afterLeadWritten` khud `withSubject` lagane lage to do jagah subject judega:
+       ek baar caller par, ek baar yahan — aur "Subject: x" do baar chhap jayega. */
+    expect(CODE).toMatch(/incoming:\s*args\.incoming,/);
   });
 
   it("kaccha body ab kisi call site par nahi jata", () => {
