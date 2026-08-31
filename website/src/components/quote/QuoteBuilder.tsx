@@ -1,62 +1,53 @@
 "use client";
 /**
- * The quote page: form on the left, live quote document on the right, print-to-PDF after
- * generating — the handoff's behaviour — plus the one thing the handoff could not do:
- * on Generate, the enquiry is POSTED to ResellerOS through /api/enquiry, so it lands in
- * the sales pipeline as a lead. The on-screen document is an ESTIMATE and says so; the
- * binding GST quotation is produced by the app and emailed.
+ * The quote page: form on the left, live estimate on the right, and on Generate the
+ * enquiry POSTs to ResellerOS through /api/enquiry — a lead in the sales pipeline.
  *
- * Quote number Q-ADPL-2026-<0100 + seats> — the handoff's deterministic placeholder scheme,
- * kept deliberately: a browser page must not pretend to own a CGST-compliant series. The
- * real gapless number is minted by ResellerOS when the actual quotation is raised.
+ * ─── WHY THE PRODUCTS ARE EDITIONS NOW ──────────────────────────────────────
+ * The first version copied the handoff's five coarse chips ("Google Workspace", …).
+ * Pardeep clicked "Get this as a quote" from the licence calculator and found his
+ * selection gone: "usme sirf google workspace hota hai, product selection ka to option
+ * hi nahi — bina product ke quote kaise jayenge". He is right: a licence quotation
+ * without the EDITION is not a quotation.
+ *
+ * So the licence chips are the same live-merged editions the calculator shows (GW rows
+ * carry the app catalogue's real prices — the ● mark), plus Anutech Mail, Hosting and
+ * Domains. The calculator hands its whole selection over in the URL
+ * (?edition=…&seats=…&term=…), so what you configured is what gets quoted.
+ *
+ * The on-screen document is an ESTIMATE and says so; the binding GST quotation with the
+ * real CGST-series number is produced by the app and emailed.
  */
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { rupee, GST_RATE } from "@/lib/money";
-import { MAIL_RATES } from "@/lib/data/catalog";
+import { MAIL_RATES, LICENCE_EDITIONS } from "@/lib/data/catalog";
+import { apiProductFor } from "@/lib/quote-mapping";
+import type { MergedEdition } from "@/lib/live-catalog";
 
-const PRODUCTS = ["Anutech Mail", "Google Workspace", "Microsoft 365", "Hosting", "Domains"] as const;
-type Product = (typeof PRODUCTS)[number];
-
-const SEAT_LABELS: Partial<Record<Product, string>> = {
-  Domains: "HOW MANY DOMAINS",
-  Hosting: "HOW MANY MAILBOXES ALONGSIDE",
-};
-
-/** What the app's enquiry API calls each product. "other" for the non-licence ones. */
-const API_PRODUCT: Record<Product, "google-workspace" | "microsoft-365" | "other"> = {
-  "Anutech Mail": "other",
-  "Google Workspace": "google-workspace",
-  "Microsoft 365": "microsoft-365",
-  Hosting: "other",
-  Domains: "other",
-};
+const FIXED_PRODUCTS = ["Anutech Mail", "Hosting", "Domains"] as const;
 
 interface QuoteLine { label: string; detail: string; qty: number; amount: string; raw: number }
 
-function linesFor(product: Product, seats: number, gwMonthlyRate: number | null): QuoteLine[] {
-  if (product === "Hosting") {
-    return [
-      { label: "Business hosting", detail: "cPanel, 50 GB NVMe, 10 sites", qty: 1, amount: rupee(359), raw: 359 },
-      { label: "Anutech Mail", detail: "Mailboxes for the team", qty: seats, amount: rupee(79 * seats), raw: 79 * seats },
-    ];
-  }
-  if (product === "Domains") {
-    return [{ label: "Domain portfolio", detail: "Transfer in, ₹649 average per name", qty: seats, amount: rupee(649 * seats), raw: 649 * seats }];
-  }
-  /* Google Workspace prices LIVE from the app's catalogue when it answered (the flexible
-     per-seat/month tier — this page quotes month-to-month). Placeholder otherwise. */
-  const rate = product === "Google Workspace" && gwMonthlyRate !== null
-    ? gwMonthlyRate
-    : MAIL_RATES[product] ?? 165;
-  return [
-    { label: product, detail: "Per mailbox, per month", qty: seats, amount: rupee(rate * seats), raw: rate * seats },
-    { label: "Migration", detail: "Mail, folders and calendars moved by us", qty: 1, amount: "Free", raw: 0 },
-  ];
-}
+export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
+  const list: MergedEdition[] =
+    editions ?? LICENCE_EDITIONS.map((e) => ({ ...e, monthlyOrNull: e.monthly }));
+  const products: string[] = [...list.map((e) => e.name), ...FIXED_PRODUCTS];
 
-export function QuoteBuilder({ gwMonthlyRate = null }: { gwMonthlyRate?: number | null }) {
-  const [product, setProduct] = useState<Product>("Google Workspace");
-  const [seats, setSeats] = useState(25);
+  /* The calculator's handover: /quote?edition=GW+Business+Standard&seats=20&term=annual.
+     An unknown edition name falls back to the first product rather than erroring — the
+     link may be old, the catalogue may have changed. */
+  const params = useSearchParams();
+  const paramEdition = params.get("edition");
+  const initialProduct =
+    paramEdition && products.includes(paramEdition) ? paramEdition : list[0]?.name ?? FIXED_PRODUCTS[0];
+  const paramSeats = Number(params.get("seats"));
+  const initialSeats = Number.isFinite(paramSeats) && paramSeats >= 1 && paramSeats <= 300 ? Math.floor(paramSeats) : 25;
+  const initialTerm: "annual" | "monthly" = params.get("term") === "monthly" ? "monthly" : "annual";
+
+  const [product, setProduct] = useState<string>(initialProduct);
+  const [term, setTerm] = useState<"annual" | "monthly">(initialTerm);
+  const [seats, setSeats] = useState(initialSeats);
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
@@ -65,8 +56,51 @@ export function QuoteBuilder({ gwMonthlyRate = null }: { gwMonthlyRate?: number 
   const [state, setState] = useState<"idle" | "sending" | "issued" | "failed">("idle");
   const [error, setError] = useState("");
 
-  const lines = linesFor(product, seats, gwMonthlyRate);
-  const sub = lines.reduce((n, l) => n + l.raw, 0);
+  const edition = list.find((e) => e.name === product) ?? null;
+  /* Same honesty rule as the calculator: no flexible tier in the catalogue → no monthly
+     figure gets invented; the term snaps to annual and the chip disables. */
+  const monthlyAvailable = edition ? edition.monthlyOrNull != null : true;
+  const effectiveTerm = edition && term === "monthly" && !monthlyAvailable ? "annual" : term;
+  const isAnnual = effectiveTerm === "annual";
+
+  const seatLabel =
+    product === "Domains" ? "HOW MANY DOMAINS" : product === "Hosting" ? "HOW MANY MAILBOXES ALONGSIDE" : "HOW MANY SEATS";
+
+  function lines(): QuoteLine[] {
+    if (product === "Hosting") {
+      return [
+        { label: "Business hosting", detail: "cPanel, 50 GB NVMe, 10 sites", qty: 1, amount: rupee(359), raw: 359 },
+        { label: "Anutech Mail", detail: "Mailboxes for the team", qty: seats, amount: rupee(79 * seats), raw: 79 * seats },
+      ];
+    }
+    if (product === "Domains") {
+      return [{ label: "Domain portfolio", detail: "Transfer in, ₹649 average per name", qty: seats, amount: rupee(649 * seats), raw: 649 * seats }];
+    }
+    if (product === "Anutech Mail") {
+      return [
+        { label: "Anutech Mail", detail: "Per mailbox, per month", qty: seats, amount: rupee(MAIL_RATES["Anutech Mail"] * seats), raw: MAIL_RATES["Anutech Mail"] * seats },
+        { label: "Migration", detail: "Mail, folders and calendars moved by us", qty: 1, amount: "Free", raw: 0 },
+      ];
+    }
+    /* A licence edition. Annual speaks per YEAR — the unit the real quotation uses. */
+    const e = edition!;
+    const perSeat = isAnnual ? e.annual * 12 : (e.monthlyOrNull ?? e.monthly);
+    const unit = isAnnual ? "yr" : "mo";
+    return [
+      {
+        label: e.name,
+        detail: `${rupee(perSeat)}/seat/${unit} · ${isAnnual ? "annual commitment" : "monthly, flexible"}${e.live ? " · live catalogue price" : " · indicative"}`,
+        qty: seats,
+        amount: rupee(perSeat * seats),
+        raw: perSeat * seats,
+      },
+      { label: "Migration", detail: "Mail, folders and calendars moved by us", qty: 1, amount: "Free", raw: 0 },
+    ];
+  }
+
+  const quoteLines = lines();
+  const sub = quoteLines.reduce((n, l) => n + l.raw, 0);
+  const periodWord = edition ? (isAnnual ? "per year" : "per month") : "per month";
 
   const submit = async () => {
     setError("");
@@ -76,6 +110,12 @@ export function QuoteBuilder({ gwMonthlyRate = null }: { gwMonthlyRate?: number 
     }
     setState("sending");
     try {
+      const requirement =
+        (edition
+          ? `${edition.name}, ${isAnnual ? "annual commitment" : "monthly flexible"}, ${seats} seats`
+          : `${product} for ${seats} ${product === "Domains" ? "domains" : "seats"}`) +
+        (provider.trim() ? ` — currently on ${provider.trim()}` : "") +
+        " (via anutech.in quote page)";
       const res = await fetch("/api/enquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,12 +124,9 @@ export function QuoteBuilder({ gwMonthlyRate = null }: { gwMonthlyRate?: number 
           companyName: company,
           email,
           phone,
-          product: API_PRODUCT[product],
+          product: apiProductFor(product),
           seats,
-          requirement:
-            `${product} for ${seats} ${product === "Domains" ? "domains" : "seats"}` +
-            (provider.trim() ? ` — currently on ${provider.trim()}` : "") +
-            " (via anutech.in quote page)",
+          requirement,
         }),
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
@@ -107,15 +144,41 @@ export function QuoteBuilder({ gwMonthlyRate = null }: { gwMonthlyRate?: number 
       <div>
         <div className="mono-label" style={{ color: "var(--text-muted)", marginBottom: 10 }}>WHAT IS THIS FOR</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-          {PRODUCTS.map((p) => (
-            <button key={p} className="chip" aria-pressed={product === p} onClick={() => { setProduct(p); setState("idle"); }}>
-              {p}
-            </button>
-          ))}
+          {products.map((p) => {
+            const live = list.find((e) => e.name === p)?.live;
+            return (
+              <button key={p} className="chip" aria-pressed={product === p} onClick={() => { setProduct(p); setState("idle"); }}>
+                {p}{live ? " ●" : ""}
+              </button>
+            );
+          })}
         </div>
 
+        {edition && (
+          <>
+            <div className="mono-label" style={{ color: "var(--text-muted)", marginBottom: 10 }}>COMMITMENT</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <button className="chip chip-primary" aria-pressed={isAnnual} onClick={() => { setTerm("annual"); setState("idle"); }}>
+                Annual commitment
+              </button>
+              <button
+                className="chip chip-primary"
+                aria-pressed={!isAnnual}
+                disabled={!monthlyAvailable}
+                style={!monthlyAvailable ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
+                onClick={() => { if (monthlyAvailable) { setTerm("monthly"); setState("idle"); } }}
+              >
+                Monthly, flexible
+              </button>
+            </div>
+            <div className="meta" style={{ marginBottom: 16 }}>
+              {!monthlyAvailable ? "This edition is priced for annual commitment only" : isAnnual ? "Cheaper per seat than the flexible rate" : "Cancel or resize any month"}
+            </div>
+          </>
+        )}
+
         <label className="mono-label" style={{ color: "var(--text-muted)", display: "block", marginBottom: 8 }}>
-          {SEAT_LABELS[product] ?? "HOW MANY MAILBOXES"} — {seats}
+          {seatLabel} — {seats}
         </label>
         <input
           type="range" min={1} max={300} value={seats}
@@ -171,7 +234,7 @@ export function QuoteBuilder({ gwMonthlyRate = null }: { gwMonthlyRate?: number 
               <div style={{ fontSize: 15, fontWeight: 600 }}>15 Sep 2026</div>
             </div>
           </div>
-          {lines.map((l) => (
+          {quoteLines.map((l) => (
             <div key={l.label} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: "1px solid var(--border-hairline)" }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{l.label}</div>
@@ -182,10 +245,10 @@ export function QuoteBuilder({ gwMonthlyRate = null }: { gwMonthlyRate?: number 
             </div>
           ))}
           <div style={{ borderTop: "1px solid var(--border)", marginTop: 6, paddingTop: 12 }}>
-            <Line label="Subtotal, per month" value={rupee(sub)} />
+            <Line label={`Subtotal, ${periodWord}`} value={rupee(sub)} />
             <Line label="GST 18%" value={rupee(sub * GST_RATE)} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "6px 0" }}>
-              <span style={{ fontSize: 15, fontWeight: 600 }}>Total, per month</span>
+              <span style={{ fontSize: 15, fontWeight: 600 }}>Total, {periodWord}</span>
               <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em" }}>{rupee(sub * (1 + GST_RATE))}</span>
             </div>
           </div>

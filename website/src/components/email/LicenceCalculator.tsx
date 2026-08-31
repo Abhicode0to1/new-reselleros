@@ -140,7 +140,15 @@ export function LicenceCalculator({
           >
             Add to cart
           </button>
-          <Link href="/quote" className="btn btn-outline">Get this as a quote</Link>
+          {/* Poora chunav saath jata hai — edition, seats, term. Pehle ye khaali /quote tha
+             aur Pardeep ne wahi pakda: form par edition ka option hi nahi tha, to quote kis
+             cheez ki jati? Ab form yahi selection khula milta hai. */}
+          <Link
+            href={{ pathname: "/quote", query: { edition: edition.name, seats: String(seats), term: isAnnual ? "annual" : "monthly" } }}
+            className="btn btn-outline"
+          >
+            Get this as a quote
+          </Link>
         </div>
       </div>
     </div>
