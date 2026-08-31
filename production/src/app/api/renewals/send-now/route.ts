@@ -20,6 +20,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { replyToAddress } from "@/lib/email/reply-to";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import {
   triggersForTerm,
@@ -103,6 +104,11 @@ export async function POST(req: Request) {
     .select("name, email, phone, gstin, address, grace_period_days, state_code, logo_url")
     .eq("id", sub.tenant_id)
     .single();
+  /* Wo mailbox jise app PADHTI hai. Reply-To wahi hona chahiye — 31 Aug 2026 ko
+     tenants.email par bheja gaya jawab kisi ko dikha hi nahi. lib/email/reply-to.ts. */
+  const { data: ingestBoxes } = await supabase
+    .from("user_google_tokens").select("google_email").eq("tenant_id", sub.tenant_id);
+
   if (!tenant) {
     return NextResponse.json({ error: "tenant not found" }, { status: 404 });
   }
@@ -270,7 +276,8 @@ export async function POST(req: Request) {
     subject: tpl.subject,
     text:    tpl.body,
     from:    tenant.email ?? undefined,
-    replyTo: tenant.email ?? undefined,
+    replyTo: replyToAddress(ingestBoxes, tenant.email),
+    route:   { tenantId: me.tenant_id },
     attachments,
   });
 

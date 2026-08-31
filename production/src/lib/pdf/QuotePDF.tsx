@@ -26,6 +26,7 @@ import {
 } from "@react-pdf/renderer";
 import { formatDate } from "@/lib/utils";
 import { pdfRupee } from "./pdf-money";
+import { pdfText } from "./pdf-text";
 import { isForeignCurrency, formatForeign } from "@/lib/currency";
 import type { QuoteLineItem, LineCommitment, BillingCycle } from "@/lib/supabase/database.types";
 import {
@@ -467,12 +468,12 @@ export function QuotePDF(props: QuotePDFProps) {
               ? <Image src={tenantLogo} style={s.brandLogo} />
               : <Text style={s.brandMonogram}>{brandInitial}</Text>}
             <View>
-              <Text style={s.brandName}>{tenantName}</Text>
+              <Text style={s.brandName}>{pdfText(tenantName)}</Text>
               {tenantGstin && (
                 <Text style={s.brandMeta}>GSTIN: {tenantGstin}</Text>
               )}
               {tenantAddress && (
-                <Text style={s.brandMeta}>{tenantAddress}</Text>
+                <Text style={s.brandMeta}>{pdfText(tenantAddress)}</Text>
               )}
               {(tenantEmail || tenantPhone) && (
                 <Text style={s.brandMeta}>
@@ -496,7 +497,7 @@ export function QuotePDF(props: QuotePDFProps) {
         <View style={s.twoCol}>
           <View style={s.colLeft}>
             <Text style={s.sectionLabel}>Bill to</Text>
-            <Text style={s.customerName}>{customerName}</Text>
+            <Text style={s.customerName}>{pdfText(customerName)}</Text>
             {contactName && (
               <Text style={s.customerLine}>Attn: {contactName}</Text>
             )}
@@ -561,7 +562,7 @@ export function QuotePDF(props: QuotePDFProps) {
               return (
                 <View key={line.id} style={s.tr} wrap={false}>
                   <View style={s.tdDesc}>
-                    <Text style={s.lineName}>{line.name}</Text>
+                    <Text style={s.lineName}>{pdfText(line.name)}</Text>
                     <Text style={s.lineMeta}>
                       Per seat{perInvoice ? "" : " per year"} · HSN 998313
                       {line.commitment && ` · ${scheduleLabel(line.commitment, effectiveCycle)}`}
@@ -699,7 +700,7 @@ export function QuotePDF(props: QuotePDFProps) {
         {notes && notes.trim().length > 0 && (
           <View style={s.notesBox}>
             <Text style={s.sectionLabel}>Notes</Text>
-            <Text style={[s.notesText, { marginTop: 4 }]}>{notes}</Text>
+            <Text style={[s.notesText, { marginTop: 4 }]}>{pdfText(notes)}</Text>
           </View>
         )}
 

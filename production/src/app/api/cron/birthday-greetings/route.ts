@@ -166,7 +166,10 @@ async function handle(req: Request): Promise<NextResponse<GreetingResult | { err
         subject,
         text,
         from:    tenant?.email ?? undefined,
-        replyTo: tenant?.email ?? undefined,
+        /* Ye greeting CUSTOMER ko jati hai, par is cron me tenant ek cache se aata hai aur
+       connected mailbox handy nahi hai. Filhaal owner ka address — jawab insaan tak
+       pahunchta hai, bas pipeline me nahi. Alag se theek karna hai. */
+    replyTo: tenant?.email ?? undefined,
         kind:    "greeting",
         /* Gated. A greeting is the least urgent thing this app sends and the most
            embarrassing to have go out during an incident. */

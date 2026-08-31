@@ -34,6 +34,7 @@
  * "12675" for one amount is how a document comes to disagree with the row behind it.
  */
 import { rupee } from "@/lib/utils";
+import { pdfText } from "./pdf-text";
 
 /** What replaces `₹`. A trailing space is included so "Rs 325" reads correctly. */
 export const PDF_RUPEE_PREFIX = "Rs ";
@@ -55,8 +56,13 @@ const RUPEE_SIGN = "₹";
  */
 export function pdfSafeMoney(text: string): string {
   /* The sign may already be followed by a space (from a hand-written string); collapse the two
-     rather than printing "Rs  325". */
-  return text.split(new RegExp(`${RUPEE_SIGN}\\s?`, "g")).join(PDF_RUPEE_PREFIX);
+     rather than printing "Rs  325".
+
+     The general case lives in pdf-text.ts now — `₹` was never the only character the font
+     cannot draw, and an audit on 31 Aug found `✓` on the invoice plus every field of text the
+     TENANT types. This function stays because money has one more rule than text does: the
+     grouping must come from `rupee()` and not be re-derived. */
+  return pdfText(text.split(new RegExp(`${RUPEE_SIGN}\\s?`, "g")).join(PDF_RUPEE_PREFIX));
 }
 
 /**

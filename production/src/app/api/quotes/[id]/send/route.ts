@@ -258,6 +258,10 @@ ${tenant.name}${tenant.phone ? `\n${tenant.phone}` : ""}${tenant.email ? `\n${te
   // ── 8. Send ──────────────────────────────────────────────────────
   const sendResult = await sendEmail({
     to:      recipient,
+    /* Bina `route` ke sendEmail default Resend par jata hai — send.ts:26 khud kehta
+       hai "Callers that omit `route` … still go through Resend." Resend test mode me
+       hai, isliye apne address ke alawa kahin quote bhejna fail hota tha. */
+    route:   { tenantId: me.tenant_id },
     subject,
     text:    messageBody,
     html:    htmlBody,

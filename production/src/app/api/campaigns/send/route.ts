@@ -21,6 +21,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { replyToAddress } from "@/lib/email/reply-to";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
@@ -147,6 +148,11 @@ export async function POST(req: NextRequest) {
     .select("name, email, phone")
     .eq("id", me.tenant_id)
     .single();
+  /* Wo mailbox jise app PADHTI hai. Reply-To wahi hona chahiye — 31 Aug 2026 ko
+     tenants.email par bheja gaya jawab kisi ko dikha hi nahi. lib/email/reply-to.ts. */
+  const { data: ingestBoxes } = await admin
+    .from("user_google_tokens").select("google_email").eq("tenant_id", me.tenant_id);
+
   const senderName = tenant?.name ?? "Your team";
 
   // ── 3. Allocate campaign ID + insert campaign row ─────────────
@@ -212,7 +218,8 @@ export async function POST(req: NextRequest) {
       const result = await sendEmail({
         to:      r.contact_email,
         from:    fromAddress,
-        replyTo: tenant?.email ?? undefined,
+        replyTo: replyToAddress(ingestBoxes, tenant?.email),
+    route:   { tenantId: me.tenant_id },
         subject: renderedSubject,
         text:    renderedBody,
         html:    renderedHtml,

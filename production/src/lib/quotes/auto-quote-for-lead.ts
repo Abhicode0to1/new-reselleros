@@ -84,6 +84,61 @@ export async function autoQuoteForLead(admin: Admin, args: AutoQuoteArgs): Promi
     return;
   }
 
+  /* ── TWO CALLERS, ONE REQUIREMENT — Pardeep caught this at 15:25 on 31 Aug 2026 ──────
+     Lead L-MTH28OTO received TWO identical quotations, Q-0064 and Q-0066, both 10 × Business
+     Starter at Rs 3,250/month, both emailed, six seconds apart:
+
+       09:53:08  first mail  -> Q-0064 drafted, term ASSUMED annual, correctly not sent
+       09:55:05  reply says "monthly"
+       09:55:08  Q-0064 RE-PRICED by the inbound pipeline  (the change I made that morning)
+       09:55:15  Q-0064 emailed
+       09:55:21  Q-0066 raised by the AI AGENT's dispatcher
+       09:55:25  Q-0066 emailed
+
+     This function has TWO callers — `lib/inbound/ingest.ts` and
+     `lib/ai/actions/quote-dispatcher.ts` — and each was written as though it were the only
+     one. They never collided because on a reply with unchanged seats and plan
+     `shouldRequoteOnReply` said "nothing changed" and the pipeline did nothing, leaving the
+     field to the agent. Teaching it to re-price on a term change woke the pipeline up, and
+     both fired. Two irreversible numbers from the gapless Rule 46 series, and two PDFs in a
+     customer's inbox, for one requirement.
+
+     So the question moves INSIDE. A caller cannot be trusted to ask "has this already been
+     quoted?" — one of them never did, and the other only asked in a narrower way than the
+     answer needed. Every other defect this session had the same shape: a decision left with
+     the callers drifts. This one is now the function's own. */
+  const { data: existing } = await admin
+    .from("quotes")
+    .select("id, status, seats, plan, billing_cycle")
+    .eq("tenant_id", args.tenantId)
+    .eq("lead_id", args.leadId)
+    .order("created_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const already = existing as
+    { id: string; status: string | null; seats: number | null; plan: string | null;
+      billing_cycle: string | null } | null;
+
+  const wantCycle = plan.items[0]?.commitment === "monthly" ? "monthly" : "yearly";
+  const samePaper =
+    already !== null &&
+    already.seats === args.seats &&
+    (already.plan ?? null) === (args.item?.name ?? null) &&
+    (already.billing_cycle ?? null) === wantCycle;
+
+  /* Identical requirement AND the customer already has the document -> nothing to do. A
+     DRAFT is different: it can still be corrected, which is what `repriceDraftId` is for. */
+  if (samePaper && already.status !== "draft" && args.repriceDraftId !== already.id) {
+    await admin.from("lead_activities").insert({
+      tenant_id: args.tenantId, lead_id: args.leadId, kind: "note",
+      detail:
+        `No second quotation raised — ${already.id} already covers ${args.seats} × ` +
+        `${args.item?.name ?? "this product"} on ${wantCycle} billing, and it has been sent.`,
+    });
+    return;
+  }
+
   const today   = new Date();
   const expires = new Date(today);
   expires.setDate(expires.getDate() + 7);

@@ -23,6 +23,7 @@ import {
 } from "@react-pdf/renderer";
 import { formatDate } from "@/lib/utils";
 import { pdfRupee } from "./pdf-money";
+import { pdfText } from "./pdf-text";
 import { isRenderableLogo } from "./logo";
 import type { Payment } from "@/lib/supabase/database.types";
 
@@ -342,17 +343,17 @@ export function ReceiptVoucherPDF(props: ReceiptVoucherPDFProps) {
         <View style={s.partiesBlock}>
           <View style={s.party}>
             <Text style={s.partyLabel}>From (Supplier)</Text>
-            <Text style={s.partyName}>{tenantName}</Text>
+            <Text style={s.partyName}>{pdfText(tenantName)}</Text>
             {tenantGstin   && <Text style={s.partyGstin}>GSTIN: {tenantGstin}</Text>}
-            {tenantAddress && <Text style={s.partyMeta}>{tenantAddress}</Text>}
+            {tenantAddress && <Text style={s.partyMeta}>{pdfText(tenantAddress)}</Text>}
             {tenantEmail   && <Text style={[s.partyMeta, { fontFamily: "Courier" }]}>{tenantEmail}</Text>}
             {tenantPhone   && <Text style={[s.partyMeta, { fontFamily: "Courier" }]}>{tenantPhone}</Text>}
           </View>
           <View style={s.partyR}>
             <Text style={s.partyLabel}>To (Recipient)</Text>
-            <Text style={s.partyName}>{customerName}</Text>
+            <Text style={s.partyName}>{pdfText(customerName)}</Text>
             {customerGstin   && <Text style={s.partyGstin}>GSTIN: {customerGstin}</Text>}
-            {customerAddress && <Text style={s.partyMeta}>{customerAddress}</Text>}
+            {customerAddress && <Text style={s.partyMeta}>{pdfText(customerAddress)}</Text>}
             {customerEmail   && <Text style={[s.partyMeta, { fontFamily: "Courier" }]}>{customerEmail}</Text>}
           </View>
         </View>

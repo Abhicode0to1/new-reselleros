@@ -20,6 +20,7 @@ import {
 } from "@react-pdf/renderer";
 import { formatDate } from "@/lib/utils";
 import { pdfRupee } from "./pdf-money";
+import { pdfText } from "./pdf-text";
 import { isRenderableLogo } from "./logo";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
@@ -421,9 +422,9 @@ export function InvoicePDF(props: InvoicePDFProps) {
         <View style={s.partiesBlock}>
           <View style={s.party}>
             <Text style={s.partyLabel}>From (Supplier)</Text>
-            <Text style={s.partyName}>{tenantName}</Text>
+            <Text style={s.partyName}>{pdfText(tenantName)}</Text>
             {tenantGstin   && <Text style={s.partyGstin}>GSTIN: {tenantGstin}</Text>}
-            {tenantAddress && <Text style={s.partyMeta}>{tenantAddress}</Text>}
+            {tenantAddress && <Text style={s.partyMeta}>{pdfText(tenantAddress)}</Text>}
             {tenantState   && <Text style={s.partyMeta}>State: {tenantState}</Text>}
             {tenantEmail   && <Text style={[s.partyMeta, { fontFamily: "Courier" }]}>{tenantEmail}</Text>}
             {tenantPhone   && <Text style={[s.partyMeta, { fontFamily: "Courier" }]}>{tenantPhone}</Text>}
@@ -432,7 +433,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
             <Text style={s.partyLabel}>Bill to (Recipient)</Text>
             <Text style={s.partyName}>{invoice.customer_name}</Text>
             {customerGstin   && <Text style={s.partyGstin}>GSTIN: {customerGstin}</Text>}
-            {customerAddress && <Text style={s.partyMeta}>{customerAddress}</Text>}
+            {customerAddress && <Text style={s.partyMeta}>{pdfText(customerAddress)}</Text>}
             {customerState   && <Text style={s.partyMeta}>State: {customerState}</Text>}
             {customerEmail   && <Text style={[s.partyMeta, { fontFamily: "Courier" }]}>{customerEmail}</Text>}
           </View>
@@ -481,7 +482,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
               >
                 <Text style={s.tdNum}>{i + 1}</Text>
                 <View style={s.tdDesc}>
-                  <Text style={s.lineName}>{li.name}</Text>
+                  <Text style={s.lineName}>{pdfText(li.name)}</Text>
                   {li.description && (
                     <Text style={{ fontSize: 9, color: COLORS.ink3, marginTop: 2 }}>
                       {li.description}
@@ -553,7 +554,10 @@ export function InvoicePDF(props: InvoicePDFProps) {
         {/* ── Advance adjustment (CGST Sec 31 + Rule 53) ──────── */}
         {advances.length > 0 && (
           <View style={s.advBlock}>
-            <Text style={s.advHeader}>✓ Advances adjusted against this invoice</Text>
+            {/* No tick mark: U+2713 is not in WinAnsi either, so the base-14 font drew a
+    broken glyph here on every invoice with an adjusted advance — found in the same
+    audit as the rupee sign, one line below it on the page. */}
+            <Text style={s.advHeader}>Advances adjusted against this invoice</Text>
             {advances.map((adv, i) => (
               <View
                 key={`${adv.payment_id}-${i}`}
