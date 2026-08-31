@@ -207,7 +207,19 @@ export function planQuoteFromEnquiry(input: PlanQuoteInput): EnquiryQuotePlan {
 
      The floor is checked against the LINE's own rate and cost — not against a global rupee
      figure. See lib/pricing/volume-slabs.ts for why that distinction is the whole guard. */
-  const slab = slabFor(seats);
+  /* ── AND NOT ON THE FLEX TIER ─────────────────────────────────────────────
+     Pardeep, 31 Aug 2026: "monthly committment par koi discount nahi hai."
+
+     Commercially that is the whole point of two tiers. The flex rate is ALREADY higher — Rs
+     325 against Rs 270 — precisely because the customer promises nothing. Taking a volume
+     discount off it spends the premium the tier exists to earn, for a commitment nobody made.
+
+     Measured on the mail that prompted this: Q-ADPL-2026-27-0057 went out at 37 seats with 3%
+     off the monthly rate. The AI's own reply had it right — it quoted 3% on the ANNUAL line
+     and plain Rs 325 monthly — because `netCostBlock` discounts `msrpPerSeatPerYear` and
+     nothing else. So the model and the pricer disagreed on the same lead, and the pricer was
+     the one writing the document. One condition, and they agree again. */
+  const slab = annual ? slabFor(seats) : ({ kind: "flex" } as const);
   const priced =
     slab.kind === "slab"
       ? discountedRate(items[0].rate, slab.slab.percent, items[0].cost)
@@ -228,11 +240,22 @@ export function planQuoteFromEnquiry(input: PlanQuoteInput): EnquiryQuotePlan {
      reason `assumption` states the term instead of leaving it to be inferred. */
   const slabNote =
     priced.note ??
-    (discountPct > 0 && slab.kind === "slab"
-      ? `${slab.slab.label}: ${discountPct}% off list for ${seats} seats (volume rate card).`
-      : slab.kind === "slab"
-        ? `${seats} seats is inside the ${slab.slab.minSeats}–${slab.slab.maxSeats} band — list price, no discount.`
-        : null);
+    (slab.kind === "flex"
+      /* Says WHY, not just "no discount": the customer will ask why 37 seats got nothing off,
+         and the answer belongs on the document.
+
+         NO SECOND RATE IN IT, and that is not brevity. This note first read "Rs 325 against
+         Rs 270 on an annual term", and the test above went red — correctly. The assumption
+         must name the rate the LINE carries and no other, because a `270` appearing there is
+         itself a signal: it means the monthly tier was missing and the annual rate was used.
+         Adding it as an explanation would have made that signal unreadable. */
+      ? `Monthly (flex) — list price, no volume discount: the flex rate already carries the ` +
+        `no-commitment premium, so the volume rate card does not apply on this tier.`
+      : discountPct > 0 && slab.kind === "slab"
+        ? `${slab.slab.label}: ${discountPct}% off list for ${seats} seats (volume rate card).`
+        : slab.kind === "slab"
+          ? `${seats} seats is inside the ${slab.slab.minSeats}–${slab.slab.maxSeats} band — list price, no discount.`
+          : null);
 
   return {
     ok: true,

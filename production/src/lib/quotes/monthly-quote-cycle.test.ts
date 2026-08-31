@@ -97,3 +97,57 @@ describe("row ka billing_cycle line se mel khata hai — yahi 12x rokta hai", ()
     expect(pdf).toMatch(/billingCycle \?\? cycleFromLegacyCommitment/);
   });
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   FLEX PAR KOI VOLUME DISCOUNT NAHI — Pardeep, 31 Aug 2026:
+   "monthly committment par koi discount nahi hai."
+
+   Do tier rakhne ka matlab hi yahi hai. Flex ka daam PEHLE SE zyada hai — Rs 325 vs Rs 270 —
+   theek isliye ki customer koi vaada nahi kar raha. Uspar volume discount dena wahi premium
+   kharch kar deta hai jiske liye tier bana hai, ek aise bandhan ke badle jo kisi ne kiya hi
+   nahi.
+
+   Naapa gaya us mail par jisse ye nikla: Q-ADPL-2026-27-0057, 37 seats, monthly ke daam par
+   3% discount ke saath BHEJ diya gaya. AI ka apna jawab sahi tha — usne 3% saalana line par
+   dikhaya aur monthly par plain Rs 325 — kyunki `netCostBlock` sirf `msrpPerSeatPerYear` par
+   discount lagata hai. Yaani model aur pricer ek hi lead par alag baat kar rahe the, aur
+   document pricer likh raha tha.
+   ───────────────────────────────────────────────────────────────────────────── */
+describe("flex par volume discount nahi lagta", () => {
+  it("37 seats monthly — 3% wale band me hai, phir bhi 0%", () => {
+    /* 37 seats saalana par 3% kamata hai (neeche wala test wahi saabit karta hai), to ye
+       "band me nahi tha" wali surat nahi hai — ye tier ka faisla hai. */
+    const p = priced(37, "monthly");
+    expect(p.discountPct).toBe(0);
+    expect(p.subtotal).toBe(37 * 325);
+    /* GST 18%, bina discount ke. */
+    expect(p.amount).toBe(Math.round(37 * 325 * 1.18));
+  });
+
+  it("wahi 37 seats ANNUAL par discount kamata hai", () => {
+    /* Control. Iske bina upar wala test "shayad 37 seats ka koi band hi nahi hai" ho sakta
+       tha, aur kuch bhi saabit na karta. */
+    const p = priced(37, "annual");
+    expect(p.discountPct).toBeGreaterThan(0);
+  });
+
+  it("draft par WAJAH likhi hoti hai, sirf 'no discount' nahi", () => {
+    /* Customer poochhega ki 37 seats par kuch kam kyun nahi hua, aur jawab document par hona
+       chahiye. `toBeTruthy()` se ye jaanch shuru hui thi — wo har haal me pass hoti, kyunki
+       do string jodne par kuch to banta hi hai. Ye wala asli shabd dhoondhta hai. */
+    const p = priced(37, "monthly");
+    expect(p.assumption).toContain("no volume discount");
+    expect(p.assumption).toContain("no-commitment premium");
+    /* Aur SAALANA daam is note me nahi aana chahiye. Pehli koshish me maine "Rs 325 against
+       Rs 270" likha tha aur quote-from-enquiry.test.ts laal ho gaya — theek hua. Us file ka
+       niyam hai: assumption wahi rate le jo LINE par hai. Aur `270` ka wahan hona khud ek
+       ishara hai — matlab monthly tier mila hi nahi aur saalana rate lag gaya. Use samjhane
+       ke liye likh dena us ishare ko hi mita deta. */
+    expect(p.assumption).not.toContain("270");
+  });
+
+  it("aur ANNUAL draft par wo wajah NAHI likhi hoti", () => {
+    /* Warna ye jaanch us line ko pakadti jo har quote par chhapti hai, aur kuch na kehti. */
+    expect(priced(37, "annual").assumption).not.toContain("no-commitment premium");
+  });
+});
