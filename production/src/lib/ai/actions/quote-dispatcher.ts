@@ -25,6 +25,7 @@
 import type { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { replySubject } from "@/lib/email/reply-subject";
+import { quotePdfAttachment, mentionsQuote } from "@/lib/quotes/quote-pdf-attachment";
 import { sendWhatsApp } from "@/lib/whatsapp/client";
 import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
 import type { CatalogueItemPrice } from "@/lib/quotes/quote-from-enquiry";
@@ -72,6 +73,14 @@ export interface DispatchArgs {
   catalogue: readonly CatalogueItemPrice[];
   /** Product name on the lead, used when the agent named nothing recognisable. */
   leadPlan: string | null;
+  /**
+   * The quotation this customer ALREADY HAS, or null.
+   *
+   * Only a delivered one — see lib/quotes/quote-delivered.ts. Used for one thing: if the
+   * reply names it, the reply carries its PDF. On 31 Aug 2026 at 16:20 a letter described
+   * Q-ADPL-2026-27-0068 in full and attached nothing.
+   */
+  deliveredQuoteId?: string | null;
   /**
    * The billing term the CUSTOMER named, or null when they did not.
    *
@@ -189,9 +198,23 @@ async function sendReply(args: DispatchArgs): Promise<DispatchResult> {
   const { decision } = args;
 
   if (args.channel === "email") {
+    /* ── A LETTER THAT NAMES A DOCUMENT CARRIES IT ─────────────────────────────
+       31 Aug 2026, 16:20: the agent wrote "We have prepared quotation Q-ADPL-2026-27-0068 …
+       Confirm quotation Q-ADPL-2026-27-0068 and I will initiate your account setup" — with
+       nothing attached. The PDF had gone seven minutes earlier in its own mail, so the
+       document existed; the person reading THAT letter still had to go hunting.
+
+       The trigger is the text, not the existence of a document: a "noted, thanks" reply
+       should not drag a PDF along. And a failure here costs an attachment, never the reply —
+       `quotePdfAttachment` returns null on anything going wrong. */
+    const attach = mentionsQuote(decision.generated_response.body_text, args.deliveredQuoteId)
+      ? await quotePdfAttachment(args.admin, args.tenantId, args.deliveredQuoteId as string)
+      : null;
+
     const res = await sendEmail({
       to: args.customerContact,
       from: args.fromEmail,
+      attachments: attach ? [attach] : undefined,
       /* `Re: <the customer's subject>`. The model writes the body; it does not name the
          conversation — see lib/email/reply-subject.ts. */
       subject: replySubject(args.incomingSubject, decision.generated_response.email_subject),

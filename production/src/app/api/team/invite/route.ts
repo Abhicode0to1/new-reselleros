@@ -123,6 +123,9 @@ export async function POST(request: NextRequest) {
   const loginUrl = host ? `${proto}://${host}/login` : (process.env.NEXT_PUBLIC_APP_URL?.trim() ?? "");
 
   const emailRes = await sendEmail({
+    /* Bina `route` ke ye default Resend par jata hai (send.ts:26), aur wo test mode
+          me hai. Tenant ne Gmail chuna hai to mail wahi se jaye. */
+    route: { tenantId: me.tenant_id },
     to:      email,
     from:    FROM_EMAIL,
     subject: `You've been invited to ${workspace} on ResellerOS`,

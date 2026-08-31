@@ -19,6 +19,7 @@
  * on the owner's behalf is an explicit, owner-requested automation.
  */
 import { NextResponse } from "next/server";
+import { replyToAddress } from "@/lib/email/reply-to";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
@@ -121,12 +122,21 @@ async function handle(req: Request): Promise<NextResponse<GreetingResult | { err
     return dt.getUTCMonth() + 1 === todayMonth && dt.getUTCDate() === todayDay;
   };
 
-  // Cache tenant name/email so we don't refetch per contact.
-  const tenantCache = new Map<string, { name: string; email: string | null } | null>();
+  /* Cache tenant name/email so we don't refetch per contact — aur uske saath wo mailbox bhi
+     jise app PADHTI hai. Pehle sirf naam aur email cache hote the, aur isi wajah se yahan
+     Reply-To owner ke address par chala jata tha: greeting CUSTOMER ko jati hai, uska jawab
+     pipeline ke bahar gir jata tha. Ek extra query per TENANT, per contact nahi. */
+  interface TenantMail { name: string; email: string | null; ingest: { google_email: string | null }[] }
+  const tenantCache = new Map<string, TenantMail | null>();
   const getTenant = async (tid: string) => {
     if (tenantCache.has(tid)) return tenantCache.get(tid)!;
-    const { data } = await admin.from("tenants").select("name, email").eq("id", tid).maybeSingle();
-    const t = data ? { name: data.name, email: data.email } : null;
+    const [{ data }, { data: boxes }] = await Promise.all([
+      admin.from("tenants").select("name, email").eq("id", tid).maybeSingle(),
+      admin.from("user_google_tokens").select("google_email").eq("tenant_id", tid),
+    ]);
+    const t: TenantMail | null = data
+      ? { name: data.name, email: data.email, ingest: boxes ?? [] }
+      : null;
     tenantCache.set(tid, t);
     return t;
   };
@@ -166,10 +176,10 @@ async function handle(req: Request): Promise<NextResponse<GreetingResult | { err
         subject,
         text,
         from:    tenant?.email ?? undefined,
-        /* Ye greeting CUSTOMER ko jati hai, par is cron me tenant ek cache se aata hai aur
-       connected mailbox handy nahi hai. Filhaal owner ka address — jawab insaan tak
-       pahunchta hai, bas pipeline me nahi. Alag se theek karna hai. */
-    replyTo: tenant?.email ?? undefined,
+        /* Wo mailbox jise app padhti hai. Ye greeting CUSTOMER ko jati hai, to uska jawab
+           pipeline me aana chahiye — lib/email/reply-to.ts. */
+        replyTo: replyToAddress(tenant?.ingest, tenant?.email),
+        route:   { tenantId: c.tenant_id },
         kind:    "greeting",
         /* Gated. A greeting is the least urgent thing this app sends and the most
            embarrassing to have go out during an incident. */

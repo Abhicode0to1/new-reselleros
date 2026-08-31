@@ -204,7 +204,12 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const sent = await sendEmail({ to, subject: mail.subject, text: mail.text });
+  /* `route` ke bina ye default Resend par jata hai (send.ts:26), aur wo test mode me hai —
+     isliye ops mail SPAM me girti thi. Tenant ne Gmail chuna hai to wahi se jaye. */
+  const sent = await sendEmail({
+    to, subject: mail.subject, text: mail.text,
+    route: { tenantId: reports[0].tenantId },
+  });
   return NextResponse.json({
     ok: true, windowHours: WINDOW_HOURS, tenants: reports.length,
     emailed: sent.status === "sent", to, emailError: sent.errorMessage, reports,

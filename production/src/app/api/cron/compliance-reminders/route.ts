@@ -168,7 +168,11 @@ async function handle(req: Request) {
           let providerId: string | null = null;
           let errorMessage: string | null = null;
           try {
-            const r = await sendEmail({ to, subject: msg.subject, text: msg.body });
+            /* `route` ke bina default Resend — test mode. Tenant ka apna transport chahiye. */
+            const r = await sendEmail({
+              to, subject: msg.subject, text: msg.body,
+              route: { tenantId: tenant.id },
+            });
             providerId = (r as { id?: string } | undefined)?.id ?? null;
             if (!isEmailConfigured()) status = "stubbed";
           } catch (err) {

@@ -1086,6 +1086,9 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
   const ownerEmail = tenant?.email?.trim();
   if (ownerEmail) {
     void sendEmail({
+      /* Bina `route` ke ye default Resend par jata hai (send.ts:26), aur wo test mode
+            me hai. Tenant ne Gmail chuna hai to mail wahi se jaye. */
+      route: { tenantId: tenantId },
       to:      ownerEmail,
       from:    FROM_EMAIL,
       replyTo: fromEmail,

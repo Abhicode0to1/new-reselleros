@@ -34,6 +34,7 @@ import { replyToAddress } from "@/lib/email/reply-to";
 import { renderQuotePDF } from "@/lib/pdf";
 import { logoDataUri } from "@/lib/pdf/logo";
 import { rupee } from "@/lib/utils";
+import { quoteEmailBody } from "@/lib/email/quote-body";
 import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import type { createAdminClient } from "@/lib/supabase/server";
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
@@ -66,6 +67,7 @@ interface QuoteRow {
   notes: string | null;
   is_renewal: boolean | null;
   status: string | null;
+  billing_cycle: string | null;
 }
 
 interface TenantRow {
@@ -86,7 +88,7 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
 
   const { data: q } = await admin
     .from("quotes")
-    .select("id, customer_name, line_items, subtotal, discount_pct, tax_rate, amount, expires_date, notes, is_renewal, status")
+    .select("id, customer_name, line_items, subtotal, discount_pct, tax_rate, amount, expires_date, notes, is_renewal, status, billing_cycle")
     .eq("id", args.quoteId)
     .eq("tenant_id", args.tenantId)
     .maybeSingle();
@@ -177,9 +179,7 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
   }
 
   const seller  = tenant.name?.trim() || "Your reseller";
-  const summary = lineItems
-    .map((li) => `  ${li.qty} × ${li.name} — ${rupee(li.qty * li.rate)}`)
-    .join("\n");
+
 
   const result = await sendEmail({
     to:      args.recipient,
@@ -201,20 +201,20 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
     automated: { tenantId: args.tenantId, action: "quote.send" },
     subject: `Your quote ${quote.id} — ${seller}`,
     text:
-`Thanks for the enquiry. Your quote is attached and summarised below.
-
-QUOTE ${quote.id}
-${summary}
-
-  Subtotal        ${rupee(subtotal)}${discountPct ? `\n  Discount ${discountPct}%   -${rupee(discount)}` : ""}
-  GST ${taxRate}%          ${rupee(tax)}
-  TOTAL           ${rupee(total)}
-${quote.expires_date ? `\nValid until ${quote.expires_date}.` : ""}
-
-Reply to this email if anything needs changing — the seat count, the plan or the billing
-term — and we will send a revised quote.
-
-— ${seller}`,
+quoteEmailBody({
+      quoteId:      quote.id,
+      customerName: quote.customer_name,
+      sellerName:   seller,
+      lineItems,
+      billingCycle: quote.billing_cycle,
+      subtotal, discountPct, discount, taxRate, tax, total,
+      expiresDate:  quote.expires_date,
+      /* The tenant's standing offer, passed in rather than baked into the template — "free
+         migration" is a commercial promise, and this repo does not let a model invent one, so
+         a template should not either. Today it is ANUTECH's own line, the same one the AI's
+         replies already carry; a second reseller may not offer it. */
+      migrationOffer: "Your existing mail and data are migrated at no extra charge.",
+    }),
     attachments,
   });
 

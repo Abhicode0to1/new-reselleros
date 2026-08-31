@@ -62,6 +62,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   await sendEmail({
+    /* Bina `route` ke ye default Resend par jata hai (send.ts:26), aur wo test mode
+          me hai. Tenant ne Gmail chuna hai to mail wahi se jaye. */
+    route: { tenantId: quote.tenant_id },
     to: tenant.email,
     subject: `UPI payment claimed on quote ${quote.id} — please verify`,
     text:

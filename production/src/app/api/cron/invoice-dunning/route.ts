@@ -188,6 +188,9 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
            to a customer, and a switch that silenced the app's own alarms would turn one bad
            afternoon into a missed suspension. */
         const r = await sendEmail({
+          /* Bina `route` ke ye default Resend par jata hai (send.ts:26), aur wo test mode
+                me hai. Tenant ne Gmail chuna hai to mail wahi se jaye. */
+          route: { tenantId: inv.tenant_id },
           to, subject: msg.subject, text: msg.text,
           kind: "invoice_dunning",
           automated: { tenantId: inv.tenant_id, action: "dunning.send" },
@@ -209,6 +212,9 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
            "something needs attention" costs a login to find out what. */
         if (tenant?.email) {
           await sendEmail({
+            /* Bina `route` ke ye default Resend par jata hai (send.ts:26), aur wo test mode
+                  me hai. Tenant ne Gmail chuna hai to mail wahi se jaye. */
+            route: { tenantId: inv.tenant_id },
             to: tenant.email,
             subject: `${inv.customer_name} — invoice ${inv.id} is ${decision.daysOverdue} days overdue`,
             text:

@@ -339,6 +339,8 @@ async function runSalesAgentForLeadInner(args: RunSalesAgentArgs): Promise<void>
     customerContact: args.customerContact,
     channel: args.channel,
     incomingSubject: args.incomingSubject,
+    /* Sirf DELIVERED — draft ka number na batao, na uska PDF bhejo. */
+    deliveredQuoteId: quote.deliveredId,
     decision: run.decision,
     sendAction: "reply.send",
     overruled: run.overruled,

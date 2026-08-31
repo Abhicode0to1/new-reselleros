@@ -122,6 +122,9 @@ export async function POST(request: NextRequest) {
       // 1. Reseller alert
       ownerEmail
         ? sendEmail({
+            /* Bina `route` ke ye default Resend par jata hai (send.ts:26), aur wo test mode
+                  me hai. Tenant ne Gmail chuna hai to mail wahi se jaye. */
+            route: { tenantId: tenantId },
             to:      ownerEmail,
             from:    FROM_EMAIL,
             replyTo: email,
@@ -145,6 +148,9 @@ ${APP_URL}/leads/${leadId}
 
       // 2. Customer acknowledgement
       sendEmail({
+        /* Bina `route` ke ye default Resend par jata hai (send.ts:26), aur wo test mode
+              me hai. Tenant ne Gmail chuna hai to mail wahi se jaye. */
+        route: { tenantId: tenantId },
         to:      email,
         from:    FROM_EMAIL,
         replyTo: ownerEmail,
