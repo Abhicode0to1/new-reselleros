@@ -75,6 +75,8 @@ export function buildInvoicePdfProps(args: {
   quote:    Quote | null;
   customer: Customer | null;
   tenant:   TenantPdfInfo;
+  /** The logo as a `data:` URI, from `await logoDataUri(tenant.logo_url)`. See below. */
+  logoDataUri?: string | null;
 }): InvoicePDFProps {
   const { invoice, quote, customer, tenant } = args;
   // Quote-backed invoice → derive from the quote; quote-less (project-milestone)
@@ -124,6 +126,7 @@ export function buildInvoicePdfProps(args: {
     tenantPhone:   tenant.phone,
     tenantAddress: tenant.address,
     tenantState:   tenant.state,
+    tenantLogo:    args.logoDataUri ?? null,
     // Export (recipient outside India) → zero-rated display + foreign currency.
     customerCountry: customer?.country ?? null,
     // Foreign-currency display (books stay ₹). Carried on the backing quote — an

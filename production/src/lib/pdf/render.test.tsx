@@ -75,3 +75,45 @@ describe("logo document par sach me chhapta hai", () => {
 
    Us niyam ko flex-has-no-year.test.ts source padh kar pakadta hai, aur wo mutation-checked
    hai. Control na hota to yahan ek jhootha green baith jata. */
+
+/* ─── Invoice aur Receipt Voucher ─────────────────────────────────────────────
+   Ye dono GST document hain, aur inme brand mark ka koi khaana tha hi nahi — quote par
+   monogram tha, in par kuch bhi nahi. Logo ab title ke upar, beech me, letterhead ki tarah
+   aata hai. Neeche ke "From (Supplier)" / "Bill to" block hi kanooni pehchan hain; logo
+   sajawat hai aur unhe hataata nahi. */
+describe("invoice aur receipt par bhi logo", () => {
+  it("Tax Invoice — logo dene par image, na dene par nahi", async () => {
+    const { renderToBuffer } = await import("@react-pdf/renderer");
+    const { InvoicePDF } = await import("./InvoicePDF");
+    const props = {
+      invoice: { id: "INV-TEST-0001", customer_name: "Test Co", amount: 17_258,
+        invoice_date: "2026-08-31", status: "unpaid" },
+      lineItems: [{ name: "Google Workspace", qty: 45, rate: 325, cost: 300 }],
+      subtotal: 14_625, discountPct: 0, discount: 0,
+      taxable: 14_625, taxRate: 18, tax: 2_633, total: 17_258, interState: false,
+      tenantName: "ANUTECH DIGITAL PVT LTD", tenantGstin: "07ABDCA0298H1ZP",
+    };
+    const draw = (logo?: string) => renderToBuffer(
+      (<InvoicePDF {...(props as unknown as React.ComponentProps<typeof InvoicePDF>)} tenantLogo={logo} />) as unknown as Parameters<typeof renderToBuffer>[0]);
+
+    const [withLogo, without] = await Promise.all([draw(TINY_PNG), draw()]);
+    expect(withLogo.includes(Buffer.from("/Subtype /Image")), "invoice par logo nahi aaya").toBe(true);
+    expect(without.includes(Buffer.from("/Subtype /Image")), "bina logo ke image kahan se aayi").toBe(false);
+  }, 60_000);
+
+  it("Receipt Voucher — wahi", async () => {
+    const { renderToBuffer } = await import("@react-pdf/renderer");
+    const { ReceiptVoucherPDF } = await import("./ReceiptVoucherPDF");
+    const props = {
+      payment: { id: "RV-TEST-0001", amount: 17_258, payment_date: "2026-08-31", method: "upi" },
+      customerName: "Test Co",
+      tenantName: "ANUTECH DIGITAL PVT LTD", tenantGstin: "07ABDCA0298H1ZP",
+    };
+    const draw = (logo?: string) => renderToBuffer(
+      (<ReceiptVoucherPDF {...(props as unknown as React.ComponentProps<typeof ReceiptVoucherPDF>)} tenantLogo={logo} />) as unknown as Parameters<typeof renderToBuffer>[0]);
+
+    const [withLogo, without] = await Promise.all([draw(TINY_PNG), draw()]);
+    expect(withLogo.includes(Buffer.from("/Subtype /Image")), "receipt par logo nahi aaya").toBe(true);
+    expect(without.includes(Buffer.from("/Subtype /Image")), "bina logo ke image kahan se aayi").toBe(false);
+  }, 60_000);
+});

@@ -19,6 +19,7 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import { rupee, formatDate } from "@/lib/utils";
+import { isRenderableLogo } from "./logo";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
 import type {
@@ -60,6 +61,14 @@ export interface InvoicePDFProps {
   tenantPhone?:  string | null;
   tenantAddress?: string | null;
   tenantState?:   string | null;
+  /**
+   * The company logo as a resolved `data:image/...` URI, from `logoDataUri()`.
+   *
+   * Never a URL — see the header of lib/pdf/logo.ts. `isRenderableLogo` refuses anything
+   * else, so a caller that passes the stored URL gets a document with no logo rather than a
+   * render-time network fetch.
+   */
+  tenantLogo?:    string | null;
 
   /**
    * Scan-to-pay QR (migration 0227). PNG data-URL built server-side by
@@ -96,6 +105,16 @@ const s = StyleSheet.create({
 
   // Title bar
   titleBar: { textAlign: "center", marginBottom: 14 },
+  brandLogo: {
+    /* Centred above the title, letterhead-style. Height fixed, width free, so a wide
+       wordmark stays wide. The party blocks below carry the legal supplier identity — the
+       logo is decoration and must never displace them. */
+    height:       32,
+    maxWidth:     170,
+    objectFit:    "contain",
+    alignSelf:    "center",
+    marginBottom: 8,
+  },
   titleEyebrow: {
     fontSize:      8,
     letterSpacing: 1.5,
@@ -357,7 +376,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
     interState = false,
     customerGstin, customerEmail, customerAddress, customerState, customerCountry,
     currency, exchangeRate, termsConditions,
-    tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress, tenantState,
+    tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress, tenantState, tenantLogo,
     upiQrDataUrl, upiVpa,
   } = props;
 
@@ -388,6 +407,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
 
         {/* ── Title ─────────────────────────────────────────────── */}
         <View style={s.titleBar}>
+          {isRenderableLogo(tenantLogo) && <Image src={tenantLogo} style={s.brandLogo} />}
           <Text style={s.titleEyebrow}>Original for recipient · GST-compliant</Text>
           <Text style={s.titleMain}>Tax Invoice</Text>
           <Text style={s.titleId}>{invoice.id}</Text>

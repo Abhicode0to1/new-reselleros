@@ -10,6 +10,7 @@ import { type NextRequest } from "next/server";
 import { createElement } from "react";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyPdfToken } from "@/lib/pdf/pdf-token";
+import { logoDataUri } from "@/lib/pdf/logo";
 import { buildInvoicePdfProps, type TenantPdfInfo } from "@/lib/pdf/build-props";
 import { buildInvoiceUpiQr } from "@/lib/pdf/upi-qr";
 import { invoiceAmountDue } from "@/lib/payments/amount-due";
@@ -42,7 +43,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     admin.from("tenants").select("name, gstin, email, phone, address, state, state_code, upi_vpa, upi_payee_name, logo_url").eq("id", inv.tenant_id).maybeSingle(),
   ]);
 
+  /* Fetched here, not inside the renderer: logoDataUri carries a 4s deadline and swallows
+     every failure, so a slow or missing logo costs the mark and never the document. */
+  const logo = await logoDataUri((tenant as { logo_url?: string | null } | null)?.logo_url);
+
   const props = buildInvoicePdfProps({
+    logoDataUri: logo,
     invoice:  inv,
     quote:    (quote as Quote) ?? null,
     customer: (customer as Customer) ?? null,

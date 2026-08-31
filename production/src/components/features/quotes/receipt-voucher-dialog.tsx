@@ -10,6 +10,8 @@
 "use client";
 
 import * as React from "react";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { logoDataUri } from "@/lib/pdf/logo";
 
 import {
   Dialog,
@@ -63,6 +65,9 @@ export function ReceiptVoucherDialog({
   quoteId,
   gstRate = 18,
 }: Props) {
+  /* Parent se nahi — teen alag page ye dialog render karte hain. Wajah tax-invoice-dialog
+     me likhi hai. */
+  const { data: me } = useCurrentUser();
   const [downloadingPdf, setDownloadingPdf] = React.useState(false);
 
   // GST calculation — reverse-out from gross amount (Indian standard)
@@ -109,6 +114,7 @@ export function ReceiptVoucherDialog({
                     customerName, customerGstin, customerEmail, customerAddress,
                     tenantName, tenantGstin, tenantEmail, tenantPhone,
                     tenantAddress, tenantState,
+                    tenantLogo: await logoDataUri(me?.tenantLogoUrl),
                     interState, gstRate, quoteId,
                   });
                 } catch (err) {

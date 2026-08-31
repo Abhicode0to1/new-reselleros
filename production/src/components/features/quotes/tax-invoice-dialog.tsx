@@ -13,6 +13,8 @@
 "use client";
 
 import * as React from "react";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import { logoDataUri } from "@/lib/pdf/logo";
 import { useRouter } from "next/navigation";
 
 import {
@@ -115,6 +117,11 @@ export function TaxInvoiceDialog({
   tenantAddress,
   tenantState,
 }: Props) {
+  /* Logo yahan se aata hai, parent se nahi. Chaar parent in dialogs ko render karte hain
+     (invoices ×2, payments, quotes/[id]) — ek prop thread karne ka matlab hota chaar jagah
+     yaad rakhna, aur unme se ek bhoolne par us document par logo chup-chaap gayab. Hook
+     parent me pehle se chal raha hai, to ye query muft hai. */
+  const { data: me } = useCurrentUser();
   const router = useRouter();
   const [downloadingPdf, setDownloadingPdf] = React.useState(false);
 
@@ -181,6 +188,7 @@ export function TaxInvoiceDialog({
       currency, exchangeRate,
       tenantName, tenantGstin, tenantEmail, tenantPhone,
       tenantAddress, tenantState,
+      tenantLogo: await logoDataUri(me?.tenantLogoUrl),
     });
   }
 

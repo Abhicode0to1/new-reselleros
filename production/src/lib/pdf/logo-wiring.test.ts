@@ -40,8 +40,12 @@ function objectAt(code: string, openBraceIndex: number): string {
   return code.slice(openBraceIndex);
 }
 
-/** Har wo jagah jo quote ka PDF banati hai, object literal ke saath. */
-const RENDERERS = ["renderQuotePDF", "downloadQuotePDF", "previewQuotePDF", "buildQuotePdfProps"];
+/** Har wo jagah jo koi bhi document ka PDF banati hai, object literal ke saath. */
+const RENDERERS = [
+  "renderQuotePDF", "downloadQuotePDF", "previewQuotePDF", "buildQuotePdfProps",
+  "renderInvoicePDF", "downloadInvoicePDF", "previewInvoicePDF", "buildInvoicePdfProps",
+  "renderReceiptVoucherPDF", "downloadReceiptVoucherPDF",
+];
 
 interface Site { file: string; fn: string; body: string }
 
@@ -71,14 +75,14 @@ describe("har quote PDF ko logo diya jata hai", () => {
     /* Bina iske ye poori file ek khaali loop hoti: zero call site, zero assertion, hara
        test. Wahi trap `public.users` wale RLS loop me phans chuka hai. */
     expect(sites.length, "quote PDF ka koi call site nahi mila — jaanch tooti hai")
-      .toBeGreaterThanOrEqual(7);
+      .toBeGreaterThanOrEqual(10);
   });
 
   for (const site of quotePdfCallSites()) {
     it(`${site.file} · ${site.fn}`, () => {
       /* `buildQuotePdfProps` args me naam `logoDataUri` hai (wo khud resolve nahi karta),
          baaki sab PDF ko seedha `tenantLogo` dete hain. */
-      const key = site.fn === "buildQuotePdfProps" ? "logoDataUri" : "tenantLogo";
+      const key = site.fn.startsWith("build") ? "logoDataUri" : "tenantLogo";
       expect(site.body, `${site.file} me ${site.fn} bina ${key} ke hai — us document par logo nahi aayega`)
         .toContain(`${key}:`);
     });
@@ -102,5 +106,16 @@ describe("wo rail jo URL ko renderer tak nahi jaane deti, source par pin hai", (
 
   it("Image sirf us jawab ke peeche hai", () => {
     expect(code).toMatch(/hasLogo\s*\?\s*<Image src=\{tenantLogo\}/);
+  });
+
+  it("Invoice aur Receipt bhi wahi ek sawaal poochhte hain", () => {
+    /* Teeno document ek hi jagah se poochhte hain. Do alag tarike se "kya ye logo hai"
+       poochhna theek wahi darar hai jisse 12x wali galti nikli thi. */
+    for (const doc of ["InvoicePDF.tsx", "ReceiptVoucherPDF.tsx"]) {
+      const c = readFileSync(join(SRC, "lib", "pdf", doc), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+      expect(c, doc).toMatch(/isRenderableLogo\(tenantLogo\) && <Image src=\{tenantLogo\}/);
+    }
   });
 });

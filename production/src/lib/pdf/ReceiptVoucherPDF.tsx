@@ -18,9 +18,11 @@ import {
   Page,
   View,
   Text,
+  Image,
   StyleSheet,
 } from "@react-pdf/renderer";
 import { rupee, formatDate } from "@/lib/utils";
+import { isRenderableLogo } from "./logo";
 import type { Payment } from "@/lib/supabase/database.types";
 
 // ─── Props ────────────────────────────────────────────────────────────────
@@ -35,6 +37,14 @@ export interface ReceiptVoucherPDFProps {
   tenantPhone?:  string | null;
   tenantAddress?: string | null;
   tenantState?:   string | null;
+  /**
+   * The company logo as a resolved `data:image/...` URI, from `logoDataUri()`.
+   *
+   * Never a URL — see the header of lib/pdf/logo.ts. `isRenderableLogo` refuses anything
+   * else, so a caller that passes the stored URL gets a document with no logo rather than a
+   * render-time network fetch.
+   */
+  tenantLogo?:    string | null;
 
   // Customer (recipient)
   customerName:    string;
@@ -75,6 +85,16 @@ const s = StyleSheet.create({
 
   // Title
   titleBar: { textAlign: "center", marginBottom: 14 },
+  brandLogo: {
+    /* Centred above the title, letterhead-style. Height fixed, width free, so a wide
+       wordmark stays wide. The party blocks below carry the legal supplier identity — the
+       logo is decoration and must never displace them. */
+    height:       32,
+    maxWidth:     170,
+    objectFit:    "contain",
+    alignSelf:    "center",
+    marginBottom: 8,
+  },
   titleEyebrow: {
     fontSize:      8,
     letterSpacing: 1.5,
@@ -281,7 +301,7 @@ const s = StyleSheet.create({
 export function ReceiptVoucherPDF(props: ReceiptVoucherPDFProps) {
   const {
     payment,
-    tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress, tenantState,
+    tenantName, tenantGstin, tenantEmail, tenantPhone, tenantAddress, tenantState, tenantLogo,
     customerName, customerGstin, customerEmail, customerAddress,
     interState = false,
     gstRate = 18,
@@ -311,6 +331,7 @@ export function ReceiptVoucherPDF(props: ReceiptVoucherPDFProps) {
 
         {/* ── Title ───────────────────────────────────────────────── */}
         <View style={s.titleBar}>
+          {isRenderableLogo(tenantLogo) && <Image src={tenantLogo} style={s.brandLogo} />}
           <Text style={s.titleEyebrow}>GST-compliant advance receipt</Text>
           <Text style={s.titleMain}>Receipt Voucher</Text>
           <Text style={s.titleId}>{payment.receipt_voucher_no ?? "(not numbered)"}</Text>
