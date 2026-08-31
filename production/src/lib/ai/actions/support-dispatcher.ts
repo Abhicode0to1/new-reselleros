@@ -28,6 +28,7 @@
  */
 import type { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
+import { replySubject } from "@/lib/email/reply-subject";
 import { sendWhatsApp } from "@/lib/whatsapp/client";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { resolveAutonomy } from "../autonomy";
@@ -58,6 +59,14 @@ export interface SupportDispatchArgs {
   ticketId: string;
   /** Email address or E.164 phone number, matching `channel`. */
   customerContact: string;
+  /**
+   * The subject the CUSTOMER wrote, so the answer stays in their own thread.
+   *
+   * Same defect as the sales path had until 31 Aug 2026: the model named the conversation,
+   * Gmail filed the reply separately, and the person waiting saw silence. Optional because
+   * WhatsApp has no subject.
+   */
+  incomingSubject?: string | null;
   customerName: string;
   channel: SupportChannel;
   decision: SupportDecision;
@@ -373,7 +382,8 @@ async function sendAnswer(args: SupportDispatchArgs): Promise<SupportDispatchRes
     const res = await sendEmail({
       to: args.customerContact,
       from: args.fromEmail,
-      subject: decision.generated_response.email_subject,
+      /* `Re: <the customer's subject>` — see lib/email/reply-subject.ts. */
+      subject: replySubject(args.incomingSubject, decision.generated_response.email_subject),
       text: decision.generated_response.body_text,
       /* `route` is not optional in practice, even though the type says it is. Without it the
          send goes through the default Resend transport instead of whatever this tenant chose

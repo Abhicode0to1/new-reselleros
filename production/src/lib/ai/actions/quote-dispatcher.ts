@@ -24,6 +24,7 @@
  */
 import type { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
+import { replySubject } from "@/lib/email/reply-subject";
 import { sendWhatsApp } from "@/lib/whatsapp/client";
 import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
 import type { CatalogueItemPrice } from "@/lib/quotes/quote-from-enquiry";
@@ -57,6 +58,14 @@ export interface DispatchArgs {
   /** True when applyHandoverRules overruled the model — logged, not re-decided. */
   overruled: boolean;
   overruleReason: string;
+  /**
+   * The subject the CUSTOMER wrote, so the reply lands in their own thread.
+   *
+   * Optional because WhatsApp has no subject. Absent or empty -> the model's own
+   * `email_subject` is used, which is what this path did before 31 Aug 2026 and is why a
+   * correct, fast, well-priced answer read as silence: Gmail filed it as a new conversation.
+   */
+  incomingSubject?: string | null;
   /** Seats as the LEAD understands them. The agent's own read is the fallback. */
   seats: number | null;
   /** The tenant's catalogue, already priced, for resolving the product by name. */
@@ -183,7 +192,9 @@ async function sendReply(args: DispatchArgs): Promise<DispatchResult> {
     const res = await sendEmail({
       to: args.customerContact,
       from: args.fromEmail,
-      subject: decision.generated_response.email_subject,
+      /* `Re: <the customer's subject>`. The model writes the body; it does not name the
+         conversation — see lib/email/reply-subject.ts. */
+      subject: replySubject(args.incomingSubject, decision.generated_response.email_subject),
       text: decision.generated_response.body_text,
       /* `route` is not optional in practice, even though the type says it is. Without it the
          send goes through the default Resend transport instead of whatever this tenant chose

@@ -68,6 +68,15 @@ export interface RunSalesAgentArgs {
   leadId: string;
   /** The customer's message, quoted thread already stripped by the caller. */
   incoming: string;
+  /**
+   * The subject line the customer used. Threaded through so the reply carries `Re: <it>`.
+   *
+   * On 31 Aug 2026 a mail whose whole request WAS its subject got a correct answer in 13
+   * seconds — under a subject the model invented. Gmail filed it away from the thread the
+   * owner was watching, and he reported it as "no reply came". From where he sat, that was
+   * true: a reply outside its own thread is indistinguishable from silence.
+   */
+  incomingSubject?: string | null;
   /** Where the message came from, and where a reply would go. */
   customerContact: string;
   channel: SalesChannel;
@@ -327,6 +336,7 @@ async function runSalesAgentForLeadInner(args: RunSalesAgentArgs): Promise<void>
     company,
     customerContact: args.customerContact,
     channel: args.channel,
+    incomingSubject: args.incomingSubject,
     decision: run.decision,
     sendAction: "reply.send",
     overruled: run.overruled,

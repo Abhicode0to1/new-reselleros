@@ -644,6 +644,9 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
       tenantId,
       leadId: args.leadId,
       incoming: args.incoming,
+      /* The customer's OWN subject, so the reply threads. One line, in one place — which is
+         exactly what merging the two branches an hour earlier bought. */
+      incomingSubject: subject,
       customerContact: fromEmail,
       channel: "email",
       senderIsOurs,

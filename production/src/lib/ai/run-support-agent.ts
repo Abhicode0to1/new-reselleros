@@ -318,6 +318,7 @@ export async function runSupportAgentForMessage(
     customerContact: args.customerContact,
     customerName: customer.customerName,
     channel: args.channel,
+    incomingSubject: args.subject,
     decision: run.decision,
     overruled: run.overruled,
     overruleReason: run.overruleReason,
