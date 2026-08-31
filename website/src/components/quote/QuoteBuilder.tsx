@@ -56,6 +56,13 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
   const [state, setState] = useState<"idle" | "sending" | "issued" | "failed">("idle");
   /* Auto-quote path se aaya draft ka number — green panel isse NAAM se batata hai. */
   const [quoteId, setQuoteId] = useState<string | null>(null);
+  /* Panel ko wo pata chahiye jis par bheja — form success par KHALI ho jata hai (Pardeep:
+     "enquiry recorded ho jaye to form khali ho jana chahiye"), to email state se nahi,
+     yahan se aata hai. */
+  const [sentTo, setSentTo] = useState("");
+  /* True jab quotation SACH ME email ho chuki (app ke gates paar karke) — panel ka vaakya
+     isi par badalta hai. Draft-hold par jhooth me "emailed" kehna bharosa todta. */
+  const [wasSent, setWasSent] = useState(false);
   const [error, setError] = useState("");
 
   const edition = list.find((e) => e.name === product) ?? null;
@@ -135,10 +142,19 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
           term: effectiveTerm,
         }),
       });
-      const data = (await res.json()) as { ok: boolean; error?: string; quoteId?: string | null };
+      const data = (await res.json()) as { ok: boolean; error?: string; quoteId?: string | null; sent?: boolean };
       if (!data.ok) throw new Error(data.error || "refused");
       setQuoteId(data.quoteId ?? null);
+      setWasSent(data.sent === true);
+      setSentTo(email);
       setState("issued");
+      /* Agli enquiry ke liye saaf slate — bhara hua form dobara Generate dabane par wahi
+         lead phir bana deta. Green panel sentTo se apna vaakya poora rakhta hai. */
+      setName("");
+      setCompany("");
+      setEmail("");
+      setPhone("");
+      setProvider("");
     } catch (e) {
       setState("failed");
       setError(e instanceof Error && e.message !== "refused" ? e.message : "Could not send the enquiry — WhatsApp us and we will price it by hand.");
@@ -210,13 +226,16 @@ export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
           <div style={{ marginTop: 16, border: "1px solid var(--success)", background: "#EEF7F0", borderRadius: 8, padding: 16 }}>
             <div className="mono-label" style={{ color: "var(--success)", marginBottom: 6 }}>ENQUIRY RECORDED</div>
             <p style={{ fontSize: 14, lineHeight: 1.5, margin: 0, color: "var(--text-secondary)" }}>
-              {quoteId ? (
+              {quoteId && wasSent ? (
+                <>Quotation <b className="mono">{quoteId}</b> has been <b>emailed to {sentTo || "you"}</b> with
+                the GST document attached — it should be in the inbox within a minute or two.</>
+              ) : quoteId ? (
                 <>Quotation <b className="mono">{quoteId}</b> has been drafted in our system with the
-                catalogue price — it reaches {email || "you"} after a quick review, usually within
+                catalogue price — it reaches {sentTo || "you"} after a quick review, usually within
                 working hours the same day.</>
               ) : (
                 <>The estimate on the right is indicative. We price the requirement in our system and
-                the formal GST quotation reaches {email || "you"} the same working day.</>
+                the formal GST quotation reaches {sentTo || "you"} the same working day.</>
               )}
             </p>
             <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={() => window.print()}>

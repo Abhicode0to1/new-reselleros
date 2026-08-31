@@ -110,10 +110,10 @@ export async function POST(req: NextRequest) {
         console.error("[enquiry-proxy] workspace upstream refused:", res.status, await res.text().catch(() => ""));
         return fail();
       }
-      const data = (await res.json()) as { success?: boolean; draftQuoteId?: string | null };
+      const data = (await res.json()) as { success?: boolean; draftQuoteId?: string | null; autoSent?: boolean };
       /* draftQuoteId can be null (doc-number retries exhausted) — the lead still exists
          and the operator was alerted, so that is a success with no number to show. */
-      return NextResponse.json({ ok: true, quoteId: data.draftQuoteId ?? null });
+      return NextResponse.json({ ok: true, quoteId: data.draftQuoteId ?? null, sent: data.autoSent === true });
     }
 
     /* ── GENERAL PATH: everything else ────────────────────────────────────── */
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       console.error("[enquiry-proxy] general upstream refused:", res.status, await res.text().catch(() => ""));
       return fail();
     }
-    return NextResponse.json({ ok: true, quoteId: null });
+    return NextResponse.json({ ok: true, quoteId: null, sent: false });
   } catch (err) {
     console.error("[enquiry-proxy] upstream unreachable:", err);
     return fail();

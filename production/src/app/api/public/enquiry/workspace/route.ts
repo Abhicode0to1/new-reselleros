@@ -37,11 +37,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
-import { sendEmail } from "@/lib/email/send";
+import { sendEmail, isEmailConfigured } from "@/lib/email/send";
+import { decideAutoSend } from "@/lib/quotes/auto-send-quote";
+import { sendAutoQuote } from "@/lib/quotes/send-auto-quote";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import {
   fetchWorkspaceCatalogPrice,
   buildWorkspaceLines,
+  buildWorkspaceFlexLines,
   TIER_DISPLAY_NAME,
 } from "@/lib/pricing/workspace";
 
@@ -103,10 +106,22 @@ export async function POST(request: NextRequest) {
     const lines      = buildWorkspaceLines(catalogRow, tierId, seats);
     const tierName   = TIER_DISPLAY_NAME[tierId];
 
+    /* ── FLEX DRAFT — the visitor asked pay-as-you-go, the document says so ──
+       billing === "monthly" prices the draft on the flexible tier: per seat per MONTH,
+       one month's subtotal, no ×12 anywhere (Pardeep: "12 invoices wala koi chakkar
+       nahi"). Null means the catalogue holds no flexible price for this product — then
+       the annual draft is created and held for a person, and nothing is invented. */
+    const wantFlex  = billing === "monthly";
+    const flexLines = wantFlex ? buildWorkspaceFlexLines(catalogRow, tierId, seats) : null;
+    const usingFlex = wantFlex && flexLines !== null;
+    const chosen    = usingFlex ? flexLines! : lines;
+
     // ── Insert lead ────────────────────────────────────────────────────────
     const leadId    = "L-" + Date.now().toString(36).toUpperCase();
     const planLabel = `google-workspace-${tierId}`;
-    const value     = lines.subtotal;   // ₹ ex-GST annual, catalog-derived (ranking)
+    /* Lead ranking value: annual figure jab annual, mahine ka jab flex — jo document
+       banega usi ka sach. */
+    const value     = chosen.subtotal;
 
     const leadNotes = [
       `Submitted via /buy/workspace`,
@@ -148,7 +163,7 @@ export async function POST(request: NextRequest) {
     // tier the catalog can't price. Retry up to 3 times if the doc-number RPC
     // returns a value already in `quotes` (counter drift from earlier seed data).
     let draftQuoteId: string | null = null;
-    const canAutoQuote = tierId !== "enterprise" && lines.items.length > 0;
+    const canAutoQuote = tierId !== "enterprise" && chosen.items.length > 0;
 
     if (canAutoQuote) {
       const today    = new Date();
@@ -172,17 +187,20 @@ export async function POST(request: NextRequest) {
           lead_id:       leadId,
           plan:          planLabel,
           seats,
-          line_items:    lines.items,        // ← real product rows (catalog-priced)
-          subtotal:      lines.subtotal,     // ← ex-GST
-          total_cost:    lines.items.reduce((s, i) => s + i.qty * i.cost, 0),
+          line_items:    chosen.items,       // ← flex: ₹/seat/MONTH · annual: ₹/seat/year
+          subtotal:      chosen.subtotal,    // ← ex-GST (per month on flex)
+          total_cost:    chosen.items.reduce((s, i) => s + i.qty * i.cost, 0),
           discount_pct:  0,
           tax_rate:      18,                 // CGST 9 + SGST 9 (or IGST 18)
-          amount:        lines.amount,       // ← incl-GST total (matches checkout)
+          amount:        chosen.amount,      // ← incl-GST (per month on flex)
+          /* The covering letter and the PDF read this to say PAYABLE EACH MONTH vs
+             TOTAL PAYABLE — leaving it null made every buy-page draft read annual. */
+          billing_cycle: usingFlex ? "monthly" : "yearly",
           status:        "draft",
           owner_id:      null,
           created_date:  today.toISOString().slice(0, 10),
           expires_date:  expires.toISOString().slice(0, 10),
-          notes:         `Auto-generated from /buy/workspace enquiry. Customer wants ${seats} seat${seats === 1 ? "" : "s"} of Google Workspace ${tierName}.`,
+          notes:         `Auto-generated from /buy/workspace enquiry. Customer wants ${seats} seat${seats === 1 ? "" : "s"} of Google Workspace ${tierName}, ${usingFlex ? "monthly flexible (pay-as-you-go)" : "annual commitment"}.`,
         });
 
         if (!quoteErr) {
@@ -207,7 +225,7 @@ export async function POST(request: NextRequest) {
         await admin
           .from("leads")
           .update({
-            notes: `${leadNotes}\n\nAuto-generated draft quote: ${draftQuoteId} (₹${lines.amount.toLocaleString("en-IN")} incl GST, valid 7 days)`,
+            notes: `${leadNotes}\n\nAuto-generated draft quote: ${draftQuoteId} (₹${chosen.amount.toLocaleString("en-IN")}${usingFlex ? "/month" : ""} incl GST, valid 7 days)`,
           })
           .eq("id", leadId);
       }
@@ -223,7 +241,7 @@ export async function POST(request: NextRequest) {
     // fast (form-submit UX) — but we do `await` both so any errors get
     // logged. The user-facing response is unaffected if email fails (the
     // lead is already saved).
-    const valueFmt = `₹${value.toLocaleString("en-IN")}`;
+    const valueFmt = `₹${value.toLocaleString("en-IN")}${usingFlex ? "/month" : "/year"}`;
     const draftUrl = draftQuoteId ? `${APP_URL}/quotes/${draftQuoteId}` : `${APP_URL}/leads`;
 
     /* Who owns this storefront, and can they be reached? Resolved once for both
@@ -233,6 +251,80 @@ export async function POST(request: NextRequest) {
     const { alert: owner, tenant: ownerTenant } = await loadOwnerAlert(admin, tenantId);
     if (!owner.ok) {
       console.error(`[enquiry/workspace] lead ${leadId} saved, but no owner alert: ${owner.reason}`);
+    }
+
+    /* ── FULL AUTO-SEND — Pardeep's call, 31 Aug 2026 ─────────────────────────
+       "poora auto-SEND bhi kar do." Until now this route stopped at a draft and the
+       operator clicked Send. The email-enquiry path has sent unattended since 23 Aug,
+       behind decideAutoSend's gates — so this route now walks through the SAME gates and
+       the SAME sender rather than growing a second send path:
+
+         · decideAutoSend  — the volume review band (>50 seats holds), the address checks,
+                             the not-configured check. termAssumed is false HERE by
+                             construction: the form's billing field is an enum the visitor
+                             clicked, not a phrase the app interpreted.
+         · sendAutoQuote   — PDF, covering letter, quote.send dial, kill switch,
+                             quote_send_log, lead stage — one sender, one audit shape.
+
+       ── AND THE ONE HOLD THAT IS NEW ──────────────────────────────────────
+       billing === "monthly" never auto-sends. buildWorkspaceLines prices EVERY draft on
+       the annual commitment (rate = monthly MSRP × 12, commitment annual_yearly — its own
+       header says so); for an annual request the document matches the ask, but a visitor
+       who clicked "Monthly, flexible" would receive a quotation priced on a commitment
+       they explicitly declined. That is the document-contradicts-the-request defect this
+       app has already paid for at 12× — so the flex draft waits for a person to reprice
+       it, and the operator alert says exactly that. Pricing flex drafts natively in
+       buildWorkspaceLines is the follow-up that removes this hold. */
+    let autoSent = false;
+    let holdReason: string | null = null;
+
+    if (draftQuoteId) {
+      const ourAddresses = [owner.ok ? owner.to : null, ownerTenant?.email ?? null]
+        .filter((a): a is string => !!a)
+        .map((a) => a.trim().toLowerCase());
+
+      if (wantFlex && !usingFlex) {
+        /* The one hold that remains: flex was asked for and the catalogue has no flexible
+           price for this tier — the draft on file is ANNUAL-priced, so a person must
+           reprice it. Sending it unattended would put a commitment the visitor declined
+           on a document they can hold us to. */
+        holdReason =
+          "the visitor chose monthly-flexible billing but the catalogue has no flexible " +
+          "price for this tier — the draft is annual-priced, reprice it before sending";
+      } else {
+        const decision = decideAutoSend({
+          termAssumed: false,
+          seats,
+          seatsHeardNotWritten: false,
+          recipient: email,
+          quoteId: draftQuoteId,
+          emailConfigured: isEmailConfigured(),
+          senderIsOurs: ourAddresses.includes(email.trim().toLowerCase()),
+          isSelfTest: false,
+        });
+        if (decision.send) {
+          const sent = await sendAutoQuote(admin, {
+            tenantId,
+            quoteId: draftQuoteId,
+            leadId,
+            recipient: email,
+            fromEmail: FROM_EMAIL,
+          });
+          autoSent = sent === "sent";
+          if (!autoSent) holdReason = "the quotation email failed to send — the draft is saved";
+        } else {
+          holdReason = decision.reason;
+        }
+      }
+
+      if (!autoSent && holdReason) {
+        /* The same sentence shape the inbound path writes, so the operator reads ONE kind
+           of hold note wherever the enquiry came from. */
+        await admin.from("lead_activities").insert({
+          tenant_id: tenantId, lead_id: leadId, kind: "note",
+          detail: `Quote not sent automatically — ${holdReason}`,
+        });
+      }
     }
 
     await Promise.allSettled([
@@ -252,12 +344,14 @@ CONTACT     ${fullName} <${email}>
 PHONE       ${phone}
 PLAN        Google Workspace ${tierName}
 SEATS       ${seats}
-EST. VALUE  ${valueFmt}/year
+EST. VALUE  ${valueFmt}
 BILLING     ${billing}
 ${message ? `MESSAGE     ${message}\n` : ""}
-${draftQuoteId
-  ? `A draft quote (${draftQuoteId}) has already been generated and is ready to send.\nReview & send: ${draftUrl}`
-  : `Open the lead to build a quote:\n${APP_URL}/leads/${leadId}`}
+${autoSent
+  ? `The quotation (${draftQuoteId}) was EMAILED AUTOMATICALLY with the PDF — nothing to do unless they reply.\nView it: ${draftUrl}`
+  : draftQuoteId
+    ? `A draft quote (${draftQuoteId}) is ready but was NOT auto-sent — ${holdReason ?? "held"}.\nReview & send: ${draftUrl}`
+    : `Open the lead to build a quote:\n${APP_URL}/leads/${leadId}`}
 
 — ResellerOS`,
       }),
@@ -314,7 +408,9 @@ Just reply to this email if anything above is wrong, or if you'd like to add det
       });
     });
 
-    return NextResponse.json({ success: true, leadId, draftQuoteId });
+    /* autoSent, taki website ka confirmation sach bole — "emailed with the PDF" sirf
+       tab jab sach me gaya ho, warna "drafted, review ke baad". */
+    return NextResponse.json({ success: true, leadId, draftQuoteId, autoSent });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[/api/public/enquiry/workspace] crashed:", message);

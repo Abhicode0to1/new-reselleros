@@ -152,3 +152,56 @@ export function buildWorkspaceLines(
   const amount   = Math.round(subtotal * 1.18);   // 18% GST
   return { items, subtotal, amount, tierName, monthlyMsrp, monthlyCost };
 }
+
+/* ── FLEX (pay-as-you-go) — Pardeep ka model, uske apne shabdon me ───────────
+   "flex pricing me monthly commitment wala rate aata hai … isme 12 invoices wala koi
+   chakkar nahi, ye pay-as-you-go ke hisab se banta hai." (31 Aug 2026)
+
+   To flex ki line PER SEAT PER MONTH hoti hai (prices.monthly.msrp — aaj ₹325), quote ka
+   subtotal EK MAHINE ka hai, aur kahin ×12 NAHI hota. Yahi model email-enquiry ka raasta
+   pehle se follow karta hai (lib/quotes/quote-from-enquiry.ts ka flex slab); ye function
+   wahi cheez buy-page/website ke raaste ko deta hai, taaki dono ek hi tarah ka document
+   banayen.
+
+   NULL jab flex daam catalogue me hai hi nahi. Fallback annual se NAHI banta — annual
+   rate ko mahine ka keh dena wahi 12×-class ki galti hai jiski keemat ye app de chuka
+   hai. Daam nahi to draft rukta hai, gadhta nahi. */
+
+export interface WorkspaceFlexLine {
+  id:         string;
+  name:       string;
+  qty:        number;
+  rate:       number;            // ₹/seat/MONTH (prices.monthly.msrp)
+  cost:       number;            // wholesale ₹/seat/month (0 if unknown)
+  commitment: "monthly";
+}
+
+export interface WorkspaceFlexLines {
+  items:    WorkspaceFlexLine[];
+  subtotal: number;   // ₹ ex-GST, PER MONTH
+  amount:   number;   // ₹ incl 18% GST, PER MONTH
+  tierName: string;
+}
+
+export function buildWorkspaceFlexLines(
+  row: CatalogPriceRow | null,
+  tierId: string,
+  seats: number,
+): WorkspaceFlexLines | null {
+  const flex = row?.prices?.monthly;
+  if (!flex || !Number.isFinite(flex.msrp) || flex.msrp <= 0) return null;
+
+  const tierName = row?.name?.replace(/^Google Workspace\s*/i, "")
+                || TIER_DISPLAY_NAME[tierId as WorkspaceTierId]
+                || "Workspace";
+  const items: WorkspaceFlexLine[] = [{
+    id:         globalThis.crypto?.randomUUID() ?? Math.random().toString(36).slice(2),
+    name:       row?.name ?? `Google Workspace · ${tierName} (flexible)`,
+    qty:        seats,
+    rate:       flex.msrp,
+    cost:       Number.isFinite(flex.wholesale) && flex.wholesale > 0 ? flex.wholesale : 0,
+    commitment: "monthly",
+  }];
+  const subtotal = items.reduce((s, i) => s + i.qty * i.rate, 0);
+  return { items, subtotal, amount: Math.round(subtotal * 1.18), tierName };
+}
