@@ -30,7 +30,7 @@ import type { QuoteLineItem, LineCommitment, BillingCycle } from "@/lib/supabase
 import {
   cycleInvoicesPerYear, cycleUnitLabel, cycleScheduleLabel, cycleFromLegacyCommitment,
 } from "@/lib/quotes/billing";
-import { perInvoiceDivisor, annualContractValue } from "./invoice-divisor";
+import { lineIsPerInvoice, perInvoiceDivisor, annualContractValue } from "./invoice-divisor";
 
 // ─── Billing helpers ───────────────────────────────────────────────────────
 // Frequency is a quote-level `billing_cycle` (migration 0161); a line's
@@ -408,6 +408,11 @@ export function QuotePDF(props: QuotePDFProps) {
      `billingCycle` alone cannot tell the two apart, because both say "monthly". The LINE's
      own commitment can, and it is the same field the pricing planner set. */
   const invoiceDivisor = perInvoiceDivisor(billingN, firstCommitment);
+  /* The same fact read the other way, and it decides more than arithmetic: a flex line is
+     priced per month BECAUSE the customer has promised nothing. So every "per year" figure
+     on this document — the invoice count, the line's annual sub-total, the contract value —
+     describes a year nobody agreed to. See the block at the "Billing schedule" group. */
+  const noYearlyCommitment = lineIsPerInvoice(firstCommitment);
   const fmtInv = (stored: number) =>
     perInvoice ? `${fmtC(dRound(stored / invoiceDivisor))}${billingUnit}` : fmtC(stored);
 
@@ -486,9 +491,17 @@ export function QuotePDF(props: QuotePDFProps) {
               <View style={s.metaGroup}>
                 <Text style={s.sectionLabel}>Billing schedule</Text>
                 <Text style={s.metaValue}>{scheduleLabel(firstCommitment, effectiveCycle)}</Text>
+                {/* ── A FLEX PLAN HAS NO YEAR TO COUNT ────────────────────────
+                    "12 invoices per year" states a commitment the customer has not made.
+                    Pardeep's point, 31 Aug 2026: monthly flex IS the flexible tier — take
+                    one month or two — so projecting a year onto it is not a rounding
+                    question, it is a claim about a contract that does not exist.
+
+                    And the truth here is a reason to buy, not a caveat: no commitment is
+                    exactly what the flex tier is sold on. */}
                 {billingN > 1 && (
                   <Text style={[s.metaValue, { fontSize: 9, color: COLORS.ink3 }]}>
-                    {billingN} invoices per year
+                    {noYearlyCommitment ? "No commitment — cancel any time" : `${billingN} invoices per year`}
                   </Text>
                 )}
               </View>
@@ -543,8 +556,11 @@ export function QuotePDF(props: QuotePDFProps) {
                   <View style={s.tdAmount}>
                     <Text style={s.lineAmount}>{fmtInv(netAnnual)}</Text>
                     {perInvoice && (
+                      /* On flex the stored figure IS one month, so "= X/yr" would print a
+                         month's number under a year's label. Drop the projection; keep the
+                         "was" — a discount is true whatever the term. */
                       <Text style={s.lineAmountSub}>
-                        = {fmtC(netAnnual)}/yr
+                        {noYearlyCommitment ? "" : `= ${fmtC(netAnnual)}/yr`}
                         {lineDiscountPct > 0 ? ` (was ${fmtC(grossAnnual)})` : ""}
                       </Text>
                     )}
@@ -600,7 +616,9 @@ export function QuotePDF(props: QuotePDFProps) {
               <View style={s.grandTotalDivider}>
                 <View style={s.totalRow}>
                   <Text style={s.grandLabel}>
-                    {perInvoice ? `Per invoice (${billingN}/yr)` : "Grand total"}
+                    {perInvoice
+                      ? noYearlyCommitment ? "Per invoice" : `Per invoice (${billingN}/yr)`
+                      : "Grand total"}
                   </Text>
                   <Text style={s.grandValue}>
                     {perInvoice
@@ -609,15 +627,35 @@ export function QuotePDF(props: QuotePDFProps) {
                   </Text>
                 </View>
                 {perInvoice && (
-                  <View style={s.perInvoiceRow}>
-                    <Text>Annual contract value</Text>
-                    {/* The mirror of the divisor above. On an annual commitment billed
-                        monthly, `dTotal` IS the year. On a monthly-flex line it is ONE
-                        MONTH, so the year is twelve of them — printing `dTotal` there
-                        published a contract value a twelfth of the truth, next to a
-                        correct per-month figure. */}
-                    <Text>{fmtC(annualContractValue(dTotal, billingN, firstCommitment))}/yr</Text>
-                  </View>
+                  noYearlyCommitment ? (
+                    /* ── A YEAR'S VALUE THE CUSTOMER NEVER PROMISED ──────────────────
+                       This row printed "Annual contract value". On a flex line that is not
+                       an arithmetic question at all — it is a contract that does not exist.
+                       Fixing it to multiply by twelve (which I did first) only stated the
+                       imaginary year more accurately.
+
+                       Pardeep, 31 Aug 2026: "monthly commitment me annual billing ki to koi
+                       jarurat hi nahi hai kyoki wo to flexible hota hai — chahe aap ek mahina
+                       lo ya do mahina". The flex tier costs MORE per seat (Rs 325 vs Rs 270)
+                       precisely because there is no lock-in; printing a year beside that
+                       price takes back the thing the customer is paying extra for.
+
+                       So the row states the term instead of projecting one — and on a
+                       quotation that sentence sells rather than warns. */
+                    <View style={s.perInvoiceRow}>
+                      <Text>Commitment</Text>
+                      <Text>None — cancel or change seats any month</Text>
+                    </View>
+                  ) : (
+                    <View style={s.perInvoiceRow}>
+                      <Text>Annual contract value</Text>
+                      {/* The mirror of the divisor above: on an annual commitment billed
+                          monthly, `dTotal` IS the year. `annualContractValue` keeps the two
+                          in step, and its tests keep the flex branch honest even though this
+                          document no longer renders it. */}
+                      <Text>{fmtC(annualContractValue(dTotal, billingN, firstCommitment))}/yr</Text>
+                    </View>
+                  )
                 )}
                 {isForeign && (
                   <View style={s.perInvoiceRow}>
