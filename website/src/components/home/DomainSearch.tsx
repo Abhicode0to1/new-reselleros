@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { rupee } from "@/lib/money";
 import { TLDS } from "@/lib/data/catalog";
+import { effectiveReg } from "@/lib/offers";
 
 function taken(name: string): boolean {
   let h = 0;
@@ -48,14 +49,20 @@ export function DomainSearch() {
     return { name: base + t.tld, t };
   });
 
-  const addDomain = (name: string, t: (typeof TLDS)[number]) =>
+  const addDomain = (name: string, t: (typeof TLDS)[number]) => {
+    /* Offer FIRST YEAR par hai; cart line wahi kahe jo sach hai — ₹1 pehla saal,
+       renewal poora, offer ka naam saath me. */
+    const p = effectiveReg(t.tld, t.reg);
     cart.add({
       label: name,
-      detail: `Domain registration · renews ${rupee(t.renew)}/yr`,
-      unitPrice: t.reg,
+      detail: p.offer
+        ? `Domain registration · ${p.offer.label} first year · renews ${rupee(t.renew)}/yr`
+        : `Domain registration · renews ${rupee(t.renew)}/yr`,
+      unitPrice: p.reg,
       unit: "year",
       cycle: "yearly",
     });
+  };
 
   return (
     <div className="card" style={{ padding: 26 }}>
@@ -92,7 +99,17 @@ export function DomainSearch() {
                   <span className="meta">already registered</span>
                 ) : (
                   <>
-                    <span style={{ fontSize: 15, fontWeight: 600 }}>{rupee(t.reg)}</span>
+                    {(() => {
+                      const p = effectiveReg(t.tld, t.reg);
+                      return p.offer ? (
+                        <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>
+                          <s style={{ color: "var(--text-disabled)", fontWeight: 400 }}>{rupee(p.offer.was)}</s>{" "}
+                          <span style={{ color: "var(--success)" }}>{rupee(p.reg)}</span>
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 15, fontWeight: 600 }}>{rupee(t.reg)}</span>
+                      );
+                    })()}
                     <button
                       onClick={() => addDomain(full, t)}
                       style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)", border: "1px solid #9FC5F3", borderRadius: 5, background: "#fff", padding: "5px 12px", cursor: "pointer" }}

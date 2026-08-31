@@ -3,6 +3,7 @@ import { SectionHead } from "@/components/ui/bits";
 import { RateTable } from "@/components/ui/RateTable";
 import { TLDS, HOSTING_PLANS } from "@/lib/data/catalog";
 import { rupee } from "@/lib/money";
+import { effectiveReg } from "@/lib/offers";
 
 export const metadata: Metadata = { title: "Every price" };
 
@@ -23,12 +24,22 @@ export default function PricingPage() {
           <SectionHead title="Domains" />
           <RateTable
             head={["EXTENSION", "REGISTER", "RENEW", "TRANSFER"]}
-            rows={TLDS.slice(0, 8).map((t) => [
-              <span key="a" className="mono" style={{ color: "var(--primary)" }}>{t.tld}</span>,
-              <b key="b">{rupee(t.reg)}</b>,
-              rupee(t.renew),
-              rupee(t.transfer),
-            ])}
+            rows={TLDS.slice(0, 8).map((t) => {
+              const p = effectiveReg(t.tld, t.reg);
+              return [
+                <span key="a" className="mono" style={{ color: "var(--primary)" }}>{t.tld}</span>,
+                p.offer ? (
+                  <b key="b" style={{ whiteSpace: "nowrap" }}>
+                    <s style={{ color: "var(--text-disabled)", fontWeight: 400 }}>{rupee(p.offer.was)}</s>{" "}
+                    <span style={{ color: "var(--success)" }}>{rupee(p.reg)}</span>
+                  </b>
+                ) : (
+                  <b key="b">{rupee(t.reg)}</b>
+                ),
+                rupee(t.renew),
+                rupee(t.transfer),
+              ];
+            })}
           />
         </div>
 

@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { rupee } from "@/lib/money";
 import { TLDS, type Tld } from "@/lib/data/catalog";
+import { effectiveReg } from "@/lib/offers";
 
 const GROUPS = ["Popular", "Business", "Tech"] as const;
 
@@ -16,14 +17,18 @@ export function DomainRateCard() {
   const [group, setGroup] = useState<(typeof GROUPS)[number]>("Popular");
   const cart = useCart();
 
-  const add = (t: Tld) =>
+  const add = (t: Tld) => {
+    const p = effectiveReg(t.tld, t.reg);
     cart.add({
       label: "yourbusiness" + t.tld,
-      detail: `Domain registration · renews ${rupee(t.renew)}/yr`,
-      unitPrice: t.reg,
+      detail: p.offer
+        ? `Domain registration · ${p.offer.label} first year · renews ${rupee(t.renew)}/yr`
+        : `Domain registration · renews ${rupee(t.renew)}/yr`,
+      unitPrice: p.reg,
       unit: "year",
       cycle: "yearly",
     });
+  };
 
   return (
     <div>
@@ -45,7 +50,22 @@ export function DomainRateCard() {
             {TLDS.filter((t) => t.group === group).map((t) => (
               <tr key={t.tld}>
                 <td className="mono" style={{ color: "var(--primary)", fontWeight: 500 }}>{t.tld}</td>
-                <td style={{ fontWeight: 600 }}>{rupee(t.reg)}</td>
+                <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                  {(() => {
+                    const p = effectiveReg(t.tld, t.reg);
+                    return p.offer ? (
+                      <>
+                        <s style={{ color: "var(--text-disabled)", fontWeight: 400 }}>{rupee(p.offer.was)}</s>{" "}
+                        <span style={{ color: "var(--success)" }}>{rupee(p.reg)}</span>{" "}
+                        <span className="mono-label" style={{ background: "#EEF7F0", color: "var(--success)", border: "1px solid var(--success)", borderRadius: 4, padding: "2px 6px" }}>
+                          {p.offer.label}
+                        </span>
+                      </>
+                    ) : (
+                      rupee(t.reg)
+                    );
+                  })()}
+                </td>
                 <td>{rupee(t.renew)}</td>
                 <td>{rupee(t.transfer)}</td>
                 <td className="meta">{t.use}</td>

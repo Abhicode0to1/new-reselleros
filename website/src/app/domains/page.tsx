@@ -3,6 +3,8 @@ import { DomainSearch } from "@/components/home/DomainSearch";
 import { DomainRateCard } from "@/components/domains/DomainRateCard";
 import { SectionHead, Reveal } from "@/components/ui/bits";
 import { DOMAIN_FEATURES } from "@/lib/data/copy";
+import { effectiveReg, DOMAIN_OFFERS } from "@/lib/offers";
+import { TLDS } from "@/lib/data/catalog";
 
 export const metadata: Metadata = { title: "Domain registration & transfer" };
 
@@ -12,6 +14,17 @@ export default function DomainsPage() {
       <section className="section rise">
         <div className="wrap" style={{ display: "grid", gridTemplateColumns: "1fr 640px", gap: 48, alignItems: "start" }} data-grid>
           <div>
+            {/* Offer strip — render-time check, isliye 1 Oct ko khud gayab. Renewal usi
+                saans me bola jata hai; offer positioning ko todta nahi, use nibhata hai. */}
+            {(() => {
+              const inTld = TLDS.find((t) => t.tld === ".in");
+              const p = inTld ? effectiveReg(".in", inTld.reg) : null;
+              return p?.offer && DOMAIN_OFFERS[".in"] ? (
+                <div className="mono-label" style={{ display: "inline-block", marginBottom: 16, padding: "8px 14px", borderRadius: 999, background: "#EEF7F0", color: "var(--success)", border: "1px solid var(--success)" }}>
+                  {p.offer.label} — .IN {"\u20B9"}1 FIRST YEAR (RENEWS {"\u20B9"}{inTld!.renew}/YR) · TILL 30 SEP
+                </div>
+              ) : null;
+            })()}
             <h1 className="h1-page" style={{ marginBottom: 16 }}>
               Register, renew and transfer — every price on one row.
             </h1>
