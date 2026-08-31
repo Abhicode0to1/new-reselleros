@@ -22,13 +22,30 @@ import {
   guardReply,
   fallbackReply,
   leadDetailsAppearInTranscript,
+  sanitizeLearning,
+  reflectionPrompt,
   type PublicChatReply,
 } from "@/lib/ai/public-sales-chat";
+import { loadAutonomyPolicy, logAiAction } from "@/lib/ai/autonomy.server";
+import { createClient as createBareClient, type SupabaseClient } from "@supabase/supabase-js";
+import { resolveAutonomy } from "@/lib/ai/autonomy";
 
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
 
 export const dynamic = "force-dynamic";
+
+/* ai_action_log typed Database schema me nahi hai — wahi untyped bare() jo
+   performance.server.ts aur autonomy.server.ts use karte hain, wahi yahan. */
+function bareLog(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return null;
+  return createBareClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (u, o) => fetch(u, { ...o, cache: "no-store" }) },
+  });
+}
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -70,6 +87,26 @@ export async function POST(request: NextRequest) {
     supportHours: "Mon–Sat, 10:00–19:00 IST",
   });
 
+  /* ── SELF-LEARNING, READ SIDE ────────────────────────────────────────────
+     The agent's own recent lessons (written by the reflection below) go back into its
+     prompt. Each one re-passes sanitizeLearning at READ time too — the store is a
+     database row somebody could edit, and the filter is cheap. Advice-only by prompt
+     construction; HARD RULES outrank. */
+  const lessonsDb = bareLog();
+  const { data: lessonRows } = lessonsDb === null
+    ? { data: [] as { reason: string | null }[] }
+    : await lessonsDb
+        .from("ai_action_log")
+    .select("reason")
+    .eq("tenant_id", BUY_PAGE_TENANT_ID)
+    .eq("action", "public_chat.learn")
+    .eq("outcome", "did")
+    .order("created_at", { ascending: false })
+    .limit(5);
+  const learnings = (lessonRows ?? [])
+    .map((r) => sanitizeLearning((r as { reason: string | null }).reason))
+    .filter((l): l is string => l !== null);
+
   const gemini = await resolveGeminiConfig(admin, BUY_PAGE_TENANT_ID);
   if (!gemini.apiKey) {
     /* No key configured is a stated state, not an error page — the visitor still gets a
@@ -86,7 +123,7 @@ export async function POST(request: NextRequest) {
   const raw = await geminiJson<PublicChatReply>({
     apiKey: gemini.apiKey,
     model: gemini.model,
-    system: systemPrompt(facts.factsText),
+    system: systemPrompt(facts.factsText, learnings),
     user: `Conversation so far:\n${transcript}\n\nAnswer the visitor's last message.`,
     temperature: 0.4,
     timeoutMs: 20_000,
@@ -180,6 +217,43 @@ export async function POST(request: NextRequest) {
          and the transcript asks again on a later turn because the widget was not credited. */
       console.error("[public/agent-chat] lead filing failed:", err);
     }
+  }
+
+  /* ── SELF-LEARNING, WRITE SIDE ───────────────────────────────────────────
+     One lesson per FINISHED conversation — finished meaning a lead was captured, or the
+     money guard had to replace a reply (the two moments with something to learn from).
+     Fire-and-forget: the visitor's reply never waits on homework. Behind its own
+     autonomy dial (public_chat.learn), so one click in /automation stops the loop. */
+  const guardTripped = guarded.reply === fallbackReply().reply;
+  if (leadCreated || guardTripped) {
+    void (async () => {
+      try {
+        const policy = await loadAutonomyPolicy(BUY_PAGE_TENANT_ID);
+        if (resolveAutonomy("public_chat.learn", policy).mode !== "auto") return;
+        const lessonRaw = await geminiJson<{ lesson?: string }>({
+          apiKey: gemini.apiKey!,
+          model: gemini.model,
+          user: reflectionPrompt(transcript, leadCreated ? "lead_captured" : "guard_fallback"),
+          temperature: 0.2,
+          timeoutMs: 10_000,
+          label: "public/agent-reflect",
+        });
+        const lesson = sanitizeLearning(lessonRaw?.lesson);
+        if (!lesson) return;
+        await logAiAction({
+          tenantId: BUY_PAGE_TENANT_ID,
+          action: "public_chat.learn",
+          outcome: "did",
+          reason: lesson,
+          mode: "auto",
+          entity: "public_chat",
+          entityId: null,
+          facts: { ending: leadCreated ? "lead_captured" : "guard_fallback", turns: messages.length },
+        });
+      } catch (err) {
+        console.error("[public/agent-chat] reflection failed:", err);
+      }
+    })();
   }
 
   return NextResponse.json({ ...guarded, leadCreated } satisfies PublicChatReply & { leadCreated: { quoteId: string | null } | null });

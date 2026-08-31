@@ -53,6 +53,15 @@ export interface AiActionSpec {
 }
 
 export const AI_ACTIONS = {
+  "public_chat.learn": {
+    label: "Learn from website chat conversations",
+    /* The public agent distils ONE lesson from each finished conversation and feeds the
+       recent lessons back into its own prompt (lib/ai/public-sales-chat.ts). `auto`
+       because the lessons are advice-only, guarded, and never contain figures — and this
+       dial exists precisely so Pardeep can stop the loop with one click if it drifts. */
+    today: "auto",
+    supports: ["off", "auto"],
+  },
   "lead.create": {
     label: "Create a lead from an inbound email",
     today: "auto",
