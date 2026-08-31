@@ -58,6 +58,20 @@ function quoteMoney(q: { amount: number | null; currency?: string | null; exchan
 }
 
 /**
+ * Quote ke total ki IKAI — "/mo" flex par, "/yr" annual par, khaali jab pata na ho.
+ *
+ * Pardeep, 31 Aug 2026: "commitment bhi show karo monthly ya yearly." ₹15,340 aur
+ * ₹76,464 dono sahi total hain — farak sirf ye hai ki ek MAHINE ka hai aur doosra SAAL
+ * ka, aur list par wo farak dikhe bina do quote compare karna andaza ban jata hai.
+ *
+ * null par khaali: purani quotes jinke billing_cycle set hi nahi hua, unpar "/yr" ka
+ * ANDAZA chhapna galat ikai ki wahi bimari hai — na dikhana behtar hai.
+ */
+function cycleSuffix(cycle: string | null | undefined): string {
+  return cycle === "monthly" ? "/mo" : cycle === "yearly" ? "/yr" : "";
+}
+
+/**
  * A quote's margin, from its LINE ITEMS.
  *
  * Two things this used to do and no longer does:
@@ -722,6 +736,7 @@ export default function QuotesPage() {
                     <div className="text-right shrink-0">
                       <p className="font-serif text-base font-bold tabular-nums text-ink">
                         {quoteMoney(q)}
+                        <span className="text-2xs font-normal text-ink-3">{cycleSuffix(q.billing_cycle)}</span>
                       </p>
                       <p className="text-2xs text-ink-3 tabular-nums">
                         {q.seats ?? "—"} seats
@@ -839,6 +854,7 @@ export default function QuotesPage() {
                         <div className="flex flex-col items-end gap-0.5">
                           <span className="tabular-nums text-sm font-medium text-ink">
                             {quoteMoney(q)}
+                            <span className="text-3xs font-normal text-ink-3">{cycleSuffix(q.billing_cycle)}</span>
                           </span>
                           {/* Foreign quote: show the ₹ base underneath so the amount
                               reconciles with the (all-INR) pipeline totals. */}

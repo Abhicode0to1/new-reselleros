@@ -4,6 +4,7 @@
 "use client";
 
 import * as React from "react";
+import { isAnnualTier } from "@/lib/quotes/commitment-rate";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -1068,10 +1069,30 @@ export default function QuoteDetailPage() {
             {items.map((line, i) => (
               <tr key={line.id} className="border-b border-hairline last:border-0">
                 <td className="p-3 text-sm text-ink-3 tabular-nums">{i + 1}</td>
-                <td className="p-3 text-sm font-medium">{line.name}</td>
+                <td className="p-3 text-sm font-medium">
+                  {line.name}
+                  {/* ── Term, item ke NEECHE hi (Pardeep, 31 Aug 2026) ────────────
+                      "item monthly hai ya yearly ye bhi show hona chahiye." ₹325 aur
+                      ₹3,240 dono sahi rate hain — farak sirf ikai ka hai, aur wahi
+                      farak 12× ka hai. isAnnualTier wahi boundary hai jo PDF aur
+                      chitthi use karte hain; yahan apna if likhna drift ka nyota. */}
+                  {line.commitment && (
+                    <span className="block text-xs text-ink-3 font-normal">
+                      {isAnnualTier(line.commitment)
+                        ? "Annual commitment · billed per year"
+                        : "Monthly, flexible · billed per month"}
+                    </span>
+                  )}
+                </td>
                 <td className="p-3 text-right tabular-nums text-sm">{line.qty}</td>
-                <td className="p-3 text-right tabular-nums text-sm">{rupee(line.rate)}</td>
-                <td className="p-3 text-right tabular-nums text-sm font-medium">{rupee(line.qty * line.rate)}</td>
+                <td className="p-3 text-right tabular-nums text-sm">
+                  {rupee(line.rate)}
+                  <span className="text-ink-3">{line.commitment ? (isAnnualTier(line.commitment) ? "/yr" : "/mo") : ""}</span>
+                </td>
+                <td className="p-3 text-right tabular-nums text-sm font-medium">
+                  {rupee(line.qty * line.rate)}
+                  <span className="text-ink-3 font-normal">{line.commitment ? (isAnnualTier(line.commitment) ? "/yr" : "/mo") : ""}</span>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1088,7 +1109,12 @@ export default function QuoteDetailPage() {
             <Row label={`GST (${quote.tax_rate}%)`} value={rupee(tax)} />
             <div className="border-t border-hairline pt-3 flex items-baseline justify-between">
               <span className="text-xs uppercase tracking-wider text-ink-3 font-semibold">Total</span>
-              <span className="font-serif text-2xl text-amber tabular-nums">{rupee(total)}</span>
+              <span className="font-serif text-2xl text-amber tabular-nums">
+                {rupee(total)}
+                {/* Flex quote ka total MAHINE ka hai — bina ikai ye wahi "per kya?" sawaal
+                   chhod deta jo line items par abhi band kiya. */}
+                {quote.billing_cycle === "monthly" && <span className="text-sm text-ink-3 font-sans"> /month</span>}
+              </span>
             </div>
           </div>
         </Card>

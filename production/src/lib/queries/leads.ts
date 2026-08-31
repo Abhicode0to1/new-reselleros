@@ -37,6 +37,44 @@ export function useLeads() {
   });
 }
 
+/**
+ * Har lead ki SABSE NAYI quote — id aur status — ek hi query me.
+ *
+ * ─── KYON ───────────────────────────────────────────────────────────────────
+ * Pardeep, 31 Aug 2026, website-form ki lead ko list me dekh kar: "lead to banti hai par
+ * ye nahi pata lagta ki isko quote bheja gaya hai ya nahi… aur related quote wahin se
+ * open bhi hona chahiye." Wo sach pehle sirf lead ke NOTES me dafan tha — jise list par
+ * koi nahi padhta — jabki quotes table me `lead_id` pehle se hai.
+ *
+ * Ek map isliye, N queries nahi: list me 30 lead par 30 round-trip wahi class ki
+ * sust-page banati jo is screen par pehle napi ja chuki hai. RLS tenant scope karta hai.
+ * "Sabse nayi" isliye ki requote hone par purani draft nahi, aaj wali dikhe.
+ */
+export interface LeadQuoteRef {
+  id: string;
+  status: string | null;
+}
+
+export function useLeadQuotes() {
+  return useQuery({
+    queryKey: ["leads", "quotes-by-lead"],
+    queryFn: async (): Promise<Record<string, LeadQuoteRef>> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("quotes")
+        .select("id, lead_id, status, created_at")
+        .not("lead_id", "is", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const map: Record<string, LeadQuoteRef> = {};
+      for (const q of (data ?? []) as { id: string; lead_id: string | null; status: string | null }[]) {
+        if (q.lead_id && !map[q.lead_id]) map[q.lead_id] = { id: q.id, status: q.status };
+      }
+      return map;
+    },
+  });
+}
+
 /** A single lead by id — used e.g. to prefill a prospect quote's WhatsApp number. */
 export function useLead(id: string | undefined) {
   return useQuery({

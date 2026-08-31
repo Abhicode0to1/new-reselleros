@@ -37,6 +37,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { StatusPill } from "@/components/ui/status-pill";
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -85,11 +87,17 @@ interface SwipeLeadCardProps {
    * outcome chip row, so a gesture and a tap can never mean different things.
    */
   onOutcome?: (outcome: LeadOutcome, lead: Lead) => void;
+  /**
+   * Is lead ki sabse nayi quote (id + status), useLeadQuotes ke map se. Optional —
+   * jis caller ke paas map nahi, card waise hi chalta hai. Pardeep, 31 Aug 2026:
+   * "lead se pata lage ki quote bheja gaya ya nahi, aur wahin se khule."
+   */
+  quoteRef?: { id: string; status: string | null };
   /** Earliest open follow-up task on this lead, if any (shows a chip). */
   task?: { due: string; overdue: boolean; count: number };
 }
 
-export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutcome, task }: SwipeLeadCardProps) {
+export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutcome, task, quoteRef }: SwipeLeadCardProps) {
   // Derived here rather than passed in, so the card is the single place that
   // decides how a lead looks on mobile — callers can't hand it a stale rule
   // that disagrees with the desktop table.
@@ -317,6 +325,23 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               </p>
               {lead.seats && (
                 <p className="text-3xs text-ink-3 tabular-nums mt-0.5">{lead.seats} seats</p>
+              )}
+              {/* Quote ka sach mobile par bhi — wahi pill jo desktop ke PLAN cell me
+                  hai (Pardeep, 31 Aug 2026). Tap quote kholta hai; stopPropagation
+                  warna card ka onTap drawer khol deta. Rang ke saath SHABD bhi. */}
+              {quoteRef && (
+                <Link
+                  href={`/quotes/${quoteRef.id}` as never}
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Open ${quoteRef.id}`}
+                  className="mt-1 inline-flex"
+                >
+                  <StatusPill
+                    status={quoteRef.status ?? "draft"}
+                    size="sm"
+                    label={`…${quoteRef.id.slice(-4)} · ${(quoteRef.status ?? "draft").charAt(0).toUpperCase() + (quoteRef.status ?? "draft").slice(1)}`}
+                  />
+                </Link>
               )}
             </div>
           </div>

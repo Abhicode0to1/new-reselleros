@@ -27,7 +27,9 @@ import { HIERARCHY_ENFORCED_IN_DATABASE } from "@/lib/team/enforcement";
 import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
-import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead } from "@/lib/queries/leads";
+import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead, useLeadQuotes, type LeadQuoteRef } from "@/lib/queries/leads";
+import { StatusPill } from "@/components/ui/status-pill";
+import Link from "next/link";
 import { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { InlineCell } from "@/components/features/leads/inline-cell";
 import { LossReasonsCard } from "@/components/features/leads/loss-reasons-card";
@@ -3662,6 +3664,9 @@ function LeadListView({
   onMerge: (l: Lead) => void;
   dupIds: Set<string>;
 }) {
+  /* Har lead ki quote — PLAN cell ka pill isi se banta hai. Ek map, ek query. */
+  const { data: leadQuotes } = useLeadQuotes();
+
   /* Stage options now come from the LEAD, not from the page — rowStageOptions() in
      lib/leads/stage-options.ts (17 tests), which is where the quote-first gate and the
      reason for it are written down. Choosing by page was correct while /leads and /deals
@@ -4224,6 +4229,7 @@ function LeadListView({
           <SwipeLeadCard
             key={lead.id}
             lead={lead}
+            quoteRef={leadQuotes?.[lead.id]}
             task={openTaskByLead.get(lead.id)}
             onTap={onRowClick}
             onChangeStage={(s) => void changeStage(lead, s)}
@@ -4738,6 +4744,27 @@ function LeadListView({
                   <span className="block" title={planWasShortened(lead.plan) ? (lead.plan ?? undefined) : undefined}>
                     {shortPlan(lead.plan) || "—"}
                   </span>
+                  {/* ── Quote ka sach, list par hi (Pardeep, 31 Aug 2026) ─────────
+                      "lead to banti hai par ye nahi pata lagta ki isko quote bheja
+                      gaya hai ya nahi… related quote wahin se open bhi hona chahiye."
+                      Pill quote ke STATUS ka hai (draft/sent/accepted — wahi rang jo
+                      /quotes par hain), click quote kholta hai. stopPropagation,
+                      warna row-click drawer bhi khol deta. Rang ke saath SHABD bhi
+                      hai — rang-andha padhne wala bhi Draft/Sent padh sake. */}
+                  {leadQuotes?.[lead.id] && (() => {
+                    const q: LeadQuoteRef = leadQuotes[lead.id];
+                    const word = (q.status ?? "draft").charAt(0).toUpperCase() + (q.status ?? "draft").slice(1);
+                    return (
+                      <Link
+                        href={`/quotes/${q.id}` as never}
+                        onClick={(e) => e.stopPropagation()}
+                        title={`Open ${q.id}`}
+                        className="mt-0.5 inline-flex"
+                      >
+                        <StatusPill status={q.status ?? "draft"} size="sm" label={`…${q.id.slice(-4)} · ${word}`} />
+                      </Link>
+                    );
+                  })()}
                 </td>
 
                 {/* Seats — apna column, daayen taraf aligned kyunki ye ginti hai. "seats"
