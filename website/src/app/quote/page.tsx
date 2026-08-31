@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import { QuoteBuilder } from "@/components/quote/QuoteBuilder";
+import { fetchLiveWorkspace, liveGwMonthlyRate } from "@/lib/live-catalog";
 
 export const metadata: Metadata = { title: "Get a quote" };
 
-export default function QuotePage() {
+export const revalidate = 600;
+
+export default async function QuotePage() {
+  const gwMonthly = liveGwMonthlyRate(await fetchLiveWorkspace());
   return (
     <section className="section rise">
       <div className="wrap">
@@ -14,7 +18,7 @@ export default function QuotePage() {
             requirement to our sales system — the formal GST quotation follows by email.
           </p>
         </div>
-        <QuoteBuilder />
+        <QuoteBuilder gwMonthlyRate={gwMonthly} />
       </div>
     </section>
   );

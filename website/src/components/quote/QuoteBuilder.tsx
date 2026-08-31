@@ -33,7 +33,7 @@ const API_PRODUCT: Record<Product, "google-workspace" | "microsoft-365" | "other
 
 interface QuoteLine { label: string; detail: string; qty: number; amount: string; raw: number }
 
-function linesFor(product: Product, seats: number): QuoteLine[] {
+function linesFor(product: Product, seats: number, gwMonthlyRate: number | null): QuoteLine[] {
   if (product === "Hosting") {
     return [
       { label: "Business hosting", detail: "cPanel, 50 GB NVMe, 10 sites", qty: 1, amount: rupee(359), raw: 359 },
@@ -43,14 +43,18 @@ function linesFor(product: Product, seats: number): QuoteLine[] {
   if (product === "Domains") {
     return [{ label: "Domain portfolio", detail: "Transfer in, ₹649 average per name", qty: seats, amount: rupee(649 * seats), raw: 649 * seats }];
   }
-  const rate = MAIL_RATES[product] ?? 165;
+  /* Google Workspace prices LIVE from the app's catalogue when it answered (the flexible
+     per-seat/month tier — this page quotes month-to-month). Placeholder otherwise. */
+  const rate = product === "Google Workspace" && gwMonthlyRate !== null
+    ? gwMonthlyRate
+    : MAIL_RATES[product] ?? 165;
   return [
     { label: product, detail: "Per mailbox, per month", qty: seats, amount: rupee(rate * seats), raw: rate * seats },
     { label: "Migration", detail: "Mail, folders and calendars moved by us", qty: 1, amount: "Free", raw: 0 },
   ];
 }
 
-export function QuoteBuilder() {
+export function QuoteBuilder({ gwMonthlyRate = null }: { gwMonthlyRate?: number | null }) {
   const [product, setProduct] = useState<Product>("Google Workspace");
   const [seats, setSeats] = useState(25);
   const [name, setName] = useState("");
@@ -61,7 +65,7 @@ export function QuoteBuilder() {
   const [state, setState] = useState<"idle" | "sending" | "issued" | "failed">("idle");
   const [error, setError] = useState("");
 
-  const lines = linesFor(product, seats);
+  const lines = linesFor(product, seats, gwMonthlyRate);
   const sub = lines.reduce((n, l) => n + l.raw, 0);
 
   const submit = async () => {

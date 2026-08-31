@@ -11,7 +11,7 @@ import { MAIL_RATES } from "@/lib/data/catalog";
 import { MAIL_OPTIONS } from "@/lib/data/copy";
 import { Tick } from "@/components/ui/bits";
 
-export function MailOptions() {
+export function MailOptions({ gwMonthlyRate = null }: { gwMonthlyRate?: number | null }) {
   const cart = useCart();
   const router = useRouter();
 
@@ -22,7 +22,7 @@ export function MailOptions() {
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em" }}>{m.name}</div>
           <div className="meta" style={{ marginBottom: 12 }}>{m.who}</div>
           <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", marginBottom: 14 }}>
-            {rupee(MAIL_RATES[m.name])}
+            {rupee(m.name === "Google Workspace" && gwMonthlyRate !== null ? gwMonthlyRate : MAIL_RATES[m.name])}
             <span style={{ fontSize: 14, fontWeight: 400, color: "var(--text-muted)" }}>/mailbox/mo</span>
           </div>
           <div style={{ flex: 1 }}>

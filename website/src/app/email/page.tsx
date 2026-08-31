@@ -4,10 +4,17 @@ import { LicenceCalculator } from "@/components/email/LicenceCalculator";
 import { MailOptions } from "@/components/email/MailOptions";
 import { SectionHead, Reveal } from "@/components/ui/bits";
 import { EMAIL_FEATURES } from "@/lib/data/copy";
+import { fetchLiveWorkspace, mergeEditions, liveGwMonthlyRate } from "@/lib/live-catalog";
 
 export const metadata: Metadata = { title: "Business email & productivity" };
 
-export default function EmailPage() {
+/* Live GW prices from the app, re-read every 10 minutes — see lib/live-catalog.ts. */
+export const revalidate = 600;
+
+export default async function EmailPage() {
+  const live = await fetchLiveWorkspace();
+  const editions = mergeEditions(live);
+  const gwMonthly = liveGwMonthlyRate(live);
   return (
     <>
       <section className="section rise">
@@ -26,7 +33,7 @@ export default function EmailPage() {
       </section>
 
       <section className="section-tight" style={{ background: "var(--tint-2)" }}>
-        <LicenceCalculator />
+        <LicenceCalculator editions={editions} />
       </section>
 
       <section className="section">
@@ -36,7 +43,7 @@ export default function EmailPage() {
             title="Pick the mailbox that fits, not the dearest one"
             body="We will say when the cheap option is enough — the guidance page exists for exactly that."
           />
-          <MailOptions />
+          <MailOptions gwMonthlyRate={gwMonthly} />
         </div>
       </section>
 
