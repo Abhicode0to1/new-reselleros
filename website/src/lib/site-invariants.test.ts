@@ -74,13 +74,22 @@ describe("rate card ki shakal", () => {
 });
 
 describe("quote form ka enquiry contract", () => {
-  it("proxy wahi field bhejta hai jo app ka Zod maangta hai", () => {
-    /* App ki taraf: fullName, companyName, email, phone (required), product enum, seats.
-       Ye source-level pin hai: proxy me se koi required field hata to laal. */
+  it("proxy ka payload APP ke Zod schema se milta hai — app ke source se naapa", () => {
+    /* Pehla version mere likhe field-naam khud se hi milata tha — aur `requirement` naam
+       galat tha (app `message` kehta hai); Pardeep ke pehle asli submit par 400 aaya.
+       Ab contract app ke route-source se aata hai: wahan ka schema badle to ye laal. */
+    const appRoute = readFileSync(
+      join(process.cwd(), "..", "production", "src", "app", "api", "public", "enquiry", "general", "route.ts"),
+      "utf8",
+    );
     const proxy = read(join(SRC, "app", "api", "enquiry", "route.ts"));
-    for (const field of ["fullName", "companyName", "email", "phone", "product", "seats", "requirement"]) {
-      expect(proxy.includes(field), `proxy me ${field} nahi`).toBe(true);
+    for (const field of ["fullName", "companyName", "email", "phone", "product", "seats", "message"]) {
+      expect(appRoute.includes(field), `app schema me ${field} nahi — contract badla?`).toBe(true);
+      expect(proxy.includes(`payload.${field}`) || proxy.includes(`{ fullName`) || proxy.includes(field),
+        `proxy ${field} nahi bhejta`).toBe(true);
     }
+    /* message REQUIRED hai app me — proxy use hamesha bhare, khaali chhodne par 400. */
+    expect(proxy).toContain("payload.message = message");
     expect(proxy).toContain("ENQUIRY_API");
   });
 

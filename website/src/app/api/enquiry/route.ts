@@ -55,7 +55,16 @@ export async function POST(req: NextRequest) {
   const payload: Record<string, unknown> = { fullName, companyName, email, phone };
   if (typeof body.product === "string" && PRODUCTS.has(body.product)) payload.product = body.product;
   if (Number.isFinite(body.seats) && (body.seats as number) >= 1) payload.seats = Math.floor(body.seats as number);
-  if (typeof body.requirement === "string" && body.requirement.trim()) payload.requirement = body.requirement.trim().slice(0, 2000);
+  /* ── FIELD KA NAAM 'message' HAI, 'requirement' NAHI ──────────────────────
+     Pardeep ke pehle asli submit par upstream ne 400 diya: "Invalid form data: Required".
+     App ka Zod free-text ko `message` (required, min 5) kehta hai; maine schema ki
+     pehli 50 line padh kar naam ANDAZE se likha tha, aur mera test mere hi andaze ko pin
+     kar raha tha. Ab ye naam app ke route-source se test hota hai (site-invariants) —
+     wahan ka schema badle to yahan laal hoga, chupchaap 400 nahi. */
+  const message = typeof body.requirement === "string" && body.requirement.trim()
+    ? body.requirement.trim().slice(0, 2000)
+    : "Quote request from the website form.";
+  payload.message = message;
 
   try {
     const res = await fetch(ENQUIRY_API, {
