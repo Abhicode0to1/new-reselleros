@@ -14,7 +14,7 @@
  *   5. Notes         — optional
  *   6. Terms footer  — payment terms + validity + signoff
  *
- * Money is formatted via `rupee()` so Indian lakh/crore grouping is preserved.
+ * Money is formatted via `pdfRupee()` so Indian lakh/crore grouping is preserved.
  */
 import {
   Document,
@@ -24,7 +24,8 @@ import {
   Image,
   StyleSheet,
 } from "@react-pdf/renderer";
-import { rupee, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { pdfRupee } from "./pdf-money";
 import { isForeignCurrency, formatForeign } from "@/lib/currency";
 import type { QuoteLineItem, LineCommitment, BillingCycle } from "@/lib/supabase/database.types";
 import {
@@ -411,7 +412,7 @@ export function QuotePDF(props: QuotePDFProps) {
   // disagree with the exact total, e.g. 32 × $32.00 ≠ $1,023.88). Books stay ₹.
   const dRound = (v: number) => (isForeign ? Math.round(v * 100) / 100 : Math.round(v));
   const toDisp = (inr: number) => (isForeign ? dRound(inr / fxRate) : inr);
-  const fmtC   = (v: number) => (isForeign ? formatForeign(v, currency ?? "") : rupee(v));
+  const fmtC   = (v: number) => (isForeign ? formatForeign(v, currency ?? "") : pdfRupee(v));
   /* ── TWO DIFFERENT THINGS BOTH LOOK LIKE "MONTHLY" ────────────────────────
      Everything below used to divide every stored figure by `billingN`, on the assumption
      that a stored figure is always an ANNUAL contract value. That is right for the common
@@ -686,7 +687,7 @@ export function QuotePDF(props: QuotePDFProps) {
                 {isForeign && (
                   <View style={s.perInvoiceRow}>
                     <Text>INR equivalent (for GST) @ Rs {exchangeRate}/{currency}</Text>
-                    <Text>{rupee(total)}</Text>
+                    <Text>{pdfRupee(total)}</Text>
                   </View>
                 )}
               </View>

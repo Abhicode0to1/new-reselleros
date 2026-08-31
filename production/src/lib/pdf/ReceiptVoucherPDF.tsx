@@ -21,7 +21,8 @@ import {
   Image,
   StyleSheet,
 } from "@react-pdf/renderer";
-import { rupee, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { pdfRupee } from "./pdf-money";
 import { isRenderableLogo } from "./logo";
 import type { Payment } from "@/lib/supabase/database.types";
 
@@ -394,7 +395,9 @@ export function ReceiptVoucherPDF(props: ReceiptVoucherPDFProps) {
         <View style={s.table}>
           <View style={s.tableHeader}>
             <Text style={s.thDesc}>Description</Text>
-            <Text style={s.thAmt}>Amount (₹)</Text>
+            {/* "Rs", not the sign: this header is drawn by the same font as the figures
+                below it, and that font has no rupee glyph — see lib/pdf/pdf-money.ts. */}
+            <Text style={s.thAmt}>Amount (Rs)</Text>
           </View>
 
           <View style={s.tableRow}>
@@ -404,30 +407,30 @@ export function ReceiptVoucherPDF(props: ReceiptVoucherPDFProps) {
               </Text>
               <Text style={s.lineMeta}>HSN/SAC: 998313 · Reseller services</Text>
             </View>
-            <Text style={s.tdAmt}>{rupee(taxable)}</Text>
+            <Text style={s.tdAmt}>{pdfRupee(taxable)}</Text>
           </View>
 
           {interState ? (
             <View style={s.tableRow}>
               <Text style={[s.tdDesc, s.taxLine]}>IGST @ {gstRate}%</Text>
-              <Text style={[s.tdAmt, { fontFamily: "Helvetica" }]}>{rupee(igst)}</Text>
+              <Text style={[s.tdAmt, { fontFamily: "Helvetica" }]}>{pdfRupee(igst)}</Text>
             </View>
           ) : (
             <>
               <View style={s.tableRow}>
                 <Text style={[s.tdDesc, s.taxLine]}>CGST @ {gstRate / 2}%</Text>
-                <Text style={[s.tdAmt, { fontFamily: "Helvetica" }]}>{rupee(cgst)}</Text>
+                <Text style={[s.tdAmt, { fontFamily: "Helvetica" }]}>{pdfRupee(cgst)}</Text>
               </View>
               <View style={s.tableRow}>
                 <Text style={[s.tdDesc, s.taxLine]}>SGST @ {gstRate / 2}%</Text>
-                <Text style={[s.tdAmt, { fontFamily: "Helvetica" }]}>{rupee(sgst)}</Text>
+                <Text style={[s.tdAmt, { fontFamily: "Helvetica" }]}>{pdfRupee(sgst)}</Text>
               </View>
             </>
           )}
 
           <View style={s.totalRow}>
             <Text style={[s.tdDesc, s.totalLabel]}>Total amount received</Text>
-            <Text style={[s.tdAmt, s.totalAmount]}>{rupee(payment.amount)}</Text>
+            <Text style={[s.tdAmt, s.totalAmount]}>{pdfRupee(payment.amount)}</Text>
           </View>
         </View>
 

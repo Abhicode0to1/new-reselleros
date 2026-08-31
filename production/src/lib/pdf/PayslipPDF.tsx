@@ -17,11 +17,18 @@ import {
   Text,
   StyleSheet,
 } from "@react-pdf/renderer";
-import { rupee, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { pdfRupee } from "./pdf-money";
 
-/** PDF-safe rupee. The built-in PDF fonts (Helvetica/Courier) have no ₹ (U+20B9)
- *  glyph, so it renders as a broken mark — use "Rs " instead. */
-const inrPdf = (n: number) => rupee(n).replace("₹", "Rs ");
+/* ── THIS FILE KNEW, AND THE OTHERS DID NOT ───────────────────────────────────
+   A local helper used to live here, with the right explanation: the built-in PDF fonts have
+   no rupee glyph, so use "Rs ". It was correct, and it was only ever applied to the PAYSLIP.
+   The quote, the invoice and the receipt voucher — the three documents that go to CUSTOMERS —
+   kept calling `rupee()` and printing a broken mark, for months.
+
+   The knowledge existed in the codebase. It just was not in a place the other three could
+   reach. It now lives in lib/pdf/pdf-money.ts and a wiring test counts the call sites. */
+const inrPdf = pdfRupee;
 
 // ─── Amount in words (Indian numbering) ─────────────────────────────────────
 

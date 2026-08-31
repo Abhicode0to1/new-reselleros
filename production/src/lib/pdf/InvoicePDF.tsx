@@ -18,7 +18,8 @@ import {
   Image,
   StyleSheet,
 } from "@react-pdf/renderer";
-import { rupee, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { pdfRupee } from "./pdf-money";
 import { isRenderableLogo } from "./logo";
 import { isExportSupply } from "@/lib/gst/place-of-supply";
 import { isForeignCurrency, foreignEquivalent, formatForeign } from "@/lib/currency";
@@ -391,7 +392,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
   // — that's what an international customer asks for. The books stay ₹, so the INR
   // equivalent is printed as a GST/GSTR-1 reference. `money()` renders every amount
   // in the invoice's display currency.
-  const money = (inr: number) => (isForeign ? formatForeign(foreignEquivalent(inr, rate), currency ?? "") : rupee(inr));
+  const money = (inr: number) => (isForeign ? formatForeign(foreignEquivalent(inr, rate), currency ?? "") : pdfRupee(inr));
 
   const advances: InvoiceAdvanceAdjustment[] = invoice.adjusted_advances ?? [];
   const advancesTotal = advances.reduce((acc, a) => acc + a.amount, 0);
@@ -543,7 +544,7 @@ export function InvoicePDF(props: InvoicePDFProps) {
               /* Books stay ₹ — print the INR equivalent for GST / GSTR-1 filing. */
               <View style={s.totalRow}>
                 <Text style={s.totalLabel}>INR equivalent (for GST) @ Rs {exchangeRate}/{currency}</Text>
-                <Text style={s.totalValue}>{rupee(total)}</Text>
+                <Text style={s.totalValue}>{pdfRupee(total)}</Text>
               </View>
             )}
           </View>
