@@ -27,7 +27,7 @@ import { sendEmail } from "@/lib/email/send";
 import { replySubject } from "@/lib/email/reply-subject";
 import { quotePdfAttachment, mentionsQuote } from "@/lib/quotes/quote-pdf-attachment";
 import { sendWhatsApp } from "@/lib/whatsapp/client";
-import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
+import { autoQuoteForLead, agentMaySendSeparateReply } from "@/lib/quotes/auto-quote-for-lead";
 import type { CatalogueItemPrice } from "@/lib/quotes/quote-from-enquiry";
 import { resolveAutonomy, type AiAction } from "../autonomy";
 import { loadAutonomyPolicy, logAiAction } from "../autonomy.server";
@@ -390,8 +390,11 @@ export async function dispatchSalesDecision(args: DispatchArgs): Promise<Dispatc
 
       /* Awaited, not fire-and-forget. The caller decides whether to await THIS function; from
          here on the ordering of the timeline rows is the thing being protected, and a floating
-         promise would interleave the quote's rows with the reply's. */
-      await autoQuoteForLead(args.admin, {
+         promise would interleave the quote's rows with the reply's.
+
+         And the OUTCOME is kept now, because it decides whether anything else may write to
+         this customer — see the block below. */
+      const quoted = await autoQuoteForLead(args.admin, {
         tenantId: args.tenantId,
         leadId: args.leadId,
         company: args.company,
@@ -421,10 +424,51 @@ export async function dispatchSalesDecision(args: DispatchArgs): Promise<Dispatc
         heardNotWritten: args.heardNotWritten,
         fromEmail: args.fromEmail,
         notePrefix: `Quoted by the AI sales agent — it read the enquiry as: ${decision.customer_intent}`,
+        /* The customer's own subject, so the quotation threads. Same helper, same reason as
+           the reply below — before 31 Aug 2026 the quotation mail wrote its own subject and
+           Gmail filed it as a separate conversation. */
+        incomingSubject: args.incomingSubject,
       });
 
-      /* The covering message goes out after the quote, so the customer's inbox reads in the
-         order the events happened. */
+      /* ── THE COVERING MESSAGE IS NOT A SECOND MAIL ─────────────────────────
+         This used to be unconditional, and the comment read "the covering message goes out
+         after the quote, so the customer's inbox reads in the order the events happened".
+         Ordering was never the problem. COUNT was.
+
+         Pardeep's screenshot, 31 Aug 2026 17:54 — one enquiry, two mails: a prose reply and
+         a separate "Your quote Q-…" carrying the PDF. `lib/inbound/ingest.ts` held the other
+         half of that defect; this is the same shape on the agent's own path.
+
+         It is also no longer needed. The quotation's covering letter
+         (`lib/email/quote-body.ts`) now states the seats, the unit price with its unit, the
+         billing term, the GST split, the supplier's GSTIN and the terms — it says everything
+         a "here is your quotation" note would say, and it arrives with the document.
+
+         So when the quotation reached the customer, the agent's draft is filed on the
+         timeline instead of mailed. Nothing is lost: an operator can read it and send it if
+         it said something the letter does not. That is the same discipline this file already
+         applies to a held reply — a draft that is not sent must still be visible. */
+      if (!agentMaySendSeparateReply(quoted)) {
+        await args.admin.from("lead_activities").insert({
+          tenant_id: args.tenantId, lead_id: args.leadId, kind: "note",
+          detail:
+            `Quotation ${quoted.quoteId} was emailed in the customer's own thread, so the ` +
+            `agent's covering reply was NOT sent as a second mail. Its draft:\n\n` +
+            `Subject: ${decision.generated_response.email_subject}\n\n` +
+            decision.generated_response.body_text,
+        });
+        return {
+          outcome: "quoted",
+          detail:
+            `Quote ${quoted.quoteId} emailed for ${seats ?? "?"} × ` +
+            `${item?.name ?? "an unmatched product"} — one mail, in the customer's thread.`,
+          followUp: null,
+        };
+      }
+
+      /* No quotation reached them — it was refused, held for review, or the send failed, and
+         each of those already wrote its reason on the timeline. They are still owed an
+         answer, so the agent's reply goes out as it did before. */
       const sent = await sendReply(args);
       return {
         outcome: sent.outcome === "replied" ? "quoted" : sent.outcome,

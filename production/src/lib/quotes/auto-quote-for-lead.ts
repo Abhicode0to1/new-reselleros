@@ -53,6 +53,8 @@ export interface AutoQuoteArgs {
   senderIsOurs: boolean;
   isSelfTest: boolean;
   fromEmail: string;
+  /** The customer's own subject, so the quotation mail threads. Null for cron-driven quotes. */
+  incomingSubject?: string | null;
   /** Prefix for the draft's notes — lets the append branch say why it re-quoted. */
   notePrefix?: string;
   /**
@@ -71,7 +73,64 @@ export interface AutoQuoteArgs {
   repriceDraftId?: string;
 }
 
-export async function autoQuoteForLead(admin: Admin, args: AutoQuoteArgs): Promise<void> {
+/**
+ * Did this call write to the CUSTOMER, and if not, why not?
+ *
+ * ─── THE SCREENSHOT THAT FORCED THIS ────────────────────────────────────────
+ * 31 Aug 2026, 17:54. One enquiry, two mails in Pardeep's inbox:
+ *
+ *     Re: mujhe 40 email ke liye quote chahiye google business starter monthly
+ *     Your quote Q-ADPL-2026-27-0107 — ANUTECH DIGITAL PVT LTD        [PDF]
+ *
+ * Only ONE quotation was raised — the duplicate guard below did its job. What went wrong was
+ * one level up: `ingest.ts` fired this function and the AI sales agent as two `void` calls,
+ * so they ran at the same time and NEITHER knew what the other was doing. The agent read the
+ * lead's latest quote before this function had created one, so it answered in prose; this
+ * function then emailed the document under a subject of its own, in a thread of its own.
+ *
+ * Two answers to one question, and the one holding the document looked unrelated to it.
+ *
+ * A `Promise<void>` cannot be sequenced against — there is nothing to branch on. So the
+ * outcome is returned, the caller runs the two steps in order, and the agent speaks only when
+ * this one did not. The `reason` is carried so the timeline can say why the agent was silent
+ * instead of leaving a gap.
+ */
+/** The customer has the quotation, in their own thread, with the PDF. */
+export type AutoQuoteEmailed = { emailed: true; quoteId: string };
+/** Nothing reached the customer. `reason` is already on the lead's timeline. */
+export type AutoQuoteNotEmailed = { emailed: false; reason: string };
+export type AutoQuoteOutcome = AutoQuoteEmailed | AutoQuoteNotEmailed;
+
+/**
+ * May anything ELSE mail this customer about this message?
+ *
+ * One line of logic, given a name and a home, because it is asked in two places that had
+ * drifted apart — `lib/inbound/ingest.ts` (the webhook) and
+ * `lib/ai/actions/quote-dispatcher.ts` (the agent's own path). Both used to mail regardless,
+ * and 31 Aug 2026 that put two mails in one inbox for one enquiry.
+ *
+ * The rule: if the quotation reached them, the quotation IS the answer. Its covering letter
+ * carries the seats, the rate with its unit, the billing term, the GST split and the terms,
+ * and it arrives in their own thread with the PDF. A second mail beside it is the app talking
+ * over itself.
+ *
+ * If it did NOT reach them — refused, held for review, or the send failed — they are still
+ * owed an answer, and the agent gives it.
+ */
+/* A type PREDICATE, not a plain `boolean` — and typecheck is why. With a boolean, the branch
+   that runs when the quotation DID go out could no longer see `quoteId`, which is exactly what
+   both call sites need in order to name the document they sent. A rule given a name must not
+   cost the caller the fact it is deciding on. */
+export function agentMaySendSeparateReply(
+  outcome: AutoQuoteOutcome,
+): outcome is AutoQuoteNotEmailed {
+  return !outcome.emailed;
+}
+
+export async function autoQuoteForLead(
+  admin: Admin,
+  args: AutoQuoteArgs,
+): Promise<AutoQuoteOutcome> {
   const plan = planQuoteFromEnquiry({ item: args.item, seats: args.seats, term: args.term });
 
   if (!plan.ok) {
@@ -81,7 +140,7 @@ export async function autoQuoteForLead(admin: Admin, args: AutoQuoteArgs): Promi
       tenant_id: args.tenantId, lead_id: args.leadId, kind: "note",
       detail: `No quote drafted automatically — ${plan.reason}`,
     });
-    return;
+    return { emailed: false, reason: plan.reason };
   }
 
   /* ── TWO CALLERS, ONE REQUIREMENT — Pardeep caught this at 15:25 on 31 Aug 2026 ──────
@@ -136,7 +195,10 @@ export async function autoQuoteForLead(admin: Admin, args: AutoQuoteArgs): Promi
         `No second quotation raised — ${already.id} already covers ${args.seats} × ` +
         `${args.item?.name ?? "this product"} on ${wantCycle} billing, and it has been sent.`,
     });
-    return;
+    /* The customer already HAS this document, so nothing more should be mailed about it —
+       but this call did not mail it, and the agent must be free to answer whatever else the
+       message said. `emailed: false` is the honest answer to "did I just write to them". */
+    return { emailed: false, reason: `${already.id} already covers this requirement` };
   }
 
   const today   = new Date();
@@ -299,19 +361,25 @@ export async function autoQuoteForLead(admin: Admin, args: AutoQuoteArgs): Promi
       tenant_id: args.tenantId, lead_id: args.leadId, kind: "note",
       detail: `Quote not sent automatically — ${sendDecision.reason}`,
     });
-    return;
+    return { emailed: false, reason: sendDecision.reason };
   }
 
-  if (!draftQuoteId) return;
+  if (!draftQuoteId) return { emailed: false, reason: "no draft was created" };
 
   /* NOT awaited by the caller's caller: rendering a PDF inside a webhook a provider is
      waiting on would trade ingest reliability for latency. Awaited HERE so the activity rows
      above land before the send's own rows, keeping the timeline in order. */
-  await sendAutoQuote(admin, {
+  const sent = await sendAutoQuote(admin, {
     tenantId:  args.tenantId,
     quoteId:   draftQuoteId,
     leadId:    args.leadId,
     recipient: args.recipient,
     fromEmail: args.fromEmail,
+    /* So the document lands in the customer's own thread and reads as the reply. */
+    incomingSubject: args.incomingSubject,
   });
+
+  return sent === "sent"
+    ? { emailed: true, quoteId: draftQuoteId }
+    : { emailed: false, reason: "the quotation email failed to send" };
 }

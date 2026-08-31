@@ -36,7 +36,7 @@ import { decideDisposition } from "@/lib/inbound/disposition";
 import { continuesThread } from "@/lib/inbound/thread-match";
 import { stripQuoted } from "@/lib/inbound/strip-quoted";
 import { isSelfTest, selfTestMarkerMisplaced, SELF_TEST_MARKER } from "@/lib/inbound/self-test";
-import { autoQuoteForLead } from "@/lib/quotes/auto-quote-for-lead";
+import { autoQuoteForLead, agentMaySendSeparateReply } from "@/lib/quotes/auto-quote-for-lead";
 import { readEnquiryFacts } from "@/lib/inbound/read-enquiry";
 import { shouldRequoteOnReply } from "@/lib/quotes/requote-on-reply";
 import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
@@ -592,35 +592,10 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
      */
     repriceDraftId?: string;
   }): Promise<void> => {
-    if (args.skipQuoteBecause) {
-      await admin.from("lead_activities").insert({
-        tenant_id: tenantId, lead_id: args.leadId, kind: "note",
-        detail: `No new quote from this reply — ${args.skipQuoteBecause}`,
-      });
-    } else {
-      /* Not awaited. A PDF render inside a webhook the provider is waiting on would trade
-         ingest reliability for latency, and the lead and the mail are committed by here. */
-      void autoQuoteForLead(admin, {
-        tenantId,
-        leadId:        args.leadId,
-        company:       args.company,
-        item:          args.item,
-        seats:         args.seats,
-        term:          args.facts.term.value,
-        seatsSource:   args.facts.seats.source,
-        productSource: args.facts.product.source,
-        termSource:    args.facts.term.source,
-        recipient:     fromEmail,
-        senderIsOurs,
-        isSelfTest:    selfTest,
-        fromEmail:     FROM_EMAIL,
-        notePrefix:    args.notePrefix,
-        repriceDraftId: args.repriceDraftId,
-      }).catch((err) => console.error("[inbound-email] auto-quote crashed:", err));
-    }
-
     /* `ownerId` null lands in the unassigned bucket, which is what 0007 designed it for —
-       a freshly captured email lead belongs to nobody yet. */
+       a freshly captured email lead belongs to nobody yet. Awaited, and FIRST: it writes no
+       mail, so it cannot collide with anything below, and the operator's task should exist
+       even if the customer-facing work later fails. */
     await createFollowUpTask(admin, args.leadId, args.ownerId, {
       fromEmail, subject, bodyText: text,
       /* `ai` is null when Gemini did not run. Passing `extracted.isEnquiry` would pass the
@@ -631,37 +606,136 @@ export async function ingestInboundEmail(body: Record<string, unknown>): Promise
       isReplyToExistingLead: args.isReply,
     });
 
-    /* Answer them, if the answer promises nothing and the dial allows it. AFTER the quote
-       block, so a drafted-and-sent quote is already in the thread — a reply that says "I will
-       send a quotation" alongside the quotation is the kind of thing a customer notices.
+    /* ══ ONE ENQUIRY, ONE ANSWER ══════════════════════════════════════════════
+       Pardeep sent a screenshot at 17:54 on 31 Aug 2026 — two mails in his inbox for one
+       enquiry, and he asked why this keeps coming back:
 
-       ─── THIS WAS `runAutoReply` UNTIL 24 AUG 2026 ───────────────────────────
-       Now the AI sales agent (lib/ai/run-sales-agent.ts), and it is a SWAP, not an addition.
-       Running both would have meant two drafters answering one customer — two replies on
-       `auto`, two drafts on `hold` — which is the trust failure this repo cares most about.
+           Re: mujhe 40 email ke liye quote chahiye google business starter monthly
+           Your quote Q-ADPL-2026-27-0107 — ANUTECH DIGITAL PVT LTD        [PDF]
 
-       The agent reuses `decideAutoReply` unchanged, so the own-address, they-wrote-last,
-       already-replied and human-is-handling-it gates all still apply, and it adds a
-       conversation transcript, an explicit quote decision, a handover for deals over 50 seats
-       or low confidence, and a scheduled follow-up.
+       It was NOT the duplicate-quote defect returning. Only one quotation was raised
+       (Q-0107); the guard in `auto-quote-for-lead.ts` held. What produced two mails was
+       this block, and specifically the word `void` in front of both calls.
 
-       Not awaited: a Gemini call inside a webhook the provider is waiting on would trade
-       ingest reliability for latency, and the mail is committed by here. */
-    void runSalesAgentForLead({
-      admin,
-      tenantId,
-      leadId: args.leadId,
-      incoming: args.incoming,
-      /* The customer's OWN subject, so the reply threads. One line, in one place — which is
-         exactly what merging the two branches an hour earlier bought. */
-      incomingSubject: subject,
-      customerContact: fromEmail,
-      channel: "email",
-      senderIsOurs,
-      isSelfTest: selfTest,
-      fromEmail: FROM_EMAIL,
-      sellerName: SELLER_NAME,
-    }).catch((err) => console.error("[inbound-email] sales agent crashed:", err));
+       The quote step and the sales agent were fired as two independent promises. They ran at
+       the same time, and neither could see the other:
+
+         · the agent read the lead's latest quote BEFORE the quote existed, so it answered in
+           prose — and, having nothing to attach, attached nothing;
+         · the quote step then mailed the document under a subject it wrote itself, which
+           Gmail filed as a separate thread, because threading in this app comes from the
+           subject and nothing else.
+
+       The old comment here claimed the ORDER solved this — "AFTER the quote block, so a
+       drafted-and-sent quote is already in the thread". It could not: `void` starts the work
+       and moves on, so the order of two `void`s says nothing about which finishes first. A
+       comment describing a guarantee the code does not make is worse than no comment.
+
+       ── The fix, and why it is this one ─────────────────────────────────────
+       The two steps are now SEQUENCED inside a single `void`, and the agent speaks only when
+       the quote step did not write to the customer. `autoQuoteForLead` returns that answer
+       rather than `void`, so there is something to branch on.
+
+       Webhook latency is unchanged — still exactly one un-awaited promise, still nothing the
+       provider waits on. What changed is that the two halves are now inside it in order,
+       which is the only way one can know about the other.
+
+       And when the agent stays quiet, the lead's timeline SAYS SO. A silence with no reason
+       is the failure this repo keeps paying for. */
+    void (async () => {
+      /* ── A CRASH HERE MUST NOT SILENCE THE ANSWER ─────────────────────────
+         Sequencing bought one thing and cost another. As two `void` calls, a crash in the
+         quote step could not stop the agent — they were independent promises. In a chain it
+         can, and then the customer gets NOTHING, which is a worse outcome than the two mails
+         this change exists to fix.
+
+         So a throw becomes an outcome like any other refusal: the quotation did not reach
+         them, therefore the agent answers. The reason is written on the lead in the same
+         sentence shape the planner's own refusals use, so an operator reads one list and not
+         two — and `console.error` keeps it in the Cloud Run log, which is where the 13-day
+         Contacts outage taught us these have to be. */
+      let quote: import("@/lib/quotes/auto-quote-for-lead").AutoQuoteOutcome =
+        { emailed: false, reason: args.skipQuoteBecause ?? "the quote step did not run" };
+
+      if (!args.skipQuoteBecause) {
+        try {
+          quote = await autoQuoteForLead(admin, {
+            tenantId,
+            leadId:        args.leadId,
+            company:       args.company,
+            item:          args.item,
+            seats:         args.seats,
+            term:          args.facts.term.value,
+            seatsSource:   args.facts.seats.source,
+            productSource: args.facts.product.source,
+            termSource:    args.facts.term.source,
+            recipient:     fromEmail,
+            senderIsOurs,
+            isSelfTest:    selfTest,
+            fromEmail:     FROM_EMAIL,
+            notePrefix:    args.notePrefix,
+            repriceDraftId: args.repriceDraftId,
+            /* The customer's own subject, so the quotation lands in THEIR thread instead of
+               starting a new one. This app has no `In-Reply-To` anywhere — Gmail threads on the
+               subject, which is why the standalone "Your quote Q-…" subject broke away. */
+            incomingSubject: subject,
+          });
+        } catch (err) {
+          const why = err instanceof Error ? err.message : "unknown error";
+          console.error("[inbound-email] auto-quote crashed:", err);
+          quote = { emailed: false, reason: `the quote step crashed — ${why}` };
+          await admin.from("lead_activities").insert({
+            tenant_id: tenantId, lead_id: args.leadId, kind: "note",
+            detail:
+              `No quote drafted automatically — the quote step crashed (${why}). ` +
+              `The customer is still being answered; raise the quotation by hand.`,
+          });
+        }
+      }
+
+      if (args.skipQuoteBecause) {
+        await admin.from("lead_activities").insert({
+          tenant_id: tenantId, lead_id: args.leadId, kind: "note",
+          detail: `No new quote from this reply — ${args.skipQuoteBecause}`,
+        });
+      }
+
+      if (!agentMaySendSeparateReply(quote)) {
+        /* The quotation IS the reply now: same thread, the customer's own subject, the PDF
+           attached, and a covering letter that states the seats, the rate, the unit and the
+           tax split. A second mail from the agent alongside it would be the app talking over
+           itself — which is exactly what the screenshot showed. */
+        await admin.from("lead_activities").insert({
+          tenant_id: tenantId, lead_id: args.leadId, kind: "note",
+          detail:
+            `The AI sales agent did not send a separate reply — quotation ${quote.quoteId} ` +
+            `was emailed in the customer's own thread, and that is the reply.`,
+        });
+        return;
+      }
+
+      /* No quotation reached them, so they are still owed an answer — a general sales
+         question, a missing seat count, a term nobody named. This is the path Pardeep asked
+         for on 31 Aug ("koi lead general question poochhe to uska bhi jawab AI de payega"),
+         and all seven of `decideAutoReply`'s gates still apply inside it. */
+      await runSalesAgentForLead({
+        admin,
+        tenantId,
+        leadId: args.leadId,
+        incoming: args.incoming,
+        /* The customer's OWN subject, so the reply threads. One line, in one place — which is
+           exactly what merging the two branches an hour earlier bought. */
+        incomingSubject: subject,
+        customerContact: fromEmail,
+        channel: "email",
+        senderIsOurs,
+        isSelfTest: selfTest,
+        fromEmail: FROM_EMAIL,
+        sellerName: SELLER_NAME,
+      }).catch((err) =>
+        console.error("[inbound-email] sales agent crashed:", err),
+      );
+    })().catch((err) => console.error("[inbound-email] answer chain crashed:", err));
   };
 
   /* ── Who is this from, before deciding what it is ──────────────────────────

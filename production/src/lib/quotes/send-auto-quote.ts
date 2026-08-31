@@ -35,6 +35,7 @@ import { renderQuotePDF } from "@/lib/pdf";
 import { logoDataUri } from "@/lib/pdf/logo";
 import { rupee } from "@/lib/utils";
 import { quoteEmailBody } from "@/lib/email/quote-body";
+import { replySubject } from "@/lib/email/reply-subject";
 import { stageAfterQuoteSent } from "@/lib/leads/stage-after-quote-sent";
 import type { createAdminClient } from "@/lib/supabase/server";
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
@@ -47,6 +48,28 @@ export interface SendAutoQuoteArgs {
   recipient: string;
   /** Envelope sender for the deployment. */
   fromEmail: string;
+  /**
+   * The subject line the CUSTOMER used, so this mail lands in their own thread.
+   *
+   * ─── WHY IT MATTERS, FROM THE SCREENSHOT ─────────────────────────────────
+   * 31 Aug 2026, 17:54 — Pardeep's inbox held TWO mails for one enquiry:
+   *
+   *     Re: mujhe 40 email ke liye quote chahiye google business starter monthly
+   *     Your quote Q-ADPL-2026-27-0107 — ANUTECH DIGITAL PVT LTD        [PDF]
+   *
+   * The first is the sales agent's reply, in the thread. The second is this mail, and
+   * because its subject was written from scratch it started a SEPARATE thread — so one
+   * enquiry got two answers in two places, and the one carrying the document looked like
+   * an unrelated mail.
+   *
+   * There is no `In-Reply-To` anywhere in this app: threading here is done by Gmail, from
+   * the subject and the participants. So the subject IS the threading mechanism, and
+   * `replySubject` is the same helper the reply path already uses.
+   *
+   * Null falls back to the old standalone subject rather than sending nothing — a cron-driven
+   * renewal quote has no incoming mail to reply to, and that case is not a defect.
+   */
+  incomingSubject?: string | null;
 }
 
 /* Typed as the RETURN of createAdminClient rather than as a hand-rolled structural type.
@@ -83,7 +106,19 @@ interface TenantRow {
   logo_url: string | null;
 }
 
-export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Promise<void> {
+/**
+ * Did the customer actually receive a mail from this call?
+ *
+ * Returned rather than swallowed because the caller has to decide whether anything ELSE may
+ * write to this customer — see `lib/inbound/ingest.ts`. A boolean that nobody returned is
+ * how one enquiry came to get two answers.
+ */
+export type SendAutoQuoteResult = "sent" | "failed";
+
+export async function sendAutoQuote(
+  admin: Admin,
+  args: SendAutoQuoteArgs,
+): Promise<SendAutoQuoteResult> {
   const note = async (detail: string) => {
     await admin.from("lead_activities").insert({
       tenant_id: args.tenantId, lead_id: args.leadId, kind: "note", detail,
@@ -100,14 +135,14 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
 
   if (!quote) {
     await note(`Quote ${args.quoteId} could not be re-read before sending — nothing was sent.`);
-    return;
+    return "failed";
   }
   /* Re-read and re-checked rather than trusted from the caller. Between drafting and here
      the row could have been sent by hand; sending twice is a worse outcome than not
      sending, because the customer gets two prices and has to ask which one counts. */
   if (quote.status !== "draft") {
     await note(`Quote ${args.quoteId} was already ${quote.status} — not sent again.`);
-    return;
+    return "failed";
   }
 
   const { data: t } = await admin
@@ -183,6 +218,12 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
   }
 
   const seller  = tenant.name?.trim() || "Your reseller";
+
+  /* ── EK ENQUIRY, EK JAWAB ────────────────────────────────────────────────────
+     Grahak ke apne subject par `Re:` — isliye ye mail unke usi thread me girta hai aur
+     WAHI jawab ban jata hai, ek doosra mail nahi. Bina incoming subject (renewal cron)
+     purana standalone subject hi chalta hai. */
+  const subject = replySubject(args.incomingSubject, `Your quote ${quote.id} — ${seller}`);
   /* `tenants.state` is select me nahi tha — ise jodna PDF ke place-of-supply se mel
      khata hai. Null ho to wo line chhoot jati hai, galat nahi chhapti. */
   const tenantState = (tenant as { state?: string | null }).state ?? null;
@@ -206,7 +247,7 @@ export async function sendAutoQuote(admin: Admin, args: SendAutoQuoteArgs): Prom
        `decideAutoSend` already checked the FACTS (did the customer state a term), and this
        checks the PERMISSION. Two different questions, both required. */
     automated: { tenantId: args.tenantId, action: "quote.send" },
-    subject: `Your quote ${quote.id} — ${seller}`,
+    subject,
     text:
 quoteEmailBody({
       quoteId:      quote.id,
@@ -268,7 +309,7 @@ quoteEmailBody({
     quote_id:        quote.id,
     recipient_email: args.recipient,
     cc_emails:       null,
-    subject:         `Your quote ${quote.id} — ${seller}`,
+    subject,
     status:          result.status,
   });
   if (sendLogErr) {
@@ -287,7 +328,7 @@ quoteEmailBody({
       `Quote ${quote.id} could NOT be emailed to ${args.recipient} — ${result.errorMessage ?? "send failed"}. ` +
       `The draft is saved; send it by hand.`,
     );
-    return;
+    return "failed";
   }
 
   /* Status moves only on a real send. A quote marked sent that never left would make the
@@ -359,4 +400,9 @@ quoteEmailBody({
   } else {
     console.info(`[send-auto-quote] lead ${args.leadId} stage unchanged — ${move.reason}`);
   }
+
+  /* Mail ja chuki hai. Uske baad ki har nakaami (audit log, stage) ke apne note hain aur wo
+     "customer ko kuch nahi mila" nahi banati — isliye "sent". Ye nateeja hi tay karta hai ki
+     sales agent chup rahega ya nahi. */
+  return "sent";
 }
