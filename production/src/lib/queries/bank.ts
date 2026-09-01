@@ -663,47 +663,27 @@ type ReconcileInput = {
   confidence?:   "exact" | "high" | "low" | "manual";
 };
 
-/** Core reconcile write — sets the match on the bank line AND keeps the reverse
- *  links (project_payments.bank_txn_id, expenses.reconciled_txn_id) + statutory /
- *  balance-sheet reversals in sync. The single source of truth used by both the
- *  manual dialog (useReconcileTransaction) and the batch auto-reconcile below, so
- *  they can never drift apart. Salary paid_amount is handled by a DB trigger on
- *  the bank_transactions update, so no extra client work is needed for salaries. */
+/** Core reconcile write — one call to the `reconcile_bank_txn` RPC, which in a
+ *  single transaction sets the match on the bank line AND keeps the reverse
+ *  links (project_payments.bank_txn_id, expenses.reconciled_txn_id) + the
+ *  statutory / balance-sheet reversals in sync. This is genuinely the single
+ *  source of truth: both the manual dialog (useReconcileTransaction) and the
+ *  batch auto-reconcile below call THIS, so they can never drift apart — and
+ *  because it is one transaction, a failure part-way can no longer leave a
+ *  matched line with an unset reverse link (the old chained-writes hazard,
+ *  CLAUDE.md §17b). matched_by is auth.uid() set server-side; salary paid_amount
+ *  is handled by a DB trigger on the update, so no extra client work is needed. */
 async function applyReconcile(
   supabase: ReturnType<typeof createClient>,
   input: ReconcileInput,
-  matchedBy: string | null,
 ): Promise<BankTransactionRow> {
-  const patch = input.matchedToType
-    ? {
-        matched_to_type:  input.matchedToType,
-        matched_to_id:    input.matchedToId,
-        matched_at:       new Date().toISOString(),
-        matched_by:       matchedBy,
-        match_confidence: input.confidence ?? "manual",
-      }
-    : {
-        matched_to_type:  null,
-        matched_to_id:    null,
-        matched_at:       null,
-        matched_by:       null,
-        match_confidence: null,
-      };
-  const { data, error } = await supabase
-    .from("bank_transactions").update(patch).eq("id", input.transactionId).select().single();
+  const { data, error } = await supabase.rpc("reconcile_bank_txn", {
+    p_txn_id:           input.transactionId,
+    p_matched_to_type:  input.matchedToType,
+    p_matched_to_id:    input.matchedToId,
+    p_match_confidence: input.confidence ?? "manual",
+  });
   if (error) throw error;
-  await supabase.from("project_payments").update({ bank_txn_id: null }).eq("bank_txn_id", input.transactionId);
-  if (input.matchedToType === "project" && input.matchedToId) {
-    await supabase.from("project_payments").update({ bank_txn_id: input.transactionId }).eq("id", input.matchedToId);
-  }
-  await supabase.from("expenses").update({ reconciled_txn_id: null }).eq("reconciled_txn_id", input.transactionId);
-  if (input.matchedToType === "expense" && input.matchedToId) {
-    await supabase.from("expenses").update({ reconciled_txn_id: input.transactionId }).eq("id", input.matchedToId);
-  }
-  if (!input.matchedToType) {
-    await supabase.from("balance_sheet_items").delete().eq("bank_txn_id", input.transactionId);
-    await supabase.from("statutory_dues_payments").delete().eq("bank_txn_id", input.transactionId);
-  }
   return data as BankTransactionRow;
 }
 
@@ -720,8 +700,6 @@ export function useAutoReconcile() {
   return useMutation({
     mutationFn: async (accountId: string): Promise<{ reconciled: number; review: number }> => {
       const supabase = createClient();
-      const { data: authData } = await supabase.auth.getUser();
-      const matchedBy = authData?.user?.id ?? null;
       const { data: txns, error } = await supabase
         .from("bank_transactions")
         .select("id")
@@ -744,7 +722,7 @@ export function useAutoReconcile() {
         const unambiguous = list.length === 1 || list[1]?.match_confidence !== conf;
         if (top && confident && unambiguous) {
           try {
-            await applyReconcile(supabase, { transactionId: t.id, matchedToType: top.match_type, matchedToId: top.match_id, confidence: "high" }, matchedBy);
+            await applyReconcile(supabase, { transactionId: t.id, matchedToType: top.match_type, matchedToId: top.match_id, confidence: "high" });
             reconciled++;
           } catch { review++; }
         } else {
@@ -775,54 +753,17 @@ export function useReconcileTransaction() {
       confidence?:   "exact" | "high" | "low" | "manual";
     }) => {
       const supabase = createClient();
-      const { data: authData } = await supabase.auth.getUser();
-      const patch = input.matchedToType
-        ? {
-            matched_to_type:  input.matchedToType,
-            matched_to_id:    input.matchedToId,
-            matched_at:       new Date().toISOString(),
-            matched_by:       authData?.user?.id ?? null,
-            match_confidence: input.confidence ?? "manual",
-          }
-        : {
-            matched_to_type:  null,
-            matched_to_id:    null,
-            matched_at:       null,
-            matched_by:       null,
-            match_confidence: null,
-          };
-      const { data, error } = await supabase
-        .from("bank_transactions")
-        .update(patch)
-        .eq("id", input.transactionId)
-        .select()
-        .single();
+      // One atomic RPC does the bank-line match, both reverse links, and the
+      // balance-sheet / statutory reversals — the SAME source of truth as the
+      // batch path (applyReconcile). See reconcile_bank_txn (migration
+      // 20260901160000) and CLAUDE.md §17b. matched_by is set server-side.
+      const { data, error } = await supabase.rpc("reconcile_bank_txn", {
+        p_txn_id:           input.transactionId,
+        p_matched_to_type:  input.matchedToType,
+        p_matched_to_id:    input.matchedToId,
+        p_match_confidence: input.confidence ?? "manual",
+      });
       if (error) throw error;
-      // Keep the project-payment ↔ bank-line reverse link in sync (a project
-      // payment stores which bank line reconciled it). Clear any stale link to
-      // this line first, then set it when matching to a project payment.
-      await supabase.from("project_payments")
-        .update({ bank_txn_id: null }).eq("bank_txn_id", input.transactionId);
-      if (input.matchedToType === "project" && input.matchedToId) {
-        await supabase.from("project_payments")
-          .update({ bank_txn_id: input.transactionId }).eq("id", input.matchedToId);
-      }
-      // Same for a single expense match, so `reconciled_txn_id` reliably marks
-      // every reconciled expense (used to filter split-match candidates).
-      await supabase.from("expenses")
-        .update({ reconciled_txn_id: null }).eq("reconciled_txn_id", input.transactionId);
-      if (input.matchedToType === "expense" && input.matchedToId) {
-        await supabase.from("expenses")
-          .update({ reconciled_txn_id: input.transactionId }).eq("id", input.matchedToId);
-      }
-      // Un-reconciling a line booked as capital / director's loan removes the
-      // linked Balance-Sheet classification too, so the two never drift apart.
-      if (!input.matchedToType) {
-        await supabase.from("balance_sheet_items").delete().eq("bank_txn_id", input.transactionId);
-        // Un-reconciling a statutory (TDS/PF/ESI) challan line reverses the
-        // statutory-dues payment it recorded, so the payable snaps back.
-        await supabase.from("statutory_dues_payments").delete().eq("bank_txn_id", input.transactionId);
-      }
       return data as BankTransactionRow;
     },
     onSuccess: (row) => {

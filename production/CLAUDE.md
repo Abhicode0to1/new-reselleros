@@ -549,7 +549,7 @@ Any operation that touches **more than one row** must go through a Postgres `SEC
 | Refund a payment + recompute outstanding           | `refund_payment` ✅ SHIPPED (20260901120000 — RFV voucher + quote/sub recompute + credit-close in one txn; refuses when a GST invoice exists → credit note first) |
 | Renew a subscription + roll forward dates          | folded INSIDE `record_payment` by design — a paid renewal quote rolls the sub forward; no separate RPC exists or is planned |
 
-The audit that corrected this table (1 Sep 2026) also measured 150 distinct functions in migrations+baseline — this table lists the money-spine four only. Do not add new multi-row money writes from the client; the known offenders still outstanding are bank reconciliation (`bank.ts` — 6 chained writes, two drifted copies) and the post-RPC writes in `record-payment-dialog.tsx` (bank account / domain / TAN patches).
+The audit that corrected this table (1 Sep 2026) also measured 150 distinct functions in migrations+baseline — this table lists the money-spine four only. Do not add new multi-row money writes from the client. Bank reconciliation — the old worst offender (`bank.ts`, 6 chained writes in two hand-kept copies) — was folded into the atomic `reconcile_bank_txn` RPC on 1 Sep 2026 (migration `20260901160000`, test `supabase/tests/reconcile_bank_txn.test.sql`); both hooks (`useReconcileTransaction`, `useAutoReconcile`→`applyReconcile`) now call it, so they cannot drift. The one still outstanding is the post-RPC writes in `record-payment-dialog.tsx` (bank account / domain / TAN patches).
 
 ---
 

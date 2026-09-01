@@ -43,7 +43,7 @@
 - [ ] C2. 23 tenant_id + top FK indexes ka migration
 - [ ] C3. Stale docs stamp/fix: LAUNCH_READINESS (99 din, 8/14 "missing" ab bane hain), MONITORING_SETUP (taaza tareekh, jhootha), MONEY-FLOW matrix, CLAUDE.md §17b, proration.ts:38 comment, bank.ts:669 docstring
 - [x] C4 (aadha) ✅ 1 Sep — reportCron ab 18/18 wired; ⏳ scheduler-script ke 6 missing jobs + murda configs hatana baaki
-- [ ] C5. Bank-reconcile ko ek RPC me (abhi 6 client-writes, do copies jo drift ho chuki hain)
+- [x] C5. Bank-reconcile ek atomic RPC me ✅ 1 Sep — reconcile_bank_txn (migration 20260901160000). 6 chained client-writes → 1 transaction; dono hooks (useReconcileTransaction + useAutoReconcile→applyReconcile) ab isi ko call karte hain, drift band. Test: supabase/tests/reconcile_bank_txn.test.sql (mutation-verified). Gate 4/4 green. CLAUDE.md §17b update.
 - [x] C6 ✅ 1 Sep — "" fallback ab THROW hai (khaali chaabi = forgeable sab); .env.example me 9 vars darj; alag PDF_SIGNING_SECRET jaan-boojh kar prod par NAHI rakha (purane links tootte) — rotation ke waqt
 - [ ] C7. Bulk/undo/j-k propagation; nav progressive-reveal (72 links)
 - [x] C8 ✅ 1 Sep — dono Google-token routes getUser-first (provider_token session se, darwaza getUser se); dono WhatsApp handshake constant-time
@@ -59,7 +59,7 @@ Chaaron faisle Pardeep ne mujhe saunpe (1 Sep shaam) — liye gaye:
 - [x] **F4. ₹1 offer website se UTAR gaya** ✅ — engine+tests fixture par salamat; wapas = DMS promo-engine (Phase 3) ke baad ek line. Live map ka khaali rehna ab TEST se pinned.
 
 Aage (kram se):
-- [ ] **M0. DMS Phase-0 suraksha**: IDOR (booking-status ownership), Razorpay-secrets plaintext→encrypt+ROTATE, backup-export me settings redact, XFF last-entry, doosra webhook harden. (DMS repo par kaam — deploy unka pipeline.)
+- [x] **M0. DMS Phase-0 suraksha** ✅ 1 Sep — PR #1 (IDOR ownership-scoped, secrets AES-encrypt, backup redact, XFF last-entry, webhook constant-time, role-leak) + PR #2 (2 public read-API) DONO merge to main. ⏳ Baaki sirf: DMS DEPLOY (Pardeep ka pipeline) + Razorpay key/webhook ROTATE (dashboard).
 - [~] **M1. Jod (chal raha)** — DMS ke 2 public read-API bane (PR #2, availability+tld-pricing, 9 test); website ka hero-search ab ASLI (nakli hash gaya) aur /domains + /pricing rate-card live-merge par (live-tld-pricing.ts). Bacha: (a) website www par deploy, (b) DMS marketing 301. **Buy→cart handoff JAAN-BOOJH KAR Phase-2 me** — cross-origin cart-bridge Phase-2 ke shared-cart me delete ho jata, isliye throwaway nahi banaya. Zinda hone ki shart: DMS PR #1+#2 merge+deploy.
 - [ ] **M2. Ek ghar**: website → DMS (marketing) route-group; SEO greenfield; ek cart; cross-repo test-path theek.
 - [ ] **M3. Promo-engine DMS me** (₹1 wapas) + inner reskin + webhook-consolidation.

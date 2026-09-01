@@ -5026,6 +5026,15 @@ export type Database = {
         Args: { p_bank_txn_id: string; p_salary_ids: string[] };
         Returns: undefined;
       };
+      reconcile_bank_txn: {
+        Args: {
+          p_txn_id:           string;
+          p_matched_to_type:  string | null;
+          p_matched_to_id:    string | null;
+          p_match_confidence: string | null;
+        };
+        Returns: BankTransactionRow;
+      };
       reconcile_expenses_to_bank_txn: {
         Args: { p_bank_txn_id: string; p_expense_ids: string[] };
         Returns: undefined;
