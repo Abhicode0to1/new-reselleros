@@ -45,7 +45,13 @@
 - [x] C4 (aadha) ✅ 1 Sep — reportCron ab 18/18 wired; ⏳ scheduler-script ke 6 missing jobs + murda configs hatana baaki
 - [x] C5. Bank-reconcile ek atomic RPC me ✅ 1 Sep — reconcile_bank_txn (migration 20260901160000). 6 chained client-writes → 1 transaction; dono hooks (useReconcileTransaction + useAutoReconcile→applyReconcile) ab isi ko call karte hain, drift band. Test: supabase/tests/reconcile_bank_txn.test.sql (mutation-verified). Gate 4/4 green. CLAUDE.md §17b update.
 - [x] C6 ✅ 1 Sep — "" fallback ab THROW hai (khaali chaabi = forgeable sab); .env.example me 9 vars darj; alag PDF_SIGNING_SECRET jaan-boojh kar prod par NAHI rakha (purane links tootte) — rotation ke waqt
-- [ ] C7. Bulk/undo/j-k propagation; nav progressive-reveal (72 links)
+- [~] C7. Bulk/undo/j-k propagation; nav progressive-reveal — PARTIAL (1 Sep)
+  - [x] Nav progressive-reveal: pehle se LIVE — Sidebar single-open accordion (sirf current section khula, baaki collapsed). Browser me confirm kiya.
+  - [x] j/k propagation → **customers** screen par jod diya (useListKeys, aria-selected + amber tint, KeyHintBar). Browser-verified real data par: j/k navigate, o opens Anitatech. Gate 4/4.
+  - [ ] j/k baaki lists par: payments, invoices, deals, online-orders, projects, expenses, attendance (~7 screens; har ek chhota par alag row-render + browser-verify)
+  - [ ] Bulk-select propagation: invoices par pehle se hai; baaki lists par nahi
+  - [ ] Undo propagation: leads/payroll/attendance par hai; delete-actions par extend karna
+  - NOTE: teenon 'propagation' hain — pattern maujood, N-screens par phailana. Batch me Pardeep greenlight kare to karta rahunga.
 - [x] C8 ✅ 1 Sep — dono Google-token routes getUser-first (provider_token session se, darwaza getUser se); dono WhatsApp handshake constant-time
 - [ ] C9. Bundle budget + analyzer; plausible ya hatao daava
 - [ ] C10. Zod 27 baki JSON-parse routes par (pehle unauthenticated wale)

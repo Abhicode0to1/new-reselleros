@@ -14,6 +14,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useListKeys } from "@/lib/hooks/useKeyboard";
+import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import { useCustomers, useOpenCreditsByCustomer } from "@/lib/queries/customers";
 import { useProjectReceivablesByCustomer } from "@/lib/queries/projects";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
@@ -128,6 +130,7 @@ export default function CustomersPage() {
   const [importOpen, setImportOpen] = React.useState(false);
   const [domainsOpen, setDomainsOpen] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = React.useState(false);
   const [view, setView] = React.useState("all");
   // Archived (is_active=false) customers are hidden by default; this toggle
   // swaps the whole list to show ONLY archived ones (Zoho-style status filter).
@@ -207,6 +210,28 @@ export default function CustomersPage() {
 
   const shown = sorted.slice(0, visible);
   const hasMore = sorted.length > shown.length;
+
+  /* j / k / Enter / o over the full-width table (the same pattern as /leads,
+     /quotes, /subscriptions, /enquiries). Disabled while a customer is open —
+     the table isn't rendered then, and the 360 panel has its own keys.
+     `count` is the visible length so the highlight re-clamps when a filter,
+     search, or "Show more" changes the list. onOpen mirrors a row click. */
+  const custKeys = useListKeys({
+    count: shown.length,
+    enabled: !selectedId,
+    onOpen: (i) => {
+      const c = shown[i];
+      if (c) setSelectedId(c.id);
+    },
+  });
+  const selectedRowRef = React.useRef<HTMLTableRowElement | null>(null);
+  React.useEffect(() => {
+    selectedRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [custKeys.index]);
+  /* Keyed by id, not index, so only the ONE desktop table below reacts — the
+     mobile card list and the split-view rail iterate the same `shown` and must
+     not light up. */
+  const kbSelectedId = custKeys.index >= 0 ? shown[custKeys.index]?.id ?? null : null;
   React.useEffect(() => { setVisible(60); }, [search, view]);
 
   // Toggle sort: same key flips direction; a new money key defaults to desc
@@ -575,15 +600,21 @@ export default function CustomersPage() {
                     return (
                       <tr
                         key={c.id}
+                        ref={c.id === kbSelectedId ? selectedRowRef : undefined}
                         onClick={() => setSelectedId(c.id)}
                         role="button"
                         tabIndex={0}
                         aria-label={`Open ${primaryName}`}
+                        /* aria-selected, not only a tint: a screen reader has to know which
+                           row Enter/o will open. */
+                        aria-selected={c.id === kbSelectedId}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedId(c.id); } }}
                         className={cn(
                           "group border-b border-hairline last:border-0 cursor-pointer transition-colors",
                           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset",
-                          receivable > 0 ? "hover:bg-rose-soft/20" : "hover:bg-paper-2/50",
+                          c.id === kbSelectedId
+                            ? "bg-amber-soft/60 ring-1 ring-inset ring-amber/40"
+                            : receivable > 0 ? "hover:bg-rose-soft/20" : "hover:bg-paper-2/50",
                         )}
                       >
                         <td className={cn("px-3 py-2.5", receivable > 0 && "border-l-2 border-l-rose")}>
@@ -747,6 +778,10 @@ export default function CustomersPage() {
         mode="invoice"
         prefillCustomerId={projInvoiceForCustomer ?? undefined}
       />
+
+      {/* Shown only once a key has actually been used — see the note on KeyHintBar. */}
+      <KeyHintBar visible={custKeys.index >= 0} onShowHelp={() => setHelpOpen(true)} />
+      <ShortcutsSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
 }
