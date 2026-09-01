@@ -1,0 +1,76 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+
+/**
+ * POST /api/catalog/sync-domains — pull the domain rate card from the DMS engine
+ * (app.anutech.in, GET /api/public/tld-pricing) into THIS tenant's catalogue.
+ *
+ * Sibling of sync-hosting. The tld-pricing feed already exists (it powers the
+ * marketing site's rate card), so there is no new engine work — this route
+ * fetches it and hands the rows to the atomic, owner-only sync_domain_catalog
+ * RPC. Each priced TLD becomes a one-time catalogue item.
+ *
+ * Live only once the DMS is deployed; until then the fetch fails and we return
+ * a clear 502, never a half-written catalogue.
+ */
+
+const DMS_BASE = (process.env.DOMAINS_APP_URL ?? "https://app.anutech.in").replace(/\/+$/, "");
+const TLD_PRICING_API = `${DMS_BASE}/api/public/tld-pricing`;
+
+interface TldRow {
+  tld: string;
+  register: number | null;
+  renew: number | null;
+  transfer: number | null;
+  currency: string;
+}
+
+export async function POST(_request: NextRequest) {
+  const supabase = createClient();
+
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData?.user) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
+  // 1. Fetch the rate card from the engine (its own default TLD set).
+  let tlds: TldRow[];
+  try {
+    const res = await fetch(TLD_PRICING_API, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: `Domain engine returned ${res.status}. Is app.anutech.in deployed?` },
+        { status: 502 },
+      );
+    }
+    const body = (await res.json()) as { tlds?: unknown };
+    if (!Array.isArray(body.tlds)) {
+      return NextResponse.json({ error: "Domain engine sent no pricing." }, { status: 502 });
+    }
+    tlds = body.tlds as TldRow[];
+  } catch {
+    return NextResponse.json(
+      { error: "Couldn't reach the domain engine (app.anutech.in). Try again once it's deployed." },
+      { status: 502 },
+    );
+  }
+
+  const priced = tlds.filter((t) => typeof t.register === "number" && (t.register ?? 0) > 0);
+  if (priced.length === 0) {
+    return NextResponse.json({ synced: 0, message: "The engine returned no priced TLDs." });
+  }
+
+  // 2. Hand them to the atomic, owner-only RPC.
+  const { data: count, error } = await supabase.rpc("sync_domain_catalog", {
+    p_tlds: priced as unknown as never,
+  });
+  if (error) {
+    const status = error.message.toLowerCase().includes("owner") ? 403 : 400;
+    return NextResponse.json({ error: error.message }, { status });
+  }
+
+  return NextResponse.json({ synced: count ?? 0 });
+}

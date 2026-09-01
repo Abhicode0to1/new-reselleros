@@ -308,4 +308,34 @@ export function useSyncHostingCatalog() {
   });
 }
 
+/**
+ * Pull the domain rate card from the DMS engine into this tenant's catalogue via
+ * POST /api/catalog/sync-domains → the owner-only, atomic sync_domain_catalog
+ * RPC. Each priced TLD becomes a one-time item. Same auto-sync rule as hosting;
+ * live once app.anutech.in is deployed.
+ */
+export function useSyncDomainCatalog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<number> => {
+      const res = await fetch("/api/catalog/sync-domains", { method: "POST" });
+      const body = (await res.json().catch(() => ({}))) as { synced?: number; error?: string };
+      if (!res.ok) throw new Error(body.error ?? "Domain sync failed");
+      return body.synced ?? 0;
+    },
+    onSuccess: (n) => {
+      qc.invalidateQueries({ queryKey: ["items"] });
+      toast.success(
+        n > 0
+          ? `${n} domain (TLD) catalogue me sync ho gaye`
+          : "Engine par abhi koi domain price nahi hai",
+      );
+    },
+    onError: (err) =>
+      toast.error((err as Error).message, {
+        description: "app.anutech.in deploy hone ke baad hi ye chalega. Tab tak catalogue waise hi rahega.",
+      }),
+  });
+}
+
 export { DEFAULT_CATALOG };

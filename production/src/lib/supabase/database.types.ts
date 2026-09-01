@@ -4265,6 +4265,17 @@ export type Database = {
         Returns: number;
       };
       /**
+       * Upserts the domain rate card (tld-pricing) from the DMS engine into this
+       * tenant's catalogue (items, vendor='domain', item_type='one_time', keyed
+       * by synced_from_partner_id = tld). Atomic, idempotent, owner-only; skips
+       * a TLD with no price. Returns how many were upserted. Migration
+       * 20260902090000.
+       */
+      sync_domain_catalog: {
+        Args: { p_tlds: Json };
+        Returns: number;
+      };
+      /**
        * Returns the Indian fiscal year label (e.g. 'FY2627') for a given date.
        * FY runs Apr 1 – Mar 31; date defaults to current_date.
        */
