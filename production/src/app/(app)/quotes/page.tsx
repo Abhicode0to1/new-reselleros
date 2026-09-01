@@ -39,6 +39,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { FAB } from "@/components/ui/fab";
+import { downloadCSV } from "@/lib/csv";
+import { QUOTES_CSV_HEADERS, quotesCsvRows } from "@/lib/export/crm-csv";
 import { rupee, daysBetween, cleanDisplayName, phoneSuffixOf } from "@/lib/utils";
 import { unifiedStatus, cashNote } from "@/lib/quotes/status-badge";
 import { awaitsMyApproval } from "@/lib/quotes/awaiting-approval";
@@ -640,6 +642,17 @@ export default function QuotesPage() {
                       onChange={(e) => setSearch(e.target.value)}
                     />
                   </div>
+                  {/* Data-portability (audit B7): jo list dikh rahi hai wahi utarti hai. */}
+                  <Button
+                    variant="outline"
+                    icon="download"
+                    onClick={() => {
+                      downloadCSV(`quotes-${new Date().toISOString().slice(0, 10)}.csv`, [...QUOTES_CSV_HEADERS], quotesCsvRows(quotes ?? []));
+                      toast.success(`Exported ${(quotes ?? []).length} quotes to CSV`);
+                    }}
+                  >
+                    <span className="hidden md:inline">Export</span>
+                  </Button>
                 </div>
               </div>
             </div>

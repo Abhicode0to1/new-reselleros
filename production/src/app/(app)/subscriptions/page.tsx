@@ -42,6 +42,8 @@ import { Card } from "@/components/ui/card";
 import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
+import { downloadCSV } from "@/lib/csv";
+import { SUBSCRIPTIONS_CSV_HEADERS, subscriptionsCsvRows } from "@/lib/export/crm-csv";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -516,6 +518,17 @@ export default function SubscriptionsPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            {/* Data-portability (audit B7). */}
+            <Button
+              variant="outline"
+              icon="download"
+              onClick={() => {
+                downloadCSV(`subscriptions-${new Date().toISOString().slice(0, 10)}.csv`, [...SUBSCRIPTIONS_CSV_HEADERS], subscriptionsCsvRows(subs ?? []));
+                toast.success(`Exported ${(subs ?? []).length} subscriptions to CSV`);
+              }}
+            >
+              <span className="hidden md:inline">Export</span>
+            </Button>
           </div>
         </div>
       )}

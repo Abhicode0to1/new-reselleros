@@ -19,6 +19,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
+import { renewalForecast } from "@/lib/renewals/forecast";
 import { toast } from "sonner";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { AiDraftButton } from "@/components/shared/ai-draft-button";
@@ -657,6 +658,11 @@ export default function RenewalsPage() {
     0,
   );
 
+  /* Forecast (audit B7): agle 6 mahine, mahina-war — "is quarter kitna aayega?"
+     ab list jodne se nahi, curve se dikhta hai. Flex alag (12x-sabak: forecast.ts). */
+  const forecast = renewalForecast(all, new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()));
+  const maxForecast = Math.max(1, ...forecast.months.map((m) => m.amount));
+
   const upcoming90   = enriched.filter((r) => r.daysUntil >= 0 && r.daysUntil <= 90);
   const highRiskSubs = upcoming90.filter((r) => renewalRisk(r.sub).level === "high");
   const highRiskArr  = highRiskSubs.reduce((s, r) => s + r.sub.mrr * 12, 0);
@@ -817,6 +823,30 @@ export default function RenewalsPage() {
                 <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">High Risk ARR</p>
                 <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{rupee(highRiskArr, { compact: true })} <span className="text-xs text-ink-3 font-normal">({highRiskSubs.length} subs)</span></p>
               </div>
+            </div>
+
+            {/* ── Renewal revenue forecast — agle 6 mahine (audit B7) ── */}
+            <div className="bg-paper-2/40 border border-hairline rounded-lg p-3">
+              <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Renewal forecast · next 6 months</p>
+                <p className="text-xs text-ink-3">Annual renewals {rupee(forecast.totalAmount, { compact: true })} ({forecast.totalCount}){forecast.flexCount > 0 ? <> · flex run-rate {rupee(forecast.flexMonthlyRunRate, { compact: true })}/mo ({forecast.flexCount}) — jod me nahi</> : null}</p>
+              </div>
+              <div className="mt-2 grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {forecast.months.map((m) => (
+                  <div key={m.key} className="text-center">
+                    <div className="h-16 flex items-end justify-center">
+                      <div
+                        className="w-7 rounded-t bg-amber/80"
+                        style={{ height: `${Math.round((m.amount / maxForecast) * 100)}%`, minHeight: m.amount > 0 ? 4 : 0 }}
+                        title={`${m.label}: ${rupee(m.amount)} (${m.count})`}
+                      />
+                    </div>
+                    <p className="mt-1 text-3xs text-ink-3">{m.label.slice(0, 3)}</p>
+                    <p className="text-2xs tabular-nums text-ink-2">{m.amount > 0 ? rupee(m.amount, { compact: true }) : "—"}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1.5 text-3xs text-ink-3">Andaza: renewal-mahine me mrr×12 (ex-GST) — churn/expansion nahi ginta.</p>
             </div>
 
             {/* Gemini AI next-best-actions */}

@@ -91,6 +91,8 @@ import { leadDisplayName, leadContactLines, leadCompanyCell } from "@/lib/leads/
 import { SALES_FOLDERS, inSalesFolder, salesFolderCounts, type SalesFolder } from "@/lib/leads/folders";
 import { SwipeLeadCard } from "@/components/features/leads/swipe-lead-card";
 import { ImportCsvDialog } from "@/components/features/leads/import-csv-dialog";
+import { downloadCSV } from "@/lib/csv";
+import { LEADS_CSV_HEADERS, leadsCsvRows } from "@/lib/export/crm-csv";
 import { ShareFormSheet, ENQUIRY_SHARE } from "@/components/features/leads/share-form-sheet";
 import StartTrialDialog from "@/components/features/leads/start-trial-dialog";
 import CampaignComposerDialog from "@/components/features/campaigns/campaign-composer-dialog";
@@ -997,6 +999,10 @@ function LeadsPageInner() {
                   </DropdownMenuItem>
                   <DropdownMenuItem className="gap-2 cursor-pointer" onSelect={() => setCsvImportOpen(true)}>
                     <Icon name="download" size={14} className="text-ink-3" /> Import CSV
+                  </DropdownMenuItem>
+                  {/* Data-portability (audit B7): saari leads, jaisi darj hain. */}
+                  <DropdownMenuItem className="gap-2 cursor-pointer" onSelect={() => { downloadCSV(`leads-${new Date().toISOString().slice(0, 10)}.csv`, [...LEADS_CSV_HEADERS], leadsCsvRows(leads ?? [])); toast.success(`Exported ${(leads ?? []).length} leads to CSV`); }}>
+                    <Icon name="upload" size={14} className="text-ink-3" /> Export CSV
                   </DropdownMenuItem>
                   <DropdownMenuItem className="gap-2 cursor-pointer" onSelect={() => setCampaignOpen(true)}>
                     <Icon name="send" size={14} className="text-ink-3" /> Send campaign
