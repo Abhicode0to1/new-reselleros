@@ -4,10 +4,16 @@ import { DomainRateCard } from "@/components/domains/DomainRateCard";
 import { SectionHead, Reveal } from "@/components/ui/bits";
 import { DOMAIN_FEATURES } from "@/lib/data/copy";
 import { OfferBand } from "@/components/offers/OfferBand";
+import { fetchLiveTldPricing, mergeTlds } from "@/lib/live-tld-pricing";
+import { TLDS } from "@/lib/data/catalog";
 
 export const metadata: Metadata = { title: "Domain registration & transfer" };
 
-export default function DomainsPage() {
+/* Live rate card se: platform ka daam 10 min me refresh, page static-ish rehta. */
+export const revalidate = 600;
+
+export default async function DomainsPage() {
+  const tlds = mergeTlds(await fetchLiveTldPricing(TLDS.map((t) => t.tld)));
   return (
     <>
       <section className="section rise">
@@ -35,7 +41,7 @@ export default function DomainsPage() {
             title="The rate card, in the open"
             body="Filter by what the name is for. Add puts a first-year registration in the cart."
           />
-          <DomainRateCard />
+          <DomainRateCard tlds={tlds} />
         </div>
       </section>
 

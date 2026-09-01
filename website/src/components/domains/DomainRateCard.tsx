@@ -13,7 +13,14 @@ import { effectiveReg } from "@/lib/offers";
 
 const GROUPS = ["Popular", "Business", "Tech"] as const;
 
-export function DomainRateCard() {
+type RateTld = Tld & { live?: boolean };
+
+/**
+ * `tlds` is passed by the (server) page after merging the platform's live
+ * rate card over the placeholder (merge Phase-1). Falls back to the
+ * placeholder TLDS when nothing is passed (e.g. a story/test render).
+ */
+export function DomainRateCard({ tlds = TLDS }: { tlds?: readonly RateTld[] }) {
   const [group, setGroup] = useState<(typeof GROUPS)[number]>("Popular");
   const cart = useCart();
 
@@ -47,7 +54,7 @@ export function DomainRateCard() {
             </tr>
           </thead>
           <tbody>
-            {TLDS.filter((t) => t.group === group).map((t) => (
+            {tlds.filter((t) => t.group === group).map((t) => (
               <tr key={t.tld}>
                 <td className="mono" style={{ color: "var(--primary)", fontWeight: 500 }}>{t.tld}</td>
                 <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>

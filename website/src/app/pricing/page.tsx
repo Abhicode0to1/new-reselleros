@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { SectionHead } from "@/components/ui/bits";
 import { RateTable } from "@/components/ui/RateTable";
 import { TLDS, HOSTING_PLANS } from "@/lib/data/catalog";
+import { fetchLiveTldPricing, mergeTlds } from "@/lib/live-tld-pricing";
 import { rupee } from "@/lib/money";
 import { effectiveReg } from "@/lib/offers";
 
@@ -12,7 +13,9 @@ export const metadata: Metadata = { title: "Every price" };
 export const revalidate = 3600;
 
 /** Four stacked tables, identical dark-header treatment — "every rate on one page". */
-export default function PricingPage() {
+export default async function PricingPage() {
+  // Live rate card overlay (merge Phase-1) — placeholder rehta jab platform down.
+  const tldRows = mergeTlds(await fetchLiveTldPricing(TLDS.map((t) => t.tld)));
   return (
     <section className="section rise">
       <div className="wrap" style={{ display: "flex", flexDirection: "column", gap: 44 }}>
@@ -28,7 +31,7 @@ export default function PricingPage() {
           <SectionHead title="Domains" />
           <RateTable
             head={["EXTENSION", "REGISTER", "RENEW", "TRANSFER"]}
-            rows={TLDS.slice(0, 8).map((t) => {
+            rows={tldRows.slice(0, 8).map((t) => {
               const p = effectiveReg(t.tld, t.reg);
               return [
                 <span key="a" className="mono" style={{ color: "var(--primary)" }}>{t.tld}</span>,
