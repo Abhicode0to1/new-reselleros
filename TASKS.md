@@ -2649,3 +2649,13 @@ All money movement via atomic SECURITY DEFINER RPCs (§17b) and verified in **ro
 - [ ] All remaining P2 items from MONEY-FLOW-TEST-MATRIX.md Section 4
 
 ## Done
+
+## MERGE (DMS → ResellerOS, ek app) — direction confirmed 1 Sep
+Pardeep: sab DMS features ResellerOS me; ResellerOS = ek ghar; engine integrate (rewrite nahi). Zoho→ResellerOS billing.
+- [x] **Brick #1: Hosting catalogue me** ✅ 1 Sep — DMS `/api/public/hosting-plans` (Anutech-Digital main c4072d5) + `sync_hosting_catalog` RPC (20260901170000, mutation-tested) + `/api/catalog/sync-hosting` + owner-only "Sync hosting" button (/items). Auto-sync (engine price = catalogue price); browser-verified (button + 401/502 graceful). LIVE after DMS deploy.
+- [ ] Brick #2: Domains bhi catalogue me (hosting jaise sync)
+- [ ] Brick #3: Domain/hosting ka native quote→pay→invoice (ResellerOS billing, Zoho hatega)
+- [ ] Brick #4: Bechne par provision trigger (DirectAdmin/ResellerClub)
+- [ ] Brick #5: Customer-facing site + SSL port; DMS retire
+- [ ] ⚠️ Pardeep decisions: (a) fractional→whole rupee rounding (₹49.99→₹50) theek hai? (b) hosting HSN 998315 CA se confirm
+- [ ] ⚠️ BLOCKER (Pardeep): DMS deploy (app.anutech.in) — tabhi hosting/domain sync + website live jagega
