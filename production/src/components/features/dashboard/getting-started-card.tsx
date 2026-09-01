@@ -46,10 +46,17 @@ interface Step {
 }
 
 export function GettingStartedCard({
-  setupDone, hasCustomer, hasQuote, hasSale, workspaceName, gstin,
+  setupDone, hasCustomer, hasCatalog, hasQuote, hasSale, workspaceName, gstin,
 }: {
   setupDone:    boolean;
   hasCustomer:  boolean;
+  /**
+   * Kya catalogue me ek bhi item hai? 1 Sep 2026 ke audit ka B2: naya tenant
+   * "Create your first quote" par pahunchta tha aur quote-builder KHALI milta
+   * tha — default-catalog ka button sirf /items ke empty-state me chhupa tha.
+   * Ab wo kadam guided raaste ka hissa hai.
+   */
+  hasCatalog:   boolean;
   hasQuote:     boolean;
   hasSale:      boolean;
   workspaceName: string;
@@ -62,6 +69,7 @@ export function GettingStartedCard({
     { id: "org",      label: "Add your organisation",              hint: "Legal name, address and state — these print on every document.", href: "/setup",     cta: "Set up",       done: setupDone },
     { id: "gst",      label: "Add your GSTIN",                     hint: "Without it an invoice cannot be a valid tax invoice.",           href: "/setup",     cta: "Add GSTIN",    done: gstDone },
     { id: "customer", label: "Add your first customer",            hint: "Or import from CSV — takes a minute.",                           href: "/customers", cta: "Add customer", done: hasCustomer },
+    { id: "catalog",  label: "Load your price list",               hint: "One click seeds 7 products + 8 add-ons — edit rates anytime.",   href: "/items",     cta: "Load catalog", done: hasCatalog },
     { id: "quote",    label: "Create your first quote",            hint: "Pick from your catalog, send on WhatsApp/email.",                href: "/quotes/new", cta: "New quote",   done: hasQuote },
     { id: "sale",     label: "Record your first payment",          hint: "When a customer pays, the sale + invoice happen here.",          href: "/quotes",    cta: "View quotes",  done: hasSale },
   ];

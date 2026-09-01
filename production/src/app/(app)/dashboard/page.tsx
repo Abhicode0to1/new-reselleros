@@ -23,6 +23,7 @@ import { useQuotes } from "@/lib/queries/quotes";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useProjectReceivablesByCustomer } from "@/lib/queries/projects";
 import { useTasks } from "@/lib/queries/tasks";
+import { useItems } from "@/lib/queries/items";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
@@ -98,6 +99,9 @@ export default function DashboardPage() {
   const { data: tasksToday }    = useTasks("today");
   const { data: tasksOverdue }  = useTasks("overdue");
   const { data: currentUser }   = useCurrentUser();
+  /* Getting-started ke "Load your price list" kadam ke liye — khali catalogue
+     naye tenant ka pehla deadend tha (audit B2). */
+  const { data: catalogItems }  = useItems();
 
   // Draggable-card order per column (persisted). Starts at the default order;
   // snaps to the saved order after mount (avoids hydration mismatch).
@@ -582,6 +586,7 @@ export default function DashboardPage() {
       <GettingStartedCard
         setupDone={Boolean(currentUser?.tenantSetupCompletedAt)}
         hasCustomer={(customers?.length ?? 0) > 0}
+        hasCatalog={(catalogItems?.length ?? 0) > 0}
         hasQuote={(quotes?.length ?? 0) > 0}
         hasSale={(subscriptions?.length ?? 0) > 0}
         workspaceName={currentUser?.tenantName ?? ""}

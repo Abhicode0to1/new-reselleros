@@ -49,4 +49,4 @@ gcloud run services update-traffic resellersos --region=asia-south1 --to-latest
 
 | Tareekh | Kisne | Nateeja |
 |---|---|---|
-| — | — | Abhi tak rehearse NAHI hua. Pehli baar karne par yahan likho. |
+| 1 Sep 2026 | Claude (audit B6) | ✅ 00460→00458→latest, dono taraf /api/version zinda; poora chakkar ~1 min. Bonus: usi din ek kharab startup-probe wali revision (00459) READY hi nahi bani aur traffic purani par tika raha — health-gate ka live saboot. |

@@ -17,22 +17,22 @@
 
 - [x] **A1. Invite-takeover band** ✅ 1 Sep — migration `20260901090000` (token) prod par lagi+tracked (0 pending invites the); password-signup ab token+email dono par join karta hai, bina token pending-invite par 409 (account banta hi nahi); invite-email me personal `?invite=` link; Google raasta jaisa tha (mailbox-proof wahi). Pin-test `invite-token.test.ts` (4).
 - [x] **A2. Project-quote accept par token** ✅ 1 Sep — migration `20260901080000` prod par lagi+tracked; route/page dono `quoteTokenMatches` se; teeno link-builder `?t=` ke saath; pin-test `project-quote-token.test.ts` (3) — `api/public/project-quote/[id]/accept` bina kisi token/session ke chalta hai; baaki sab quote-routes `?t=` maangte hain.
-- [ ] **A3. Rate-limiting `/api/public/*`** — poore app me 0 limiter; Gemini/Resend anonymous jalte hain. + expense-claim PIN par lockout (4-digit brute-force khula hai).
+- [x] **A3. Rate-limiting** ✅ 1 Sep — `lib/security/rate-limit.ts` (fixed-window, per-instance — Cloud Armor ka badla nahi, kharche ka dhakkan; file me likha hai): middleware me sab `/api/public/*` + signup (AI chat 30/5min, likhne-wale 10/10min, PIN 15/15min, GET 120/5min per IP) + PIN par PER-EMPLOYEE 10/ghanta. 10 test (ginti+wiring). Live 429 deploy ke baad naapna hai.
 - [x] **A4. `users` DELETE owner-only + audit** ✅ 1 Sep — migration `20260901100000` prod par: DELETE sirf owner (aur kabhi apni row nahi), `current_user_is_owner()` helper, `log_row_change` trigger users par. SQL test `users_delete_owner_only` LIVE green (dono disha + audit-row). Service-role raasta abhi bhi unaudited — wo C-item me darj hai.
 - [ ] **A5. Overpayment-credit atomic karo** — `record-payment-dialog.tsx:446` RPC ke baad client-side credit insert; fail par rupaye gum. RPC ke andar lo. (Bada bhai: `refund_payment` RPC — alag item A5b.)
 - [ ] **A5b. `refund_payment` RPC** — GST-invoice ke baad paisa wapas karne ka koi raasta nahi; `useRefundPayment` (0 callers) ledger-corrupt karne wala stub hai — ya poora banao ya hatao.
-- [ ] **A6. SQL tests CI me (nightly) + money-check push par** — 43 SQL test kisi CI me nahi; money-check.yml sirf PR par hai aur aakhri PR 15 Aug ka hai (0 runs ever). Live DB se 3 guard pehle gum ho chuke hain.
+- [x] **A6. CI wiring (aadha)** ✅ 1 Sep — money-check ab PUSH par bhi (deploy/session/main; pehle 0 runs ever) aur pehli baar git me TRACKED; suite-health tripwire CI ke e2e me (dark 54 e2e ab har run me dikhte hain). ⏳ Baki aadha: SQL tests CI me — DB creds GitHub-secrets me rakhne ka faisla Pardeep ka (repo khud ise "decision, not cleanup" kehta hai) — 👉 list me joda.
 - [x] **A7. Sentry + uptime monitor** ✅ 1 Sep — NAAPA: dono DSN Cloud Run par pehle se SET the (docs jhooth bol rahe the; health-signals.ts ka comment sudhara). Naya: Cloud Monitoring uptime-check `/api/version` (5 min) + email-alert Pardeep ko + `docs/DEPLOY-ROLLBACK.md` runbook. Sentry ki delivery dashboard se hi verify hogi (reasoned-only).
 - [ ] **A8. Ek restore-rehearsal + runbook** — backup 3 layer, 0 restore kabhi; auth-users/storage kisi backup me nahi. Staging project par rehearse karo, samay likho.
 
 ## 🟠 AUDIT-P1 — world-class banane wale
 
 - [x] **B1. Reports page ke PAANCH fabrications khatam** ✅ 1 Sep — audit ne 1 dhoondha tha, andar 5 the: funnel, 12-mahine MRR trend, 17% margin (KPI+per-customer), ID-se-bana "renewal risk", jhoothe trend-badge, +Math.max(lowRisk,1) ka floor. Ab: pipeline leads ki asli stage-ginti, MRR history mrr_snapshots se (1 asli bindu + note), risk sirf seat-utilisation, seats-by-vendor asli; guard `reports-honesty.test.ts` (5). Browser-verified: MRR ₹3,77,370 DB se hu-ba-hu.
-- [ ] **B2. Default catalog setup-wizard me** — naye tenant ko khali quote-builder milta hai; "Load default catalog" sirf /items ke empty-state me chhupa hai.
+- [x] **B2. Default catalog guided raaste me** ✅ 1 Sep — setup-wizard ke Import step me "Load default catalog" card (loaded ho to green tick), aur getting-started checklist me naya kadam "Load your price list" (asli items-count se ticked; ab 6 kadam). Tests updated (10 green).
 - [ ] **B3. §24 enforcement (error = kya+kyun+aage kya)** — 479 `toast.error` me 6 action-button (1.3%); lint/hook ke bina ye kabhi nahi sudhrega.
 - [ ] **B4. In-app notifications** — table + realtime + per-user read (abhi localStorage); payment/quote-accept/overdue/ticket ka in-app nishaan zero.
 - [ ] **B5. Mobile card-view: 4 customer-facing pages pehle** — quote-accept (WhatsApp se phone par khulta hai), portal invoices/orders, project-quote. (Kul 21 bare tables.)
-- [ ] **B6. Deploy hardening** — startup probe (0 HEALTHCHECK), 2-line rollback runbook + ek rehearsal, `migrations:verify` deploy-gate.
+- [x] **B6. Deploy hardening** ✅ 1 Sep — startup-probe `/api/version` LIVE (aur usi din saboot: kharab-probe wali revision ready nahi bani, traffic purani par tika); rollback runbook `docs/DEPLOY-ROLLBACK.md` + ASLI rehearsal (00460→00458→latest, ~1 min, dono taraf zinda). ⏳ migrations-verify deploy-gate: Cloud Build ko DB creds chahiye — wahi Pardeep-faisla jo A6 ka hai.
 - [ ] **B7. CRM data-export + renewals forecast + GSTR-1 format** — customers/quotes/invoices ka CSV export nahi; forecast curve nahi.
 - [ ] **B8. Hindi i18n (bada, ~2-3 hafte)** — 0% bana hai; teen docs jhooth bolte hain. Pehle extraction (en.json), phir hi.json. Alag session ka kaam.
 
@@ -51,7 +51,7 @@
 
 ## 👉 sirf Pardeep (audit se)
 
-- [ ] Sentry account/DSN (agar kahin maujood nahi)
+- [ ] GitHub-secrets me DB creds (SQL-tests-in-CI + Cloud Build migration-gate dono isi par atke hain) — repo ka apna note: "decision, not a cleanup"
 - [ ] Razorpay LIVE keys + Resend domain verify (purane, ab bhi khade)
 
 # 🟢 HANDOFF — 25 Aug 2026 (शाम). Satrah feature, ek bhi migration nahi, aur chaar cheezein jo LIVE tooti hui hain.

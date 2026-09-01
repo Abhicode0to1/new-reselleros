@@ -13,6 +13,7 @@ const VALID_GSTIN = "07ABDCA0298H1ZP";
 const props = {
   setupDone: false,
   hasCustomer: false,
+  hasCatalog: false,
   hasQuote: false,
   hasSale: false,
   workspaceName: "ANUTECH DIGITAL PVT LTD",
@@ -67,6 +68,7 @@ describe("the checklist as a whole", () => {
       "Add your organisation",
       "Add your GSTIN",
       "Add your first customer",
+      "Load your price list",
       "Create your first quote",
       "Record your first payment",
     ]) {
@@ -80,7 +82,7 @@ describe("the checklist as a whole", () => {
     const { container } = render(
       <GettingStartedCard
         {...props}
-        setupDone hasCustomer hasQuote hasSale gstin={VALID_GSTIN}
+        setupDone hasCustomer hasCatalog hasQuote hasSale gstin={VALID_GSTIN}
       />,
     );
     expect(container.innerHTML).toBe("");
@@ -90,7 +92,7 @@ describe("the checklist as a whole", () => {
     /* The whole point of the split: a workspace that has done everything else but has no
        GSTIN must keep seeing the card. Before, it would have disappeared. */
     const { container } = render(
-      <GettingStartedCard {...props} setupDone hasCustomer hasQuote hasSale gstin={null} />,
+      <GettingStartedCard {...props} setupDone hasCustomer hasCatalog hasQuote hasSale gstin={null} />,
     );
     expect(container.innerHTML).not.toBe("");
     expect(isTicked("Add your GSTIN")).toBe(false);
@@ -98,7 +100,7 @@ describe("the checklist as a whole", () => {
 
   it("counts progress out of the real number of steps", () => {
     render(<GettingStartedCard {...props} setupDone gstin={VALID_GSTIN} />);
-    expect(screen.getByText(/2 of 5 done/)).toBeDefined();
+    expect(screen.getByText(/2 of 6 done/)).toBeDefined();
   });
 
   it("gives every unfinished step somewhere to go", () => {
@@ -106,7 +108,7 @@ describe("the checklist as a whole", () => {
        way to fix it is the shape that rule exists to forbid. */
     render(<GettingStartedCard {...props} />);
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(6);
     for (const a of links) expect(a.getAttribute("href")).toMatch(/^\//);
   });
 });

@@ -1,0 +1,127 @@
+# Money-path check
+#
+# Fires when a pull request touches code that decides what a customer is charged.
+# It cannot tell you whether a number is RIGHT — only someone who knows the business can
+# do that. What it can do is refuse to let a money change through without the two things
+# that make checking possible: a test carrying the exact figure, and a before/after in
+# the description.
+#
+# ─── WHY THIS EXISTS ────────────────────────────────────────────────────────
+# In one working session (14-15 Aug 2026) this repo turned up:
+#   • add-seats deriving vendor cost as `sellPrice x 0.83` — a hardcoded 17% margin
+#     standing in for a real price. On Google Workspace Business Starter the real cost is
+#     Rs 110/seat/month; the guess said Rs 224. Double.
+#   • FOUR products whose pre-filled default price sat BELOW the vendor's own cost. M365
+#     Business Standard suggested Rs 7,920/seat/year against a Rs 9,840 cost — a
+#     guaranteed Rs 1,920 loss per seat per year, offered by the app before a sale.
+#   • CLAUDE.md and utils.ts both stating money is stored in PAISE. It is stored in whole
+#     RUPEES. Acting on that doc puts a x100 into money code.
+# None of these were caught by reading the code. All were caught by writing the rupee
+# figures down and comparing them to reality.
+#
+# ─── THE ESCAPE HATCH ───────────────────────────────────────────────────────
+# A comment-only or rename-only edit to a money file is not a money change. Put
+#     money-check: no-behaviour-change - <your reason>
+# in the PR description and this passes. Deliberately not silent: the reason stays in the
+# PR forever, so an override is a decision on the record rather than a workaround nobody
+# sees.
+name: Money check
+
+# ⚠️ 1 Sep 2026 tak ye workflow KABHI nahi chala tha: trigger sirf pull_request
+# tha, aur is repo me kul 2 PR hain — dono is file ke BANNE se pehle merge ho
+# chuke the. Ship ka asli raasta `git push anutech HEAD:deploy` hai, isliye ab
+# push par bhi chalta hai — wahi raasta jo asli me istemal hota hai.
+on:
+  push:
+    branches: [main, deploy, "session/**"]
+    paths:
+      - "production/src/lib/subscriptions/**"
+      - "production/src/lib/pricing/**"
+      - "production/src/lib/gst/**"
+      - "production/src/lib/quotes/**"
+      - "production/src/lib/payments/**"
+      - "production/src/lib/utils.ts"
+      - "production/src/app/api/subscriptions/**"
+      - "production/supabase/migrations/**"
+  pull_request:
+    paths:
+      # Everything here decides a rupee figure that reaches a customer.
+      - "production/src/lib/subscriptions/**"
+      - "production/src/lib/pricing/**"
+      - "production/src/lib/gst/**"
+      - "production/src/lib/quotes/**"
+      - "production/src/lib/payments/**"
+      - "production/src/lib/utils.ts"
+      - "production/src/app/api/subscriptions/**"
+      - "production/supabase/migrations/**"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  money-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a test and a before/after
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "Files changed in this PR:"
+          echo "$CHANGED" | sed 's/^/  /'
+          echo
+
+          # Checked first, so an explicit override reads clearly at the top of the log.
+          if printf '%s' "$PR_BODY" | grep -qiE 'money-check:[[:space:]]*no-behaviour-change'; then
+            echo "::notice::Override found in the PR description - money-check skipped."
+            printf '%s' "$PR_BODY" | grep -iE 'money-check:[[:space:]]*no-behaviour-change.*' | head -1
+            exit 0
+          fi
+
+          FAIL=0
+
+          # 1. A money change needs a test change. Not a specific test - just evidence
+          #    that somebody wrote down what the new behaviour is.
+          if echo "$CHANGED" | grep -qE '\.test\.(ts|tsx)$|supabase/tests/.*\.sql$'; then
+            echo "PASS - a test file changed"
+          else
+            echo "FAIL - no test file changed"
+            echo "  Money code changed but no test did. Every money bug found in this repo was"
+            echo "  found by putting the rupee figure into a test and comparing it to reality."
+            echo "  See production/src/lib/subscriptions/margin.test.ts for the shape."
+            FAIL=1
+          fi
+
+          # 2. The description needs actual figures - enough to show the author computed
+          #    the change rather than assuming it.
+          if printf '%s' "$PR_BODY" | grep -qE '₹|Rs\.?[[:space:]]*[0-9]|before[[:space:]]*/?[[:space:]]*after|before:.*after:'; then
+            echo "PASS - the description carries figures or a before/after"
+          else
+            echo "FAIL - the description has no before/after and no rupee figures"
+            echo "  Say what a customer was charged before this change and what they are"
+            echo "  charged after. If nothing changes, say that and why - a x0.83 that nobody"
+            echo "  questioned sat in this codebase for months."
+            FAIL=1
+          fi
+
+          echo
+          if [ "$FAIL" -ne 0 ]; then
+            echo "This check is not asking whether your number is RIGHT - it cannot know."
+            echo "It asks for the two things that let a human check: a test with the figure"
+            echo "in it, and a before/after in the description."
+            echo
+            echo "Genuinely not a behaviour change? Add this line to the PR description:"
+            echo "    money-check: no-behaviour-change - <reason>"
+            exit 1
+          fi
+
+          echo "Money check passed. A human still needs to confirm the figure is correct."

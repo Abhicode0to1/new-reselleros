@@ -116,7 +116,15 @@ jobs:
           # live ALIAS for the same service and is what the Cloud Scheduler jobs call — do
           # not "fix" those to match this one.
           PLAYWRIGHT_BASE_URL: ${{ vars.PLAYWRIGHT_BASE_URL || 'https://resellersos-njvk4nxhdq-el.a.run.app' }}
-        run: npx playwright test smoke.spec.ts money-spine.spec.ts --project=chromium
+        # suite-health.spec.ts is the tripwire the repo built for "70 auth-gated
+        # tests silently skip and the run still reads green" — and then left out
+        # of this very list, so it never fired (audit A6, 1 Sep 2026). It is IN
+        # now: while .env.test / CI secrets don't exist it goes red inside this
+        # already-non-blocking job, which makes the dark half of the e2e suite
+        # visible in every run instead of invisible in all of them. Seeding the
+        # fixtures (a Supabase branch + two test users) turns it green — that
+        # decision needs DB credentials as repo secrets, which is Pardeep's call.
+        run: npx playwright test smoke.spec.ts money-spine.spec.ts suite-health.spec.ts --project=chromium
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4

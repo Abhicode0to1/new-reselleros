@@ -28,6 +28,7 @@ import { useUpdateTenant } from "@/lib/queries/tenant";
 import { GST_STATE_BY_CODE, gstStateFromGstin, isValidGstin, validateGstin } from "@/lib/utils";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 import { ImportCustomersDialog } from "@/components/features/customers/import-customers-dialog";
+import { useItems, useLoadDefaultCatalog } from "@/lib/queries/items";
 
 // ─── Step config ──────────────────────────────────────────────────────────────
 
@@ -341,6 +342,14 @@ function StepImport({
   update: (k: keyof WizardData, v: string | boolean) => void;
 }) {
   const [importOpen, setImportOpen] = React.useState(false);
+  /* Catalogue isi kadam me — 1 Sep 2026 ke audit ka B2: naya tenant wizard
+     poora karke bhi KHALI quote-builder par pahunchta tha, kyunki default-
+     catalog ka button sirf /items ke empty-state me chhupa tha. Quote banane
+     ke liye customer AUR daam dono chahiye; ye "data laao" wala step hai,
+     to dono yahin. */
+  const { data: catalogItems } = useItems();
+  const loadCatalog = useLoadDefaultCatalog();
+  const catalogCount = catalogItems?.length ?? 0;
 
   return (
     <div className="space-y-4">
@@ -410,6 +419,35 @@ function StepImport({
           </Button>
         </div>
       )}
+
+      {/* ── Price list — quote iske bina ban hi nahi sakta ─────────────── */}
+      <div className="rounded-xl border border-hairline bg-paper p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-ink">Your price list</p>
+            <p className="mt-0.5 text-xs text-ink-3">
+              {catalogCount > 0
+                ? `${catalogCount} item${catalogCount === 1 ? "" : "s"} in your catalog — quotes are ready to build.`
+                : "Quotes need a catalog. Load the standard one (Google Workspace, M365, Zoho — 7 products + 8 add-ons) and edit rates anytime."}
+            </p>
+          </div>
+          {catalogCount > 0 ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-soft px-3 py-1 text-xs font-semibold text-emerald">
+              <Icon name="check" size={12} /> Loaded
+            </span>
+          ) : (
+            <Button
+              variant="primary"
+              size="sm"
+              loading={loadCatalog.isPending}
+              onClick={() => loadCatalog.mutate()}
+            >
+              <Icon name="download" size={13} />
+              Load default catalog
+            </Button>
+          )}
+        </div>
+      </div>
 
       <ImportCustomersDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>

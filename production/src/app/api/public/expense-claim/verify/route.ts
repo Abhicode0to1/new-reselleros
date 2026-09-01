@@ -9,6 +9,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyClaimToken } from "@/lib/claim-token";
+import { rateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "This link is invalid or expired. Ask the office for a fresh link." }, { status: 403 });
   }
   if (!employeeId || !pin) return NextResponse.json({ error: "Pick your name and enter your PIN" }, { status: 400 });
+
+  /* PIN 4–6 ank ka hai aur DB me iska koi attempt-counter nahi (audit A3) —
+     IP-wali seema middleware me hai, par PIN par PER-EMPLOYEE tala bhi
+     chahiye warna dheere-dheere (ya kai IP se) 10,000 me se sahi mil hi
+     jata. 10 galat/ghanta kaafi udaar hai asli ungli-phisalne ke liye. */
+  const pinGate = rateLimit(`claim-pin:${tid}:${employeeId}`, { limit: 10, windowMs: 60 * 60_000 });
+  if (!pinGate.ok) {
+    return NextResponse.json(
+      { error: "Bahut galat koshishen — ek ghante baad dobara, ya office se PIN reset karwaiye." },
+      { status: 429, headers: { "Retry-After": String(pinGate.retryAfterSec) } },
+    );
+  }
 
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("verify_claim_access", {

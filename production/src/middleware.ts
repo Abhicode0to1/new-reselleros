@@ -10,6 +10,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { allowedRoutesForRole, ROLE_HOME, type UserRole } from "@/lib/nav";
+import { rateLimit, clientIp, publicApiLimit } from "@/lib/security/rate-limit";
 
 // Routes that require authentication (the entire app shell).
 // Keep this in sync with APP_NAV in src/lib/nav.ts — any new section's
@@ -103,6 +104,26 @@ export async function middleware(request: NextRequest) {
   if (pathname === "/dev" || pathname.startsWith("/dev/")) {
     if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEV_PAGES !== "1") {
       return new NextResponse(null, { status: 404 });
+    }
+  }
+
+  /* ─── Rate limit: unauthenticated public surface (audit A3, 1 Sep 2026) ────
+     Auth se PEHLE, kyunki ye routes bina session ke hi chalte hain — aur inme
+     paid Gemini (agent/chat), email + auto-quote (enquiry), aur PIN-jaanch
+     (expense-claim) baithe hain. Seemayein aur unke kyun: lib/security/
+     rate-limit.ts. Per-instance hai — Cloud Armor ka badla nahi, kharche ka
+     dhakkan hai. */
+  const rl = publicApiLimit(pathname);
+  if (rl) {
+    const verdict = rateLimit(`pub:${pathname.split("/").slice(0, 4).join("/")}:${clientIp(request.headers)}`, rl);
+    if (!verdict.ok) {
+      return NextResponse.json(
+        {
+          error: "Bahut tez — thodi der ruk kar dobara koshish kariye.",
+          retryAfterSec: verdict.retryAfterSec,
+        },
+        { status: 429, headers: { "Retry-After": String(verdict.retryAfterSec) } },
+      );
     }
   }
 
