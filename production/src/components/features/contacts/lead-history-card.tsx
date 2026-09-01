@@ -48,7 +48,7 @@ export function LeadHistoryCard({
           <Icon name="target" size={15} className="text-ink-3" />
           Leads <span className="text-ink-3 font-normal">({visible.length})</span>
         </h2>
-        <Link href="/leads" className="text-xs text-ink-3 underline hover:text-ink">
+        <Link href={"/leads" as never} className="text-xs text-ink-3 underline hover:text-ink">
           Sab leads
         </Link>
       </div>
