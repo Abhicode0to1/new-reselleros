@@ -50,8 +50,23 @@
 - [ ] C9. Bundle budget + analyzer; plausible ya hatao daava
 - [ ] C10. Zod 27 baki JSON-parse routes par (pehle unauthenticated wale)
 
+## 🧭 MERGE (website+DMS+ResellerOS) — naksha: https://claude.ai/code/artifact/1f80ef89-2cd6-42a4-89ed-090014f31b6f
+
+Chaaron faisle Pardeep ne mujhe saunpe (1 Sep shaam) — liye gaye:
+- [x] **F1. DMS repo PRIVATE** — faisla haan; ⚠️ mera GitHub-account us org me admin nahi (404) → **Pardeep ka 1 click** (neeche 👉 me).
+- [x] **F2. Domain-batwara** — www.anutech.in = chehra (website), app.anutech.in = dukaan (DMS), root→www. (DNS Phase 1 me.)
+- [x] **F3. Homepage website ka** — DMS ke dono marketing-variants + admin-toggle Phase 1 me 301/retire.
+- [x] **F4. ₹1 offer website se UTAR gaya** ✅ — engine+tests fixture par salamat; wapas = DMS promo-engine (Phase 3) ke baad ek line. Live map ka khaali rehna ab TEST se pinned.
+
+Aage (kram se):
+- [ ] **M0. DMS Phase-0 suraksha**: IDOR (booking-status ownership), Razorpay-secrets plaintext→encrypt+ROTATE, backup-export me settings redact, XFF last-entry, doosra webhook harden. (DMS repo par kaam — deploy unka pipeline.)
+- [ ] **M1. Jod**: DMS me 2 public read-API (tld-pricing, availability) → website ka nakli search/daam asli; Buy→app.anutech.in cart handoff; website Cloud Run par www; DMS marketing 301.
+- [ ] **M2. Ek ghar**: website → DMS (marketing) route-group; SEO greenfield; ek cart; cross-repo test-path theek.
+- [ ] **M3. Promo-engine DMS me** (₹1 wapas) + inner reskin + webhook-consolidation.
+
 ## 👉 sirf Pardeep (audit se)
 
+- [ ] **DMS repo → PRIVATE karna (F1)**: github.com/exceltechnologies-india/domain-management-system → Settings → neeche “Danger Zone” → “Change visibility” → Private. (IDOR+secrets chhape hain — sabse pehla click.)
 - [ ] GitHub-secrets me DB creds (SQL-tests-in-CI + Cloud Build migration-gate dono isi par atke hain) — repo ka apna note: "decision, not a cleanup"
 - [ ] Razorpay LIVE keys + Resend domain verify (purane, ab bhi khade)
 
