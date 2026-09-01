@@ -1,64 +1,83 @@
 "use client";
 /**
- * The hero's domain-search card — the handoff's exact behaviour:
+ * The hero's domain-search card.
  *
- *   · debounced 340ms, skeleton rows (wPulse) while pending
- *   · availability is a DETERMINISTIC hash in this prototype stage (`h % 4 === 0` → taken);
- *     production must call the registrar/EPP availability API, and the handoff says so.
- *     Deterministic beats random on purpose — the same name always answers the same way,
- *     so a shared screenshot can be reproduced.
- *   · when any result is taken: an "TAKEN — TRY THESE INSTEAD" chip row of four alternates
- *     (<name>india, get<name>, <name>hq, the<name>)
- *   · Add puts a yearly line in the cart and the drawer opens.
+ * ─── REAL, since the merge Phase-1 (1 Sep 2026) ─────────────────────────────
+ * Availability + price used to be a deterministic string-hash (a modulo of
+ * the name decided TAKEN) with prices from the hardcoded catalogue. Both are
+ * gone. It now
+ * asks the domains platform (app.anutech.in) through the site's own proxy
+ * (/api/domains/availability → /api/public/domain-availability), which returns
+ * the SAME real ResellerClub answer + customer price the logged-in app shows.
+ *
+ * The face never claims a domain is free that the shop cannot sell, and never
+ * a price the cart will not charge. If the platform is unreachable the card
+ * says so — it does NOT fall back to a guess.
+ *
+ *   · Enter or the Search button fires the check (no fake debounce theatre).
+ *   · Skeleton rows (wPulse) while the request is in flight.
+ *   · AVAILABLE rows get the real price + Add (yearly cart line at that price).
+ *   · A clear, honest message on empty / error — no invented status.
  */
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { rupee } from "@/lib/money";
-import { TLDS } from "@/lib/data/catalog";
-import { effectiveReg } from "@/lib/offers";
 
-function taken(name: string): boolean {
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 997;
-  return h % 4 === 0;
+/** Default TLDs to check — the platform prices whatever it recognises. */
+const DEFAULT_TLDS = ["in", "com", "co.in", "org", "net"];
+
+interface DomainResult {
+  domain: string;
+  available: boolean;
+  price: number;
+  currency: string;
+  years: number;
+  priceKnown: boolean;
 }
+
+type State =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "done"; base: string; domains: DomainResult[] }
+  | { kind: "error"; message: string };
 
 export function DomainSearch() {
   const [query, setQuery] = useState("");
-  const [searching, setSearching] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [state, setState] = useState<State>({ kind: "idle" });
+  const reqId = useRef(0);
   const cart = useCart();
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  async function runSearch() {
+    const base = query.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    if (!base) {
+      setState({ kind: "error", message: "Type a name to check." });
+      return;
+    }
+    const mine = ++reqId.current;
+    setState({ kind: "loading" });
+    try {
+      const res = await fetch(
+        `/api/domains/availability?name=${encodeURIComponent(base)}&tlds=${DEFAULT_TLDS.join(",")}`,
+        { cache: "no-store" },
+      );
+      if (mine !== reqId.current) return; // a newer search superseded this one
+      if (!res.ok) {
+        setState({ kind: "error", message: "Couldn't check right now — please try again, or WhatsApp us." });
+        return;
+      }
+      const body = (await res.json()) as { base: string; domains: DomainResult[] };
+      setState({ kind: "done", base: body.base, domains: body.domains ?? [] });
+    } catch {
+      if (mine !== reqId.current) return;
+      setState({ kind: "error", message: "Couldn't check right now — please try again, or WhatsApp us." });
+    }
+  }
 
-  const onInput = (value: string) => {
-    setQuery(value);
-    setSearching(true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setSearching(false), 340);
-  };
-
-  const q = query.trim().toLowerCase().replace(/[^a-z0-9-]/g, "") || "yourbusiness";
-  const results = TLDS.slice(0, 5).map((t) => {
-    const full = q + t.tld;
-    return { t, full, gone: taken(full) };
-  });
-  const anyTaken = results.some((r) => r.gone);
-  const alternates = [q + "india", "get" + q, q + "hq", "the" + q].map((base, i) => {
-    const t = TLDS[i % 3];
-    return { name: base + t.tld, t };
-  });
-
-  const addDomain = (name: string, t: (typeof TLDS)[number]) => {
-    /* Offer FIRST YEAR par hai; cart line wahi kahe jo sach hai — ₹1 pehla saal,
-       renewal poora, offer ka naam saath me. */
-    const p = effectiveReg(t.tld, t.reg);
+  const addDomain = (r: DomainResult) => {
     cart.add({
-      label: name,
-      detail: p.offer
-        ? `Domain registration · ${p.offer.label} first year · renews ${rupee(t.renew)}/yr`
-        : `Domain registration · renews ${rupee(t.renew)}/yr`,
-      unitPrice: p.reg,
+      label: r.domain,
+      detail: `Domain registration · 1 year`,
+      unitPrice: r.price,
       unit: "year",
       cycle: "yearly",
     });
@@ -69,76 +88,75 @@ export function DomainSearch() {
       <div className="mono-label" style={{ color: "var(--text-muted)", marginBottom: 10 }}>
         FIND YOUR NAME — LIVE PRICES, RENEWAL INCLUDED
       </div>
-      <div style={{ display: "flex", border: "2px solid var(--dark)", borderRadius: 6, overflow: "hidden" }}>
+      <form
+        onSubmit={(e) => { e.preventDefault(); void runSearch(); }}
+        style={{ display: "flex", border: "2px solid var(--dark)", borderRadius: 6, overflow: "hidden" }}
+      >
         <input
           value={query}
-          onChange={(e) => onInput(e.target.value)}
+          onChange={(e) => setQuery(e.target.value)}
           placeholder="yourbusiness"
           aria-label="Domain name to search"
           style={{ flex: 1, border: "none", outline: "none", padding: "13px 14px", fontSize: 16, fontFamily: "inherit", minWidth: 0 }}
         />
-        <button className="btn btn-primary" style={{ borderRadius: 0, padding: "13px 20px" }}>Search</button>
-      </div>
+        <button type="submit" className="btn btn-primary" style={{ borderRadius: 0, padding: "13px 20px" }}>
+          Search
+        </button>
+      </form>
 
       <div style={{ marginTop: 8 }}>
-        {searching
-          ? [1, 2, 3, 4, 5].map((i) => (
-              <div key={i} style={{ height: 46, borderBottom: "1px solid var(--border-hairline)", display: "flex", alignItems: "center" }}>
-                <div style={{ height: 12, width: `${40 + i * 8}%`, background: "var(--border-hairline)", borderRadius: 4, animation: "wPulse 1.1s infinite" }} />
-              </div>
-            ))
-          : results.map(({ t, full, gone }) => (
-              <div key={t.tld} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border-hairline)" }}>
-                <span className="mono" style={{ fontSize: 15, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={full}>
-                  {full}
-                </span>
-                <span className="mono-label" style={{ color: gone ? "var(--danger)" : "var(--success)" }}>
-                  {gone ? "TAKEN" : "AVAILABLE"}
-                </span>
-                {gone ? (
-                  <span className="meta">already registered</span>
-                ) : (
-                  <>
-                    {(() => {
-                      const p = effectiveReg(t.tld, t.reg);
-                      return p.offer ? (
-                        <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>
-                          <s style={{ color: "var(--text-disabled)", fontWeight: 400 }}>{rupee(p.offer.was)}</s>{" "}
-                          <span style={{ color: "var(--success)" }}>{rupee(p.reg)}</span>
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 15, fontWeight: 600 }}>{rupee(t.reg)}</span>
-                      );
-                    })()}
+        {state.kind === "idle" && (
+          <p className="meta" style={{ padding: "10px 0" }}>
+            Enter a name and we&apos;ll check it live across .in, .com and more.
+          </p>
+        )}
+
+        {state.kind === "loading" &&
+          [1, 2, 3, 4, 5].map((i) => (
+            <div key={i} style={{ height: 46, borderBottom: "1px solid var(--border-hairline)", display: "flex", alignItems: "center" }}>
+              <div style={{ height: 12, width: `${40 + i * 8}%`, background: "var(--border-hairline)", borderRadius: 4, animation: "wPulse 1.1s infinite" }} />
+            </div>
+          ))}
+
+        {state.kind === "error" && (
+          <p className="meta" style={{ padding: "10px 0", color: "var(--danger)" }}>{state.message}</p>
+        )}
+
+        {state.kind === "done" && state.domains.length === 0 && (
+          <p className="meta" style={{ padding: "10px 0" }}>No results — try another spelling.</p>
+        )}
+
+        {state.kind === "done" &&
+          state.domains.map((r) => (
+            <div key={r.domain} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border-hairline)" }}>
+              <span className="mono" style={{ fontSize: 15, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.domain}>
+                {r.domain}
+              </span>
+              <span className="mono-label" style={{ color: r.available ? "var(--success)" : "var(--danger)" }}>
+                {r.available ? "AVAILABLE" : "TAKEN"}
+              </span>
+              {r.available ? (
+                <>
+                  {r.priceKnown ? (
+                    <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>{rupee(r.price)}</span>
+                  ) : (
+                    <span className="meta">price on request</span>
+                  )}
+                  {r.priceKnown && (
                     <button
-                      onClick={() => addDomain(full, t)}
+                      onClick={() => addDomain(r)}
                       style={{ fontSize: 13, fontWeight: 600, color: "var(--primary)", border: "1px solid #9FC5F3", borderRadius: 5, background: "#fff", padding: "5px 12px", cursor: "pointer" }}
                     >
                       Add
                     </button>
-                  </>
-                )}
-              </div>
-            ))}
+                  )}
+                </>
+              ) : (
+                <span className="meta">already registered</span>
+              )}
+            </div>
+          ))}
       </div>
-
-      {!searching && anyTaken && (
-        <div style={{ marginTop: 14 }}>
-          <div className="mono-label" style={{ color: "var(--danger)", marginBottom: 8 }}>TAKEN — TRY THESE INSTEAD</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {alternates.map((a) => (
-              <button
-                key={a.name}
-                className="chip"
-                onClick={() => addDomain(a.name, a.t)}
-                title={`Add ${a.name} — ${rupee(a.t.reg)}`}
-              >
-                {a.name} · {rupee(a.t.reg)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

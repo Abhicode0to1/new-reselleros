@@ -13,6 +13,21 @@ export const RESELLEROS_URL =
   process.env.NEXT_PUBLIC_RESELLEROS_URL?.trim() ||
   "https://resellersos-njvk4nxhdq-el.a.run.app";
 
+/**
+ * The domains + hosting platform (app.anutech.in / DMS). Merge Phase-1: the
+ * marketing site's domain search + rate card read REAL answers from its
+ * public read-APIs instead of the old fakes. Custom domain (not a run.app
+ * host) so site-invariants stays happy; override per environment.
+ */
+export const DOMAINS_APP_URL =
+  process.env.NEXT_PUBLIC_DOMAINS_APP_URL?.trim() ||
+  "https://app.anutech.in";
+
+/** Real domain availability + customer price (see the app's /api/public/domain-availability). */
+export const DOMAIN_AVAILABILITY_API = `${DOMAINS_APP_URL}/api/public/domain-availability`;
+/** Real per-TLD register/renew/transfer rate card. */
+export const TLD_PRICING_API = `${DOMAINS_APP_URL}/api/public/tld-pricing`;
+
 export const OS_SIGNUP = `${RESELLEROS_URL}/signup`;
 
 /**
