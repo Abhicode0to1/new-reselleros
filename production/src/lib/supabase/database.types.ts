@@ -4255,6 +4255,16 @@ export type Database = {
         Returns: string;
       };
       /**
+       * Upserts hosting plans fetched from the DMS engine's public API into
+       * this tenant's catalogue (items, vendor='hosting', keyed by
+       * synced_from_partner_id = planId). Atomic, idempotent, owner-only.
+       * Returns how many plans were upserted. Migration 20260901170000.
+       */
+      sync_hosting_catalog: {
+        Args: { p_plans: Json };
+        Returns: number;
+      };
+      /**
        * Returns the Indian fiscal year label (e.g. 'FY2627') for a given date.
        * FY runs Apr 1 – Mar 31; date defaults to current_date.
        */

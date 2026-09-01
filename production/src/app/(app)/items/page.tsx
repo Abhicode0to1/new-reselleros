@@ -7,7 +7,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useItems, useDeleteItem, useLoadDefaultCatalog } from "@/lib/queries/items";
+import { useItems, useDeleteItem, useLoadDefaultCatalog, useSyncHostingCatalog } from "@/lib/queries/items";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { OneTimeItemForm } from "@/components/features/items/one-time-item-form";
 import { ItemForm } from "@/components/features/items/item-form";
 import { FAB } from "@/components/ui/fab";
@@ -94,6 +95,8 @@ function FilterChip({
 
 export default function ItemsPage() {
   const { data: items, isLoading, error, refetch } = useItems({ includeInactive: true });
+  const me = useCurrentUser().data;
+  const syncHosting = useSyncHostingCatalog();
   const deleteItem = useDeleteItem();
   const loadDefaults = useLoadDefaultCatalog();
   const confirm = useConfirm();
@@ -180,6 +183,17 @@ export default function ItemsPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          {catalogType === "subscription" && me?.role === "owner" && (
+            <Button
+              variant="outline"
+              icon="refresh"
+              loading={syncHosting.isPending}
+              onClick={() => syncHosting.mutate()}
+              title="Pull hosting plans from the engine (app.anutech.in) into this catalogue"
+            >
+              Sync hosting
+            </Button>
+          )}
           {catalogType === "subscription" ? (
             <Button variant="primary" icon="plus" onClick={() => { setEditing(null); setAddOpen(true); }}>
               Add item
