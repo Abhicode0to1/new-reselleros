@@ -196,6 +196,8 @@ export type TeamInviteRow = {
   invited_by:  string | null;
   created_at:  string;
   accepted_at: string | null;
+  /** Migration 20260901090000 — invite-email ka raaz; password-signup se join iske bina nahi. */
+  token:       string;
 };
 type TeamInviteInsert = {
   id?:          string;

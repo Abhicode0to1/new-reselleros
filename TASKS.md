@@ -15,14 +15,14 @@
 
 ## 🔴 AUDIT-P0 — pehle asli customer se pehle (khule darwaze)
 
-- [ ] **A1. Invite-takeover band karo** — `team_invites` me token nahi; signup `email_confirm: true` se bina mailbox-proof account banata hai (owner tak). Fix: token column + link se hi accept.
+- [x] **A1. Invite-takeover band** ✅ 1 Sep — migration `20260901090000` (token) prod par lagi+tracked (0 pending invites the); password-signup ab token+email dono par join karta hai, bina token pending-invite par 409 (account banta hi nahi); invite-email me personal `?invite=` link; Google raasta jaisa tha (mailbox-proof wahi). Pin-test `invite-token.test.ts` (4).
 - [x] **A2. Project-quote accept par token** ✅ 1 Sep — migration `20260901080000` prod par lagi+tracked; route/page dono `quoteTokenMatches` se; teeno link-builder `?t=` ke saath; pin-test `project-quote-token.test.ts` (3) — `api/public/project-quote/[id]/accept` bina kisi token/session ke chalta hai; baaki sab quote-routes `?t=` maangte hain.
 - [ ] **A3. Rate-limiting `/api/public/*`** — poore app me 0 limiter; Gemini/Resend anonymous jalte hain. + expense-claim PIN par lockout (4-digit brute-force khula hai).
-- [ ] **A4. `users` DELETE owner-only + audit** — koi bhi member owner ko delete kar sakta hai, bina activity_log ke. Migration: policy + users par trigger.
+- [x] **A4. `users` DELETE owner-only + audit** ✅ 1 Sep — migration `20260901100000` prod par: DELETE sirf owner (aur kabhi apni row nahi), `current_user_is_owner()` helper, `log_row_change` trigger users par. SQL test `users_delete_owner_only` LIVE green (dono disha + audit-row). Service-role raasta abhi bhi unaudited — wo C-item me darj hai.
 - [ ] **A5. Overpayment-credit atomic karo** — `record-payment-dialog.tsx:446` RPC ke baad client-side credit insert; fail par rupaye gum. RPC ke andar lo. (Bada bhai: `refund_payment` RPC — alag item A5b.)
 - [ ] **A5b. `refund_payment` RPC** — GST-invoice ke baad paisa wapas karne ka koi raasta nahi; `useRefundPayment` (0 callers) ledger-corrupt karne wala stub hai — ya poora banao ya hatao.
 - [ ] **A6. SQL tests CI me (nightly) + money-check push par** — 43 SQL test kisi CI me nahi; money-check.yml sirf PR par hai aur aakhri PR 15 Aug ka hai (0 runs ever). Live DB se 3 guard pehle gum ho chuke hain.
-- [ ] **A7. SENTRY_DSN + uptime monitor** — Sentry code laga hai, DSN unset (error-tracking OFF). DSN kahin ho to `--update-env-vars` (kabhi `--set-env-vars` nahi); nahi to Pardeep-item.
+- [x] **A7. Sentry + uptime monitor** ✅ 1 Sep — NAAPA: dono DSN Cloud Run par pehle se SET the (docs jhooth bol rahe the; health-signals.ts ka comment sudhara). Naya: Cloud Monitoring uptime-check `/api/version` (5 min) + email-alert Pardeep ko + `docs/DEPLOY-ROLLBACK.md` runbook. Sentry ki delivery dashboard se hi verify hogi (reasoned-only).
 - [ ] **A8. Ek restore-rehearsal + runbook** — backup 3 layer, 0 restore kabhi; auth-users/storage kisi backup me nahi. Staging project par rehearse karo, samay likho.
 
 ## 🟠 AUDIT-P1 — world-class banane wale

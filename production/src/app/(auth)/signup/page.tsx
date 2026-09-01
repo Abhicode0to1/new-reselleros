@@ -76,6 +76,10 @@ export default function SignupPage() {
         fullName:    values.fullName,
         companyName: values.companyName,
         gstin:       values.gstin ?? null,
+        // Invite-email ke link se aata hai (/signup?invite=…). Iske bina
+        // pending-invite wale email par password-signup 409 deta hai —
+        // by design (mailbox ka saboot token hi hai).
+        inviteToken: new URLSearchParams(window.location.search).get("invite") ?? undefined,
       }),
     });
 

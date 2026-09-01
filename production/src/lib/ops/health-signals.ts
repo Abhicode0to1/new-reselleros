@@ -7,8 +7,10 @@
  * shut.
  *
  *   Cloud Run logs   the primary source — gcloud auth expired mid-session
- *   Sentry           never worked; SENTRY_DSN is empty, and CLAUDE.md §22 already
- *                    documents that its init is fragile on this host
+ *   Sentry           us din SENTRY_DSN khaali tha. ⚠️ 1 Sep 2026 ko naapa:
+ *                    ab DONO DSN Cloud Run par SET hain (95 chars) — ye
+ *                    itihaas hai, aaj ki haalat nahi. Delivery ki tasdeeq
+ *                    dashboard se hi ho sakti hai.
  *   DB log tables    working — and the only thing that found anything all day
  *
  * So a scan that reported "System healthy" was reporting on what it could still see,

@@ -53,10 +53,16 @@ export async function POST(request: NextRequest) {
 
   // ── Create the invite (RLS: team_invites is owner-scoped) ─────────────
   let roleChangedFrom: string | null = null;
+  /* Token email ke signup-link me jata hai — password-raaste se join ka
+     ek-matra saboot (migration 20260901090000). */
+  let inviteToken: string | null = null;
 
-  const { error: insErr } = await supabase
+  const { data: insData, error: insErr } = await supabase
     .from("team_invites")
-    .insert({ tenant_id: me.tenant_id, email, role, invited_by: authData.user.id });
+    .insert({ tenant_id: me.tenant_id, email, role, invited_by: authData.user.id })
+    .select("token")
+    .single();
+  if (insData) inviteToken = insData.token;
 
   if (insErr) {
     // 23505 = unique violation: this email already has an invite somewhere.
@@ -78,7 +84,7 @@ export async function POST(request: NextRequest) {
        the caller's own tenant, so the update below cannot touch anyone else's row. */
     const { data: existing } = await supabase
       .from("team_invites")
-      .select("role, tenant_id")
+      .select("role, tenant_id, token")
       .eq("email", email)
       .maybeSingle();
 
@@ -108,6 +114,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: updErr.message }, { status: 500 });
     }
     roleChangedFrom = existing.role;
+    inviteToken = existing.token;
   }
 
   // ── Notify the invitee (best-effort) ──────────────────────────────────
@@ -120,7 +127,11 @@ export async function POST(request: NextRequest) {
 
   const proto = request.headers.get("x-forwarded-proto") ?? "https";
   const host  = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
-  const loginUrl = host ? `${proto}://${host}/login` : (process.env.NEXT_PUBLIC_APP_URL?.trim() ?? "");
+  const base  = host ? `${proto}://${host}` : (process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/+$/, "") ?? "");
+  const loginUrl  = `${base}/login`;
+  /* Password-raasta: token wale link se hi khulta hai. Ye link hi mailbox ka
+     saboot hai — bina iske signup 409 deta hai (audit 1 Sep 2026). */
+  const signupUrl = inviteToken ? `${base}/signup?invite=${inviteToken}` : null;
 
   const emailRes = await sendEmail({
     /* Bina `route` ke ye default Resend par jata hai (send.ts:26), aur wo test mode
@@ -134,11 +145,12 @@ export async function POST(request: NextRequest) {
 
 You've been added to ${workspace} on ResellerOS as ${role}.
 
-To join, sign in with Google using THIS email address (${email}):
+Easiest way to join — sign in with Google using THIS email address (${email}):
 ${loginUrl}
-
-That's it — signing in with this email drops you straight into ${workspace}. No password or separate account needed.
-
+${signupUrl ? `
+Prefer a password instead? Use your personal invite link (it only works for ${email}):
+${signupUrl}
+` : ""}
 — ${workspace} (via ResellerOS)`,
   });
 

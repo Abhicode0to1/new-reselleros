@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
       fullName: string;
       companyName: string;
       gstin?: string;
+      /** Invite-email ke link se aaya raaz — iske bina invite se join NAHI hota. */
+      inviteToken?: string;
     };
 
     const { password, fullName, companyName, gstin } = body;
@@ -60,12 +62,49 @@ export async function POST(request: NextRequest) {
 
     // ── 1. Where does this person belong? Decided BEFORE anything is created,
     //       so a decision of "join" or "wait" never leaves a stray tenant behind.
-    const { data: inviteRow } = await admin
-      .from("team_invites")
-      .select("tenant_id, role")
-      .eq("email", email)
-      .is("accepted_at", null)
-      .maybeSingle();
+    //
+    // ⚠️ Password-raaste par invite EMAIL SE NAHI pehchana jata — token se.
+    // 1 Sep 2026 ke audit ka #1 khatra yahi tha: is route ne kabhi mailbox
+    // saabit nahi kiya (email_confirm: true), to sirf email-match par join
+    // dena har invited address ko ek khula darwaza banata tha — koi bhi
+    // billing@company.com ka andaza laga kar, apna password rakh kar, us
+    // tenant me (owner tak ke role me) ghus sakta tha. Token sirf invite-
+    // email me jata hai, isliye uska hona hi mailbox ka saboot hai. Google
+    // wala raasta (callback) pehle jaisa — wahan saboot Google deta hai.
+    const inviteToken = typeof body.inviteToken === "string" ? body.inviteToken.trim() : "";
+    const { data: inviteRow } = inviteToken
+      ? await admin
+          .from("team_invites")
+          .select("tenant_id, role")
+          .eq("token", inviteToken)
+          .eq("email", email)
+          .is("accepted_at", null)
+          .maybeSingle()
+      : { data: null };
+
+    // Invite pending hai par token nahi/galat? Account banate hi NAHI —
+    // warna wahi takeover, ya (ignore karne par) invited insaan ki apni
+    // alag company ban jati (13 stranded-users wala purana bug). §24:
+    // kya hua + kyun + aage kya, teeno.
+    if (!inviteRow) {
+      const { data: pendingByEmail } = await admin
+        .from("team_invites")
+        .select("id")
+        .eq("email", email)
+        .is("accepted_at", null)
+        .maybeSingle();
+      if (pendingByEmail) {
+        return NextResponse.json(
+          {
+            error:
+              "Is email par ek workspace ka invite hai. Join karne ke do raaste: " +
+              "(1) invite email me aaya link kholiye, ya (2) isi email se Google ke saath sign in kariye. " +
+              "Password se naya account is invite ko bypass nahi kar sakta.",
+          },
+          { status: 409 },
+        );
+      }
+    }
 
     const domainMatch = await findVerifiedDomainTenant(email);
     const decision = decideOnboarding({
@@ -108,7 +147,7 @@ export async function POST(request: NextRequest) {
       }
       await admin.from("team_invites")
         .update({ accepted_at: new Date().toISOString() })
-        .eq("email", email).is("accepted_at", null);
+        .eq("token", inviteToken).eq("email", email).is("accepted_at", null);
 
       return NextResponse.json({ success: true, status: "joined", userId, tenantId: decision.tenantId });
     }
