@@ -272,7 +272,7 @@ export const OBLIGATIONS: Obligation[] = [
     category: "income_tax", freq: "annual", form: "ITR-6",
     penalty: "₹5,000 late fee + interest u/s 234A", link: "https://www.incometax.gov.in",
     applies: "Audit case: by 31 Oct. Non-audit: by 31 Jul.",
-    dataHref: { href: "/accounting/pnl", label: "Open P&L (for the income figures)" },
+    dataHref: { href: "/accounting/itr", label: "Open the ITR pack (computation + CA export)" },
     filingSteps: [
       "Finalise the audited accounts; get the tax-audit report accepted first (if applicable).",
       "Compute total income — disallowances, depreciation as per IT Act, MAT if it applies.",
@@ -304,7 +304,7 @@ export const OBLIGATIONS: Obligation[] = [
     category: "income_tax", freq: "quarterly",
     penalty: "Interest u/s 234B / 234C", link: "https://www.incometax.gov.in",
     applies: "If tax liability ≥ ₹10,000/yr. Due 15 Jun (15%), 15 Sep (45%), 15 Dec (75%), 15 Mar (100%).",
-    dataHref: { href: "/accounting/pnl", label: "Open P&L (to estimate profit)" },
+    dataHref: { href: "/accounting/itr", label: "Open the ITR pack (instalment schedule)" },
     filingSteps: [
       "Estimate the year's total income + tax liability (include MAT).",
       "Work out this instalment's cumulative % (15 / 45 / 75 / 100) minus what you've already paid.",

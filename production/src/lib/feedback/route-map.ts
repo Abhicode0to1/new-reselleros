@@ -57,6 +57,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/accounting/esi-register", file: "src/app/(app)/accounting/esi-register/page.tsx" },
   { route: "/accounting/expenses", file: "src/app/(app)/accounting/expenses/page.tsx" },
   { route: "/accounting/gst", file: "src/app/(app)/accounting/gst/page.tsx" },
+  { route: "/accounting/itr", file: "src/app/(app)/accounting/itr/page.tsx" },
   { route: "/accounting/leave", file: "src/app/(app)/accounting/leave/page.tsx" },
   { route: "/accounting/ledger", file: "src/app/(app)/accounting/ledger/page.tsx" },
   { route: "/accounting/loans", file: "src/app/(app)/accounting/loans/page.tsx" },
