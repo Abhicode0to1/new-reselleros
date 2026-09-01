@@ -4560,6 +4560,24 @@ export type Database = {
         };
         Returns: string;
       };
+      /**
+       * Migration 20260901120000 (audit A5b) — payment ka poora ulat-pher EK
+       * transaction me: status+RFV voucher, quote recompute, subscription
+       * outstanding, overpayment-credit band. GST-invoice/bank-reconciled/
+       * add-seats par §24-shaili me raise karta hai. Gateway call NAHI karta.
+       */
+      refund_payment: {
+        Args: { p_payment_id: string; p_reason: string };
+        Returns: {
+          refund_voucher_no:  string;
+          payment_id:         string;
+          amount:             number;
+          quote_id:           string;
+          new_payment_status: string;
+          credits_closed:     number;
+          gateway_refunded:   boolean;
+        };
+      };
       record_payment: {
         Args: {
           p_quote_id:  string;

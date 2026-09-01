@@ -105,30 +105,46 @@ export function useUpdatePayment() {
 }
 
 // ============================================================
-// Refund a payment
+// Refund a payment — atomic via RPC (migration 20260901120000, audit A5b)
 // ============================================================
-export function useRefundPayment() {
+// Pehle ye ek nanga status-flip tha — na quote ka recompute, na subscription
+// ka outstanding, na RFV voucher, na overpayment-credit ka band hona. Zero
+// callers the, aur wahi uski suraksha thi: jo pehla engineer ise button se
+// jodta, ledger corrupt karta. Ab poora ulat-pher ek transaction me RPC ke
+// andar hai (test: refund_payment.test.sql — RFV, recompute, credit-close,
+// double-guard, invoice-guard). GST-invoice/bank-reconciled wale case RPC
+// khud §24-shaili me refuse karta hai — message me agla kadam hota hai.
+// Gateway par paisa YE NAHI bhejta — wo operator Razorpay/bank se karta hai.
+export function useRefundPayment(opts?: { onBlocked?: (message: string) => void }) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
       const supabase = createClient();
-      const { error } = await supabase
-        .from("payments")
-        .update({
-          status: "refunded",
-          refunded_at: new Date().toISOString(),
-          refund_reason: reason || null,
-        })
-        .eq("id", id);
-      if (error) throw error;
-      return id;
+      const { data, error } = await supabase.rpc("refund_payment", {
+        p_payment_id: id,
+        p_reason: reason,
+      });
+      if (error) throw new Error(error.message);
+      return data as { refund_voucher_no: string; amount: number };
     },
-    onSuccess: () => {
+    onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["payments"] });
       qc.invalidateQueries({ queryKey: ["quotes"] });
-      toast.success("Payment marked as refunded");
+      qc.invalidateQueries({ queryKey: ["subscriptions"] });
+      qc.invalidateQueries({ queryKey: ["customer-credits"] });
+      qc.invalidateQueries({ queryKey: ["outstanding-receivables"] });
+      toast.success(`Refund booked — voucher ${r.refund_voucher_no}`, {
+        description: "Kitab me darj hua. Asli paisa Razorpay/bank se aapko khud bhejna hai.",
+      });
     },
-    onError: (err) => toastError(err),
+    onError: (err) => {
+      const msg = (err as Error).message;
+      if (opts?.onBlocked && /credit note|un-reconcile|add-seats/i.test(msg)) {
+        opts.onBlocked(msg);
+        return;
+      }
+      toastError(err);
+    },
   });
 }
 

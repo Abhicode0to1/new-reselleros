@@ -542,14 +542,14 @@ await supabase.rpc("set_document_series_start", {
 
 Any operation that touches **more than one row** must go through a Postgres `SECURITY DEFINER` function — never chain client-side Supabase calls. Without atomicity, mid-flight failures leave the tenant in inconsistent state (e.g., customer created but subscription missing).
 
-| Operation                                          | RPC name                  |
+| Operation                                          | RPC name — status (corrected 1 Sep 2026; this table had drifted badly) |
 |----------------------------------------------------|---------------------------|
-| Record a payment (auto-converts lead → customer)   | `record_payment` (TBD)    |
-| Generate invoice from a paid quote                 | `generate_invoice` (TBD)  |
-| Refund a payment + recompute outstanding           | `refund_payment` (TBD)    |
-| Renew a subscription + roll forward dates          | `renew_subscription` (TBD)|
+| Record a payment (auto-converts lead → customer)   | `record_payment` ✅ SHIPPED — the spine's backbone (~550 lines; overpayment credit atomic since 20260901110000) |
+| Generate invoice from a paid quote                 | `generate_invoice` ✅ SHIPPED (archive 0058; GST split frozen at issue) |
+| Refund a payment + recompute outstanding           | `refund_payment` ✅ SHIPPED (20260901120000 — RFV voucher + quote/sub recompute + credit-close in one txn; refuses when a GST invoice exists → credit note first) |
+| Renew a subscription + roll forward dates          | folded INSIDE `record_payment` by design — a paid renewal quote rolls the sub forward; no separate RPC exists or is planned |
 
-Until these RPCs land (task #102), client-side mutations are tolerated but flagged as tech debt. Do not add new multi-row writes from the client.
+The audit that corrected this table (1 Sep 2026) also measured 150 distinct functions in migrations+baseline — this table lists the money-spine four only. Do not add new multi-row money writes from the client; the known offenders still outstanding are bank reconciliation (`bank.ts` — 6 chained writes, two drifted copies) and the post-RPC writes in `record-payment-dialog.tsx` (bank account / domain / TAN patches).
 
 ---
 

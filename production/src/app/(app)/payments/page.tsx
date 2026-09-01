@@ -23,6 +23,7 @@ async function openReceipt(path: string) {
 import {
   usePayments,
   useDeletePayment,
+  useRefundPayment,
   useOutstandingReceivables,
   useMarkReminderSent,
   useSuspendSubscription,
@@ -863,6 +864,40 @@ function PaymentRowView({
   });
   const confirm = useConfirm();
 
+  // Refund = paisa sach me wapas ja raha hai (delete = galat entry sudhaarna —
+  // dono alag cheezein). RPC ek transaction me RFV voucher + quote/subscription
+  // recompute + overpayment-credit band karta hai (audit A5b); gateway par
+  // paisa operator khud bhejta hai aur toast yahi kehta hai.
+  const refund = useRefundPayment({
+    onBlocked: (msg) =>
+      toast.error(msg, {
+        description: "Ye rukavat quote/banking se hatati hai — wahin agla kadam hai.",
+        action: { label: "Open quote", onClick: () => router.push(`/quotes/${p.quote_id}` as any) },
+      }),
+  });
+  const [refundReason, setRefundReason] = React.useState("");
+
+  const handleRefund = async () => {
+    const reason = window.prompt(
+      `${rupee(p.amount)} ka refund book karna hai (${p.quote_id}).\n\nWajah likhiye — ye RFV voucher par darj hogi:`,
+      refundReason,
+    );
+    if (reason === null) return;
+    setRefundReason(reason);
+    if (reason.trim().length < 5) {
+      toast.error("Wajah kam se kam 5 akshar ki ho — voucher par chhapti hai.");
+      return;
+    }
+    if (await confirm({
+      title: `Refund ${rupee(p.amount)} on ${p.quote_id}?`,
+      body:
+        "Kitab me: payment 'refunded', RFV voucher banega, quote/subscription ka hisaab wapas khulega, " +
+        "aur is payment se bani credit band hogi.\n\nAsli paisa Razorpay/bank se aapko KHUD bhejna hoga — ye button gateway ko nahi chhoota.",
+      confirmLabel: "Book refund",
+      danger: true,
+    })) refund.mutate({ id: p.id, reason: reason.trim() });
+  };
+
   // Delete = correct a wrong entry. Explains the reversal, then reverses via RPC
   // (guards block if a GST invoice was issued / it's bank-reconciled).
   const handleDelete = async () => {
@@ -981,6 +1016,11 @@ function PaymentRowView({
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
+              {p.status === "received" && (
+                <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer text-rose" onClick={handleRefund}>
+                  <Icon name="rupee" size={16} /> Refund payment
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer text-rose" onClick={handleDelete}>
                 <Icon name="trash" size={16} /> Delete payment
               </DropdownMenuItem>
