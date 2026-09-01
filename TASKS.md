@@ -48,7 +48,8 @@
 - [~] C7. Bulk/undo/j-k propagation; nav progressive-reveal — PARTIAL (1 Sep)
   - [x] Nav progressive-reveal: pehle se LIVE — Sidebar single-open accordion (sirf current section khula, baaki collapsed). Browser me confirm kiya.
   - [x] j/k propagation → **customers** screen par jod diya (useListKeys, aria-selected + amber tint, KeyHintBar). Browser-verified real data par: j/k navigate, o opens Anitatech. Gate 4/4.
-  - [ ] j/k baaki lists par: payments, invoices, deals, online-orders, projects, expenses, attendance (~7 screens; har ek chhota par alag row-render + browser-verify)
+  - [x] j/k → **payments** bhi (PaymentRowView ko selected/rowRef props; enabled sirf non-project view; gate 4/4). 
+  - [ ] j/k baaki lists par: invoices, online-orders, projects, expenses, attendance (paused — merge priority)
   - [ ] Bulk-select propagation: invoices par pehle se hai; baaki lists par nahi
   - [ ] Undo propagation: leads/payroll/attendance par hai; delete-actions par extend karna
   - NOTE: teenon 'propagation' hain — pattern maujood, N-screens par phailana. Batch me Pardeep greenlight kare to karta rahunga.

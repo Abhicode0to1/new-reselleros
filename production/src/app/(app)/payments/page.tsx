@@ -8,6 +8,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { useListKeys } from "@/lib/hooks/useKeyboard";
+import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import { getDocumentSignedUrl } from "@/lib/queries/documents";
 
 /** Open a payment's attached receipt (private bucket → short-lived signed URL). */
@@ -56,7 +58,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { rupee, formatDate, bankLabel, cleanDisplayName } from "@/lib/utils";
+import { rupee, formatDate, bankLabel, cleanDisplayName, cn } from "@/lib/utils";
 import { useConfirm } from "@/components/providers/confirm-provider";
 
 const STATUS_TABS: TabBarItem[] = [
@@ -82,9 +84,11 @@ const PAY_COL_WIDTHS: Record<string, string> = {
 };
 
 function PaymentsPageInner() {
+  const router = useRouter();
   const [tab, setTab]       = React.useState<"all" | "received" | "refunded">("all");
   const [view, setView]     = React.useState<"all" | "subscription" | "project">("all");
   const [search, setSearch] = React.useState("");
+  const [helpOpen, setHelpOpen] = React.useState(false);
 
   /* ── One customer's receipts ───────────────────────────────────────────────
      `?customer=<id>` — how the "Lifetime paid" tile on a customer answers "which
@@ -162,6 +166,25 @@ function PaymentsPageInner() {
       (quoteCtx?.customerName.toLowerCase().includes(s) ?? false)
     );
   });
+
+  /* j / k / Enter / o over the sales-payments table — opens the payment's quote,
+     the same target a click uses. Enabled only while that table is on screen
+     (it lives inside the subscription/all block, not the project view), so the
+     keys never open a row from a list the user isn't looking at. Keyed by id,
+     like /customers, so only that one table lights up. */
+  const payKeys = useListKeys({
+    count: filtered.length,
+    enabled: view !== "project",
+    onOpen: (i) => {
+      const p = filtered[i];
+      if (p) router.push(`/quotes/${p.quote_id}` as never);
+    },
+  });
+  const selectedRowRef = React.useRef<HTMLTableRowElement | null>(null);
+  React.useEffect(() => {
+    selectedRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [payKeys.index]);
+  const payKbSelectedId = payKeys.index >= 0 ? filtered[payKeys.index]?.id ?? null : null;
 
   const counts: Record<string, number> = { all: payments?.length ?? 0 };
   for (const p of payments ?? []) counts[p.status] = (counts[p.status] ?? 0) + 1;
@@ -637,6 +660,8 @@ function PaymentsPageInner() {
                     me={me}
                     bankLabel={p.bank_account_id ? bankNameById.get(p.bank_account_id) : undefined}
                     onEdit={() => setEditPayment(p)}
+                    selected={p.id === payKbSelectedId}
+                    rowRef={p.id === payKbSelectedId ? selectedRowRef : undefined}
                   />
                 );
               })}
@@ -734,6 +759,10 @@ function PaymentsPageInner() {
           (editPayment && quoteById.get(editPayment.quote_id)?.customerName) || "Customer"
         }
       />
+
+      {/* Shown only once a key has actually been used — see the note on KeyHintBar. */}
+      <KeyHintBar visible={payKeys.index >= 0} onShowHelp={() => setHelpOpen(true)} />
+      <ShortcutsSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
 }
@@ -835,6 +864,8 @@ function PaymentRowView({
   me,
   bankLabel,
   onEdit,
+  selected = false,
+  rowRef,
 }: {
   p: Payment;
   ctx?: { customerName: string; paymentStatus: string; invoiceId: string | null; customerId: string | null };
@@ -848,6 +879,9 @@ function PaymentRowView({
   me?: ReturnType<typeof useCurrentUser>["data"];
   bankLabel?: string;
   onEdit: () => void;
+  /** Keyboard (j/k) selection — the parent owns which row is current. */
+  selected?: boolean;
+  rowRef?: React.Ref<HTMLTableRowElement>;
 }) {
   const router = useRouter();
   const methodInfo = METHOD_META[p.method];
@@ -922,10 +956,15 @@ function PaymentRowView({
   const customerName = cleanDisplayName(ctx?.customerName ?? "—");
   return (
     <tr
-      className="group border-b border-hairline last:border-0 hover:bg-paper-2/50 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset"
+      ref={rowRef}
+      className={cn(
+        "group border-b border-hairline last:border-0 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset",
+        selected ? "bg-amber-soft/60 ring-1 ring-inset ring-amber/40" : "hover:bg-paper-2/50",
+      )}
       role="button"
       tabIndex={0}
       aria-label={`Open quote ${p.quote_id}`}
+      aria-selected={selected}
       onClick={() => router.push(`/quotes/${p.quote_id}` as any)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/quotes/${p.quote_id}` as any); } }}
     >
