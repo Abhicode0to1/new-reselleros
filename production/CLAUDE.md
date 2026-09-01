@@ -101,7 +101,7 @@ When in doubt, **read the prototype** for UX reference. Do NOT copy prototype co
 | Animation | **Framer Motion** (sparingly) |
 | Command palette | **cmdk** |
 | Toast | **sonner** |
-| i18n | **next-intl** (English default, Hindi planned) |
+| i18n | **None — by decision.** Pardeep, 1 Sep 2026: "hindi ui nahi karna hai". UI is English + Hinglish; next-intl was a dead dep (zero imports ever) and was uninstalled the same day. Do not re-propose Hindi/i18n. |
 | Icons | **lucide-react** |
 | Email | **Resend** |
 | Payments | **Razorpay** |
@@ -351,7 +351,7 @@ Never use `fetch()` directly in components. Always go through Supabase or a type
 - **GSTIN format**: 15-char alphanumeric, validated against checksum
 - **HSN code for SaaS**: 998313 (default)
 - **GST rate for SaaS**: 18% (CGST 9% + SGST 9% for intra-state, IGST 18% inter-state)
-- **Language**: English UI default, Hindi i18n planned (next-intl)
+- **Language**: English UI + Hinglish copy — Hindi i18n CANCELLED by owner decision (1 Sep 2026); do not re-propose
 
 ---
 
@@ -558,7 +558,7 @@ The audit that corrected this table (1 Sep 2026) also measured 150 distinct func
 - **Phase 1 (Weeks 1-3)**: Foundation — auth, multi-tenant, design system, layout shell, CRUD
 - **Phase 2 (Weeks 4-6)**: Money — Razorpay, GST, WhatsApp, email
 - **Phase 3 (Weeks 7-9)**: Reseller moat — Google CSP, margin, churn risk, AI features
-- **Phase 4 (Weeks 10-12)**: Polish — Hindi, PWA, performance, security audit
+- **Phase 4 (Weeks 10-12)**: Polish — PWA, performance, security audit (Hindi cancelled 1 Sep 2026)
 - **Phase 5 (Weeks 13-14)**: Soft launch — Excel Tech first, then customer #2
 
 Detailed plan in repo wiki or `../prototype/` docs.
