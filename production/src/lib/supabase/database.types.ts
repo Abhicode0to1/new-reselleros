@@ -654,6 +654,20 @@ export type ShippingAddress = {
 /** Customer classification (migration 0165). Individuals have no company. */
 export type CustomerType = "business" | "individual";
 
+export type NotificationRow = {
+  id:         string;
+  tenant_id:  string;
+  user_id:    string;
+  kind:       string;
+  title:      string;
+  body:       string | null;
+  href:       string | null;
+  entity_id:  string | null;
+  created_at: string;
+  read_at:    string | null;
+};
+type NotificationInsert = Omit<NotificationRow, "id" | "created_at" | "read_at"> & { id?: string; read_at?: string | null };
+
 type CustomerRow = {
   id: string;
   tenant_id: string;
@@ -3966,6 +3980,8 @@ export type Database = {
       tenants:       { Row: TenantRow;       Insert: TenantInsert;       Update: TenantUpdate;       Relationships: [] };
       users:         { Row: UserRow;         Insert: UserInsert;         Update: UserUpdate;         Relationships: [] };
       customers:     { Row: CustomerRow;     Insert: CustomerInsert;     Update: CustomerUpdate;     Relationships: [] };
+      /** Migration 20260901130000 (audit B4) — in-app khabar, row per recipient; read_at DB me (localStorage nahi). */
+      notifications: { Row: NotificationRow; Insert: NotificationInsert; Update: Partial<NotificationRow>; Relationships: [] };
       customer_groups: { Row: CustomerGroupRow; Insert: CustomerGroupInsert; Update: CustomerGroupUpdate; Relationships: [] };
       items:         { Row: ItemRow;         Insert: ItemInsert;         Update: ItemUpdate;         Relationships: [] };
       leads:         { Row: LeadRow;         Insert: LeadInsert;         Update: LeadUpdate;         Relationships: [] };

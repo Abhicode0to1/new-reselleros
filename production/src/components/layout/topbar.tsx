@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 import { CommandPalette, useCommandPalette } from "./command-palette";
 import { NotificationPanel } from "./notification-panel";
+import { useNotifications } from "@/lib/queries/notifications";
 import { QuickActionsPanel } from "./quick-actions-panel";
 import { FeedbackDialog } from "@/components/shared/feedback-dialog";
 import { getCrumb, getParentListHref } from "@/lib/nav";
@@ -44,7 +45,9 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
   // notifications + WhatsApp reminders arrive in Phase 2 they'll feed the
   // same number (any unread notification becomes a virtual task surface).
   const { data: taskCount } = useTaskCountDueOrOverdue();
-  const unreadCount = taskCount ?? 0;
+  /* + asli events (payment/quote/lead/ticket) jinka read_at DB me null hai (audit B4). */
+  const { data: dbNotifs } = useNotifications();
+  const unreadCount = (taskCount ?? 0) + (dbNotifs ?? []).filter((n) => !n.read_at).length;
 
   // Mount-only flag to avoid theme hydration mismatch
   const [mounted, setMounted] = React.useState(false);

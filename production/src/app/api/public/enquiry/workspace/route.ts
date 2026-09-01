@@ -37,6 +37,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
+import { notifyTenantOwners } from "@/lib/notifications/notify.server";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { decideAutoSend } from "@/lib/quotes/auto-send-quote";
 import { sendAutoQuote } from "@/lib/quotes/send-auto-quote";
@@ -157,6 +158,16 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
+
+    /* In-app khabar (audit B4) — lead COMMIT ke baad, best-effort. */
+    await notifyTenantOwners({
+      tenantId,
+      kind: "lead.created",
+      title: `New enquiry — ${companyName}`,
+      body: `${fullName} · ${seats} seats ${tierId}`,
+      href: "/leads",
+      entityId: leadId,
+    });
 
     // ── Auto-create draft quote — collapses pipeline stage 5 ──────────────
     // Skip for Enterprise (custom pricing — Pardeep hand-prices) and for any

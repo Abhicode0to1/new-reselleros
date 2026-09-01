@@ -7,6 +7,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { notifyTenantOwners } from "@/lib/notifications/notify.server";
 import { isQuoteExpired, rupee } from "@/lib/utils";
 import { quoteTokenMatches } from "@/lib/quotes/accept-token";
 import { sendEmail } from "@/lib/email/send";
@@ -238,6 +239,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   console.info(`[quote-accept] ${params.id} accepted by ${quote.customer_name} (tenant ${quote.tenant_id})`);
+
+  /* In-app khabar (audit B4) — accept COMMIT ke baad, best-effort. */
+  await notifyTenantOwners({
+    tenantId: quote.tenant_id,
+    kind: "quote.accepted",
+    title: `Quote accepted — ${quote.id}`,
+    body: `${quote.customer_name}${signerName ? ` · signed by ${signerName}` : ""}`,
+    href: `/quotes/${quote.id}`,
+    entityId: quote.id,
+  });
 
   return NextResponse.json({ ok: true, accepted: true, signed: Boolean(signerName) });
 }

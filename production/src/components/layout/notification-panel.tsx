@@ -22,6 +22,7 @@ import { cn, rupee, formatDate, toWhatsAppDigits } from "@/lib/utils";
 import { useTasks } from "@/lib/queries/tasks";
 import { useLeads } from "@/lib/queries/leads";
 import { useCelebrations } from "@/lib/queries/contacts";
+import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/lib/queries/notifications";
 
 type NotifTone = "emerald" | "indigo" | "amber" | "rose" | "slate";
 
@@ -59,6 +60,11 @@ export function NotificationPanel({
   const { data: tasks } = useTasks("all");
   const { data: leads } = useLeads();
   const { data: celebrations } = useCelebrations(7);
+  /* Asli events — DB se (audit B4): payment/quote-accept/lead/ticket. Read-state
+     row par hai, har device par ek. */
+  const { data: dbNotifs } = useNotifications();
+  const markDbRead = useMarkNotificationRead();
+  const markDbAll  = useMarkAllNotificationsRead();
 
   // Persisted read-state so "Mark all read" survives refresh.
   const [readIds, setReadIds] = React.useState<Set<string>>(new Set());
@@ -76,6 +82,27 @@ export function NotificationPanel({
   const items = React.useMemo<Notification[]>(() => {
     const out: Notification[] = [];
     const { start, end } = todayBoundsIST();
+
+    // 0. Asli events (DB) — payment/quote/lead/ticket; yahi badge ke pehle chalak hain.
+    const KIND_META: Record<string, { icon: string; tone: NotifTone }> = {
+      "payment.received": { icon: "rupee",  tone: "emerald" },
+      "quote.accepted":   { icon: "check",  tone: "emerald" },
+      "lead.created":     { icon: "target", tone: "amber"   },
+      "ticket.created":   { icon: "help",   tone: "indigo"  },
+    };
+    for (const n of dbNotifs ?? []) {
+      const km = KIND_META[n.kind] ?? { icon: "bell", tone: "slate" as NotifTone };
+      out.push({
+        id: `db-${n.id}`,
+        title: n.title,
+        meta: `${n.body ? n.body + " · " : ""}${formatDate(n.created_at)}`,
+        icon: km.icon,
+        tone: km.tone,
+        unread: !n.read_at,
+        link: n.href ?? "/dashboard",
+        when: new Date(n.created_at).getTime(),
+      });
+    }
 
     // 1. Actionable: tasks due today or overdue (pending / snoozed only).
     for (const t of tasks ?? []) {
@@ -139,7 +166,7 @@ export function NotificationPanel({
     }
 
     return out.sort((a, b) => b.when - a.when).slice(0, 30);
-  }, [tasks, leads, celebrations, readIds]);
+  }, [tasks, leads, celebrations, readIds, dbNotifs]);
 
   const unreadCount = items.filter((n) => n.unread).length;
 
@@ -147,12 +174,15 @@ export function NotificationPanel({
     const next = new Set(readIds);
     items.forEach((n) => next.add(n.id));
     persistRead(next);
+    // DB events ka read_at bhi — warna doosre device par sab wapas unread.
+    markDbAll.mutate();
   };
 
   const openItem = (n: Notification) => {
     const next = new Set(readIds);
     next.add(n.id);
     persistRead(next);
+    if (n.id.startsWith("db-")) markDbRead.mutate(n.id.slice(3));
     onOpenChange(false);
     router.push(n.link as never);
   };

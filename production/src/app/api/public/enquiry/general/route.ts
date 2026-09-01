@@ -21,6 +21,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
+import { notifyTenantOwners } from "@/lib/notifications/notify.server";
 import { sendEmail } from "@/lib/email/send";
 
 const FROM_EMAIL = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
@@ -105,6 +106,16 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
+
+    /* In-app khabar (audit B4) — lead COMMIT ke baad, best-effort. */
+    await notifyTenantOwners({
+      tenantId,
+      kind: "lead.created",
+      title: `New enquiry — ${companyName}`,
+      body: fullName + (seats ? ` · ${seats} seats` : ""),
+      href: "/leads",
+      entityId: leadId,
+    });
 
     // ── Notify the reseller (best-effort — don't fail the request on email) ──
     // Pull the tenant's own inbox so alerts land with the right owner, not a

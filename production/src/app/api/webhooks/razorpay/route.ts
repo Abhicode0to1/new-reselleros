@@ -22,6 +22,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
+import { notifyTenantOwners } from "@/lib/notifications/notify.server";
+import { rupee } from "@/lib/utils";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
@@ -249,6 +251,16 @@ export async function POST(request: NextRequest) {
     console.error("[webhooks/razorpay] record_payment RPC failed:", rpcErr);
     return NextResponse.json({ error: "Payment processing failed", detail: rpcErr.message }, { status: 500 });
   }
+
+  /* In-app khabar (audit B4) — record_payment COMMIT ke baad, best-effort. */
+  await notifyTenantOwners({
+    tenantId: quote.tenant_id,
+    kind: "payment.received",
+    title: `Payment received — ${rupee(paymentAmount)} on ${quote.id}`,
+    body: `Razorpay ${event} · ${quote.customer_name ?? ""}`,
+    href: `/quotes/${quote.id}`,
+    entityId: quote.id,
+  });
 
   /* ── QUEUE THE ACTIVATION ────────────────────────────────────────────────
      Placed after `record_payment` has committed, on purpose: the money being recorded is the
