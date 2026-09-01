@@ -119,7 +119,15 @@ Ranked by value:
 
 1. **Supabase Pro (~$25/mo)** — daily automatic backups + 7-day PITR, covering auth, storage and schema. This is the real answer, and the cheapest hour of insurance available for a database with ₹57L of invoices in it. GST records are legally required to be retained.
 2. **`supabase db dump`** — the CLI is already installed (v2.114.0), but the project is **not linked** (no `config.toml`, no project ref stored) and linking needs the **database password**. That produces a genuine, restorable `pg_dump`.
-3. **Schedule whichever you choose**, and **rehearse one restore** into a scratch project. Until a restore has been done once, the backup's value is unproven.
+3. **Schedule whichever you choose**, and **rehearse one restore** into a scratch project.
+   **✅ REHEARSED — 1 Sep 2026.** Kal raat ke offsite JSON (`daily/2026-09-01.json`) se
+   ANUTECH tenant ke **46 tables / 1,993 rows** ek scratch schema me `jsonb_populate_recordset`
+   se **typed** load hue, har table ki ginti backup se milayi gayi, aur poora kaam ROLLBACK
+   hua (prod par koi nishaan nahi). Canary bhi chala: ek ginti jaan-boojh kar bigaadi to run
+   laal hua — matlab green asli tha. Dobara karne ke liye:
+   `node scripts/gen-restore-rehearsal.cjs <backup.json> <tenant_id> out.sql` →
+   `supabase db query --linked -f out.sql`. **Jo ab bhi backup ke BAHAR hai: auth-users aur
+   storage-files** — data lautne par bhi login nahi lautega; ye agla kaam hai.
 
 Until one of those lands, `npm run backup:db` **before any risky change** is the floor — not the ceiling.
 
