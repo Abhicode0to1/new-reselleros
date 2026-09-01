@@ -41,7 +41,7 @@
 
 - [x] C1 ✅ 1 Sep — CSP live (object-src none/base-uri/form-action kase; script udaar — file me kyun likha), logos bucket SVG-mukt (migration; sab PNG the), browser me 0 violation
 - [ ] C2. 23 tenant_id + top FK indexes ka migration
-- [ ] C3. Stale docs stamp/fix: LAUNCH_READINESS (99 din, 8/14 "missing" ab bane hain), MONITORING_SETUP (taaza tareekh, jhootha), MONEY-FLOW matrix, CLAUDE.md §17b, proration.ts:38 comment, bank.ts:669 docstring
+- [x] C3. Stale docs ✅ 1 Sep — LAUNCH_READINESS: dated stale-banner (10 "not built" items verified SHIPPED against code; Hindi-i18n false claim flagged). MONITORING_SETUP: Sentry already LIVE (DSN set on prod, verified via gcloud) + Excel→ANUTECH. CLAUDE.md §17b + bank.ts:669 docstring theek ho gaye C5 me. proration.ts:38 pehle se honest. MONEY-FLOW matrix pehle se 1-Jun par revised (snapshot vs §2.1 current) — jhooth nahi.
 - [x] C4 (aadha) ✅ 1 Sep — reportCron ab 18/18 wired; ⏳ scheduler-script ke 6 missing jobs + murda configs hatana baaki
 - [x] C5. Bank-reconcile ek atomic RPC me ✅ 1 Sep — reconcile_bank_txn (migration 20260901160000). 6 chained client-writes → 1 transaction; dono hooks (useReconcileTransaction + useAutoReconcile→applyReconcile) ab isi ko call karte hain, drift band. Test: supabase/tests/reconcile_bank_txn.test.sql (mutation-verified). Gate 4/4 green. CLAUDE.md §17b update.
 - [x] C6 ✅ 1 Sep — "" fallback ab THROW hai (khaali chaabi = forgeable sab); .env.example me 9 vars darj; alag PDF_SIGNING_SECRET jaan-boojh kar prod par NAHI rakha (purane links tootte) — rotation ke waqt

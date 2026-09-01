@@ -1,5 +1,14 @@
 # Monitoring setup — Sentry + BetterStack
 
+> **✅ Sentry is already LIVE — stamped 2026-09-01.** Verified against Cloud Run:
+> `SENTRY_DSN` **and** `NEXT_PUBLIC_SENTRY_DSN` are set on the `resellersos` service
+> (region `asia-south1`, correct below), and the init is wired code-side (CLAUDE.md §22).
+> So the "🔴 Sentry" section below is a **record of how it was set up, not an open task** —
+> skip straight to verification (`/api/sentry-test`) if you're checking it still works.
+> **BetterStack uptime is still genuinely open** (it needs no env var — it's a dashboard
+> signup + monitor), so that half of this guide is live to-do. Org/email references say
+> "Excel Tech" — historical; the company is **ANUTECH DIGITAL PVT LTD** now (CLAUDE.md §1).
+
 Two services give us full production visibility:
 
 - **Sentry** → catches every JavaScript / server error with stack trace + breadcrumbs

@@ -6,6 +6,38 @@
 
 ---
 
+> ## ⚠️ STALE — point-in-time snapshot from 2026-05-24. Do not trust the tables below.
+>
+> Stamped 2026-09-01 (CLAUDE.md §25.1: a doc found wrong is fixed or stamped in the same
+> session). ~100 days on, most of what §1's **"🔴 Not built"** table lists as absent has
+> since **shipped** — verified against the code on 2026-09-01, not remembered:
+>
+> | Doc said "not built" | Reality on 2026-09-01 |
+> |---|---|
+> | Customer portal | ✅ built — `src/app/(public)/portal/**` (12 pages) + `portal_customer_users` RLS/tests |
+> | Team / invite members | ✅ built — invite route + `20260901090000_team_invites_token.sql` |
+> | Contact import (CSV) | ✅ built — `import-csv-dialog.tsx` |
+> | Sentry monitoring | ✅ built — `lib/sentry.ts` + chokepoint init (CLAUDE.md §22) |
+> | WhatsApp | ✅ page shipped — `/whatsapp` |
+> | Razorpay | ✅ webhook + verify shipped (3 route files); **live KYC/keys still Pardeep's** |
+> | Gemini AI (scoring, replies, telecalling, sales agent) | ✅ heavily built — 81 libs under `lib/ai/` |
+> | Reports | ✅ 4 report pages shipped — **GSTR-1 government-format export still pending** |
+> | Hosting (§3 #1) | ✅ live on Cloud Run (`resellersos-njvk4nxhdq`), not "Firebase in progress" |
+> | Resend / APP_URL / CRON_SECRET (§3 #2–4) | ✅ all resolved; only Resend **domain verify** remains (Pardeep) |
+>
+> **Line 178 is actively false:** "Hindi i18n (next-intl already set up)" — Hindi/i18n was
+> **cancelled** by Pardeep on 2026-09-01 and `next-intl` uninstalled (CLAUDE.md §2). Do not
+> re-propose it.
+>
+> **Still genuinely open:** GST e-Invoice IRP (IRN+QR), Google CSP / MS Partner / Zoho reseller
+> APIs, GSTR-1 export, Razorpay live keys (KYC), Resend domain verify.
+>
+> **Current sources of truth:** `TASKS.md` (live status) · `production/CLAUDE.md` (conventions)
+> · the deep-audit artifact. The narrative below is kept only as a record of where things stood
+> at first-launch planning.
+
+---
+
 ## TL;DR
 
 Code shape me hai. **Frontend + DB + automated workflows production-grade hain.** Lekin **deploy ke saath ek baar 3 cheezein setup karni hain** for the app to actually deliver business value (emails, payments, GST). Rest is nice-to-have for v1.
