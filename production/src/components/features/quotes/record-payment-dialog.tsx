@@ -428,36 +428,14 @@ export function RecordPaymentDialog({
         }
       }
 
-      // ── 4. Overpayment → customer advance credit (best-effort, like TDS row).
-      // The RPC floors outstanding at 0, so any excess would otherwise vanish.
-      // Record only the INCREMENTAL excess this payment caused (so multiple
-      // installments don't double-count) as an 'open' credit for the customer.
-      const priorReceived = (r.total_received ?? 0) - settledAmount;
-      const priorOverpaid = Math.max(0, priorReceived - (r.expected ?? 0));
-      const overpaidNow   = Math.max(0, (r.total_received ?? 0) - (r.expected ?? 0));
-      const creditAmount  = Math.max(0, overpaidNow - priorOverpaid);
-      let creditRecorded  = 0;
-      if (!isReplay && creditAmount > 0 && r.customer_id) {
-        const { data: authData2 } = await supabase.auth.getUser();
-        if (authData2?.user) {
-          const { data: me2 } = await supabase
-            .from("users").select("tenant_id").eq("id", authData2.user.id).maybeSingle();
-          if (me2) {
-            const credErr = (await supabase.from("customer_credits").insert({
-              tenant_id:         me2.tenant_id,
-              customer_id:       r.customer_id,
-              amount:            creditAmount,
-              source:            "overpayment",
-              source_payment_id: r.payment_id,
-              source_quote_id:   quoteId,
-              note:              `Excess over quote ${quoteId}`,
-              status:            "open",
-            })).error;
-            if (credErr) console.error("[record-payment] customer credit insert failed (payment still recorded):", credErr);
-            else creditRecorded = creditAmount;
-          }
-        }
-      }
+      // ── 4. Overpayment → customer credit: ab RPC ke ANDAR banta hai
+      // (migration 20260901110000, audit A5). Pehle yahan client-side insert
+      // tha — RPC-commit ke BAAD, sirf console.error ke sahare — network ki
+      // ek hichki aur excess hamesha ke liye be-hisaab. Ab function khud
+      // incremental excess ki 'open' credit likhta hai (test:
+      // record_payment_overpaid_credit — atomic, incremental, replay-safe)
+      // aur return me bata deta hai.
+      const creditRecorded = Number(r.overpaid_credit ?? 0);
 
       // Re-shape into the camelCase keys the onSuccess handler already consumes
       return {

@@ -130,13 +130,13 @@ function ReportCard({
 // Ye "funnel conversion" nahi hai: stage ka itihaas record nahi hota, sirf
 // aaj ki stage — isliye card kehta hai "Pipeline today" aur % kul ka hissa
 // hai, conversion nahi.
-const PIPELINE_STAGES: ReadonlyArray<{ stage: string; label: string; color: string }> = [
-  { stage: "new",     label: "New leads",      color: "#64748b" },
-  { stage: "contact", label: "Contacted",      color: "#6366f1" },
-  { stage: "demo",    label: "Demo scheduled", color: "#0ea5e9" },
-  { stage: "trial",   label: "Trial active",   color: "#f43f5e" },
-  { stage: "quote",   label: "Quote sent",     color: "#C2410C" },
-  { stage: "won",     label: "Closed won",     color: "#16a34a" },
+const PIPELINE_STAGES: ReadonlyArray<{ id: string; label: string; color: string }> = [
+  { id: "new",     label: "New leads",      color: "#64748b" },
+  { id: "contact", label: "Contacted",      color: "#6366f1" },
+  { id: "demo",    label: "Demo scheduled", color: "#0ea5e9" },
+  { id: "trial",   label: "Trial active",   color: "#f43f5e" },
+  { id: "quote",   label: "Quote sent",     color: "#C2410C" },
+  { id: "won",     label: "Closed won",     color: "#16a34a" },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -208,11 +208,11 @@ export default function ReportsPage() {
     acc[l.stage] = (acc[l.stage] ?? 0) + 1;
     return acc;
   }, {});
-  const pipelineTotal = PIPELINE_STAGES.reduce((s, st) => s + (stageCounts[st.stage] ?? 0), 0);
+  const pipelineTotal = PIPELINE_STAGES.reduce((s, st) => s + (stageCounts[st.id] ?? 0), 0);
   const pipeline = PIPELINE_STAGES.map((st) => ({
     ...st,
-    count: stageCounts[st.stage] ?? 0,
-    pct: pipelineTotal > 0 ? Math.round(((stageCounts[st.stage] ?? 0) / pipelineTotal) * 100) : 0,
+    count: stageCounts[st.id] ?? 0,
+    pct: pipelineTotal > 0 ? Math.round(((stageCounts[st.id] ?? 0) / pipelineTotal) * 100) : 0,
   }));
 
   /* Seats by vendor — asli; nakli 6-mahine ke stacked bars ki jagah. */

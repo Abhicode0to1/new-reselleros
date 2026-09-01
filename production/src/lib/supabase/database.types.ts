@@ -4588,6 +4588,8 @@ export type Database = {
           /** True when the same (quote, reference) was already recorded — idempotent replay; no new row inserted. */
           idempotent_replay?:      boolean;
           already_recorded?:       boolean;
+          /** Migration 20260901110000 (audit A5) — is bhugtan ne jitna NAYA excess banaya, utni 'open' customer credit isi transaction me bani. Replay par absent. */
+          overpaid_credit?:        number;
         };
       };
       /**
@@ -4633,6 +4635,8 @@ export type Database = {
           already_recorded?:       boolean;
           /** True when the TDS receivable committed in the same txn as the payment. */
           tds_saved?:              boolean;
+          /** record_payment se hokar aata hai — migration 20260901110000 (audit A5). */
+          overpaid_credit?:        number;
         };
       };
       /**
