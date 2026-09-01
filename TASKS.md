@@ -7,6 +7,53 @@
 
 ---
 
+# 🟢 HANDOFF — 1 Sep 2026. Deep audit (4 auditor, sab naapa hua) ke 26 kaam — status YAHIN update hota hai.
+
+> Poori report: https://claude.ai/code/artifact/7cf5e0d1-b317-492d-ac54-d5a660e5fba8
+> Har daave ka file:line saboot report me hai. Pardeep ka nirdesh (1 Sep): saare kaam karo,
+> har poora hua kaam isi list me tick karo, permission recommended par khud accept.
+
+## 🔴 AUDIT-P0 — pehle asli customer se pehle (khule darwaze)
+
+- [ ] **A1. Invite-takeover band karo** — `team_invites` me token nahi; signup `email_confirm: true` se bina mailbox-proof account banata hai (owner tak). Fix: token column + link se hi accept.
+- [x] **A2. Project-quote accept par token** ✅ 1 Sep — migration `20260901080000` prod par lagi+tracked; route/page dono `quoteTokenMatches` se; teeno link-builder `?t=` ke saath; pin-test `project-quote-token.test.ts` (3) — `api/public/project-quote/[id]/accept` bina kisi token/session ke chalta hai; baaki sab quote-routes `?t=` maangte hain.
+- [ ] **A3. Rate-limiting `/api/public/*`** — poore app me 0 limiter; Gemini/Resend anonymous jalte hain. + expense-claim PIN par lockout (4-digit brute-force khula hai).
+- [ ] **A4. `users` DELETE owner-only + audit** — koi bhi member owner ko delete kar sakta hai, bina activity_log ke. Migration: policy + users par trigger.
+- [ ] **A5. Overpayment-credit atomic karo** — `record-payment-dialog.tsx:446` RPC ke baad client-side credit insert; fail par rupaye gum. RPC ke andar lo. (Bada bhai: `refund_payment` RPC — alag item A5b.)
+- [ ] **A5b. `refund_payment` RPC** — GST-invoice ke baad paisa wapas karne ka koi raasta nahi; `useRefundPayment` (0 callers) ledger-corrupt karne wala stub hai — ya poora banao ya hatao.
+- [ ] **A6. SQL tests CI me (nightly) + money-check push par** — 43 SQL test kisi CI me nahi; money-check.yml sirf PR par hai aur aakhri PR 15 Aug ka hai (0 runs ever). Live DB se 3 guard pehle gum ho chuke hain.
+- [ ] **A7. SENTRY_DSN + uptime monitor** — Sentry code laga hai, DSN unset (error-tracking OFF). DSN kahin ho to `--update-env-vars` (kabhi `--set-env-vars` nahi); nahi to Pardeep-item.
+- [ ] **A8. Ek restore-rehearsal + runbook** — backup 3 layer, 0 restore kabhi; auth-users/storage kisi backup me nahi. Staging project par rehearse karo, samay likho.
+
+## 🟠 AUDIT-P1 — world-class banane wale
+
+- [x] **B1. Reports page ke PAANCH fabrications khatam** ✅ 1 Sep — audit ne 1 dhoondha tha, andar 5 the: funnel, 12-mahine MRR trend, 17% margin (KPI+per-customer), ID-se-bana "renewal risk", jhoothe trend-badge, +Math.max(lowRisk,1) ka floor. Ab: pipeline leads ki asli stage-ginti, MRR history mrr_snapshots se (1 asli bindu + note), risk sirf seat-utilisation, seats-by-vendor asli; guard `reports-honesty.test.ts` (5). Browser-verified: MRR ₹3,77,370 DB se hu-ba-hu.
+- [ ] **B2. Default catalog setup-wizard me** — naye tenant ko khali quote-builder milta hai; "Load default catalog" sirf /items ke empty-state me chhupa hai.
+- [ ] **B3. §24 enforcement (error = kya+kyun+aage kya)** — 479 `toast.error` me 6 action-button (1.3%); lint/hook ke bina ye kabhi nahi sudhrega.
+- [ ] **B4. In-app notifications** — table + realtime + per-user read (abhi localStorage); payment/quote-accept/overdue/ticket ka in-app nishaan zero.
+- [ ] **B5. Mobile card-view: 4 customer-facing pages pehle** — quote-accept (WhatsApp se phone par khulta hai), portal invoices/orders, project-quote. (Kul 21 bare tables.)
+- [ ] **B6. Deploy hardening** — startup probe (0 HEALTHCHECK), 2-line rollback runbook + ek rehearsal, `migrations:verify` deploy-gate.
+- [ ] **B7. CRM data-export + renewals forecast + GSTR-1 format** — customers/quotes/invoices ka CSV export nahi; forecast curve nahi.
+- [ ] **B8. Hindi i18n (bada, ~2-3 hafte)** — 0% bana hai; teen docs jhooth bolte hain. Pehle extraction (en.json), phir hi.json. Alag session ka kaam.
+
+## 🟡 AUDIT-P2 — chamak
+
+- [ ] C1. CSP header + logos bucket se SVG hatao (stored-XSS raasta)
+- [ ] C2. 23 tenant_id + top FK indexes ka migration
+- [ ] C3. Stale docs stamp/fix: LAUNCH_READINESS (99 din, 8/14 "missing" ab bane hain), MONITORING_SETUP (taaza tareekh, jhootha), MONEY-FLOW matrix, CLAUDE.md §17b, proration.ts:38 comment, bank.ts:669 docstring
+- [ ] C4. Cron hygiene: 6 route scheduler-script me darj nahi; reportCron 12/18; wiring-test threshold 16→18; vercel.json ke 4 murda cron + firebase/apphosting configs hatao
+- [ ] C5. Bank-reconcile ko ek RPC me (abhi 6 client-writes, do copies jo drift ho chuki hain)
+- [ ] C6. PDF signing-key alag env se (`SUPABASE_SERVICE_ROLE_KEY` reuse + "" fallback band); `.env.example` me 9 missing vars
+- [ ] C7. Bulk/undo/j-k propagation; nav progressive-reveal (72 links)
+- [ ] C8. `getSession()`→`getUser()` 2 routes; WhatsApp verify-token constant-time
+- [ ] C9. Bundle budget + analyzer; plausible ya hatao daava
+- [ ] C10. Zod 27 baki JSON-parse routes par (pehle unauthenticated wale)
+
+## 👉 sirf Pardeep (audit se)
+
+- [ ] Sentry account/DSN (agar kahin maujood nahi)
+- [ ] Razorpay LIVE keys + Resend domain verify (purane, ab bhi khade)
+
 # 🟢 HANDOFF — 25 Aug 2026 (शाम). Satrah feature, ek bhi migration nahi, aur chaar cheezein jo LIVE tooti hui hain.
 
 > Neeche isi din ka subah ka handoff hai, phir 24 Aug ka. **Yahan se "kya karna hai" lo. "Kyun"

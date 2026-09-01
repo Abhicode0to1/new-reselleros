@@ -380,7 +380,7 @@ export default function QuotesPage() {
                         <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => router.push(`/projects/${p.id}` as any)}>
                           <Icon name="eye" size={15} /> Open project
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => window.open(`/project-quote/${p.id}`, "_blank", "noopener")}>
+                        <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => window.open(`/project-quote/${p.id}?t=${p.public_token}`, "_blank", "noopener")}>
                           <Icon name="file" size={15} /> Preview quote (customer view)
                         </DropdownMenuItem>
                         <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setEditProject(p)}>
@@ -453,7 +453,7 @@ export default function QuotesPage() {
                             <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => router.push(`/projects/${p.id}` as any)}>
                               <Icon name="eye" size={15} /> Open project
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => window.open(`/project-quote/${p.id}`, "_blank", "noopener")}>
+                            <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => window.open(`/project-quote/${p.id}?t=${p.public_token}`, "_blank", "noopener")}>
                               <Icon name="file" size={15} /> Preview quote (customer view)
                             </DropdownMenuItem>
                             <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setEditProject(p)}>

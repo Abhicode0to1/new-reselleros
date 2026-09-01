@@ -2481,6 +2481,8 @@ type SalaryPaymentUpdate = Partial<Omit<SalaryPaymentInsert, "tenant_id">>;
 export type ProjectSaleRow = {
   id:             string;
   tenant_id:      string;
+  /** Migration 20260901080000 — unguessable token for the public /project-quote link (id akela kaafi nahi). */
+  public_token:   string;
   customer_id:    string | null;
   customer_name:  string;
   title:          string;

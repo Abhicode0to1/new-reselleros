@@ -109,7 +109,7 @@ export default function ProjectDetailPage() {
   // fully compliant tax invoice (CGST/SGST vs IGST + their ITC).
   const gstMissing = customer ? (!customer.gstin || !customer.state) : false;
 
-  const customerLink = typeof window !== "undefined" ? `${window.location.origin}/project-quote/${project.id}` : "";
+  const customerLink = typeof window !== "undefined" ? `${window.location.origin}/project-quote/${project.id}?t=${project.public_token}` : "";
   const copyLink = async () => {
     try { await navigator.clipboard.writeText(customerLink); toast.success("Customer link copied"); }
     catch { toast.error("Could not copy"); }

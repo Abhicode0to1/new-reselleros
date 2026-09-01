@@ -1,15 +1,24 @@
 /**
- * Reports & Analytics — matches prototype screen D3.
+ * Reports & Analytics — ab HAR aankda asli hai, ya saaf kehta hai ki nahi hai.
  *
- * Layout:
- *   - Page header (eyebrow/title/subtitle + This month / Export PDF)
- *   - 6 KPIs: MRR / ARR / Margin ARR / Customer LTV / Churn % / Avg deal size
- *   - Row 1: MRR+Margin trend line chart | Sales funnel
- *   - Row 2: Revenue by plan donut | Renewal risk donut
- *   - Row 3: Margin by vendor stacked bars | Top customers table
+ * 1 Sep 2026 ke audit ne is page par paanch jhooth naape the, sab asli
+ * numbers ke BEECH me baithe hue: 12-mahine ka MRR trend hardcode tha,
+ * funnel (Leads 120 → Won 22) hardcode tha, "Margin ARR" hamesha 17% tha,
+ * "renewal risk" subscription ki ID ke aksharon se nakli NPS/last-login
+ * banata tha, aur KPI ke saare trend-badge (plus-barah-pratishat jaisi
+ * string-literals) kahaani the.
+ * Demo ke liye theek tha; "Live business insights" heading ke neeche wahi
+ * cheez jhooth ban jati hai jo saas-metrics wala page kabhi nahi karta
+ * (wahan expansion ka "—" hota hai, ₹0 nahi).
  *
- * Charts use Recharts v2. MRR trend uses illustrative 12-month demo data
- * (production would pull from a server-side aggregation table).
+ * Ab ka niyam: aankda ya to naapa hua hai (source comment ke saath), ya
+ * dikhaya hi nahi jata — uski jagah likha hota hai ki wo KAB se aayega.
+ *   - MRR/ARR/seats: live subscriptions se.
+ *   - MRR history: mrr_snapshots (mahine ki 1 ko cron likhta hai) — jitne
+ *     mahine asli hain utne hi bindu.
+ *   - Funnel: leads ki asli stage-ginti (aaj ka pipeline, conversion nahi —
+ *     conversion ke liye stage-history chahiye jo abhi record nahi hoti).
+ *   - Risk: sirf seat-utilisation (used/seats) — jo sach me pata hai.
  */
 "use client";
 
@@ -17,6 +26,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useCustomers } from "@/lib/queries/customers";
+import { useLeads } from "@/lib/queries/leads";
+import { useMrrSnapshots } from "@/lib/queries/seat-requests";
 import { KPI } from "@/components/shared/kpi";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
@@ -38,30 +49,11 @@ import {
 } from "recharts";
 import type { Subscription } from "@/lib/supabase/database.types";
 
-// ─── Demo trend data (12 months) ─────────────────────────────────────────────
-// Production: replace with a server-side time-series aggregation query.
-const MONTH_LABELS = [
-  "Jun", "Jul", "Aug", "Sep", "Oct", "Nov",
-  "Dec", "Jan", "Feb", "Mar", "Apr", "May",
-];
-const MRR_TREND = [240000, 252000, 268000, 280000, 295000, 308000, 322000, 348000, 358000, 372000, 395000, 420000];
-const MARGIN_TREND = MRR_TREND.map((v) => Math.round(v * 0.17));
-
-const trendData = MONTH_LABELS.map((month, i) => ({
-  month,
-  mrr:    MRR_TREND[i],
-  margin: MARGIN_TREND[i],
-}));
-
-// Stacked bar data: margin by vendor (last 6 months)
-const vendorBarData = [
-  { month: "Dec", google: 48000, microsoft: 12000, zoho: 3000 },
-  { month: "Jan", google: 52000, microsoft: 13500, zoho: 3500 },
-  { month: "Feb", google: 54000, microsoft: 14000, zoho: 3800 },
-  { month: "Mar", google: 58000, microsoft: 15000, zoho: 4200 },
-  { month: "Apr", google: 62000, microsoft: 16000, zoho: 4500 },
-  { month: "May", google: 67000, microsoft: 17200, zoho: 4800 },
-];
+/** "2026-08-01" → "Aug '26" — chart ki dhuri ke liye. */
+function periodLabel(period: string): string {
+  const d = new Date(period + "T00:00:00Z");
+  return `${d.toLocaleString("en-IN", { month: "short", timeZone: "UTC" })} '${String(d.getUTCFullYear() % 100).padStart(2, "0")}`;
+}
 
 // ─── Custom Recharts tooltip ──────────────────────────────────────────────────
 function RupeeTooltip({ active, payload, label }: any) {
@@ -134,13 +126,17 @@ function ReportCard({
   );
 }
 
-// ─── Sales funnel ─────────────────────────────────────────────────────────────
-const FUNNEL_STAGES = [
-  { label: "Leads",          count: 120, pct: 100, color: "#64748b" },
-  { label: "Demo scheduled", count: 68,  pct: 57,  color: "#6366f1" },
-  { label: "Trial active",   count: 45,  pct: 37,  color: "#f43f5e" },
-  { label: "Quote sent",     count: 32,  pct: 27,  color: "#C2410C" },
-  { label: "Closed won",     count: 22,  pct: 18,  color: "#16a34a" },
+// ─── Sales pipeline — leads ki ASLI stage-ginti ke labels/rang ──────────────
+// Ye "funnel conversion" nahi hai: stage ka itihaas record nahi hota, sirf
+// aaj ki stage — isliye card kehta hai "Pipeline today" aur % kul ka hissa
+// hai, conversion nahi.
+const PIPELINE_STAGES: ReadonlyArray<{ stage: string; label: string; color: string }> = [
+  { stage: "new",     label: "New leads",      color: "#64748b" },
+  { stage: "contact", label: "Contacted",      color: "#6366f1" },
+  { stage: "demo",    label: "Demo scheduled", color: "#0ea5e9" },
+  { stage: "trial",   label: "Trial active",   color: "#f43f5e" },
+  { stage: "quote",   label: "Quote sent",     color: "#C2410C" },
+  { stage: "won",     label: "Closed won",     color: "#16a34a" },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -148,6 +144,8 @@ const FUNNEL_STAGES = [
 export default function ReportsPage() {
   const { data: subs,      isLoading: subsLoading  } = useSubscriptions();
   const { data: customers, isLoading: custsLoading } = useCustomers();
+  const { data: leads } = useLeads();
+  const { data: snapshots } = useMrrSnapshots(13);
 
   const loading = subsLoading || custsLoading;
 
@@ -172,27 +170,60 @@ export default function ReportsPage() {
   const activeSubs = (subs ?? []).filter((s) => s.status === "active");
   const totalMrr   = activeSubs.reduce((s, x) => s + x.mrr, 0);
   const totalArr   = totalMrr * 12;
-  const marginArr  = Math.round(totalArr * 0.17);
   const custCount  = (customers ?? []).length;
-  const ltv        = custCount > 0 ? Math.round(totalArr / custCount) : 0;
+  const totalSeats = activeSubs.reduce((s, x) => s + x.seats, 0);
 
-  // Risk distribution for donut
+  /* MRR history — mrr_snapshots ki asli avadhi-war ginti. Ek period me har
+     customer ki apni row hoti hai, isliye period par jod. */
+  const byPeriod = new Map<string, number>();
+  for (const r of snapshots ?? []) {
+    byPeriod.set(r.period, (byPeriod.get(r.period) ?? 0) + r.mrr);
+  }
+  const trendData = [...byPeriod.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([period, mrr]) => ({ month: periodLabel(period), mrr }));
+  /* Trend-badge sirf tab jab do asli mahine hon — warna koi badge nahi.
+     (Purana page yahan plus-barah-pratishat jaisa banaya hua badge chhapta tha.) */
+  const mrrMoM =
+    trendData.length >= 2 && trendData[trendData.length - 2].mrr > 0
+      ? Math.round(
+          ((trendData[trendData.length - 1].mrr - trendData[trendData.length - 2].mrr) /
+            trendData[trendData.length - 2].mrr) * 100,
+        )
+      : null;
+
+  /* Risk = sirf seat-utilisation, kyunki wahi sach me naapa hua hai.
+     (Pehle yahan sub ki ID ke aksharon se "last login" aur "NPS" bante the.) */
   function riskLevel(sub: Subscription): "high" | "medium" | "low" {
-    const idHash = sub.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 100;
-    let score = 0;
     const util = sub.used / Math.max(1, sub.seats);
-    if (util < 0.7) score += 35;
-    else if (util < 0.85) score += 15;
-    const lastLogin = (idHash * 7) % 60;
-    if (lastLogin > 30) score += 25;
-    const nps = 9 - (idHash % 10);
-    if (nps <= 4) score += 25;
-    return score >= 60 ? "high" : score >= 30 ? "medium" : "low";
+    return util < 0.7 ? "high" : util < 0.85 ? "medium" : "low";
   }
 
   const highRisk   = activeSubs.filter((s) => riskLevel(s) === "high").length;
   const mediumRisk = activeSubs.filter((s) => riskLevel(s) === "medium").length;
   const lowRisk    = activeSubs.filter((s) => riskLevel(s) === "low").length;
+
+  /* Pipeline today — leads ki asli stage-ginti ("junk"/lost ginti me nahi). */
+  const stageCounts = (leads ?? []).reduce<Record<string, number>>((acc, l) => {
+    acc[l.stage] = (acc[l.stage] ?? 0) + 1;
+    return acc;
+  }, {});
+  const pipelineTotal = PIPELINE_STAGES.reduce((s, st) => s + (stageCounts[st.stage] ?? 0), 0);
+  const pipeline = PIPELINE_STAGES.map((st) => ({
+    ...st,
+    count: stageCounts[st.stage] ?? 0,
+    pct: pipelineTotal > 0 ? Math.round(((stageCounts[st.stage] ?? 0) / pipelineTotal) * 100) : 0,
+  }));
+
+  /* Seats by vendor — asli; nakli 6-mahine ke stacked bars ki jagah. */
+  const seatsByVendor = Object.entries(
+    activeSubs.reduce<Record<string, number>>((acc, s) => {
+      acc[s.vendor] = (acc[s.vendor] ?? 0) + s.seats;
+      return acc;
+    }, {}),
+  )
+    .map(([vendor, seats]) => ({ vendor, seats }))
+    .sort((a, b) => b.seats - a.seats);
 
   // Top customers by MRR (from subs — aggregate per customer)
   const mrrByCustomer = activeSubs.reduce<Record<string, { name: string; mrr: number }>>((acc, s) => {
@@ -233,10 +264,12 @@ export default function ReportsPage() {
       fmt:   (v: number) => rupee(v, { compact: true }),
     }));
 
+  /* Koi floor nahi — healthy 0 ho to 0 hi dikhe. (Pehle Math.max(lowRisk, 1)
+     tha: shunya ko chup-chaap ek bana deta tha.) */
   const riskSlices = [
-    { label: "Healthy (low risk)", value: Math.max(lowRisk,    1), color: "#16A34A", fmt: (v: number) => `${v} subs` },
-    { label: "Medium risk",        value: Math.max(mediumRisk, 0), color: "#FBBC04", fmt: (v: number) => `${v} subs` },
-    { label: "High risk",          value: Math.max(highRisk,   0), color: "#EF4444", fmt: (v: number) => `${v} subs` },
+    { label: "Healthy (≥85% used)",   value: lowRisk,    color: "#16A34A", fmt: (v: number) => `${v} subs` },
+    { label: "Watch (70–85% used)",   value: mediumRisk, color: "#FBBC04", fmt: (v: number) => `${v} subs` },
+    { label: "At risk (<70% used)",   value: highRisk,   color: "#EF4444", fmt: (v: number) => `${v} subs` },
   ].filter((s) => s.value > 0);
 
   return (
@@ -249,7 +282,7 @@ export default function ReportsPage() {
           </p>
           <h1 className="font-serif text-3xl text-ink">Reports</h1>
           <p className="mt-1 text-sm text-ink-3">
-            Live business insights · auto-refreshed every 5 minutes
+            Live figures from subscriptions, leads and monthly MRR snapshots
           </p>
         </div>
         {/* Deeper drill-down. (Date-range + PDF export intentionally omitted until
@@ -262,135 +295,95 @@ export default function ReportsPage() {
         </Link>
       </div>
 
-      {/* ── KPIs ── */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+      {/* ── KPIs — sab live subscriptions se; trend-badge sirf jab history ho.
+             Churn/LTV yahan nahi: unke asli hisaab /accounting/saas-metrics
+             par hain, aur nakli badge se khaali jagah behtar hai. ── */}
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
         <KPI
           label="MRR"
           value={totalMrr}
           asCurrency
-          trend="+12%"
-          trendKind="up"
+          trend={mrrMoM !== null ? `${mrrMoM > 0 ? "+" : ""}${mrrMoM}% MoM` : undefined}
+          trendKind={mrrMoM === null ? undefined : mrrMoM >= 0 ? "up" : "down"}
           icon="rupee"
         />
+        <KPI label="ARR" value={totalArr} asCurrency icon="trending_up" />
+        <KPI label="Active subscriptions" value={activeSubs.length} icon="layers" />
+        <KPI label="Seats under management" value={totalSeats} icon="users" />
         <KPI
-          label="ARR"
-          value={totalArr}
-          asCurrency
-          trend="+14%"
-          trendKind="up"
-          icon="trending_up"
-        />
-        <KPI
-          label="Margin · ARR"
-          value={marginArr}
-          asCurrency
-          trend="17% avg"
-          trendKind="up"
-          icon="rupee"
-        />
-        <KPI
-          label="Customer LTV"
-          value={ltv}
-          asCurrency
-          trend="+₹40K"
-          trendKind="up"
-          icon="users"
-        />
-        <KPI
-          label="Churn %"
-          value="2.1"
-          unit="%"
-          trend="−0.4pp"
-          trendKind="up"
-          icon="trending_down"
-        />
-        <KPI
-          label="Avg deal size"
+          label="Avg MRR / customer"
           value={custCount > 0 ? Math.round(totalMrr / custCount) : 0}
           asCurrency
-          trend="+₹15K"
-          trendKind="up"
           icon="award"
         />
       </div>
 
       {/* ── Row 1: MRR trend + Funnel ── */}
       <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* MRR + Margin trend */}
-        <ReportCard title="MRR + Margin trend" subtitle="Last 12 months">
-          {/* Legend */}
-          <div className="mb-3 flex gap-4 text-xs">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-0.5 w-5 rounded bg-amber inline-block" />
-              MRR
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-0.5 w-5 rounded bg-emerald-500 inline-block" />
-              Your Margin
-            </span>
-          </div>
-
-          <ResponsiveContainer width="100%" height={200}>
-            <ComposedChart data={trendData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
-              <defs>
-                <linearGradient id="mrrGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#C2410C" stopOpacity={0.28} />
-                  <stop offset="95%" stopColor="#C2410C" stopOpacity={0}    />
-                </linearGradient>
-                <linearGradient id="marginGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#16a34a" stopOpacity={0.22} />
-                  <stop offset="95%" stopColor="#16a34a" stopOpacity={0}    />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="2 4" stroke="var(--color-hairline, #e4e4e7)" />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 9, fill: "var(--color-ink-3, #71717a)" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 9, fill: "var(--color-ink-3, #71717a)" }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => `₹${Math.round(v / 1000)}K`}
-                width={40}
-              />
-              <Tooltip content={<RupeeTooltip />} />
-              <Area
-                type="monotone"
-                dataKey="mrr"
-                name="MRR"
-                stroke="#C2410C"
-                strokeWidth={2}
-                fill="url(#mrrGrad)"
-                dot={{ r: 2.5, fill: "#fff", stroke: "#C2410C", strokeWidth: 1.5 }}
-              />
-              <Area
-                type="monotone"
-                dataKey="margin"
-                name="Margin"
-                stroke="#16a34a"
-                strokeWidth={2}
-                fill="url(#marginGrad)"
-                dot={{ r: 2.5, fill: "#fff", stroke: "#16a34a", strokeWidth: 1.5 }}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-
-          <div className="mt-2 flex justify-between text-xs text-ink-3">
-            <span>Jun '25: ₹2.4L MRR</span>
-            <span>
-              May '26: ₹4.2L ·{" "}
-              <span className="text-emerald-600">+75% YoY</span>
-            </span>
-          </div>
+        {/* MRR history — mrr_snapshots se, jitni asli hai utni hi. */}
+        <ReportCard
+          title="MRR history"
+          subtitle={`Monthly snapshots · ${trendData.length} month${trendData.length === 1 ? "" : "s"} recorded`}
+        >
+          {trendData.length === 0 ? (
+            <p className="text-sm text-ink-3 py-8 text-center">
+              Pehla snapshot mahine ki 1 taareekh ko banega — cron har mahine
+              MRR ka bindu jodta hai.
+            </p>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <ComposedChart data={trendData} margin={{ left: 0, right: 8, top: 4, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="mrrGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#C2410C" stopOpacity={0.28} />
+                      <stop offset="95%" stopColor="#C2410C" stopOpacity={0}    />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--color-hairline, #e4e4e7)" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 9, fill: "var(--color-ink-3, #71717a)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 9, fill: "var(--color-ink-3, #71717a)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `₹${Math.round(v / 1000)}K`}
+                    width={40}
+                  />
+                  <Tooltip content={<RupeeTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="mrr"
+                    name="MRR"
+                    stroke="#C2410C"
+                    strokeWidth={2}
+                    fill="url(#mrrGrad)"
+                    dot={{ r: 3, fill: "#fff", stroke: "#C2410C", strokeWidth: 1.5 }}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+              {trendData.length < 3 && (
+                <p className="mt-2 text-xs text-ink-3">
+                  History {trendData[0].month} se shuru hui hai — curve mahine-dar-mahine
+                  apne aap banegi. (Pehle yahan 12 mahine ka DEMO data tha; wo kisi
+                  faisle ke kaam ka nahi tha.)
+                </p>
+              )}
+            </>
+          )}
         </ReportCard>
 
-        {/* Sales funnel */}
-        <ReportCard title="Sales funnel" subtitle="This month">
+        {/* Pipeline today — leads ki asli stage-ginti */}
+        <ReportCard
+          title="Pipeline today"
+          subtitle={`Leads by current stage · ${pipelineTotal} open + won`}
+        >
           <div className="space-y-3 pt-1">
-            {FUNNEL_STAGES.map((f) => (
+            {pipeline.map((f) => (
               <div
                 key={f.label}
                 className="grid items-center gap-2 text-sm"
@@ -446,10 +439,12 @@ export default function ReportsPage() {
           )}
         </ReportCard>
 
-        {/* Renewal risk distribution */}
+        {/* Seat-utilisation risk — jo sach me naapa hua hai wahi. (Pehle yahan
+            "renewal risk" tha jo sub ki ID ke aksharon se NPS/last-login
+            banata tha — fiction.) */}
         <ReportCard
-          title="Renewal risk · Next 90 days"
-          subtitle="Distribution across active subscriptions"
+          title="Seat utilisation risk"
+          subtitle="Under-used seats churn first · used ÷ purchased per subscription"
         >
           {riskSlices.length === 0 ? (
             <p className="text-sm text-ink-3 py-8 text-center">
@@ -479,52 +474,43 @@ export default function ReportsPage() {
         </ReportCard>
       </div>
 
-      {/* ── Row 3: Stacked bars + Top customers ── */}
+      {/* ── Row 3: Seats by vendor + Top customers ── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Margin by vendor — stacked bars */}
-        <ReportCard title="Margin by vendor" subtitle="Last 6 months · stacked monthly">
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart
-              data={vendorBarData}
-              margin={{ left: 0, right: 8, top: 4, bottom: 0 }}
-            >
-              <CartesianGrid strokeDasharray="2 4" stroke="var(--color-hairline, #e4e4e7)" vertical={false} />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 9, fill: "var(--color-ink-3, #71717a)" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 9, fill: "var(--color-ink-3, #71717a)" }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => `₹${Math.round(v / 1000)}K`}
-                width={40}
-              />
-              <Tooltip content={<RupeeTooltip />} />
-              <Bar dataKey="google"    name="Google"    stackId="a" fill="#C2410C" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="microsoft" name="Microsoft" stackId="a" fill="#4285F4" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="zoho"      name="Zoho"      stackId="a" fill="#34A853" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-
-          {/* Vendor legend */}
-          <div className="mt-2 flex flex-wrap gap-3 text-xs text-ink-3">
-            {[
-              { label: "Google Workspace", color: "#C2410C" },
-              { label: "Microsoft 365",   color: "#4285F4" },
-              { label: "Zoho + add-ons",  color: "#34A853" },
-            ].map((v) => (
-              <span key={v.label} className="inline-flex items-center gap-1.5">
-                <span
-                  className="rounded-sm"
-                  style={{ width: 8, height: 8, background: v.color }}
-                />
-                {v.label}
-              </span>
-            ))}
-          </div>
+        {/* Seats by vendor — asli; margin ke liye P&L report hai (wahan basis
+            ke saath aata hai — billed ya estimated, chhupa kar nahi). */}
+        <ReportCard title="Seats by vendor" subtitle="Active subscriptions today">
+          {seatsByVendor.length === 0 ? (
+            <p className="text-sm text-ink-3 py-8 text-center">No active subscriptions yet.</p>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart
+                  data={seatsByVendor}
+                  margin={{ left: 0, right: 8, top: 4, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="2 4" stroke="var(--color-hairline, #e4e4e7)" vertical={false} />
+                  <XAxis
+                    dataKey="vendor"
+                    tick={{ fontSize: 9, fill: "var(--color-ink-3, #71717a)" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 9, fill: "var(--color-ink-3, #71717a)" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={40}
+                  />
+                  <Tooltip />
+                  <Bar dataKey="seats" name="Seats" fill="#C2410C" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              <p className="mt-2 text-xs text-ink-3">
+                Vendor-margin ke rupaye <Link href={"/accounting/pnl" as never} className="underline">P&amp;L report</Link> par
+                hain — wahan har aankde ke saath uska basis likha hota hai.
+              </p>
+            </>
+          )}
         </ReportCard>
 
         {/* Top customers */}
@@ -545,8 +531,10 @@ export default function ReportsPage() {
                     <td className="py-2.5 text-right tabular-nums font-serif text-base text-ink">
                       {rupee(c.mrr * 12, { compact: true })}
                     </td>
-                    <td className="py-2.5 text-right text-xs tabular-nums text-emerald-600">
-                      {Math.round(c.mrr * 0.17 * 12 / (c.mrr * 12) * 100)}% margin
+                    {/* Share of MRR — asli. (Pehle yahan har row par "17% margin"
+                        chhapta tha jo ek hardcoded guess tha.) */}
+                    <td className="py-2.5 text-right text-xs tabular-nums text-ink-3">
+                      {totalMrr > 0 ? Math.round((c.mrr / totalMrr) * 100) : 0}% of MRR
                     </td>
                   </tr>
                 ))}

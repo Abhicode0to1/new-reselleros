@@ -1,19 +1,28 @@
 /**
  * Public project quotation — the customer-facing page for a one-time project
- * quote (custom software etc.). Opened via an unguessable link (project id).
- * Shows the itemised quote + GST + milestone schedule, and an Accept button.
+ * quote (custom software etc.). Opened via the link the operator shares, jo
+ * id KE SAATH `?t=public_token` bhi rakhta hai — id akela kaafi nahi (wo
+ * URL/email/log me dikhta hai; audit 1 Sep 2026, wahi niyam jo 0115 ne
+ * /quote/[id]/accept par lagaya tha).
  *
  * Server Component: reads via the admin client (customer isn't authenticated).
  */
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { rupee, formatDate } from "@/lib/utils";
+import { quoteTokenMatches } from "@/lib/quotes/accept-token";
 import { AcceptQuoteButton } from "./accept-button";
 import type { ProjectQuoteLine } from "@/lib/supabase/database.types";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectQuotePage({ params }: { params: { id: string } }) {
+export default async function ProjectQuotePage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { t?: string };
+}) {
   const supabase = createAdminClient();
 
   const { data: project } = await supabase
@@ -22,7 +31,11 @@ export default async function ProjectQuotePage({ params }: { params: { id: strin
     .eq("id", params.id)
     .maybeSingle();
 
-  if (!project || !["quoted", "active", "completed"].includes(project.status)) {
+  /* Galat id aur galat token dono ek hi notFound() dete hain. */
+  if (!project || !quoteTokenMatches(searchParams.t, project.public_token)) {
+    notFound();
+  }
+  if (!["quoted", "active", "completed"].includes(project.status)) {
     notFound();
   }
 
@@ -130,7 +143,7 @@ export default async function ProjectQuotePage({ params }: { params: { id: strin
                 <p className="text-sm text-ink-3 mb-3">
                   Accepting confirms you&apos;d like to proceed with this project on the terms above.
                 </p>
-                <AcceptQuoteButton projectId={project.id} />
+                <AcceptQuoteButton projectId={project.id} token={project.public_token} />
               </>
             )}
           </div>
