@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractEntities, foundCount, type CatalogueEntry } from "./extract";
+import { extractEntities, foundCount, findBillingCycle, type CatalogueEntry } from "./extract";
 
 const CATALOGUE: CatalogueEntry[] = [
   { id: "GW-STR", name: "Google Workspace Business Starter" },
@@ -528,5 +528,31 @@ describe("an ambiguous one-word catalogue name", () => {
     expect(
       run({ subject: "", body: "12 users of Microsoft 365 Business Standard please.", catalogue: AMBIGUOUS_CATALOGUE }).product.value?.id,
     ).toBe("MS-BS");
+  });
+});
+
+describe("findBillingCycle — bhugtan ki baat, commitment ki nahi (1 Sep 2026)", () => {
+  /* Wo asli jumla jisne ye parivar khola: agent ne 'monthly billing' sunkar
+     COMMITMENT palat diya tha (Rs 325 flex), jabki customer 'yearly' tay kar
+     chuka tha aur sirf bhugtan monthly maang raha tha. */
+  it("'monthly billing' / 'monthly payments' = cycle monthly", () => {
+    expect(findBillingCycle("would like to proceed with monthly billing").value).toBe("monthly");
+    expect(findBillingCycle("can we do monthly payments for the yearly plan").value).toBe("monthly");
+    expect(findBillingCycle("billing every month please").value).toBe("monthly");
+    expect(findBillingCycle("EMI me ho jayega?").value).toBe("monthly");
+    expect(findBillingCycle("har mahine bhugtan karenge").value).toBe("monthly");
+  });
+
+  it("akela 'monthly' ya 'monthly plan' cycle NAHI hai — wo commitment ki duniya hai", () => {
+    expect(findBillingCycle("monthly").value).toBeNull();
+    expect(findBillingCycle("monthly plan chahiye").value).toBeNull();
+    expect(findBillingCycle("no commitment, month to month").value).toBeNull();
+  });
+
+  it("kuch na ho to null, aur source ke saath aata hai jab ho", () => {
+    expect(findBillingCycle("20 seats yearly").value).toBeNull();
+    const r = findBillingCycle("prefer monthly invoices");
+    expect(r.value).toBe("monthly");
+    expect(r.source).toContain("monthly invoices");
   });
 });

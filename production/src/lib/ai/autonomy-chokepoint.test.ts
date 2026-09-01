@@ -116,7 +116,7 @@ describe("every gateable action in the registry is actually wired somewhere", ()
        this file: the failure is a missing hand-off, which reads in the source and not in a
        mock. */
     const code = strip(read("lib/ai/actions/quote-dispatcher.ts"));
-    expect(code).toContain("automated: { tenantId: args.tenantId, action: args.sendAction }");
+    expect(code).toContain("automated: { tenantId: args.tenantId, action: args.sendAction, entityId: args.leadId }");
     expect(code).toContain("resolveAutonomy(args.sendAction, policy)");
   });
 

@@ -25,6 +25,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { verifyMetaSignature, signatureRefusalReason } from "@/lib/crypto/webhook-signature";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { runSalesAgentForLead } from "@/lib/ai/run-sales-agent";
@@ -68,7 +69,9 @@ export async function GET(req: NextRequest) {
   if (!data?.whatsapp_verify_token) {
     return NextResponse.json({ error: "no verify token configured" }, { status: 403 });
   }
-  if (data.whatsapp_verify_token !== token) {
+  /* Constant-time — wahi niyam jo 17 cron aur HMAC-signature par hai (audit C8).
+     Handshake ka token bhi ek secret hai; !== uska ek-ek akshar timing se batata hai. */
+  if (!timingSafeEqualStr(token, data.whatsapp_verify_token)) {
     return NextResponse.json({ error: "verify_token mismatch" }, { status: 403 });
   }
 

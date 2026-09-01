@@ -230,7 +230,8 @@ async function sendReply(args: DispatchArgs): Promise<DispatchResult> {
       kind: args.sendAction === "followup.send" ? "ai_sales_followup" : "ai_sales_reply",
       /* The chokepoint. sendEmail resolves the dial, refuses on the kill switch, and writes
          the outcome to ai_action_log and email_log — so this path must NOT log again. */
-      automated: { tenantId: args.tenantId, action: args.sendAction },
+      /* entityId = lead: retry-cron isi naam se dhoondhta hai ki jawab gaya ya nahi. */
+      automated: { tenantId: args.tenantId, action: args.sendAction, entityId: args.leadId },
     });
 
     /* `stubbed` counts as sent, matching every other caller in the repo: with no Resend key
@@ -394,6 +395,19 @@ export async function dispatchSalesDecision(args: DispatchArgs): Promise<Dispatc
 
          And the OUTCOME is kept now, because it decides whether anything else may write to
          this customer — see the block below. */
+      /* ── TERM: model ki poori-thread wali padhat PEHLE ─────────────────────
+         1 Sep 2026: customer "yearly" tay kar chuka tha, phir sirf BHUGTAN
+         monthly maanga — keyword-search ne commitment palat kar flex (Rs 325)
+         bol diya. term_discussed teeno ko alag rakhta hai; keyword-search ab
+         sirf fallback hai (purane model-output me field absent → null). */
+      const td = args.decision.term_discussed;
+      const effTerm: "monthly" | "annual" =
+        td === "monthly_flex" ? "monthly" : td ? "annual" : (args.term ?? "annual");
+      const effBilling: "monthly" | null = td === "annual_billed_monthly" ? "monthly" : null;
+      const effTermSource = td
+        ? `agent read the whole thread: ${td.replace(/_/g, " ")}`
+        : (args.termSource ?? "annual commitment");
+
       const quoted = await autoQuoteForLead(args.admin, {
         tenantId: args.tenantId,
         leadId: args.leadId,
@@ -414,10 +428,12 @@ export async function dispatchSalesDecision(args: DispatchArgs): Promise<Dispatc
            `findBillingTerm` is the same function the inbound path uses, not a second
            keyword search that agrees with it today. Null still means annual, exactly as
            before — the change is only that an explicit "monthly" is now honoured. */
-        term: args.term ?? "annual",
+        term: effTerm,
+        billing: effBilling,
+        billingSource: effBilling ? effTermSource : null,
         seatsSource: seats === null ? null : `${seats} seats, from the conversation`,
         productSource: item ? `${item.name}, from the conversation` : null,
-        termSource: args.termSource ?? "annual commitment",
+        termSource: effTermSource,
         recipient: args.customerContact,
         senderIsOurs: args.senderIsOurs,
         isSelfTest: args.isSelfTest,

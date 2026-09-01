@@ -24,6 +24,8 @@ import {
   leadDetailsAppearInTranscript,
   sanitizeLearning,
   reflectionPrompt,
+  promisesDelivery,
+  honestNoDeliveryReply,
   type PublicChatReply,
 } from "@/lib/ai/public-sales-chat";
 import { loadAutonomyPolicy, logAiAction } from "@/lib/ai/autonomy.server";
@@ -132,7 +134,7 @@ export async function POST(request: NextRequest) {
 
   if (!raw) return NextResponse.json(fallbackReply() satisfies PublicChatReply);
 
-  const guarded = guardReply(raw, facts.allowedFigures);
+  let guarded = guardReply(raw, facts.allowedFigures);
 
   /* ── THE LEAD — the whole point of the chat, filed through the PROVEN path ──
      Three conditions before anything is written:
@@ -224,6 +226,17 @@ export async function POST(request: NextRequest) {
      money guard had to replace a reply (the two moments with something to learn from).
      Fire-and-forget: the visitor's reply never waits on homework. Behind its own
      autonomy dial (public_chat.learn), so one click in /automation stops the loop. */
+  /* ── Delivery-vaadon ka pehredaar (1 Sep 2026) ───────────────────────────
+     Naapa hua jhooth: "team formal GST quotation generate kar rahi hai...
+     jald hi deliver ho jayega... WhatsApp par bhi confirm karegi" — us
+     session me na lead, na quotation, na email (DB me dekha). "Bheji ja
+     rahi hai" kehna TABHI sach hai jab isi turn me quotation sach me bani
+     ho (leadCreated) — warna reply imandaar agle-kadam se badal di jati
+     hai. suggestQuote/lead-nikaasi waise hi rehte hain. */
+  if (!leadCreated && promisesDelivery(guarded.reply)) {
+    guarded = { ...guarded, reply: honestNoDeliveryReply() };
+  }
+
   const guardTripped = guarded.reply === fallbackReply().reply;
   if (leadCreated || guardTripped) {
     void (async () => {

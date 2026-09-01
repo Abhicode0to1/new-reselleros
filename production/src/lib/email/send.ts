@@ -101,7 +101,17 @@ export interface EmailMessage {
    * two, because a double-counted audit log is worse than a thin one. Refusals are logged
    * here regardless of the flag: a caller that never runs cannot log anything.
    */
-  automated?: { tenantId: string; action: AiAction; logsItsOwnOutcome?: boolean };
+  automated?: {
+    tenantId: string; action: AiAction; logsItsOwnOutcome?: boolean;
+    /**
+     * Kis LEAD/record ki taraf se ye send hai — ai_action_log.entity_id isi se bharta
+     * hai. 1 Sep 2026 tak success yahan provider-message-id ke naam likhta tha, aur
+     * ai-reply-retry (jo lead-id se "jawab gaya?" poochhta hai) ko kabhi haan nahi
+     * milti thi → ek hi mail ka jawab har 5 min dobara (3 duplicate, live). Failure
+     * lead-id par tha, success kisi aur naam par — dono kabhi mile hi nahi.
+     */
+    entityId?: string | null;
+  };
 }
 
 export interface EmailRoute {
@@ -190,7 +200,7 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
         reason:   verdict.reason,
         mode:     verdict.mode,
         entity:   "email",
-        entityId: null,
+        entityId: msg.automated.entityId ?? null,
         facts:    { recipient: msg.to, subject: msg.subject, kind: msg.kind ?? null },
       });
       return refusal;
@@ -234,7 +244,7 @@ export async function sendEmail(msg: EmailMessage): Promise<EmailSendResult> {
         : `sent to ${msg.to}`,
       mode:     "auto",
       entity:   "email",
-      entityId: result.providerId ?? null,
+      entityId: msg.automated.entityId ?? result.providerId ?? null,
       facts:    { recipient: msg.to, subject: msg.subject, kind: msg.kind ?? null },
     });
   }

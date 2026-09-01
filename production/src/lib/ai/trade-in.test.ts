@@ -278,6 +278,7 @@ describe("the disparagement guard holds the draft", () => {
     generated_response: { email_subject: "Re: email", body_text: body, whatsapp_summary: "hi" },
     next_followup_loop: null,
     seats_discussed: 30,
+    term_discussed: null,
   });
 
   it("hands over a draft that runs down the old provider", () => {

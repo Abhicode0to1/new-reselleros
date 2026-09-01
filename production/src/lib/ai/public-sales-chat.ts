@@ -210,6 +210,7 @@ export function systemPrompt(facts: string, learnings: readonly string[] = []): 
     "7. Ask ONE practical question per reply, chosen from what you do not yet know: how many people need email (seats); where their email runs today (Gmail free / another provider / new domain); annual commitment or monthly flexible; when they want to start. Never ask what they already told you.",
     "8. Once there is real buying interest, ask for their NAME and PHONE and EMAIL — with the honest reason: the formal GST quotation is emailed, and a person confirms details on WhatsApp. One ask at a time, never pushy, and NEVER refuse price information because they have not shared contact details.",
     "9. Set the lead field ONLY when the visitor has actually typed their name AND email AND phone in this conversation. Never invent or complete a partial detail. Set it once, in the reply where the last missing detail arrives, together with a short confirmation of what happens next.",
+    "10. NEVER claim an email/quotation has been sent, is being generated, or that a team will call/WhatsApp — you cannot see or trigger any of that. A quotation goes out ONLY in the same turn you set the lead field (the system mails it then). If asked whether it was sent and you did not set lead this conversation, say plainly it has not gone out yet, and either collect the missing details or point to the quote page.",
     "",
     "Answer as JSON: {\"reply\": string, \"suggestQuote\": {\"tier\": \"starter\"|\"standard\"|\"plus\", \"seats\": number, \"term\": \"annual\"|\"monthly\"} | null, \"lead\": {\"fullName\": string, \"email\": string, \"phone\": string, \"company\": string|null, \"tier\": \"starter\"|\"standard\"|\"plus\"|null, \"seats\": number|null, \"term\": \"annual\"|\"monthly\"|null} | null}.",
     "Keep replies under 120 words, plain and concrete.",
@@ -240,6 +241,43 @@ export function fallbackReply(): PublicChatReply {
  * Guard a model reply: unknown rupee figures kill it, and suggestQuote is re-validated
  * field by field — the model's JSON is still untrusted input.
  */
+/* ── Delivery-promise ka pehredaar (1 Sep 2026) ─────────────────────────────
+   Screenshot se pakda: agent ne likha "hamari team formal GST quotation
+   generate kar rahi hai aur jald hi deliver ho jayega... WhatsApp par bhi
+   confirm karegi" — jabki us session me NA lead bana tha NA quotation NA
+   koi email (DB me naapa). Money-guard aankde pakadta hai; ye HARKAT ke
+   jhooth pakadta hai. Email-pipeline me yahi guard pehle se hai (run-auto-
+   reply ka promise-check) — chat nanga tha.
+
+   Route ise leadCreated ke SAATH istemal karta hai: isi turn me quotation
+   sach me bani ho to "bhej di" kehna sach hai; warna reply badal kar imandaar
+   jawab jata hai. */
+const DELIVERY_PROMISE_RE = new RegExp(
+  [
+    String.raw`bhej\s+(di|diya|denge|dijiye?gi|di\s+jayegi|raha|rahi)`,
+    String.raw`deliver\s+ho`,
+    String.raw`generate\s+kar\s+(rahi|raha|rahe)`,
+    String.raw`(has\s+been|will\s+be|being|already)\s+(sent|emailed|delivered|shared)`,
+    String.raw`we\s+(have\s+sent|will\s+send|are\s+sending|have\s+emailed)`,
+    String.raw`team\s+.{0,40}(whatsapp|call|contact|confirm)`,
+    String.raw`(whatsapp|call)\s+par\s+.{0,24}(confirm|sampark|baat)`,
+  ].join("|"),
+  "i",
+);
+
+export function promisesDelivery(reply: string): boolean {
+  return DELIVERY_PROMISE_RE.test(reply);
+}
+
+/** Jhoothe vaade ki jagah imandaar agla kadam — suggestQuote/lead waise hi rehte hain. */
+export function honestNoDeliveryReply(): string {
+  return (
+    "Abhi tak aapki quotation system me nahi bani hai — main abhi bana sakta hoon. " +
+    "Bas apna naam, email aur phone number likh dijiye, formal GST quotation usi waqt " +
+    "aapke email par chali jayegi. Ya turant hisaab ke liye quote page use kariye."
+  );
+}
+
 export function guardReply(raw: unknown, allowedFigures: readonly number[]): PublicChatReply {
   if (!raw || typeof raw !== "object") return fallbackReply();
   const reply = (raw as Record<string, unknown>).reply;

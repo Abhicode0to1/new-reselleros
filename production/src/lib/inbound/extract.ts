@@ -487,6 +487,20 @@ export function findBillingTerm(text: string): Extracted<BillingTerm> {
   return { ...NONE };
 }
 
+/* ── Billing CYCLE — bhugtan ki baat, commitment ki nahi (1 Sep 2026) ──────
+   "yearly commitment, monthly payment" wala parivar: findBillingTerm ko yahan
+   annual+monthly dono milte the aur wo NONE de deta tha; aur akela "monthly
+   billing" flex ban jata tha. Ye reader sirf BHUGTAN-shabdon par haan kehta
+   hai — commitment ka faisla wahi purana findBillingTerm/term_discussed karta
+   hai. Dono ek mail me hon to: commitment annual, billing monthly. */
+const MONTHLY_BILLING_RE =
+  /(?:monthly|per[- ]?month|har\s+mah[i ]?ne|mahine)\s*(?:ka|ki|ke|me[in]?)?\s*(?:billing|payments?|bhugtan|invoices?|instal?ments?|kisht(?:on|ein)?)|(?:billing|payments?|bhugtan|invoices?)\s+(?:every\s+month|monthly|har\s+mah[i ]?ne|mahine\s*(?:me[in]?|par))|pay\s+(?:per|every)\s+month|\bemi\b/i;
+
+export function findBillingCycle(text: string): Extracted<"monthly"> {
+  const m = MONTHLY_BILLING_RE.exec(text);
+  return m ? { value: "monthly", source: m[0].trim() } : { value: null, source: null };
+}
+
 /** How many fields were actually found — drives "3 of 5 details found". */
 export function foundCount(e: ExtractedEntities): number {
   return [e.name, e.email, e.phone, e.seats, e.product].filter((f) => f.value != null).length;

@@ -33,9 +33,17 @@ describe("hardcoded term wapas nahi aana chahiye", () => {
     expect(DISPATCHER).not.toMatch(/term:\s*"annual"\s*,/);
   });
 
-  it("dispatcher customer ki batayi term leta hai, aur na ho to annual", () => {
-    expect(DISPATCHER).toMatch(/term:\s*args\.term\s*\?\?\s*"annual"/);
-    expect(DISPATCHER).toMatch(/termSource:\s*args\.termSource\s*\?\?/);
+  it("dispatcher pehle model ki poori-thread padhat leta hai, phir keyword, phir annual", () => {
+    /* 1 Sep 2026 se: term_discussed (annual / annual_billed_monthly / monthly_flex)
+       PEHLE — keyword-search sirf fallback. Wahi din: customer 'yearly' tay kar
+       chuka tha, sirf BHUGTAN monthly maanga, aur keyword ne commitment palat
+       kar flex (Rs 325) bol diya tha. */
+    expect(DISPATCHER).toMatch(/args\.decision\.term_discussed/);
+    expect(DISPATCHER).toMatch(/td\s*\?\s*"annual"\s*:\s*\(args\.term\s*\?\?\s*"annual"\)/);
+    expect(DISPATCHER).toMatch(/term:\s*effTerm/);
+    expect(DISPATCHER).toMatch(/billing:\s*effBilling/);
+    // annual_billed_monthly = saal ka vaada, 12 kishtein — billing alag dimension hai.
+    expect(DISPATCHER).toMatch(/annual_billed_monthly"\s*\?\s*"monthly"\s*:\s*null/);
   });
 
   it("caller wahi function use karta hai jo inbound path karta hai", () => {

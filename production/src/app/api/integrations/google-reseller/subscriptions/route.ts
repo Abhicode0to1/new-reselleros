@@ -62,12 +62,18 @@ export async function GET(req: Request) {
   const probe = new URL(req.url).searchParams.get("probe") === "1";
 
   const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
+  /* Pehchan getUser() se — wo JWT ko SERVER par verify karta hai; getSession()
+     cookie par bharosa karta hai (middleware.ts:47 isi wajah se getUser hai —
+     audit C8 ne yahan do chhoote hue pakde). provider_token phir bhi session
+     se hi milta hai, isliye dono call hain: getUser = darwaza, getSession =
+     Google ka token. */
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const { data: { session } } = await supabase.auth.getSession();
 
-  const accessToken = session.provider_token;
+  const accessToken = session?.provider_token;
   if (!accessToken) {
     return NextResponse.json(
       { error: "Google access token unavailable — log in with your reseller-admin Google account.", code: "needs_reauth" },

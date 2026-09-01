@@ -501,7 +501,10 @@ export function QuoteAcceptView({
                 <>
                   <p className="text-3xs uppercase tracking-widest text-ink-3 font-semibold mb-1.5">Billing schedule</p>
                   <p className="text-sm">{scheduleLabel(firstCommitment, effectiveCycle)}</p>
-                  {billingN > 1 && (
+                  {isFlex && (
+                <p className="text-2xs text-ink-3">Pay-as-you-go — har mahine apni invoice, jab tak chalu rakhein</p>
+              )}
+              {billingN > 1 && !isFlex && (
                     <p className="text-2xs text-ink-3">{billingN} invoices per year</p>
                   )}
                 </>

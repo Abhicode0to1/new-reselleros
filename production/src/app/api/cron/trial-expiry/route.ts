@@ -17,6 +17,7 @@
  * (503), and a wrong/missing bearer → 401 (constant-time compare). (SEC-3)
  */
 
+import { reportCron } from "@/lib/ops/cron-report";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
@@ -228,5 +229,5 @@ ${APP_URL}/leads?lead=${lead.id}
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("trial-expiry", result));
 }

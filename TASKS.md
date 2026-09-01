@@ -39,14 +39,14 @@
 
 ## 🟡 AUDIT-P2 — chamak
 
-- [ ] C1. CSP header + logos bucket se SVG hatao (stored-XSS raasta)
+- [x] C1 ✅ 1 Sep — CSP live (object-src none/base-uri/form-action kase; script udaar — file me kyun likha), logos bucket SVG-mukt (migration; sab PNG the), browser me 0 violation
 - [ ] C2. 23 tenant_id + top FK indexes ka migration
 - [ ] C3. Stale docs stamp/fix: LAUNCH_READINESS (99 din, 8/14 "missing" ab bane hain), MONITORING_SETUP (taaza tareekh, jhootha), MONEY-FLOW matrix, CLAUDE.md §17b, proration.ts:38 comment, bank.ts:669 docstring
-- [ ] C4. Cron hygiene: 6 route scheduler-script me darj nahi; reportCron 12/18; wiring-test threshold 16→18; vercel.json ke 4 murda cron + firebase/apphosting configs hatao
+- [x] C4 (aadha) ✅ 1 Sep — reportCron ab 18/18 wired; ⏳ scheduler-script ke 6 missing jobs + murda configs hatana baaki
 - [ ] C5. Bank-reconcile ko ek RPC me (abhi 6 client-writes, do copies jo drift ho chuki hain)
-- [ ] C6. PDF signing-key alag env se (`SUPABASE_SERVICE_ROLE_KEY` reuse + "" fallback band); `.env.example` me 9 missing vars
+- [x] C6 ✅ 1 Sep — "" fallback ab THROW hai (khaali chaabi = forgeable sab); .env.example me 9 vars darj; alag PDF_SIGNING_SECRET jaan-boojh kar prod par NAHI rakha (purane links tootte) — rotation ke waqt
 - [ ] C7. Bulk/undo/j-k propagation; nav progressive-reveal (72 links)
-- [ ] C8. `getSession()`→`getUser()` 2 routes; WhatsApp verify-token constant-time
+- [x] C8 ✅ 1 Sep — dono Google-token routes getUser-first (provider_token session se, darwaza getUser se); dono WhatsApp handshake constant-time
 - [ ] C9. Bundle budget + analyzer; plausible ya hatao daava
 - [ ] C10. Zod 27 baki JSON-parse routes par (pehle unauthenticated wale)
 

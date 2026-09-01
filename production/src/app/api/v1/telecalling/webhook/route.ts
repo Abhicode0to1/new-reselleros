@@ -308,6 +308,7 @@ export async function POST(req: NextRequest) {
         trigger_condition: "quotation sent after a phone call; no reply yet",
       },
       seats_discussed: seats,
+    term_discussed: null,
     };
 
     const dispatched = await dispatchSalesDecision({

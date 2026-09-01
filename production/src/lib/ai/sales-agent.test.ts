@@ -79,6 +79,7 @@ function decision(over: Partial<SalesAgentDecision> = {}): SalesAgentDecision {
       body_text: "Namaste Asha,\n\nStarter is ₹270 per seat per year.\n\nRegards,\nANUTECH",
       whatsapp_summary: "Starter is ₹270 per seat per year.",
     },
+    term_discussed: null,
     next_followup_loop: { in_hours: 48, trigger_condition: "quote sent, no reply yet" },
     seats_discussed: 12,
     ...over,
@@ -933,6 +934,7 @@ describe("handover_reason", () => {
     action_required: "HANDOVER_TO_HUMAN",
     generated_response: { email_subject: "s", body_text: "b", whatsapp_summary: "w" },
     next_followup_loop: null,
+    term_discussed: null,
     seats_discussed: 80,
   };
 

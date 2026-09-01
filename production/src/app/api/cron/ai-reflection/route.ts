@@ -21,6 +21,7 @@
  * cannot drift. A model in this path would add a paraphrase and a cost and nothing else — and a
  * paraphrase is exactly the artefact that could carry a customer's instruction forward.
  */
+import { reportCron } from "@/lib/ops/cron-report";
 import { NextResponse } from "next/server";
 import { createClient as createBareClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
@@ -210,8 +211,9 @@ export async function GET(req: NextRequest) {
     to, subject: mail.subject, text: mail.text,
     route: { tenantId: reports[0].tenantId },
   });
-  return NextResponse.json({
+  return NextResponse.json(reportCron("ai-reflection", {
     ok: true, windowHours: WINDOW_HOURS, tenants: reports.length,
-    emailed: sent.status === "sent", to, emailError: sent.errorMessage, reports,
-  });
+    emailed: sent.status === "sent", to, emailError: sent.errorMessage,
+    failed: sent.status === "sent" ? 0 : 1, reports,
+  }));
 }

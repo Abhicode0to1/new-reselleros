@@ -11,13 +11,24 @@
  */
 import { createHmac, timingSafeEqual } from "crypto";
 
-const SECRET =
-  process.env.PDF_SIGNING_SECRET?.trim() ||
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  "";
+let cachedSecret: string | null = null;
+function SECRET(): string {
+  if (cachedSecret) return cachedSecret;
+  /* Kabhi "" nahi (audit C6): khaali key par HMAC = har token forgeable, aur wo
+     bug chup-chaap "sab links chal rahe hain" jaisa dikhta. Dono var gayab hon to
+     pehla sign/verify hi phat jaye — khaali chaabi se darwaza khula rakhne se
+     accha hai bina chaabi ke band rehna. SERVICE_ROLE fallback jaan-boojh kar
+     RAKHA hai: aaj tak ke saare tokens usi se sign hue hain; use hatana har
+     baante hue link ko todta. Alag PDF_SIGNING_SECRET set karna abhi bhi behtar
+     hai (key-reuse do alag suraksha-daayron me) — .env.example me darj.  */
+  const s = process.env.PDF_SIGNING_SECRET?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!s) throw new Error("No signing secret: set PDF_SIGNING_SECRET (or SUPABASE_SERVICE_ROLE_KEY) — refusing to sign with an empty key");
+  cachedSecret = s;
+  return s;
+}
 
 export function signClaimToken(tenantId: string): string {
-  return createHmac("sha256", SECRET).update(`expense-claim:${tenantId}`).digest("hex");
+  return createHmac("sha256", SECRET()).update(`expense-claim:${tenantId}`).digest("hex");
 }
 
 export function verifyClaimToken(tenantId: string, sig: string): boolean {

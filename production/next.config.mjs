@@ -70,6 +70,32 @@ const nextConfig = {
           ...(isDev ? [] : [{ key: "X-Frame-Options", value: "SAMEORIGIN" }]),
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          /* ── CSP — pehli baar (audit C1, 1 Sep 2026) ─────────────────────────
+             Jaan-boojh kar UDAAR script/style ('unsafe-inline'/'unsafe-eval' —
+             Next ka runtime bina nonce-pipeline ke inhi par chalta hai) aur KASA
+             wahan jahan asli hamla rukta hai: object-src 'none' (SVG/Flash-shailee
+             embeds), base-uri (link-hijack), form-action (credential-exfil apne
+             origin ke bahar form-post se), frame-src sirf Razorpay. connect-src me
+             Supabase (REST+realtime), Razorpay, Sentry-ingest. Naya third-party
+             jodo to yahan bhi jodna hoga — CSP-error console me saaf naam ke
+             saath aata hai. Prod-only (isDev guard nahi: dev me bhi wahi niyam,
+             taki todne wala badlav deploy se pehle dikhe). */
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "img-src 'self' data: blob: https:",
+              "font-src 'self' data: https://fonts.gstatic.com",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
+              "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'self'",
+            ].join("; "),
+          },
           // camera=(self): the attendance kiosk needs the camera for check-in
           // selfies. Empty () would block getUserMedia in EVERY browser
           // regardless of OS/site settings. geolocation stays disabled.

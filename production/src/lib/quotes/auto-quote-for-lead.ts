@@ -42,6 +42,14 @@ export interface AutoQuoteArgs {
   seats: number | null;
   /** From extractEntities().term — null when the sender never said. */
   term: "monthly" | "annual" | null;
+  /**
+   * Invoice kitni baar — COMMITMENT se alag sawal (1 Sep 2026). "monthly" +
+   * term annual = saal ka vaada, 12 kishton me bhugtan (annual tier ka rate,
+   * quote.billing_cycle monthly — instalments engine baaki karta hai).
+   * Null = commitment se hi cycle nikle, jaisa pehle tha.
+   */
+  billing?: "monthly" | "yearly" | null;
+  billingSource?: string | null;
   /** What the extractor matched, quoted on the draft so a reader can check it. */
   seatsSource: string | null;
   /** True when the seat count came out of a voice-note transcription, not the customer. */
@@ -179,7 +187,7 @@ export async function autoQuoteForLead(
     { id: string; status: string | null; seats: number | null; plan: string | null;
       billing_cycle: string | null } | null;
 
-  const wantCycle = plan.items[0]?.commitment === "monthly" ? "monthly" : "yearly";
+  const wantCycle = args.billing ?? (plan.items[0]?.commitment === "monthly" ? "monthly" : "yearly");
   const samePaper =
     already !== null &&
     already.seats === args.seats &&
@@ -215,7 +223,7 @@ export async function autoQuoteForLead(
     subtotal:      plan.subtotal,
     /* `as const` zaroori hai: object literal me ternary `string` par widen ho jata hai,
        aur column ek union hai. */
-    billing_cycle: (plan.items[0]?.commitment === "monthly" ? "monthly" : "yearly") as BillingCycle,
+    billing_cycle: (args.billing ?? (plan.items[0]?.commitment === "monthly" ? "monthly" : "yearly")) as BillingCycle,
     total_cost:    plan.items.reduce((sum, i) => sum + i.qty * i.cost, 0),
     discount_pct:  plan.discountPct,
     tax_rate:      18,

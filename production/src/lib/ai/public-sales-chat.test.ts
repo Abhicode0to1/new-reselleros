@@ -10,6 +10,8 @@ import {
   systemPrompt,
   guardReply,
   fallbackReply,
+  promisesDelivery,
+  honestNoDeliveryReply,
   MAX_MESSAGES,
   MAX_MESSAGE_CHARS,
 } from "./public-sales-chat";
@@ -295,5 +297,42 @@ describe("promotion — time-boxed, request-time par jaanchi", () => {
     expect(f.factsText.includes("CURRENT PROMOTION")).toBe(false);
     expect(f.allowedFigures).not.toContain(1);
     expect(f.allowedFigures).not.toContain(799);
+  });
+});
+
+describe("promisesDelivery — harkat ke jhooth ka pehredaar (1 Sep 2026)", () => {
+  it("screenshot wale asli jumle pakde jate hain", () => {
+    expect(promisesDelivery("hamari team 20 seats ka formal GST quotation generate kar rahi hai")).toBe(true);
+    expect(promisesDelivery("jald hi pardeep.webmaster@gmail.com par deliver ho jayega")).toBe(true);
+    expect(promisesDelivery("Hamari team WhatsApp par bhi confirm karegi")).toBe(true);
+    expect(promisesDelivery("Your quotation has been sent to your email")).toBe(true);
+    expect(promisesDelivery("We will send the quotation shortly")).toBe(true);
+    expect(promisesDelivery("quotation bhej di gayi hai")).toBe(true);
+  });
+
+  it("aam sales-baat par nahi bhadakta", () => {
+    expect(promisesDelivery("Business Starter Rs 270 per seat per month hai (annual)")).toBe(false);
+    expect(promisesDelivery("Aap quote page par turant hisaab dekh sakte hain")).toBe(false);
+    expect(promisesDelivery("Naam, email aur phone dijiye to quotation ban jayegi")).toBe(false);
+    expect(promisesDelivery("Kya aap annual ya monthly flexible prefer karenge?")).toBe(false);
+  });
+
+  it("imandaar replacement khud vaada-mukt hai aur agla kadam deta hai", () => {
+    const r = honestNoDeliveryReply();
+    expect(promisesDelivery(r)).toBe(false);
+    expect(r).toMatch(/naam, email aur phone/i);
+  });
+});
+
+describe("route delivery-vaade ko leadCreated se bandhta hai (source pin)", () => {
+  it("enforcement lead-filing ke NATEEJE ke baad, guardTripped se pehle", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/app/api/public/agent/chat/route.ts"), "utf8");
+    const enforce = src.indexOf("promisesDelivery(guarded.reply)");
+    const filing = src.indexOf("leadCreated = {");
+    const tripped = src.indexOf("const guardTripped");
+    expect(enforce).toBeGreaterThan(filing);
+    expect(enforce).toBeLessThan(tripped);
+    expect(src).toContain("honestNoDeliveryReply()");
   });
 });

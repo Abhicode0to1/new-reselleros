@@ -25,6 +25,7 @@
  * run of this cron writes `held` rows and rings nobody — and the operator's queue is the
  * result. That is the intended steady state until Pardeep moves the dial at /automation.
  */
+import { reportCron } from "@/lib/ops/cron-report";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
@@ -214,7 +215,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
     });
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("ai-telecall-renewals", result));
 }
 
 /**

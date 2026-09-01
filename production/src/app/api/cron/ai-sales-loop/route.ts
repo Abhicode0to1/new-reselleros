@@ -28,6 +28,7 @@
  * per lead, so the due list cannot contain the same lead twice. Idempotency across runs comes
  * from closing the row before the next sweep can see it.
  */
+import { reportCron } from "@/lib/ops/cron-report";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
@@ -447,5 +448,5 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("ai-sales-loop", result));
 }

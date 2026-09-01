@@ -35,6 +35,7 @@
  *
  * Koi nayi dependency nahi: token metadata server se, logs REST se (CLAUDE.md §17).
  */
+import { reportCron } from "@/lib/ops/cron-report";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
@@ -165,8 +166,9 @@ async function handle(req: Request) {
     text: digestText(digest, appUrl),
   });
 
-  return NextResponse.json({
+  return NextResponse.json(reportCron("health-digest", {
     ok: true, clean: false, emailed: sent.status === "sent", to, digest,
+    failed: sent.status === "sent" ? 0 : 1,
     emailError: sent.errorMessage,
-  });
+  }));
 }

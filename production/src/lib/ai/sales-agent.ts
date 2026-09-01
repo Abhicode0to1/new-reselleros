@@ -309,6 +309,16 @@ export interface SalesAgentDecision {
   next_followup_loop: SalesAgentFollowUp | null;
   /** Seats the model read out of the conversation. Null when the customer has not said. */
   seats_discussed: number | null;
+  /**
+   * Term jaisa POORI baat-cheet se samajh aata hai — teen alag cheezein, do nahi
+   * (1 Sep 2026: customer ne "yearly" tay kiya tha, phir sirf BHUGTAN monthly
+   * maanga; agent ne commitment hi palat kar Rs 325 flex bol diya):
+   *   annual                = saal ka vaada, saal me ek invoice
+   *   annual_billed_monthly = saal ka vaada, bhugtan har mahine (12 invoices)
+   *   monthly_flex          = koi vaada nahi, mahina-dar-mahina (mehenga tier)
+   * Null = kaha hi nahi. Dispatcher isse pehle padhta hai, keyword-search baad me.
+   */
+  term_discussed: "annual" | "annual_billed_monthly" | "monthly_flex" | null;
 }
 
 /* ── The master system prompt ─────────────────────────────────────────────── */
@@ -470,7 +480,18 @@ export const SALES_AGENT_SYSTEM_PROMPT = [
   '"handover_reason":string|null,',
   '"generated_response":{"email_subject":string,"body_text":string,"whatsapp_summary":string},',
   '"next_followup_loop":{"in_hours":number,"trigger_condition":string}|null,',
-  '"seats_discussed":number|null}',
+  '"seats_discussed":number|null,',
+  '"term_discussed":"annual"|"annual_billed_monthly"|"monthly_flex"|null}',
+  "",
+  "term_discussed — read the WHOLE conversation, not the last message alone:",
+  "- annual: yearly/annual commitment, billed once a year.",
+  "- annual_billed_monthly: the customer has (or had) a YEARLY commitment and asks to PAY",
+  "  monthly — monthly billing/payments/instalments of the annual plan. If yearly was already",
+  "  agreed earlier in the thread and they now say just Rs-per-month or ask about monthly",
+  "  billing, this is the one — do NOT flip them to the flex tier.",
+  "- monthly_flex: they explicitly want no commitment / month-to-month (the flex tier, higher",
+  "  per-seat rate).",
+  "- null: the term never came up.",
   "",
   "body_text is the email body, plain text. whatsapp_summary is the SAME message in at most 600",
   "characters, no salutation block — keep the price, the unit and the next step; drop the rest.",
@@ -821,6 +842,8 @@ export const SALES_AGENT_SCHEMA = z.object({
     .nullable()
     .default(null),
   seats_discussed: z.coerce.number().int().min(1).max(1_000_000).nullable().default(null),
+  /* Naya field — purane model-output me absent hoga, isliye default null (tolerant). */
+  term_discussed: z.enum(["annual", "annual_billed_monthly", "monthly_flex"]).nullable().default(null),
 });
 
 export type ParseResult =

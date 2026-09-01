@@ -21,6 +21,7 @@
  * switch that also muted "this ticket has waited 40 minutes" would turn one busy morning into a
  * customer discovering we never answered.
  */
+import { reportCron } from "@/lib/ops/cron-report";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
@@ -227,7 +228,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | { error: 
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json(reportCron("ai-support-sla", result));
 }
 
 /**

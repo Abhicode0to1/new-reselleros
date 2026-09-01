@@ -109,6 +109,7 @@ describe("guard tak pahunchta hai — prompt akela kaafi nahi", () => {
     },
     next_followup_loop: { in_hours: 48, trigger_condition: "no reply" },
     seats_discussed: 40,
+    term_discussed: null,
   });
 
   it("bina quote ke dava karne wala draft RUK jata hai", () => {
