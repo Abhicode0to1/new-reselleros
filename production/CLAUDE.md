@@ -736,6 +736,12 @@ add-seats orphan trap in migration 0213 was a bug because there wasn't).
 
 **"Done" for any guard/block = reason + next-step hint + (where possible) a button.**
 
+**Machine-enforced since 1 Sep 2026:** `src/lib/errors/toast-error-ratchet.test.ts` counts
+every `toast.error(...)` that carries neither `description:` nor `action:` and fails the suite
+if the count ever RISES above its measured baseline (450 of 481 on 1 Sep — twenty days of
+"migrate opportunistically" had moved exactly one). New error toasts must ship §24-complete;
+fixing an old one means lowering the baseline in that test so it can never climb back.
+
 ---
 
 ## 25. Session hygiene — working with Claude (added 2026-08-12)

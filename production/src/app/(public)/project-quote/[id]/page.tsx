@@ -84,8 +84,21 @@ export default async function ProjectQuotePage({
             {project.description && <p className="text-sm text-ink-3 mt-1">{project.description}</p>}
           </div>
 
-          {/* Line items */}
-          <div className="overflow-x-auto">
+          {/* Line items — phone par cards (§20, audit B5: customer-facing page
+              phone par khulta hai; scroll wali table wahan padhne layak nahi). */}
+          <ul className="sm:hidden divide-y divide-hairline border border-hairline rounded-md">
+            {lines.map((l, i) => (
+              <li key={i} className="p-3">
+                <p className="text-sm text-ink">{l.name}</p>
+                <div className="mt-1 flex items-center justify-between text-sm">
+                  <span className="text-2xs text-ink-3">{l.qty} × {rupee(l.rate)}</span>
+                  <span className="tabular-nums font-medium text-ink">{rupee(l.amount)}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="overflow-x-auto hidden sm:block">
             <table className="w-full text-sm min-w-[420px]">
               <thead>
                 <tr className="border-b border-hairline text-2xs uppercase tracking-wider text-ink-3">

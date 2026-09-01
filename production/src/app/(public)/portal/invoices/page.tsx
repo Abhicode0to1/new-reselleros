@@ -63,7 +63,48 @@ export default async function PortalInvoicesPage() {
           invoice against your paid order.
         </Card>
       ) : (
-        <Card className="overflow-hidden">
+        <>
+        {/* ── Phone: card list (§20 — ye page WhatsApp-link se phone par khulta
+               hai; table wahan horizontal-scroll ban jati thi, audit B5). ── */}
+        <ul className="md:hidden space-y-3">
+          {rows.map((inv) => (
+            <li key={inv.id}>
+              <Card className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm text-ink">{inv.id}</p>
+                    <p className="mt-0.5 text-2xs text-ink-3">{formatDate(inv.invoice_date)}</p>
+                  </div>
+                  <Badge color={STATUS_COLOR[inv.status] ?? "slate"}>{inv.status}</Badge>
+                </div>
+                <div className="mt-3 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-3xs uppercase tracking-wider text-ink-3">Net payable</p>
+                    <p className="font-mono text-lg font-semibold text-ink">{rupee(inv.net_payable ?? inv.amount)}</p>
+                    {inv.net_payable != null && inv.net_payable !== inv.amount && (
+                      <p className="text-2xs text-ink-3">Invoice {rupee(inv.amount)}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {(inv.status === "pending" || inv.status === "overdue") && (
+                      <PayInvoiceButton invoiceId={inv.id} email={session.userEmail} />
+                    )}
+                    <a
+                      href={`/api/portal/invoice/${encodeURIComponent(inv.id)}/pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-amber-ink hover:underline whitespace-nowrap py-2"
+                    >
+                      PDF ↓
+                    </a>
+                  </div>
+                </div>
+              </Card>
+            </li>
+          ))}
+        </ul>
+
+        <Card className="overflow-hidden hidden md:block">
           <table className="w-full text-sm">
             <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               <tr>
@@ -111,6 +152,7 @@ export default async function PortalInvoicesPage() {
             </tbody>
           </table>
         </Card>
+        </>
       )}
 
       {tenantWhatsAppLink(session.tenantPhone, `Hi ${reseller}, I have a question about an invoice.`) && (

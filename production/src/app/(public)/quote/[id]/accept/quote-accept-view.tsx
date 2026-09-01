@@ -502,8 +502,95 @@ export function QuoteAcceptView({
             </div>
           </div>
 
-          {/* Line items */}
-          <table className="w-full mb-6">
+          {/* Line items.
+
+              Har row ke aankde EK jagah compute hote hain (rowData) aur do render
+              unhe istemal karte hain — phone ki card-list aur desktop ki table
+              (§20, audit B5: YE page WhatsApp-link se phone par khulta hai, aur
+              iski table wahan bina card-fallback ke thi). Do render, ek ganit —
+              warna dono ek din alag jawab dete. */}
+          {(() => {
+            const rowData = dispLines.map(({ line, unit, amount }) => {
+              /* Once anything is adjusted, EVERY figure on this row comes from the
+                 server's answer. Nothing here multiplies a rate by a seat count —
+                 a number the browser computed is a number the customer chose. */
+              const live      = liveConfig?.lines.find((l) => l.lineId === line.id);
+              const qty       = live?.qty ?? line.qty;
+              const rowUnit   = live ? live.rate : unit;
+              const rowAmount = live ? live.amount : amount;
+              const included  = live ? live.included : (!line.optional || (line.included_by_default ?? false));
+              const bounds    = line.seats_adjustable
+                ? {
+                    min: Math.max(1, line.min_seats ?? Math.max(1, Math.floor(line.qty / 2))),
+                    max: line.max_seats ?? Math.max(line.qty * 3, line.qty + 50),
+                  }
+                : null;
+              return { line, live, qty, rowUnit, rowAmount, included, bounds };
+            });
+
+            const includeBox = (r: (typeof rowData)[number]) =>
+              adjustable && r.line.optional ? (
+                <input
+                  type="checkbox"
+                  checked={r.included}
+                  aria-label={`Include ${r.line.name}`}
+                  onChange={(e) => setChoices((c) => ({ ...c, [r.line.id]: { ...c[r.line.id], included: e.target.checked } }))}
+                  className="mt-1 h-4 w-4 shrink-0 accent-amber"
+                />
+              ) : null;
+
+            const seatsBox = (r: (typeof rowData)[number]) =>
+              adjustable && r.bounds && r.included ? (
+                <input
+                  type="number"
+                  min={r.bounds.min}
+                  max={r.bounds.max}
+                  value={r.qty}
+                  aria-label={`Seats for ${r.line.name}`}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    if (Number.isFinite(n)) setChoices((c) => ({ ...c, [r.line.id]: { ...c[r.line.id], seats: n } }));
+                  }}
+                  className="w-16 rounded border border-hairline bg-paper px-1.5 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-amber"
+                />
+              ) : null;
+
+            return (
+              <>
+              {/* ── Phone: card per line ── */}
+              <ul className="sm:hidden mb-6 divide-y divide-hairline border-y-2 border-ink">
+                {rowData.map((r) => (
+                  <li key={r.line.id} className={cn("py-3", !r.included && "opacity-45")}>
+                    <div className="flex items-start gap-2">
+                      {includeBox(r)}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          {r.line.name}
+                          {r.line.optional && <span className="ml-1.5 text-3xs uppercase tracking-wider text-ink-3">optional</span>}
+                        </p>
+                        {r.line.commitment && (
+                          <p className="text-2xs text-ink-3 mt-0.5">{scheduleLabel(r.line.commitment, effectiveCycle)}</p>
+                        )}
+                        {r.live?.rePriced && r.live.bandLabel && (
+                          <p className="mt-0.5 text-2xs font-medium text-emerald">
+                            {r.qty} seats reaches the {r.live.bandLabel} price
+                          </p>
+                        )}
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <span className="flex items-center gap-1.5 text-sm tabular-nums text-ink-2">
+                            {seatsBox(r) ?? <span>{r.qty}</span>}
+                            <span className="text-2xs text-ink-3">× {r.included ? fmtInv(r.rowUnit) : "—"}</span>
+                          </span>
+                          <span className="text-sm tabular-nums font-medium">{r.included ? fmtInv(r.rowAmount) : "—"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* ── Desktop: table ── */}
+              <table className="w-full mb-6 hidden sm:table">
             <thead className="border-y-2 border-ink">
               <tr>
                 <th className="text-left py-2 text-2xs uppercase tracking-wider font-semibold">Item</th>
@@ -513,21 +600,8 @@ export function QuoteAcceptView({
               </tr>
             </thead>
             <tbody>
-              {dispLines.map(({ line, unit, amount }) => {
-                /* Once anything is adjusted, EVERY figure on this row comes from the
-                   server's answer. Nothing here multiplies a rate by a seat count —
-                   a number the browser computed is a number the customer chose. */
-                const live      = liveConfig?.lines.find((l) => l.lineId === line.id);
-                const qty       = live?.qty ?? line.qty;
-                const rowUnit   = live ? live.rate : unit;
-                const rowAmount = live ? live.amount : amount;
-                const included  = live ? live.included : (!line.optional || (line.included_by_default ?? false));
-                const bounds    = line.seats_adjustable
-                  ? {
-                      min: Math.max(1, line.min_seats ?? Math.max(1, Math.floor(line.qty / 2))),
-                      max: line.max_seats ?? Math.max(line.qty * 3, line.qty + 50),
-                    }
-                  : null;
+              {rowData.map((r) => {
+                const { line, live, qty, rowUnit, rowAmount, included, bounds } = r;
 
                 return (
                   <tr key={line.id} className={cn("border-b border-hairline", !included && "opacity-45")}>
@@ -582,7 +656,10 @@ export function QuoteAcceptView({
                 );
               })}
             </tbody>
-          </table>
+              </table>
+              </>
+            );
+          })()}
 
           {adjustable && (
             <p className="-mt-4 mb-6 text-2xs leading-snug text-ink-3">

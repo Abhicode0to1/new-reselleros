@@ -48,7 +48,33 @@ export default async function PortalOrdersPage() {
           enters them in the system. Message {reseller} if you expect one to be here.
         </Card>
       ) : (
-        <Card className="overflow-hidden">
+        <>
+        {/* Phone: card list (§20, audit B5) — portal phone-first surface hai. */}
+        <ul className="md:hidden space-y-3">
+          {rows.map((q) => (
+            <li key={q.id}>
+              <Card className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm text-ink">{q.id}</p>
+                    <p className="mt-0.5 text-2xs text-ink-3 truncate" title={q.plan ?? undefined}>
+                      {q.plan ?? "—"}{q.seats != null ? ` · ${q.seats} seats` : ""}
+                    </p>
+                  </div>
+                  <Badge color={PAYMENT_STATUS_COLOR[q.payment_status ?? "none"] ?? "slate"}>
+                    {(q.payment_status ?? "none").replace("_", " ")}
+                  </Badge>
+                </div>
+                <div className="mt-3 flex items-end justify-between">
+                  <p className="font-mono text-lg font-semibold text-ink">{rupee(q.amount)}</p>
+                  <p className="text-2xs text-ink-3">{formatDate(q.created_date)}</p>
+                </div>
+              </Card>
+            </li>
+          ))}
+        </ul>
+
+        <Card className="overflow-hidden hidden md:block">
           <table className="w-full text-sm">
             <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               <tr>
@@ -78,6 +104,7 @@ export default async function PortalOrdersPage() {
             </tbody>
           </table>
         </Card>
+      </>
       )}
     </div>
   );
