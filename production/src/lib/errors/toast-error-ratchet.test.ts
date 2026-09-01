@@ -18,7 +18,6 @@
  */
 import { describe, it, expect } from "vitest";
 import { join } from "path";
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { countRaw } = require("../../../scripts/count-raw-toast-errors.cjs");
 
 /** Naapa hua: 1 Sep 2026 — kul 481 me se 450 nange. */
