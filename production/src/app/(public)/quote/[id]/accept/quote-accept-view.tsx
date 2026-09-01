@@ -97,6 +97,10 @@ export function QuoteAcceptView({
   const fmtC   = (v: number) => (isForeign ? formatForeign(v, quote.currency ?? "") : rupee(v));
 
   const firstCommitment = lineItems[0]?.commitment;
+  /* FLEX (pehli line commitment=monthly): quote ke stored aankde pehle se PER-MONTH
+     hain — wahi seema jo quote-body.ts aur record_payment maante hain. Inhe 12 par
+     baantna 1 Sep 2026 ko naapi gayi 12x under-charge/under-display thi. */
+  const isFlex = firstCommitment === "monthly";
   const effectiveCycle: BillingCycle = quote.billing_cycle ?? cycleFromLegacyCommitment(firstCommitment);
   const billingN    = cycleInvoicesPerYear(effectiveCycle);
   const billingUnit = cycleUnitLabel(effectiveCycle);
@@ -123,7 +127,8 @@ export function QuoteAcceptView({
   // Format an ANNUAL display-currency figure, slicing per-invoice when the cycle
   // bills more than once a year.
   const fmtInv = (annual: number) =>
-    perInvoice ? `${fmtC(dRound(annual / billingN))}${billingUnit}` : fmtC(annual);
+    isFlex ? `${fmtC(annual)}/mo`
+    : perInvoice ? `${fmtC(dRound(annual / billingN))}${billingUnit}` : fmtC(annual);
 
   /* ─── Customer-adjustable configuration ──────────────────────────────────
      Deliberately DOMESTIC-ONLY. Mixing customer re-pricing with FX conversion means
@@ -193,7 +198,9 @@ export function QuoteAcceptView({
     termTaxable: (quote.subtotal ?? 0) - Math.round((quote.subtotal ?? 0) * (quote.discount_pct ?? 0) / 100),
     termGross:   payableTotal,
     taxRate:     quote.tax_rate ?? 18,
-  }), [effectiveCycle, quote.subtotal, quote.discount_pct, quote.tax_rate, payableTotal]);
+    // Flex me stored aankde per-month hain — split kuch hai hi nahi (12× ka parivar).
+    lineCommitment: firstCommitment ?? null,
+  }), [effectiveCycle, quote.subtotal, quote.discount_pct, quote.tax_rate, payableTotal, firstCommitment]);
 
   const [notifying, setNotifying] = React.useState(false);
   /**
@@ -700,19 +707,26 @@ export function QuoteAcceptView({
                   <span className="text-2xs uppercase tracking-widest font-semibold">
                     {/* Annual upfront (single yearly invoice) → emphasize "payable now"
                         so customer knows full amount needs to clear in one go. */}
-                    {perInvoice ? `Per invoice (${billingN}/yr)` : (billingN === 1 ? "Total payable now" : "Total")}
+                    {isFlex ? "Payable each month" : perInvoice ? `Per invoice (${billingN}/yr)` : (billingN === 1 ? "Total payable now" : "Total")}
                   </span>
                   <span className="font-serif text-2xl tabular-nums">
                     {/* dueToday when we have it — the schedule engine carries its
                         remainder into the LAST instalment, so a term that does not
                         divide gives a first instalment a rupee below the average.
                         This is the figure the pay button charges. */}
-                    {perInvoice
+                    {isFlex
+                      ? `${fmtC(payableTotal)}/month`
+                      : perInvoice
                       ? `${fmtC(dueToday ? dueToday.firstGross : dRound(payableTotal / billingN))}${billingUnit}`
                       : fmtC(payableTotal)}
                   </span>
                 </div>
-                {perInvoice && (
+                {isFlex && (
+                  <div className="mt-1.5 text-2xs text-ink-3">
+                    Pay-as-you-go — koi saal ka bandhan nahi; seats ya plan kisi bhi mahine badal/band kar sakte hain.
+                  </div>
+                )}
+                {perInvoice && !isFlex && (
                   <div className="flex justify-between items-baseline mt-1.5 text-ink-3">
                     <span className="text-2xs">Annual contract value</span>
                     <span className="text-sm tabular-nums">{fmtC(payableTotal)}/yr</span>
@@ -754,11 +768,19 @@ export function QuoteAcceptView({
                 {/* The whole term used to be charged here regardless of cycle. */}
                 {dueToday
                   ? `Pay ${dueToday.cycle === "monthly" ? "this month" : "this instalment"} · ${fmtC(dueToday.firstGross)}`
+                  : isFlex
+                  ? `Pay this month · ${fmtC(dTotal)}`
                   : `Pay online now · ${fmtC(dTotal)}`}
               </Button>
             )}
             {/* Said next to the button, because "why is this less than the total?"
                 is the question a customer asks with their card already out. */}
+            {payOnline && !liveConfig?.changed && isFlex && (
+              <p className="text-[12px] leading-snug text-ink-3">
+                Flex plan: har mahine ki apni invoice banti hai aur usi se bhugtan hota
+                hai — aaj sirf is mahine ka {fmtC(dTotal)} lagta hai.
+              </p>
+            )}
             {payOnline && !liveConfig?.changed && dueToday && (
               <p className="text-[12px] leading-snug text-ink-3">
                 This is instalment 1 of {dueToday.count}. The rest are invoiced one

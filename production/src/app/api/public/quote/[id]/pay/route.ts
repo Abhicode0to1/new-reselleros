@@ -29,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   // ── 1. Load + token-authorize (identical secrecy model to the accept route) ──
   const { data: quote, error: qErr } = await admin
     .from("quotes")
-    .select("id, status, payment_status, expires_date, amount, currency, customer_name, tenant_id, public_token, invoice_id, billing_cycle, subtotal, discount_pct, tax_rate, created_date")
+    .select("id, status, payment_status, expires_date, amount, currency, customer_name, tenant_id, public_token, invoice_id, billing_cycle, subtotal, discount_pct, tax_rate, created_date, line_items")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -93,6 +93,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     termTaxable: subtotal - Math.round(subtotal * (quote.discount_pct ?? 0) / 100),
     termGross:   quote.amount ?? 0,
     taxRate,
+    // Flex (pehli line commitment=monthly): stored aankde per-month hain — engine null dega
+    // aur neeche amountInr seedha quote.amount (mahine ki poori vasooli) banega. Iske bina
+    // flex par 12× under-charge thi (audit B9-deep, 1 Sep 2026).
+    lineCommitment: (Array.isArray(quote.line_items) ? (quote.line_items[0] as { commitment?: string } | undefined)?.commitment : null) ?? null,
   });
 
   /* A split-billed quote is paid ONCE here — the first instalment. Everything after

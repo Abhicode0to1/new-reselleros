@@ -169,8 +169,19 @@ export function quoteInstalments(args: {
   taxRate: number;
   /** Whole months in the term. Committed sales are 12 — see record_payment. */
   termMonths?: number;
+  /**
+   * Pehli line ka `commitment`. `'monthly'` = FLEX — aur flex me quote ke
+   * stored aankde pehle se PER-MONTH hain (wahi seema jo quote-body.ts aur
+   * record_payment dono maante hain: `commitment === 'monthly'` par
+   * line-figures mahine ke hote hain, saal ke nahi). Unhe 12 par baantna
+   * 1 Sep 2026 ko naapi gayi 12× UNDER-charge thi: ₹5,753/month ke flex
+   * quote par pay-button ₹479 maang raha tha. Flex me baantne ko kuch hai
+   * hi nahi — stored amount hi har mahine ki vasooli hai — isliye null.
+   */
+  lineCommitment?: string | null;
 }): QuoteInstalments | null {
   const { cycle, termTaxable, termGross, taxRate } = args;
+  if (args.lineCommitment === "monthly") return null;
   if (!isSplitBilled(cycle)) return null;
   if (!Number.isFinite(termTaxable) || termTaxable <= 0) return null;
   if (!Number.isFinite(termGross)   || termGross   <= 0) return null;

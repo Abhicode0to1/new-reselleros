@@ -165,6 +165,18 @@ describe("quoteInstalments — what a quote collects today", () => {
     expect(q({ cycle: null })).toBeNull();
   });
 
+  it("FLEX (commitment=monthly) par null — stored amount hi mahine ki vasooli hai", () => {
+    /* 1 Sep 2026 ko naapa: Q-ADPL-2026-27-0106 (15 seats flex, ₹4,875+GST = ₹5,753
+       PER MONTH stored) par ye engine termTaxable ko SAAL maan kar 12 par baant
+       raha tha — pay-button ₹479 maang raha tha, asli ₹5,753. Flex me quote ke
+       aankde pehle se per-month hain (quote-body.ts:133 aur record_payment ka
+       v_is_monthly — dono yahi seema maante hain), isliye split ka sawal hi nahi:
+       null → caller poora quote.amount charge karta hai, har mahine apni invoice. */
+    expect(q({ lineCommitment: "monthly", termTaxable: 4_875, termGross: 5_753 })).toBeNull();
+    // Committed-annual billed monthly par split pehle jaisa zinda hai.
+    expect(q({ lineCommitment: "annual" })?.firstGross).toBe(2_360);
+  });
+
   it("the instalments still add up to the quote total", () => {
     /* A customer who pays 12 instalments must have paid the quote, not the quote
        plus rounding. The schedule carries its remainder into the LAST instalment,
