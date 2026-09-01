@@ -28,9 +28,22 @@ export interface DomainOffer {
   until: string; // YYYY-MM-DD
 }
 
-export const DOMAIN_OFFERS: Readonly<Record<string, DomainOffer>> = {
-  ".in": { price: 1, label: "SEPTEMBER OFFER", until: "2026-09-30" },
-};
+/**
+ * ⚠️ ABHI KHAALI — jaan-boojh kar (merge-faisla #4, 1 Sep 2026).
+ *
+ * ".in @ ₹1" yahan LIVE tha, par asli dukaan (app.anutech.in / DMS) ke paas
+ * promo-engine hai hi nahi — uska price-verifier ₹1 wali line ko khud REJECT
+ * kar deta (wo ResellerClub ka daam verbatim bechta hai). Jo daam checkout
+ * charge nahi kar sakta, wo chehre par likhna grahak se jhooth hai.
+ *
+ * Wapas laane ke liye: pehle DMS me promo-layer (merge-naksha Phase 3 —
+ * Promo model → PricingService override → price-verifier → renewal-alag →
+ * Zoho line), PHIR yahan ek line:
+ *   ".in": { price: 1, label: "OFFER", until: "YYYY-MM-DD" },
+ * Engine + tests (IST-expiry, first-year-only, offer≥normal=refuse) salamat
+ * hain — test apna map inject karte hain, is khaali map par nahi baithe.
+ */
+export const DOMAIN_OFFERS: Readonly<Record<string, DomainOffer>> = {};
 
 /** IST "today", so the offer flips at Indian midnight — where the customers are. */
 function istToday(now: Date): string {
@@ -44,8 +57,14 @@ export interface EffectivePrice {
   offer?: { was: number; label: string };
 }
 
-export function effectiveReg(tld: string, normalReg: number, now: Date = new Date()): EffectivePrice {
-  const o = DOMAIN_OFFERS[tld];
+export function effectiveReg(
+  tld: string,
+  normalReg: number,
+  now: Date = new Date(),
+  /** Tests apna map dete hain; production hamesha DOMAIN_OFFERS par chalta hai. */
+  offers: Readonly<Record<string, DomainOffer>> = DOMAIN_OFFERS,
+): EffectivePrice {
+  const o = offers[tld];
   if (!o) return { reg: normalReg };
   if (istToday(now) > o.until) return { reg: normalReg };
   /* An "offer" above the normal rate is a data error, not a discount — refuse it. */
