@@ -60,7 +60,7 @@ Chaaron faisle Pardeep ne mujhe saunpe (1 Sep shaam) — liye gaye:
 
 Aage (kram se):
 - [ ] **M0. DMS Phase-0 suraksha**: IDOR (booking-status ownership), Razorpay-secrets plaintext→encrypt+ROTATE, backup-export me settings redact, XFF last-entry, doosra webhook harden. (DMS repo par kaam — deploy unka pipeline.)
-- [ ] **M1. Jod**: DMS me 2 public read-API (tld-pricing, availability) → website ka nakli search/daam asli; Buy→app.anutech.in cart handoff; website Cloud Run par www; DMS marketing 301.
+- [~] **M1. Jod (chal raha)** — DMS ke 2 public read-API bane (PR #2, availability+tld-pricing, 9 test); website ka hero-search ab ASLI (nakli hash gaya) aur /domains + /pricing rate-card live-merge par (live-tld-pricing.ts). Bacha: (a) website www par deploy, (b) DMS marketing 301. **Buy→cart handoff JAAN-BOOJH KAR Phase-2 me** — cross-origin cart-bridge Phase-2 ke shared-cart me delete ho jata, isliye throwaway nahi banaya. Zinda hone ki shart: DMS PR #1+#2 merge+deploy.
 - [ ] **M2. Ek ghar**: website → DMS (marketing) route-group; SEO greenfield; ek cart; cross-repo test-path theek.
 - [ ] **M3. Promo-engine DMS me** (₹1 wapas) + inner reskin + webhook-consolidation.
 
