@@ -20,6 +20,7 @@ import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { LeadHistoryCard } from "@/components/features/contacts/lead-history-card";
 import { initials, formatDate, cn } from "@/lib/utils";
 
 // ── Social handle → full URL. Accepts a full URL, a bare domain path, or a
@@ -188,6 +189,14 @@ export default function ContactDetailPage() {
           </dl>
         </div>
       </Panel>
+
+      {/* Is insaan ki leads — anchor (0197) + isi card ke emails/phones se
+         (Pardeep, 1 Sep 2026: quotation/invoice ki tarah leads bhi yahin dikhein). */}
+      <LeadHistoryCard
+        contactId={contact.id}
+        emails={emails.map((e) => e.value)}
+        phones={phones.map((pn) => pn.value)}
+      />
 
       {/* Social — for advertising / outreach */}
       {hasSocial && (

@@ -151,7 +151,9 @@ export default function ContactsPage() {
         !c.phone?.toLowerCase().includes(s) &&
         !c.company.toLowerCase().includes(s) &&
         !inArr(c.emails) &&
-        !inArr(c.phones)
+        !inArr(c.phones) &&
+        /* Merge hui leads ki companies bhi — "demo 7" wala sabak (1 Sep 2026). */
+        !inArr(c.companies)
       ) return false;
     }
     return true;

@@ -393,3 +393,52 @@ export function useMergeLeads() {
     onError: (err) => toastError(err),
   });
 }
+
+/* ── Ek insaan ki LEADS — contact/customer ke page ke liye (1 Sep 2026) ──────
+   Pardeep: "lead ka koi contact hota hai to us contact ke page par uski leads
+   bhi dikhao, jaise quotation/invoice dikhate hain." Pehchan teen raaste se:
+   anchor (leads.contact_id — migration 0197, har lead par hai), email-match,
+   phone-match (EXACT stored value; +91/space-variant yahan nahi judte — wo
+   contacts-book ka last-10 merge hai, DB filter nahi).
+   Teen chhoti queries, client par dedup — PostgREST ke or(in(...)) ke quoting
+   jaal se seedha raasta. */
+export function useLeadsForPerson(args: {
+  contactId?: string | null;
+  emails?: readonly string[];
+  phones?: readonly string[];
+}) {
+  const contactId = args.contactId ?? null;
+  const emails = (args.emails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const phones = (args.phones ?? []).map((p) => p.trim()).filter(Boolean);
+
+  return useQuery({
+    queryKey: ["leads-for-person", contactId, emails, phones],
+    enabled: Boolean(contactId || emails.length || phones.length),
+    queryFn: async (): Promise<Lead[]> => {
+      const supabase = createClient();
+      const picks = "id, company, contact_name, contact_email, contact_phone, stage, is_junk, value, seats, plan, created_at";
+      const [byAnchor, byEmail, byPhone] = await Promise.all([
+        contactId
+          ? supabase.from("leads").select(picks).eq("contact_id", contactId)
+          : Promise.resolve({ data: [], error: null }),
+        emails.length
+          ? supabase.from("leads").select(picks).in("contact_email", emails)
+          : Promise.resolve({ data: [], error: null }),
+        phones.length
+          ? supabase.from("leads").select(picks).in("contact_phone", phones)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      for (const r of [byAnchor, byEmail, byPhone]) if (r.error) throw r.error;
+
+      const seen = new Set<string>();
+      const out: Lead[] = [];
+      for (const l of [...(byAnchor.data ?? []), ...(byEmail.data ?? []), ...(byPhone.data ?? [])] as Lead[]) {
+        if (seen.has(l.id)) continue;
+        seen.add(l.id);
+        out.push(l);
+      }
+      out.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+      return out;
+    },
+  });
+}

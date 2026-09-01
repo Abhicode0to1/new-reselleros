@@ -42,6 +42,13 @@ export interface UnifiedContact {
    *  into ONE contact so the book never shows the same human twice. */
   emails?: string[];
   phones?: string[];
+  /**
+   * Har merge hui row ki company (dedup, face pehle). 1 Sep 2026: "demo 7" ki
+   * lead search me nahi mili — wo usi email/phone ke customer-card me MERGE thi
+   * aur search sirf chehre wali company dekhta tha. Insaan ek hi hai, par uski
+   * HAR company se wo dhoondha ja sake.
+   */
+  companies?: string[];
   /** How many source rows were merged into this identity (1 = not merged). */
   mergedCount?: number;
   /** The master contact id this row is tied to — a lead's `contact_id`, or an
@@ -279,8 +286,10 @@ export function useAllContacts() {
         // Merge all reachable channels (primary first, deduped, order-stable).
         const emails: string[] = [];
         const phones: string[] = [];
+        const companies: string[] = [];
         const seenE = new Set<string>();
         const seenP = new Set<string>();
+        const seenC = new Set<string>();
         const ordered = [rep, ...idxs.map((i) => all[i]).filter((c) => c !== rep)];
         for (const c of ordered) {
           const e = (c.email ?? "").trim();
@@ -289,6 +298,9 @@ export function useAllContacts() {
           const p = (c.phone ?? "").trim();
           const pk = normPhone(p);
           if (p && pk && !seenP.has(pk)) { seenP.add(pk); phones.push(p); }
+          const co = (c.company ?? "").trim();
+          const ck = co.toLowerCase();
+          if (co && co !== "—" && !seenC.has(ck)) { seenC.add(ck); companies.push(co); }
         }
         // Prefer a real company name over a "—" placeholder from a weaker row.
         const company =
@@ -304,6 +316,7 @@ export function useAllContacts() {
           phone:       phones[0] ?? rep.phone,
           emails,
           phones,
+          companies,
           mergedCount: idxs.length,
         });
       }

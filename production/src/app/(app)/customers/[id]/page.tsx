@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { TabBar } from "@/components/ui/tabs";
+import { LeadHistoryCard } from "@/components/features/contacts/lead-history-card";
 import { Icon } from "@/components/ui/icon";
 import { formatDate, rupee, daysBetween, cn } from "@/lib/utils";
 import {
@@ -400,6 +401,13 @@ export default function CustomerDetailPage() {
               subscription list because "do they have support for this?" is the
               question a rep opens this page with. */}
           <EntitlementCard customerId={params.id} customerName={c.name} />
+
+          {/* Is customer ke email/phone par aayi LEADS — quotation/invoice ki tarah
+             yahan bhi itihaas dikhe (Pardeep, 1 Sep 2026). */}
+          <LeadHistoryCard
+            emails={[c.contact_email].filter(Boolean) as string[]}
+            phones={[c.contact_phone, c.contact_mobile].filter(Boolean) as string[]}
+          />
 
           <Card
             title="Subscriptions & projects"
