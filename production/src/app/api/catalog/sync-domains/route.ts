@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { rcConfigured, rcTldPricing } from "@/lib/resellerclub";
 
 /**
  * POST /api/catalog/sync-domains — pull the domain rate card from the DMS engine
@@ -33,29 +34,42 @@ export async function POST(_request: NextRequest) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  // 1. Fetch the rate card from the engine (its own default TLD set).
+  // 1. Fetch the rate card — direct from ResellerClub when the credentials are
+  //    on this server (Plan B, 2 Sep 2026: the engine can't be redeployed), else
+  //    the engine's public API as before.
   let tlds: TldRow[];
-  try {
-    const res = await fetch(TLD_PRICING_API, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(8_000),
-    });
-    if (!res.ok) {
+  if (rcConfigured()) {
+    const rows = await rcTldPricing(["in", "com", "co.in", "org", "net", "shop", "store", "io"]);
+    if (!rows) {
       return NextResponse.json(
-        { error: `Domain engine returned ${res.status}. Is app.anutech.in deployed?` },
+        { error: "ResellerClub didn't answer — check that this server's IP (34.14.190.227) is whitelisted in the ResellerClub panel, then try again." },
         { status: 502 },
       );
     }
-    const body = (await res.json()) as { tlds?: unknown };
-    if (!Array.isArray(body.tlds)) {
-      return NextResponse.json({ error: "Domain engine sent no pricing." }, { status: 502 });
+    tlds = rows;
+  } else {
+    try {
+      const res = await fetch(TLD_PRICING_API, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (!res.ok) {
+        return NextResponse.json(
+          { error: `Domain engine returned ${res.status}. Is app.anutech.in deployed?` },
+          { status: 502 },
+        );
+      }
+      const body = (await res.json()) as { tlds?: unknown };
+      if (!Array.isArray(body.tlds)) {
+        return NextResponse.json({ error: "Domain engine sent no pricing." }, { status: 502 });
+      }
+      tlds = body.tlds as TldRow[];
+    } catch {
+      return NextResponse.json(
+        { error: "Couldn't reach the domain engine (app.anutech.in). Try again once it's deployed." },
+        { status: 502 },
+      );
     }
-    tlds = body.tlds as TldRow[];
-  } catch {
-    return NextResponse.json(
-      { error: "Couldn't reach the domain engine (app.anutech.in). Try again once it's deployed." },
-      { status: 502 },
-    );
   }
 
   const priced = tlds.filter((t) => typeof t.register === "number" && (t.register ?? 0) > 0);

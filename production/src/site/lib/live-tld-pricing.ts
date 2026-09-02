@@ -17,6 +17,12 @@
  */
 import { TLD_PRICING_API } from "./config";
 import { TLDS, type Tld } from "./data/catalog";
+/* Plan B (2 Sep 2026): the one deliberate site→app import. This runs server-side
+   only (the pages that call it are server components), and the app's ResellerClub
+   client is where the credentials live — duplicating that here would be a second
+   copy of a money-facing integration. When the credentials are absent (local
+   dev), everything below falls back to the engine URL exactly as before. */
+import { rcConfigured, rcTldPricing } from "@/lib/resellerclub";
 
 export interface LiveTldPrice {
   tld: string; // ".in"
@@ -27,6 +33,19 @@ export interface LiveTldPrice {
 }
 
 export async function fetchLiveTldPricing(tlds: readonly string[]): Promise<LiveTldPrice[] | null> {
+  /* Direct from ResellerClub when this server holds the credentials — the
+     engine's public API can't be redeployed (owner account lost). Same shape,
+     same never-invent rule: null on failure keeps the placeholder standing. */
+  if (rcConfigured()) {
+    const rows = await rcTldPricing(tlds.map((t) => t.replace(/^\.+/, "")));
+    return rows?.map((r) => ({
+      tld: r.tld,
+      register: r.register,
+      renew: r.renew,
+      transfer: r.transfer,
+      currency: r.currency,
+    })) ?? null;
+  }
   try {
     // API wants dot-less, comma-separated ("in,com,co.in").
     const q = tlds.map((t) => t.replace(/^\.+/, "")).join(",");
