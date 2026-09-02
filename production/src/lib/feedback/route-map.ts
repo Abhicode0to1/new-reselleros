@@ -38,7 +38,6 @@ export interface AppRoute {
  * Keep sorted and keep it matching disk — `route-map.test.ts` enforces both.
  */
 export const APP_ROUTES: readonly AppRoute[] = [
-  { route: "/", file: "src/app/page.tsx" },
   { route: "/aa/simulate-approval", file: "src/app/(app)/aa/simulate-approval/page.tsx" },
   { route: "/about", file: "src/app/(public)/about/page.tsx" },
   { route: "/accounting", file: "src/app/(app)/accounting/page.tsx" },

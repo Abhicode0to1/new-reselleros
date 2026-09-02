@@ -33,7 +33,9 @@ const PUBLIC_FACING = [
      Sabak: "public-facing" ka matlab wo file nahi jise user KHOLTA hai — wo har file hai
      jiska output user tak PAHUNCHTA hai. Layout, metadata aur manifest usme aate hain. */
   ["root layout",  ["src", "app", "layout.tsx"]],
-  ["landing",      ["src", "app", "page.tsx"]],
+  /* The public home is now the Anutech marketing page (merge brick #5) — the old
+     app landing was removed when `/` became the company's face. */
+  ["landing",      ["src", "app", "(marketing)", "page.tsx"]],
   ["public shell", ["src", "app", "(public)", "_components", "public-shell.tsx"]],
   ["landing bits", ["src", "app", "(public)", "_components", "landing-sections.tsx"]],
   ["privacy",      ["src", "app", "(public)", "privacy", "page.tsx"]],

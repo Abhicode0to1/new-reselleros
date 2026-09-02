@@ -67,7 +67,14 @@ function normalize(raw: string): string | null {
   return collapsed === "" ? "/" : collapsed;
 }
 
+/* Routes that exist but are deliberately NOT in APP_ROUTES. `/` is the Anutech
+   marketing home ((marketing)/page.tsx, merge brick #5) — that group is
+   self-governed and excluded from the app's screen registry, but app pages
+   legitimately link to the site root (logo, "back to home"). */
+const EXTRA_ROUTES = new Set(["/"]);
+
 function resolves(link: string): boolean {
+  if (EXTRA_ROUTES.has(link)) return true;
   const want = link.split("/").filter(Boolean);
   return APP_ROUTES.some(({ route }) => {
     const have = route.split("/").filter(Boolean);
