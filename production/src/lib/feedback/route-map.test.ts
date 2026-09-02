@@ -25,6 +25,11 @@ function scanRoutes(): { route: string; file: string }[] {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) {
+        // The vendored Anutech marketing site (the (marketing) route group, merge
+        // brick #5) is self-governed and ported incrementally — it is not part of
+        // the app's screen registry (APP_ROUTES names files a bug was reported
+        // from; marketing has its own site-invariants test). Skip it.
+        if (entry.name === "(marketing)") continue;
         walk(full);
       } else if (entry.name === "page.tsx") {
         // Repo-relative, POSIX separators — matches how APP_ROUTES stores them.

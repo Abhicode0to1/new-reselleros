@@ -35,8 +35,15 @@ const DYN = "[*]";
 function tsxFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) tsxFiles(full, out);
-    else if (/\.tsx$/.test(entry.name) && !/\.test\.tsx$/.test(entry.name)) out.push(full);
+    // The vendored Anutech marketing site (src/site + the (marketing) route group,
+    // merge brick #5) is a self-governed subtree: its own design, its own routes,
+    // and its own link-integrity test (site/lib/site-invariants.test.ts). Its links
+    // point at marketing pages that land incrementally, so the APP's route table
+    // must not police them. Skip both.
+    if (entry.isDirectory()) {
+      if (entry.name === "site" || entry.name === "(marketing)") continue;
+      tsxFiles(full, out);
+    } else if (/\.tsx$/.test(entry.name) && !/\.test\.tsx$/.test(entry.name)) out.push(full);
   }
   return out;
 }
