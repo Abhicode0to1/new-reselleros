@@ -5,10 +5,14 @@
  *
  * A faithful build of the "Hosting Page Conversion Redesign" v2 handoff, adapted
  * to the app's real data (see hosting-landing-v2.ts for the three departures:
- * real bandwidth, verified-only claims, real website counts). It is a STANDALONE
- * page — its own announcement strip, sticky header, footer and decision bar —
- * so it renders under the (hosting) route group WITHOUT the marketing chrome, to
- * keep a single focused funnel. Prices come from LANDING_PLANS via HOSTING_TIERS.
+ * real bandwidth, verified-only claims, real website counts). It renders under
+ * (marketing), so the shared site chrome — the home-page menu (a sticky Header),
+ * the utility bar and the footer — sits around it on this page as on every other,
+ * and the way back to the home page and across to Domains, Email, ResellerOS,
+ * etc. is never lost. So this component renders only its own body (hero → final
+ * CTA); in-page navigation is the quick-jump strip. "Start free trial" leads to
+ * the customer trial form (/hosting/trial); "Buy now" adds the plan to the cart.
+ * Prices come from LANDING_PLANS via HOSTING_TIERS.
  *
  * Responsive is driven off a measured window width (`w`), exactly as the
  * prototype did; SSR and the first client render both use 1200 (desktop), so
@@ -16,6 +20,7 @@
  */
 import { useEffect, useState } from "react";
 import { Manrope, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { useCart } from "@/site/components/cart/CartProvider";
 import {
   HOSTING_TIERS,
   REC_WHY,
@@ -61,6 +66,7 @@ export function HostingLanding() {
   const [openFaq, setOpenFaq] = useState(0);
   const [showMatrix, setShowMatrix] = useState(false);
   const [w, setW] = useState(1200);
+  const cart = useCart();
 
   useEffect(() => {
     const measure = () => {
@@ -161,7 +167,7 @@ export function HostingLanding() {
               Enterprise-grade web hosting powered by Google Cloud. Free SSL, daily backups, free migration and 24×7 expert support — and the trial needs no credit card, so your old host stays live until you approve the move.
             </p>
             <div style={{ marginTop: 26, display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <a href="/signup" className="hlp-orange" style={{ background: C.accent, color: "#fff", padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free trial</a>
+              <a href="/hosting/trial" className="hlp-orange" style={{ background: C.accent, color: "#fff", padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free trial</a>
               <a href="#move" className="hlp-outline" style={{ background: "#fff", border: `1px solid ${C.line}`, color: C.ink, padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>See how migration works</a>
             </div>
             <ul style={{ marginTop: 24, display: "flex", gap: "8px 22px", flexWrap: "wrap", listStyle: "none", padding: 0, margin: "24px 0 0" }}>
@@ -272,8 +278,14 @@ export function HostingLanding() {
                 <div style={{ marginTop: 6, fontSize: 13.5, color: C.muted, lineHeight: 1.5 }}>{p.billingLine}<br /><span style={{ color: C.ink, fontWeight: 600 }}>Renews at {p.renewLine}</span></div>
                 <div style={{ marginTop: 10, background: C.tint, border: `1px solid ${C.line}`, borderRadius: 9, padding: "9px 12px", fontFamily: MONO, fontSize: 12.5 }}>{p.payToday}</div>
                 <div style={{ marginTop: 16, display: "grid", gap: 8 }}>
-                  <a href={`/signup?plan=${p.name.toLowerCase()}`} className={p.isTop ? "hlp-orange" : "hlp-dark"} style={{ textAlign: "center", padding: 15, borderRadius: 11, fontSize: 15, fontWeight: 700, color: "#fff", minHeight: 50, background: p.isTop ? C.accent : C.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>Start free trial on {p.name}</a>
-                  <a href="/cart" className="hlp-outline" style={{ textAlign: "center", padding: 12, borderRadius: 11, fontSize: 14, fontWeight: 700, color: C.ink2, border: `1px solid ${C.line}`, background: "#fff", minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center" }}>Buy now, skip the trial</a>
+                  <a href={`/hosting/trial?plan=${p.name.toLowerCase()}`} className={p.isTop ? "hlp-orange" : "hlp-dark"} style={{ textAlign: "center", padding: 15, borderRadius: 11, fontSize: 15, fontWeight: 700, color: "#fff", minHeight: 50, background: p.isTop ? C.accent : C.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>Start free trial on {p.name}</a>
+                  <button type="button" onClick={() => cart.add({
+                    label: `${p.name} hosting`,
+                    detail: `${p.storage} · ${p.bandwidth} · cPanel on Google Cloud`,
+                    unitPrice: yearly ? p.yearlyTotal : p.monthly,
+                    unit: yearly ? "year" : "month",
+                    cycle: yearly ? "yearly" : "monthly",
+                  })} className="hlp-outline" style={{ textAlign: "center", padding: 12, borderRadius: 11, fontSize: 14, fontWeight: 700, color: C.ink2, border: `1px solid ${C.line}`, background: "#fff", minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>Buy now, skip the trial</button>
                 </div>
                 <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px dashed ${C.line}`, display: "grid", gap: 10 }}>
                   {[["NVMe storage", p.storage], ["Websites", p.sites], ["Bandwidth", p.bandwidth]].map(([k, v]) => (
@@ -496,7 +508,7 @@ export function HostingLanding() {
           <h2 style={{ fontSize: "clamp(30px,5vw,44px)", lineHeight: 1.08, letterSpacing: "-.04em", fontWeight: 800 }}>Try it with your real website. <span style={{ fontFamily: SERIF, fontStyle: "italic", fontWeight: 400, color: C.accent }}>Then decide.</span></h2>
           <p style={{ marginTop: 16, fontSize: 17.5, color: C.ink2, maxWidth: 560, marginLeft: "auto", marginRight: "auto", lineHeight: 1.55 }}>{TRIAL_DAYS} days, every feature, no credit card, and our team does the migration while your current site stays live.</p>
           <div style={{ marginTop: 26, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <a href="/signup" className="hlp-dark" style={{ background: C.ink, color: C.paper, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free trial</a>
+            <a href="/hosting/trial" className="hlp-dark" style={{ background: C.ink, color: C.paper, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free trial</a>
             <a href="/quote" className="hlp-outline" style={{ background: "#fff", color: C.ink, border: `1px solid ${C.line}`, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Get a written quote</a>
           </div>
           <div style={{ marginTop: 20, fontSize: 13, color: C.muted, fontFamily: MONO, letterSpacing: ".04em" }}>NO CARD · CANCEL ANYTIME · GST INVOICE ON EVERY ORDER</div>
