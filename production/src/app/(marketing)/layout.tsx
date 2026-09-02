@@ -1,0 +1,54 @@
+/**
+ * Marketing route group — the Anutech Digital public site, ported into
+ * ResellerOS (merge brick #5) so there is ONE app. It keeps its OWN design
+ * (Archivo + IBM Plex Mono, the site's blue) entirely separate from the app's
+ * Tailwind shell: everything is wrapped in `.anutech-site`, and site.css is
+ * scoped under that class, so the two design systems never touch.
+ *
+ * This is a NESTED layout — the root layout still owns <html>/<body>. Here we
+ * only set the font variables on the wrapper (so `--font-sans` = Archivo inside
+ * the marketing subtree, overriding the app's Plus Jakarta just for these
+ * pages) and render the site chrome around the page.
+ *
+ * Collisions with existing app routes (/, /pricing, /about, /login, …) are
+ * deliberately NOT ported yet — which page wins there is its own decision.
+ */
+import { Archivo, IBM_Plex_Mono } from "next/font/google";
+import "@/site/site.css";
+import { CartProvider } from "@/site/components/cart/CartProvider";
+import { CartDrawer } from "@/site/components/cart/CartDrawer";
+import { Header } from "@/site/components/chrome/Header";
+import { UtilityBar, CtaBand, Footer, WhatsAppButton, ConsentBanner } from "@/site/components/chrome/Chrome";
+import { AgentChat } from "@/site/components/agent/AgentChat";
+
+const archivo = Archivo({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+  display: "swap",
+});
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
+  display: "swap",
+});
+
+export default function MarketingLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className={`anutech-site ${archivo.variable} ${plexMono.variable}`}>
+      <CartProvider>
+        <a href="#main" className="skip-link">Skip to content</a>
+        <UtilityBar />
+        <Header />
+        <main id="main">{children}</main>
+        <CtaBand />
+        <Footer />
+        <WhatsAppButton />
+        <AgentChat />
+        <ConsentBanner />
+        <CartDrawer />
+      </CartProvider>
+    </div>
+  );
+}
