@@ -6,6 +6,11 @@ const config: Config = {
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/lib/**/*.{js,ts,jsx,tsx}",
+    /* The vendored marketing site (merge brick #5). Most of it is styled by its
+       own scoped stylesheet, but the ported hosting landing is pure Tailwind —
+       without this glob its violet/gradient classes are never generated and the
+       page renders unstyled. */
+    "./src/site/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     container: {
