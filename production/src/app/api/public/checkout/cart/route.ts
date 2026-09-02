@@ -262,7 +262,11 @@ export async function POST(request: NextRequest) {
       totalRupees: amount,
     });
   } catch (err) {
-    const m = err instanceof Error ? err.message : "Unknown error";
+    // Razorpay's SDK rejects with a plain object ({statusCode, error:{code,description}}),
+    // not an Error — surface its `description`, then any message, then the raw shape.
+    const rzpDesc = (err as { error?: { description?: string } })?.error?.description;
+    let m = rzpDesc || (err instanceof Error ? err.message : "");
+    if (!m) { try { m = JSON.stringify(err); } catch { m = String(err); } }
     console.error("[/api/public/checkout/cart] crashed:", m);
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
