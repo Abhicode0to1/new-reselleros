@@ -60,7 +60,9 @@ function repriceLine(sku: string | undefined, cycle: string | undefined, qty: nu
     const t = HOSTING_TIERS.find((x) => x.name.toLowerCase() === tier);
     if (!t) return null;
     const yearly = cycle !== "monthly";
-    const rate = yearly ? t.yearlyTotal : t.monthly; // server truth, not client
+    // Whole rupees — the money spine stores integers (CLAUDE.md §13); a fractional
+    // tier total like ₹599.88 would break the integer lead/quote columns.
+    const rate = Math.round(yearly ? t.yearlyTotal : t.monthly); // server truth, not client
     return {
       tier,
       line: {
