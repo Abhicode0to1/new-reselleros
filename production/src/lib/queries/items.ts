@@ -278,11 +278,11 @@ export function useLoadDefaultCatalog() {
 }
 
 /**
- * Pull the hosting tiers from the DMS engine (app.anutech.in) into this
- * tenant's catalogue via POST /api/catalog/sync-hosting → the owner-only,
- * atomic `sync_hosting_catalog` RPC. One source of price: the engine's number
- * is the catalogue's number (Pardeep's choice, 1 Sep 2026), refreshed on every
- * sync; a cost you set by hand survives. Live once app.anutech.in is deployed.
+ * Seed/refresh the hosting catalogue via POST /api/catalog/sync-hosting → the
+ * owner-only, atomic `sync_hosting_catalog` RPC. Rewired 2 Sep 2026 to the two
+ * directly-connected sources: SPECS (disk/bandwidth) from DirectAdmin live, and
+ * PRICE/name/features from our own config (hosting-landing.ts). No longer needs
+ * the DMS engine. A cost you set by hand on an item survives a re-sync.
  */
 export function useSyncHostingCatalog() {
   const qc = useQueryClient();
@@ -297,13 +297,13 @@ export function useSyncHostingCatalog() {
       qc.invalidateQueries({ queryKey: ["items"] });
       toast.success(
         n > 0
-          ? `${n} hosting plan${n === 1 ? "" : "s"} catalogue me sync ho gaye`
-          : "Engine par abhi koi hosting plan nahi hai",
+          ? `${n} hosting plan${n === 1 ? "" : "s"} catalogue me sync ho gaye (specs DirectAdmin se)`
+          : "Koi DirectAdmin package priced plan se match nahi hua",
       );
     },
     onError: (err) =>
       toast.error((err as Error).message, {
-        description: "app.anutech.in deploy hone ke baad hi ye chalega. Tab tak catalogue waise hi rahega.",
+        description: "DirectAdmin connection zaroori hai. Setup > Integrations me creds check karo.",
       }),
   });
 }

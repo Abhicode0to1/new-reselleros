@@ -190,7 +190,7 @@ export default function ItemsPage() {
               icon="refresh"
               loading={syncHosting.isPending}
               onClick={() => syncHosting.mutate()}
-              title="Pull hosting plans from the engine (app.anutech.in) into this catalogue"
+              title="Seed hosting plans into this catalogue — specs live from DirectAdmin, price from config"
             >
               Sync hosting
             </Button>

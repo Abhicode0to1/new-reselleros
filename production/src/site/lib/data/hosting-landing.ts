@@ -44,7 +44,7 @@ export const LANDING_PLANS: readonly LandingPlan[] = [
     features: [
       "10 GB SSD storage",
       "Unlimited Free SSL",
-      "100GB Bandwidth",
+      "20 GB Bandwidth",
       "Host 1 Website",
       "24/7 Phone & Email Support",
       "99.99% Uptime Guarantee",
@@ -63,7 +63,7 @@ export const LANDING_PLANS: readonly LandingPlan[] = [
     features: [
       "25 GB SSD storage",
       "Unlimited Free SSL",
-      "200GB Bandwidth",
+      "30 GB Bandwidth",
       "Host Multiple Websites",
       "24/7 Phone & Email Support",
       "99.99% Uptime Guarantee",
@@ -82,7 +82,7 @@ export const LANDING_PLANS: readonly LandingPlan[] = [
     features: [
       "50 GB SSD storage",
       "Unlimited Free SSL",
-      "Unmetered Bandwidth",
+      "40 GB Bandwidth",
       "Host Multiple Websites",
       "24/7 Phone & Email Support",
       "99.99% Uptime Guarantee",

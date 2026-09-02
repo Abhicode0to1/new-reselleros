@@ -1,38 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { daConfigured, daAllPackages } from "@/lib/directadmin";
+import { LANDING_PLANS } from "@/site/lib/data/hosting-landing";
 
 /**
- * POST /api/catalog/sync-hosting — pull the hosting tiers from the DMS engine
- * (app.anutech.in, GET /api/public/hosting-plans) into THIS tenant's catalogue.
+ * POST /api/catalog/sync-hosting — seed/refresh THIS tenant's hosting catalogue
+ * from the two directly-connected sources of truth (merge, 2 Sep 2026):
  *
- * Why a route and not a client call: the plan feed lives on another origin, so
- * the fetch belongs server-side (no CORS dance, no leaking of internal URLs to
- * the browser). The actual write is the `sync_hosting_catalog` RPC, which is
- * atomic, idempotent, and owner-only — so this route does not re-implement any
- * of that; it authenticates, fetches, and hands the plans to the RPC. A
- * non-owner (or an unauthenticated caller) is refused by the RPC / RLS.
+ *   • SPECS (disk + bandwidth)  ← DirectAdmin, read live from the server that
+ *     actually provisions the account (lib/directadmin). This is authoritative:
+ *     it is the quota the customer really gets. Verified 2 Sep — the disk quotas
+ *     matched the marketing page exactly, but bandwidth did NOT (page promised
+ *     100/200/Unmetered GB while the packages enforce 20/30/40 GB). Pardeep's
+ *     ruling: the server is the truth, so the page was corrected to match, and
+ *     the catalogue takes its specs from here, never from the page.
+ *   • PRICE + name + features   ← LANDING_PLANS (hosting-landing.ts), Anutech's
+ *     own numbers. DirectAdmin holds no selling price, so price can only come
+ *     from our own config.
  *
- * Live only once the DMS is deployed and its public API answers; until then the
- * fetch fails and we return a clear 502, never a half-written catalogue.
+ * This replaces the previous version, which fetched the DMS engine
+ * (app.anutech.in) — undeployable since its GCP owner account was lost. Same
+ * atomic, owner-only RPC underneath (`sync_hosting_catalog`); this route only
+ * authenticates, reads DA, merges, and hands the plans over. It NEVER writes to
+ * DirectAdmin — creating/altering an account is a separate, gated module.
+ *
+ * A DA package with no matching priced plan is SKIPPED (never seeded at ₹0) and
+ * named in the response, so nothing is ever put on sale without a real price.
  */
-
-const DMS_BASE = (process.env.DOMAINS_APP_URL ?? "https://app.anutech.in").replace(/\/+$/, "");
-const HOSTING_PLANS_API = `${DMS_BASE}/api/public/hosting-plans`;
-
-interface DmsHostingPlan {
-  planId: string;
-  name: string;
-  description?: string;
-  price: number;
-  renewalPrice?: number;
-  currency?: string;
-  period?: string;
-  features?: string[];
-  quotaMB?: number;
-  bandwidthMB?: number;
-  popular?: boolean;
-}
-
 export async function POST(_request: NextRequest) {
   const supabase = createClient();
 
@@ -41,36 +35,62 @@ export async function POST(_request: NextRequest) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  // 1. Fetch the plans from the engine.
-  let plans: DmsHostingPlan[];
-  try {
-    const res = await fetch(HOSTING_PLANS_API, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(8_000),
-    });
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: `Hosting engine returned ${res.status}. Is app.anutech.in deployed?` },
-        { status: 502 },
-      );
-    }
-    const body = (await res.json()) as { plans?: unknown };
-    if (!Array.isArray(body.plans)) {
-      return NextResponse.json({ error: "Hosting engine sent no plans." }, { status: 502 });
-    }
-    plans = body.plans as DmsHostingPlan[];
-  } catch {
+  if (!daConfigured()) {
     return NextResponse.json(
-      { error: "Couldn't reach the hosting engine (app.anutech.in). Try again once it's deployed." },
+      { error: "DirectAdmin is not connected on this server yet." },
+      { status: 400 },
+    );
+  }
+
+  // 1. Read the real package specs from DirectAdmin (read-only).
+  const packages = await daAllPackages();
+  if (!packages) {
+    return NextResponse.json(
+      {
+        error:
+          "DirectAdmin didn't answer with data. The server's IP (34.14.190.227) may not be " +
+          "on the DirectAdmin allowlist, or the credentials are wrong.",
+      },
       { status: 502 },
     );
   }
 
-  if (plans.length === 0) {
-    return NextResponse.json({ synced: 0, message: "The engine has no active hosting plans yet." });
+  // 2. Merge each package's specs with its priced plan from our own config.
+  const priced = new Map(LANDING_PLANS.map((p) => [p.name.trim().toLowerCase(), p]));
+  const plans: Array<Record<string, unknown>> = [];
+  const skipped: string[] = [];
+
+  for (const pkg of packages) {
+    const plan = priced.get(pkg.name.trim().toLowerCase());
+    if (!plan) {
+      skipped.push(pkg.name); // a package we have no price for — never seed at ₹0
+      continue;
+    }
+    plans.push({
+      planId: plan.planId,
+      name: plan.name,
+      description: plan.description,
+      price: plan.price, // ₹/mo billed yearly — a seed the owner can edit
+      currency: plan.currency,
+      period: "/mo",
+      features: plan.features,
+      quotaMB: pkg.quotaMB, // ← DirectAdmin truth
+      bandwidthMB: pkg.bandwidthMB, // ← DirectAdmin truth
+      popular: plan.isPopular,
+    });
   }
 
-  // 2. Hand them to the atomic, owner-only RPC.
+  if (plans.length === 0) {
+    return NextResponse.json({
+      synced: 0,
+      skipped,
+      message:
+        "No DirectAdmin package matched a priced plan. Add a price for these in hosting-landing.ts: " +
+        skipped.join(", "),
+    });
+  }
+
+  // 3. Hand the merged plans to the atomic, owner-only RPC.
   const { data: count, error } = await supabase.rpc("sync_hosting_catalog", {
     p_plans: plans as unknown as never,
   });
@@ -79,5 +99,5 @@ export async function POST(_request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status });
   }
 
-  return NextResponse.json({ synced: count ?? 0 });
+  return NextResponse.json({ synced: count ?? 0, skipped, source: "directadmin+config" });
 }
