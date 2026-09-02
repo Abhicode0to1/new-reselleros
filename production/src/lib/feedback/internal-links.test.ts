@@ -41,7 +41,7 @@ function tsxFiles(dir: string, out: string[] = []): string[] {
     // point at marketing pages that land incrementally, so the APP's route table
     // must not police them. Skip both.
     if (entry.isDirectory()) {
-      if (entry.name === "site" || entry.name === "(marketing)") continue;
+      if (entry.name === "site" || entry.name === "(marketing)" || entry.name === "(hosting)") continue;
       tsxFiles(full, out);
     } else if (/\.tsx$/.test(entry.name) && !/\.test\.tsx$/.test(entry.name)) out.push(full);
   }

@@ -1,571 +1,597 @@
 "use client";
+
 /**
- * The hosting landing — ported from the engine's own page (app.anutech.in) into
- * ResellerOS, because that is the page Pardeep wants as THE hosting page here
- * (2 Sep 2026: "bilkul yahi hona chahiye meri app me").
+ * HostingLanding — the conversion-focused /hosting page (redesign, 2 Sep 2026).
  *
- * ─── SAME PAGE, OUR PLUMBING ────────────────────────────────────────────────
- * The engine's version is built on ITS stack: next-auth for the session, a
- * zustand cart store, react-hot-toast, and its own Navigation/Footer/Support
- * widget. Copying that verbatim would have given this app a second auth system,
- * a second cart and a second toaster — the opposite of the one-app merge. So the
- * layout, copy, sections and look are reproduced faithfully, while the moving
- * parts are the ones this app already has:
- *   · cart      → the marketing site's CartProvider (useCart)
- *   · toast     → sonner (the app's toaster, mounted in the root layout)
- *   · chrome    → the (marketing) layout's header/footer/WhatsApp/agent, so the
- *                 engine's Navigation, Footer and SupportWidget are dropped
- *   · search    → the docked search bar the (marketing) layout puts on this page,
- *                 which replaced the engine's full-width search band (see below)
+ * A faithful build of the "Hosting Page Conversion Redesign" v2 handoff, adapted
+ * to the app's real data (see hosting-landing-v2.ts for the three departures:
+ * real bandwidth, verified-only claims, real website counts). It is a STANDALONE
+ * page — its own announcement strip, sticky header, footer and decision bar —
+ * so it renders under the (hosting) route group WITHOUT the marketing chrome, to
+ * keep a single focused funnel. Prices come from LANDING_PLANS via HOSTING_TIERS.
  *
- * The engine's font stack ("Google Sans", which resolves to system-ui for most
- * visitors) is set on the root here, so the page keeps its own face rather than
- * inheriting the marketing site's Archivo.
- *
- * ⚠️ The trust logos and testimonials are the engine's PLACEHOLDER content — not
- * signed-off customer references. See src/site/lib/data/hosting-landing.ts.
+ * Responsive is driven off a measured window width (`w`), exactly as the
+ * prototype did; SSR and the first client render both use 1200 (desktop), so
+ * there is no hydration mismatch, and the layout settles after mount.
  */
-import * as React from "react";
-import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import Link from "@/site/components/ui/SiteLink";
-import { useCart } from "@/site/components/cart/CartProvider";
+import { useEffect, useState } from "react";
+import { Manrope, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import {
-  LANDING_PLANS, TRUSTED_LOGOS, HOSTING_FEATURES, HOSTING_COMPARISON,
-  HOSTING_STEPS, HOSTING_TESTIMONIALS, HOSTING_FAQS, type LandingPlan,
-} from "@/site/lib/data/hosting-landing";
-import {
-  Cloud, Zap, Lock, RefreshCw, Rocket, Headphones, CreditCard, Globe, Server,
-  CheckCircle, Check, Minus, X, Star, ShieldCheck, ArrowRight, ChevronDown,
-  LayoutDashboard, Layers, Mail, FileText, Database, Save, Shield, Settings,
-  Bell, Grid3x3, Plus,
-} from "lucide-react";
+  HOSTING_TIERS,
+  REC_WHY,
+  HOSTING_MATRIX,
+  HOSTING_TIMELINE,
+  MIGRATION_NEED,
+  MIGRATION_WEDO,
+  HOSTING_WORRIES,
+  HOSTING_PROOFS,
+  HOSTING_QUOTES,
+  HOSTING_GOOD_FIT,
+  HOSTING_BAD_FIT,
+  HOSTING_CHANNELS,
+  HOSTING_FAQS_V2,
+  WHATSAPP_URL,
+  TRIAL_DAYS,
+} from "@/site/lib/data/hosting-landing-v2";
 
-/** The engine's face: Google Sans if present, else the system UI font. */
-const FACE = "'Google Sans', system-ui, -apple-system, 'Segoe UI', sans-serif";
+const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--hf-sans", display: "swap" });
+const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: "italic", variable: "--hf-serif", display: "swap" });
+const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--hf-mono", display: "swap" });
 
-/* The trial is offered on the yearly Starter tier — the same rule the pricing
-   cards apply — so the hero's trial button and the card's agree by construction
-   rather than by two people remembering the same thing. */
-const TRIAL_PLAN = LANDING_PLANS.find((p) => /starter/i.test(p.name)) ?? LANDING_PLANS[0];
-
-const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  cloud: Cloud, zap: Zap, lock: Lock, refresh: RefreshCw, rocket: Rocket,
-  headphones: Headphones, card: CreditCard, globe: Globe, server: Server,
+const C = {
+  ink: "#17120F", ink2: "#4A403A", muted: "#7A6C62", faint: "#9A8B80", onDark: "#C9BAB0",
+  paper: "#FDFBF8", tint: "#FBF8F5", card: "#fff", line: "#E8DFD7", lineSoft: "#F3ECE5",
+  accent: "#C2410C", accentDark: "#7C2D12", accentLight: "#FB923C", accSurf: "#FFF1E7",
+  accSurf2: "#FFF9F4", accBorder: "#FBD3B8", success: "#15803D", successSurf: "#F0FDF4",
+  successBorder: "#BBF7D0", dot: "#4ADE80", darkCard: "#1E1712", darkBorder: "#33261E",
 };
+const MONO = "var(--hf-mono), 'JetBrains Mono', monospace";
+const SERIF = "var(--hf-serif), 'Instrument Serif', serif";
 
-function Section({ tone, id, className, children }: {
-  tone: "white" | "gray"; id?: string; className?: string; children: React.ReactNode;
-}) {
-  return (
-    <section id={id} className={`py-14 sm:py-20 ${tone === "gray" ? "bg-gray-50" : "bg-white"} ${className ?? ""}`}>
-      <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">{children}</div>
-    </section>
-  );
-}
-
-function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-bold tracking-[0.18em] uppercase text-violet-600 mb-3">{children}</p>;
-}
-
-function FaqItem({ question, answer }: { question: string; answer: string }) {
-  const [open, setOpen] = React.useState(false);
-  return (
-    <div className="bg-white rounded-xl border border-gray-200">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="w-full flex items-center justify-between gap-4 text-left px-5 py-4"
-      >
-        <span className="text-sm sm:text-base font-semibold text-gray-900">{question}</span>
-        <ChevronDown className={`h-5 w-5 shrink-0 text-violet-600 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && <p className="px-5 pb-5 -mt-1 text-sm text-gray-600 leading-relaxed">{answer}</p>}
-    </div>
-  );
-}
+const inr = (n: number) => {
+  const r = Math.round(n * 100) / 100;
+  return "₹" + r.toLocaleString("en-IN", { minimumFractionDigits: r % 1 ? 2 : 0, maximumFractionDigits: 2 });
+};
+const gst = (n: number) => inr(n * 1.18);
 
 export function HostingLanding() {
-  const [billingCycle, setBillingCycle] = React.useState<"monthly" | "yearly">("yearly");
-  const router = useRouter();
-  const cart = useCart();
+  const [billing, setBilling] = useState<"Monthly" | "Yearly">("Yearly");
+  const [sites, setSites] = useState<string | null>(null);
+  const [traffic, setTraffic] = useState<string | null>(null);
+  const [openFaq, setOpenFaq] = useState(0);
+  const [showMatrix, setShowMatrix] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [w, setW] = useState(1200);
 
-  /* Testimonial carousel — responsive cards-per-view, same as the engine's. */
-  const [tIndex, setTIndex] = React.useState(0);
-  const [perView, setPerView] = React.useState(4);
-  React.useEffect(() => {
-    const calc = () => setPerView(window.innerWidth < 640 ? 1 : window.innerWidth < 1024 ? 2 : 4);
-    calc();
-    window.addEventListener("resize", calc);
-    return () => window.removeEventListener("resize", calc);
+  useEffect(() => {
+    const onScroll = () => setScrolled((window.scrollY || document.documentElement.scrollTop) > 620);
+    const measure = () => {
+      const width = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+      if (width) { setW(width); setMenuOpen(false); }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", measure);
+    measure();
+    onScroll();
+    return () => { window.removeEventListener("scroll", onScroll); window.removeEventListener("resize", measure); };
   }, []);
-  const maxT = Math.max(0, HOSTING_TESTIMONIALS.length - perView);
-  React.useEffect(() => { setTIndex((i) => Math.min(i, maxT)); }, [maxT]);
 
-  const isMonthly = billingCycle === "monthly";
+  const mob = w < 760, mid = w < 1010, navMob = w < 1100;
+  const yearly = billing === "Yearly";
 
-  /* Buy → the site's own cart (the same one the domain rate card fills), then
-     the cart page. Monthly is billed at 2× the yearly rate, as the shop does. */
-  const choosePlan = (plan: LandingPlan) => {
-    const price = isMonthly ? plan.price * 2 : plan.price;
-    cart.add({
-      label: `${plan.name} hosting`,
-      detail: isMonthly
-        ? "cPanel hosting · billed monthly, cancel any time"
-        : "cPanel hosting · 12 months prepaid · 30-day money-back",
-      unitPrice: Math.round(isMonthly ? price : price * 12),
-      unit: isMonthly ? "month" : "year",
-      cycle: isMonthly ? "monthly" : "yearly",
-    });
-    toast.success(`${plan.name} hosting added to your cart`);
-    router.push("/cart" as never);
+  // Recommender
+  let rec: string | null = null, recWhy = "";
+  if (sites && traffic) {
+    if (sites === "More than 5" || traffic === "50,000+") {
+      rec = "Plus";
+      recWhy = sites === "More than 5" ? REC_WHY["Plus-sites"] : REC_WHY["Plus-traffic"];
+    } else if (sites === "Just one" && traffic === "Under 5,000") {
+      rec = "Starter"; recWhy = REC_WHY.Starter;
+    } else {
+      rec = "Standard"; recWhy = REC_WHY.Standard;
+    }
+  }
+
+  const plans = HOSTING_TIERS.map((p) => {
+    const isRec = p.name === rec;
+    const isTop = isRec || (!rec && p.isPopular);
+    const total = yearly ? p.yearlyTotal : p.monthly;
+    return {
+      ...p,
+      badge: isRec ? "BEST FIT" : (!rec && p.isPopular ? "MOST CHOSEN" : null),
+      isTop,
+      priceLabel: inr(yearly ? p.yearlyMo : p.monthly),
+      billingLine: yearly ? `Billed annually · ${inr(p.yearlyTotal)} + GST` : `Billed monthly · ${inr(p.monthly)} + GST`,
+      renewLine: `${inr(yearly ? p.yearlyMo : p.monthly)}/mo — the same price, not a first-year rate`,
+      payToday: `Pay today ${gst(total)} incl. 18% GST`,
+    };
+  });
+  const anchor = plans.find((p) => p.badge) ?? plans[1];
+  const anchorBase = HOSTING_TIERS.find((t) => t.name === anchor.name)!;
+
+  const costRows = HOSTING_TIERS.map((p) => {
+    const y = p.yearlyTotal * 3, m = p.monthly * 36;
+    return { name: p.name, yearly: gst(y), monthly: gst(m), save: gst(m - y) };
+  });
+
+  // Shared style fragments
+  const eyebrow = (color = C.accent): React.CSSProperties => ({ fontFamily: MONO, fontSize: 12, letterSpacing: ".1em", color, fontWeight: 700 });
+  const h2: React.CSSProperties = { marginTop: 12, fontSize: "clamp(30px,4.6vw,42px)", lineHeight: 1.1, letterSpacing: "-.035em", fontWeight: 800 };
+  const wrap: React.CSSProperties = { maxWidth: 1200, margin: "0 auto" };
+  const chip = (active: boolean): React.CSSProperties => ({
+    border: `1.5px solid ${active ? C.accent : C.line}`, background: active ? C.accSurf : "#fff",
+    color: active ? C.accentDark : C.ink2, padding: "12px 16px", borderRadius: 999, fontSize: 14.5,
+    fontWeight: 700, minHeight: 46, whiteSpace: "nowrap", cursor: "pointer",
+  });
+  const twoCol = w < 820 ? "minmax(0,1fr)" : "repeat(2,minmax(0,1fr))";
+  const threeCol = mob ? "minmax(0,1fr)" : mid ? "repeat(2,minmax(0,1fr))" : "repeat(3,minmax(0,1fr))";
+  const tripleCol = mob ? "minmax(0,1fr)" : "repeat(3,minmax(0,1fr))";
+  const quadGrid: React.CSSProperties = {
+    marginTop: 28, display: "grid",
+    gridTemplateColumns: mob ? "minmax(0,1fr)" : `repeat(${mid ? 2 : 4},minmax(0,1fr))`, gap: mob ? 14 : 16,
   };
-
-  /* The 15-day trial (yearly Starter). It costs ₹0 today; the team sets the
-     account up and the first invoice follows the trial — so it goes through the
-     same cart → enquiry path, never a silent charge. */
-  const startTrial = (plan: LandingPlan) => {
-    cart.add({
-      label: `${plan.name} hosting — 15-day free trial`,
-      detail: `₹0 today · then ${plan.price.toFixed(2)}/mo billed yearly after 15 days · cancel any time`,
-      unitPrice: 0,
-      unit: "trial",
-      cycle: "once",
-    });
-    toast.success("Free trial added — ₹0 today. Tell us where to set it up.");
-    router.push("/cart" as never);
-  };
+  const navLinks = [
+    { href: "#choose", t: "Choose a plan" }, { href: "#cost", t: "3-year cost" },
+    { href: "#move", t: "Moving your site" }, { href: "#worries", t: "Common worries" },
+    { href: "#proof", t: "Verify us" },
+  ];
 
   return (
-    <div className="bg-white text-gray-900" style={{ fontFamily: FACE }}>
-      {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-violet-50/70 via-white to-white">
-        <div aria-hidden className="absolute -top-24 -right-24 w-[30rem] h-[30rem] rounded-full bg-violet-100/50 blur-3xl pointer-events-none" />
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20 relative">
-          <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 mb-5 text-green-600 text-[11px] sm:text-xs font-bold tracking-[0.12em] uppercase">
-                <Rocket className="h-3.5 w-3.5" />
-                15-Day Free Trial · No Credit Card Required
-              </div>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900 leading-[1.05] mb-5">
-                Launch Your<br />
-                Business Website<br />
-                <span className="bg-gradient-to-r from-[#7C3AED] to-[#6D28D9] bg-clip-text text-transparent">FREE for 15 Days</span>
-              </h1>
-              <p className="text-base sm:text-lg text-gray-600 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0">
-                Enterprise-grade web hosting powered by Google Cloud. Free SSL, daily backups, free migration and 24×7 expert support.
-              </p>
-              {/* Both buttons used to jump to #pricing — two controls, one
-                  outcome, and the promise on the first one ("Start your trial")
-                  was not what it did. The primary now STARTS the trial, and the
-                  one that says "View plans" is the one that scrolls. */}
-              <div className="flex flex-col sm:flex-row gap-3 mb-6 sm:justify-center lg:justify-start">
-                <button
-                  type="button"
-                  onClick={() => startTrial(TRIAL_PLAN)}
-                  className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:from-[#16A34A] hover:to-[#15803D] text-white font-bold py-3.5 px-7 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95"
-                >
-                  <Rocket className="h-5 w-5" />
-                  Start Your 15-Day Free Trial
-                </button>
-                <Link href="#pricing" className="inline-flex items-center justify-center gap-2 bg-white text-gray-800 font-bold py-3.5 px-7 rounded-xl border border-gray-200 shadow-sm hover:border-violet-300 hover:text-violet-700 transition-all">
-                  View Hosting Plans
-                </Link>
-              </div>
-              <div className="flex flex-wrap justify-center lg:justify-start gap-x-5 gap-y-2 text-sm text-gray-500">
-                {["No Credit Card Required", "Full Access to All Features", "Cancel Anytime"].map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1.5"><CheckCircle className="h-4 w-4 text-green-500" />{t}</span>
-                ))}
-              </div>
-            </motion.div>
+    <div className={`hlp ${manrope.variable} ${serif.variable} ${mono.variable}`}
+      style={{ fontFamily: "var(--hf-sans), system-ui, sans-serif", background: C.paper, color: C.ink, maxWidth: "100%", overflowX: "hidden" }}>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .hlp a { color:${C.accent}; text-decoration:none; }
+        .hlp a:hover { color:${C.accentDark}; text-decoration:underline; }
+        .hlp *:focus-visible { outline:2.5px solid ${C.accent}; outline-offset:2px; }
+        @keyframes hlpPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.8)} }
+        @keyframes hlpRise { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        .hlp-orange:hover { background:${C.accentDark} !important; text-decoration:none !important; color:#fff !important; }
+        .hlp-dark:hover { background:${C.accent} !important; text-decoration:none !important; color:#FDFBF8 !important; }
+        .hlp-orange2:hover { background:#EA580C !important; text-decoration:none !important; color:#fff !important; }
+        .hlp-outline:hover { border-color:${C.ink} !important; color:${C.ink} !important; text-decoration:none !important; }
+        .hlp-pill:hover { border-color:${C.accent} !important; text-decoration:none !important; }
+        .hlp-ghostdark:hover { border-color:#FDFBF8 !important; color:#FDFBF8 !important; text-decoration:none !important; }
+      ` }} />
 
-            {/* Dashboard mock — what the customer gets after signing up. */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }} className="hidden lg:block">
-              <div className="rounded-2xl border border-gray-200 shadow-2xl overflow-hidden bg-white">
-                <div className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-green-400" />
-                  <span className="ml-3 text-[11px] text-gray-400 font-medium">Your hosting dashboard</span>
-                </div>
-                <div className="flex">
-                  <div className="w-36 shrink-0 border-r border-gray-100 p-3 hidden xl:block">
-                    <div className="flex items-center gap-1.5 mb-4 px-1">
-                      <div className="h-5 w-5 rounded bg-gradient-to-br from-[#7C3AED] to-[#6D28D9]" />
-                      <span className="text-[11px] font-bold text-gray-800">ANUTECH</span>
-                    </div>
-                    {([
-                      { n: "Dashboard", Icon: LayoutDashboard }, { n: "Websites", Icon: Layers },
-                      { n: "Domains", Icon: Globe }, { n: "Emails", Icon: Mail },
-                      { n: "Files", Icon: FileText }, { n: "Databases", Icon: Database },
-                      { n: "Backups", Icon: Save }, { n: "Security", Icon: Shield },
-                      { n: "Settings", Icon: Settings },
-                    ] as const).map(({ n, Icon }, i) => (
-                      <div key={n} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 text-[11px] ${i === 0 ? "bg-violet-50 text-violet-700 font-semibold" : "text-gray-500"}`}>
-                        <Icon className={`h-3 w-3 ${i === 0 ? "text-violet-600" : "text-gray-400"}`} />
-                        {n}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex-1 p-4 min-w-0">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">Welcome back! 👋</p>
-                        <p className="text-[11px] text-gray-500">Here&apos;s what&apos;s happening with your website today.</p>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-300">
-                        <Bell className="h-4 w-4" />
-                        <Grid3x3 className="h-4 w-4" />
-                        <span className="h-5 w-5 rounded-full bg-gradient-to-br from-violet-300 to-violet-500" />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 mb-3">
-                      {[
-                        { label: "Website", value: "mybusiness.com", badge: "Active", pct: null as number | null },
-                        { label: "Storage", value: "15.8 / 25 GB", badge: "63% Used", pct: 63 },
-                        { label: "Bandwidth", value: "9.6 / 30 GB", badge: "32% Used", pct: 32 },
-                      ].map((s) => (
-                        <div key={s.label} className="rounded-lg border border-gray-100 bg-gray-50/60 p-2.5">
-                          <p className="text-[9px] uppercase tracking-wide text-gray-400">{s.label}</p>
-                          <p className="text-[11px] font-bold text-gray-900 truncate">{s.value}</p>
-                          {s.pct === null ? (
-                            <p className="text-[9px] font-semibold text-green-600 mt-0.5 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-green-500" />{s.badge}</p>
-                          ) : (
-                            <>
-                              <div className="h-1 rounded-full bg-gray-200 mt-1.5 overflow-hidden"><div className="h-full rounded-full bg-violet-500" style={{ width: `${s.pct}%` }} /></div>
-                              <p className="text-[9px] text-gray-400 mt-0.5">{s.badge}</p>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="col-span-2 rounded-lg border border-gray-100 p-3">
-                        <p className="text-[10px] font-semibold text-gray-500 mb-2">Performance <span className="text-green-500">+12.9%</span></p>
-                        <svg viewBox="0 0 200 60" className="w-full h-14" aria-hidden>
-                          <polyline fill="none" stroke="#7C3AED" strokeWidth="2.5" points="0,45 28,40 56,44 84,30 112,34 140,20 168,24 200,8" />
-                        </svg>
-                      </div>
-                      <div className="rounded-lg border border-gray-100 p-3">
-                        <p className="text-[10px] font-semibold text-gray-500 mb-2">Quick Actions</p>
-                        {([
-                          { a: "Create Website", Icon: Globe }, { a: "Install WordPress", Icon: Server },
-                          { a: "Add Domain", Icon: Plus }, { a: "Manage Emails", Icon: Mail },
-                        ] as const).map(({ a, Icon }) => (
-                          <p key={a} className="text-[9px] text-gray-600 mb-1.5 flex items-center gap-1.5"><Icon className="h-2.5 w-2.5 text-violet-500" />{a}</p>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+      {/* 1. Announcement strip */}
+      <div style={{ background: C.ink, color: C.paper, fontSize: 13, padding: "9px 20px", display: "flex", justifyContent: "center", gap: 22, alignItems: "center", flexWrap: "wrap", textAlign: "center" }}>
+        <a href="/status" style={{ color: C.paper, display: "flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
+          <span style={{ width: 7, height: 7, borderRadius: 999, background: C.dot, animation: "hlpPulse 2.4s ease-in-out infinite" }} />Live system status
+        </a>
+        <span style={{ opacity: 0.45 }}>·</span>
+        <span>Free migration on every plan</span>
+        <span style={{ opacity: 0.45 }}>·</span>
+        <span>GST invoice on every order</span>
+      </div>
+
+      {/* 2. Header */}
+      <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(253,251,248,.9)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", borderBottom: `1px solid ${C.line}` }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "13px 20px", display: "flex", alignItems: "center", gap: 24 }}>
+          <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 800, fontSize: 17, letterSpacing: "-.02em", color: C.ink, textDecoration: "none" }}>
+            <span style={{ width: 30, height: 30, borderRadius: 8, background: C.accent, color: "#fff", display: "grid", placeItems: "center", fontSize: 15 }}>A</span>
+            Anutech Digital
+          </a>
+          {!navMob && (
+            <>
+              <nav style={{ display: "flex", gap: 22, fontSize: 14.5, fontWeight: 600, marginRight: "auto" }}>
+                {navLinks.map((l) => <a key={l.href} href={l.href} style={{ color: C.ink2 }}>{l.t}</a>)}
+              </nav>
+              <a href="/login" style={{ fontSize: 14, fontWeight: 700, color: C.ink2 }}>Client login</a>
+              <a href="#choose" className="hlp-dark" style={{ background: C.ink, color: C.paper, padding: "12px 18px", borderRadius: 10, fontSize: 14, fontWeight: 700 }}>Start free trial</a>
+            </>
+          )}
+          {navMob && (
+            <button onClick={() => setMenuOpen((v) => !v)} aria-label="Open menu" aria-expanded={menuOpen}
+              style={{ marginLeft: "auto", width: 46, height: 46, display: "grid", placeItems: "center", gap: 5, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, cursor: "pointer" }}>
+              {[0, 1, 2].map((i) => <span key={i} style={{ width: 18, height: 2, background: C.ink, display: "block" }} />)}
+            </button>
+          )}
+        </div>
+        {navMob && menuOpen && (
+          <div style={{ borderTop: `1px solid ${C.line}`, background: C.paper, padding: "8px 20px 16px", animation: "hlpRise .2s ease-out" }}>
+            {navLinks.map((l) => (
+              <a key={l.href} href={l.href} onClick={() => setMenuOpen(false)}
+                style={{ display: "block", fontSize: 16.5, fontWeight: 700, padding: "15px 4px", borderBottom: `1px solid #F0E8E0`, color: C.ink }}>{l.t}</a>
+            ))}
+            <a href="/login" onClick={() => setMenuOpen(false)} style={{ display: "block", fontSize: 16.5, fontWeight: 700, padding: "15px 4px", borderBottom: `1px solid #F0E8E0`, color: C.ink }}>Client login</a>
+            <a href="#choose" onClick={() => setMenuOpen(false)} className="hlp-orange" style={{ display: "block", textAlign: "center", marginTop: 12, background: C.accent, color: "#fff", padding: "15px", borderRadius: 12, fontSize: 15, fontWeight: 700 }}>Start free trial</a>
+          </div>
+        )}
+      </header>
+
+      {/* 3. Hero */}
+      <section style={{ padding: "clamp(38px,6vw,66px) 20px clamp(40px,5vw,54px)", borderBottom: `1px solid ${C.line}` }}>
+        <div style={{ ...wrap, display: "grid", gridTemplateColumns: w < 880 ? "minmax(0,1fr)" : "minmax(0,1.15fr) minmax(0,.85fr)", gap: w < 880 ? 32 : w < 1060 ? 32 : 56, alignItems: w < 880 ? "start" : "center" }}>
+          <div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 9, background: C.accSurf, border: `1px solid ${C.accBorder}`, color: C.accentDark, padding: "7px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 700, fontFamily: MONO }}>{TRIAL_DAYS}-DAY FREE TRIAL · NO CARD NEEDED</div>
+            <h1 style={{ marginTop: 20, fontSize: "clamp(34px,4.4vw,56px)", lineHeight: 1.07, letterSpacing: "-.035em", fontWeight: 800 }}>
+              Launch Your<br />Business Website<br />
+              <span style={{ fontFamily: SERIF, fontWeight: 400, fontStyle: "italic", color: C.accent }}>FREE for {TRIAL_DAYS} Days.</span>
+            </h1>
+            <p style={{ marginTop: 18, fontSize: 18, lineHeight: 1.55, color: C.ink2, maxWidth: "min(100%,560px)", textWrap: "pretty" } as React.CSSProperties}>
+              Enterprise-grade web hosting powered by Google Cloud. Free SSL, daily backups, free migration and 24×7 expert support — and the trial needs no credit card, so your old host stays live until you approve the move.
+            </p>
+            <div style={{ marginTop: 26, display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <a href="#choose" className="hlp-orange" style={{ background: C.accent, color: "#fff", padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free trial</a>
+              <a href="#move" className="hlp-outline" style={{ background: "#fff", border: `1px solid ${C.line}`, color: C.ink, padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>See how migration works</a>
+            </div>
+            <ul style={{ marginTop: 24, display: "flex", gap: "8px 22px", flexWrap: "wrap", listStyle: "none", padding: 0, margin: "24px 0 0" }}>
+              {["No credit card", "Full features during trial", "30-day refund on yearly"].map((t) => (
+                <li key={t} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14.5, fontWeight: 600, color: C.ink2 }}><span style={{ color: C.success, fontWeight: 800 }}>✓</span>{t}</li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Honest numbers card */}
+          <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 18, padding: "clamp(22px,3vw,28px)", boxShadow: "0 20px 50px -34px rgba(23,18,15,.4)" }}>
+            <div style={{ fontFamily: MONO, fontSize: 11.5, letterSpacing: ".09em", color: C.muted, fontWeight: 700 }}>THE HONEST NUMBERS</div>
+            <div style={{ marginTop: 16, display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: "clamp(34px,4vw,44px)", fontWeight: 800, letterSpacing: "-.04em" }}>{anchor.priceLabel}</span>
+              <span style={{ fontSize: 15, color: C.muted, fontWeight: 600 }}>/month, {anchor.name} plan</span>
+            </div>
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              {[
+                ["Billed", yearly ? `${inr(anchorBase.yearlyTotal)} + GST once a year` : `${inr(anchorBase.monthly)} + GST every month`],
+                ["You pay today", `${gst(yearly ? anchorBase.yearlyTotal : anchorBase.monthly)} incl. GST`],
+                ["Renews at", `${inr(yearly ? anchorBase.yearlyMo : anchorBase.monthly)}/mo — same price`],
+              ].map(([k, v], i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 14.5, paddingBottom: 10, borderBottom: `1px dashed ${C.line}` }}><span style={{ color: C.muted }}>{k}</span><span style={{ fontWeight: 700, textAlign: "right" }}>{v}</span></div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 14.5 }}><span style={{ color: C.muted }}>Charged during trial</span><span style={{ fontWeight: 700, color: C.success }}>₹0</span></div>
+            </div>
+            <p style={{ marginTop: 16, fontSize: 13.5, lineHeight: 1.5, color: C.muted }}>Domains, business email and Google Workspace are separate line items — never bundled into the headline price. <a href="/pricing">See the full rate card</a>.</p>
           </div>
         </div>
       </section>
 
-      {/* ── Trust bar ────────────────────────────────────────────────────── */}
-      <section className="border-y border-gray-100 bg-white">
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div>
-              <p className="text-[11px] font-bold tracking-[0.18em] uppercase text-violet-600 mb-3 text-center lg:text-left">Trusted by 1,000+ businesses</p>
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-2">
-                {TRUSTED_LOGOS.map((l) => (
-                  <span key={l} className="text-sm sm:text-base font-bold text-gray-400/80">{l}</span>
+      {/* 4. Quick-jump */}
+      <section style={{ padding: "22px 20px", background: C.tint, borderBottom: `1px solid ${C.line}` }}>
+        <div style={wrap}>
+          <div style={{ fontSize: 13.5, color: C.muted, fontWeight: 600 }}>Deciding on hosting comes down to four questions. Jump to any of them:</div>
+          <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {[["#choose", "Which plan do I need?"], ["#cost", "What will it really cost?"], ["#move", "How hard is moving?"], ["#worries", "What if something goes wrong?"]].map(([href, t]) => (
+              <a key={href} href={href} className="hlp-pill" style={{ background: "#fff", border: `1px solid ${C.line}`, color: C.ink, padding: "11px 15px", borderRadius: 999, fontSize: 14, fontWeight: 700 }}>{t}</a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Choose */}
+      <section id="choose" style={{ padding: "clamp(50px,7vw,76px) 20px", borderBottom: `1px solid ${C.line}` }}>
+        <div style={wrap}>
+          <div style={eyebrow()}>STEP 1 — WHICH PLAN</div>
+          <h2 style={{ ...h2, maxWidth: 700 }}>Answer two questions instead of reading three feature lists.</h2>
+
+          <div style={{ marginTop: 26, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 18, padding: "clamp(20px,3vw,28px)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: twoCol, gap: 22 }}>
+              <div>
+                <div style={{ fontFamily: MONO, fontSize: 11.5, letterSpacing: ".08em", color: C.muted, fontWeight: 700 }}>HOW MANY WEBSITES?</div>
+                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {["Just one", "2 to 5", "More than 5"].map((o) => <button key={o} onClick={() => setSites(o)} style={chip(sites === o)}>{o}</button>)}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontFamily: MONO, fontSize: 11.5, letterSpacing: ".08em", color: C.muted, fontWeight: 700 }}>VISITORS PER MONTH?</div>
+                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {["Under 5,000", "5,000–50,000", "50,000+"].map((o) => <button key={o} onClick={() => setTraffic(o)} style={chip(traffic === o)}>{o}</button>)}
+                </div>
+              </div>
+            </div>
+            {rec ? (
+              <div style={{ marginTop: 22, background: C.accSurf, border: `1px solid ${C.accBorder}`, borderRadius: 14, padding: 20, display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 280px", minWidth: 0 }}>
+                  <div style={{ fontSize: 18.5, fontWeight: 800, letterSpacing: "-.02em", color: C.accentDark }}>{rec} is the plan to start on</div>
+                  <p style={{ marginTop: 7, fontSize: 15, lineHeight: 1.55, color: C.ink2 }}>{recWhy}</p>
+                </div>
+                <button onClick={() => { setSites(null); setTraffic(null); }} style={{ background: "transparent", border: `1px solid ${C.accBorder}`, color: C.accentDark, padding: "12px 15px", borderRadius: 10, fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap", minHeight: 46, cursor: "pointer" }}>Start over</button>
+              </div>
+            ) : (
+              <p style={{ marginTop: 18, fontSize: 14.5, color: C.muted, lineHeight: 1.55 }}>Still unsure? Start the trial on any plan — the account and everything you build in it carry over when you switch plan later.</p>
+            )}
+          </div>
+
+          {/* Billing toggle */}
+          <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+            <div style={{ display: "inline-flex", background: "#F3ECE5", borderRadius: 12, padding: 4 }}>
+              {(["Monthly", "Yearly"] as const).map((b) => {
+                const active = (b === "Yearly") === yearly;
+                return <button key={b} onClick={() => setBilling(b)} style={{ border: 0, borderRadius: 9, padding: "12px 18px", fontSize: 14, fontWeight: 700, minHeight: 46, whiteSpace: "nowrap", cursor: "pointer", background: active ? C.ink : "transparent", color: active ? C.paper : C.muted }}>{b === "Yearly" ? "Yearly · save 50%" : "Monthly"}</button>;
+              })}
+            </div>
+          </div>
+
+          {/* Plan cards */}
+          <div style={mob
+            ? { margin: "26px -20px 0", padding: "4px 20px 18px", display: "flex", gap: 14, overflowX: "auto", scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", alignItems: "start" } as React.CSSProperties
+            : { marginTop: 18, display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: mid ? 14 : 20, alignItems: "start" }}>
+            {plans.map((p) => (
+              <div key={p.name} style={{
+                background: "#fff", border: p.isTop ? `1.5px solid ${C.accent}` : `1px solid ${C.line}`, borderRadius: 18,
+                padding: mob ? 22 : 24, boxShadow: p.isTop ? "0 26px 60px -34px rgba(194,65,12,.5)" : "0 10px 30px -24px rgba(23,18,15,.28)",
+                ...(mob ? { scrollSnapAlign: "center", minWidth: "min(86vw,340px)" } : {}),
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", minHeight: 26 }}>
+                  <div style={{ fontFamily: MONO, fontSize: 11.5, letterSpacing: ".09em", color: C.muted, fontWeight: 700 }}>{p.tag}</div>
+                  {p.badge && <div style={{ background: C.accent, color: "#fff", fontSize: 11, fontWeight: 800, letterSpacing: ".06em", padding: "5px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{p.badge}</div>}
+                </div>
+                <h3 style={{ marginTop: 14, fontSize: 26, fontWeight: 800, letterSpacing: "-.03em" }}>{p.name}</h3>
+                <p style={{ marginTop: 6, fontSize: 14.5, color: C.ink2, lineHeight: 1.45, minHeight: 42 }}>{p.fit}</p>
+                <div style={{ marginTop: 16, display: "flex", alignItems: "baseline", gap: 7 }}>
+                  <span style={{ fontSize: 38, fontWeight: 800, letterSpacing: "-.04em" }}>{p.priceLabel}</span>
+                  <span style={{ fontSize: 14.5, color: C.muted, fontWeight: 600 }}>/month</span>
+                </div>
+                <div style={{ marginTop: 6, fontSize: 13.5, color: C.muted, lineHeight: 1.5 }}>{p.billingLine}<br /><span style={{ color: C.ink, fontWeight: 600 }}>Renews at {p.renewLine}</span></div>
+                <div style={{ marginTop: 10, background: C.tint, border: `1px solid ${C.line}`, borderRadius: 9, padding: "9px 12px", fontFamily: MONO, fontSize: 12.5 }}>{p.payToday}</div>
+                <div style={{ marginTop: 16, display: "grid", gap: 8 }}>
+                  <a href="/signup" className={p.isTop ? "hlp-orange" : "hlp-dark"} style={{ textAlign: "center", padding: 15, borderRadius: 11, fontSize: 15, fontWeight: 700, color: "#fff", minHeight: 50, background: p.isTop ? C.accent : C.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>Start free trial on {p.name}</a>
+                  <a href="/cart" className="hlp-outline" style={{ textAlign: "center", padding: 12, borderRadius: 11, fontSize: 14, fontWeight: 700, color: C.ink2, border: `1px solid ${C.line}`, background: "#fff", minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center" }}>Buy now, skip the trial</a>
+                </div>
+                <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px dashed ${C.line}`, display: "grid", gap: 10 }}>
+                  {[["NVMe storage", p.storage], ["Websites", p.sites], ["Bandwidth", p.bandwidth]].map(([k, v]) => (
+                    <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 14.5 }}><span style={{ color: C.muted }}>{k}</span><span style={{ fontWeight: 700, fontFamily: MONO }}>{v}</span></div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 16, background: C.accSurf2, border: `1px solid ${C.accBorder}`, borderRadius: 10, padding: 12 }}>
+                  <div style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: ".08em", color: C.accentDark, fontWeight: 700 }}>MOVE UP WHEN</div>
+                  <p style={{ marginTop: 5, fontSize: 13.5, lineHeight: 1.45, color: C.ink2 }}>{p.outgrow}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {mob && <div style={{ marginTop: 12, textAlign: "center", fontFamily: MONO, fontSize: 11.5, letterSpacing: ".06em", color: C.accent, fontWeight: 700 }}>Swipe to compare all three plans →</div>}
+
+          {/* Feature table */}
+          <div style={{ marginTop: 24, textAlign: "center" }}>
+            <button onClick={() => setShowMatrix((v) => !v)} className="hlp-outline" style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, padding: "14px 22px", fontSize: 15, fontWeight: 700, color: C.ink, minHeight: 48, cursor: "pointer" }}>{showMatrix ? "Hide the full feature table" : "See the full feature table"}</button>
+          </div>
+          {showMatrix && (
+            <div style={{ marginTop: 18, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 16, overflowX: "auto" }}>
+              <div style={{ minWidth: 560 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1.6fr .8fr .8fr .8fr", background: C.ink, color: C.paper }}>
+                  <div style={{ padding: "14px 18px", fontFamily: MONO, fontSize: 12, letterSpacing: ".06em" }}>FEATURE</div>
+                  {["Starter", "Standard", "Plus"].map((t) => <div key={t} style={{ padding: "14px 12px", fontSize: 14, fontWeight: 700, textAlign: "center" }}>{t}</div>)}
+                </div>
+                {HOSTING_MATRIX.map((m) => (
+                  <div key={m.k} style={{ display: "grid", gridTemplateColumns: "1.6fr .8fr .8fr .8fr", borderBottom: `1px solid ${C.lineSoft}`, alignItems: "center" }}>
+                    <div style={{ padding: "13px 18px", fontSize: 14.5, fontWeight: 600 }}>{m.k}</div>
+                    {[m.a, m.b, m.c].map((v, i) => <div key={i} style={{ padding: "13px 12px", fontSize: 14, textAlign: "center", color: C.ink2, fontFamily: MONO }}>{v}</div>)}
+                  </div>
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-5 sm:gap-8">
-              {[
-                { Icon: Star, value: "1,000+", label: "Happy Customers" },
-                { Icon: ShieldCheck, value: "99.99%", label: "Uptime Guarantee" },
-                { Icon: Rocket, value: "5+", label: "Years of Trust" },
-                { Icon: Headphones, value: "24×7", label: "Expert Support" },
-              ].map(({ Icon, value, label }) => (
-                <div key={label} className="flex flex-col items-center text-center">
-                  <Icon className="h-4 w-4 text-violet-600 mb-1" />
-                  <p className="text-base sm:text-lg font-extrabold text-gray-900">{value}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500">{label}</p>
+          )}
+        </div>
+      </section>
+
+      {/* 6. Cost */}
+      <section id="cost" style={{ padding: "clamp(50px,7vw,76px) 20px", background: C.tint, borderBottom: `1px solid ${C.line}` }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={eyebrow()}>STEP 2 — REAL COST</div>
+          <h2 style={{ ...h2, maxWidth: 720 }}>Three years of hosting, GST included, both billing options.</h2>
+          <p style={{ marginTop: 14, fontSize: 16.5, lineHeight: 1.55, color: C.ink2, maxWidth: 680, textWrap: "pretty" } as React.CSSProperties}>Monthly billing costs more over time — we&apos;d rather show you the arithmetic than hide it. These are our list prices at 18% GST; nothing here is an introductory rate that jumps later.</p>
+          <div style={{ marginTop: 28, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 16, overflowX: "auto" }}>
+            <div style={{ minWidth: 620 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", background: C.ink, color: C.paper }}>
+                <div style={{ padding: "14px 18px", fontFamily: MONO, fontSize: 12, letterSpacing: ".06em" }}>PLAN</div>
+                <div style={{ padding: "14px 14px", fontSize: 13.5, fontWeight: 700, textAlign: "right" }}>3 yrs, billed yearly</div>
+                <div style={{ padding: "14px 14px", fontSize: 13.5, fontWeight: 700, textAlign: "right" }}>3 yrs, billed monthly</div>
+                <div style={{ padding: "14px 18px 14px 14px", fontSize: 13.5, fontWeight: 700, textAlign: "right", color: C.accentLight }}>You keep</div>
+              </div>
+              {costRows.map((r) => (
+                <div key={r.name} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", borderBottom: `1px solid ${C.lineSoft}`, alignItems: "center" }}>
+                  <div style={{ padding: "16px 18px", fontSize: 15.5, fontWeight: 700 }}>{r.name}</div>
+                  <div style={{ padding: "16px 14px", fontSize: 15, textAlign: "right", fontFamily: MONO, fontWeight: 700 }}>{r.yearly}</div>
+                  <div style={{ padding: "16px 14px", fontSize: 15, textAlign: "right", fontFamily: MONO, color: C.faint }}>{r.monthly}</div>
+                  <div style={{ padding: "16px 18px 16px 14px", fontSize: 15, textAlign: "right", fontFamily: MONO, fontWeight: 700, color: C.success }}>{r.save}</div>
                 </div>
               ))}
             </div>
           </div>
+          <p style={{ marginTop: 14, fontSize: 13.5, color: C.muted, lineHeight: 1.55 }}>Figures are 36 months of the current list price with 18% GST applied. Domain registration, business email and Google Workspace are billed separately — <a href="/pricing">see the rate card</a> or <a href="/quote">ask for a written quote</a> with your exact requirement.</p>
         </div>
       </section>
 
-      {/* The engine's page had a full-width domain-search band here. It is gone
-          (Pardeep, 2 Sep 2026: "ise hata do ab iski jarurat nahi") — the search
-          bar docks under the header on this page too, so the band was the same
-          tool a second time, and it pushed the plans further down the page. */}
-
-      {/* ── Features ─────────────────────────────────────────────────────── */}
-      <Section tone="white">
-        <div className="text-center mb-10 sm:mb-14">
-          <Eyebrow>Everything you need to succeed online</Eyebrow>
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">Powerful Features. Unmatched Performance.</h2>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-5">
-          {HOSTING_FEATURES.map((f, i) => {
-            const Icon = ICONS[f.icon] ?? Cloud;
-            return (
-              <motion.div key={f.title} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.05 }}
-                className="group bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover:shadow-md hover:border-violet-200 transition-all">
-                <div className={`inline-flex items-center justify-center h-12 w-12 rounded-full ${f.tint} mb-4`}>
-                  <Icon className="h-6 w-6" />
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-2">{f.title}</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">{f.body}</p>
-              </motion.div>
-            );
-          })}
-        </div>
-      </Section>
-
-      {/* ── Comparison ───────────────────────────────────────────────────── */}
-      <Section tone="gray">
-        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          <div className="text-center lg:text-left">
-            <Eyebrow>Why choose Anutech?</Eyebrow>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 leading-[1.1]">
-              Better Hosting.<br />Better Results.
-            </h2>
-            <p className="mt-5 text-base text-gray-600 leading-relaxed max-w-md mx-auto lg:mx-0">
-              We combine the power of Google Cloud with personalized support to give your business the hosting experience it deserves.
-            </p>
-            <div className="mt-8 hidden lg:block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/server-cloud.png"
-                alt="Google Cloud powered hosting infrastructure"
-                width={340}
-                height={340}
-                className="h-auto w-[340px] max-w-full select-none"
-                loading="lazy"
-                draggable={false}
-              />
-            </div>
-          </div>
-
-          <div className="relative pt-3">
-            <div aria-hidden className="pointer-events-none absolute top-0 bottom-0 right-20 w-20 sm:right-[150px] sm:w-[150px] rounded-2xl border-2 border-violet-300 bg-violet-50/40 shadow-xl shadow-violet-500/10" />
-            <div className="relative grid grid-cols-[minmax(0,1fr)_5rem_5rem] sm:grid-cols-[minmax(0,1fr)_150px_150px] rounded-2xl bg-white/60 border border-gray-200">
-              <div className="px-3 sm:px-5 py-4 border-b border-gray-100" />
-              <div className="relative z-10 -mt-3 mx-[-1px] px-2 sm:px-6 py-4 sm:py-5 bg-gradient-to-b from-violet-600 to-violet-700 text-white text-xs sm:text-sm font-bold text-center leading-tight rounded-t-2xl shadow-lg shadow-violet-500/20">Anutech Hosting</div>
-              <div className="px-2 sm:px-6 py-4 border-b border-gray-100 text-xs sm:text-sm font-semibold text-gray-500 text-center leading-tight">Typical Hosting</div>
-              {HOSTING_COMPARISON.map((row, i) => {
-                const last = i === HOSTING_COMPARISON.length - 1;
-                return (
-                  <div key={row.feature} className="contents">
-                    <div className={`px-3 sm:px-5 py-3.5 text-xs sm:text-sm font-medium text-gray-800 ${!last ? "border-b border-gray-100" : ""}`}>{row.feature}</div>
-                    <div className={`relative z-10 px-2 sm:px-6 py-3.5 flex justify-center ${!last ? "border-b border-violet-100" : ""}`}>
-                      <CheckCircle className="h-5 w-5 text-white fill-green-500" />
-                    </div>
-                    <div className={`px-2 sm:px-6 py-3.5 flex justify-center ${!last ? "border-b border-gray-100" : ""}`}>
-                      {row.typical === "yes" ? <CheckCircle className="h-5 w-5 text-white fill-green-500" />
-                        : row.typical === "partial" ? <Minus className="h-5 w-5 text-amber-400" strokeWidth={3} />
-                          : <X className="h-5 w-5 text-red-500" strokeWidth={3} />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      {/* ── How the trial works ──────────────────────────────────────────── */}
-      <Section tone="white">
-        <div className="text-center mb-10 sm:mb-14">
-          <Eyebrow>Get started in minutes</Eyebrow>
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">How the 15-Day Free Trial Works</h2>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
-          {HOSTING_STEPS.map((step, i) => {
-            const Icon = ICONS[step.icon] ?? Rocket;
-            return (
-              <motion.div key={step.num} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.08 }}
-                className="relative bg-white rounded-2xl border border-gray-200 shadow-sm p-6 text-center">
-                <div className="relative w-16 h-16 mx-auto mb-4">
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-violet-50 to-indigo-50" />
-                  <div className="relative flex items-center justify-center h-full"><Icon className="h-7 w-7 text-violet-600" /></div>
-                  <span className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-violet-600 text-white text-xs font-bold flex items-center justify-center shadow-md border-2 border-white">{step.num}</span>
-                </div>
-                <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">{step.title}</h4>
-                <p className="text-sm text-gray-600 leading-relaxed">{step.body}</p>
-              </motion.div>
-            );
-          })}
-        </div>
-      </Section>
-
-      {/* ── Pricing ──────────────────────────────────────────────────────── */}
-      <Section tone="gray" id="pricing" className="scroll-mt-24">
-        <div className="text-center mb-8 sm:mb-10">
-          <Eyebrow>Choose the perfect plan for you</Eyebrow>
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-3">Simple, Transparent Pricing</h2>
-          <p className="text-base text-gray-600">Start with a 15-day free trial — no credit card required.</p>
-        </div>
-
-        <div className="flex justify-center mb-10">
-          <div className="inline-flex items-center gap-1 bg-gray-100 rounded-full p-1">
-            <button type="button" onClick={() => setBillingCycle("monthly")} aria-pressed={isMonthly}
-              className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${isMonthly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-              Monthly
-            </button>
-            <button type="button" onClick={() => setBillingCycle("yearly")} aria-pressed={!isMonthly}
-              className={`inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-all ${!isMonthly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-              Yearly
-              <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Save up to 60%</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto items-start">
-          {LANDING_PLANS.map((plan) => {
-            const monthlyPrice = plan.price * 2;
-            const displayPrice = (isMonthly ? monthlyPrice : plan.price).toFixed(2);
-            const isStarter = /starter/i.test(plan.name);
-            const offersTrial = !isMonthly && isStarter;
-            return (
-              <div key={plan.planId}
-                className={`relative bg-white rounded-2xl border p-6 shadow-sm ${plan.isPopular ? "border-violet-400 shadow-xl shadow-violet-500/10 ring-1 ring-violet-200" : "border-gray-200"}`}>
-                {plan.isPopular && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[10px] font-bold tracking-wider uppercase px-3 py-1 rounded-full shadow">
-                    Most Popular
-                  </span>
-                )}
-                {!isMonthly && (
-                  <span className="inline-block mb-3 text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Save 50% OFF</span>
-                )}
-                <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
-                <p className="text-sm text-gray-500 mb-4">{plan.description}</p>
-                <div className="flex items-end gap-2 mb-1">
-                  {!isMonthly && <span className="text-base text-gray-400 line-through">₹{monthlyPrice.toFixed(2)}</span>}
-                  <span className="text-4xl font-extrabold text-gray-900">₹{displayPrice}</span>
-                  <span className="text-sm text-gray-500 mb-1.5">/mo</span>
-                </div>
-                {/* The rate is per MONTH; on the yearly plan the money leaves the
-                    customer's account once, for twelve months. Saying only
-                    "₹49.99/mo" hides that, so the billed amount is spelled out —
-                    the commitment and the payment are two different things and a
-                    price card must never blur them. */}
-                <p className="text-xs font-medium text-gray-700 mb-1">
-                  {isMonthly
-                    ? "Billed monthly"
-                    : `Billed annually · ₹${(plan.price * 12).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/yr`}
-                </p>
-                <p className="text-xs text-gray-500 mb-5">
-                  Renews at ₹{(isMonthly ? monthlyPrice : plan.price).toFixed(2)}/mo
-                </p>
-                <div className="flex flex-col gap-2 mb-5">
-                  <button type="button" onClick={() => (offersTrial ? startTrial(plan) : choosePlan(plan))}
-                    className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#7C3AED] to-[#6D28D9] hover:from-[#6D28D9] hover:to-[#5B21B6] text-white font-bold py-3 rounded-xl shadow-md transition-all active:scale-95">
-                    {offersTrial ? "Start Free Trial" : "Buy Now"}
-                  </button>
-                  {offersTrial && (
-                    <button type="button" onClick={() => choosePlan(plan)}
-                      className="w-full inline-flex items-center justify-center gap-2 bg-white text-gray-800 font-semibold py-3 rounded-xl border border-gray-200 hover:border-violet-300 hover:text-violet-700 transition-all">
-                      Buy Now
-                    </button>
-                  )}
-                </div>
-                <ul className="space-y-2">
-                  {[...plan.features, ...(!isMonthly ? ["30-Day Money-Back Guarantee"] : [])].map((f) => (
-                    <li key={f} className={`flex items-start gap-2 text-sm ${plan.highlightFeatures.includes(f) ? "font-semibold text-gray-900" : "text-gray-600"}`}>
-                      <Check className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+      {/* 7. Trial timeline (dark) */}
+      <section style={{ padding: "clamp(46px,6vw,60px) 20px", background: C.ink, color: C.paper }}>
+        <div style={wrap}>
+          <h2 style={{ fontSize: "clamp(28px,4vw,36px)", letterSpacing: "-.03em", fontWeight: 800 }}>What happens on each day of the trial.</h2>
+          <div style={quadGrid}>
+            {HOSTING_TIMELINE.map((t) => (
+              <div key={t.d} style={{ border: `1px solid ${C.darkBorder}`, background: C.darkCard, borderRadius: 14, padding: 22 }}>
+                <div style={{ fontFamily: MONO, fontSize: 11.5, letterSpacing: ".08em", color: C.accentLight, fontWeight: 700 }}>{t.d}</div>
+                <div style={{ marginTop: 9, fontSize: 17, fontWeight: 800, letterSpacing: "-.02em" }}>{t.t}</div>
+                <p style={{ marginTop: 7, fontSize: 14.5, lineHeight: 1.55, color: C.onDark }}>{t.b}</p>
               </div>
-            );
-          })}
+            ))}
+          </div>
+          <p style={{ marginTop: 20, fontSize: 14.5, color: C.onDark }}>No card is stored during the trial, so no automatic charge is possible at the end of it.</p>
         </div>
-        {/* This line said "15-Day Money-Back Guarantee" while the cards directly
-            above it said 30-day and the FAQ below said 30-day on yearly plans
-            only — three claims, two of them agreeing, on one screen. 15 days is
-            the free TRIAL, not the refund window; the two had been conflated.
-            It now states the same promise the cards and the FAQ do, and it
-            follows the billing toggle, because monthly plans are not covered. */}
-        <p className="text-center text-sm text-gray-500 mt-8">
-          {isMonthly
-            ? "Monthly plans: cancel any time, no lock-in. The 30-day money-back guarantee applies to yearly plans."
-            : "30-day money-back guarantee on yearly plans · cancel any time"}
-        </p>
-      </Section>
+      </section>
 
-      {/* ── Testimonials ─────────────────────────────────────────────────── */}
-      <Section tone="white">
-        <div className="text-center mb-10 sm:mb-14">
-          <Eyebrow>What our customers say</Eyebrow>
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">Loved by 1,000+ Businesses</h2>
+      {/* 8. Move */}
+      <section id="move" style={{ padding: "clamp(50px,7vw,76px) 20px", borderBottom: `1px solid ${C.line}` }}>
+        <div style={wrap}>
+          <div style={eyebrow()}>STEP 3 — MOVING YOUR SITE</div>
+          <h2 style={{ ...h2, maxWidth: 720 }}>Free migration means we do it, not that we send you a guide.</h2>
+          <div style={{ marginTop: 30, display: "grid", gridTemplateColumns: twoCol, gap: 20 }}>
+            <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 16, padding: 26 }}>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>What we need from you</div>
+              <ul style={{ marginTop: 14, display: "grid", gap: 11, listStyle: "none", padding: 0 }}>
+                {MIGRATION_NEED.map((n) => <li key={n.n} style={{ display: "flex", gap: 10, fontSize: 15, lineHeight: 1.5, color: C.ink2 }}><span style={{ fontFamily: MONO, color: C.accent, fontWeight: 700 }}>{n.n}</span>{n.t}</li>)}
+              </ul>
+              <p style={{ marginTop: 14, fontSize: 14, color: C.muted, lineHeight: 1.5 }}>That&apos;s the whole ask. No exports, no zip files, no downtime window to schedule.</p>
+            </div>
+            <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 16, padding: 26 }}>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>What we do</div>
+              <ul style={{ marginTop: 14, display: "grid", gap: 11, listStyle: "none", padding: 0 }}>
+                {MIGRATION_WEDO.map((t) => <li key={t} style={{ display: "flex", gap: 10, fontSize: 15, lineHeight: 1.5, color: C.ink2 }}><span style={{ color: C.success, fontWeight: 800 }}>✓</span>{t}</li>)}
+              </ul>
+            </div>
+          </div>
+          <div style={{ marginTop: 20, background: C.accSurf, border: `1px solid ${C.accBorder}`, borderRadius: 16, padding: 24, display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.accentDark }}>If the copy isn&apos;t right, nothing switches</div>
+              <p style={{ marginTop: 7, fontSize: 15, lineHeight: 1.55, color: C.ink2 }}>We only change DNS after you have checked the migrated site. Until then your live website keeps serving from your current host, exactly as it does today.</p>
+            </div>
+            <a href={WHATSAPP_URL} className="hlp-dark" style={{ background: C.ink, color: C.paper, padding: "15px 20px", borderRadius: 11, fontSize: 15, fontWeight: 700, whiteSpace: "nowrap", minHeight: 50, display: "inline-flex", alignItems: "center" }}>Ask about my site</a>
+          </div>
         </div>
-        <div className="relative overflow-hidden">
-          <div className="flex transition-transform duration-700 ease-out" style={{ transform: `translateX(-${tIndex * (100 / perView)}%)` }}>
-            {HOSTING_TESTIMONIALS.map((t) => (
-              <div key={t.name} className="shrink-0 px-2.5 sm:px-3" style={{ flexBasis: `${100 / perView}%` }}>
-                <div className="h-full bg-white rounded-2xl p-6 border border-gray-200 shadow-sm">
-                  <div className="flex gap-0.5 mb-3">{Array.from({ length: 5 }).map((_, s) => (<Star key={s} className="h-4 w-4 fill-yellow-400 text-yellow-400" />))}</div>
-                  <p className="text-sm text-gray-700 leading-relaxed mb-4">&ldquo;{t.quote}&rdquo;</p>
-                  <div className="flex items-center gap-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={t.img} alt={t.name} loading="lazy" className="h-11 w-11 rounded-full bg-violet-100 object-cover shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{t.name}</p>
-                      <p className="text-xs text-gray-500">{t.role}</p>
-                    </div>
+      </section>
+
+      {/* 9. Worries */}
+      <section id="worries" style={{ padding: "clamp(50px,7vw,76px) 20px", background: C.tint, borderBottom: `1px solid ${C.line}` }}>
+        <div style={wrap}>
+          <div style={eyebrow()}>STEP 4 — WHAT IF</div>
+          <h2 style={{ ...h2, maxWidth: 720 }}>The six worries people actually have before switching host.</h2>
+          <div style={{ marginTop: 30, display: "grid", gridTemplateColumns: threeCol, gap: 16 }}>
+            {HOSTING_WORRIES.map((wr) => (
+              <div key={wr.q} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 14, padding: 22 }}>
+                <div style={{ fontSize: 16.5, fontWeight: 800, letterSpacing: "-.02em", color: C.ink }}>{wr.q}</div>
+                <p style={{ marginTop: 8, fontSize: 14.5, lineHeight: 1.55, color: C.ink2 }}>{wr.a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 10. Proof + testimonials */}
+      <section id="proof" style={{ padding: "clamp(50px,7vw,76px) 20px", borderBottom: `1px solid ${C.line}` }}>
+        <div style={wrap}>
+          <div style={eyebrow()}>DON&apos;T TAKE OUR WORD</div>
+          <h2 style={{ ...h2, maxWidth: 720 }}>Check us before you pay us.</h2>
+          <div style={{ marginTop: 28, display: "grid", gridTemplateColumns: tripleCol, gap: 16 }}>
+            {HOSTING_PROOFS.map((pf) => (
+              <div key={pf.k} style={{ border: `1px solid ${C.line}`, background: "#fff", borderRadius: 14, padding: 22, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: ".08em", color: C.muted, fontWeight: 700 }}>{pf.k}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-.01em", lineHeight: 1.4 }}>{pf.v}</div>
+                <a href={pf.href} style={{ marginTop: "auto", fontSize: 14, fontWeight: 700 }}>{pf.a} →</a>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: tripleCol, gap: 16 }}>
+            {HOSTING_QUOTES.map((q) => (
+              <div key={q.name} style={{ border: `1px solid ${C.line}`, borderRadius: 14, padding: 22, background: C.tint, display: "flex", flexDirection: "column", gap: 14 }}>
+                <p style={{ fontSize: 16.5, lineHeight: 1.5, letterSpacing: "-.01em", textWrap: "pretty" } as React.CSSProperties}>&ldquo;{q.text}&rdquo;</p>
+                <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 11 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 999, background: "#F0E8E0", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 14, color: C.muted }}>{q.initials}</div>
+                  <div>
+                    <div style={{ fontSize: 14.5, fontWeight: 700 }}>{q.name}</div>
+                    <div style={{ fontSize: 13, color: C.muted }}>{q.role}</div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
-        {maxT > 0 && (
-          <div className="flex justify-center gap-2 mt-8">
-            {Array.from({ length: maxT + 1 }).map((_, i) => (
-              <button key={i} type="button" onClick={() => setTIndex(i)} aria-label={`Go to testimonial slide ${i + 1}`}
-                className={`h-2 rounded-full transition-all ${i === tIndex ? "w-6 bg-violet-600" : "w-2 bg-gray-300 hover:bg-gray-400"}`} />
-            ))}
-          </div>
-        )}
-      </Section>
+      </section>
 
-      {/* ── FAQ ──────────────────────────────────────────────────────────── */}
-      <Section tone="gray">
-        <div className="grid lg:grid-cols-3 gap-8 lg:gap-12">
-          <div className="lg:col-span-1 text-center lg:text-left">
-            <Eyebrow>Frequently asked questions</Eyebrow>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
-              Got Questions?<br />We&apos;ve Got Answers.
-            </h2>
-          </div>
-          <div className="lg:col-span-2 space-y-3">
-            {HOSTING_FAQS.map((f) => (<FaqItem key={f.question} question={f.question} answer={f.answer} />))}
+      {/* 11. Fit check */}
+      <section style={{ padding: "clamp(50px,7vw,76px) 20px", borderBottom: `1px solid ${C.line}` }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <h2 style={{ ...h2, marginTop: 0 }}>We&apos;d rather you know before you pay.</h2>
+          <div style={{ marginTop: 28, display: "grid", gridTemplateColumns: twoCol, gap: 20 }}>
+            <div style={{ background: C.successSurf, border: `1px solid ${C.successBorder}`, borderRadius: 16, padding: 26 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.success }}>A good fit if you are</div>
+              <ul style={{ marginTop: 14, display: "grid", gap: 10, listStyle: "none", padding: 0 }}>
+                {HOSTING_GOOD_FIT.map((g) => <li key={g} style={{ display: "flex", gap: 10, fontSize: 15, lineHeight: 1.5 }}><span style={{ color: C.success, fontWeight: 800 }}>✓</span>{g}</li>)}
+              </ul>
+            </div>
+            <div style={{ background: C.tint, border: `1px solid ${C.line}`, borderRadius: 16, padding: 26 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: C.muted }}>Not the right product if</div>
+              <ul style={{ marginTop: 14, display: "grid", gap: 10, listStyle: "none", padding: 0 }}>
+                {HOSTING_BAD_FIT.map((b) => <li key={b} style={{ display: "flex", gap: 10, fontSize: 15, lineHeight: 1.5, color: C.ink2 }}><span style={{ color: C.faint, fontWeight: 800 }}>—</span>{b}</li>)}
+              </ul>
+            </div>
           </div>
         </div>
-      </Section>
+      </section>
 
-      {/* ── Final CTA ────────────────────────────────────────────────────── */}
-      <section className="bg-gradient-to-r from-[#7C3AED] to-[#4F46E5]">
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-14 text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Ready to Launch Your Website?</h2>
-          <p className="text-violet-100 mb-7 max-w-2xl mx-auto">Join 1,000+ businesses who trust Anutech for their online success.</p>
-          <Link href="#pricing" className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:from-[#16A34A] hover:to-[#15803D] text-white font-bold py-3.5 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95">
-            <Rocket className="h-5 w-5" />
-            Start Your 15-Day Free Trial
-            <ArrowRight className="h-5 w-5" />
-          </Link>
-          <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-violet-100 mt-6">
-            {["15-Day Free Trial", "No Credit Card Required", "Cancel Anytime"].map((t) => (
-              <span key={t} className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" />{t}</span>
+      {/* 12. Contact channels */}
+      <section style={{ padding: "clamp(50px,7vw,76px) 20px", background: C.tint, borderBottom: `1px solid ${C.line}` }}>
+        <div style={wrap}>
+          <h2 style={{ ...h2, marginTop: 0 }}>Talk to a person first. That&apos;s normal here.</h2>
+          <div style={quadGrid}>
+            {HOSTING_CHANNELS.map((ch) => (
+              <div key={ch.t} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 14, padding: 22, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-.02em" }}>{ch.t}</div>
+                <p style={{ fontSize: 14.5, lineHeight: 1.5, color: C.ink2 }}>{ch.d}</p>
+                <a href={ch.href} style={{ marginTop: "auto", fontSize: 14.5, fontWeight: 700 }}>{ch.a} →</a>
+              </div>
             ))}
           </div>
         </div>
       </section>
+
+      {/* 13. FAQ */}
+      <section id="faq" style={{ padding: "clamp(50px,7vw,76px) 20px", borderBottom: `1px solid ${C.line}` }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <h2 style={{ fontSize: "clamp(30px,4.6vw,42px)", letterSpacing: "-.035em", fontWeight: 800 }}>Everything else, answered plainly.</h2>
+          <div style={{ marginTop: 28, borderTop: `1px solid ${C.line}` }}>
+            {HOSTING_FAQS_V2.map((f, i) => (
+              <div key={f.q} style={{ borderBottom: `1px solid ${C.line}` }}>
+                <button onClick={() => setOpenFaq((o) => (o === i ? -1 : i))} aria-expanded={openFaq === i}
+                  style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 18, background: "transparent", border: 0, padding: "21px 4px", textAlign: "left", fontSize: 17.5, fontWeight: 700, letterSpacing: "-.015em", color: C.ink, minHeight: 56, cursor: "pointer" }}>
+                  {f.q}
+                  <span style={{ fontFamily: MONO, fontSize: 20, color: C.accent, flexShrink: 0 }}>{openFaq === i ? "−" : "+"}</span>
+                </button>
+                {openFaq === i && <p style={{ padding: "0 40px 24px 4px", fontSize: 16, lineHeight: 1.62, color: C.ink2, textWrap: "pretty" } as React.CSSProperties}>{f.a}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 14. Final CTA */}
+      <section style={{ padding: "clamp(56px,7vw,84px) 20px clamp(70px,8vw,96px)" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto", background: C.accSurf, border: `1px solid ${C.accBorder}`, borderRadius: 22, padding: "clamp(32px,5vw,56px) clamp(22px,4vw,48px)", textAlign: "center" }}>
+          <h2 style={{ fontSize: "clamp(30px,5vw,44px)", lineHeight: 1.08, letterSpacing: "-.04em", fontWeight: 800 }}>Try it with your real website. <span style={{ fontFamily: SERIF, fontStyle: "italic", fontWeight: 400, color: C.accent }}>Then decide.</span></h2>
+          <p style={{ marginTop: 16, fontSize: 17.5, color: C.ink2, maxWidth: 560, marginLeft: "auto", marginRight: "auto", lineHeight: 1.55 }}>{TRIAL_DAYS} days, every feature, no credit card, and our team does the migration while your current site stays live.</p>
+          <div style={{ marginTop: 26, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <a href="#choose" className="hlp-dark" style={{ background: C.ink, color: C.paper, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free trial</a>
+            <a href="/quote" className="hlp-outline" style={{ background: "#fff", color: C.ink, border: `1px solid ${C.line}`, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Get a written quote</a>
+          </div>
+          <div style={{ marginTop: 20, fontSize: 13, color: C.muted, fontFamily: MONO, letterSpacing: ".04em" }}>NO CARD · CANCEL ANYTIME · GST INVOICE ON EVERY ORDER</div>
+        </div>
+      </section>
+
+      {/* 15. Footer */}
+      <footer style={{ background: C.ink, color: C.onDark, padding: "44px 20px 120px" }}>
+        <div style={{ ...wrap, display: "flex", justifyContent: "space-between", gap: 30, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ maxWidth: 460 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.paper, fontWeight: 800, fontSize: 16 }}>
+              <span style={{ width: 28, height: 28, borderRadius: 8, background: C.accent, color: "#fff", display: "grid", placeItems: "center", fontSize: 14 }}>A</span>
+              Anutech Digital
+            </div>
+            <p style={{ marginTop: 12, fontSize: 13.5, lineHeight: 1.6 }}>Anutech Digital Pvt Ltd, Rohini, Delhi · GSTIN 07ABDCA0298H1ZP · Maker of ResellerOS.</p>
+            <div style={{ marginTop: 12, display: "flex", gap: 14, flexWrap: "wrap", fontSize: 13.5 }}>
+              <a href="/terms" style={{ color: C.accentLight }}>Terms</a>
+              <a href="/refund" style={{ color: C.accentLight }}>Refund policy</a>
+              <a href="/privacy" style={{ color: C.accentLight }}>Privacy</a>
+              <a href="/support" style={{ color: C.accentLight }}>Support</a>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, fontFamily: MONO, fontSize: 11, letterSpacing: ".06em", flexWrap: "wrap" }}>
+            {["GST INVOICE", "UPI", "NETBANKING", "VISA / MASTERCARD"].map((p) => <span key={p} style={{ border: `1px solid ${C.darkBorder}`, padding: "8px 12px", borderRadius: 8 }}>{p}</span>)}
+          </div>
+        </div>
+      </footer>
+
+      {/* 16. Sticky decision bar */}
+      {scrolled && (
+        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 60, background: "rgba(23,18,15,.97)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", color: C.paper, padding: "13px 20px", animation: "hlpRise .28s ease-out" }}>
+          <div style={{ ...wrap, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{anchor.name} — {anchor.priceLabel}/mo</div>
+            {!mob && <div style={{ fontSize: 13.5, color: C.onDark }}>{TRIAL_DAYS} days free · no card · free migration included</div>}
+            <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flex: "1 1 auto", justifyContent: "flex-end" }}>
+              <a href={WHATSAPP_URL} className="hlp-ghostdark" style={{ color: C.paper, fontSize: 14, fontWeight: 700, border: `1px solid ${C.darkBorder}`, padding: "13px 16px", borderRadius: 10 }}>WhatsApp</a>
+              <a href="/signup" className="hlp-orange2" style={mob
+                ? { flex: "1 1 auto", textAlign: "center", background: C.accent, color: "#fff", padding: "14px 18px", borderRadius: 10, fontSize: 15, fontWeight: 700 }
+                : { background: C.accent, color: "#fff", padding: "13px 20px", borderRadius: 10, fontSize: 14.5, fontWeight: 700 }}>Start free trial</a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

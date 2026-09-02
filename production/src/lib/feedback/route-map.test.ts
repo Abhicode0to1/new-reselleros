@@ -29,7 +29,7 @@ function scanRoutes(): { route: string; file: string }[] {
         // brick #5) is self-governed and ported incrementally — it is not part of
         // the app's screen registry (APP_ROUTES names files a bug was reported
         // from; marketing has its own site-invariants test). Skip it.
-        if (entry.name === "(marketing)") continue;
+        if (entry.name === "(marketing)" || entry.name === "(hosting)") continue;
         walk(full);
       } else if (entry.name === "page.tsx") {
         // Repo-relative, POSIX separators — matches how APP_ROUTES stores them.
