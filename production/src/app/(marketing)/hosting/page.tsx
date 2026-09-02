@@ -5,12 +5,14 @@ import { HOSTING_TIERS, HOSTING_FAQS_V2 } from "@/site/lib/data/hosting-landing-
 /**
  * /hosting — the conversion-focused hosting landing page (redesign, 2 Sep 2026).
  *
- * Deliberately in its OWN route group, NOT under (marketing): this is a single
- * focused funnel with its own announcement strip, sticky header, footer and
- * decision bar (all inside HostingLanding), so it must not inherit the marketing
- * site chrome — that would double the header and footer. The root layout gives
- * it only <body> + providers; the component carries the entire design and loads
- * its own fonts (Manrope / Instrument Serif / JetBrains Mono).
+ * It lives UNDER (marketing) on purpose: the marketing layout gives it the
+ * shared site chrome — the same home-page menu (a sticky Header), the utility
+ * bar and the footer — on this page as on every other, so a visitor can always
+ * get back to the home page and across to Domains, Email, ResellerOS, etc.
+ * (Pardeep, 2 Sep: the menu must be on every page.) HostingLanding therefore
+ * renders only its own body (hero → final CTA); its in-page navigation is the
+ * quick-jump strip. It still loads its own display fonts (Manrope / Instrument
+ * Serif / JetBrains Mono) for the body, scoped to itself.
  *
  * SEO + AI-answer-engine friendliness (Pardeep, 2 Sep — "koi AI chatbot jaise
  * Gemini me ranking la sake"): rich metadata plus server-rendered JSON-LD for

@@ -60,24 +60,19 @@ export function HostingLanding() {
   const [traffic, setTraffic] = useState<string | null>(null);
   const [openFaq, setOpenFaq] = useState(0);
   const [showMatrix, setShowMatrix] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const [w, setW] = useState(1200);
 
   useEffect(() => {
-    const onScroll = () => setScrolled((window.scrollY || document.documentElement.scrollTop) > 620);
     const measure = () => {
       const width = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-      if (width) { setW(width); setMenuOpen(false); }
+      if (width) setW(width);
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", measure);
     measure();
-    onScroll();
-    return () => { window.removeEventListener("scroll", onScroll); window.removeEventListener("resize", measure); };
+    return () => window.removeEventListener("resize", measure);
   }, []);
 
-  const mob = w < 760, mid = w < 1010, navMob = w < 1100;
+  const mob = w < 760, mid = w < 1010;
   const yearly = billing === "Yearly";
 
   // Recommender
@@ -131,12 +126,6 @@ export function HostingLanding() {
     marginTop: 28, display: "grid",
     gridTemplateColumns: mob ? "minmax(0,1fr)" : `repeat(${mid ? 2 : 4},minmax(0,1fr))`, gap: mob ? 14 : 16,
   };
-  const navLinks = [
-    { href: "#choose", t: "Choose a plan" }, { href: "#cost", t: "3-year cost" },
-    { href: "#move", t: "Moving your site" }, { href: "#worries", t: "Common worries" },
-    { href: "#proof", t: "Verify us" },
-  ];
-
   return (
     <div className={`hlp ${manrope.variable} ${serif.variable} ${mono.variable}`}
       style={{ fontFamily: "var(--hf-sans), system-ui, sans-serif", background: C.paper, color: C.ink, maxWidth: "100%", overflowX: "hidden" }}>
@@ -154,51 +143,10 @@ export function HostingLanding() {
         .hlp-ghostdark:hover { border-color:#FDFBF8 !important; color:#FDFBF8 !important; text-decoration:none !important; }
       ` }} />
 
-      {/* 1. Announcement strip */}
-      <div style={{ background: C.ink, color: C.paper, fontSize: 13, padding: "9px 20px", display: "flex", justifyContent: "center", gap: 22, alignItems: "center", flexWrap: "wrap", textAlign: "center" }}>
-        <a href="/status" style={{ color: C.paper, display: "flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
-          <span style={{ width: 7, height: 7, borderRadius: 999, background: C.dot, animation: "hlpPulse 2.4s ease-in-out infinite" }} />Live system status
-        </a>
-        <span style={{ opacity: 0.45 }}>·</span>
-        <span>Free migration on every plan</span>
-        <span style={{ opacity: 0.45 }}>·</span>
-        <span>GST invoice on every order</span>
-      </div>
-
-      {/* 2. Header */}
-      <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(253,251,248,.9)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", borderBottom: `1px solid ${C.line}` }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "13px 20px", display: "flex", alignItems: "center", gap: 24 }}>
-          <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 800, fontSize: 17, letterSpacing: "-.02em", color: C.ink, textDecoration: "none" }}>
-            <span style={{ width: 30, height: 30, borderRadius: 8, background: C.accent, color: "#fff", display: "grid", placeItems: "center", fontSize: 15 }}>A</span>
-            Anutech Digital
-          </a>
-          {!navMob && (
-            <>
-              <nav style={{ display: "flex", gap: 22, fontSize: 14.5, fontWeight: 600, marginRight: "auto" }}>
-                {navLinks.map((l) => <a key={l.href} href={l.href} style={{ color: C.ink2 }}>{l.t}</a>)}
-              </nav>
-              <a href="/login" style={{ fontSize: 14, fontWeight: 700, color: C.ink2 }}>Client login</a>
-              <a href="#choose" className="hlp-dark" style={{ background: C.ink, color: C.paper, padding: "12px 18px", borderRadius: 10, fontSize: 14, fontWeight: 700 }}>Start free trial</a>
-            </>
-          )}
-          {navMob && (
-            <button onClick={() => setMenuOpen((v) => !v)} aria-label="Open menu" aria-expanded={menuOpen}
-              style={{ marginLeft: "auto", width: 46, height: 46, display: "grid", placeItems: "center", gap: 5, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, cursor: "pointer" }}>
-              {[0, 1, 2].map((i) => <span key={i} style={{ width: 18, height: 2, background: C.ink, display: "block" }} />)}
-            </button>
-          )}
-        </div>
-        {navMob && menuOpen && (
-          <div style={{ borderTop: `1px solid ${C.line}`, background: C.paper, padding: "8px 20px 16px", animation: "hlpRise .2s ease-out" }}>
-            {navLinks.map((l) => (
-              <a key={l.href} href={l.href} onClick={() => setMenuOpen(false)}
-                style={{ display: "block", fontSize: 16.5, fontWeight: 700, padding: "15px 4px", borderBottom: `1px solid #F0E8E0`, color: C.ink }}>{l.t}</a>
-            ))}
-            <a href="/login" onClick={() => setMenuOpen(false)} style={{ display: "block", fontSize: 16.5, fontWeight: 700, padding: "15px 4px", borderBottom: `1px solid #F0E8E0`, color: C.ink }}>Client login</a>
-            <a href="#choose" onClick={() => setMenuOpen(false)} className="hlp-orange" style={{ display: "block", textAlign: "center", marginTop: 12, background: C.accent, color: "#fff", padding: "15px", borderRadius: 12, fontSize: 15, fontWeight: 700 }}>Start free trial</a>
-          </div>
-        )}
-      </header>
+      {/* The announcement strip, the home-page menu (site Header, sticky) and the
+          footer all come from the marketing layout, so they appear on EVERY page
+          and the way back to the main site is never lost. This page renders only
+          its own body below; the quick-jump strip handles in-page navigation. */}
 
       {/* 3. Hero */}
       <section style={{ padding: "clamp(38px,6vw,66px) 20px clamp(40px,5vw,54px)", borderBottom: `1px solid ${C.line}` }}>
@@ -555,43 +503,6 @@ export function HostingLanding() {
         </div>
       </section>
 
-      {/* 15. Footer */}
-      <footer style={{ background: C.ink, color: C.onDark, padding: "44px 20px 120px" }}>
-        <div style={{ ...wrap, display: "flex", justifyContent: "space-between", gap: 30, flexWrap: "wrap", alignItems: "center" }}>
-          <div style={{ maxWidth: 460 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.paper, fontWeight: 800, fontSize: 16 }}>
-              <span style={{ width: 28, height: 28, borderRadius: 8, background: C.accent, color: "#fff", display: "grid", placeItems: "center", fontSize: 14 }}>A</span>
-              Anutech Digital
-            </div>
-            <p style={{ marginTop: 12, fontSize: 13.5, lineHeight: 1.6 }}>Anutech Digital Pvt Ltd, Rohini, Delhi · GSTIN 07ABDCA0298H1ZP · Maker of ResellerOS.</p>
-            <div style={{ marginTop: 12, display: "flex", gap: 14, flexWrap: "wrap", fontSize: 13.5 }}>
-              <a href="/terms" style={{ color: C.accentLight }}>Terms</a>
-              <a href="/refund" style={{ color: C.accentLight }}>Refund policy</a>
-              <a href="/privacy" style={{ color: C.accentLight }}>Privacy</a>
-              <a href="/support" style={{ color: C.accentLight }}>Support</a>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 10, fontFamily: MONO, fontSize: 11, letterSpacing: ".06em", flexWrap: "wrap" }}>
-            {["GST INVOICE", "UPI", "NETBANKING", "VISA / MASTERCARD"].map((p) => <span key={p} style={{ border: `1px solid ${C.darkBorder}`, padding: "8px 12px", borderRadius: 8 }}>{p}</span>)}
-          </div>
-        </div>
-      </footer>
-
-      {/* 16. Sticky decision bar */}
-      {scrolled && (
-        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 60, background: "rgba(23,18,15,.97)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", color: C.paper, padding: "13px 20px", animation: "hlpRise .28s ease-out" }}>
-          <div style={{ ...wrap, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{anchor.name} — {anchor.priceLabel}/mo</div>
-            {!mob && <div style={{ fontSize: 13.5, color: C.onDark }}>{TRIAL_DAYS} days free · no card · free migration included</div>}
-            <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flex: "1 1 auto", justifyContent: "flex-end" }}>
-              <a href={WHATSAPP_URL} className="hlp-ghostdark" style={{ color: C.paper, fontSize: 14, fontWeight: 700, border: `1px solid ${C.darkBorder}`, padding: "13px 16px", borderRadius: 10 }}>WhatsApp</a>
-              <a href="/signup" className="hlp-orange2" style={mob
-                ? { flex: "1 1 auto", textAlign: "center", background: C.accent, color: "#fff", padding: "14px 18px", borderRadius: 10, fontSize: 15, fontWeight: 700 }
-                : { background: C.accent, color: "#fff", padding: "13px 20px", borderRadius: 10, fontSize: 14.5, fontWeight: 700 }}>Start free trial</a>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
