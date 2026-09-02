@@ -30,6 +30,7 @@ import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
+import { daWriteConfigured } from "@/lib/directadmin/provision";
 import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
 import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
@@ -332,13 +333,17 @@ export async function POST(request: NextRequest) {
        config read, because a config that could say "true" would be a config that can lie. */
     vendorApiConfigured: false,
     domainName: provisioningDomain,
-    /* Hosting and domains are ours to provision, but this app cannot order on the
-       engine yet: app.anutech.in's deployed build answers 404 on the merge APIs
-       and there is no server-to-server credential for its ordering endpoints.
-       Hardcoded for the same reason as vendorApiConfigured — and registering a
-       domain is irreversible spend, so this must never be a value a config can
-       flip on by accident. */
-    engineConnected: false,
+    /* HOSTING is now provisioned by us directly on DirectAdmin (2 Sep 2026), so it
+       IS connected — but only once the same explicit go-live gate the trial uses is
+       on (HOSTING_TRIAL_LIVE=1 + DA credentials present). DOMAIN stays false: we
+       read ResellerClub for availability/price but do NOT order on it yet, and a
+       registration is irreversible spend that must never flip on by config accident.
+       The hosting worker (/api/cron/provision-hosting) turns an unblocked hosting
+       request into a real cPanel account + login email. */
+    engineConnected:
+      provisioningVendor === "hosting"
+        ? process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured()
+        : false,
     dialMode: (await loadAutonomyPolicy(quote.tenant_id)).modes?.["provisioning.activate"] ?? "off",
   });
 

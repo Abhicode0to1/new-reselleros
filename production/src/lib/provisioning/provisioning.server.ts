@@ -26,6 +26,59 @@ function bare() {
   });
 }
 
+/** One hosting request ready to be turned into a real cPanel account. */
+export interface ReadyHostingRequest {
+  id: string;
+  tenant_id: string;
+  quote_id: string;
+  domain: string | null;
+  plan: string | null;
+}
+
+/**
+ * Hosting requests that decideProvisioning fully approved (blocker IS NULL) on a
+ * LIVE payment — the ones the worker may provision. A test-mode payment, an
+ * engine-not-connected or dial-hold row carries a blocker and is left alone.
+ */
+export async function listReadyHostingRequests(limit = 50): Promise<ReadyHostingRequest[]> {
+  const db = bare();
+  if (!db) return [];
+  const { data, error } = await db
+    .from("provisioning_requests")
+    .select("id, tenant_id, quote_id, domain, plan")
+    .eq("vendor", "hosting")
+    .eq("status", "queued")
+    .eq("payment_mode", "live")
+    .is("blocker", null)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error) {
+    console.error("[provisioning] list ready hosting failed:", error.message);
+    return [];
+  }
+  return (data ?? []) as ReadyHostingRequest[];
+}
+
+export async function markProvisioningActivated(id: string, vendorRef: string): Promise<void> {
+  const db = bare();
+  if (!db) return;
+  const { error } = await db
+    .from("provisioning_requests")
+    .update({ status: "activated", vendor_ref: vendorRef, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) console.error("[provisioning] mark activated failed:", error.message);
+}
+
+export async function markProvisioningFailed(id: string, note: string): Promise<void> {
+  const db = bare();
+  if (!db) return;
+  const { error } = await db
+    .from("provisioning_requests")
+    .update({ status: "failed", note: note.slice(0, 500), updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) console.error("[provisioning] mark failed failed:", error.message);
+}
+
 export interface QueueProvisioningInput {
   tenantId: string;
   quoteId: string;
