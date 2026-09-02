@@ -63,6 +63,9 @@ function load(): CartLine[] {
         qty: Math.max(1, Number(l.qty ?? 1)),
         unit: String(l.unit ?? "item"),
         cycle: (l.cycle === "monthly" || l.cycle === "yearly" ? l.cycle : "once") as CartLine["cycle"],
+        /* Preserve the server-repriceable SKU across a reload — without this it was
+           dropped on load, so every line reached checkout unpriced and was refused. */
+        sku: typeof l.sku === "string" ? l.sku : undefined,
       }))
       .filter((l) => l.label && Number.isFinite(l.unitPrice));
   } catch {
