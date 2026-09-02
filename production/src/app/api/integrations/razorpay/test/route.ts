@@ -8,6 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 
 export const dynamic = "force-dynamic";
 export const runtime  = "nodejs";
@@ -27,11 +28,14 @@ export async function POST() {
   if (me.role !== "owner") return NextResponse.json({ ok: false, error: "Owner only" }, { status: 403 });
 
   const admin = createAdminClient();
-  const { data: secrets } = await admin
+  const { data: rawSecrets } = await admin
     .from("tenant_secrets")
     .select("razorpay_mode, razorpay_key_id, razorpay_key_secret")
     .eq("tenant_id", me.tenant_id)
     .maybeSingle();
+  // The secret is stored sealed (rosv1:…) — decrypt before use, or Basic auth
+  // sends the ciphertext and Razorpay always answers "Authentication failed".
+  const secrets = decryptTenantSecrets(rawSecrets);
   if (!secrets?.razorpay_key_id || !secrets.razorpay_key_secret) {
     return NextResponse.json({ ok: false, error: "Save credentials first" }, { status: 400 });
   }

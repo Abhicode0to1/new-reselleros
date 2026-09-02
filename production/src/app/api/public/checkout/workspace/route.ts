@@ -27,6 +27,7 @@ import { captureFromRequest } from "@/lib/marketing/utm";
 import { z } from "zod";
 import Razorpay from "razorpay";
 import { createAdminClient } from "@/lib/supabase/server";
+import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 
@@ -202,11 +203,13 @@ export async function POST(request: NextRequest) {
     let rzMode:      "test" | "live" = "test";
     {
       const adminEarly = createAdminClient();
-      const { data: secrets } = await adminEarly
+      const { data: rawSecrets } = await adminEarly
         .from("tenant_secrets")
         .select("razorpay_key_id, razorpay_key_secret, razorpay_mode")
         .eq("tenant_id", BUY_PAGE_TENANT_ID)
         .maybeSingle();
+      // Sealed at rest (rosv1:…) — decrypt or Razorpay rejects the ciphertext.
+      const secrets = decryptTenantSecrets(rawSecrets);
       if (secrets?.razorpay_key_id && secrets.razorpay_key_secret) {
         rzKeyId     = secrets.razorpay_key_id;
         rzKeySecret = secrets.razorpay_key_secret;

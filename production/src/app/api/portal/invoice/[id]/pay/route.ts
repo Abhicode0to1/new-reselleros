@@ -19,6 +19,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import Razorpay from "razorpay";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 
 const ENV_RAZORPAY_KEY_ID =
   process.env.RAZORPAY_KEY_ID?.trim() || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || "";
@@ -99,11 +100,13 @@ export async function POST(
   let rzKeySecret = "";
   let rzMode: "test" | "live" = "test";
   {
-    const { data: secrets } = await admin
+    const { data: rawSecrets } = await admin
       .from("tenant_secrets")
       .select("razorpay_key_id, razorpay_key_secret, razorpay_mode")
       .eq("tenant_id", invoice.tenant_id)
       .maybeSingle();
+    // Sealed at rest (rosv1:…) — decrypt or Razorpay rejects the ciphertext.
+    const secrets = decryptTenantSecrets(rawSecrets);
     if (secrets?.razorpay_key_id && secrets.razorpay_key_secret) {
       rzKeyId = secrets.razorpay_key_id;
       rzKeySecret = secrets.razorpay_key_secret;
