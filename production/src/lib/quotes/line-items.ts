@@ -53,3 +53,17 @@ export function addOrMergeLine(lines: QuoteLineItem[], line: QuoteLineItem): Add
   }
   return { lines: [...lines, line], merged: false };
 }
+
+/**
+ * The quantity a catalog item defaults to when first added to a quote.
+ *
+ * Workspace / M365 / Zoho are PER-SEAT, so a business quote sensibly starts at
+ * ~10 seats. Hosting (merge brick #1) is a FLAT product — one account, priced
+ * ₹/month, not ₹/seat — so it must default to 1; the old flat 10 turned a
+ * ₹X/mo plan into a ₹10X/mo line (a silent 10× over-quote). The operator can
+ * still raise it (hosting for several sites). Domains are one_time and never
+ * reach this dialog, so they are not a case here.
+ */
+export function catalogDefaultQty(vendor: string | null | undefined): number {
+  return vendor === "hosting" ? 1 : 10;
+}

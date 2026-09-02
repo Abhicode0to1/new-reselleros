@@ -28,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { useItems } from "@/lib/queries/items";
+import { catalogDefaultQty } from "@/lib/quotes/line-items";
 import { rupee } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { formatForeign } from "@/lib/currency";
@@ -130,7 +131,9 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
       id: crypto.randomUUID(),
       item_id: it.id,
       name: it.name,
-      qty: 10,                              // default
+      // Per-seat (Workspace/M365/Zoho) defaults to ~10; flat hosting to 1. See
+      // catalogDefaultQty — a flat ₹X/mo plan at the old ×10 was a 10× overquote.
+      qty: catalogDefaultQty(it.vendor),
       rate: msrpPerYear,                    // store as ₹/seat/year (canonical)
       cost: wholesalePerYear,
       commitment: "annual_yearly",

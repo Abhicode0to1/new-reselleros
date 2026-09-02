@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addOrMergeLine } from "./line-items";
+import { addOrMergeLine, catalogDefaultQty } from "./line-items";
 import type { QuoteLineItem } from "@/lib/supabase/database.types";
 
 function line(over: Partial<QuoteLineItem> = {}): QuoteLineItem {
@@ -71,5 +71,24 @@ describe("addOrMergeLine", () => {
     const r = addOrMergeLine([], line({ id: "a" }));
     expect(r.merged).toBe(false);
     expect(r.lines).toHaveLength(1);
+  });
+});
+
+describe("catalogDefaultQty", () => {
+  it("defaults per-seat vendors to ~10 seats", () => {
+    expect(catalogDefaultQty("google")).toBe(10);
+    expect(catalogDefaultQty("microsoft")).toBe(10);
+    expect(catalogDefaultQty("zoho")).toBe(10);
+  });
+
+  it("defaults flat hosting to 1 — the 10x-overquote guard (merge brick #3)", () => {
+    // A ₹125/mo hosting plan at qty 10 would quote ₹1,250/mo. Must be 1.
+    expect(catalogDefaultQty("hosting")).toBe(1);
+  });
+
+  it("defaults an unknown/other vendor to 10 (unchanged behaviour)", () => {
+    expect(catalogDefaultQty("other")).toBe(10);
+    expect(catalogDefaultQty(null)).toBe(10);
+    expect(catalogDefaultQty(undefined)).toBe(10);
   });
 });
