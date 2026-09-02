@@ -31,6 +31,9 @@ import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
 import { daWriteConfigured } from "@/lib/directadmin/provision";
+import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
+
+const WEBHOOK_APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
 import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
@@ -386,6 +389,23 @@ export async function POST(request: NextRequest) {
   const domain        = notes.domain  ?? "";
   const amountFmt     = `₹${paymentAmount.toLocaleString("en-IN")}`;
 
+  // Hosting orders get hosting wording (not "live on Google Workspace") and the
+  // provisioning worker sends the cPanel login separately.
+  const isHostingOrder = provisioningVendor === "hosting" || (quote.plan ?? "").startsWith("hosting-");
+  // The GST invoice record_payment just created — link it in the email so the
+  // "you'll get your invoice" line is true, not a promise nothing keeps.
+  const { data: paidQuote } = await admin.from("quotes").select("invoice_id").eq("id", quote.id).maybeSingle();
+  const invoiceUrl = paidQuote?.invoice_id
+    ? pdfDownloadUrl(WEBHOOK_APP_URL, "invoice", String(paidQuote.invoice_id), quote.tenant_id)
+    : null;
+  const invoiceLine = invoiceUrl
+    ? `YOUR GST TAX INVOICE\n  ${invoiceUrl}`
+    : `Your GST tax invoice will reach you by email shortly.`;
+  const whatNext = isHostingOrder
+    ? `WHAT HAPPENS NEXT\n  • Your hosting account is being set up now\n  • You'll get a separate email with your control-panel login\n  • Moving from another host? Reply and we'll migrate you free`
+    : `WHAT HAPPENS NEXT\n  Within 4 hours  — ${sellerPerson} will contact you to verify the domain\n  Within 24 hours — Your team is live on Google Workspace\n  Day 7           — Health-check call to make sure everything's working`;
+  const productDesc = isHostingOrder ? tierName : `${seats} users of ${tierName}`;
+
   await Promise.allSettled([
     // Customer order confirmation
     customerEmail && owner.ok && sendEmail({
@@ -398,23 +418,18 @@ export async function POST(request: NextRequest) {
       text:
 `Hi ${customerName.split(" ")[0] || "there"},
 
-Thanks for your purchase! Your payment of ${amountFmt} for ${seats} users of
-${tierName} has been received.
+Thanks for your purchase! Your payment of ${amountFmt} for ${productDesc} has been received.
 
 ORDER SUMMARY
   Order ID    ${quote.id}
-  Plan        ${tierName}
-  Seats       ${seats}
+  Plan        ${tierName}${isHostingOrder ? "" : `\n  Seats       ${seats}`}
   Domain      ${domain || "—"}
   Total paid  ${amountFmt} (incl 18% GST)
 
-WHAT HAPPENS NEXT
-  Within 4 hours  — ${sellerPerson} will contact you to verify the domain
-  Within 24 hours — Your team is live on Google Workspace
-  Day 7           — Health-check call to make sure everything's working
+${whatNext}
 
-You'll receive a separate email with your GST tax invoice.${
-  sellerPhone ? ` If you need anything before then, WhatsApp ${sellerPerson} on ${sellerPhone}.` : ""
+${invoiceLine}${
+  sellerPhone ? `\n\nIf you need anything, WhatsApp ${sellerPerson} on ${sellerPhone}.` : ""
 }
 
 — ${sellerPerson}
