@@ -79,10 +79,14 @@ async function daPost(path: string, params: Record<string, string>): Promise<{ o
     // parseDA returns null on an HTML login page (blocked IP / bad creds) or on
     // DA's `error=1` envelope — both are failures here.
     if (!parsed) {
+      // DA's failure envelope is `error=1&text=…&details=…`. The `details` half
+      // carries the actual reason ("You have no available IPs", "Domain already
+      // exists", …); surface both, or the caller only ever sees "Unable to …".
+      const pick = (k: string) => decodeURIComponent((new RegExp(`(?:^|&)${k}=([^&]*)`).exec(text)?.[1] || "").replace(/\+/g, " ")).trim();
       const m = /error=1/.test(text)
-        ? decodeURIComponent((/text=([^&]*)/.exec(text)?.[1] || "").replace(/\+/g, " ")) || "DirectAdmin rejected the request."
+        ? [pick("text"), pick("details")].filter(Boolean).join(" — ") || "DirectAdmin rejected the request."
         : "DirectAdmin did not accept the request (IP not allowed, or bad credentials).";
-      console.error(`[directadmin:write] ${path} failed: ${m} · raw: ${text.slice(0, 160)}`);
+      console.error(`[directadmin:write] ${path} failed: ${m} · raw: ${text.slice(0, 220)}`);
       return { ok: false, message: m };
     }
     return { ok: true, message: "ok" };
@@ -140,7 +144,7 @@ export async function daCreateAccount(input: CreateAccountInput): Promise<{ ok: 
     passwd2: input.password,
     domain: input.domain,
     package: input.pkg,
-    ip: input.ip || "shared",
+    ip: input.ip || process.env.DIRECTADMIN_IP?.trim() || "shared",
     notify: "no",
   });
 }
