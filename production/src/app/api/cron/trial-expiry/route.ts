@@ -23,6 +23,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { resolveOwnerAlert, type TenantContact } from "@/lib/email/owner-alert";
+import { daSuspendAccount, daWriteConfigured, genUsername } from "@/lib/directadmin/provision";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,6 +44,8 @@ interface CronResult {
   alerts_unaddressed: { tenant_id: string; reason: string }[];
   errors:         { lead_id: string; message: string }[];
   details:        { lead_id: string; company: string; days_past: number }[];
+  /** Hosting trials whose cPanel account was suspended on expiry. */
+  hosting_suspended: number;
 }
 
 function checkAuth(req: Request): NextResponse | null {
@@ -74,12 +77,13 @@ async function handle(req: Request) {
     alerts_unaddressed: [],
     errors:        [],
     details:       [],
+    hosting_suspended: 0,
   };
 
   // Pull trials past their expiry that haven't been marked yet
   const { data: leads, error } = await admin
     .from("leads")
-    .select("id, tenant_id, company, contact_name, contact_email, contact_phone, plan, domain, trial_expires_at, trial_started_at")
+    .select("id, tenant_id, company, contact_name, contact_email, contact_phone, plan, domain, source, trial_expires_at, trial_started_at")
     .eq("stage", "trial")
     .is("trial_converted_at", null)
     .is("trial_expired_at", null)
@@ -142,12 +146,54 @@ async function handle(req: Request) {
       const sellerPerson = tenant?.contact_name?.trim() || sellerName;
       const sellerPhone  = (tenant as { phone?: string | null } | null)?.phone?.trim() || "";
 
+      // ── Hosting trials: suspend the cPanel account + a hosting-worded note ──
+      // (The Workspace-worded customer email below is gated to non-hosting leads.)
+      const isHosting = lead.source === "buy-hosting-trial";
+      if (isHosting) {
+        // Suspend the auto-provisioned account (deterministic username from the
+        // domain). Only when live provisioning is on — manual-era trials are
+        // suspended by the owner. Best-effort; never fails the cron.
+        if (process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured() && lead.domain) {
+          try {
+            const r = await daSuspendAccount(genUsername(lead.domain));
+            if (r.ok) result.hosting_suspended++;
+            else console.error(`[trial-expiry] suspend failed for ${lead.domain}: ${r.message}`);
+          } catch (e) {
+            console.error("[trial-expiry] suspend threw:", e);
+          }
+        }
+        if (lead.contact_email && owner.ok) {
+          try {
+            await sendEmail({
+              to:        lead.contact_email,
+              from:      FROM_EMAIL,
+              replyTo:   owner.to,
+              kind:      "trial_expiry_customer",
+              route:     { tenantId: lead.tenant_id },
+              automated: { tenantId: lead.tenant_id, action: "trial.send" },
+              subject:   `Your hosting trial${lead.domain ? ` for ${lead.domain}` : ""} has ended`,
+              text:
+`Hi ${(lead.contact_name ?? "").split(" ")[0] || "there"},
+
+Your hosting trial${lead.domain ? ` on ${lead.domain}` : ""} has ended${daysPast === 0 ? " today" : ` ${daysPast} days ago`}, so the account is paused for now.
+
+Everything you built is safe. To keep your site live, just reply and we'll convert you to a paid plan — you pick up exactly where you left off, no data loss.
+
+${sellerPhone ? `Prefer to talk? WhatsApp ${sellerPerson || "us"} on ${sellerPhone}.\n\n` : ""}— ${sellerPerson || sellerName || "Your hosting team"}${sellerName && sellerPerson !== sellerName ? `\n   ${sellerName}` : ""}`,
+            });
+            result.emails_sent++;
+          } catch (e) {
+            console.error("[trial-expiry] hosting customer email failed:", e);
+          }
+        }
+      }
+
       // Best-effort emails — don't fail the cron if these break
       /* The customer mail needs somewhere for a reply to LAND. Without the
          reseller's address it used to point at a hardcoded third party, which is
          worse than not sending: the customer replies and nobody who can help ever
          sees it. So this now requires `owner.ok`, and the skip is counted. */
-      if (lead.contact_email && owner.ok) {
+      if (!isHosting && lead.contact_email && owner.ok) {
         try {
           await sendEmail({
             to:      lead.contact_email,

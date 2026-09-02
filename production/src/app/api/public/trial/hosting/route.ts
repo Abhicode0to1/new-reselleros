@@ -21,6 +21,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
+import { makeTrialToken } from "@/lib/hosting/trial-token";
 
 const FROM_EMAIL = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
@@ -151,10 +152,46 @@ export async function POST(request: NextRequest) {
 
     const trialEndsFmt = trialExpiresAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
+    // Email-verification link — the bot guard. The account is provisioned only
+    // after the customer clicks this. Without a signing secret configured we
+    // can't verify a link, so we fall back to the manual "we'll set it up" note.
+    const token = makeTrialToken(leadId);
+    const confirmUrl = token ? `${APP_URL}/api/public/trial/hosting/confirm?token=${encodeURIComponent(token)}` : null;
+    const firstName = fullName.split(" ")[0];
+
     const { alert: owner, tenant: ownerTenant } = await loadOwnerAlert(admin, BUY_PAGE_TENANT_ID);
     if (!owner.ok) {
       console.error(`[trial/hosting] lead ${leadId} saved, but no owner alert: ${owner.reason}`);
     }
+    const ownerName = owner.ok ? owner.ownerName : "";
+    const signOff = `— ${ownerName || ownerTenant?.name?.trim() || "Your hosting team"}${
+      ownerTenant?.name?.trim() && ownerName !== ownerTenant.name.trim() ? `\n   ${ownerTenant.name.trim()}` : ""
+    }`;
+    const customerSubject = confirmUrl
+      ? `Confirm your email to start your ${TRIAL_DAYS}-day hosting trial`
+      : `Your ${TRIAL_DAYS}-day hosting trial${cleanDomain ? ` — ${cleanDomain}` : ""}`;
+    const customerText = confirmUrl
+      ? `Hi ${firstName},
+
+One quick step to start your free ${TRIAL_DAYS}-day ${tierName} hosting trial —
+confirm this is your email by opening the link below:
+
+${confirmUrl}
+
+As soon as you do${domainStatus === "need" ? ", we'll be in touch to help you pick a domain and set the account up" : `, we set up your ${tierName} cPanel account${cleanDomain ? ` for ${cleanDomain}` : ""} and email your login`}.
+No credit card, ${TRIAL_DAYS} days fully free. The link is valid for 48 hours.
+
+If you didn't request this, you can ignore this email — nothing happens without
+that click.
+
+${signOff}`
+      : `Hi ${firstName},
+
+Thanks for starting a ${tierName} hosting trial${ownerTenant?.name?.trim() ? ` with ${ownerTenant.name.trim()}` : ""}. We'll set up your
+cPanel account and email your login within a few hours. No credit card, ${TRIAL_DAYS}
+days fully free. Trial ends ${trialEndsFmt}.
+
+${signOff}`;
 
     await Promise.allSettled([
       owner.ok && sendEmail({
@@ -188,30 +225,8 @@ ${APP_URL}/leads/${leadId}
         replyTo: owner.to,
         kind: "buy_page_trial_customer",
         route: { tenantId: BUY_PAGE_TENANT_ID },
-        subject: `Your ${TRIAL_DAYS}-day hosting trial${cleanDomain ? ` — ${cleanDomain}` : ""}`,
-        text:
-`Hi ${fullName.split(" ")[0]},
-
-Thanks for starting a hosting trial${ownerTenant?.name?.trim() ? ` with ${ownerTenant.name.trim()}` : ""}. Here's what happens next:
-
-WITHIN A FEW HOURS
-  • We set up your ${tierName} cPanel account on Google Cloud
-  • ${domainStatus === "need" ? "We help you pick and register a domain" : `We set up ${cleanDomain || "your domain"} — and if you're moving from another host, the migration is free and your old site stays live until you approve the switch`}
-  • You get your cPanel login by email and WhatsApp (${phone})
-
-DAY 12
-  • We check in about converting to a paid plan (the same GST pricing you saw) or extending / closing the trial
-
-NO CREDIT CARD until you decide to continue. ${TRIAL_DAYS} days fully free. The
-trial ends ${trialEndsFmt}.
-
-If you'd like to talk before then, just reply to this email${ownerTenant?.phone?.trim() ? ` — or call/WhatsApp us on ${ownerTenant.phone.trim()}` : ""}.
-
-— ${owner.ownerName || ownerTenant?.name?.trim() || "Your hosting team"}${
-  ownerTenant?.name?.trim() && owner.ownerName !== ownerTenant.name.trim()
-    ? `\n   ${ownerTenant.name.trim()}`
-    : ""
-}`,
+        subject: customerSubject,
+        text: customerText,
       }),
     ]).then((results) => {
       const labels = ["owner alert", "customer acknowledgement"];
