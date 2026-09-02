@@ -161,7 +161,7 @@ export function HostingLanding() {
               Enterprise-grade web hosting powered by Google Cloud. Free SSL, daily backups, free migration and 24×7 expert support — and the trial needs no credit card, so your old host stays live until you approve the move.
             </p>
             <div style={{ marginTop: 26, display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <a href="#choose" className="hlp-orange" style={{ background: C.accent, color: "#fff", padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free trial</a>
+              <a href="/signup" className="hlp-orange" style={{ background: C.accent, color: "#fff", padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free trial</a>
               <a href="#move" className="hlp-outline" style={{ background: "#fff", border: `1px solid ${C.line}`, color: C.ink, padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>See how migration works</a>
             </div>
             <ul style={{ marginTop: 24, display: "flex", gap: "8px 22px", flexWrap: "wrap", listStyle: "none", padding: 0, margin: "24px 0 0" }}>
@@ -272,7 +272,7 @@ export function HostingLanding() {
                 <div style={{ marginTop: 6, fontSize: 13.5, color: C.muted, lineHeight: 1.5 }}>{p.billingLine}<br /><span style={{ color: C.ink, fontWeight: 600 }}>Renews at {p.renewLine}</span></div>
                 <div style={{ marginTop: 10, background: C.tint, border: `1px solid ${C.line}`, borderRadius: 9, padding: "9px 12px", fontFamily: MONO, fontSize: 12.5 }}>{p.payToday}</div>
                 <div style={{ marginTop: 16, display: "grid", gap: 8 }}>
-                  <a href="/signup" className={p.isTop ? "hlp-orange" : "hlp-dark"} style={{ textAlign: "center", padding: 15, borderRadius: 11, fontSize: 15, fontWeight: 700, color: "#fff", minHeight: 50, background: p.isTop ? C.accent : C.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>Start free trial on {p.name}</a>
+                  <a href={`/signup?plan=${p.name.toLowerCase()}`} className={p.isTop ? "hlp-orange" : "hlp-dark"} style={{ textAlign: "center", padding: 15, borderRadius: 11, fontSize: 15, fontWeight: 700, color: "#fff", minHeight: 50, background: p.isTop ? C.accent : C.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>Start free trial on {p.name}</a>
                   <a href="/cart" className="hlp-outline" style={{ textAlign: "center", padding: 12, borderRadius: 11, fontSize: 14, fontWeight: 700, color: C.ink2, border: `1px solid ${C.line}`, background: "#fff", minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center" }}>Buy now, skip the trial</a>
                 </div>
                 <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px dashed ${C.line}`, display: "grid", gap: 10 }}>
@@ -496,7 +496,7 @@ export function HostingLanding() {
           <h2 style={{ fontSize: "clamp(30px,5vw,44px)", lineHeight: 1.08, letterSpacing: "-.04em", fontWeight: 800 }}>Try it with your real website. <span style={{ fontFamily: SERIF, fontStyle: "italic", fontWeight: 400, color: C.accent }}>Then decide.</span></h2>
           <p style={{ marginTop: 16, fontSize: 17.5, color: C.ink2, maxWidth: 560, marginLeft: "auto", marginRight: "auto", lineHeight: 1.55 }}>{TRIAL_DAYS} days, every feature, no credit card, and our team does the migration while your current site stays live.</p>
           <div style={{ marginTop: 26, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <a href="#choose" className="hlp-dark" style={{ background: C.ink, color: C.paper, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free trial</a>
+            <a href="/signup" className="hlp-dark" style={{ background: C.ink, color: C.paper, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free trial</a>
             <a href="/quote" className="hlp-outline" style={{ background: "#fff", color: C.ink, border: `1px solid ${C.line}`, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Get a written quote</a>
           </div>
           <div style={{ marginTop: 20, fontSize: 13, color: C.muted, fontFamily: MONO, letterSpacing: ".04em" }}>NO CARD · CANCEL ANYTIME · GST INVOICE ON EVERY ORDER</div>
