@@ -225,8 +225,8 @@ export function HostingLanding() {
                     <div className="grid grid-cols-3 gap-2 mb-3">
                       {[
                         { label: "Website", value: "mybusiness.com", badge: "Active", pct: null as number | null },
-                        { label: "Storage", value: "12.6 / 20 GB", badge: "63% Used", pct: 63 },
-                        { label: "Bandwidth", value: "32.4 / 100 GB", badge: "32% Used", pct: 32 },
+                        { label: "Storage", value: "15.8 / 25 GB", badge: "63% Used", pct: 63 },
+                        { label: "Bandwidth", value: "9.6 / 30 GB", badge: "32% Used", pct: 32 },
                       ].map((s) => (
                         <div key={s.label} className="rounded-lg border border-gray-100 bg-gray-50/60 p-2.5">
                           <p className="text-[9px] uppercase tracking-wide text-gray-400">{s.label}</p>
