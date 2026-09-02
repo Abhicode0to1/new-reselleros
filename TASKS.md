@@ -2651,10 +2651,10 @@ All money movement via atomic SECURITY DEFINER RPCs (§17b) and verified in **ro
 ## Done
 
 ## MERGE (DMS → ResellerOS, ek app) — direction confirmed 1 Sep
-Pardeep: sab DMS features ResellerOS me; ResellerOS = ek ghar; engine integrate (rewrite nahi). Zoho→ResellerOS billing.
+Pardeep: sab DMS features ResellerOS me; ResellerOS = ek ghar; engine integrate (rewrite nahi). Zoho→ResellerOS billing. CONFIRMED 2 Sep: app.anutech.in = sirf ENGINE (customer sirf ResellerOS dekhega); DMS ke customer-facing pages ResellerOS me port honge (website/ folder seed).
 - [x] **Brick #1: Hosting catalogue me** ✅ 1 Sep — DMS `/api/public/hosting-plans` (Anutech-Digital main c4072d5) + `sync_hosting_catalog` RPC (20260901170000, mutation-tested) + `/api/catalog/sync-hosting` + owner-only "Sync hosting" button (/items). Auto-sync (engine price = catalogue price); browser-verified (button + 401/502 graceful). LIVE after DMS deploy.
 - [x] **Brick #2: Domains catalogue me** ✅ 2 Sep — sync_domain_catalog RPC (20260902090000, mutation-tested) + /api/catalog/sync-domains + owner-only "Sync domains" button (Items Catalog tab). Har priced TLD = one-time item; ₹0 skip. tld-pricing pehle se DMS main par. Browser-verified (button + 502 graceful). LIVE after DMS deploy.
-- [ ] Brick #3: Domain/hosting ka native quote→pay→invoice (ResellerOS billing, Zoho hatega)
+- [~] **Brick #3: Native quote→pay→invoice** (2 Sep) — Domains: PEHLE SE THEEK (project quote, msrp se priced). Hosting: **10x misprice fix** (flat product qty default 1, catalogDefaultQty helper + unit test 11/11) → ab annual sub ban kar sahi spine me. HSN gap (invoice par hardcoded 998313) alag task task_2538cd75 me (freeze-per-line + CA SAC decision chahiye).
 - [ ] Brick #4: Bechne par provision trigger (DirectAdmin/ResellerClub)
 - [ ] Brick #5: Customer-facing site + SSL port; DMS retire
 - [ ] ⚠️ Pardeep decisions: (a) fractional→whole rupee rounding (₹49.99→₹50) theek hai? (b) hosting HSN 998315 CA se confirm
