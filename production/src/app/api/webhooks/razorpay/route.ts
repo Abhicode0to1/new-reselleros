@@ -101,7 +101,49 @@ function vendorFromPlan(plan: string | null | undefined): ProvisioningVendor {
   if (p.includes("google") || p.includes("workspace")) return "google";
   if (p.includes("microsoft") || p.includes("365")) return "microsoft";
   if (p.includes("zoho")) return "zoho";
+  if (p.includes("hosting") || p.includes("cpanel")) return "hosting";
+  if (p.includes("domain")) return "domain";
   return "other";
+}
+
+/**
+ * The vendor of what was actually sold, read from the CATALOGUE rather than
+ * guessed from the plan's wording.
+ *
+ * `vendorFromPlan` above is a string match, and merge brick #4 made that matter:
+ * hosting tiers synced from the engine are named "Starter", "Standard", "Plus"
+ * — no word in them says hosting, so a paid Starter order would have been filed
+ * as `other` and told the desk to go to a vendor console that does not exist.
+ * The item row knows the truth (`items.vendor`, set by sync_hosting_catalog /
+ * sync_domain_catalog), so the item is asked first and the wording is only a
+ * fallback for hand-typed lines. Same reasoning as record_payment, which resolves
+ * vendor by item_id and only name-guesses when there is no item.
+ */
+async function vendorForQuote(
+  db: ReturnType<typeof createAdminClient>,
+  lineItems: unknown,
+  plan: string | null | undefined,
+): Promise<ProvisioningVendor> {
+  const ids = Array.isArray(lineItems)
+    ? lineItems
+        .map((l) => (l && typeof l === "object" ? (l as { item_id?: unknown }).item_id : null))
+        .filter((v): v is string => typeof v === "string" && v.length > 0)
+    : [];
+  if (ids.length === 0) return vendorFromPlan(plan);
+
+  const { data } = await db.from("items").select("vendor").in("id", ids);
+  const vendors = (data ?? [])
+    .map((r) => (r as { vendor?: string | null }).vendor)
+    .filter((v): v is string => !!v);
+
+  /* An engine vendor anywhere in the quote decides it: a domain or a hosting
+     account still has to be provisioned even when a licence rides along, and
+     those are the lines that need the engine. */
+  if (vendors.includes("domain")) return "domain";
+  if (vendors.includes("hosting")) return "hosting";
+  const first = vendors[0];
+  if (first === "google" || first === "microsoft" || first === "zoho") return first;
+  return vendorFromPlan(plan);
 }
 
 /** Verify Razorpay's HMAC SHA256 signature header against a given secret. */
@@ -272,6 +314,11 @@ export async function POST(request: NextRequest) {
      against that would hand out seats for free at machine speed. So the seats are QUEUED with
      the blocker in words, and the desk gets "paid, awaiting activation" instead of the nothing
      it sees today. See lib/provisioning/provisioning.ts. */
+  /* Resolved from the catalogue, not from the plan's wording — a hosting tier is
+     named "Starter" and says nothing about hosting. See vendorForQuote. */
+  const provisioningVendor = await vendorForQuote(admin, quote.line_items, quote.plan);
+  const provisioningDomain = (notes.domain as string | undefined)?.trim() || null;
+
   const provisioning = decideProvisioning({
     paymentMode: razorpayMode(keyIdForMode),
     /* The signature verified and the amount was checked above — those two together are what
@@ -279,11 +326,19 @@ export async function POST(request: NextRequest) {
     paymentVerified: true,
     amountPaid: paymentAmount,
     amountExpected: quote.amount ?? paymentAmount,
-    vendor: vendorFromPlan(quote.plan),
+    vendor: provisioningVendor,
     seats: Number(quote.seats ?? 0),
     /* No adapter exists — `src/lib/google-csp/` is absent. Hardcoded false rather than a
        config read, because a config that could say "true" would be a config that can lie. */
     vendorApiConfigured: false,
+    domainName: provisioningDomain,
+    /* Hosting and domains are ours to provision, but this app cannot order on the
+       engine yet: app.anutech.in's deployed build answers 404 on the merge APIs
+       and there is no server-to-server credential for its ordering endpoints.
+       Hardcoded for the same reason as vendorApiConfigured — and registering a
+       domain is irreversible spend, so this must never be a value a config can
+       flip on by accident. */
+    engineConnected: false,
     dialMode: (await loadAutonomyPolicy(quote.tenant_id)).modes?.["provisioning.activate"] ?? "off",
   });
 
@@ -291,9 +346,9 @@ export async function POST(request: NextRequest) {
     const queued = await queueProvisioning({
       tenantId:    quote.tenant_id,
       quoteId:     quote.id,
-      vendor:      vendorFromPlan(quote.plan),
+      vendor:      provisioningVendor,
       seats:       Number(quote.seats ?? 0) || 1,
-      domain:      (notes.domain as string | undefined) ?? null,
+      domain:      provisioningDomain,
       plan:        quote.plan ?? null,
       amountPaid:  paymentAmount,
       paymentMode: razorpayMode(keyIdForMode),

@@ -33,7 +33,21 @@
  * than the current state where a paid quote produces no activation signal at all.
  */
 
-export type ProvisioningVendor = "google" | "microsoft" | "zoho" | "other";
+/**
+ * `hosting` and `domain` joined the list with merge brick #4 (2 Sep 2026), and
+ * they are a different KIND of case from Microsoft and Zoho. Those two are
+ * activated in someone else's console and always will be. Hosting and domains
+ * are OURS — DirectAdmin and ResellerClub, behind the Anutech engine — so the
+ * only thing between a paid order and an automatic account is a connection this
+ * app does not have yet. The queue should say that, not "go to the vendor".
+ */
+export type ProvisioningVendor =
+  | "google" | "microsoft" | "zoho"
+  | "hosting" | "domain"
+  | "other";
+
+/** Vendors provisioned by our own engine rather than a third party's console. */
+export const ENGINE_VENDORS: readonly ProvisioningVendor[] = ["hosting", "domain"];
 
 export type ProvisioningOutcome =
   /** Everything is real and wired — go. Cannot be reached today; see the header. */
@@ -47,7 +61,9 @@ export type ProvisioningBlocker =
   | "test_mode_payment"
   | "vendor_api_not_configured"
   | "dial_not_auto"
-  | "vendor_unsupported";
+  | "vendor_unsupported"
+  /** Ours to provision (hosting/domain), but the engine isn't reachable from here yet. */
+  | "engine_not_connected";
 
 export interface ProvisioningInput {
   /** From `razorpayMode(key_id)`. The HARD gate — see the header. */
@@ -64,6 +80,21 @@ export interface ProvisioningInput {
   vendorApiConfigured: boolean;
   /** `provisioning.activate` resolved from the autonomy dial. */
   dialMode: "off" | "hold" | "auto";
+  /**
+   * The name being registered or hosted, for the engine vendors. A domain order
+   * without one cannot be acted on by anybody — see the refusal in
+   * decideProvisioning. Ignored for seat vendors.
+   */
+  domainName?: string | null;
+  /**
+   * True only when this app can actually reach the Anutech engine AND holds a
+   * credential to order on it. Hardcoded false at the call sites today: the
+   * engine's public read APIs answer 404 on the deployed build, and no
+   * server-to-server credential exists for its ordering endpoints. Like
+   * `vendorApiConfigured`, it is passed in rather than read from config, so a
+   * config cannot claim a connection that isn't there.
+   */
+  engineConnected?: boolean;
 }
 
 /**
@@ -83,8 +114,25 @@ export function decideProvisioning(input: ProvisioningInput): ProvisioningOutcom
     };
   }
 
-  if (input.seats <= 0 || !Number.isInteger(input.seats)) {
+  const isEngineVendor = ENGINE_VENDORS.includes(input.vendor);
+
+  /* Seat vendors must carry a real seat count. Hosting and a domain are not
+     seats — one account, one registration — so a hosting quote that never had a
+     `seats` value is normal, not a defect, and refusing it would drop a paid
+     order on the floor. Quantity is only checked for what is actually counted. */
+  if (!isEngineVendor && (input.seats <= 0 || !Number.isInteger(input.seats))) {
     return { action: "refuse", reason: `${input.seats} is not a seat count that can be activated` };
+  }
+
+  /* A domain order with no name is unactionable by anyone: there is nothing to
+     register. Refused rather than queued, because a queued row a person cannot
+     drain is worse than none — it sits in the desk's list forever looking like
+     work. Hosting can be set up and pointed at a domain later, so it is exempt. */
+  if (input.vendor === "domain" && !input.domainName?.trim()) {
+    return {
+      action: "refuse",
+      reason: "a domain registration needs the domain name — the order does not carry one, so there is nothing to register",
+    };
   }
 
   const shortfall = input.amountExpected - input.amountPaid;
@@ -116,7 +164,24 @@ export function decideProvisioning(input: ProvisioningInput): ProvisioningOutcom
     };
   }
 
-  if (input.vendor !== "google") {
+  if (isEngineVendor && !input.engineConnected) {
+    /* Ours to fulfil, so the true next step is "connect the engine", not "go to
+       a vendor console". Merge brick #4: the queue carries the plan and the name
+       so the order can be placed the moment that connection exists. */
+    const what = input.vendor === "domain"
+      ? `the registration of ${input.domainName?.trim()}`
+      : "the hosting account";
+    return {
+      action: "queue",
+      blocker: "engine_not_connected",
+      reason:
+        `${what} is set up on our own engine (${input.vendor === "domain" ? "ResellerClub" : "DirectAdmin"}), ` +
+        "which this app cannot order on yet — app.anutech.in has not been deployed with the ordering " +
+        "connection. The order is queued with the plan and name it needs.",
+    };
+  }
+
+  if (input.vendor !== "google" && !isEngineVendor) {
     /* Microsoft and Zoho have their own partner APIs and their own agreements. Naming the
        limitation beats a generic failure that reads like a bug. */
     return {
@@ -126,7 +191,11 @@ export function decideProvisioning(input: ProvisioningInput): ProvisioningOutcom
     };
   }
 
-  if (!input.vendorApiConfigured) {
+  /* Google only. An engine vendor that reached this line HAS its connection —
+     `vendorApiConfigured` describes the CSP adapter and says nothing about
+     DirectAdmin or ResellerClub, so letting it answer for them would block a
+     hosting order with a sentence about a Google application. */
+  if (input.vendor === "google" && !input.vendorApiConfigured) {
     return {
       action: "queue",
       blocker: "vendor_api_not_configured",
@@ -145,9 +214,14 @@ export function decideProvisioning(input: ProvisioningInput): ProvisioningOutcom
     };
   }
 
+  const subject = input.vendor === "domain"
+    ? `${input.domainName?.trim()} registration`
+    : input.vendor === "hosting"
+      ? "hosting account"
+      : `${input.seats} seats`;
   return {
     action: "activate",
-    reason: `payment verified in live mode, ${input.seats} seats, reseller API connected`,
+    reason: `payment verified in live mode, ${subject}, ${isEngineVendor ? "engine connected" : "reseller API connected"}`,
   };
 }
 
@@ -162,10 +236,22 @@ export function queuedLine(input: {
   seats: number;
   amountPaid: number;
   outcome: Extract<ProvisioningOutcome, { action: "queue" }>;
+  /** Omit for seat sales; both are used to name a hosting/domain order properly. */
+  vendor?: ProvisioningVendor;
+  domainName?: string | null;
 }): string {
+  /* "3 seats waiting to be activated" is wrong for a domain — a domain has no
+     seats, and a desk reading it wonders which product this even is. */
+  const waiting =
+    input.vendor === "domain"
+      ? `${input.domainName?.trim() || "a domain"} waiting to be registered`
+      : input.vendor === "hosting"
+        ? "a hosting account waiting to be set up"
+        : `${input.seats} seat${input.seats === 1 ? "" : "s"} waiting to be activated`;
+
   return (
     `${input.customerName || "A customer"} paid Rs ${input.amountPaid.toLocaleString("en-IN")} — ` +
-    `${input.seats} seat${input.seats === 1 ? "" : "s"} waiting to be activated. ` +
+    `${waiting}. ` +
     input.outcome.reason
   );
 }
