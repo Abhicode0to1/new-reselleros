@@ -27,6 +27,13 @@ export interface CartLine {
   /** What one unit is — "seat/month", "year", "mailbox". Renders as "40 × ₹736 per seat/month". */
   unit: string;
   cycle: Cycle;
+  /**
+   * Stable server-recognisable SKU, e.g. "hosting:standard". OPTIONAL and set by
+   * the "Buy now" buttons. The checkout API re-prices every line from this SKU
+   * server-side and NEVER trusts `unitPrice` from the client — a line without a
+   * recognised SKU can't be charged online (it's sent to a quote instead).
+   */
+  sku?: string;
 }
 
 /** The two launch coupons from the handoff. Percent off the gross, before GST. */

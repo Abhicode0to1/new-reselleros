@@ -285,6 +285,7 @@ export function HostingLanding() {
                     unitPrice: yearly ? p.yearlyTotal : p.monthly,
                     unit: yearly ? "year" : "month",
                     cycle: yearly ? "yearly" : "monthly",
+                    sku: `hosting:${p.name.toLowerCase()}`,
                   })} className="hlp-outline" style={{ textAlign: "center", padding: 12, borderRadius: 11, fontSize: 14, fontWeight: 700, color: C.ink2, border: `1px solid ${C.line}`, background: "#fff", minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>Buy now, skip the trial</button>
                 </div>
                 <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px dashed ${C.line}`, display: "grid", gap: 10 }}>

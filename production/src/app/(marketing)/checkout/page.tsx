@@ -1,12 +1,14 @@
 "use client";
 /**
- * Two-step checkout. Step 1 collects who the invoice is for (GSTIN optional); step 2 shows
- * four payment methods as selectable rows and a terms checkbox that GATES the pay button —
- * disabled at #C8D4E4 with cursor not-allowed until ticked, per the handoff.
+ * Two-step checkout. Step 1 collects who the invoice is for (GSTIN optional, plus the
+ * hosting domain when a hosting line is in the cart); step 2 shows the payment methods
+ * and a terms checkbox that GATES the pay button until ticked.
  *
- * ⚠️ No real payment happens here yet. Razorpay integration is a launch task; until then
- * "Pay" records the order locally and lands on /done, which is exactly what the design
- * prototype did. The button says the amount so nobody can claim the total surprised them.
+ * Real payment (2 Sep 2026): "Pay" now calls /api/public/checkout/cart — which re-prices
+ * every line SERVER-SIDE from its SKU (the client price is never trusted), creates a draft
+ * quote, and returns a Razorpay order. The Razorpay widget opens; on success the webhook
+ * flips the quote to paid, creates the customer/subscription/invoice and queues provisioning.
+ * A line with no server-priceable SKU is refused with a clear message (request a quote).
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -20,6 +22,34 @@ const METHODS = [
   { label: "Bank transfer", note: "NEFT/RTGS — activated on credit" },
 ] as const;
 
+const RAZORPAY_SRC = "https://checkout.razorpay.com/v1/checkout.js";
+interface RzpCtor { new (opts: Record<string, unknown>): { open: () => void; on: (e: string, cb: (r: { error?: { description?: string } }) => void) => void }; }
+
+/** Read the Razorpay global via a cast — a `declare global` here would clash with
+ *  the one in buy-workspace-client.tsx (same property, different local type). */
+function rzpGlobal(): RzpCtor | undefined {
+  return (window as unknown as { Razorpay?: RzpCtor }).Razorpay;
+}
+
+function loadRazorpay(): Promise<RzpCtor> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined") return reject(new Error("no window"));
+    const have = rzpGlobal();
+    if (have) return resolve(have);
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${RAZORPAY_SRC}"]`);
+    if (existing) {
+      existing.addEventListener("load", () => { const g = rzpGlobal(); g ? resolve(g) : reject(new Error("no global")); });
+      existing.addEventListener("error", () => reject(new Error("load failed")));
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = RAZORPAY_SRC; s.async = true;
+    s.onload = () => { const g = rzpGlobal(); g ? resolve(g) : reject(new Error("no global")); };
+    s.onerror = () => reject(new Error("load failed"));
+    document.body.appendChild(s);
+  });
+}
+
 export default function CheckoutPage() {
   const cart = useCart();
   const router = useRouter();
@@ -27,11 +57,17 @@ export default function CheckoutPage() {
 
   const [step, setStep] = useState<"details" | "payment">("details");
   const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
   const [gstin, setGstin] = useState("");
   const [phone, setPhone] = useState("");
+  const [domain, setDomain] = useState("");
   const [method, setMethod] = useState<string>("UPI");
   const [agreed, setAgreed] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const hasHosting = cart.lines.some((l) => (l.sku || "").startsWith("hosting:"));
 
   if (cart.lines.length === 0) {
     return (
@@ -44,15 +80,75 @@ export default function CheckoutPage() {
     );
   }
 
-  const detailsOk = name.trim().length >= 2 && email.includes("@") && phone.trim().length >= 10;
+  const detailsOk =
+    name.trim().length >= 2 &&
+    company.trim().length >= 2 &&
+    email.includes("@") &&
+    phone.trim().length >= 10 &&
+    (!hasHosting || domain.trim().length >= 3);
 
-  const placeOrder = () => {
-    if (!agreed) return;
-    const orderNo = "ORD-ADPL-2026-" + String(4100 + cart.lines.length * 7).padStart(4, "0");
-    try { window.sessionStorage.setItem("anutech.order", orderNo); } catch { /* shown from the default */ }
-    cart.clear();
-    router.push("/done" as never);
-  };
+  async function placeOrder() {
+    if (!agreed || paying) return;
+    setPaying(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/public/checkout/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: name.trim(),
+          companyName: company.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          gstin: gstin.trim() || undefined,
+          domain: hasHosting ? domain.trim() : undefined,
+          lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle })),
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        success?: boolean; simulated?: boolean; orderId?: string; amount?: number;
+        currency?: string; razorpayKeyId?: string; quoteId?: string; error?: string;
+      };
+      if (!res.ok || !json.success) throw new Error(json.error || "Could not start checkout. Please retry.");
+
+      if (json.simulated) {
+        try { window.sessionStorage.setItem("anutech.order", json.quoteId || ""); } catch { /* default shown */ }
+        cart.clear();
+        router.push("/done" as never);
+        return;
+      }
+
+      if (!json.orderId || !json.razorpayKeyId || !json.amount) {
+        throw new Error("Payment details missing from server. Please retry.");
+      }
+      const Razorpay = await loadRazorpay();
+      const rzp = new Razorpay({
+        key: json.razorpayKeyId,
+        amount: json.amount,
+        currency: json.currency ?? "INR",
+        name: "ANUTECH DIGITAL PVT LTD",
+        description: `Order ${json.quoteId ?? ""}`,
+        order_id: json.orderId,
+        prefill: { name, email, contact: phone },
+        notes: { quoteId: json.quoteId ?? "", domain: hasHosting ? domain.trim() : "" },
+        theme: { color: "#C2410C" },
+        handler: () => {
+          try { window.sessionStorage.setItem("anutech.order", json.quoteId || ""); } catch { /* default */ }
+          cart.clear();
+          router.push("/done" as never);
+        },
+        modal: { ondismiss: () => setPaying(false), escape: true },
+      });
+      rzp.on("payment.failed", (resp) => {
+        setError(`Payment failed: ${resp.error?.description ?? "Please retry or WhatsApp us."}`);
+        setPaying(false);
+      });
+      rzp.open();
+    } catch (err) {
+      setError((err as Error).message);
+      setPaying(false);
+    }
+  }
 
   return (
     <section className="section rise">
@@ -65,10 +161,14 @@ export default function CheckoutPage() {
 
           {step === "details" ? (
             <div style={{ maxWidth: 460 }}>
-              <Field label="NAME" value={name} onChange={setName} />
+              <Field label="YOUR NAME" value={name} onChange={setName} />
+              <Field label="COMPANY / BUSINESS NAME — ON THE GST INVOICE" value={company} onChange={setCompany} />
               <Field label="EMAIL — THE GST INVOICE GOES HERE" value={email} onChange={setEmail} type="email" />
               <Field label="GSTIN (OPTIONAL — FOR INPUT CREDIT)" value={gstin} onChange={setGstin} mono />
               <Field label="MOBILE" value={phone} onChange={setPhone} type="tel" />
+              {hasHosting && (
+                <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
+              )}
               <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk} onClick={() => setStep("payment")}>
                 Continue
               </button>
@@ -106,18 +206,22 @@ export default function CheckoutPage() {
                 </span>
               </label>
 
+              {error && (
+                <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
+              )}
+
               <button
                 className="btn"
                 style={{
                   width: "100%",
-                  background: agreed ? "var(--primary)" : "#C8D4E4",
+                  background: agreed && !paying ? "var(--primary)" : "#C8D4E4",
                   color: "#fff",
-                  cursor: agreed ? "pointer" : "not-allowed",
+                  cursor: agreed && !paying ? "pointer" : "not-allowed",
                 }}
-                disabled={!agreed}
+                disabled={!agreed || paying}
                 onClick={placeOrder}
               >
-                Pay {rupee(t.payable)}
+                {paying ? "Starting secure payment…" : `Pay ${rupee(t.payable)}`}
               </button>
               <button
                 onClick={() => setStep("details")}
