@@ -154,3 +154,12 @@ export async function daSuspendAccount(username: string): Promise<{ ok: boolean;
 export async function daUnsuspendAccount(username: string): Promise<{ ok: boolean; message: string }> {
   return daPost("/CMD_API_SELECT_USERS", { location: "CMD_SELECT_USERS", suspend: "Unsuspend", select0: username });
 }
+
+/**
+ * PERMANENTLY delete an account. Used only to clean up the controlled test
+ * account during bring-up — the trial flow suspends, it never deletes. This is
+ * the most destructive call here; the caller must be certain of the username.
+ */
+export async function daDeleteAccount(username: string): Promise<{ ok: boolean; message: string }> {
+  return daPost("/CMD_API_SELECT_USERS", { confirmed: "Confirm", delete: "Delete", select0: username });
+}
