@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { HostingLanding } from "@/site/components/hosting/HostingLanding";
+import { DomainSearchDock } from "@/site/components/home/DomainSearchDock";
 
 /**
  * /hosting — the engine's landing page, brought into ResellerOS (merge brick
@@ -14,5 +15,13 @@ export const metadata: Metadata = {
 };
 
 export default function HostingPage() {
-  return <HostingLanding />;
+  return (
+    <>
+      {/* Hosting and a domain are bought in the same breath, so the search tool
+          stays docked here too — it appears once the hero scrolls away, exactly
+          as on the home page. */}
+      <DomainSearchDock />
+      <HostingLanding />
+    </>
+  );
 }

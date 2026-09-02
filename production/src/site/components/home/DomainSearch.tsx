@@ -22,18 +22,7 @@
 import { useRef, useState } from "react";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee } from "@/site/lib/money";
-
-/** Default TLDs to check — the platform prices whatever it recognises. */
-const DEFAULT_TLDS = ["in", "com", "co.in", "org", "net"];
-
-interface DomainResult {
-  domain: string;
-  available: boolean;
-  price: number;
-  currency: string;
-  years: number;
-  priceKnown: boolean;
-}
+import { searchDomains, normaliseName, type DomainResult } from "@/site/lib/domain-search";
 
 type State =
   | { kind: "idle" }
@@ -48,29 +37,18 @@ export function DomainSearch() {
   const cart = useCart();
 
   async function runSearch() {
-    const base = query.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    const base = normaliseName(query);
     if (!base) {
       setState({ kind: "error", message: "Type a name to check." });
       return;
     }
     const mine = ++reqId.current;
     setState({ kind: "loading" });
-    try {
-      const res = await fetch(
-        `/api/domains/availability?name=${encodeURIComponent(base)}&tlds=${DEFAULT_TLDS.join(",")}`,
-        { cache: "no-store" },
-      );
-      if (mine !== reqId.current) return; // a newer search superseded this one
-      if (!res.ok) {
-        setState({ kind: "error", message: "Couldn't check right now — please try again, or WhatsApp us." });
-        return;
-      }
-      const body = (await res.json()) as { base: string; domains: DomainResult[] };
-      setState({ kind: "done", base: body.base, domains: body.domains ?? [] });
-    } catch {
-      if (mine !== reqId.current) return;
-      setState({ kind: "error", message: "Couldn't check right now — please try again, or WhatsApp us." });
-    }
+    const out = await searchDomains(base);
+    if (mine !== reqId.current) return; // a newer search superseded this one
+    setState(out.ok
+      ? { kind: "done", base: out.base, domains: out.domains }
+      : { kind: "error", message: out.message });
   }
 
   const addDomain = (r: DomainResult) => {

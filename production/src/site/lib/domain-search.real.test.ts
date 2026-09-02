@@ -8,17 +8,34 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const search = readFileSync(join(process.cwd(), "src/site/components/home/DomainSearch.tsx"), "utf8");
+const dock = readFileSync(join(process.cwd(), "src/site/components/home/DomainSearchDock.tsx"), "utf8");
+const lookup = readFileSync(join(process.cwd(), "src/site/lib/domain-search.ts"), "utf8");
 const proxy = readFileSync(join(process.cwd(), "src/app/api/domains/availability/route.ts"), "utf8");
 const config = readFileSync(join(process.cwd(), "src/site/lib/config.ts"), "utf8");
 
 describe("DomainSearch reads real availability", () => {
   it("the fake hash is gone", () => {
-    expect(search).not.toContain("h % 4");
-    expect(search).not.toMatch(/function taken\(/);
-    expect(search).not.toMatch(/charCodeAt\(0\)\) % 997/);
+    for (const src of [search, lookup]) {
+      expect(src).not.toContain("h % 4");
+      expect(src).not.toMatch(/function taken\(/);
+      expect(src).not.toMatch(/charCodeAt\(0\)\) % 997/);
+    }
   });
-  it("it calls the site's availability proxy", () => {
-    expect(search).toContain("/api/domains/availability");
+  /* The lookup moved into ONE module when the always-on search dock was added
+     (2 Sep 2026) — two copies of an availability+price call is how they drift.
+     So the proxy call is asserted where it now lives, and the hero is asserted
+     to go through it rather than rolling its own fetch. */
+  it("the shared lookup calls the site's availability proxy", () => {
+    expect(lookup).toContain("/api/domains/availability");
+  });
+  it("every caller goes through that one lookup, not its own fetch", () => {
+    /* Comments are not code — both callers legitimately NAME the proxy while
+       explaining themselves. Strip them, then assert on what actually runs. */
+    const code = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+    for (const [name, src] of [["hero", search], ["dock", dock]] as const) {
+      expect(src, `${name} should import searchDomains`).toContain("searchDomains");
+      expect(code(src), `${name} must not fetch availability itself`).not.toContain("/api/domains/availability");
+    }
   });
   it("it does not import the hardcoded TLD catalogue for pricing any more", () => {
     // Prices now come from the API response, not catalog.ts.

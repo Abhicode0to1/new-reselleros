@@ -2,7 +2,8 @@ import Link from "@/site/components/ui/SiteLink";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { DomainSearch } from "@/site/components/home/DomainSearch";
+import { DomainSearchDock } from "@/site/components/home/DomainSearchDock";
+import Image from "next/image";
 import { OfferBand } from "@/site/components/offers/OfferBand";
 import { Reveal, SectionHead, ImageSlot } from "@/site/components/ui/bits";
 import { CATALOGUE, CASES, REVIEWS, PROOF_POINTS } from "@/site/lib/data/copy";
@@ -10,6 +11,34 @@ import { CATALOGUE, CASES, REVIEWS, PROOF_POINTS } from "@/site/lib/data/copy";
 export const metadata: Metadata = {
   title: "Anutech Digital — Google Workspace, M365 and Zoho in rupees",
 };
+
+/* Each vendor's own brand colour, used ONLY on that vendor's name in the
+   headline, so a reader recognises the three products at a glance. */
+const MICROSOFT_BLUE = "#0078D4";
+const ZOHO_RED       = "#E42527";
+
+/* "Google" as Google sets it — the four brand colours, letter by letter
+   (Pardeep supplied the logotype, 2 Sep 2026). "Workspace" stays in the
+   headline's own ink, exactly as the real lockup does. */
+const GOOGLE_LETTERS = [
+  ["G", "#4285F4"], ["o", "#EA4335"], ["o", "#FBBC05"],
+  ["g", "#4285F4"], ["l", "#34A853"], ["e", "#EA4335"],
+] as const;
+
+function GoogleWorkspace() {
+  return (
+    /* One accessible string for screen readers and for copy-paste; the coloured
+       letters are decorative spans inside it. */
+    <span aria-label="Google Workspace">
+      <span aria-hidden>
+        {GOOGLE_LETTERS.map(([ch, colour], i) => (
+          <span key={i} style={{ color: colour }}>{ch}</span>
+        ))}
+        {" Workspace"}
+      </span>
+    </span>
+  );
+}
 
 /**
  * Home — the public face of anutech.in (merge brick #5). The core IA decision
@@ -35,42 +64,84 @@ export default async function HomePage({
          (Pardeep: "home page par noticeable jagah"). Client component, taaki expiry
          visitor ki ghadi se ho — static page ka build-time date nahi. */}
       <OfferBand />
-      {/* ── Hero: 1.05fr .95fr, h1 54px, search card right ─────────────────── */}
+      {/* The domain search as a TOOL: docked under the header on every scroll
+         position, so a visitor can check a name whenever the thought strikes
+         (Pardeep, 2 Sep 2026). It replaced the hero's search card — with the bar
+         always on screen, a second copy in the hero was the same tool twice. */}
+      <DomainSearchDock />
+      {/* ── Hero: copy left, the product itself right ───────────────────────
+         The search card used to sit on the right; with the search now docked,
+         the column shows what the customer is actually buying — mail on their
+         own domain. */}
       <section className="section rise">
-        <div className="wrap" style={{ display: "grid", gridTemplateColumns: "1.05fr .95fr", gap: 48, alignItems: "start" }} data-grid="hero">
+        <div className="wrap" style={{ display: "grid", gridTemplateColumns: "1.05fr .95fr", gap: 52, alignItems: "center" }} data-grid="hero">
           <div>
             <div className="eyebrow" style={{ color: "var(--primary)", marginBottom: 14 }}>
               GOOGLE PREMIER PARTNER · DELHI · SINCE 2014
             </div>
-            <h1 className="h1-hero" style={{ marginBottom: 18 }}>
-              Google Workspace, Microsoft 365 and Zoho — bought in rupees, supported on WhatsApp.
+            {/* Each product wears its own brand colour — Google's four-colour
+                logotype, Microsoft's blue, Zoho's red — so the line is scannable
+                in one glance (Pardeep, 2 Sep 2026, with the logo to match). */}
+            <h1 className="h1-page" style={{ marginBottom: 18, maxWidth: 620 }}>
+              <GoogleWorkspace />,{" "}
+              <span style={{ color: MICROSOFT_BLUE }}>Microsoft&nbsp;365</span> and{" "}
+              <span style={{ color: ZOHO_RED }}>Zoho</span> — bought in rupees, supported on WhatsApp.
             </h1>
-            <p className="body-lg" style={{ margin: "0 0 26px", maxWidth: 520 }}>
+            <p className="body-lg" style={{ margin: "0 0 26px", maxWidth: 560 }}>
               Licences, domains, hosting and business email for Indian businesses. Published prices,
               GST invoices, free migration — and a reply inside eleven minutes, not a ticket number.
             </p>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 30 }}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 26 }}>
               <Link href="/email/compare-editions" className="btn btn-primary">Compare editions &amp; prices</Link>
               <Link href="/quote" className="btn btn-outline">Get a quote for my headcount</Link>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 22px", maxWidth: 520 }}>
+            {/* One flowing row rather than a 2×2 grid: at this width the grid
+                broke "renewal shown up front" across lines and left ragged gaps.
+                Flex-wrap keeps each promise on one line. */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 24px", marginBottom: 22 }}>
               {PROOF_POINTS.map((p) => (
-                <div key={p} style={{ display: "flex", gap: 8, fontSize: 14, color: "var(--text-secondary)" }}>
+                <span key={p} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, color: "var(--text-secondary)" }}>
                   <span aria-hidden style={{ color: "var(--success)", fontWeight: 700 }}>✓</span> {p}
-                </div>
+                </span>
               ))}
             </div>
-            <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 28, maxWidth: 460 }}>
-              <div style={{ width: 120, flex: "none" }}>
-                <ImageSlot label="PARTNER BADGE" height={74} />
-              </div>
-              <p className="meta" style={{ margin: 0 }}>
-                The Google Premier Partner badge is earned yearly on certified staff and managed seats —
-                it is Google&apos;s own tier, not a self-description.
-              </p>
-            </div>
+            {/* The badge slot here was an empty dashed box — on a live page that
+                reads as unfinished, not as "image coming". The credential is a
+                sentence, so it is set as one. */}
+            <p className="meta" style={{ margin: 0, maxWidth: 560, borderLeft: "2px solid var(--border-strong)", paddingLeft: 14 }}>
+              The Google Premier Partner badge is earned yearly on certified staff and managed seats —
+              it is Google&apos;s own tier, not a self-description.
+            </p>
           </div>
-          <DomainSearch />
+          {/* The product itself, supplied by Pardeep (2 Sep 2026) — a real
+              Workspace inbox, not a drawing. It replaced the search card that
+              used to sit here (the search now lives in the dock above), so the
+              column shows what the buyer is actually paying for. The caption is
+              not decoration: a screenshot with no label makes the reader work
+              out what they are looking at. */}
+          <figure style={{ margin: 0 }}>
+            <Image
+              src="/googleworkspace-inbox.png"
+              alt="A Google Workspace inbox: Gmail with the company's own labels, plus Chat, Meet and Spaces in the side rail"
+              width={1024}
+              height={640}
+              priority
+              sizes="(max-width: 979px) 100vw, 46vw"
+              style={{
+                width: "100%",
+                height: "auto",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                boxShadow: "var(--shadow-panel)",
+                display: "block",
+              }}
+            />
+            <figcaption className="meta" style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: "4px 10px", alignItems: "baseline" }}>
+              <span>Business email on your own domain —</span>
+              <span className="mono" style={{ color: "var(--text)" }}>you@yourcompany.in</span>
+              <span>· Gmail, Drive, Meet and Calendar included.</span>
+            </figcaption>
+          </figure>
         </div>
       </section>
 

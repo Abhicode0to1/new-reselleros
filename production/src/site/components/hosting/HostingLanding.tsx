@@ -445,6 +445,16 @@ export function HostingLanding() {
                   <span className="text-4xl font-extrabold text-gray-900">₹{displayPrice}</span>
                   <span className="text-sm text-gray-500 mb-1.5">/mo</span>
                 </div>
+                {/* The rate is per MONTH; on the yearly plan the money leaves the
+                    customer's account once, for twelve months. Saying only
+                    "₹49.99/mo" hides that, so the billed amount is spelled out —
+                    the commitment and the payment are two different things and a
+                    price card must never blur them. */}
+                <p className="text-xs font-medium text-gray-700 mb-1">
+                  {isMonthly
+                    ? "Billed monthly"
+                    : `Billed annually · ₹${(plan.price * 12).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/yr`}
+                </p>
                 <p className="text-xs text-gray-500 mb-5">
                   Renews at ₹{(isMonthly ? monthlyPrice : plan.price).toFixed(2)}/mo
                 </p>
