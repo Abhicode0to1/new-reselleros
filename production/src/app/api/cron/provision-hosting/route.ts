@@ -14,7 +14,7 @@
  * Auth: same fail-closed Bearer(CRON_SECRET) pattern as the other crons.
  */
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
@@ -29,20 +29,30 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.
 const DA_LOGIN_URL = (process.env.DIRECTADMIN_URL?.trim() || "").replace(/\/+$/, "");
 const PKG_NAME: Record<string, string> = { starter: "Starter", standard: "Standard", plus: "Plus" };
 
-function checkAuth(req: Request): NextResponse | null {
+/** Cron secret (for the scheduler) OR a signed-in owner (for a manual run). */
+async function authorized(req: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return NextResponse.json({ error: "cron not configured" }, { status: 503 });
-  const m = /^Bearer\s+(.+)$/i.exec(req.headers.get("authorization") ?? "");
-  if (!timingSafeEqualStr(m?.[1] ?? "", secret)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  return null;
+  if (secret) {
+    const m = /^Bearer\s+(.+)$/i.exec(req.headers.get("authorization") ?? "");
+    if (timingSafeEqualStr(m?.[1] ?? "", secret)) return true;
+  }
+  // Manual run: an owner opening the URL in their signed-in browser.
+  try {
+    const supabase = createClient();
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData?.user) return false;
+    const { data: me } = await supabase.from("users").select("role").eq("id", authData.user.id).single();
+    return me?.role === "owner";
+  } catch {
+    return false;
+  }
 }
 
 export async function GET(req: Request) { return handle(req); }
 export async function POST(req: Request) { return handle(req); }
 
 async function handle(req: Request) {
-  const auth = checkAuth(req);
-  if (auth) return auth;
+  if (!(await authorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   if (!daWriteConfigured() || process.env.HOSTING_TRIAL_LIVE !== "1") {
     return NextResponse.json({ ran: true, activated: 0, note: "hosting provisioning not live (DA creds / HOSTING_TRIAL_LIVE)" });
