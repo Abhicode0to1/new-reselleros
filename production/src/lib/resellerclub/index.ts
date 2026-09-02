@@ -126,12 +126,21 @@ async function customerPricing(): Promise<CustomerPricingMap | null> {
       cache: "no-store",
       signal: AbortSignal.timeout(20_000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      /* Log the REAL reason (status + a short, secret-free body slice). Silent
+         null is why a failure looked like nothing; ResellerClub's own error
+         text — "IP not whitelisted", "invalid api-key" — is what tells us which
+         it is. The URL is not logged (it carries the key in query params). */
+      const body = await res.text().catch(() => "");
+      console.error(`[resellerclub] customer-price HTTP ${res.status}: ${body.slice(0, 200)}`);
+      return null;
+    }
     const data = (await res.json()) as CustomerPricingMap;
     if (!data || typeof data !== "object") return null;
     priceCache = { data, at: Date.now() };
     return data;
-  } catch {
+  } catch (err) {
+    console.error("[resellerclub] customer-price unreachable:", (err as Error).message);
     return null;
   }
 }
@@ -166,16 +175,24 @@ export async function rcAvailability(
       }),
       { cache: "no-store", signal: AbortSignal.timeout(15_000) },
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error(`[resellerclub] available HTTP ${res.status}: ${body.slice(0, 200)}`);
+      return null;
+    }
     const data = (await res.json()) as Record<string, { status?: string } | undefined>;
     if (!data || typeof data !== "object") return null;
     /* An { status: "error" } entry anywhere means the request itself was bad
        (unknown TLD list, auth problem) — same check the engine makes. */
-    if (Object.values(data).some((d) => d && typeof d === "object" && d.status === "error")) return null;
+    if (Object.values(data).some((d) => d && typeof d === "object" && d.status === "error")) {
+      console.error(`[resellerclub] available returned error entry: ${JSON.stringify(data).slice(0, 200)}`);
+      return null;
+    }
     return Object.entries(data)
       .filter(([, d]) => d && typeof d === "object")
       .map(([domain, d]) => ({ domain: domain.toLowerCase(), available: d!.status === "available" }));
-  } catch {
+  } catch (err) {
+    console.error("[resellerclub] available unreachable:", (err as Error).message);
     return null;
   }
 }
