@@ -15,8 +15,8 @@
  *   · toast     → sonner (the app's toaster, mounted in the root layout)
  *   · chrome    → the (marketing) layout's header/footer/WhatsApp/agent, so the
  *                 engine's Navigation, Footer and SupportWidget are dropped
- *   · search    → this site's real DomainSearch (asks the platform, and says so
- *                 honestly when the platform can't be reached)
+ *   · search    → the docked search bar the (marketing) layout puts on this page,
+ *                 which replaced the engine's full-width search band (see below)
  *
  * The engine's font stack ("Google Sans", which resolves to system-ui for most
  * visitors) is set on the root here, so the page keeps its own face rather than
@@ -30,7 +30,6 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import Link from "@/site/components/ui/SiteLink";
-import { DomainSearch } from "@/site/components/home/DomainSearch";
 import { useCart } from "@/site/components/cart/CartProvider";
 import {
   LANDING_PLANS, TRUSTED_LOGOS, HOSTING_FEATURES, HOSTING_COMPARISON,
@@ -45,6 +44,11 @@ import {
 
 /** The engine's face: Google Sans if present, else the system UI font. */
 const FACE = "'Google Sans', system-ui, -apple-system, 'Segoe UI', sans-serif";
+
+/* The trial is offered on the yearly Starter tier — the same rule the pricing
+   cards apply — so the hero's trial button and the card's agree by construction
+   rather than by two people remembering the same thing. */
+const TRIAL_PLAN = LANDING_PLANS.find((p) => /starter/i.test(p.name)) ?? LANDING_PLANS[0];
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   cloud: Cloud, zap: Zap, lock: Lock, refresh: RefreshCw, rocket: Rocket,
@@ -154,11 +158,19 @@ export function HostingLanding() {
               <p className="text-base sm:text-lg text-gray-600 leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0">
                 Enterprise-grade web hosting powered by Google Cloud. Free SSL, daily backups, free migration and 24×7 expert support.
               </p>
+              {/* Both buttons used to jump to #pricing — two controls, one
+                  outcome, and the promise on the first one ("Start your trial")
+                  was not what it did. The primary now STARTS the trial, and the
+                  one that says "View plans" is the one that scrolls. */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6 sm:justify-center lg:justify-start">
-                <Link href="#pricing" className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:from-[#16A34A] hover:to-[#15803D] text-white font-bold py-3.5 px-7 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95">
+                <button
+                  type="button"
+                  onClick={() => startTrial(TRIAL_PLAN)}
+                  className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#22C55E] to-[#16A34A] hover:from-[#16A34A] hover:to-[#15803D] text-white font-bold py-3.5 px-7 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95"
+                >
                   <Rocket className="h-5 w-5" />
                   Start Your 15-Day Free Trial
-                </Link>
+                </button>
                 <Link href="#pricing" className="inline-flex items-center justify-center gap-2 bg-white text-gray-800 font-bold py-3.5 px-7 rounded-xl border border-gray-200 shadow-sm hover:border-violet-300 hover:text-violet-700 transition-all">
                   View Hosting Plans
                 </Link>
@@ -285,19 +297,10 @@ export function HostingLanding() {
         </div>
       </section>
 
-      {/* ── Domain search ────────────────────────────────────────────────── */}
-      <section id="domain-search" className="scroll-mt-24 relative overflow-hidden bg-gradient-to-br from-[#312e81] via-[#4c1d95] to-[#3730a3] py-14 sm:py-20">
-        <div aria-hidden className="pointer-events-none absolute -top-24 -right-16 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-16 h-72 w-72 rounded-full bg-indigo-400/20 blur-3xl" />
-        <div className="relative max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-xs font-bold tracking-[0.18em] uppercase text-violet-300 mb-3">Search for your perfect domain</p>
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-3">Find the Perfect Domain Name</h2>
-          <p className="text-indigo-100/80 text-base max-w-xl mx-auto mb-8">Search across 500+ extensions and register your domain in seconds — free with select hosting plans.</p>
-          <div className="max-w-3xl mx-auto text-left">
-            <DomainSearch />
-          </div>
-        </div>
-      </section>
+      {/* The engine's page had a full-width domain-search band here. It is gone
+          (Pardeep, 2 Sep 2026: "ise hata do ab iski jarurat nahi") — the search
+          bar docks under the header on this page too, so the band was the same
+          tool a second time, and it pushed the plans further down the page. */}
 
       {/* ── Features ─────────────────────────────────────────────────────── */}
       <Section tone="white">
@@ -482,7 +485,17 @@ export function HostingLanding() {
             );
           })}
         </div>
-        <p className="text-center text-sm text-gray-500 mt-8">15-Day Money-Back Guarantee · Cancel Anytime</p>
+        {/* This line said "15-Day Money-Back Guarantee" while the cards directly
+            above it said 30-day and the FAQ below said 30-day on yearly plans
+            only — three claims, two of them agreeing, on one screen. 15 days is
+            the free TRIAL, not the refund window; the two had been conflated.
+            It now states the same promise the cards and the FAQ do, and it
+            follows the billing toggle, because monthly plans are not covered. */}
+        <p className="text-center text-sm text-gray-500 mt-8">
+          {isMonthly
+            ? "Monthly plans: cancel any time, no lock-in. The 30-day money-back guarantee applies to yearly plans."
+            : "30-day money-back guarantee on yearly plans · cancel any time"}
+        </p>
       </Section>
 
       {/* ── Testimonials ─────────────────────────────────────────────────── */}

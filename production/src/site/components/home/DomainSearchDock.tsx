@@ -15,7 +15,9 @@
  * than guessing.
  */
 import * as React from "react";
+import Link from "@/site/components/ui/SiteLink";
 import { useCart } from "@/site/components/cart/CartProvider";
+import { WHATSAPP_URL } from "@/site/lib/config";
 import { rupee } from "@/site/lib/money";
 import { searchDomains, normaliseName, type DomainResult } from "@/site/lib/domain-search";
 
@@ -29,6 +31,9 @@ export function DomainSearchDock() {
   const [query, setQuery] = React.useState("");
   const [state, setState] = React.useState<State>({ kind: "idle" });
   const [open, setOpen] = React.useState(false);
+  /* The name the last search actually ran on — the error's recovery actions name
+     it, and the input may have been edited since. */
+  const [lastTried, setLastTried] = React.useState("");
   const reqId = React.useRef(0);
   const cart = useCart();
 
@@ -52,6 +57,7 @@ export function DomainSearchDock() {
       return;
     }
     const mine = ++reqId.current;
+    setLastTried(base);
     setState({ kind: "loading" });
     setOpen(true);
     const out = await searchDomains(base);
@@ -121,8 +127,33 @@ export function DomainSearchDock() {
                 </div>
               ))}
 
+            {/* An honest failure is not enough on its own. A visitor who typed a
+                name and got only red text has been stopped with nowhere to go —
+                and this failure is EXPECTED right now, because the platform that
+                answers availability is not deployed yet. So the message carries
+                the two ways a person actually gets helped: ask us for the name by
+                quote, or on WhatsApp with the name already written in.
+                (CLAUDE.md §24 — a block always names the next step.) */}
             {state.kind === "error" && (
-              <p className="meta" style={{ padding: "10px 0", color: "var(--danger)" }}>{state.message}</p>
+              <div style={{ padding: "10px 0", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 12px" }}>
+                <span className="meta" style={{ color: "var(--danger)" }}>{state.message}</span>
+                {lastTried && (
+                  <>
+                    <Link href="/quote" className="btn btn-primary btn-sm" style={{ padding: "6px 14px" }}>
+                      Ask us about {lastTried}
+                    </Link>
+                    <a
+                      href={`${WHATSAPP_URL}?text=${encodeURIComponent(`Hi — is ${lastTried} available? What would it cost?`)}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="btn btn-outline btn-sm"
+                      style={{ padding: "6px 14px" }}
+                    >
+                      WhatsApp us
+                    </a>
+                  </>
+                )}
+              </div>
             )}
 
             {state.kind === "done" && state.domains.length === 0 && (
