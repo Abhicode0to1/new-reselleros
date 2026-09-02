@@ -258,6 +258,12 @@ export default function CheckoutPage() {
             <div className="meta" style={{ marginTop: 10 }}>
               GST invoice with GSTIN issued on every order — it reaches your inbox with the receipt.
             </div>
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border-hairline)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 12.5, color: "var(--text-muted)" }}>
+              <span aria-hidden>🔒</span>
+              <span>Payments secured &amp; powered by</span>
+              <RazorpayMark />
+            </div>
+            <div className="meta" style={{ textAlign: "center", marginTop: 4, fontSize: 11.5 }}>UPI · Cards · Netbanking · Wallets</div>
           </div>
         </aside>
       </div>
@@ -276,6 +282,21 @@ function Field({ label, value, onChange, type = "text", mono }: { label: string;
         style={{ width: "100%", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "11px 12px", fontSize: 15, fontFamily: mono ? "var(--font-mono)" : "inherit" }}
       />
     </label>
+  );
+}
+
+/** "Powered by Razorpay" mark — the slanted glyph + wordmark in Razorpay's blues.
+ *  Rendered inline (no external image) so it never breaks; the real Razorpay-branded
+ *  secure modal (with the full logo) opens when the customer taps Pay. */
+function RazorpayMark() {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <svg width="13" height="13" viewBox="0 0 40 40" aria-hidden style={{ display: "block" }}>
+        <path d="M23 3 L31 3 L17 37 L9 37 Z" fill="#3395FF" />
+        <path d="M15 13 L25 13 L20 30 L13 30 Z" fill="#0A1F44" />
+      </svg>
+      <span style={{ fontWeight: 700, color: "#0A1F44", fontSize: 13.5, letterSpacing: "-0.01em" }}>Razorpay</span>
+    </span>
   );
 }
 
