@@ -299,7 +299,11 @@ export default function RazorpayConfigureDialog({ open, onOpenChange }: Props) {
             icon="check"
             onClick={() => save.mutate()}
             loading={save.isPending}
-            disabled={!keyId.trim() || !keySecret.trim()}
+            /* Key Secret is required ONLY when connecting the first time. Once
+               configured, blank means "keep the saved secret" (as the field's own
+               hint says), so an owner can update JUST the webhook secret — this
+               matched the save mutation's own rule but the button disabled it. */
+            disabled={!keyId.trim() || (!status?.configured && !keySecret.trim())}
           >
             Save
           </Button>
