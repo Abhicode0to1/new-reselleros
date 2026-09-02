@@ -7,9 +7,9 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const search = readFileSync(join(process.cwd(), "src/components/home/DomainSearch.tsx"), "utf8");
+const search = readFileSync(join(process.cwd(), "src/site/components/home/DomainSearch.tsx"), "utf8");
 const proxy = readFileSync(join(process.cwd(), "src/app/api/domains/availability/route.ts"), "utf8");
-const config = readFileSync(join(process.cwd(), "src/lib/config.ts"), "utf8");
+const config = readFileSync(join(process.cwd(), "src/site/lib/config.ts"), "utf8");
 
 describe("DomainSearch reads real availability", () => {
   it("the fake hash is gone", () => {

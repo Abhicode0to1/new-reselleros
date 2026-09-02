@@ -17,7 +17,8 @@ import { TLDS, HOSTING_PLANS, LICENCE_EDITIONS } from "./data/catalog";
    3. Alias/mara hua Cloud Run URL kahin na ho.
    ───────────────────────────────────────────────────────────────────────────── */
 
-const SRC = join(process.cwd(), "src");
+const SITE = join(process.cwd(), "src", "site");
+const APP = join(process.cwd(), "src");
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {
@@ -26,7 +27,7 @@ function walk(dir: string): string[] {
   });
 }
 
-const files = walk(SRC).filter((f) => !f.includes(".test."));
+const files = walk(SITE).filter((f) => !f.includes(".test."));
 const read = (f: string) => readFileSync(f, "utf8");
 
 describe("app ka pata — ek jagah", () => {
@@ -79,10 +80,10 @@ describe("quote form ka enquiry contract", () => {
        galat tha (app `message` kehta hai); Pardeep ke pehle asli submit par 400 aaya.
        Ab contract app ke route-source se aata hai: wahan ka schema badle to ye laal. */
     const appRoute = readFileSync(
-      join(process.cwd(), "..", "production", "src", "app", "api", "public", "enquiry", "general", "route.ts"),
+      join(APP, "app", "api", "public", "enquiry", "general", "route.ts"),
       "utf8",
     );
-    const proxy = read(join(SRC, "app", "api", "enquiry", "route.ts"));
+    const proxy = read(join(APP, "app", "api", "enquiry", "route.ts"));
     for (const field of ["fullName", "companyName", "email", "phone", "product", "seats", "message"]) {
       expect(appRoute.includes(field), `app schema me ${field} nahi — contract badla?`).toBe(true);
       expect(proxy.includes(`payload.${field}`) || proxy.includes(`{ fullName`) || proxy.includes(field),
@@ -96,7 +97,7 @@ describe("quote form ka enquiry contract", () => {
   it("GW auto-quote path bhi app ke source se milta hai — tierId, billing, seats", () => {
     /* Wahi sabak dobara nahi: workspace endpoint ka schema USKE route se padho, yaad se nahi. */
     const appRoute = readFileSync(
-      join(process.cwd(), "..", "production", "src", "app", "api", "public", "enquiry", "workspace", "route.ts"),
+      join(APP, "app", "api", "public", "enquiry", "workspace", "route.ts"),
       "utf8",
     );
     for (const field of ["tierId", "billing", "seats", "message", "draftQuoteId"]) {
@@ -106,14 +107,14 @@ describe("quote form ka enquiry contract", () => {
     for (const v of ['"starter"', '"standard"', '"plus"', '"monthly"', '"annual"']) {
       expect(appRoute.includes(v), `app me enum ${v} nahi`).toBe(true);
     }
-    const proxy = read(join(SRC, "app", "api", "enquiry", "route.ts"));
+    const proxy = read(join(APP, "app", "api", "enquiry", "route.ts"));
     for (const field of ["tierId", "billing", "ENQUIRY_WORKSPACE_API", "gwTierFor", "draftQuoteId"]) {
       expect(proxy.includes(field), `proxy me ${field} nahi`).toBe(true);
     }
   });
 
   it("QuoteBuilder seedha app ko nahi, /api/enquiry ko POST karta hai (CORS)", () => {
-    const qb = read(join(SRC, "components", "quote", "QuoteBuilder.tsx"));
+    const qb = read(join(SITE, "components", "quote", "QuoteBuilder.tsx"));
     expect(qb).toContain('fetch("/api/enquiry"');
     expect(qb.includes("run.app")).toBe(false);
   });
