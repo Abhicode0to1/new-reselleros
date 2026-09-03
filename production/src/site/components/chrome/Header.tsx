@@ -224,12 +224,12 @@ export function Header() {
           </span>
         </Link>
         {/* Log in to the ResellerOS app / client area — the conventional top-right
-            spot, present on every page. Kept a quiet text link so the primary CTA
-            stays "Get a quote"; existing customers know to look here for sign-in. */}
-        <Link href="/login" className="hide-mobile" aria-label="Log in to ResellerOS"
-          style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", padding: "9px 8px", whiteSpace: "nowrap" }}>Log in</Link>
-        <Link href="/quote" className="btn btn-primary btn-sm hide-mobile"
-          style={orange ? { background: "var(--dark)", borderColor: "var(--dark)", color: "#fff" } : undefined}>Get a quote</Link>
+            spot, present on every page. "Get a quote" used to sit here as the
+            primary CTA but Pardeep had it removed from the header (3 Sep 2026); it
+            still lives in the hero, the mega-menu promos and the footer. With it
+            gone, Log in is the header's right-side action, so it reads as a button. */}
+        <Link href="/login" className="btn btn-sm hide-mobile" aria-label="Log in to ResellerOS"
+          style={{ background: orange ? "var(--dark)" : "var(--primary)", borderColor: orange ? "var(--dark)" : "var(--primary)", color: "#fff", whiteSpace: "nowrap" }}>Log in</Link>
         <button
           className="only-mobile"
           aria-label={mobile ? "Close menu" : "Open menu"}
