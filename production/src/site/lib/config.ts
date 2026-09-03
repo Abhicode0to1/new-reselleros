@@ -14,6 +14,18 @@ export const RESELLEROS_URL =
   "https://resellersos-njvk4nxhdq-el.a.run.app";
 
 /**
+ * The public marketing site's CANONICAL origin (Pardeep, 3 Sep 2026: canonical
+ * = anutech.in). Every canonical link, OpenGraph URL, sitemap entry, robots host
+ * and JSON-LD @id uses this — so search engines and AI crawlers treat anutech.in
+ * as the one true home, regardless of which Cloud Run host actually serves the
+ * bytes today. Override per environment with NEXT_PUBLIC_SITE_URL. No trailing
+ * slash. (This is the marketing brand's domain — distinct from RESELLEROS_URL,
+ * the app service, and DOMAINS_APP_URL, the domains/hosting platform.)
+ */
+export const SITE_URL =
+  (process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://anutech.in").replace(/\/+$/, "");
+
+/**
  * The domains + hosting platform (app.anutech.in / DMS). Merge Phase-1: the
  * marketing site's domain search + rate card read REAL answers from its
  * public read-APIs instead of the old fakes. Custom domain (not a run.app

@@ -7,11 +7,7 @@ import Image from "next/image";
 import { OfferBand } from "@/site/components/offers/OfferBand";
 import { Reveal, SectionHead, ImageSlot } from "@/site/components/ui/bits";
 import { CATALOGUE, CASES, REVIEWS, PROOF_POINTS } from "@/site/lib/data/copy";
-import { COMPANY } from "@/site/lib/config";
-
-/* The marketing site's public URL — used for canonical + structured-data ids.
-   Kept identical to the value on /domains so the graph refers to one origin. */
-const SITE_URL = "https://resellersos-njvk4nxhdq-el.a.run.app";
+import { COMPANY, SITE_URL } from "@/site/lib/config";
 
 export const metadata: Metadata = {
   /* Absolute — the title IS the brand statement, so it must not also pick up the

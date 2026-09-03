@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DomainLanding } from "@/site/components/domains/DomainLanding";
 import { TLDS } from "@/site/lib/data/catalog";
 import { DOMAIN_FAQS } from "@/site/lib/data/domains-landing";
+import { SITE_URL } from "@/site/lib/config";
 
 /**
  * /domains — the conversion redesign ("Domain hosting improvement strategy",
@@ -14,10 +15,8 @@ import { DOMAIN_FAQS } from "@/site/lib/data/domains-landing";
  * Google/Gemini so it can rank and be quoted): rich <metadata> plus JSON-LD for
  * the organisation, the domain-registration offer catalogue (real ₹ prices from
  * TLDS), and the FAQ (the same six Q&A the page renders). All figures come from
- * the app's own data, never invented.
+ * the app's own data, never invented. Canonical origin is anutech.in (SITE_URL).
  */
-
-const SITE_URL = "https://resellersos-njvk4nxhdq-el.a.run.app";
 
 export const metadata: Metadata = {
   title: "Domain registration & transfer — the domain is ₹0 with yearly hosting",
