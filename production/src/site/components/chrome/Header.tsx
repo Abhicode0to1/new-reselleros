@@ -151,7 +151,12 @@ export function Header() {
       style={{ position: "sticky", top: 0, zIndex: 80, background: "#fff", borderBottom: "1px solid var(--border-light)" }}
     >
       <div className="wrap" style={{ height: 68, display: "flex", alignItems: "center", gap: 26 }}>
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10 }} aria-label="Anutech Digital home">
+        {/* The marketing home lives at "/", but "/" redirects a logged-in user to
+            /dashboard — so for an owner browsing the site, the logo would bounce to
+            the app instead of the company home they clicked for. "?preview=1" is the
+            root page's built-in bypass: it shows the Anutech Digital home to everyone,
+            signed in or not. */}
+        <Link href="/?preview=1" style={{ display: "flex", alignItems: "center", gap: 10 }} aria-label="Anutech Digital home">
           <Image src="/anutech-digital-logo.png" alt="" width={34} height={34} style={{ objectFit: "contain" }} />
           <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>Anutech Digital</span>
         </Link>
