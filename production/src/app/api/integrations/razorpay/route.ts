@@ -66,7 +66,10 @@ async function resolveTenantAndOwnership() {
 }
 
 function webhookUrlFor(tenantId: string, req: NextRequest): string {
-  const origin = req.nextUrl.origin;
+  // On Cloud Run behind the proxy, req.nextUrl.origin resolves to the container's
+  // internal http://0.0.0.0:8080 — useless to paste into Razorpay. Prefer the
+  // canonical public URL, falling back to the request origin only in dev.
+  const origin = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "") || req.nextUrl.origin;
   // The `tenant` param is load-bearing: /api/webhooks/razorpay reads it to pick
   // WHICH tenant's signing secret to verify against, and to reject an event
   // whose quote belongs to a different tenant. Registering the URL without it
