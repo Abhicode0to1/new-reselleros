@@ -7,9 +7,43 @@ import Image from "next/image";
 import { OfferBand } from "@/site/components/offers/OfferBand";
 import { Reveal, SectionHead, ImageSlot } from "@/site/components/ui/bits";
 import { CATALOGUE, CASES, REVIEWS, PROOF_POINTS } from "@/site/lib/data/copy";
+import { COMPANY } from "@/site/lib/config";
+
+/* The marketing site's public URL — used for canonical + structured-data ids.
+   Kept identical to the value on /domains so the graph refers to one origin. */
+const SITE_URL = "https://resellersos-njvk4nxhdq-el.a.run.app";
 
 export const metadata: Metadata = {
-  title: "Anutech Digital — Google Workspace, M365 and Zoho in rupees",
+  /* Absolute — the title IS the brand statement, so it must not also pick up the
+     "· Anutech Digital" suffix the marketing template adds to every other page.
+     It names the company AND everything the page sells, so a searcher (or an AI
+     summarising the page) sees the full scope, not just the licence business. */
+  title: {
+    absolute: "Anutech Digital — Google Workspace, Microsoft 365, Zoho, Domains, Hosting & Email in India",
+  },
+  description:
+    "Anutech Digital is a Delhi-based Google Premier Partner (since 2014). Buy Google Workspace, Microsoft 365 and Zoho licences, domains, cPanel hosting and business email in rupees — published prices, GST invoices, free migration and WhatsApp support.",
+  keywords: [
+    "Anutech Digital",
+    "Google Workspace India price",
+    "Microsoft 365 reseller India",
+    "Zoho Workplace India",
+    "buy domain India rupees",
+    "cPanel hosting India",
+    "business email India",
+    "Google Premier Partner Delhi",
+    "GST invoice cloud licences",
+  ],
+  alternates: { canonical: `${SITE_URL}/` },
+  openGraph: {
+    title: "Anutech Digital — Google Workspace, Microsoft 365, Zoho, Domains & Hosting",
+    description:
+      "Google Premier Partner in Delhi since 2014. Licences, domains, hosting and business email in rupees — published prices, GST invoices, free migration, WhatsApp support.",
+    url: `${SITE_URL}/`,
+    siteName: "Anutech Digital",
+    type: "website",
+    locale: "en_IN",
+  },
 };
 
 /* Each vendor's own brand colour, used ONLY on that vendor's name in the
@@ -58,8 +92,86 @@ export default async function HomePage({
   const { data: { user } } = await supabase.auth.getUser();
   if (user && searchParams.preview !== "1") redirect("/dashboard");
 
+  /* ── Structured data (SEO + AI answerability) ──────────────────────────────
+     A single @graph an engine — or an LLM building an answer — can read to learn
+     WHO Anutech Digital is, WHAT it sells and FOR HOW MUCH, without parsing the
+     visual page. Prices come from the same CATALOGUE the cards render, so the
+     graph can never disagree with what a visitor sees. */
+  const priceNum = (s: string): number => {
+    const m = s.match(/₹\s?([\d,]+)/);
+    return m ? Number(m[1].replace(/,/g, "")) : 0;
+  };
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${SITE_URL}/#organization`,
+        name: COMPANY.name,
+        alternateName: COMPANY.short,
+        url: SITE_URL,
+        logo: `${SITE_URL}/anutech-digital-logo.png`,
+        description:
+          "Delhi-based Google Premier Partner (since 2014) selling Google Workspace, Microsoft 365 and Zoho licences, domains, cPanel hosting and business email to Indian businesses, in rupees with GST invoices. Maker of ResellerOS.",
+        foundingDate: "2014",
+        award: "Google Premier Partner",
+        taxID: COMPANY.gstin,
+        address: {
+          "@type": "PostalAddress",
+          addressLocality: "Rohini",
+          addressRegion: "Delhi",
+          addressCountry: "IN",
+        },
+        contactPoint: {
+          "@type": "ContactPoint",
+          contactType: "customer support",
+          email: COMPANY.supportEmail,
+          areaServed: "IN",
+          availableLanguage: ["en", "hi"],
+        },
+        areaServed: "IN",
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${SITE_URL}/#website`,
+        name: "Anutech Digital",
+        url: SITE_URL,
+        publisher: { "@id": `${SITE_URL}/#organization` },
+        inLanguage: "en-IN",
+      },
+      {
+        "@type": "OfferCatalog",
+        name: "Anutech Digital — products and services",
+        url: SITE_URL,
+        provider: { "@id": `${SITE_URL}/#organization` },
+        itemListElement: CATALOGUE.map((c) => {
+          const price = priceNum(c.from);
+          return {
+            "@type": "Offer",
+            name: c.name,
+            description: c.body,
+            url: `${SITE_URL}${c.href}`,
+            priceCurrency: "INR",
+            price,
+            priceSpecification: {
+              "@type": "PriceSpecification",
+              priceCurrency: "INR",
+              minPrice: price,
+              description: c.from,
+            },
+          };
+        }),
+      },
+    ],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* September offer — header ke neeche pehli cheez, poori chaudai ka hara band
          (Pardeep: "home page par noticeable jagah"). Client component, taaki expiry
          visitor ki ghadi se ho — static page ka build-time date nahi. */}

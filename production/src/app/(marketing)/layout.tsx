@@ -13,8 +13,26 @@
  * Collisions with existing app routes (/, /pricing, /about, /login, …) are
  * deliberately NOT ported yet — which page wins there is its own decision.
  */
+import type { Metadata } from "next";
 import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import "@/site/site.css";
+
+/**
+ * The public site is Anutech Digital's — not ResellerOS's. The root layout's
+ * title template appends "· ResellerOS" to every page, which on the marketing
+ * pages reads as a second, confusing brand ("Anutech Digital … · ResellerOS").
+ * This nested metadata re-brands the whole marketing subtree: every page title
+ * ends "· Anutech Digital", and the OpenGraph site name matches. ResellerOS is
+ * one product Anutech sells (it has its own /reselleros page); it is not the
+ * name of this website.
+ */
+export const metadata: Metadata = {
+  title: {
+    default: "Anutech Digital — Google Workspace, Microsoft 365, Zoho, Domains & Hosting in India",
+    template: "%s · Anutech Digital",
+  },
+  openGraph: { siteName: "Anutech Digital" },
+};
 import { CartProvider } from "@/site/components/cart/CartProvider";
 import { CartDrawer } from "@/site/components/cart/CartDrawer";
 import { Header } from "@/site/components/chrome/Header";
