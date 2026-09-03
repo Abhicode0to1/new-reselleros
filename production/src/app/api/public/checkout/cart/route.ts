@@ -25,6 +25,8 @@ import Razorpay from "razorpay";
 import { createAdminClient } from "@/lib/supabase/server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { HOSTING_TIERS } from "@/site/lib/data/hosting-landing-v2";
+import { TLDS } from "@/site/lib/data/catalog";
+import { MAILBOX_YR } from "@/site/lib/data/domains-landing";
 
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
@@ -51,29 +53,50 @@ const cartSchema = z.object({
 
 interface QuoteLine { id: string; name: string; qty: number; rate: number; cost: number; }
 
-/** Re-price one line from its sku. Returns null for anything we can't price server-side. */
-function repriceLine(sku: string | undefined, cycle: string | undefined, qty: number): { line: QuoteLine; tier?: string } | null {
+type LineKind = "hosting" | "domain" | "mailbox";
+interface Repriced { line: QuoteLine; kind: LineKind; tier?: string; yearly: boolean }
+
+const newId = () => globalThis.crypto?.randomUUID() ?? Math.random().toString(36).slice(2);
+
+/**
+ * Re-price one line from its sku against the server's OWN source of truth.
+ * Returns null for anything we can't price server-side.
+ *
+ *   hosting:<tier>   → HOSTING_TIERS (whole rupees)
+ *   domain:<tld>     → TLDS reg price. The ₹0 bundle is NOT applied here — it is
+ *                      applied after the whole cart is priced, and ONLY when a
+ *                      yearly hosting line is present. A client that sends ₹0 for
+ *                      a bare domain still gets charged the real reg price.
+ *   mailbox:anutech  → MAILBOX_YR. Same bundle rule as the domain.
+ */
+function repriceLine(sku: string | undefined, cycle: string | undefined, qty: number): Repriced | null {
   if (!sku) return null;
-  const m = /^hosting:(starter|standard|plus)$/.exec(sku.toLowerCase());
-  if (m) {
-    const tier = m[1];
+  const s = sku.toLowerCase();
+  const yearly = cycle !== "monthly";
+
+  const h = /^hosting:(starter|standard|plus)$/.exec(s);
+  if (h) {
+    const tier = h[1];
     const t = HOSTING_TIERS.find((x) => x.name.toLowerCase() === tier);
     if (!t) return null;
-    const yearly = cycle !== "monthly";
     // Whole rupees — the money spine stores integers (CLAUDE.md §13); a fractional
     // tier total like ₹599.88 would break the integer lead/quote columns.
-    const rate = Math.round(yearly ? t.yearlyTotal : t.monthly); // server truth, not client
-    return {
-      tier,
-      line: {
-        id: globalThis.crypto?.randomUUID() ?? Math.random().toString(36).slice(2),
-        name: `${t.name} hosting (${yearly ? "billed yearly" : "billed monthly"})`,
-        qty,
-        rate,
-        cost: 0,
-      },
-    };
+    const rate = Math.round(yearly ? t.yearlyTotal : t.monthly);
+    return { kind: "hosting", tier, yearly, line: { id: newId(), name: `${t.name} hosting (${yearly ? "billed yearly" : "billed monthly"})`, qty, rate, cost: 0 } };
   }
+
+  const d = /^domain:(.+)$/.exec(s);
+  if (d) {
+    const ext = "." + d[1].replace(/^\./, "");
+    const t = TLDS.find((x) => x.tld.toLowerCase() === ext);
+    if (!t) return null;
+    return { kind: "domain", yearly: true, line: { id: newId(), name: `Domain ${t.tld} — registration, 1 year`, qty, rate: t.reg, cost: 0 } };
+  }
+
+  if (s === "mailbox:anutech") {
+    return { kind: "mailbox", yearly: true, line: { id: newId(), name: "Mailbox — Anutech Mail, 1 year", qty, rate: Math.round(MAILBOX_YR), cost: 0 } };
+  }
+
   return null;
 }
 
@@ -93,12 +116,21 @@ export async function POST(request: NextRequest) {
     const items: QuoteLine[] = [];
     const unpriced: string[] = [];
     let hasHosting = false;
+    let hasYearlyHosting = false;
     let hostingTier: string | null = null;
+    const bundleEligible: QuoteLine[] = []; // domain + mailbox lines that go ₹0 with a yearly plan
     for (const l of lines) {
       const r = repriceLine(l.sku, l.cycle, l.qty);
       if (!r) { unpriced.push(l.label || l.sku || "an item"); continue; }
       items.push(r.line);
-      if (r.tier) { hasHosting = true; hostingTier = hostingTier ?? r.tier; }
+      if (r.kind === "hosting") { hasHosting = true; if (r.yearly) hasYearlyHosting = true; hostingTier = hostingTier ?? r.tier ?? null; }
+      if (r.kind === "domain" || r.kind === "mailbox") bundleEligible.push(r.line);
+    }
+    // THE bundle rule, enforced server-side: the domain (and its mailbox) are ₹0
+    // only when a YEARLY hosting line rides along. Otherwise they pay full reg —
+    // the client's ₹0 is never trusted. A bare domain, or a monthly plan, is charged.
+    if (hasYearlyHosting) {
+      for (const line of bundleEligible) line.rate = 0;
     }
     if (unpriced.length) {
       return NextResponse.json(

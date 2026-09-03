@@ -1,65 +1,96 @@
 import type { Metadata } from "next";
-import { DomainSearch } from "@/site/components/home/DomainSearch";
-import { DomainRateCard } from "@/site/components/domains/DomainRateCard";
-import { SectionHead, Reveal } from "@/site/components/ui/bits";
-import { DOMAIN_FEATURES } from "@/site/lib/data/copy";
-import { OfferBand } from "@/site/components/offers/OfferBand";
-import { fetchLiveTldPricing, mergeTlds } from "@/site/lib/live-tld-pricing";
+import { DomainLanding } from "@/site/components/domains/DomainLanding";
 import { TLDS } from "@/site/lib/data/catalog";
+import { DOMAIN_FAQS } from "@/site/lib/data/domains-landing";
 
-export const metadata: Metadata = { title: "Domain registration & transfer" };
+/**
+ * /domains — the conversion redesign ("Domain hosting improvement strategy",
+ * 3 Sep 2026). The page is <DomainLanding/>, a self-contained editorial body;
+ * the shared site chrome (home menu, utility bar, footer, cart drawer) wraps it
+ * via the (marketing) layout, so navigation is present on this page as on every
+ * other.
+ *
+ * SEO + AI-answerability (Pardeep's standing ask — the site should be legible to
+ * Google/Gemini so it can rank and be quoted): rich <metadata> plus JSON-LD for
+ * the organisation, the domain-registration offer catalogue (real ₹ prices from
+ * TLDS), and the FAQ (the same six Q&A the page renders). All figures come from
+ * the app's own data, never invented.
+ */
 
-/* Live rate card se: platform ka daam 10 min me refresh, page static-ish rehta. */
+const SITE_URL = "https://resellersos-njvk4nxhdq-el.a.run.app";
+
+export const metadata: Metadata = {
+  title: "Domain registration & transfer — the domain is ₹0 with yearly hosting",
+  description:
+    "Register or transfer a domain in rupees, with the renewal price printed next to the first-year price. The domain is ₹0 when it points at Anutech hosting on a yearly plan. 500+ extensions, GST invoice on every order.",
+  alternates: { canonical: `${SITE_URL}/domains` },
+  openGraph: {
+    title: "Domain registration & transfer — ₹0 with yearly hosting",
+    description:
+      "The domain is ₹0 when it points at our hosting (yearly plan). Live registry lookup, renewal price shown up front, GST invoice on every order.",
+    url: `${SITE_URL}/domains`,
+    type: "website",
+  },
+};
+
+/* Static-ish; the live availability check runs client-side, prices refresh on deploy. */
 export const revalidate = 600;
 
-export default async function DomainsPage() {
-  const tlds = mergeTlds(await fetchLiveTldPricing(TLDS.map((t) => t.tld)));
+export default function DomainsPage() {
+  const cheapest = Math.min(...TLDS.map((t) => t.reg));
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        name: "Anutech Digital Pvt Ltd",
+        url: SITE_URL,
+        description: "Indian domain, hosting and business-email provider. Maker of ResellerOS.",
+        address: { "@type": "PostalAddress", addressLocality: "Rohini", addressRegion: "Delhi", addressCountry: "IN" },
+      },
+      {
+        "@type": "Product",
+        name: "Domain registration",
+        description:
+          "Register or transfer a domain in rupees. The domain is ₹0 when bundled with a yearly Anutech hosting plan. Renewal price shown up front; GST invoice on every order.",
+        brand: { "@type": "Brand", name: "Anutech Digital" },
+        offers: {
+          "@type": "AggregateOffer",
+          priceCurrency: "INR",
+          lowPrice: 0,
+          highPrice: Math.max(...TLDS.map((t) => t.reg)),
+          offerCount: TLDS.length,
+          offers: TLDS.map((t) => ({
+            "@type": "Offer",
+            name: `${t.tld} domain — first year`,
+            priceCurrency: "INR",
+            price: t.reg,
+            description: `${t.tld} for ${t.use}. Renews ₹${t.renew}/yr. ₹0 with a yearly hosting plan.`,
+            url: `${SITE_URL}/domains#rates`,
+          })),
+        },
+      },
+      {
+        "@type": "FAQPage",
+        mainEntity: DOMAIN_FAQS.map((f) => ({
+          "@type": "Question",
+          name: f.q,
+          acceptedAnswer: { "@type": "Answer", text: f.a },
+        })),
+      },
+    ],
+  };
+
   return (
     <>
-      <section className="section rise">
-        <div className="wrap" style={{ display: "grid", gridTemplateColumns: "1fr 640px", gap: 48, alignItems: "start" }} data-grid>
-          <div>
-            {/* Client pill — server strip build-time date freeze kar deta (page static
-               hai); browser me expiry visitor ki apni ghadi se hoti hai. */}
-            <OfferBand variant="pill" />
-            <h1 className="h1-page" style={{ marginBottom: 16 }}>
-              Register, renew and transfer — every price on one row.
-            </h1>
-            <p className="body-lg" style={{ margin: 0, maxWidth: 480 }}>
-              500+ extensions in rupees. The renewal price is printed next to the first-year price,
-              because that is the number that actually decides what a domain costs.
-            </p>
-          </div>
-          <DomainSearch />
-        </div>
-      </section>
-
-      <section className="section-tight" id="rates" style={{ background: "var(--tint)" }}>
-        <div className="wrap">
-          <SectionHead
-            eyebrow="RATE CARD"
-            title="The rate card, in the open"
-            body="Filter by what the name is for. Add puts a first-year registration in the cart."
-          />
-          <DomainRateCard tlds={tlds} />
-        </div>
-      </section>
-
-      <section className="section" id="included">
-        <div className="wrap">
-          <SectionHead eyebrow="INCLUDED" title="Included with every domain" />
-          <div className="grid-4" style={{ gap: 24 }}>
-            {DOMAIN_FEATURES.map((f) => (
-              <Reveal key={f.title}>
-                <div style={{ borderTop: "2px solid var(--dark)", paddingTop: 14 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{f.title}</div>
-                  <p className="body" style={{ margin: 0, fontSize: 14 }}>{f.body}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <DomainLanding />
+      <span hidden>{`Domains from ₹${cheapest}, ₹0 with yearly hosting.`}</span>
     </>
   );
 }
