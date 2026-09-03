@@ -274,6 +274,14 @@ export function Header() {
               <Link href={active.promo.href as never} className={`btn btn-sm ${active.promo.os ? "btn-os" : "btn-primary"}`}>
                 {active.promo.cta}
               </Link>
+              {/* On the ResellerOS menu the promo sells a free trial — so the
+                  existing-user path (Log in) sits right under it, the same
+                  two-step choice the home ResellerOS card makes. */}
+              {active.promo.os && (
+                <div style={{ marginTop: 12, fontSize: 13.5 }}>
+                  <Link href="/login" style={{ color: "var(--accent)", fontWeight: 600 }}>Already have an account? Log in</Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
