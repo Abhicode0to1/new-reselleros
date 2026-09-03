@@ -10,7 +10,7 @@
  * flips the quote to paid, creates the customer/subscription/invoice and queues provisioning.
  * A line with no server-priceable SKU is refused with a clear message (request a quote).
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee, cycleLabel } from "@/site/lib/money";
@@ -68,6 +68,24 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
 
   const hasHosting = cart.lines.some((l) => (l.sku || "").startsWith("hosting:"));
+
+  // Remember the buyer's details across a refresh so nothing has to be re-typed.
+  useEffect(() => {
+    try {
+      const s = JSON.parse(window.localStorage.getItem("anutech.checkout") || "{}");
+      if (typeof s.name === "string") setName(s.name);
+      if (typeof s.company === "string") setCompany(s.company);
+      if (typeof s.email === "string") setEmail(s.email);
+      if (typeof s.gstin === "string") setGstin(s.gstin);
+      if (typeof s.phone === "string") setPhone(s.phone);
+      if (typeof s.domain === "string") setDomain(s.domain);
+    } catch { /* private window / blocked storage — just start empty */ }
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain }));
+    } catch { /* ignore */ }
+  }, [name, company, email, gstin, phone, domain]);
 
   if (cart.lines.length === 0) {
     return (
