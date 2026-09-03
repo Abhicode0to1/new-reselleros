@@ -268,6 +268,11 @@ export async function POST(request: NextRequest) {
     let m = rzpDesc || (err instanceof Error ? err.message : "");
     if (!m) { try { m = JSON.stringify(err); } catch { m = String(err); } }
     console.error("[/api/public/checkout/cart] crashed:", m);
-    return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
+    // Surface the real reason (mostly a Razorpay order-create rejection) so a
+    // failed checkout says WHY instead of a dead-end. §24 actionable errors.
+    return NextResponse.json(
+      { error: m ? `Payment couldn't start — ${m}` : "Something went wrong. Please try again." },
+      { status: 500 },
+    );
   }
 }
