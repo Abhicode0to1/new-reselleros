@@ -214,56 +214,8 @@ export function DomainLanding() {
 
   return (
     <div className={`${manrope.variable} ${serif.variable} ${mono.variable}`} style={{ fontFamily: "var(--df-sans), 'Manrope', system-ui, sans-serif", color: C.ink2, background: C.paper, paddingBottom: 96 }}>
-      {/* ── 1 · HERO + ARITHMETIC ─────────────────────────────────────────── */}
-      <section style={wrap({ paddingTop: mob ? 40 : 56, display: "grid", gridTemplateColumns: mid ? "1fr" : "1.15fr 0.85fr", gap: mid ? 36 : 56, alignItems: "start" })}>
-        <div>
-          <div style={eyebrow}>Why the domain can cost ₹0</div>
-          <h1 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: mob ? 44 : 62, lineHeight: 1.02, letterSpacing: "-0.02em", color: C.ink, margin: "14px 0 0", textWrap: "balance" as const }}>
-            A domain is a signpost.{" "}
-            <span style={{ fontStyle: "italic", color: C.accent }}>Point it at something.</span>
-          </h1>
-          <p style={{ fontSize: mob ? 16.5 : 18, lineHeight: 1.6, color: C.ink2, maxWidth: "52ch", margin: "18px 0 0" }}>
-            A {ANCHOR_TLD} on its own is {inr(anchorTld.reg)}. {ANCHOR_TIER} hosting is {inr(anchorTier.yearlyTotal)}.
-            Together it&apos;s {inr(anchorTier.yearlyTotal)} — so hosting adds {inr(anchorTier.yearlyTotal - anchorTld.reg)}, not {inr(anchorTier.yearlyTotal)},
-            and the domain line reads ₹0. Register just the name if that&apos;s all you need — it stays available and unpunished.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 22 }}>
-            {["The renewal price is shown up front — no year-two surprise", `${15}-day hosting trial, no card asked for`, "We wire the DNS and migrate the site for you"].map((t) => (
-              <div key={t} style={{ display: "flex", gap: 10, alignItems: "baseline", fontSize: 14 }}>
-                <span style={{ color: C.success, fontWeight: 700 }}>✓</span>
-                <span style={{ color: C.ink2 }}>{t}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* arithmetic card */}
-        <div style={{ ...cardBox, padding: mob ? "20px 20px" : "22px 24px" }}>
-          <div style={{ ...eyebrow, color: C.muted, fontSize: 11 }}>The arithmetic, before you start</div>
-          <div style={{ marginTop: 12 }}>
-            {[
-              { l: `${ANCHOR_TLD} domain, on its own`, v: inr(anchorTld.reg), strike: false, bold: false },
-              { l: `${ANCHOR_TIER} hosting, 1 year`, v: inr(anchorTier.yearlyTotal), strike: false, bold: false },
-              { l: "Bought separately", v: inr(anchorTld.reg + anchorTier.yearlyTotal), strike: true, bold: false },
-            ].map((r) => (
-              <div key={r.l} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "11px 0", borderBottom: `1px dashed ${C.line}` }}>
-                <span style={{ fontSize: 14.5, color: r.strike ? C.faint : C.ink2 }}>{r.l}</span>
-                <span style={priceMono({ fontSize: 16, color: r.strike ? C.faint : C.ink, textDecoration: r.strike ? "line-through" : "none" })}>{r.v}</span>
-              </div>
-            ))}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "13px 0 4px" }}>
-              <span style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>Bought together</span>
-              <span style={priceMono({ fontSize: 22, fontWeight: 700, color: C.accent })}>{inr(anchorTier.yearlyTotal)}</span>
-            </div>
-          </div>
-          <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, margin: "8px 0 0" }}>
-            Hosting costs {inr(anchorTier.yearlyTotal - anchorTld.reg)} more, not {inr(anchorTier.yearlyTotal)} — so the domain line reads ₹0.
-            The renewal, {inr(anchorTld.renew)} + {inr(anchorTier.yearlyTotal)}, is printed on the invoice.
-          </p>
-        </div>
-      </section>
-
       {/* ── 2 · SEARCH MODULE (the most important block) ───────────────────── */}
-      <section id="search" style={wrap({ paddingTop: mob ? 32 : 44 })}>
+      <section id="search" style={wrap({ paddingTop: mob ? 18 : 22 })}>
         <div style={{ ...cardBox, borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 2px rgba(26,22,20,0.04), 0 12px 32px -18px rgba(26,22,20,0.16)" }}>
           {/* tab strip */}
           <div role="tablist" aria-label="Domain actions" style={{ display: "flex", gap: 4, padding: "8px 8px 0", background: C.tint, borderBottom: `1px solid ${C.line}` }}>
@@ -379,6 +331,54 @@ export function DomainLanding() {
               </div>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* ── 1 · HERO + ARITHMETIC ─────────────────────────────────────────── */}
+      <section style={wrap({ paddingTop: mob ? 44 : 52, display: "grid", gridTemplateColumns: mid ? "1fr" : "1.15fr 0.85fr", gap: mid ? 36 : 56, alignItems: "start" })}>
+        <div>
+          <div style={eyebrow}>Why the domain can cost ₹0</div>
+          <h1 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: mob ? 44 : 62, lineHeight: 1.02, letterSpacing: "-0.02em", color: C.ink, margin: "14px 0 0", textWrap: "balance" as const }}>
+            A domain is a signpost.{" "}
+            <span style={{ fontStyle: "italic", color: C.accent }}>Point it at something.</span>
+          </h1>
+          <p style={{ fontSize: mob ? 16.5 : 18, lineHeight: 1.6, color: C.ink2, maxWidth: "52ch", margin: "18px 0 0" }}>
+            A {ANCHOR_TLD} on its own is {inr(anchorTld.reg)}. {ANCHOR_TIER} hosting is {inr(anchorTier.yearlyTotal)}.
+            Together it&apos;s {inr(anchorTier.yearlyTotal)} — so hosting adds {inr(anchorTier.yearlyTotal - anchorTld.reg)}, not {inr(anchorTier.yearlyTotal)},
+            and the domain line reads ₹0. Register just the name if that&apos;s all you need — it stays available and unpunished.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 22 }}>
+            {["The renewal price is shown up front — no year-two surprise", `${15}-day hosting trial, no card asked for`, "We wire the DNS and migrate the site for you"].map((t) => (
+              <div key={t} style={{ display: "flex", gap: 10, alignItems: "baseline", fontSize: 14 }}>
+                <span style={{ color: C.success, fontWeight: 700 }}>✓</span>
+                <span style={{ color: C.ink2 }}>{t}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* arithmetic card */}
+        <div style={{ ...cardBox, padding: mob ? "20px 20px" : "22px 24px" }}>
+          <div style={{ ...eyebrow, color: C.muted, fontSize: 11 }}>The arithmetic, before you start</div>
+          <div style={{ marginTop: 12 }}>
+            {[
+              { l: `${ANCHOR_TLD} domain, on its own`, v: inr(anchorTld.reg), strike: false, bold: false },
+              { l: `${ANCHOR_TIER} hosting, 1 year`, v: inr(anchorTier.yearlyTotal), strike: false, bold: false },
+              { l: "Bought separately", v: inr(anchorTld.reg + anchorTier.yearlyTotal), strike: true, bold: false },
+            ].map((r) => (
+              <div key={r.l} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "11px 0", borderBottom: `1px dashed ${C.line}` }}>
+                <span style={{ fontSize: 14.5, color: r.strike ? C.faint : C.ink2 }}>{r.l}</span>
+                <span style={priceMono({ fontSize: 16, color: r.strike ? C.faint : C.ink, textDecoration: r.strike ? "line-through" : "none" })}>{r.v}</span>
+              </div>
+            ))}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "13px 0 4px" }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>Bought together</span>
+              <span style={priceMono({ fontSize: 22, fontWeight: 700, color: C.accent })}>{inr(anchorTier.yearlyTotal)}</span>
+            </div>
+          </div>
+          <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, margin: "8px 0 0" }}>
+            Hosting costs {inr(anchorTier.yearlyTotal - anchorTld.reg)} more, not {inr(anchorTier.yearlyTotal)} — so the domain line reads ₹0.
+            The renewal, {inr(anchorTld.renew)} + {inr(anchorTier.yearlyTotal)}, is printed on the invoice.
+          </p>
         </div>
       </section>
 

@@ -12,10 +12,18 @@ import { useEffect, useState } from "react";
 import { COMPANY, WHATSAPP_URL } from "@/site/lib/config";
 
 export function UtilityBar() {
+  const pathname = usePathname();
+  const onDomains = pathname.startsWith("/domains");
   return (
     <div style={{ background: "var(--dark)", color: "#C3CBD6", fontSize: 13, padding: "9px 0" }}>
       <div className="wrap" style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
-        <span>Free migration on every plan · GST invoice on every order</span>
+        {onDomains ? (
+          /* The domains page leads with the offer — the ₹0 lever is the whole page's
+             thesis, so the utility bar states it first (offer text in warm accent). */
+          <span><span style={{ color: "#FFC9A8" }}>Domain ₹0 with any 1-year hosting plan</span> · GST invoice on every order</span>
+        ) : (
+          <span>Free migration on every plan · GST invoice on every order</span>
+        )}
         <span className="hide-mobile" style={{ display: "flex", gap: 18 }}>
           <Link href="/pricing">All prices</Link>
           <Link href="/support">Knowledge base</Link>

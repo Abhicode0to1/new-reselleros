@@ -137,6 +137,14 @@ export function Header() {
 
   const active = MENUS.find((m) => m.label === open) ?? null;
 
+  /* /domains and /hosting are the "orange" editorial sections. On them the chrome
+     picks up the brand accent (ink + amber) instead of the services blue, so the
+     header sits with the page's own palette rather than leaking a second colour
+     onto an all-orange page. Every other route keeps the blue services identity. */
+  const orange = pathname.startsWith("/domains") || pathname.startsWith("/hosting");
+  const accent = orange ? "var(--accent)" : "var(--primary)";
+  const activeNav = orange ? "var(--text)" : "var(--primary)";
+
   return (
     <header
       onMouseLeave={() => setOpen(null)}
@@ -144,7 +152,7 @@ export function Header() {
     >
       <div className="wrap" style={{ height: 68, display: "flex", alignItems: "center", gap: 26 }}>
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10 }} aria-label="Anutech Digital home">
-          <Image src="/anutech-logo.png" alt="" width={34} height={34} style={{ objectFit: "contain" }} />
+          <Image src="/anutech-digital-logo.png" alt="" width={34} height={34} style={{ objectFit: "contain" }} />
           <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>Anutech Digital</span>
         </Link>
 
@@ -167,9 +175,9 @@ export function Header() {
                   else if (e.key === "ArrowDown") { e.preventDefault(); setOpen(m.label); }
                 }}
                 style={{
-                  padding: "24px 12px", fontSize: 15, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap",
-                  color: isActive ? "var(--primary)" : "var(--text)",
-                  boxShadow: isActive ? "inset 0 -2px 0 0 var(--primary)" : "none",
+                  padding: "24px 12px", fontSize: 15, fontWeight: isActive ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap",
+                  color: isActive ? activeNav : "var(--text)",
+                  boxShadow: isActive ? `inset 0 -2px 0 0 ${accent}` : "none",
                 }}
               >
                 {m.label} <span aria-hidden style={{ fontSize: 10, color: "var(--text-muted)" }}>▾</span>
@@ -179,9 +187,9 @@ export function Header() {
           <Link
             href="/why-us"
             style={{
-              padding: "24px 12px", fontSize: 15, fontWeight: 500,
-              color: pathname === "/why-us" ? "var(--primary)" : "var(--text)",
-              boxShadow: pathname === "/why-us" ? "inset 0 -2px 0 0 var(--primary)" : "none",
+              padding: "24px 12px", fontSize: 15, fontWeight: pathname === "/why-us" ? 600 : 500,
+              color: pathname === "/why-us" ? activeNav : "var(--text)",
+              boxShadow: pathname === "/why-us" ? `inset 0 -2px 0 0 ${accent}` : "none",
             }}
           >
             Why us
@@ -203,14 +211,15 @@ export function Header() {
             className="mono"
             style={{
               fontSize: 12, minWidth: 20, textAlign: "center", padding: "1px 6px", borderRadius: 999,
-              background: cart.lines.length ? "var(--primary)" : "var(--border-hairline)",
+              background: cart.lines.length ? accent : "var(--border-hairline)",
               color: cart.lines.length ? "#fff" : "var(--text-muted)",
             }}
           >
             {cart.lines.length}
           </span>
         </Link>
-        <Link href="/quote" className="btn btn-primary btn-sm hide-mobile">Get a quote</Link>
+        <Link href="/quote" className="btn btn-primary btn-sm hide-mobile"
+          style={orange ? { background: "var(--dark)", borderColor: "var(--dark)", color: "#fff" } : undefined}>Get a quote</Link>
         <button
           className="only-mobile"
           aria-label={mobile ? "Close menu" : "Open menu"}
