@@ -92,6 +92,7 @@ export function DomainLanding() {
   const [filter, setFilter] = useState("popular");
   const [openFaq, setOpenFaq] = useState(0);
   const [transferText, setTransferText] = useState("");
+  const [fieldFocus, setFieldFocus] = useState(false); // soft focus ring on the whole search field
   const [w, setW] = useState(1200);
   const cart = useCart();
 
@@ -234,11 +235,16 @@ export function DomainLanding() {
           {tab === "register" && (
             <div style={{ padding: mob ? "20px 18px 24px" : "26px 28px 28px" }}>
               <form onSubmit={(e) => { e.preventDefault(); void runSearch(); }} style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 260, display: "flex", alignItems: "center", border: `1.5px solid ${C.line}`, borderRadius: 10, background: C.paper, padding: "0 4px 0 16px" }}>
-                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="your business name" aria-label="Domain name to search"
-                    style={{ flex: 1, border: "none", outline: "none", background: "transparent", padding: "16px 0", fontSize: 19, letterSpacing: "-0.01em", fontFamily: "inherit", color: C.ink, minWidth: 0 }} />
-                  <select value={tld} onChange={(e) => setTld(e.target.value)} aria-label="Extension"
-                    style={{ border: "none", outline: "none", background: "transparent", fontFamily: MONO, fontSize: 17, color: C.accent, padding: "14px 8px", cursor: "pointer" }}>
+                {/* The field owns the focus indicator — a single soft accent ring on the
+                    whole wrapper (input + TLD) via focus-within state. The app's global
+                    amber double-ring (globals.css :focus-visible) is suppressed on the
+                    controls themselves (boxShadow:none) so it doesn't stack a hard ring
+                    inside this soft one. */}
+                <div style={{ flex: 1, minWidth: 260, display: "flex", alignItems: "center", border: `1.5px solid ${fieldFocus ? C.accent : C.line}`, borderRadius: 10, background: C.paper, padding: "0 4px 0 16px", boxShadow: fieldFocus ? "0 0 0 3px rgba(194,65,12,0.14)" : "none", transition: "border-color .15s, box-shadow .15s" }}>
+                  <input value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setFieldFocus(true)} onBlur={() => setFieldFocus(false)} placeholder="your business name" aria-label="Domain name to search"
+                    style={{ flex: 1, border: "none", outline: "none", boxShadow: "none", background: "transparent", padding: "16px 0", fontSize: 19, letterSpacing: "-0.01em", fontFamily: "inherit", color: C.ink, minWidth: 0 }} />
+                  <select value={tld} onChange={(e) => setTld(e.target.value)} onFocus={() => setFieldFocus(true)} onBlur={() => setFieldFocus(false)} aria-label="Extension"
+                    style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", fontFamily: MONO, fontSize: 17, color: C.accent, padding: "14px 8px", cursor: "pointer" }}>
                     {TLDS.map((t) => <option key={t.tld} value={t.tld}>{t.tld}</option>)}
                   </select>
                 </div>
