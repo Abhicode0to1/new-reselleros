@@ -275,7 +275,12 @@ export default async function HomePage({
                 Our own software: subscriptions and seats, GST quotes and invoices, renewals, bank
                 reconciliation. Free during beta.
               </p>
-              <Link href="/reselleros" className="btn btn-os">Explore ResellerOS →</Link>
+              {/* New resellers explore; existing ones sign straight in — the two
+                  natural next steps from this card, side by side. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+                <Link href="/reselleros" className="btn btn-os">Explore ResellerOS →</Link>
+                <Link href="/login" style={{ fontSize: 14, fontWeight: 600, color: "var(--accent)" }}>Already a member? Log in</Link>
+              </div>
             </div>
           </Reveal>
         </div>

@@ -223,6 +223,11 @@ export function Header() {
             {cart.lines.length}
           </span>
         </Link>
+        {/* Log in to the ResellerOS app / client area — the conventional top-right
+            spot, present on every page. Kept a quiet text link so the primary CTA
+            stays "Get a quote"; existing customers know to look here for sign-in. */}
+        <Link href="/login" className="hide-mobile" aria-label="Log in to ResellerOS"
+          style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", padding: "9px 8px", whiteSpace: "nowrap" }}>Log in</Link>
         <Link href="/quote" className="btn btn-primary btn-sm hide-mobile"
           style={orange ? { background: "var(--dark)", borderColor: "var(--dark)", color: "#fff" } : undefined}>Get a quote</Link>
         <button
@@ -289,6 +294,11 @@ export function Header() {
               <span style={{ display: "block", fontSize: 13, color: "var(--text-muted)" }}>{p.note}</span>
             </Link>
           ))}
+          {/* Sign-in gets its own emphasised row on mobile — the desktop top-right
+              "Log in" is hidden here, so this is where a returning customer finds it. */}
+          <Link href="/login" style={{ display: "block", padding: "15px 20px", background: "var(--tint)", color: "var(--primary)", fontWeight: 700, fontSize: 15 }}>
+            Log in to ResellerOS →
+          </Link>
         </nav>
       )}
     </header>
