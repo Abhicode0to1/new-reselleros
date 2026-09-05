@@ -98,7 +98,7 @@ steps:
     # `gcloud run services update --update-env-vars`, never --set-env-vars.
 
 substitutions:
-  _REGION: asia-southeast1
+  _REGION: asia-south1
   # The same Artifact Registry path the current revision already runs from.
   _IMAGE: asia-south1-docker.pkg.dev/resellsubsos-prod/cloud-run-source-deploy/resellersos
 
