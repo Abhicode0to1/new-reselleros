@@ -107,8 +107,8 @@ const CROSS_ROWS: readonly { label: string; gw: string; ms: string; zoho: string
  *  real pages. `gst` is "+ GST 18%" or "No charge" per the design. `icon` keys a
  *  simple line-art glyph that fills a tinted 16:9 band (consistent across all
  *  four — no half-empty photo slots). */
-const CATALOGUE_V2: readonly { name: string; href: string; from: string; unit: string; gst: string; body: string; tags: string[]; cta: string; icon: "globe" | "server" | "lock" | "tag" }[] = [
-  { name: "Domains", href: "/domains", from: "₹249", unit: "from · first year", gst: "+ GST 18%", body: "500+ extensions, register and renew price on one row.", tags: ["500+ TLDS", "FREE DNS", "WHOIS PRIVACY"], cta: "See domain rates", icon: "globe" },
+const CATALOGUE_V2: readonly { name: string; href: string; from: string; unit: string; gst: string; body: string; tags: string[]; cta: string; icon: "globe" | "server" | "lock" | "tag"; img?: string }[] = [
+  { name: "Domains", href: "/domains", from: "₹249", unit: "from · first year", gst: "+ GST 18%", body: "500+ extensions, register and renew price on one row.", tags: ["500+ TLDS", "FREE DNS", "WHOIS PRIVACY"], cta: "See domain rates", icon: "globe", img: "/domain-search.jpg" },
   { name: "Web hosting", href: "/hosting", from: "₹159", unit: "from · /mo, billed yearly", gst: "+ GST 18%", body: "cPanel and LiteSpeed on NVMe, Mumbai and Bengaluru.", tags: ["CPANEL", "LITESPEED", "99.9% SLA"], cta: "See hosting plans", icon: "server" },
   { name: "SSL & security", href: "/ssl", from: "₹0", unit: "free DV", gst: "No charge", body: "Free DV on every hosted site; wildcard and OV when needed.", tags: ["DV", "OV", "WILDCARD"], cta: "See SSL options", icon: "lock" },
   { name: "Reseller program", href: "/reseller", from: "₹0", unit: "to join", gst: "No charge", body: "Published wholesale rates. No slabs, no advance deposit.", tags: ["NO DEPOSIT", "ONE RATE", "WHITE LABEL"], cta: "See the rate card", icon: "tag" },
@@ -119,6 +119,15 @@ const CAT_ICON: Record<string, string> = {
   lock: "M6 10V8a6 6 0 1112 0v2M5 10h14v10H5zM12 14v3",
   tag: "M20.6 13.4 12 22l-9-9V4h9l8.6 8.6a1.4 1.4 0 010 2zM7.5 7.5h.01",
 };
+
+/** Migration — the handoff's "we do three, you do one" four-step section that
+ *  carries the real Google Workspace inbox image. */
+const MIG_STEPS: readonly { n: string; title: string; body: string; who: string }[] = [
+  { n: "01", title: "Just tell us this much", body: "How many people, where mail runs today, and which domain. Ten minutes — no file or list to prepare.", who: "You" },
+  { n: "02", title: "We prepare everything first", body: "We create every mailbox, its aliases and forwarding, and test that your mail doesn't land in spam (SPF, DKIM, DMARC).", who: "We" },
+  { n: "03", title: "The switch happens at night, after your office hours", body: "Old mail, folders, contacts and calendar are copied, then we point the domain at the new mail. Your team does nothing.", who: "We" },
+  { n: "04", title: "We stay with you on WhatsApp the next morning", body: "The team logs in; if someone's password or phone isn't set up we fix it right there. Invoice afterwards, not before.", who: "We" },
+];
 
 const wrap = (extra?: React.CSSProperties): React.CSSProperties => ({ maxWidth: 1180, margin: "0 auto", padding: "0 48px", ...extra });
 const eyebrow: React.CSSProperties = { fontFamily: MONO, fontSize: 10.5, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: C.blue };
@@ -433,24 +442,34 @@ export function HomeV2() {
         </div>
       </section>
 
-      {/* ── ORDER FLOW ─────────────────────────────────────────────────────── */}
-      <section style={{ background: C.sectT, borderTop: `1px solid ${C.borderL}`, borderBottom: `1px solid ${C.borderL}` }}>
-        <div style={wrap({ padding: "44px 48px" })}>
-          <div style={eyebrow}>After you order</div>
-          <h2 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em", color: C.ink, margin: "8px 0 20px", textWrap: "balance" as const }}>You have the price. The next step takes eleven minutes.</h2>
-          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "repeat(3,1fr)", gap: 16 }}>
-            {[
-              { n: "01", t: "You approve", b: "Pick an edition and seat count. We send a GST quote in ₹ — nothing is charged until you say yes." },
-              { n: "02", t: "We set it up", b: "Licences provisioned, DNS/MX wired, and your old mail migrated by us — outside your working hours." },
-              { n: "03", t: "You're live", b: "Mailboxes on your own domain, admin handed over, and one person on WhatsApp who can change your account." },
-            ].map((s) => (
-              <div key={s.n} style={{ background: C.surf, border: `1px solid ${C.borderL}`, borderRadius: 12, padding: 20, boxShadow: SH_CARD }}>
-                <div style={{ ...eyebrow, marginBottom: 8 }}>{s.n}</div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: C.ink, marginBottom: 6 }}>{s.t}</div>
-                <p style={{ fontSize: 14, lineHeight: 1.5, color: C.body, margin: 0 }}>{s.b}</p>
-              </div>
-            ))}
+      {/* ── MIGRATION: four steps + the real inbox image ───────────────────── */}
+      <section style={{ background: C.surf, borderTop: `1px solid ${C.hair}` }}>
+        <div style={wrap({ padding: mob ? "44px 48px" : "56px 48px", display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: mob ? 32 : 52, alignItems: "center" })}>
+          <div>
+            <div style={{ ...eyebrow, marginBottom: 10 }}>Moving your old mail</div>
+            <h2 style={{ fontSize: mob ? 27 : 31, fontWeight: 700, letterSpacing: "-0.03em", color: C.ink, margin: "0 0 10px", textWrap: "balance" as const }}>Four steps. We do three, you do one.</h2>
+            <p style={{ fontSize: 17, lineHeight: 1.55, color: C.body, margin: "0 0 20px" }}>Old mail, folders, contacts and calendar all move to the new system — any number of mailboxes, from any previous provider, for ₹0. The work happens at night so your day isn&apos;t interrupted.</p>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {MIG_STEPS.map((s) => (
+                <div key={s.n} style={{ display: "flex", gap: 16, padding: "14px 0", borderTop: `1px solid ${C.hair}` }}>
+                  <span style={monoNum({ fontSize: 13, color: C.blue, fontWeight: 500, paddingTop: 2, flex: "none", width: 26 })}>{s.n}</span>
+                  <span style={{ flex: 1 }}>
+                    <span style={{ display: "block", fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em", color: C.ink, marginBottom: 3 }}>{s.title}</span>
+                    <span style={{ display: "block", fontSize: 14, color: C.body, lineHeight: 1.5 }}>{s.body}</span>
+                  </span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: C.sec, flex: "none", paddingTop: 3 }}>{s.who}</span>
+                </div>
+              ))}
+            </div>
           </div>
+          <figure style={{ margin: 0 }}>
+            <img src="/googleworkspace-inbox.png" alt="A Google Workspace inbox: Gmail with the company's own labels, plus Chat, Meet and Spaces in the side rail" width={1024} height={640} style={{ width: "100%", height: "auto", border: `1px solid ${C.borderL}`, borderRadius: 10, boxShadow: "0 16px 40px -26px rgba(12,17,22,.3)", display: "block" }} />
+            <figcaption style={{ marginTop: 14, fontSize: 13, color: C.sec, display: "flex", flexWrap: "wrap", gap: "4px 10px", alignItems: "baseline" }}>
+              <span>This is what the team sees in the morning —</span>
+              <span style={{ fontFamily: MONO, color: C.ink }}>you@yourcompany.in</span>
+              <span>· the same folders, the same old mail.</span>
+            </figcaption>
+          </figure>
         </div>
       </section>
 
@@ -464,8 +483,10 @@ export function HomeV2() {
             {CATALOGUE_V2.map((c) => (
               <Link key={c.name} href={c.href as never} style={{ display: "flex", flexDirection: "column", background: C.surf, border: `1px solid ${C.borderL}`, borderRadius: 11, padding: "16px 17px 14px", boxShadow: SH_CARD, textDecoration: "none", color: "inherit" }}>
                 {/* 16:9 icon band */}
-                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative", aspectRatio: "16/9", margin: "-16px -17px 12px", background: "linear-gradient(135deg, #F2F6FB, #E8ECF1)", borderBottom: `1px solid ${C.hair}`, borderRadius: "11px 11px 0 0" }}>
-                  <svg aria-hidden viewBox="0 0 24 24" width="42" height="42" fill="none" stroke={C.blue} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.85 }}><path d={CAT_ICON[c.icon]} /></svg>
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative", aspectRatio: "16/9", margin: "-16px -17px 12px", overflow: "hidden", background: "linear-gradient(135deg, #F2F6FB, #E8ECF1)", borderBottom: `1px solid ${C.hair}`, borderRadius: "11px 11px 0 0" }}>
+                  {c.img
+                    ? <img src={c.img} alt="" loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                    : <svg aria-hidden viewBox="0 0 24 24" width="42" height="42" fill="none" stroke={C.blue} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.85 }}><path d={CAT_ICON[c.icon]} /></svg>}
                 </span>
                 <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-0.01em", color: C.ink, minHeight: 19 }}>{c.name}</span>
                 <span style={{ display: "flex", alignItems: "baseline", gap: 5, marginTop: 9 }}>
