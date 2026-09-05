@@ -116,8 +116,6 @@ export function HomeV2() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [openFaq, setOpenFaq] = useState(0);
   const [w, setW] = useState(1200);
-  const [autoOff, setAutoOff] = useState(false); // hero auto-rotate stops for good once the visitor picks
-  const [hover, setHover] = useState(false);      // ...and pauses while the pointer is on the cards
 
   useEffect(() => {
     const m = () => setW(Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0));
@@ -126,21 +124,13 @@ export function HomeV2() {
   }, []);
   const mob = w < 980;
 
-  // Hero auto-rotate: cycle the highlighted suite as an attract loop, until the
-  // visitor picks one (permanent stop) or hovers the cards (temporary pause).
-  useEffect(() => {
-    if (autoOff || hover) return;
-    const id = setInterval(() => setVendorKey((k) => (k === "gw" ? "ms" : k === "ms" ? "zoho" : "gw")), 5000);
-    return () => clearInterval(id);
-  }, [autoOff, hover]);
-
   // Deep links: /#compare and /#features open + scroll to those sections, so the
   // nav/footer/hero links (and a shared URL) land in the right place.
   useEffect(() => {
     const openFromHash = () => {
       const h = window.location.hash;
-      if (h === "#compare") { setCompareOpen(true); setAutoOff(true); }
-      if (h === "#features") { setFeaturesOpen(true); setAutoOff(true); }
+      if (h === "#compare") setCompareOpen(true);
+      if (h === "#features") setFeaturesOpen(true);
       if (h === "#compare" || h === "#features") {
         setTimeout(() => document.querySelector(h)?.scrollIntoView({ behavior: "smooth" }), 60);
       }
@@ -178,14 +168,14 @@ export function HomeV2() {
           Annual billing saves up to {maxSavePct}% · GST invoice in ₹, input-credit eligible.
         </p>
 
-        <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12, maxWidth: 860, margin: "0 auto 14px", textAlign: "left" }}>
+        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12, maxWidth: 860, margin: "0 auto 14px", textAlign: "left" }}>
           {VENDORS.map((v) => {
             const from = Math.min(...editionsFor(v).map((e) => e.annual));
             const perDay = Math.round((from * 1.18 * 12) / 365);
             const on = v.key === vendorKey;
             const rec = v.key === "gw";
             return (
-              <button key={v.key} onClick={() => { setAutoOff(true); setVendorKey(v.key); document.getElementById("products")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} aria-pressed={on}
+              <button key={v.key} onClick={() => { setVendorKey(v.key); document.getElementById("products")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} aria-pressed={on}
                 style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", textAlign: "left", fontFamily: "inherit", padding: "16px 18px", borderRadius: 12, cursor: "pointer",
                   background: on ? C.greenT : C.surf, border: `1px solid ${on ? C.green : C.borderL}`, boxShadow: on ? SH_GREEN : SH_CARD }}>
                 <span style={{ display: "flex", alignItems: "center", width: "100%", minHeight: 20, marginBottom: 2 }}>
