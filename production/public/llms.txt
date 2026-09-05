@@ -1,0 +1,38 @@
+# Anutech Digital Pvt Ltd
+
+> Delhi-based Google Premier Partner (since 2014). We sell Google Workspace, Microsoft 365 and Zoho Workplace licences, domains, cPanel hosting, SSL and business email to Indian businesses — priced in rupees, with an 18% GST invoice (HSN 998313, input-credit eligible), free migration, and WhatsApp support. Maker of ResellerOS. GSTIN 07ABDCA0298H1ZP.
+
+## Business email pricing (per user / month, GST 18% extra, annual billing)
+
+- Google Workspace Business Starter — ₹136 (30 GB per user)
+- Google Workspace Business Standard — ₹736 (2 TB per user, recordings) — most teams pick this
+- Google Workspace Business Plus — ₹1,380 (5 TB, Vault, eDiscovery)
+- Microsoft 365 Business Basic — ₹145 (web Office, 50 GB mail)
+- Microsoft 365 Business Standard — ₹770 (desktop Office, 1 TB)
+- Zoho Workplace Standard — ₹90 (mail plus Writer, Sheet, Show) — cheapest full suite
+
+Monthly (flexible) billing is higher per user; annual billing saves roughly 12–17%. Renewal is at the same published rate. Nothing is charged until the customer approves a quote; payment is by Razorpay (UPI, card, netbanking).
+
+## Domains (per year, GST extra)
+
+- .in ₹499 first year, renews ₹799 · .co.in ₹599/₹899 · .com ₹899/₹1,199 · .org ₹1,099/₹1,299 · .net ₹1,199/₹1,399 · .store ₹249/₹4,199 · .io ₹3,899/₹4,299 · .ai ₹6,999/₹7,499
+- The renewal price is always printed next to the first-year price. The domain is ₹0 with a yearly hosting plan.
+
+## Hosting (cPanel on NVMe, Mumbai/Bengaluru)
+
+- Starter ₹159/mo (yearly), Business ₹359/mo, Agency ₹799/mo. Free SSL, daily backups, free migration.
+
+## Key pages
+
+- Home / email pricing: https://anutech.in/
+- Domains: https://anutech.in/domains
+- Hosting: https://anutech.in/hosting
+- Business email: https://anutech.in/email
+- Get a quote: https://anutech.in/quote
+- ResellerOS (software for resellers): https://anutech.in/reselleros
+
+## Contact
+
+- WhatsApp support, ~11-minute average first reply, Mon–Sat 10:00–19:00 IST
+- Email: support@anutech.in
+- Company: Anutech Digital Pvt Ltd, Rohini, Delhi, India
