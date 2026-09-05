@@ -46,10 +46,12 @@ describe("app ka pata — ek jagah", () => {
     }
   });
 
-  it("config live (Singapore) service par hai", () => {
-    /* 5 Sep 2026: canonical ab asia-southeast1 (Singapore) hai — public + domain-bound.
-       Purana njvk4nxhdq (asia-south1) ab auth-required, live nahi. */
-    expect(RESELLEROS_URL).toContain("asia-southeast1");
+  it("config STABLE domain par hai, cloud URL par nahi", () => {
+    /* 5 Sep 2026: cloud URLs region-move par badalte hain (asia-south1 →
+       asia-southeast1), isliye ab STABLE domain anutech.in use hota hai — jo
+       jis bhi live service se bound ho usi par jaata hai. Kabhi run.app pin mat karo. */
+    expect(RESELLEROS_URL).toContain("anutech.in");
+    expect(RESELLEROS_URL.includes("run.app")).toBe(false);
     expect(OS_SIGNUP).toBe(`${RESELLEROS_URL}/signup`);
     expect(ENQUIRY_API).toContain("/api/public/enquiry/general");
   });

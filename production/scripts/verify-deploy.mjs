@@ -30,7 +30,7 @@
  * number aaj 10 minute kha gaya tha, kyunki purane project ka wahi shakl ka host 503 deta
  * hai aur dono ek jaise dikhte hain.
  */
-export const PROD_URL = "https://resellersos-1005662057478.asia-southeast1.run.app";
+export const PROD_URL = "https://anutech.in";
 
 /** 28 Aug 2026 tak zinda tha, ab 503 deta hai — dobara na likha jaye. */
 const DEAD_URL = "https://resellersos-490252291080.asia-south1.run.app";

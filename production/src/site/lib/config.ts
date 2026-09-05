@@ -11,7 +11,11 @@
  */
 export const RESELLEROS_URL =
   process.env.NEXT_PUBLIC_RESELLEROS_URL?.trim() ||
-  "https://resellersos-1005662057478.asia-southeast1.run.app";
+  // Use the STABLE domain, not the Cloud Run URL — the run.app host changes when
+  // the service moves region (asia-south1 → asia-southeast1 on 5 Sep 2026), but
+  // anutech.in is bound to whichever service is live. So live-price + enquiry
+  // self-calls, signup and demo links follow the domain and never break on a move.
+  "https://anutech.in";
 
 /**
  * The public marketing site's CANONICAL origin (Pardeep, 3 Sep 2026: canonical
