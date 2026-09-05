@@ -23,7 +23,7 @@
 import { useEffect, useState } from "react";
 import Link from "@/site/components/ui/SiteLink";
 import { LICENCE_EDITIONS, EDITION_MATRICES } from "@/site/lib/data/catalog";
-import { CATALOGUE, TRUST, REVIEWS } from "@/site/lib/data/copy";
+import { TRUST, REVIEWS } from "@/site/lib/data/copy";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import { HOME_FAQS } from "@/site/lib/data/home-faqs";
 
@@ -102,6 +102,23 @@ const CROSS_ROWS: readonly { label: string; gw: string; ms: string; zoho: string
   { label: "Where the data sits", gw: "Google, India region pricing", ms: "Microsoft's regions", zoho: "Zoho's Indian datacentre" },
   { label: "Migration and support", gw: "✓ ₹0, overnight, done by us", ms: "✓ ₹0, overnight, done by us", zoho: "✓ ₹0, overnight, done by us" },
 ];
+
+/** "The rest of the catalogue" — the handoff's four cards, wired to the app's
+ *  real pages. `gst` is "+ GST 18%" or "No charge" per the design. `icon` keys a
+ *  simple line-art glyph that fills a tinted 16:9 band (consistent across all
+ *  four — no half-empty photo slots). */
+const CATALOGUE_V2: readonly { name: string; href: string; from: string; unit: string; gst: string; body: string; tags: string[]; cta: string; icon: "globe" | "server" | "lock" | "tag" }[] = [
+  { name: "Domains", href: "/domains", from: "₹249", unit: "from · first year", gst: "+ GST 18%", body: "500+ extensions, register and renew price on one row.", tags: ["500+ TLDS", "FREE DNS", "WHOIS PRIVACY"], cta: "See domain rates", icon: "globe" },
+  { name: "Web hosting", href: "/hosting", from: "₹159", unit: "from · /mo, billed yearly", gst: "+ GST 18%", body: "cPanel and LiteSpeed on NVMe, Mumbai and Bengaluru.", tags: ["CPANEL", "LITESPEED", "99.9% SLA"], cta: "See hosting plans", icon: "server" },
+  { name: "SSL & security", href: "/ssl", from: "₹0", unit: "free DV", gst: "No charge", body: "Free DV on every hosted site; wildcard and OV when needed.", tags: ["DV", "OV", "WILDCARD"], cta: "See SSL options", icon: "lock" },
+  { name: "Reseller program", href: "/reseller", from: "₹0", unit: "to join", gst: "No charge", body: "Published wholesale rates. No slabs, no advance deposit.", tags: ["NO DEPOSIT", "ONE RATE", "WHITE LABEL"], cta: "See the rate card", icon: "tag" },
+];
+const CAT_ICON: Record<string, string> = {
+  globe: "M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2c2.5 2.7 4 6.3 4 10s-1.5 7.3-4 10c-2.5-2.7-4-6.3-4-10s1.5-7.3 4-10z",
+  server: "M4 5h16v5H4zM4 14h16v5H4zM7.5 7.5h.01M7.5 16.5h.01",
+  lock: "M6 10V8a6 6 0 1112 0v2M5 10h14v10H5zM12 14v3",
+  tag: "M20.6 13.4 12 22l-9-9V4h9l8.6 8.6a1.4 1.4 0 010 2zM7.5 7.5h.01",
+};
 
 const wrap = (extra?: React.CSSProperties): React.CSSProperties => ({ maxWidth: 1180, margin: "0 auto", padding: "0 48px", ...extra });
 const eyebrow: React.CSSProperties = { fontFamily: MONO, fontSize: 10.5, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: C.blue };
@@ -437,26 +454,35 @@ export function HomeV2() {
         </div>
       </section>
 
-      {/* ── CATALOGUE ──────────────────────────────────────────────────────── */}
-      <section style={wrap({ padding: "44px 48px" })}>
-        <div style={eyebrow}>Everything else we sell</div>
-        <h2 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em", color: C.ink, margin: "8px 0 6px", textWrap: "balance" as const }}>Domains, hosting, SSL — same published-price rule</h2>
-        <p style={{ fontSize: 15, color: C.body, margin: "0 0 20px" }}>Every rate on the card, GST 18% separate, renewal price shown up front.</p>
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4,1fr)", gap: 16 }}>
-          {CATALOGUE.filter((c) => c.name !== "Business email").map((c) => (
-            <Link key={c.name} href={c.href as never} style={{ display: "block", background: C.surf, border: `1px solid ${C.borderL}`, borderRadius: 12, padding: 18, boxShadow: SH_CARD, textDecoration: "none", color: "inherit" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8, gap: 8 }}>
-                <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", color: C.ink }}>{c.name}</span>
-                <span style={monoNum({ fontSize: 12, color: C.blue })}>{c.from}</span>
-              </div>
-              <p style={{ fontSize: 13.5, lineHeight: 1.5, color: C.body, margin: "0 0 12px" }}>{c.body}</p>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {c.chips.map((chip) => (
-                  <span key={chip} style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: "0.08em", textTransform: "uppercase", border: `1px solid ${C.borderL}`, borderRadius: 4, padding: "3px 7px", color: C.sec }}>{chip}</span>
-                ))}
-              </div>
-            </Link>
-          ))}
+      {/* ── CATALOGUE — the rest of what we sell ───────────────────────────── */}
+      <section id="catalogue" style={{ background: C.sectT, borderTop: `1px solid ${C.hair}`, scrollMarginTop: 80 }}>
+        <div style={wrap({ padding: "44px 48px 48px" })}>
+          <div style={eyebrow}>The rest of the catalogue</div>
+          <h2 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.03em", color: C.ink, margin: "8px 0 6px", textWrap: "balance" as const }}>Domains, hosting, SSL — same published-price rule</h2>
+          <p style={{ fontSize: 15, color: C.body, margin: "0 0 22px" }}>Every rate on the card, GST 18% billed separately, renewal price shown up front.</p>
+          <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr 1fr" : "repeat(4,1fr)", gap: 16 }}>
+            {CATALOGUE_V2.map((c) => (
+              <Link key={c.name} href={c.href as never} style={{ display: "flex", flexDirection: "column", background: C.surf, border: `1px solid ${C.borderL}`, borderRadius: 11, padding: "16px 17px 14px", boxShadow: SH_CARD, textDecoration: "none", color: "inherit" }}>
+                {/* 16:9 icon band */}
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative", aspectRatio: "16/9", margin: "-16px -17px 12px", background: "linear-gradient(135deg, #F2F6FB, #E8ECF1)", borderBottom: `1px solid ${C.hair}`, borderRadius: "11px 11px 0 0" }}>
+                  <svg aria-hidden viewBox="0 0 24 24" width="42" height="42" fill="none" stroke={C.blue} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.85 }}><path d={CAT_ICON[c.icon]} /></svg>
+                </span>
+                <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-0.01em", color: C.ink, minHeight: 19 }}>{c.name}</span>
+                <span style={{ display: "flex", alignItems: "baseline", gap: 5, marginTop: 9 }}>
+                  <span style={monoNum({ fontSize: 22, fontWeight: 500, letterSpacing: "-0.02em", color: C.ink })}>{c.from}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase", color: C.sec }}>{c.unit}</span>
+                </span>
+                <span style={{ fontSize: 11.5, color: c.gst === "No charge" ? C.green : C.sec, marginTop: 2, fontWeight: c.gst === "No charge" ? 600 : 400 }}>{c.gst}</span>
+                <span style={{ fontSize: 12.5, lineHeight: 1.45, color: C.sec, marginTop: 10, minHeight: 54 }}>{c.body}</span>
+                <span style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 2, minHeight: 44, alignContent: "flex-start" }}>
+                  {c.tags.map((t) => (
+                    <span key={t} style={{ fontFamily: MONO, fontSize: 8.5, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: C.body, background: "#F2F6FB", border: "1px solid #E4EAF2", padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap" }}>{t}</span>
+                  ))}
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: 6, marginTop: "auto", paddingTop: 12, borderTop: `1px solid ${C.hair}`, fontSize: 12.5, fontWeight: 600, color: C.blue }}>{c.cta} <span aria-hidden>→</span></span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
