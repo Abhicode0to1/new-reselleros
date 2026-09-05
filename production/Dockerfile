@@ -44,7 +44,12 @@ ENV NEXT_PUBLIC_SUPABASE_ANON_KEY="sb_publishable_M1d2SCgCNq5QXLVAOsBPUA_UwLutFU
 # was NOT live and produced dead links. Override via --build-arg once a real
 # custom domain is mapped. (Customer-facing quote links now derive from the
 # request host instead — see /api/quotes/[id]/send — so they're domain-agnostic.)
-ARG NEXT_PUBLIC_APP_URL="https://resellersos-1005662057478.asia-south1.run.app"
+# The real custom domain, bound to whichever Cloud Run service is live. Baked in
+# at build (NEXT_PUBLIC_* is inlined by `next build`, so a runtime env can't set
+# it). Using the domain — not a run.app host — means OAuth redirects, email links
+# and the Razorpay webhook URL survive a region move (asia-south1 →
+# asia-southeast1, 5 Sep 2026). Override via --build-arg for a preview build.
+ARG NEXT_PUBLIC_APP_URL="https://anutech.in"
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 # Web-push VAPID PUBLIC key. Public by design — the browser sends it to the push
