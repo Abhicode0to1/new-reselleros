@@ -329,6 +329,61 @@ export function HomeV2() {
         </div>
       </section>
 
+      {/* ── FEATURES: full feature list for the selected suite ─────────────── */}
+      <section id="features" style={{ background: C.sectT, borderTop: `1px solid ${C.hair}`, scrollMarginTop: 80 }}>
+        <div style={wrap({ padding: "34px 48px" })}>
+          <button onClick={() => setFeaturesOpen((v) => !v)} aria-expanded={featuresOpen} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, fontFamily: "inherit" }}>
+            <div style={eyebrow}>Feature comparison</div>
+            <h2 style={{ fontSize: 27, fontWeight: 700, letterSpacing: "-0.035em", color: C.ink, margin: "8px 0 0" }}>{vendor.name} — every feature, edition by edition <span style={{ color: C.blue }}>{featuresOpen ? "▲" : "▼"}</span></h2>
+            <p style={{ fontSize: 14, color: C.sec, margin: "6px 0 0" }}>The complete list — <span style={{ color: C.green }}>✓ included</span>, a value where it differs, <span style={{ color: C.faint }}>— not in this edition</span>. GST 18% is billed separately.</p>
+          </button>
+          {featuresOpen && vendor.matrix && EDITION_MATRICES[vendor.matrix] && (() => {
+            const m = EDITION_MATRICES[vendor.matrix];
+            return (
+              <>
+                <div style={{ border: `1px solid ${C.borderL}`, borderRadius: 12, overflow: "hidden", marginTop: 16, background: C.surf }}>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                      <thead>
+                        <tr style={{ background: C.tableHead }}>
+                          <th style={{ textAlign: "left", padding: "13px 16px", width: 200, fontFamily: MONO, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.sec, borderBottom: `1px solid #DFE5EE` }}>Feature</th>
+                          {m.cols.map((c, ci) => {
+                            const ed = editionsFor(vendor)[ci];
+                            return (
+                              <th key={c} style={{ textAlign: "left", padding: "11px 16px", borderLeft: `1px solid #DFE5EE`, borderBottom: `1px solid #DFE5EE` }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{c}</div>
+                                {ed && <div style={monoNum({ fontSize: 12, color: C.sec })}>{inr(rateOf(ed))}/user/mo</div>}
+                              </th>
+                            );
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {m.rows.map((row) => (
+                          <tr key={row[0]} style={{ borderTop: `1px solid ${C.hair}` }}>
+                            <td style={{ padding: "11px 16px", fontSize: 13, fontWeight: 600, color: C.ink, background: C.surfT }}>{row[0]}</td>
+                            {row.slice(1).map((cell, j) => (
+                              <td key={j} style={{ padding: "11px 16px", fontSize: 13, fontFamily: cell === "Yes" || cell === "—" ? "inherit" : MONO, color: cell === "—" ? C.faint : cell === "Yes" ? C.green : C.ink, fontWeight: cell === "Yes" ? 700 : 400, borderLeft: `1px solid ${C.hair}` }}>
+                                {cell === "Yes" ? "✓" : cell}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {m.note && <p style={{ fontSize: 13, color: C.sec, padding: "12px 16px", margin: 0, borderTop: `1px solid ${C.hair}` }}><b style={{ color: C.ink, fontWeight: 600 }}>Good to know:</b> {m.note}</p>}
+                </div>
+                <p style={{ fontSize: 13, color: C.sec, marginTop: 12 }}>Switch the suite in the strip above to compare {vendor.key === "gw" ? "Microsoft 365 or Zoho" : "another suite"} instead. <button onClick={() => document.getElementById("products")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "none", border: "none", cursor: "pointer", color: C.blue, fontWeight: 600, fontSize: 13, fontFamily: "inherit" }}>Back to plans →</button></p>
+              </>
+            );
+          })()}
+          {featuresOpen && !vendor.matrix && (
+            <p style={{ fontSize: 14, color: C.body, marginTop: 12 }}>Zoho Workplace is a single Standard edition — mail plus Writer, Sheet and Show, 30 GB per user, on your own domain. Switch to Google Workspace or Microsoft 365 above for their edition-by-edition breakdown, or ask on WhatsApp.</p>
+          )}
+        </div>
+      </section>
+
       {/* ── COMPARE: all three suites side by side ─────────────────────────── */}
       <section id="compare" style={wrap({ padding: "40px 48px", scrollMarginTop: 80 })}>
         <button onClick={() => setCompareOpen((v) => !v)} aria-expanded={compareOpen} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, fontFamily: "inherit" }}>
@@ -385,61 +440,6 @@ export function HomeV2() {
             </div>
           );
         })()}
-      </section>
-
-      {/* ── FEATURES: full feature list for the selected suite ─────────────── */}
-      <section id="features" style={{ background: C.sectT, borderTop: `1px solid ${C.hair}`, scrollMarginTop: 80 }}>
-        <div style={wrap({ padding: "34px 48px" })}>
-          <button onClick={() => setFeaturesOpen((v) => !v)} aria-expanded={featuresOpen} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, fontFamily: "inherit" }}>
-            <div style={eyebrow}>Feature comparison</div>
-            <h2 style={{ fontSize: 27, fontWeight: 700, letterSpacing: "-0.035em", color: C.ink, margin: "8px 0 0" }}>{vendor.name} — every feature, edition by edition <span style={{ color: C.blue }}>{featuresOpen ? "▲" : "▼"}</span></h2>
-            <p style={{ fontSize: 14, color: C.sec, margin: "6px 0 0" }}>The complete list — <span style={{ color: C.green }}>✓ included</span>, a value where it differs, <span style={{ color: C.faint }}>— not in this edition</span>. GST 18% is billed separately.</p>
-          </button>
-          {featuresOpen && vendor.matrix && EDITION_MATRICES[vendor.matrix] && (() => {
-            const m = EDITION_MATRICES[vendor.matrix];
-            return (
-              <>
-                <div style={{ border: `1px solid ${C.borderL}`, borderRadius: 12, overflow: "hidden", marginTop: 16, background: C.surf }}>
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
-                      <thead>
-                        <tr style={{ background: C.tableHead }}>
-                          <th style={{ textAlign: "left", padding: "13px 16px", width: 200, fontFamily: MONO, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.sec, borderBottom: `1px solid #DFE5EE` }}>Feature</th>
-                          {m.cols.map((c, ci) => {
-                            const ed = editionsFor(vendor)[ci];
-                            return (
-                              <th key={c} style={{ textAlign: "left", padding: "11px 16px", borderLeft: `1px solid #DFE5EE`, borderBottom: `1px solid #DFE5EE` }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{c}</div>
-                                {ed && <div style={monoNum({ fontSize: 12, color: C.sec })}>{inr(rateOf(ed))}/user/mo</div>}
-                              </th>
-                            );
-                          })}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {m.rows.map((row) => (
-                          <tr key={row[0]} style={{ borderTop: `1px solid ${C.hair}` }}>
-                            <td style={{ padding: "11px 16px", fontSize: 13, fontWeight: 600, color: C.ink, background: C.surfT }}>{row[0]}</td>
-                            {row.slice(1).map((cell, j) => (
-                              <td key={j} style={{ padding: "11px 16px", fontSize: 13, fontFamily: cell === "Yes" || cell === "—" ? "inherit" : MONO, color: cell === "—" ? C.faint : cell === "Yes" ? C.green : C.ink, fontWeight: cell === "Yes" ? 700 : 400, borderLeft: `1px solid ${C.hair}` }}>
-                                {cell === "Yes" ? "✓" : cell}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {m.note && <p style={{ fontSize: 13, color: C.sec, padding: "12px 16px", margin: 0, borderTop: `1px solid ${C.hair}` }}><b style={{ color: C.ink, fontWeight: 600 }}>Good to know:</b> {m.note}</p>}
-                </div>
-                <p style={{ fontSize: 13, color: C.sec, marginTop: 12 }}>Switch the suite in the strip above to compare {vendor.key === "gw" ? "Microsoft 365 or Zoho" : "another suite"} instead. <button onClick={() => document.getElementById("products")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "none", border: "none", cursor: "pointer", color: C.blue, fontWeight: 600, fontSize: 13, fontFamily: "inherit" }}>Back to plans →</button></p>
-              </>
-            );
-          })()}
-          {featuresOpen && !vendor.matrix && (
-            <p style={{ fontSize: 14, color: C.body, marginTop: 12 }}>Zoho Workplace is a single Standard edition — mail plus Writer, Sheet and Show, 30 GB per user, on your own domain. Switch to Google Workspace or Microsoft 365 above for their edition-by-edition breakdown, or ask on WhatsApp.</p>
-          )}
-        </div>
       </section>
 
       {/* ── MIGRATION: four steps + the real inbox image ───────────────────── */}
