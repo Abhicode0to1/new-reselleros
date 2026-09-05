@@ -112,9 +112,12 @@ export function HomeV2() {
   const [billing, setBilling] = useState<Billing>("annual");
   const [seats, setSeats] = useState(1);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [featuresOpen, setFeaturesOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [openFaq, setOpenFaq] = useState(0);
   const [w, setW] = useState(1200);
+  const [autoOff, setAutoOff] = useState(false); // hero auto-rotate stops for good once the visitor picks
+  const [hover, setHover] = useState(false);      // ...and pauses while the pointer is on the cards
 
   useEffect(() => {
     const m = () => setW(Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0));
@@ -122,6 +125,30 @@ export function HomeV2() {
     return () => window.removeEventListener("resize", m);
   }, []);
   const mob = w < 980;
+
+  // Hero auto-rotate: cycle the highlighted suite as an attract loop, until the
+  // visitor picks one (permanent stop) or hovers the cards (temporary pause).
+  useEffect(() => {
+    if (autoOff || hover) return;
+    const id = setInterval(() => setVendorKey((k) => (k === "gw" ? "ms" : k === "ms" ? "zoho" : "gw")), 5000);
+    return () => clearInterval(id);
+  }, [autoOff, hover]);
+
+  // Deep links: /#compare and /#features open + scroll to those sections, so the
+  // nav/footer/hero links (and a shared URL) land in the right place.
+  useEffect(() => {
+    const openFromHash = () => {
+      const h = window.location.hash;
+      if (h === "#compare") { setCompareOpen(true); setAutoOff(true); }
+      if (h === "#features") { setFeaturesOpen(true); setAutoOff(true); }
+      if (h === "#compare" || h === "#features") {
+        setTimeout(() => document.querySelector(h)?.scrollIntoView({ behavior: "smooth" }), 60);
+      }
+    };
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
+  }, []);
 
   const vendor = VENDORS.find((v) => v.key === vendorKey)!;
   const annual = billing === "annual";
@@ -151,14 +178,14 @@ export function HomeV2() {
           Annual billing saves up to {maxSavePct}% · GST invoice in ₹, input-credit eligible.
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12, maxWidth: 860, margin: "0 auto 14px", textAlign: "left" }}>
+        <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12, maxWidth: 860, margin: "0 auto 14px", textAlign: "left" }}>
           {VENDORS.map((v) => {
             const from = Math.min(...editionsFor(v).map((e) => e.annual));
             const perDay = Math.round((from * 1.18 * 12) / 365);
             const on = v.key === vendorKey;
             const rec = v.key === "gw";
             return (
-              <button key={v.key} onClick={() => { setVendorKey(v.key); document.getElementById("products")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} aria-pressed={on}
+              <button key={v.key} onClick={() => { setAutoOff(true); setVendorKey(v.key); document.getElementById("products")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} aria-pressed={on}
                 style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", textAlign: "left", fontFamily: "inherit", padding: "16px 18px", borderRadius: 12, cursor: "pointer",
                   background: on ? C.greenT : C.surf, border: `1px solid ${on ? C.green : C.borderL}`, boxShadow: on ? SH_GREEN : SH_CARD }}>
                 <span style={{ display: "flex", alignItems: "center", width: "100%", minHeight: 20, marginBottom: 2 }}>
@@ -239,8 +266,8 @@ export function HomeV2() {
               const buyHref = WA(`Hi Anutech — I'd like to buy ${vendor.name} ${LABEL[e.name] ?? e.name} for ${seats} user${seats > 1 ? "s" : ""} (${annual ? "annual" : "monthly"}). Please send the payment link.`);
               return (
                 <div key={e.name} style={{ display: "flex", flexDirection: "column", minHeight: 352, padding: 18, border: `1px solid ${pop ? C.green : C.border}`, borderRadius: 12, background: pop ? C.greenT : C.surf, boxShadow: pop ? SH_GREEN : SH_CARD }}>
-                  {/* head */}
-                  <div style={{ margin: "-18px -18px 10px", padding: "9px 18px 8px", background: pop ? C.greenT : C.surfT, borderBottom: `1px solid ${C.hair}`, borderRadius: "12px 12px 0 0" }}>
+                  {/* head — sticks below the strip while scrolling a long card */}
+                  <div style={{ position: "sticky", top: 130, zIndex: 5, margin: "-18px -18px 10px", padding: "9px 18px 8px", background: pop ? C.greenT : C.surfT, backdropFilter: "blur(4px)", borderBottom: `1px solid ${C.hair}`, borderRadius: "12px 12px 0 0" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
                         <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.02em", color: C.ink }}>{LABEL[e.name] ?? e.name}</span>
@@ -342,6 +369,61 @@ export function HomeV2() {
             </div>
           );
         })()}
+      </section>
+
+      {/* ── FEATURES: full feature list for the selected suite ─────────────── */}
+      <section id="features" style={{ background: C.sectT, borderTop: `1px solid ${C.hair}`, scrollMarginTop: 80 }}>
+        <div style={wrap({ padding: "34px 48px" })}>
+          <button onClick={() => setFeaturesOpen((v) => !v)} aria-expanded={featuresOpen} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, fontFamily: "inherit" }}>
+            <div style={eyebrow}>Feature comparison</div>
+            <h2 style={{ fontSize: 27, fontWeight: 700, letterSpacing: "-0.035em", color: C.ink, margin: "8px 0 0" }}>{vendor.name} — every feature, edition by edition <span style={{ color: C.blue }}>{featuresOpen ? "▲" : "▼"}</span></h2>
+            <p style={{ fontSize: 14, color: C.sec, margin: "6px 0 0" }}>The complete list — <span style={{ color: C.green }}>✓ included</span>, a value where it differs, <span style={{ color: C.faint }}>— not in this edition</span>. GST 18% is billed separately.</p>
+          </button>
+          {featuresOpen && vendor.matrix && EDITION_MATRICES[vendor.matrix] && (() => {
+            const m = EDITION_MATRICES[vendor.matrix];
+            return (
+              <>
+                <div style={{ border: `1px solid ${C.borderL}`, borderRadius: 12, overflow: "hidden", marginTop: 16, background: C.surf }}>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                      <thead>
+                        <tr style={{ background: C.tableHead }}>
+                          <th style={{ textAlign: "left", padding: "13px 16px", width: 200, fontFamily: MONO, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.sec, borderBottom: `1px solid #DFE5EE` }}>Feature</th>
+                          {m.cols.map((c, ci) => {
+                            const ed = editionsFor(vendor)[ci];
+                            return (
+                              <th key={c} style={{ textAlign: "left", padding: "11px 16px", borderLeft: `1px solid #DFE5EE`, borderBottom: `1px solid #DFE5EE` }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{c}</div>
+                                {ed && <div style={monoNum({ fontSize: 12, color: C.sec })}>{inr(rateOf(ed))}/user/mo</div>}
+                              </th>
+                            );
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {m.rows.map((row) => (
+                          <tr key={row[0]} style={{ borderTop: `1px solid ${C.hair}` }}>
+                            <td style={{ padding: "11px 16px", fontSize: 13, fontWeight: 600, color: C.ink, background: C.surfT }}>{row[0]}</td>
+                            {row.slice(1).map((cell, j) => (
+                              <td key={j} style={{ padding: "11px 16px", fontSize: 13, fontFamily: cell === "Yes" || cell === "—" ? "inherit" : MONO, color: cell === "—" ? C.faint : cell === "Yes" ? C.green : C.ink, fontWeight: cell === "Yes" ? 700 : 400, borderLeft: `1px solid ${C.hair}` }}>
+                                {cell === "Yes" ? "✓" : cell}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {m.note && <p style={{ fontSize: 13, color: C.sec, padding: "12px 16px", margin: 0, borderTop: `1px solid ${C.hair}` }}><b style={{ color: C.ink, fontWeight: 600 }}>Good to know:</b> {m.note}</p>}
+                </div>
+                <p style={{ fontSize: 13, color: C.sec, marginTop: 12 }}>Switch the suite in the strip above to compare {vendor.key === "gw" ? "Microsoft 365 or Zoho" : "another suite"} instead. <button onClick={() => document.getElementById("products")?.scrollIntoView({ behavior: "smooth" })} style={{ background: "none", border: "none", cursor: "pointer", color: C.blue, fontWeight: 600, fontSize: 13, fontFamily: "inherit" }}>Back to plans →</button></p>
+              </>
+            );
+          })()}
+          {featuresOpen && !vendor.matrix && (
+            <p style={{ fontSize: 14, color: C.body, marginTop: 12 }}>Zoho Workplace is a single Standard edition — mail plus Writer, Sheet and Show, 30 GB per user, on your own domain. Switch to Google Workspace or Microsoft 365 above for their edition-by-edition breakdown, or ask on WhatsApp.</p>
+          )}
+        </div>
       </section>
 
       {/* ── ORDER FLOW ─────────────────────────────────────────────────────── */}
