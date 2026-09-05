@@ -22,7 +22,8 @@
  */
 import { useEffect, useState } from "react";
 import Link from "@/site/components/ui/SiteLink";
-import { LICENCE_EDITIONS, EDITION_MATRICES } from "@/site/lib/data/catalog";
+import { LICENCE_EDITIONS, EDITION_MATRICES, type LicenceEdition } from "@/site/lib/data/catalog";
+import type { MergedEdition } from "@/site/lib/live-catalog";
 import { TRUST, REVIEWS } from "@/site/lib/data/copy";
 import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import { HOME_FAQS } from "@/site/lib/data/home-faqs";
@@ -72,7 +73,6 @@ const DESC: Record<string, string> = {
 };
 const ZOHO_FEATURES = ["Custom email on your domain", "Mail, Writer, Sheet, Show, Calendar", "30 GB per user", "IMAP, POP and mobile apps", "Migration done by us, free"];
 
-const editionsFor = (v: Vendor) => LICENCE_EDITIONS.filter((e) => e.name.startsWith(v.prefix));
 /** ALL "Yes"/valued features for an edition (no cap — the card shows a few and
  *  a "See all N features" toggle reveals the rest). */
 function featuresFor(v: Vendor, i: number): string[] {
@@ -133,7 +133,7 @@ const wrap = (extra?: React.CSSProperties): React.CSSProperties => ({ maxWidth: 
 const eyebrow: React.CSSProperties = { fontFamily: MONO, fontSize: 10.5, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: C.blue };
 const monoNum = (extra?: React.CSSProperties): React.CSSProperties => ({ fontFamily: MONO, fontVariantNumeric: "tabular-nums", ...extra });
 
-export function HomeV2() {
+export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
   const [vendorKey, setVendorKey] = useState<VendorKey>("gw");
   const [billing, setBilling] = useState<Billing>("annual");
   const [seats, setSeats] = useState(1);
@@ -168,11 +168,16 @@ export function HomeV2() {
 
   const vendor = VENDORS.find((v) => v.key === vendorKey)!;
   const annual = billing === "annual";
-  const rateOf = (e: (typeof LICENCE_EDITIONS)[number]) => (annual ? e.annual : e.monthly);
+  const rateOf = (e: LicenceEdition) => (annual ? e.annual : e.monthly);
 
-  const allAnnual = LICENCE_EDITIONS.map((e) => e.annual);
+  // Live GW rates (from the app catalogue) override the placeholders; fall back
+  // to placeholders if the page didn't pass any. Same source the /quote uses.
+  const LIST: readonly LicenceEdition[] = editions && editions.length ? editions : LICENCE_EDITIONS;
+  const editionsFor = (v: Vendor) => LIST.filter((e) => e.name.startsWith(v.prefix));
+
+  const allAnnual = LIST.map((e) => e.annual);
   const heroMin = Math.min(...allAnnual), heroMax = Math.max(...allAnnual);
-  const maxSavePct = Math.max(...LICENCE_EDITIONS.map((e) => Math.round((1 - e.annual / e.monthly) * 100)));
+  const maxSavePct = Math.max(...LIST.map((e) => Math.round((1 - e.annual / e.monthly) * 100)));
 
   const vendorEditions = editionsFor(vendor);
   const popularEd = vendorEditions.find((e) => e.name === vendor.popular) ?? vendorEditions[0];
@@ -359,7 +364,7 @@ export function HomeV2() {
                         </tr>
                       </thead>
                       <tbody>
-                        {m.rows.map((row) => (
+                        {m.rows.filter((row) => !/price per seat/i.test(row[0])).map((row) => (
                           <tr key={row[0]} style={{ borderTop: `1px solid ${C.hair}` }}>
                             <td style={{ padding: "11px 16px", fontSize: 13, fontWeight: 600, color: C.ink, background: C.surfT }}>{row[0]}</td>
                             {row.slice(1).map((cell, j) => (
@@ -392,7 +397,7 @@ export function HomeV2() {
           <p style={{ fontSize: 14, color: C.sec, margin: "6px 0 0" }}>Real values, not adjectives. Markers: <span style={{ color: C.green }}>✓ included</span> · <span style={{ color: "#8A5A0B" }}>₹ costs extra</span> · <span style={{ color: C.faint }}>✕ not included</span>. Every rate is + 18% GST.</p>
         </button>
         {compareOpen && (() => {
-          const entry = (p: string) => LICENCE_EDITIONS.find((e) => e.name.startsWith(p))!;
+          const entry = (p: string) => LIST.find((e) => e.name.startsWith(p))!;
           const bill = (p: string) => inr(Math.round((annual ? entry(p).annual : entry(p).monthly) * 1.18)) + "/user/mo";
           const buy = (name: string) => WA(`Hi Anutech — I'd like to buy ${name}. Please guide me.`);
           const head = [{ k: "gw", name: "Google Workspace", logo: "/logo-google-workspace-wordmark.png", h: 20 }, { k: "ms", name: "Microsoft 365", logo: "/logo-microsoft-365-trim.png", h: 22 }, { k: "zoho", name: "Zoho Workplace", logo: "/logo-zoho-trim.png", h: 22 }];

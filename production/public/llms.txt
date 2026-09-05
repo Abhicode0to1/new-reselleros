@@ -4,7 +4,7 @@
 
 ## Business email pricing (per user / month, GST 18% extra, annual billing)
 
-- Google Workspace Business Starter — ₹136 (30 GB per user)
+- Google Workspace Business Starter — ₹270 (30 GB per user)
 - Google Workspace Business Standard — ₹736 (2 TB per user, recordings) — most teams pick this
 - Google Workspace Business Plus — ₹1,380 (5 TB, Vault, eDiscovery)
 - Microsoft 365 Business Basic — ₹145 (web Office, 50 GB mail)

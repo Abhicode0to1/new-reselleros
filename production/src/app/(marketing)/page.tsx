@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { HomeV2 } from "@/site/components/home/HomeV2";
 import { HOME_FAQS } from "@/site/lib/data/home-faqs";
 import { COMPANY, SITE_URL } from "@/site/lib/config";
-import { LICENCE_EDITIONS } from "@/site/lib/data/catalog";
+import { fetchLiveWorkspace, mergeEditions } from "@/site/lib/live-catalog";
 
 /**
  * Home — the email-first "Anutech Home v2" (5 Sep 2026). The body is <HomeV2/>
@@ -64,6 +64,11 @@ export default async function HomePage({
   const { data: { user } } = await supabase.auth.getUser();
   if (user && searchParams.preview !== "1") redirect("/dashboard");
 
+  // Real GW prices from the app catalogue override the placeholder rates, so the
+  // home shows the same figure the quote does (falls back to placeholders if the
+  // app is unreachable). Same source the /quote page uses.
+  const editions = mergeEditions(await fetchLiveWorkspace());
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -93,7 +98,7 @@ export default async function HomePage({
       },
       // One Product per suite, with an AggregateOffer over its real editions.
       ...SUITES.map((s) => {
-        const eds = LICENCE_EDITIONS.filter((e) => e.name.startsWith(s.prefix));
+        const eds = editions.filter((e) => e.name.startsWith(s.prefix));
         const prices = eds.map((e) => e.annual);
         return {
           "@type": "Product",
@@ -136,7 +141,7 @@ export default async function HomePage({
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <HomeV2 />
+      <HomeV2 editions={editions} />
     </>
   );
 }
