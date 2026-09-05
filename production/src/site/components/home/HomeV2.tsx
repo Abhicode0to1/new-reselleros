@@ -73,6 +73,8 @@ const DESC: Record<string, string> = {
 const ZOHO_FEATURES = ["Custom email on your domain", "Mail, Writer, Sheet, Show, Calendar", "30 GB per user", "IMAP, POP and mobile apps", "Migration done by us, free"];
 
 const editionsFor = (v: Vendor) => LICENCE_EDITIONS.filter((e) => e.name.startsWith(v.prefix));
+/** ALL "Yes"/valued features for an edition (no cap — the card shows a few and
+ *  a "See all N features" toggle reveals the rest). */
 function featuresFor(v: Vendor, i: number): string[] {
   if (!v.matrix) return ZOHO_FEATURES;
   const m = EDITION_MATRICES[v.matrix];
@@ -83,10 +85,23 @@ function featuresFor(v: Vendor, i: number): string[] {
     if (/price|user cap/i.test(label)) continue;
     const cell = cells[i];
     if (cell && cell !== "—") out.push(cell === "Yes" ? label : `${label}: ${cell}`);
-    if (out.length >= 5) break;
   }
   return out;
 }
+
+/** Cross-vendor comparison — the handoff's own copy (GW vs M365 vs Zoho). Cells
+ *  lead with a marker: ✓ included · ✕ not included · ₹ costs extra. Bill-per-user
+ *  is computed live from the entry edition of each suite. */
+const CROSS_ROWS: readonly { label: string; gw: string; ms: string; zoho: string }[] = [
+  { label: "Storage per user", gw: "30 GB · 2 TB on Standard · 5 TB on Plus", ms: "50 GB mailbox + 1 TB OneDrive", zoho: "30 GB mailbox + WorkDrive" },
+  { label: "Mail on your own domain", gw: "✓ Gmail", ms: "✓ Outlook", zoho: "✓ Zoho Mail" },
+  { label: "Desktop Word / Excel", gw: "✕ Browser and mobile only", ms: "✓ From Business Standard (₹770)", zoho: "✕ Browser and mobile" },
+  { label: "Meetings", gw: "Meet: 100 · 150 on Standard · 500 on Plus", ms: "Teams: meetings and webinars", zoho: "Zoho Meeting: fine for a small team" },
+  { label: "Compliance / audit tools", gw: "✓ Vault, in Business Plus (₹1,380)", ms: "₹ Purchased separately", zoho: "✕ Not in this plan" },
+  { label: "User limit", gw: "Up to 300; Enterprise after that", ms: "Up to 300 on Business plans", zoho: "No practical limit" },
+  { label: "Where the data sits", gw: "Google, India region pricing", ms: "Microsoft's regions", zoho: "Zoho's Indian datacentre" },
+  { label: "Migration and support", gw: "✓ ₹0, overnight, done by us", ms: "✓ ₹0, overnight, done by us", zoho: "✓ ₹0, overnight, done by us" },
+];
 
 const wrap = (extra?: React.CSSProperties): React.CSSProperties => ({ maxWidth: 1180, margin: "0 auto", padding: "0 48px", ...extra });
 const eyebrow: React.CSSProperties = { fontFamily: MONO, fontSize: 10.5, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: C.blue };
@@ -97,6 +112,7 @@ export function HomeV2() {
   const [billing, setBilling] = useState<Billing>("annual");
   const [seats, setSeats] = useState(1);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [openFaq, setOpenFaq] = useState(0);
   const [w, setW] = useState(1200);
 
@@ -245,12 +261,18 @@ export function HomeV2() {
                   </a>
                   <p style={{ fontSize: 12.5, lineHeight: 1.45, color: C.sec, margin: "0 0 12px", minHeight: 36 }}>{DESC[e.name] ?? e.note}</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-                    {feats.map((f) => (
+                    {(expanded[e.name] ? feats : feats.slice(0, 4)).map((f) => (
                       <span key={f} style={{ display: "flex", gap: 9, fontSize: 12.5, lineHeight: 1.4, color: C.ink2 }}>
                         <svg aria-hidden viewBox="0 0 24 24" width="15" height="15" fill="none" stroke={C.blue} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none", marginTop: 1 }}><path d="M20 6 9 17l-5-5" /></svg>
                         <span>{f}</span>
                       </span>
                     ))}
+                    {feats.length > 4 && (
+                      <button onClick={() => setExpanded((x) => ({ ...x, [e.name]: !x[e.name] }))} aria-expanded={!!expanded[e.name]}
+                        style={{ alignSelf: "flex-start", fontFamily: "inherit", fontSize: 12, fontWeight: 600, color: C.blue, background: "none", border: "none", padding: "2px 0", cursor: "pointer" }}>
+                        {expanded[e.name] ? "Show fewer" : `See all ${feats.length} features`}
+                      </button>
+                    )}
                   </div>
                   {/* trial / quote */}
                   <div style={{ display: "flex", gap: 7, marginTop: "auto", paddingTop: 14 }}>
@@ -264,44 +286,62 @@ export function HomeV2() {
         </div>
       </section>
 
-      {/* ── COMPARE ────────────────────────────────────────────────────────── */}
+      {/* ── COMPARE: all three suites side by side ─────────────────────────── */}
       <section id="compare" style={wrap({ padding: "40px 48px", scrollMarginTop: 80 })}>
         <button onClick={() => setCompareOpen((v) => !v)} aria-expanded={compareOpen} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0, fontFamily: "inherit" }}>
           <div style={eyebrow}>Compare editions</div>
-          <h2 style={{ fontSize: 27, fontWeight: 700, letterSpacing: "-0.035em", color: C.ink, margin: "8px 0 0" }}>{vendor.name} — every edition, in the open <span style={{ color: C.blue }}>{compareOpen ? "▲" : "▼"}</span></h2>
-          <p style={{ fontSize: 14, color: C.sec, margin: "6px 0 0" }}>Real feature values, not adjectives. GST 18% is billed separately on every edition.</p>
+          <h2 style={{ fontSize: 27, fontWeight: 700, letterSpacing: "-0.035em", color: C.ink, margin: "8px 0 0" }}>All three suites, side by side <span style={{ color: C.blue }}>{compareOpen ? "▲" : "▼"}</span></h2>
+          <p style={{ fontSize: 14, color: C.sec, margin: "6px 0 0" }}>Real values, not adjectives. Markers: <span style={{ color: C.green }}>✓ included</span> · <span style={{ color: "#8A5A0B" }}>₹ costs extra</span> · <span style={{ color: C.faint }}>✕ not included</span>. Every rate is + 18% GST.</p>
         </button>
-        {compareOpen && vendor.matrix && EDITION_MATRICES[vendor.matrix] && (
-          <div style={{ border: `1px solid ${C.borderL}`, borderRadius: 12, overflow: "hidden", marginTop: 16 }}>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
-                <thead>
-                  <tr style={{ background: C.tableHead }}>
-                    <th style={{ textAlign: "left", padding: "12px 16px", fontSize: 12.5, fontWeight: 600, color: C.ink2 }}>Feature</th>
-                    {EDITION_MATRICES[vendor.matrix].cols.map((c) => (
-                      <th key={c} style={{ textAlign: "left", padding: "12px 16px", fontFamily: MONO, fontSize: 10.5, letterSpacing: "0.08em", color: C.ink2 }}>{c}</th>
+        {compareOpen && (() => {
+          const entry = (p: string) => LICENCE_EDITIONS.find((e) => e.name.startsWith(p))!;
+          const bill = (p: string) => inr(Math.round((annual ? entry(p).annual : entry(p).monthly) * 1.18)) + "/user/mo";
+          const buy = (name: string) => WA(`Hi Anutech — I'd like to buy ${name}. Please guide me.`);
+          const head = [{ k: "gw", name: "Google Workspace", logo: "/logo-google-workspace-wordmark.png", h: 20 }, { k: "ms", name: "Microsoft 365", logo: "/logo-microsoft-365-trim.png", h: 22 }, { k: "zoho", name: "Zoho Workplace", logo: "/logo-zoho-trim.png", h: 22 }];
+          const rows: { label: string; sub?: string; cells: string[] }[] = [
+            { label: "Bill per user", sub: annual ? "annual commitment" : "flexible monthly", cells: [bill("GW "), bill("M365 "), bill("Zoho")] },
+            ...CROSS_ROWS.map((r) => ({ label: r.label, cells: [r.gw, r.ms, r.zoho] })),
+          ];
+          return (
+            <div style={{ border: `1px solid ${C.borderL}`, borderRadius: 12, overflow: "hidden", marginTop: 16 }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+                  <thead>
+                    <tr style={{ background: C.tableHead }}>
+                      <th style={{ textAlign: "left", padding: "13px 16px", width: 190, fontFamily: MONO, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: C.sec, borderBottom: `1px solid #DFE5EE` }}>What we&apos;re comparing</th>
+                      {head.map((v) => (
+                        <th key={v.k} style={{ textAlign: "left", padding: "13px 16px", borderLeft: `1px solid #DFE5EE`, borderBottom: `1px solid #DFE5EE` }}>
+                          <img src={v.logo} alt={v.name} style={{ height: v.h, width: "auto", objectFit: "contain" }} />
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.label} style={{ borderTop: `1px solid ${C.hair}` }}>
+                        <td style={{ padding: "12px 16px", fontSize: 13.5, fontWeight: 600, color: C.ink, background: C.surfT }}>
+                          {r.label}{r.sub && <span style={{ display: "block", fontSize: 11.5, fontWeight: 400, color: C.sec, marginTop: 2 }}>{r.sub}</span>}
+                        </td>
+                        {r.cells.map((cell, j) => <MarkerCell key={j} text={cell} />)}
+                      </tr>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {EDITION_MATRICES[vendor.matrix].rows.map((row) => (
-                    <tr key={row[0]} style={{ borderTop: `1px solid ${C.hair}` }}>
-                      <td style={{ padding: "11px 16px", fontSize: 13, color: C.sec }}>{row[0]}</td>
-                      {row.slice(1).map((cell, j) => (
-                        <td key={j} style={{ padding: "11px 16px", fontSize: 13, fontFamily: cell === "Yes" || cell === "—" ? "inherit" : MONO, color: cell === "—" ? C.faint : cell === "Yes" ? C.green : C.ink }}>
-                          {cell === "Yes" ? "✓" : cell}
+                    <tr style={{ borderTop: `1px solid ${C.hair}`, background: C.surfT }}>
+                      <td style={{ padding: "14px 16px", fontSize: 13.5, fontWeight: 600, color: C.ink }}>Made your choice?</td>
+                      {head.map((v) => (
+                        <td key={v.k} style={{ padding: "12px 16px", borderLeft: `1px solid ${C.hair}` }}>
+                          <a href={buy(v.name)} target="_blank" rel="noopener" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "9px 12px", borderRadius: 8, background: BTN_PRIMARY, color: "#fff", boxShadow: SH_BTN, textDecoration: "none", whiteSpace: "nowrap" }}><CartIcon /> Buy {v.name.split(" ")[0]}</a>
                         </td>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              </div>
+              <p style={{ fontSize: 13, color: C.sec, padding: "12px 16px", margin: 0, borderTop: `1px solid ${C.hair}` }}>
+                Still unsure? <a href={WA("Hi Anutech — here's our current bill / requirement, which suite works out cheaper?")} target="_blank" rel="noopener" style={{ color: C.green, fontWeight: 600 }}>Send it on WhatsApp</a> — we&apos;ll compare and tell you in writing which works out cheaper.
+              </p>
             </div>
-          </div>
-        )}
-        {compareOpen && !vendor.matrix && (
-          <p style={{ fontSize: 14, color: C.body, marginTop: 12 }}>Zoho Workplace is a single Standard edition at {inr(90)}/user/mo (annual) — mail plus Writer, Sheet and Show, 30 GB per user. Ask on WhatsApp for the full feature list.</p>
-        )}
+          );
+        })()}
       </section>
 
       {/* ── ORDER FLOW ─────────────────────────────────────────────────────── */}
@@ -403,6 +443,17 @@ export function HomeV2() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** A comparison cell that colours a leading ✓ / ✕ / ₹ marker. */
+function MarkerCell({ text }: { text: string }) {
+  const m = text.match(/^([✓✕₹])\s*(.*)$/);
+  const color = m ? (m[1] === "✓" ? C.green : m[1] === "₹" ? "#8A5A0B" : C.faint) : C.ink2;
+  return (
+    <td style={{ padding: "12px 16px", fontSize: 13, lineHeight: 1.4, color: C.ink2, borderLeft: `1px solid ${C.hair}`, verticalAlign: "top" }}>
+      {m ? (<><span style={{ color, fontWeight: 700 }}>{m[1]}</span> {m[2]}</>) : text}
+    </td>
   );
 }
 
