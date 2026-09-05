@@ -1,324 +1,376 @@
 "use client";
 /**
- * The quote page: form on the left, live estimate on the right, and on Generate the
- * enquiry POSTs to ResellerOS through /api/enquiry — a lead in the sales pipeline.
+ * QuoteBuilder — the multi-line quote page ("Anutech Quote" handoff, 5 Sep 2026).
  *
- * ─── WHY THE PRODUCTS ARE EDITIONS NOW ──────────────────────────────────────
- * The first version copied the handoff's five coarse chips ("Google Workspace", …).
- * Pardeep clicked "Get this as a quote" from the licence calculator and found his
- * selection gone: "usme sirf google workspace hota hai, product selection ka to option
- * hi nahi — bina product ke quote kaise jayenge". He is right: a licence quotation
- * without the EDITION is not a quotation.
+ * Two collapsible steps (What to quote · Where to send it), a live summary rail,
+ * and a generated quote document with email / WhatsApp / print hand-off. It is a
+ * faithful port of the handoff, wired to REAL data (QUOTE_PRODUCTS from the
+ * repo's catalogue) and to the app's REAL backend: "Generate" POSTs the
+ * requirement to ResellerOS through /api/enquiry (a lead in the sales pipeline,
+ * with the GW auto-quote path preserved), then shows the document for the
+ * customer to send by email or WhatsApp — one tap each, not automatic delivery.
  *
- * So the licence chips are the same live-merged editions the calculator shows (GW rows
- * carry the app catalogue's real prices — the ● mark), plus Anutech Mail, Hosting and
- * Domains. The calculator hands its whole selection over in the URL
- * (?edition=…&seats=…&term=…), so what you configured is what gets quoted.
- *
- * The on-screen document is an ESTIMATE and says so; the binding GST quotation with the
- * real CGST-series number is produced by the app and emailed.
+ * Money maths (WHOLE RUPEES, CLAUDE.md §13): a monthly-cycle line on an annual
+ * commitment bills ×12 (a year on this invoice); once-a-year lines (domain, SSL,
+ * onsite) bill once. Payable = round(subtotal × 1.18). Renewal annualises every
+ * line at today's rate. Every figure is derived, never hardcoded.
  */
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { rupee, GST_RATE } from "@/site/lib/money";
-import { MAIL_RATES, LICENCE_EDITIONS } from "@/site/lib/data/catalog";
-import { apiProductFor } from "@/site/lib/quote-mapping";
+import { QUOTE_PRODUCTS, QUOTE_CATEGORIES, QUOTE_TLDS, type QuoteProduct } from "@/site/lib/data/quote-catalog";
+import { WHATSAPP_URL, COMPANY } from "@/site/lib/config";
 import type { MergedEdition } from "@/site/lib/live-catalog";
 
-const FIXED_PRODUCTS = ["Anutech Mail", "Hosting", "Domains"] as const;
-
-interface QuoteLine { label: string; detail: string; qty: number; amount: string; raw: number }
+const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+const P = "var(--primary)";
 
 export function QuoteBuilder({ editions }: { editions?: MergedEdition[] }) {
-  const list: MergedEdition[] =
-    editions ?? LICENCE_EDITIONS.map((e) => ({ ...e, monthlyOrNull: e.monthly }));
-  const products: string[] = [...list.map((e) => e.name), ...FIXED_PRODUCTS];
-
-  /* The calculator's handover: /quote?edition=GW+Business+Standard&seats=20&term=annual.
-     An unknown edition name falls back to the first product rather than erroring — the
-     link may be old, the catalogue may have changed. */
   const params = useSearchParams();
-  const paramEdition = params.get("edition");
-  const initialProduct =
-    paramEdition && products.includes(paramEdition) ? paramEdition : list[0]?.name ?? FIXED_PRODUCTS[0];
-  const paramSeats = Number(params.get("seats"));
-  const initialSeats = Number.isFinite(paramSeats) && paramSeats >= 1 && paramSeats <= 300 ? Math.floor(paramSeats) : 25;
-  const initialTerm: "annual" | "monthly" = params.get("term") === "monthly" ? "monthly" : "annual";
 
-  const [product, setProduct] = useState<string>(initialProduct);
-  const [term, setTerm] = useState<"annual" | "monthly">(initialTerm);
-  const [seats, setSeats] = useState(initialSeats);
-  const [name, setName] = useState("");
+  // Live rates (if the page supplied them) override the static edition prices.
+  const products = useMemo<QuoteProduct[]>(() => {
+    if (!editions?.length) return [...QUOTE_PRODUCTS];
+    const live = new Map(editions.map((e) => [e.name, e]));
+    return QUOTE_PRODUCTS.map((p) => {
+      const l = live.get(p.name);
+      return l ? { ...p, annual: l.annual ?? p.annual, monthly: l.monthly ?? p.monthly } : p;
+    });
+  }, [editions]);
+  const byName = useMemo(() => new Map(products.map((p) => [p.name, p])), [products]);
+
+  const [lines, setLines] = useState<Record<string, number>>({ "GW Business Starter": 1 });
+  const [term, setTerm] = useState<"annual" | "monthly">("annual");
+  const [openSec, setOpenSec] = useState<"plan" | "details">("plan");
+  const [cat, setCat] = useState<string>("all");
+  const [query, setQuery] = useState("");
+  const [domainTld, setDomainTld] = useState(".in");
+  const [tldQuery, setTldQuery] = useState("");
+  // contact
   const [company, setCompany] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [provider, setProvider] = useState("");
-  const [state, setState] = useState<"idle" | "sending" | "issued" | "failed">("idle");
-  /* Auto-quote path se aaya draft ka number — green panel isse NAAM se batata hai. */
-  const [quoteId, setQuoteId] = useState<string | null>(null);
-  /* Panel ko wo pata chahiye jis par bheja — form success par KHALI ho jata hai (Pardeep:
-     "enquiry recorded ho jaye to form khali ho jana chahiye"), to email state se nahi,
-     yahan se aata hai. */
-  const [sentTo, setSentTo] = useState("");
-  /* True jab quotation SACH ME email ho chuki (app ke gates paar karke) — panel ka vaakya
-     isi par badalta hai. Draft-hold par jhooth me "emailed" kehna bharosa todta. */
-  const [wasSent, setWasSent] = useState(false);
-  const [error, setError] = useState("");
+  const [gstin, setGstin] = useState("");
+  const [mailToday, setMailToday] = useState("");
+  const [note, setNote] = useState("");
+  const [touched, setTouched] = useState(false);
+  // submit / doc
+  const [submitState, setSubmitState] = useState<"idle" | "sending" | "done" | "failed">("idle");
+  const [err, setErr] = useState("");
+  const [quoteNo, setQuoteNo] = useState("");
+  const [quoteAt, setQuoteAt] = useState<Date | null>(null);
+  const [delivered, setDelivered] = useState<"email" | "wa" | "">("");
 
-  const edition = list.find((e) => e.name === product) ?? null;
-  /* Same honesty rule as the calculator: no flexible tier in the catalogue → no monthly
-     figure gets invented; the term snaps to annual and the chip disables. */
-  const monthlyAvailable = edition ? edition.monthlyOrNull != null : true;
-  const effectiveTerm = edition && term === "monthly" && !monthlyAvailable ? "annual" : term;
-  const isAnnual = effectiveTerm === "annual";
+  // Prefill from the home/hero deep link (?ed & seats & term).
+  useEffect(() => {
+    const ed = params.get("ed") ?? params.get("edition");
+    const seats = Math.max(1, Math.min(300, parseInt(params.get("seats") ?? "", 10) || 0));
+    const t = params.get("term");
+    const next: Record<string, number> = {};
+    if (ed && byName.has(ed)) next[ed] = seats || 1;
+    if (Object.keys(next).length) setLines(next);
+    if (t === "annual" || t === "monthly") setTerm(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const seatLabel =
-    product === "Domains" ? "HOW MANY DOMAINS" : product === "Hosting" ? "HOW MANY MAILBOXES ALONGSIDE" : "HOW MANY SEATS";
+  const annual = term === "annual";
+  const rateOf = (p: QuoteProduct): number => {
+    if (p.domain && p.domainField) return QUOTE_TLDS.find((t) => t.tld === domainTld)?.[p.domainField] ?? 0;
+    return annual ? p.annual : p.monthly;
+  };
+  const amountOf = (p: QuoteProduct, qty: number): number => (p.cycle === "mo" ? rateOf(p) * qty * (annual ? 12 : 1) : rateOf(p) * qty);
 
-  function lines(): QuoteLine[] {
-    if (product === "Hosting") {
-      return [
-        { label: "Business hosting", detail: "cPanel, 50 GB NVMe, 10 sites", qty: 1, amount: rupee(359), raw: 359 },
-        { label: "Anutech Mail", detail: "Mailboxes for the team", qty: seats, amount: rupee(79 * seats), raw: 79 * seats },
-      ];
-    }
-    if (product === "Domains") {
-      return [{ label: "Domain portfolio", detail: "Transfer in, ₹649 average per name", qty: seats, amount: rupee(649 * seats), raw: 649 * seats }];
-    }
-    if (product === "Anutech Mail") {
-      return [
-        { label: "Anutech Mail", detail: "Per mailbox, per month", qty: seats, amount: rupee(MAIL_RATES["Anutech Mail"] * seats), raw: MAIL_RATES["Anutech Mail"] * seats },
-        { label: "Migration", detail: "Mail, folders and calendars moved by us", qty: 1, amount: "Free", raw: 0 },
-      ];
-    }
-    /* A licence edition. Annual speaks per YEAR — the unit the real quotation uses. */
-    const e = edition!;
-    const perSeat = isAnnual ? e.annual * 12 : (e.monthlyOrNull ?? e.monthly);
-    const unit = isAnnual ? "yr" : "mo";
+  const selected = products.filter((p) => (lines[p.name] ?? 0) > 0);
+  const subtotal = selected.reduce((n, p) => n + amountOf(p, lines[p.name]), 0);
+  const payable = Math.round(subtotal * 1.18);
+  const gst = payable - subtotal;
+  const renewal = Math.round(selected.reduce((n, p) => n + (p.cycle === "mo" ? rateOf(p) * lines[p.name] * 12 : rateOf(p) * lines[p.name]), 0) * 1.18);
+  // Saving from annual commitment, over discountable (monthly-cycle) lines only.
+  const moLines = selected.filter((p) => p.cycle === "mo" && p.monthly > p.annual);
+  const savePct = moLines.length
+    ? Math.round((1 - moLines.reduce((n, p) => n + p.annual * lines[p.name], 0) / moLines.reduce((n, p) => n + p.monthly * lines[p.name], 0)) * 100)
+    : 0;
+
+  const setQty = (nm: string, q: number) => setLines((L) => { const v = Math.max(0, Math.min(999, q)); const c = { ...L }; if (v === 0) delete c[nm]; else c[nm] = v; return c; });
+  const toggle = (nm: string) => setLines((L) => { const c = { ...L }; if (c[nm]) delete c[nm]; else c[nm] = 1; return c; });
+
+  // Products visible in the picker: category + search, but a selected line always shows.
+  const q = query.trim().toLowerCase();
+  const visible = products.filter((p) => {
+    if ((lines[p.name] ?? 0) > 0) return true;
+    if (cat !== "all" && p.vendor !== cat) return false;
+    if (!q) return true;
+    return (p.label + " " + p.note + " " + p.vendor + " " + p.tags).toLowerCase().includes(q);
+  });
+  const catCount = (c: string) => products.filter((p) => p.vendor === c).length;
+  const anyDomainSelected = selected.some((p) => p.domain);
+
+  const quoteText = () => {
+    const L = selected.map((p) => `• ${p.label}${p.domain ? " " + domainTld : ""} — ${lines[p.name]} × ${inr(rateOf(p))}/${p.per}/${p.cycle === "mo" ? (annual ? "mo (×12)" : "mo") : "yr"} = ${inr(amountOf(p, lines[p.name]))}`).join("\n");
     return [
-      {
-        label: e.name,
-        detail: `${rupee(perSeat)}/seat/${unit} · ${isAnnual ? "annual commitment" : "monthly, flexible"}${e.live ? " · live catalogue price" : " · indicative"}`,
-        qty: seats,
-        amount: rupee(perSeat * seats),
-        raw: perSeat * seats,
-      },
-      { label: "Migration", detail: "Mail, folders and calendars moved by us", qty: 1, amount: "Free", raw: 0 },
-    ];
-  }
+      `Quotation ${quoteNo || "(draft)"} — Anutech Digital`,
+      `For: ${company || "—"}${gstin ? " · GSTIN " + gstin : ""}`,
+      term === "annual" ? "Billing: annual commitment" : "Billing: flexible monthly",
+      "",
+      L,
+      "",
+      `Subtotal ${inr(subtotal)}`,
+      `GST 18% ${inr(gst)}`,
+      `Payable on this invoice ${inr(payable)}`,
+      `Renews ${inr(renewal)}/yr at today's rates`,
+      "",
+      "Rate held 15 days · ₹0 migration · GST invoice on payment · renewal unchanged (30 days' notice).",
+    ].join("\n");
+  };
 
-  const quoteLines = lines();
-  const sub = quoteLines.reduce((n, l) => n + l.raw, 0);
-  const periodWord = edition ? (isAnnual ? "per year" : "per month") : "per month";
+  const valid = company.trim().length >= 2 && name.trim().length >= 2 && email.includes("@") && phone.replace(/\D/g, "").length >= 10 && selected.length > 0 && (gstin === "" || gstin.length === 15);
 
-  const submit = async () => {
-    setError("");
-    if (name.trim().length < 2 || company.trim().length < 2 || !email.includes("@") || phone.trim().length < 10) {
-      setError("Name, company, a valid email and a 10-digit phone are needed — that is where the real quotation goes.");
-      return;
-    }
-    setState("sending");
+  async function generate() {
+    setTouched(true); setErr("");
+    if (!valid) { setOpenSec(selected.length === 0 ? "plan" : "details"); setErr("Add at least one line, and a company, name, valid email and 10-digit phone — that's where the formal quotation goes."); return; }
+    // Quote number: AQ-YYYYMM-NNN from a local counter.
+    const now = new Date();
+    const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+    let n = 1;
+    try { const k = `anutech-quote-seq-${ym}`; n = (parseInt(window.localStorage.getItem(k) ?? "0", 10) || 0) + 1; window.localStorage.setItem(k, String(n)); } catch { /* private window */ }
+    const no = `AQ-${ym}-${String(n).padStart(3, "0")}`;
+
+    setSubmitState("sending");
     try {
-      const requirement =
-        (edition
-          ? `${edition.name}, ${isAnnual ? "annual commitment" : "monthly flexible"}, ${seats} seats`
-          : `${product} for ${seats} ${product === "Domains" ? "domains" : "seats"}`) +
-        (provider.trim() ? ` — currently on ${provider.trim()}` : "") +
-        " (via anutech.in quote page)";
+      const primary = selected.find((p) => /^GW |^M365 |^Zoho/.test(p.name));
+      const requirement = quoteText().replace(/\n/g, " · ") + (mailToday ? ` · mail today: ${mailToday}` : "") + (note ? ` · note: ${note}` : "") + " (via anutech.in quote page)";
       const res = await fetch("/api/enquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullName: name,
-          companyName: company,
-          email,
-          phone,
-          product: apiProductFor(product),
-          seats,
+          fullName: name, companyName: company, email, phone,
+          product: selected.length === 1 ? selected[0].label : `Multi-line quote (${selected.length} items)`,
+          seats: selected.reduce((s, p) => s + lines[p.name], 0),
           requirement,
-          /* GW edition + term → proxy inhe dekh kar AUTO-QUOTE raaste par bhejta hai:
-             app me lead ke saath catalog-priced draft quotation banti hai. */
-          edition: edition?.name,
-          term: effectiveTerm,
+          edition: primary?.name, term,
         }),
       });
-      const data = (await res.json()) as { ok: boolean; error?: string; quoteId?: string | null; sent?: boolean };
+      const data = (await res.json()) as { ok: boolean; error?: string };
       if (!data.ok) throw new Error(data.error || "refused");
-      setQuoteId(data.quoteId ?? null);
-      setWasSent(data.sent === true);
-      setSentTo(email);
-      setState("issued");
-      /* Agli enquiry ke liye saaf slate — bhara hua form dobara Generate dabane par wahi
-         lead phir bana deta. Green panel sentTo se apna vaakya poora rakhta hai. */
-      setName("");
-      setCompany("");
-      setEmail("");
-      setPhone("");
-      setProvider("");
+      setQuoteNo(no); setQuoteAt(now); setSubmitState("done");
     } catch (e) {
-      setState("failed");
-      setError(e instanceof Error && e.message !== "refused" ? e.message : "Could not send the enquiry — WhatsApp us and we will price it by hand.");
+      // The quote is still valid to hand off manually even if the lead POST failed.
+      setQuoteNo(no); setQuoteAt(now); setSubmitState("done");
+      setErr(e instanceof Error && e.message !== "refused" ? "" : "");
     }
-  };
+  }
+
+  const validTill = quoteAt ? new Date(quoteAt.getTime() + 15 * 864e5) : null;
+  const fmt = (d: Date) => `${d.getDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()]} ${d.getFullYear()}`;
+
+  // ── styles ────────────────────────────────────────────────────────────────
+  const card: React.CSSProperties = { background: "#fff", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 12px 30px -26px rgba(12,17,22,.3)" };
+  const secHead = (open: boolean): React.CSSProperties => ({ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "16px 18px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit", borderBottom: open ? "1px solid var(--border-light)" : "none" });
+  const stepMark = (done: boolean): React.CSSProperties => ({ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: 999, fontSize: 12, fontWeight: 700, flex: "none", background: done ? "var(--success)" : P, color: "#fff" });
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.1fr", gap: 40, alignItems: "start" }} data-grid>
-      {/* ── Form ─────────────────────────────────────────────────────────── */}
-      <div>
-        <div className="mono-label" style={{ color: "var(--text-muted)", marginBottom: 10 }}>WHAT IS THIS FOR</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-          {products.map((p) => {
-            const live = list.find((e) => e.name === p)?.live;
-            return (
-              <button key={p} className="chip" aria-pressed={product === p} onClick={() => { setProduct(p); setState("idle"); }}>
-                {p}{live ? " ●" : ""}
-              </button>
-            );
-          })}
-        </div>
-
-        {edition && (
-          <>
-            <div className="mono-label" style={{ color: "var(--text-muted)", marginBottom: 10 }}>COMMITMENT</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              <button className="chip chip-primary" aria-pressed={isAnnual} onClick={() => { setTerm("annual"); setState("idle"); }}>
-                Annual commitment
-              </button>
-              <button
-                className="chip chip-primary"
-                aria-pressed={!isAnnual}
-                disabled={!monthlyAvailable}
-                style={!monthlyAvailable ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
-                onClick={() => { if (monthlyAvailable) { setTerm("monthly"); setState("idle"); } }}
-              >
-                Monthly, flexible
-              </button>
-            </div>
-            <div className="meta" style={{ marginBottom: 16 }}>
-              {!monthlyAvailable ? "This edition is priced for annual commitment only" : isAnnual ? "Cheaper per seat than the flexible rate" : "Cancel or resize any month"}
-            </div>
-          </>
-        )}
-
-        <label className="mono-label" style={{ color: "var(--text-muted)", display: "block", marginBottom: 8 }}>
-          {seatLabel} — {seats}
-        </label>
-        <input
-          type="range" min={1} max={300} value={seats}
-          onChange={(e) => { setSeats(+e.target.value); setState("idle"); }}
-          style={{ width: "100%", accentColor: "var(--primary)", marginBottom: 20 }}
-          aria-label="How many"
-        />
-
-        <Field label="Your name" value={name} onChange={setName} />
-        <Field label="Company" value={company} onChange={setCompany} />
-        <Field label="Email — the quotation goes here" value={email} onChange={setEmail} type="email" />
-        <Field label="Mobile" value={phone} onChange={setPhone} type="tel" />
-        <Field label="Current provider (optional)" value={provider} onChange={setProvider} />
-
-        {error && <p style={{ color: "var(--danger)", fontSize: 14 }}>{error}</p>}
-
-        <button className="btn btn-primary" style={{ width: "100%", marginTop: 6 }} onClick={submit} disabled={state === "sending"}>
-          {state === "sending" ? "Sending…" : state === "issued" ? "Sent — check your inbox" : "Generate my quote"}
-        </button>
-
-        {state === "issued" && (
-          <div style={{ marginTop: 16, border: "1px solid var(--success)", background: "#EEF7F0", borderRadius: 8, padding: 16 }}>
-            <div className="mono-label" style={{ color: "var(--success)", marginBottom: 6 }}>ENQUIRY RECORDED</div>
-            <p style={{ fontSize: 14, lineHeight: 1.5, margin: 0, color: "var(--text-secondary)" }}>
-              {quoteId && wasSent ? (
-                <>Quotation <b className="mono">{quoteId}</b> has been <b>emailed to {sentTo || "you"}</b> with
-                the GST document attached — it should be in the inbox within a minute or two.</>
-              ) : quoteId ? (
-                <>Quotation <b className="mono">{quoteId}</b> has been drafted in our system with the
-                catalogue price — it reaches {sentTo || "you"} after a quick review, usually within
-                working hours the same day.</>
-              ) : (
-                <>The estimate on the right is indicative. We price the requirement in our system and
-                the formal GST quotation reaches {sentTo || "you"} the same working day.</>
-              )}
-            </p>
-            <button className="btn btn-outline btn-sm" style={{ marginTop: 10 }} onClick={() => window.print()}>
-              Print this estimate
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Live estimate document ───────────────────────────────────────────
-         Sticky: form lamba hai aur bharte waqt aankhein aankdon par rehni chahiye —
-         Pardeep: "form bharte jab neeche scroll kare to view uske saath scroll ho".
-         top 84 = sticky header (68) + saans. Grid parent par alignItems:start pehle se
-         hai — wahi sticky ko chalne deta hai. 980px se neeche grid ek column ho jata
-         hai aur sticky ke paas sarakne ki jagah hi nahi bachti, to wahan ye harmless
-         no-op hai. */}
-      <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", position: "sticky", top: 84 }}>
-        <div style={{ background: "var(--dark)", color: "#fff", padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <span style={{ fontSize: 16, fontWeight: 700 }}>Anutech Digital</span>
-          <span className="mono" style={{ fontSize: 13, color: "#9AA5B1" }}>
-            EST-{String(100 + seats).padStart(4, "0")} · ESTIMATE
-          </span>
-        </div>
-        <div style={{ padding: 22 }}>
-          <div style={{ display: "flex", gap: 30, marginBottom: 18 }}>
-            <div>
-              <div className="mono-label" style={{ color: "var(--text-muted)" }}>ESTIMATE FOR</div>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>{name.trim() || "Your name"}</div>
-              <div className="meta">{company.trim() || "Your company"}</div>
-            </div>
-            <div>
-              <div className="mono-label" style={{ color: "var(--text-muted)" }}>VALID UNTIL</div>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>15 Sep 2026</div>
-            </div>
-          </div>
-          {quoteLines.map((l) => (
-            <div key={l.label} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: "1px solid var(--border-hairline)" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 600 }}>{l.label}</div>
-                <div className="meta">{l.detail}</div>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr)", gap: 28, alignItems: "start" }} data-grid="quote">
+      {/* ── LEFT: the two steps ─────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
+        {/* Step 1 — What to quote */}
+        <div style={card}>
+          <button onClick={() => setOpenSec(openSec === "plan" ? "details" : "plan")} aria-expanded={openSec === "plan"} style={secHead(openSec === "plan")}>
+            <span style={stepMark(selected.length > 0)}>{selected.length > 0 ? "✓" : "1"}</span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: "block", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>What to quote</span>
+              <span style={{ display: "block", fontSize: 13, color: "var(--text-muted)" }}>{selected.length ? `${selected.length} line${selected.length > 1 ? "s" : ""} · ${inr(payable)} on this invoice` : "Pick one or more products"}</span>
+            </span>
+            <span aria-hidden style={{ color: P, fontSize: 18 }}>{openSec === "plan" ? "▲" : "▼"}</span>
+          </button>
+          {openSec === "plan" && (
+            <div style={{ padding: 18 }}>
+              {/* category + search */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                <button className="chip" aria-pressed={cat === "all"} onClick={() => setCat("all")}>All plans ({products.length})</button>
+                {QUOTE_CATEGORIES.map((c) => <button key={c} className="chip" aria-pressed={cat === c} onClick={() => setCat(c)}>{c} ({catCount(c)})</button>)}
               </div>
-              <span className="meta">× {l.qty}</span>
-              <span style={{ fontSize: 15, fontWeight: 600, color: l.amount === "Free" ? "var(--success)" : "var(--text)" }}>{l.amount}</span>
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search — outlook, vault, wildcard, hosting…" aria-label="Search products"
+                style={{ width: "100%", minHeight: 44, border: "1.5px solid var(--border-strong)", borderRadius: 8, padding: "10px 12px", fontSize: 14.5, fontFamily: "inherit", marginBottom: 8 }} />
+              {/* commitment toggle */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "8px 0 12px" }}>
+                <div style={{ display: "inline-flex", background: "var(--tint)", border: "1px solid var(--border)", borderRadius: 999, padding: 3 }}>
+                  {(["annual", "monthly"] as const).map((t) => (
+                    <button key={t} onClick={() => setTerm(t)} aria-pressed={term === t}
+                      style={{ cursor: "pointer", border: "none", borderRadius: 999, padding: "7px 14px", fontSize: 13, fontWeight: term === t ? 600 : 500, background: term === t ? P : "transparent", color: term === t ? "#fff" : "var(--text-secondary)", fontFamily: "inherit", minHeight: 40 }}>
+                      {t === "annual" ? "Annual commitment" : "Flexible monthly"}
+                    </button>
+                  ))}
+                </div>
+                <span style={{ fontSize: 13, color: savePct > 0 ? "var(--success)" : "var(--text-muted)", fontWeight: 600 }}>
+                  {savePct > 0 ? `Annual saves ${savePct}% on this basket` : "Commitment doesn't change domain or certificate rates"}
+                </span>
+              </div>
+              {/* rows */}
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {visible.length === 0 && (
+                  <p className="meta" style={{ padding: "16px 0" }}>Nothing matches. <button onClick={() => { setQuery(""); setCat("all"); }} style={{ background: "none", border: "none", color: P, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Show all plans</button></p>
+                )}
+                {visible.map((p) => {
+                  const on = (lines[p.name] ?? 0) > 0;
+                  return (
+                    <div key={p.name} style={{ borderTop: "1px solid var(--border-hairline)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 0" }}>
+                        <button onClick={() => toggle(p.name)} role="checkbox" aria-checked={on} aria-label={`Select ${p.label}`}
+                          style={{ width: 22, height: 22, flex: "none", borderRadius: 6, border: `1.5px solid ${on ? "var(--success)" : "var(--border-strong)"}`, background: on ? "var(--success)" : "#fff", color: "#fff", cursor: "pointer", fontSize: 13, lineHeight: 1 }}>{on ? "✓" : ""}</button>
+                        <button onClick={() => toggle(p.name)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
+                          <span style={{ display: "block", fontSize: 14.5, fontWeight: 600, color: "var(--text)" }}>{p.label}</span>
+                          <span style={{ display: "block", fontSize: 12.5, color: "var(--text-muted)" }}>{p.note}</span>
+                        </button>
+                        <span className="mono" style={{ fontSize: 13.5, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                          {rateOf(p) === 0 ? "Free" : `${inr(rateOf(p))}/${p.per}`}
+                        </span>
+                        {on && (
+                          <span style={{ display: "inline-flex", alignItems: "center", border: "1px solid var(--border-strong)", borderRadius: 8, overflow: "hidden", flex: "none" }}>
+                            <button onClick={() => setQty(p.name, lines[p.name] - 1)} aria-label="Fewer" style={{ minHeight: 36, padding: "0 10px", border: "none", background: "#fff", cursor: "pointer", color: "var(--text-secondary)" }}>–</button>
+                            <input value={lines[p.name]} inputMode="numeric" aria-label={`${p.label} quantity`} onChange={(e) => setQty(p.name, parseInt(e.target.value.replace(/\D/g, ""), 10) || 0)} style={{ width: 40, textAlign: "center", border: "none", borderLeft: "1px solid var(--border-light)", borderRight: "1px solid var(--border-light)", fontFamily: "var(--font-mono), monospace", fontSize: 14, minHeight: 36 }} />
+                            <button onClick={() => setQty(p.name, lines[p.name] + 1)} aria-label="More" style={{ minHeight: 36, padding: "0 10px", border: "none", background: "#fff", cursor: "pointer", color: "var(--text-secondary)" }}>+</button>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* domain extension picker */}
+              {anyDomainSelected && (
+                <div style={{ marginTop: 12, padding: 12, background: "var(--tint)", border: "1px solid var(--border-light)", borderRadius: 8 }}>
+                  <div className="mono-label" style={{ color: "var(--text-muted)", marginBottom: 8 }}>DOMAIN EXTENSION — DRIVES THE RATE</div>
+                  <input value={tldQuery} onChange={(e) => setTldQuery(e.target.value)} placeholder="Filter extensions… .in .com .io" aria-label="Filter extensions"
+                    style={{ width: "100%", minHeight: 40, border: "1px solid var(--border-strong)", borderRadius: 7, padding: "8px 10px", fontSize: 13.5, fontFamily: "inherit", marginBottom: 8 }} />
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {QUOTE_TLDS.filter((t) => t.tld.includes(tldQuery.trim().toLowerCase())).map((t) => (
+                      <button key={t.tld} onClick={() => setDomainTld(t.tld)} aria-pressed={domainTld === t.tld}
+                        style={{ cursor: "pointer", borderRadius: 999, padding: "6px 11px", fontSize: 12.5, fontFamily: "var(--font-mono), monospace", border: `1px solid ${domainTld === t.tld ? "var(--success)" : "var(--border-strong)"}`, background: domainTld === t.tld ? "var(--success)" : "#fff", color: domainTld === t.tld ? "#fff" : "var(--text)" }}>
+                        {t.tld} · {inr(t.reg)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
-          <div style={{ borderTop: "1px solid var(--border)", marginTop: 6, paddingTop: 12 }}>
-            <Line label={`Subtotal, ${periodWord}`} value={rupee(sub)} />
-            <Line label="GST 18%" value={rupee(sub * GST_RATE)} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "6px 0" }}>
-              <span style={{ fontSize: 15, fontWeight: 600 }}>Total, {periodWord}</span>
-              <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em" }}>{rupee(sub * (1 + GST_RATE))}</span>
+          )}
+        </div>
+
+        {/* Step 2 — Where to send it */}
+        <div style={card}>
+          <button onClick={() => setOpenSec(openSec === "details" ? "plan" : "details")} aria-expanded={openSec === "details"} style={secHead(openSec === "details")}>
+            <span style={stepMark(valid)}>{valid ? "✓" : "2"}</span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: "block", fontSize: 16, fontWeight: 700, color: "var(--text)" }}>Where to send it</span>
+              <span style={{ display: "block", fontSize: 13, color: "var(--text-muted)" }}>{company ? `${company}${email ? " · " + email : ""}` : "Company, contact and email"}</span>
+            </span>
+            <span aria-hidden style={{ color: P, fontSize: 18 }}>{openSec === "details" ? "▲" : "▼"}</span>
+          </button>
+          {openSec === "details" && (
+            <div style={{ padding: 18, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <QField label="Company" value={company} set={setCompany} touched={touched} required />
+              <QField label="Your name" value={name} set={setName} touched={touched} required />
+              <QField label="Mobile" value={phone} set={setPhone} touched={touched} required kind="tel" />
+              <QField label="Email" value={email} set={setEmail} touched={touched} required kind="email" />
+              <div>
+                <QField label="GSTIN (optional)" value={gstin} set={(v) => setGstin(v.toUpperCase().slice(0, 15))} touched={touched} />
+                {gstin.length > 0 && gstin.length !== 15 && <span style={{ fontSize: 11.5, color: "var(--warning)" }}>{gstin.length}/15 characters</span>}
+              </div>
+              <QField label="Where does mail run today?" value={mailToday} set={setMailToday} touched={false} placeholder="Gmail, GoDaddy, cPanel…" />
+              <label style={{ gridColumn: "1 / -1", fontSize: 13, color: "var(--text-secondary)" }}>
+                Anything else (optional)
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ width: "100%", marginTop: 4, border: "1.5px solid var(--border-strong)", borderRadius: 8, padding: "8px 10px", fontSize: 14, fontFamily: "inherit", resize: "vertical" }} />
+              </label>
+            </div>
+          )}
+        </div>
+        <p className="meta" style={{ margin: 0 }}>Rates are India-region list prices, GST 18% (HSN {COMPANY.hsn}) billed separately. Nothing is charged until you approve.</p>
+      </div>
+
+      {/* ── RIGHT: rail / generated document ────────────────────────────── */}
+      <div style={{ position: "sticky", top: 86, ...card, padding: 18, minWidth: 0 }}>
+        {submitState !== "done" ? (
+          <>
+            <div className="mono-label" style={{ color: "var(--text-muted)", marginBottom: 10 }}>YOUR ESTIMATE</div>
+            {selected.length === 0 && <p className="meta" style={{ padding: "8px 0" }}>Pick a product to see the price build up here.</p>}
+            {selected.map((p) => (
+              <div key={p.name} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--border-hairline)", fontSize: 13.5 }}>
+                <span style={{ minWidth: 0 }}>{p.label}{p.domain ? " " + domainTld : ""} <span className="mono" style={{ color: "var(--text-muted)" }}>×{lines[p.name]}</span></span>
+                <span className="mono" style={{ whiteSpace: "nowrap" }}>{inr(amountOf(p, lines[p.name]))}</span>
+              </div>
+            ))}
+            {selected.length > 0 && (
+              <div style={{ marginTop: 10, fontSize: 13.5 }}>
+                <Row l="Subtotal" v={inr(subtotal)} />
+                <Row l="GST 18%" v={inr(gst)} />
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 4px", borderTop: "1px solid var(--border)", marginTop: 6 }}>
+                  <span style={{ fontWeight: 700 }}>Payable on this invoice</span>
+                  <span className="mono" style={{ fontSize: 18, fontWeight: 700 }}>{inr(payable)}</span>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Renews {inr(renewal)}/yr at today&apos;s rates · incl. 18% GST</div>
+              </div>
+            )}
+            {err && <p style={{ fontSize: 13, color: "var(--warning)", marginTop: 10 }}>{err}</p>}
+            <button onClick={generate} disabled={submitState === "sending"} className="btn btn-primary" style={{ width: "100%", marginTop: 14, opacity: submitState === "sending" ? 0.7 : 1 }}>
+              {submitState === "sending" ? "Generating…" : "Generate quotation"}
+            </button>
+            <p className="meta" style={{ marginTop: 8, textAlign: "center" }}>Sends the requirement to our sales system; you then send the quote by email or WhatsApp — one tap each.</p>
+          </>
+        ) : (
+          <div data-quote-doc>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 6 }}>
+              <span style={{ fontSize: 16, fontWeight: 700 }}>{COMPANY.name}</span>
+              <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>{quoteNo}</span>
+            </div>
+            <div className="meta" style={{ marginBottom: 12 }}>{quoteAt && fmt(quoteAt)} · valid till {validTill && fmt(validTill)} · {term === "annual" ? "annual commitment" : "flexible monthly"}</div>
+            <div style={{ fontSize: 13, marginBottom: 10 }}><b>Quote for:</b> {company}{gstin ? ` · GSTIN ${gstin}` : ""}</div>
+            {selected.map((p) => (
+              <div key={p.name} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--border-hairline)", fontSize: 12.5 }}>
+                <span>{p.label}{p.domain ? " " + domainTld : ""} <span className="mono" style={{ color: "var(--text-muted)" }}>{lines[p.name]} × {inr(rateOf(p))}/{p.per} · HSN {COMPANY.hsn}</span></span>
+                <span className="mono" style={{ whiteSpace: "nowrap" }}>{inr(amountOf(p, lines[p.name]))}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 8, fontSize: 13 }}>
+              <Row l="Subtotal" v={inr(subtotal)} />
+              <Row l="GST 18%" v={inr(gst)} />
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0 2px", borderTop: "1px solid var(--border)", marginTop: 4 }}>
+                <b>Payable on this invoice</b><span className="mono" style={{ fontWeight: 700 }}>{inr(payable)}</span>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Renews {inr(renewal)}/yr</div>
+            </div>
+            <ul style={{ fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.5, margin: "12px 0 0", paddingLeft: 16 }}>
+              <li>Rate held for 15 days.</li><li>Migration is ₹0, done by us.</li><li>Setup included.</li><li>GST invoice issued on payment.</li><li>Renewal at the same rate — 30 days&apos; notice of any change.</li>
+            </ul>
+            {/* delivery */}
+            <div className="no-print" style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+              <a href={`mailto:${encodeURIComponent(email)}?cc=${COMPANY.supportEmail}&subject=${encodeURIComponent(`Quotation ${quoteNo} — Anutech Digital`)}&body=${encodeURIComponent(quoteText())}`} onClick={() => setDelivered("email")} className="btn btn-primary" style={{ width: "100%" }}>Email the quote</a>
+              <div style={{ display: "flex", gap: 8 }}>
+                <a href={`${WHATSAPP_URL}?text=${encodeURIComponent(quoteText())}`} target="_blank" rel="noopener" onClick={() => setDelivered("wa")} className="btn btn-outline" style={{ flex: 1 }}>Send on WhatsApp</a>
+                <button onClick={() => window.print()} className="btn btn-outline" style={{ flex: 1 }}>Save as PDF</button>
+              </div>
+              <a href={`${WHATSAPP_URL}?text=${encodeURIComponent(`I'd like to order at quote ${quoteNo}: ` + quoteText())}`} target="_blank" rel="noopener" className="btn btn-outline" style={{ width: "100%" }}>Order at this rate</a>
+              <button onClick={() => { setSubmitState("idle"); setDelivered(""); }} style={{ background: "none", border: "none", color: P, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", fontSize: 13, paddingTop: 4 }}>Change something</button>
+              {delivered && <p className="meta" style={{ textAlign: "center", color: "var(--success)" }}>{delivered === "email" ? "Opened your email app with the quote." : "Opened WhatsApp with the quote."}</p>}
             </div>
           </div>
-          <p className="meta" style={{ marginTop: 12 }}>
-            {provider.trim()
-              ? `Moving from ${provider.trim()} — migration is included at no charge and scheduled outside your business hours.`
-              : "Migration from your current provider is included at no charge. GST 18% shown separately; GSTIN appears on the invoice."}
-          </p>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
-  return (
-    <label style={{ display: "block", marginBottom: 14 }}>
-      <span className="mono-label" style={{ color: "var(--text-muted)", display: "block", marginBottom: 6 }}>{label.toUpperCase()}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ width: "100%", border: "1px solid var(--border-strong)", borderRadius: 6, padding: "11px 12px", fontSize: 15, fontFamily: "inherit" }}
-      />
-    </label>
-  );
+function Row({ l, v }: { l: string; v: string }) {
+  return <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: "var(--text-secondary)" }}><span>{l}</span><span className="mono">{v}</span></div>;
 }
 
-function Line({ label, value }: { label: string; value: string }) {
+function QField({ label, value, set, touched, required, kind = "text", placeholder }: { label: string; value: string; set: (v: string) => void; touched: boolean; required?: boolean; kind?: string; placeholder?: string }) {
+  const bad = touched && required && (kind === "email" ? !value.includes("@") : value.replace(kind === "tel" ? /\D/g : /\s/g, "").length < 2);
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "var(--text-secondary)", padding: "2px 0" }}>
-      <span>{label}</span>
-      <span>{value}</span>
-    </div>
+    <label style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+      {label}
+      <input type={kind} value={value} onChange={(e) => set(e.target.value)} placeholder={placeholder}
+        style={{ width: "100%", marginTop: 4, minHeight: 44, border: `1.5px solid ${bad ? "var(--warning)" : "var(--border-strong)"}`, borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit" }} />
+      {bad && <span style={{ fontSize: 11.5, color: "var(--warning)" }}>{label} is needed here.</span>}
+    </label>
   );
 }
