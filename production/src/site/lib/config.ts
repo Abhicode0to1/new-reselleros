@@ -11,7 +11,7 @@
  */
 export const RESELLEROS_URL =
   process.env.NEXT_PUBLIC_RESELLEROS_URL?.trim() ||
-  "https://resellersos-njvk4nxhdq-el.a.run.app";
+  "https://resellersos-1005662057478.asia-southeast1.run.app";
 
 /**
  * The public marketing site's CANONICAL origin (Pardeep, 3 Sep 2026: canonical

@@ -36,17 +36,20 @@ describe("app ka pata — ek jagah", () => {
     expect(offenders, "in files me hardcoded Cloud Run URL hai").toEqual([]);
   });
 
-  it("alias aur mari hui service ka URL KAHIN nahi", () => {
-    /* 1005662057478 = alias (handoff isi par tha), 490252291080 = mari hui service. */
+  it("mari hui service ka URL KAHIN nahi", () => {
+    /* 490252291080 = mari hui service. (5 Sep 2026: service asia-south1 se
+       asia-southeast1 par move ho gayi; ab uska URL 1005662057478.asia-southeast1
+       hai aur config.ts me legit hai — isliye wo ab forbidden nahi.) */
     for (const f of files) {
       const s = read(f);
-      expect(s.includes("1005662057478"), `${f} me alias URL hai`).toBe(false);
       expect(s.includes("490252291080"), `${f} me mari hui service ka URL hai`).toBe(false);
     }
   });
 
-  it("config canonical service par hai", () => {
-    expect(RESELLEROS_URL).toContain("njvk4nxhdq");
+  it("config live (Singapore) service par hai", () => {
+    /* 5 Sep 2026: canonical ab asia-southeast1 (Singapore) hai — public + domain-bound.
+       Purana njvk4nxhdq (asia-south1) ab auth-required, live nahi. */
+    expect(RESELLEROS_URL).toContain("asia-southeast1");
     expect(OS_SIGNUP).toBe(`${RESELLEROS_URL}/signup`);
     expect(ENQUIRY_API).toContain("/api/public/enquiry/general");
   });

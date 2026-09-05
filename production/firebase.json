@@ -9,7 +9,7 @@
         "source": "**",
         "run": {
           "serviceId": "resellersos",
-          "region": "asia-south1"
+          "region": "asia-southeast1"
         }
       }
     ],
