@@ -109,9 +109,9 @@ const CROSS_ROWS: readonly { label: string; gw: string; ms: string; zoho: string
  *  four — no half-empty photo slots). */
 const CATALOGUE_V2: readonly { name: string; href: string; from: string; unit: string; gst: string; body: string; tags: string[]; cta: string; icon: "globe" | "server" | "lock" | "tag"; img?: string }[] = [
   { name: "Domains", href: "/domains", from: "₹249", unit: "from · first year", gst: "+ GST 18%", body: "500+ extensions, register and renew price on one row.", tags: ["500+ TLDS", "FREE DNS", "WHOIS PRIVACY"], cta: "See domain rates", icon: "globe", img: "/domain-search.jpg" },
-  { name: "Web hosting", href: "/hosting", from: "₹159", unit: "from · /mo, billed yearly", gst: "+ GST 18%", body: "cPanel and LiteSpeed on NVMe, Mumbai and Bengaluru.", tags: ["CPANEL", "LITESPEED", "99.9% SLA"], cta: "See hosting plans", icon: "server" },
-  { name: "SSL & security", href: "/ssl", from: "₹0", unit: "free DV", gst: "No charge", body: "Free DV on every hosted site; wildcard and OV when needed.", tags: ["DV", "OV", "WILDCARD"], cta: "See SSL options", icon: "lock" },
-  { name: "Reseller program", href: "/reseller", from: "₹0", unit: "to join", gst: "No charge", body: "Published wholesale rates. No slabs, no advance deposit.", tags: ["NO DEPOSIT", "ONE RATE", "WHITE LABEL"], cta: "See the rate card", icon: "tag" },
+  { name: "Web hosting", href: "/hosting", from: "₹159", unit: "from · /mo, billed yearly", gst: "+ GST 18%", body: "cPanel and LiteSpeed on NVMe, Mumbai and Bengaluru.", tags: ["CPANEL", "LITESPEED", "99.9% SLA"], cta: "See hosting plans", icon: "server", img: "/cat-hosting.png" },
+  { name: "SSL & security", href: "/ssl", from: "₹0", unit: "free DV", gst: "No charge", body: "Free DV on every hosted site; wildcard and OV when needed.", tags: ["DV", "OV", "WILDCARD"], cta: "See SSL options", icon: "lock", img: "/cat-ssl.jpg" },
+  { name: "Reseller program", href: "/reseller", from: "₹0", unit: "to join", gst: "No charge", body: "Published wholesale rates. No slabs, no advance deposit.", tags: ["NO DEPOSIT", "ONE RATE", "WHITE LABEL"], cta: "See the rate card", icon: "tag", img: "/cat-reseller.png" },
 ];
 const CAT_ICON: Record<string, string> = {
   globe: "M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2c2.5 2.7 4 6.3 4 10s-1.5 7.3-4 10c-2.5-2.7-4-6.3-4-10s1.5-7.3 4-10z",
@@ -486,7 +486,7 @@ export function HomeV2() {
                 <span style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative", aspectRatio: "16/9", margin: "-16px -17px 12px", overflow: "hidden", background: "linear-gradient(135deg, #F2F6FB, #E8ECF1)", borderBottom: `1px solid ${C.hair}`, borderRadius: "11px 11px 0 0" }}>
                   {c.img
                     ? <img src={c.img} alt="" loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-                    : <svg aria-hidden viewBox="0 0 24 24" width="42" height="42" fill="none" stroke={C.blue} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.85 }}><path d={CAT_ICON[c.icon]} /></svg>}
+                    : <CatScene kind={c.icon} />}
                 </span>
                 <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-0.01em", color: C.ink, minHeight: 19 }}>{c.name}</span>
                 <span style={{ display: "flex", alignItems: "baseline", gap: 5, marginTop: 9 }}>
@@ -563,6 +563,36 @@ export function HomeV2() {
       </section>
     </div>
   );
+}
+
+/** A designed graphic band for catalogue cards with no photo — richer than a
+ *  lone icon, in the same flat-illustration spirit as the domains image. */
+function CatScene({ kind }: { kind: string }) {
+  const blue = "#1668E3", soft = "#B9D0F5", fill = "#DCE8FB";
+  if (kind === "lock") {
+    return (
+      <svg aria-hidden viewBox="0 0 120 68" width="58%" style={{ maxWidth: 190 }} fill="none">
+        <circle cx="20" cy="18" r="3" fill={soft} /><circle cx="100" cy="22" r="3" fill={soft} />
+        <circle cx="24" cy="50" r="2.5" fill={soft} /><circle cx="98" cy="48" r="2.5" fill={soft} />
+        <path d="M60 8 84 16v18c0 14-10 22-24 28-14-6-24-14-24-28V16Z" fill={fill} stroke={blue} strokeWidth="2.4" strokeLinejoin="round" />
+        <path d="M50 34l7 7 15-16" stroke={blue} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (kind === "tag") {
+    return (
+      <svg aria-hidden viewBox="0 0 120 68" width="60%" style={{ maxWidth: 190 }} fill="none">
+        <rect x="16" y="18" width="44" height="7" rx="3.5" fill={soft} />
+        <rect x="16" y="31" width="36" height="7" rx="3.5" fill={fill} />
+        <rect x="16" y="44" width="28" height="7" rx="3.5" fill={fill} />
+        <g stroke={blue} strokeWidth="2.4" strokeLinejoin="round">
+          <path d="M104 34 82 56 68 42 90 20h14v14Z" fill={fill} />
+          <circle cx="95" cy="29" r="3.2" fill="#fff" />
+        </g>
+      </svg>
+    );
+  }
+  return <svg aria-hidden viewBox="0 0 24 24" width="42" height="42" fill="none" stroke={blue} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.85 }}><path d={CAT_ICON[kind]} /></svg>;
 }
 
 /** A comparison cell that colours a leading ✓ / ✕ / ₹ marker. */
