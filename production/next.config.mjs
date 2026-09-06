@@ -59,10 +59,36 @@ const nextConfig = {
       { protocol: "https", hostname: "upload.wikimedia.org" },
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "*.supabase.co" },
+      // Self-hosted data plane (Storage serves images from here). Same host the
+      // CSP connect-src is derived from below — keep both in step.
+      ...(() => {
+        try {
+          const h = new URL((process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "")).host;
+          return h && !h.endsWith(".supabase.co") ? [{ protocol: "https", hostname: h }] : [];
+        } catch {
+          return [];
+        }
+      })(),
     ],
   },
   async headers() {
     const isDev = process.env.NODE_ENV !== "production";
+    /* CSP connect-src must name the Supabase host the browser actually talks to.
+       Derive it from NEXT_PUBLIC_SUPABASE_URL (baked at build) so it can never drift
+       from the client again — the way it did when the data plane moved to
+       api.anutech.in but this list still only allowed *.supabase.co, and every
+       client-side query silently died on a CSP error ("No workspace"/"Not signed
+       in"). Keep *.supabase.co too so a rollback to hosted Supabase still works. */
+    const supaUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "");
+    let supaConnect = "https://*.supabase.co wss://*.supabase.co";
+    try {
+      if (supaUrl) {
+        const h = new URL(supaUrl).host;
+        supaConnect = `https://${h} wss://${h} ${supaConnect}`;
+      }
+    } catch {
+      /* malformed env → fall back to the wildcard above */
+    }
     return [
       {
         source: "/(.*)",
@@ -88,7 +114,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
+              `connect-src 'self' ${supaConnect} https://api.razorpay.com https://lumberjack.razorpay.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io`,
               "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
               "object-src 'none'",
               "base-uri 'self'",
