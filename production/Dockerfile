@@ -35,8 +35,8 @@ COPY . .
 
 # Public env vars — designed to be exposed in the client bundle.
 # Supabase URL and anon key are PUBLIC by design (RLS protects the data).
-ENV NEXT_PUBLIC_SUPABASE_URL="https://ontpnqjoysjgrlsukecm.supabase.co"
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY="sb_publishable_M1d2SCgCNq5QXLVAOsBPUA_UwLutFUK"
+ENV NEXT_PUBLIC_SUPABASE_URL="https://api.anutech.in"
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9udHBucWpveXNqZ3Jsc3VrZWNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjc1NjcsImV4cCI6MjA5NDg0MzU2N30.tulYYDQSzq7IpEQCFbP7qjsSUxg4c-0ku5uO80-TKXI"
 
 # App URL — must be a valid URL (Next.js metadataBase calls `new URL(...)` at build).
 # NOTE: this is baked into the bundle at build time. It defaults to the live

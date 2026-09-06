@@ -53,3 +53,9 @@ next-env.d.ts
 !.vscode/extensions.json
 .idea
 .next-check
+
+# Cloud SQL migration — never commit filled secrets
+supabase/cloudsql/*.secret.sql
+supabase/cloudsql/.env*
+supabase/cloudsql/phase2/.env
+!supabase/cloudsql/phase2/.env.example

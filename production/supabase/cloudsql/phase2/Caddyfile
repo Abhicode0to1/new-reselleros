@@ -1,0 +1,31 @@
+# Caddy — TLS (auto Let's Encrypt) + path routing for the Supabase data plane.
+# api.anutech.in must resolve to THIS VM's public IP, DNS-only (grey cloud) in
+# Cloudflare, so Caddy can complete the ACME HTTP challenge and get a real cert.
+#
+# supabase-js calls  /auth/v1/*  /rest/v1/*  /storage/v1/*  — handle_path strips
+# the matched prefix, so each backend receives the request at its own root.
+
+api.anutech.in {
+	encode gzip
+
+	handle_path /auth/v1/* {
+		reverse_proxy auth:9999
+	}
+
+	handle_path /rest/v1/* {
+		reverse_proxy rest:3000
+	}
+
+	handle_path /storage/v1/* {
+		reverse_proxy storage:5000
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Anything else → a plain 404 (no Supabase Studio is exposed).
+	handle {
+		respond "Not found" 404
+	}
+}
