@@ -3341,6 +3341,73 @@ type SupportTicketInsert = {
 type SupportTicketUpdate = Partial<SupportTicketInsert>;
 
 /**
+ * Agent tooling on a support ticket (migration 20260907120000 — DSP-merge
+ * brick 1). Notes and time logs are APPEND-ONLY for authenticated: RLS carries
+ * no update/delete policy, so Update types exist only for service_role paths.
+ */
+export type SupportTicketNoteRow = {
+  id:          string;
+  tenant_id:   string;
+  ticket_id:   string;
+  author_id:   string | null;
+  author_name: string;
+  body:        string;
+  created_at:  string;
+};
+type SupportTicketNoteInsert = {
+  id?:         string;
+  tenant_id:   string;
+  ticket_id:   string;
+  author_id?:  string | null;
+  author_name: string;
+  body:        string;
+  created_at?: string;
+};
+
+export type SupportTicketTimeLogRow = {
+  id:         string;
+  tenant_id:  string;
+  ticket_id:  string;
+  user_id:    string | null;
+  user_name:  string;
+  minutes:    number;
+  note:       string | null;
+  created_at: string;
+};
+type SupportTicketTimeLogInsert = {
+  id?:        string;
+  tenant_id:  string;
+  ticket_id:  string;
+  user_id?:   string | null;
+  user_name:  string;
+  minutes:    number;
+  note?:      string | null;
+  created_at?: string;
+};
+
+export type SupportCannedResponseRow = {
+  id:          string;
+  tenant_id:   string;
+  title:       string;
+  body:        string;
+  usage_count: number;
+  created_by:  string | null;
+  created_at:  string;
+  updated_at:  string;
+};
+type SupportCannedResponseInsert = {
+  id?:          string;
+  tenant_id:    string;
+  title:        string;
+  body:         string;
+  usage_count?: number;
+  created_by?:  string | null;
+  created_at?:  string;
+  updated_at?:  string;
+};
+type SupportCannedResponseUpdate = Partial<SupportCannedResponseInsert>;
+
+/**
  * A customer asking for a live 1-on-1 call (migration 20260817180000).
  *
  * `meet_url` is NULL until a REAL Google Meet link exists. A meeting code can only be
@@ -4046,6 +4113,9 @@ export type Database = {
       tds_receivable:     { Row: TdsReceivableRow;     Insert: TdsReceivableInsert;     Update: TdsReceivableUpdate;     Relationships: [] };
       customer_users:     { Row: CustomerUserRow;      Insert: CustomerUserInsert;      Update: CustomerUserUpdate;      Relationships: [] };
       support_tickets:    { Row: SupportTicketRow;     Insert: SupportTicketInsert;     Update: SupportTicketUpdate;     Relationships: [] };
+      support_ticket_notes:      { Row: SupportTicketNoteRow;      Insert: SupportTicketNoteInsert;      Update: Partial<SupportTicketNoteInsert>;      Relationships: [] };
+      support_ticket_time_logs:  { Row: SupportTicketTimeLogRow;   Insert: SupportTicketTimeLogInsert;   Update: Partial<SupportTicketTimeLogInsert>;   Relationships: [] };
+      support_canned_responses:  { Row: SupportCannedResponseRow;  Insert: SupportCannedResponseInsert;  Update: SupportCannedResponseUpdate;           Relationships: [] };
       support_call_requests: { Row: SupportCallRequestRow; Insert: SupportCallRequestInsert; Update: Partial<SupportCallRequestInsert>; Relationships: [] };
       purchase_orders:    { Row: PurchaseOrderRow;     Insert: PurchaseOrderInsert;     Update: PurchaseOrderUpdate;     Relationships: [] };
       po_bill_allocations:{ Row: PoBillAllocationRow;  Insert: PoBillAllocationInsert;  Update: PoBillAllocationUpdate;  Relationships: [] };

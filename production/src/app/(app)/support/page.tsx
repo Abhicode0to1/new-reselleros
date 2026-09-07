@@ -21,6 +21,7 @@ import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/utils";
 import { supportTier, slaState, type SupportTierId } from "@/lib/support/tiers";
 import { EntitlementCard } from "@/components/features/support/entitlement-card";
+import { AgentToolingPanel } from "@/components/features/support/agent-tooling-panel";
 
 /**
  * What plan bought this ticket, and how the clock is doing.
@@ -578,6 +579,25 @@ export default function SupportPage() {
                 ticketText={`${selected.subject ?? ""}\n${selected.body ?? ""}`}
               />
             </div>
+
+            {/* Agent tooling — internal notes, time log, canned replies (DSP-merge brick 1b).
+                Canned picks INSERT into the resolution box below rather than sending:
+                a canned answer is a starting point, not an answer. The textarea is
+                uncontrolled (defaultValue), so the insert writes both the DOM value and
+                the same `selected` field Save & Close reads — one source of truth. */}
+            <AgentToolingPanel
+              ticketId={selected.id}
+              onInsertText={(text) => {
+                const el = document.getElementById("resNote") as HTMLTextAreaElement | null;
+                const existing = el?.value ?? (selected as any).resolution_note ?? "";
+                const next = existing ? `${existing}\n\n${text}` : text;
+                (selected as any).resolution_note = next;
+                if (el) {
+                  el.value = next;
+                  el.focus();
+                }
+              }}
+            />
 
             {/* Resolution Note Input */}
             <div className="space-y-1.5 pt-2 border-t border-hairline">
