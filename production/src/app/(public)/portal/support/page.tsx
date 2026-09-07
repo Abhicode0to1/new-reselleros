@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/utils";
 import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
+import { RateTicket } from "@/components/features/support/ticket-rating";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,15 @@ export default async function PortalSupportPage() {
 
   const rows = tickets ?? [];
   const openCount = rows.filter((t) => t.status !== "resolved" && t.status !== "closed").length;
+
+  /* Ratings the customer already gave — RLS hands back only their own. One query
+     for the whole page; the map keeps the card render O(1). */
+  const { data: ratingRows } = await supabase
+    .from("support_ticket_ratings")
+    .select("ticket_id, score, comment");
+  const ratingByTicket = new Map(
+    (ratingRows ?? []).map((r) => [r.ticket_id, { score: r.score, comment: r.comment }]),
+  );
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
@@ -138,6 +148,16 @@ export default async function PortalSupportPage() {
                     </div>
                     <p className="text-ink-2 leading-relaxed">{t.resolution_note}</p>
                   </div>
+                )}
+                {/* CSAT — only a FINISHED ticket can be scored (the DB refuses the rest;
+                    the UI simply doesn't ask). One verdict per ticket. */}
+                {(t.status === "resolved" || t.status === "closed" || t.resolved_at) && (
+                  <RateTicket
+                    ticketId={t.id}
+                    tenantId={session.tenantId}
+                    ratedByEmail={session.userEmail}
+                    existing={ratingByTicket.get(t.id) ?? null}
+                  />
                 )}
               </Card>
             ))}

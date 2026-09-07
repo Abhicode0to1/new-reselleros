@@ -3408,6 +3408,30 @@ type SupportCannedResponseInsert = {
 type SupportCannedResponseUpdate = Partial<SupportCannedResponseInsert>;
 
 /**
+ * CSAT: the customer's one verdict on a finished ticket (migration
+ * 20260907150000 — DSP-merge brick 3). Insert is the PORTAL customer's alone
+ * (RLS gates on current_customer_id + resolved/closed); nobody updates it.
+ */
+export type SupportTicketRatingRow = {
+  id:             string;
+  tenant_id:      string;
+  ticket_id:      string;
+  score:          number;
+  comment:        string | null;
+  rated_by_email: string;
+  created_at:     string;
+};
+type SupportTicketRatingInsert = {
+  id?:            string;
+  tenant_id:      string;
+  ticket_id:      string;
+  score:          number;
+  comment?:       string | null;
+  rated_by_email: string;
+  created_at?:    string;
+};
+
+/**
  * A customer asking for a live 1-on-1 call (migration 20260817180000).
  *
  * `meet_url` is NULL until a REAL Google Meet link exists. A meeting code can only be
@@ -4116,6 +4140,7 @@ export type Database = {
       support_ticket_notes:      { Row: SupportTicketNoteRow;      Insert: SupportTicketNoteInsert;      Update: Partial<SupportTicketNoteInsert>;      Relationships: [] };
       support_ticket_time_logs:  { Row: SupportTicketTimeLogRow;   Insert: SupportTicketTimeLogInsert;   Update: Partial<SupportTicketTimeLogInsert>;   Relationships: [] };
       support_canned_responses:  { Row: SupportCannedResponseRow;  Insert: SupportCannedResponseInsert;  Update: SupportCannedResponseUpdate;           Relationships: [] };
+      support_ticket_ratings:    { Row: SupportTicketRatingRow;    Insert: SupportTicketRatingInsert;    Update: Partial<SupportTicketRatingInsert>;    Relationships: [] };
       support_call_requests: { Row: SupportCallRequestRow; Insert: SupportCallRequestInsert; Update: Partial<SupportCallRequestInsert>; Relationships: [] };
       purchase_orders:    { Row: PurchaseOrderRow;     Insert: PurchaseOrderInsert;     Update: PurchaseOrderUpdate;     Relationships: [] };
       po_bill_allocations:{ Row: PoBillAllocationRow;  Insert: PoBillAllocationInsert;  Update: PoBillAllocationUpdate;  Relationships: [] };

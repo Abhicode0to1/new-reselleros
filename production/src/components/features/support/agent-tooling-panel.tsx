@@ -27,6 +27,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
+import { RatingStars } from "@/components/features/support/ticket-rating";
 
 interface TicketNote {
   id: string;
@@ -101,6 +102,24 @@ export function AgentToolingPanel({ ticketId, onInsertText }: AgentToolingPanelP
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data ?? [];
+    },
+    enabled: !!ticketId,
+  });
+
+  /* The customer's verdict on this ticket, if they gave one (CSAT, brick 3).
+     Read-only here by design — RLS refuses agent writes, and the panel never
+     offers what the wall refuses. */
+  const ratingQ = useQuery({
+    queryKey: ["support-ticket-rating", ticketId],
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("support_ticket_ratings")
+        .select("score, comment, rated_by_email, created_at")
+        .eq("ticket_id", ticketId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
     },
     enabled: !!ticketId,
   });
@@ -223,6 +242,20 @@ export function AgentToolingPanel({ ticketId, onInsertText }: AgentToolingPanelP
 
   return (
     <div className="space-y-4 pt-2 border-t border-hairline">
+      {/* ── Customer verdict (CSAT) — shown only when one exists ── */}
+      {ratingQ.data && (
+        <div className="rounded-md border border-hairline bg-paper-2/60 px-3 py-2 flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-ink-3 uppercase tracking-wider">Customer verdict</span>
+          <RatingStars score={ratingQ.data.score} />
+          {ratingQ.data.comment && (
+            <span className="text-xs text-ink-2">“{ratingQ.data.comment}”</span>
+          )}
+          <span className="text-2xs text-ink-3 ml-auto">
+            {ratingQ.data.rated_by_email} · {formatDate(ratingQ.data.created_at, "short")}
+          </span>
+        </div>
+      )}
+
       {/* ── Canned replies ── */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
