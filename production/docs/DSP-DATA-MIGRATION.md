@@ -126,8 +126,7 @@ email; `created_at` verbatim. DSP's `uq_rating(ref_type, ref_id)` maps 1:1 onto 
 
 1. **DSP VM access** — extraction runs where MySQL lives; needs the VM name/project
    (it is NOT supabase-gateway) and Pardeep's paste, same as every DB step so far.
-2. **Freeze window** — DSP stays live during extract; tickets created after the
-   extract are missed. Either extract during a quiet hour and re-run a delta later,
-   or (simpler, since Phase-2 retires DSP tickets anyway) declare the extract moment
-   the cutover and point people at ResellerOS from then on. **Pardeep's call.**
+2. **Freeze window — DECIDED (Pardeep, 7 Sep): extract = cutover.** The moment the
+   extract runs, new tickets are raised in ResellerOS and DSP's ticket surface is
+   history. No delta pass.
 3. `pending → awaiting_customer` reading — confirm with Pardeep (one word).
