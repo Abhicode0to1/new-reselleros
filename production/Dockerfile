@@ -49,7 +49,7 @@ ENV NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3Mi
 # it). Using the domain — not a run.app host — means OAuth redirects, email links
 # and the Razorpay webhook URL survive a region move (asia-south1 →
 # asia-southeast1, 5 Sep 2026). Override via --build-arg for a preview build.
-ARG NEXT_PUBLIC_APP_URL="https://anutech.in"
+ARG NEXT_PUBLIC_APP_URL="https://reselleros.anutech.in"
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 # Web-push VAPID PUBLIC key. Public by design — the browser sends it to the push

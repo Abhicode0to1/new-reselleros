@@ -13,21 +13,22 @@ export const RESELLEROS_URL =
   process.env.NEXT_PUBLIC_RESELLEROS_URL?.trim() ||
   // Use the STABLE domain, not the Cloud Run URL — the run.app host changes when
   // the service moves region (asia-south1 → asia-southeast1 on 5 Sep 2026), but
-  // anutech.in is bound to whichever service is live. So live-price + enquiry
+  // the custom domain is bound to whichever service is live. So live-price + enquiry
   // self-calls, signup and demo links follow the domain and never break on a move.
-  "https://anutech.in";
+  "https://reselleros.anutech.in";
 
 /**
- * The public marketing site's CANONICAL origin (Pardeep, 3 Sep 2026: canonical
- * = anutech.in). Every canonical link, OpenGraph URL, sitemap entry, robots host
- * and JSON-LD @id uses this — so search engines and AI crawlers treat anutech.in
+ * The public marketing site's CANONICAL origin (Pardeep, 7 Sep 2026: app+site
+ * moved to the product subdomain; anutech.in 301s here, so canonical follows).
+ * Every canonical link, OpenGraph URL, sitemap entry, robots host and JSON-LD
+ * @id uses this — so search engines and AI crawlers treat reselleros.anutech.in
  * as the one true home, regardless of which Cloud Run host actually serves the
  * bytes today. Override per environment with NEXT_PUBLIC_SITE_URL. No trailing
  * slash. (This is the marketing brand's domain — distinct from RESELLEROS_URL,
  * the app service, and DOMAINS_APP_URL, the domains/hosting platform.)
  */
 export const SITE_URL =
-  (process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://anutech.in").replace(/\/+$/, "");
+  (process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://reselleros.anutech.in").replace(/\/+$/, "");
 
 /**
  * The domains + hosting platform (app.anutech.in / DMS). Merge Phase-1: the
