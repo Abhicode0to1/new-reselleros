@@ -83,6 +83,11 @@ export const SUPPORT_TOPICS = [
   "storage_quota",
   "subscription_or_seats",
   "invoice_or_billing",
+  /* The other half of this business. DSP's live intent taxonomy (the support
+     panel's bot, 7 Sep 2026 merge) showed domain expiry, hosting suspensions and
+     SSL are what Anutech's customers actually write in about — and none of it
+     had a runbook here, so every one of those tickets was landing in `other`. */
+  "domain_or_hosting",
   "service_outage",
   "other",
 ] as const;
@@ -268,6 +273,62 @@ export const SUPPORT_KNOWLEDGE_BASE = [
   "  purchase, so state that a colleague will confirm the cost and never name a figure.",
   "- A mailbox at 100% stops RECEIVING mail. Treat that as HIGH, not LOW.",
   "",
+  /* The four sections below came from the DSP merge (7 Sep 2026): they are what the
+     support panel's own intent taxonomy proved customers actually ask, and none of
+     it had a runbook. Same design rule as everything above: procedures and places,
+     never values, never prices. */
+  "DOMAIN REGISTRATION, RENEWAL AND EXPIRY",
+  "- Establish the exact domain name and whether it was bought from us. If it lives at another",
+  "  registrar, their own panel is the only place anything can be done — say so plainly.",
+  "- A domain's renewal DATE and renewal PRICE are commercial facts you have not been given.",
+  "  Never state or guess either — renewal price is usually not the purchase price, so a guess",
+  "  misleads. Say a colleague will confirm both.",
+  "- An EXPIRED domain takes the website AND every mailbox on it down together. Treat as HIGH.",
+  "  Past the grace window the domain can be lost to auction — escalate the same day, never",
+  "  advise waiting.",
+  "- 'Please renew my domain' is an order and a payment — a commercial action. Confirm the",
+  "  domain name, escalate for the renewal, and never say it is done when it is not.",
+  "- A transfer needs the domain unlocked and the EPP/auth code from the CURRENT registrar's",
+  "  panel. The code is displayed there; never invent or guess one.",
+  "",
+  "WEB HOSTING, WEBSITES AND SSL",
+  "- 'My website is not working' has three different owners: the domain (expired or DNS), the",
+  "  hosting (suspended or down), or the site's own code. Ask what the browser actually SHOWS —",
+  "  a suspension notice, a DNS error, or a broken page — before advising anything.",
+  "- A SUSPENSION notice means an unpaid renewal or a resource/abuse hold, and which one is in",
+  "  OUR records, not in anything you can see. Escalate so a person confirms and restores;",
+  "  never speculate to the customer about why they were suspended.",
+  "- cPanel, hosting or domain LOGIN DETAILS are credentials: never send them over email or",
+  "  chat, and never promise to. A person verifies identity first — escalate.",
+  "- SSL: the two usual causes are an expired certificate and a certificate that does not cover",
+  "  the exact hostname (www vs the bare domain is the classic miss). 'Renewed but still",
+  "  warning' usually means the OLD certificate is still being served — that is fixed at the",
+  "  hosting panel; escalate if they cannot see it.",
+  "- Hosting PLANS and PRICES are a purchase — a colleague confirms the cost. Never quote one.",
+  "",
+  "MAIL FLOWS BUT LANDS IN SPAM, OR ONE SENDER IS BLOCKED",
+  "- This is DIFFERENT from records-not-set-up: mail is moving, reputation or filtering is the",
+  "  problem. Ask: one recipient domain or many, one sender or all, since when, and whether any",
+  "  bulk sending happened recently.",
+  "- Landing in spam at MANY recipients → SPF/DKIM/DMARC alignment first (their own admin",
+  "  console shows the status), then sending habits — bulk mail from a normal mailbox is the",
+  "  usual cause.",
+  "- NOT receiving from ONE specific sender → the filter is on THEIR side: spam folder and",
+  "  quarantine, then admin rules (Google Workspace: Admin console → Apps → Google Workspace →",
+  "  Gmail → Spam, phishing and malware; Microsoft 365: the quarantine in the security portal).",
+  "- Never promise a 'whitelisting' you cannot perform. The change happens in their console —",
+  "  walk the path.",
+  "",
+  "RECOVERING DELETED EMAIL",
+  "- Deleted mail sits in the user's own Trash / Deleted Items first — check there before",
+  "  anything else.",
+  "- Beyond that an ADMIN can restore within the vendor's window (Google Workspace: Admin",
+  "  console → Users → the user → Restore data; Microsoft 365: admin-side recovery). Whether",
+  "  anything is still inside that window is a fact you cannot see — walk the admin path, set",
+  "  that expectation, and escalate if the window may already have passed.",
+  "- Zoho mail 'deleting itself' is almost always a filter rule or a POP client set to",
+  "  delete-after-download — check both before treating it as data loss.",
+  "",
   "SUBSCRIPTION, SEATS, RENEWAL AND INVOICES",
   "- The subscription facts given to you below are from our own records and you may state them",
   "  plainly: plan, seat count, seats in use, renewal date, status.",
@@ -275,6 +336,12 @@ export const SUPPORT_KNOWLEDGE_BASE = [
   "  a colleague will send it — do not describe a screen you cannot see.",
   "- Any question about what something COSTS, a discount, a refund, or a credit note is a",
   "  commercial matter. Escalate rather than answering.",
+  "- 'Payment done but reminders keep coming' — our records decide, not memory. Acknowledge the",
+  "  crossed wires, and escalate so a person reconciles the payment against the reminders.",
+  "- A GST number or billing address change lands on TAX DOCUMENTS, so a person applies it.",
+  "  Collect the new value, escalate, and never claim it is already updated.",
+  "- 'Paid but no tax invoice' — the invoice is issued from our records; say a colleague will",
+  "  send it. Never fabricate an invoice number or date.",
   "",
   "SERVICE OUTAGE",
   "- 'Nothing works for anyone', 'all mail is down', 'the whole office cannot send' is an",
@@ -938,6 +1005,7 @@ export function categoryForTopic(topic: SupportTopic): TicketCategory {
     case "mail_client_sync":
     case "password_or_access":
     case "storage_quota":
+    case "domain_or_hosting":
     case "service_outage":
       return "tech";
     case "other":

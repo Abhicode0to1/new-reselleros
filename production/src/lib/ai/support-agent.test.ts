@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  SUPPORT_KNOWLEDGE_BASE,
   applyEscalationRules,
   asksForCredentials,
   buildSupportAgentPrompt,
@@ -743,7 +744,23 @@ describe("mapping the decision onto the existing ticket vocabulary", () => {
     expect(categoryForTopic("dns_records")).toBe("tech");
     expect(categoryForTopic("service_outage")).toBe("tech");
     expect(categoryForTopic("password_or_access")).toBe("tech");
+    /* DSP merge (7 Sep 2026): domains/hosting/SSL got their own runbook + topic,
+       because the support panel's live intent data showed that is what Anutech's
+       customers actually write in about. */
+    expect(categoryForTopic("domain_or_hosting")).toBe("tech");
     expect(categoryForTopic("other")).toBe("other");
+  });
+
+  it("the domain/hosting runbook keeps the values-never rule", () => {
+    /* The KB's whole design is procedures-not-values. The new sections must carry
+       the same three refusals their content promises: no renewal price guessing,
+       no credentials over email, no hosting price quoting. Pinned as substrings so
+       a rewrite that drops the rule (not just rewords it) goes red. */
+    expect(SUPPORT_KNOWLEDGE_BASE).toContain("DOMAIN REGISTRATION, RENEWAL AND EXPIRY");
+    expect(SUPPORT_KNOWLEDGE_BASE).toContain("WEB HOSTING, WEBSITES AND SSL");
+    expect(SUPPORT_KNOWLEDGE_BASE).toContain("Never state or guess either");
+    expect(SUPPORT_KNOWLEDGE_BASE).toContain("never send them over email");
+    expect(SUPPORT_KNOWLEDGE_BASE).toContain("Never quote one");
   });
 
   it("never chooses plan_change or feature", () => {
