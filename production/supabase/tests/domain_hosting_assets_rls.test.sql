@@ -232,7 +232,7 @@ select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 insert into auth.users (id, email) values
   ('ffffffff-0000-0000-0000-00000000e002', 'staff-a@example.test');
 
-insert into public.users (id, tenant_id, email, name, role) values
+insert into public.users (id, tenant_id, email, full_name, role) values
   ('ffffffff-0000-0000-0000-00000000e002', 'ffffffff-0000-0000-0000-00000000d001',
    'staff-a@example.test', 'Staff A', 'owner');
 
