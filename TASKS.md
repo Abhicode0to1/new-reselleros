@@ -7,6 +7,101 @@
 
 ---
 
+# 🟣 HANDOFF — 8 Sep 2026 (shaam). LOCAL DB chalu ho gaya bina cloud login ke; aur PROD ~38 table PEECHHE hai.
+
+> Pawan ne bola: upstream `main` merge karo, app verify karo, test chalao. Merge karne ko
+> kuch tha hi nahi — `newrepo/main` (`c81a9067`) already `pawan` (`facbd6b2`) ka ANCESTOR
+> hai (1 aage, 0 peechhe; `git ls-remote` se live check kiya). Phir Pawan ne bola: "schema
+> to likha hua hai, local DB bana lo" — wahi hua, aur usme do asli kharabi mili.
+
+## ✅ Local DB — cloud login ki ZAROORAT NAHI
+
+`npx supabase login` ab bhi gayab hai (`LegacyPlatformAuthRequiredError`, CLI 2.117.0), par
+local ke liye wo chahiye hi nahi. Docker Desktop khud start karke poora stack uthaya:
+DB 54322 · API 54321 · Studio 54323. **125 table**, 78 migration exit 0.
+
+## ⚠️ `npm run setup` TOOTA HUA THA — do jagah, dono theek ki
+
+Naapa 8 Sep: kisi bhi naye developer ke liye setup pehle hi step par marta tha.
+
+1. **`supabase start` migration ko KHALI database par chalata hai.** `[db.migrations]`
+   enabled hone se sabse PURANI file (`20260816094848`) chalti hai aur
+   `relation "public.leads" does not exist` par mar jaati hai, CLI container band kar deta
+   hai. Fix: `scripts/setup.mjs` start ke waqt flag OFF karta hai aur `finally` me WAAPAS
+   ON kar deta hai (crash/Ctrl-C par bhi) — `db push` wahi flag padhta hai, isliye
+   permanently off nahi chhoda.
+2. **Baseline ke baad 78 migration kabhi lagti hi nahi thi.** `rebuild-db.mjs --local`
+   sirf baseline (87 table) load karta tha, yaani developer **HEAD se ~38 table peechhe**
+   bethta tha aur `supabase/tests/` ki **53 me se 29 file** missing column par fail hoti
+   thi (`subscriptions.term_months`, `personal_accounts`, `txn_category_rules`). Ab
+   `--local` baseline ke UPAR saari 78 migration kram se lagata hai → **47/53 pass**.
+   - 9 file apna `begin;`/`commit;` khud kholti hain — unhe `--single-transaction` me
+     lapetna galat hai (psql "already a transaction in progress" warn karke aadhi file
+     lagata hai aur phir bhi success bolta hai). Code ye check karta hai.
+   - **SUBSET nahi chalta**: Aug 24–25 ka batch hi `quotes` par `unique (tenant_id, id)`
+     deta hai aur `provisioning_requests` banata hai; baad ki migration unme composite FK
+     daalti hain. Sirf naye 5 lagane par `no unique constraint matching given keys` aata hai.
+   - Failure path CANARY se naapa: ek toota migration daala → exit 1, file ka naam, aur
+     "database is INCOMPLETE". Chup-chaap pass nahi hota.
+3. `config.toml` ka `[db.seed]` comment kehta tha migrations folder "deliberately empty of
+   the old history" hai — **78 file hain**. Comment theek kiya.
+
+## ✅ Brick #5 ka pehla kaam — HO GAYA (local par)
+
+- [x] **Migration lagi** (local): `domains` / `hosting_accounts` / `dns_records`, teeno par
+      RLS on + 4-4 policy.
+- [x] **`domain_hosting_assets_rls.test.sql` PEHLI BAAR CHALA** — aur usme asli bug tha: wo
+      `users.name` insert karta tha, column ka naam `full_name` hai. Test kabhi chal hi
+      nahi sakta tha. Theek kiya.
+- [x] **Green ka matlab banaya** (§25 ka niyam): canary RED (exit 3) · policy
+      `domains_select_own_customer` girai → `FAIL(2)` RED · constraint
+      `dns_records_priority_required` girai → `FAIL(6)` RED · bina mutation GREEN · 4 policy
+      salamat · 0 row peechhe chhooti.
+
+## ⚠️ PROD ~38 TABLE PEECHHE HAI — sabse bada finding
+
+2 Sep ka `baseline.sql` (prod ka dump) me 87 table hain; 78 migration lagane par 125 ho
+jaate hain. Yaani ye migration prod par **kabhi lagi hi nahi**. Baseline me GAYAB:
+
+- `public.provisioning_requests` (`20260825220000`) — brick #1–#4 ka poora provisioning
+  spine isi table ko maan kar chalta hai.
+- `quotes` par `unique (tenant_id, id)` — baseline me sirf `PRIMARY KEY (id)` hai, aur poore
+  baseline me `UNIQUE (tenant_id, id)` **ek bhi nahi**, jabki multi-tenant composite-FK
+  convention isi par khadi hai.
+- `public.personal_accounts` (`20260819170000`), `public.txn_category_rules` (`20260822090000`).
+- `subscriptions.term_months` (`20260816130000`) — par baseline ke **FUNCTION isi column ko
+  padhte hain**, to snapshot khud apne andar se ulta hai: `record_payment` ka raasta ek aisa
+  column padhta hai jo uski table me nahi hai.
+
+**Isliye `db push` ab ek BAHUT bada batch le kar jayega.** `resellersos-env` skill ki line
+"drift 0 hai" (24 Aug) is naap se **stale** hai. Pehle
+`npx supabase migration list --linked` padho, phir kuch socho.
+
+## ⚠️ `next build` is machine par TOOT raha hai — code ki galti NAHI
+
+8 koshish, har baar ALAG jagah aur ALAG error: `Check failed: index < size()`,
+`unreachable code`, `0xC0000005`, SIGSEGV. Ye V8 ke andar ke assertion hain. Saaf `.next`,
+4 GB heap, `npm ci`, dono shell — kisi se farq nahi pada. **Local Node v24.19.0 hai, jabki
+`ci.yml` aur `Dockerfile` dono Node 20 pin karte hain** — build wahin karo. Node 20 par bhi
+toote to machine ki RAM shak ke daayre me hai.
+Tree theek hai: `typecheck 0 · 6462 test pass · lint 0`, aur app `next dev` par chalti hai
+(`/` 200, `/login` 200, `/portal/domains` + `/portal/hosting` → 307 `/portal/login`, zero
+exception).
+
+## ⏳ Ab bhi bacha hua
+
+- [ ] **Migration PROD par lagani hai** — `npx supabase login` chahiye (interactive), aur
+      pehle upar wali drift padho: push akela chalana khatarnaak hai.
+- [ ] **Design gate** — `design-critique` / `accessibility-review` / `layout-audit` teeno
+      abhi tak nahi chalaye. Ab local DB hai, to 1-2 asli row seed karke chal sakte hain.
+- [ ] **Badge `color=` ka murda prop** — 7 internal file abhi bhi grey (accounting/aging,
+      bills, profitability, saas-metrics, tds-receivable ×2, tds-detail-dialog).
+- [ ] **DNS management** · **RC customer/contact** · **renewal sweep** — brick #5 ka bacha scope.
+- [ ] **🔑 `origin` remote URL me GitHub PAT plaintext pada hai** (`.git/config`). Rotate
+      karo aur credential helper use karo.
+
+---
+
 # 🟣 HANDOFF — 8 Sep 2026. Domain + hosting ka SYSTEM OF RECORD ban gaya; migration LAGNI BAAKI hai.
 
 > Pawan ne bola: domain/hosting service theek se chalao aur customer panel jodo, DMS
