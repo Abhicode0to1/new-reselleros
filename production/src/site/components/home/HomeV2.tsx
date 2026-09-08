@@ -324,7 +324,7 @@ export function HomeV2({ editions }: { editions?: MergedEdition[] } = {}) {
                   </div>
                   {/* trial / quote */}
                   <div style={{ display: "flex", gap: 7, marginTop: "auto", paddingTop: 14 }}>
-                    <a href={WA(`Hi Anutech — I'd like a free trial of ${vendor.name} ${LABEL[e.name] ?? e.name}.`)} target="_blank" rel="noopener" style={{ flex: 1, textAlign: "center", fontSize: 12.5, fontWeight: 600, padding: "9px 6px", borderRadius: 8, background: C.surf, color: C.ink, border: `1px solid ${C.strong}`, textDecoration: "none" }}>Trial</a>
+                    <Link href={`/trial?ed=${encodeURIComponent(e.name)}&seats=${seats}`} style={{ flex: 1, textAlign: "center", fontSize: 12.5, fontWeight: 600, padding: "9px 6px", borderRadius: 8, background: C.surf, color: C.ink, border: `1px solid ${C.strong}`, textDecoration: "none" }}>Trial</Link>
                     <Link href="/quote" style={{ flex: 1, textAlign: "center", fontSize: 12.5, fontWeight: 600, padding: "9px 6px", borderRadius: 8, background: C.surf, color: C.ink, border: `1px solid ${C.border}` }}>Quote</Link>
                   </div>
                 </div>
