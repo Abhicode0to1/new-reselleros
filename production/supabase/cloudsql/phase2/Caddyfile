@@ -8,13 +8,14 @@
 api.anutech.in {
 	encode gzip
 
-	# GoTrue does NOT emit CORS headers of its own (hosted Supabase relies on its
-	# edge/Kong for that). Behind Caddy the browser's preflight to /auth/v1/* came
-	# back 204 with no Access-Control-Allow-Origin, so supabase-js getUser()/token
-	# refresh died with "Failed to fetch" and the app showed "Not signed in" for a
-	# fully-authenticated user. Caddy supplies CORS here. (REST is left alone —
-	# PostgREST sets its own CORS, and a second ACAO would be a duplicate header the
-	# browser rejects.) Auth uses a Bearer token, not cookies, so "*" is safe.
+	# GoTrue sets Access-Control-Allow-Origin on its ACTUAL responses, but answers
+	# the browser's CORS PREFLIGHT (OPTIONS) with a bare 204 and no CORS headers —
+	# so supabase-js getUser()/token-refresh failed the preflight with "Failed to
+	# fetch" and the app showed "Not signed in" for a logged-in user. Caddy answers
+	# ONLY the preflight here. Passthrough (GET/POST) responses are left untouched
+	# so GoTrue's own single ACAO stands — adding a second one produced a duplicate
+	# "Access-Control-Allow-Origin: *, *" that the browser rejects just as hard.
+	# (REST is left alone entirely — PostgREST does its own CORS, preflight included.)
 	handle_path /auth/v1/* {
 		@preflight method OPTIONS
 		handle @preflight {
@@ -26,13 +27,7 @@ api.anutech.in {
 			}
 			respond 204
 		}
-		handle {
-			header {
-				Access-Control-Allow-Origin "*"
-				Access-Control-Expose-Headers "Content-Range, X-Supabase-Api-Version, Content-Length"
-			}
-			reverse_proxy auth:9999
-		}
+		reverse_proxy auth:9999
 	}
 
 	handle_path /rest/v1/* {
