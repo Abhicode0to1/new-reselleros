@@ -1,6 +1,8 @@
 # DSP → ResellerOS data migration (design)
 
-> Brick 4 of the DSP merge · designed 7 Sep 2026 · status: **DESIGN — not yet run**
+> Brick 4 of the DSP merge · designed 7 Sep 2026 · status: **PARKED (7 Sep): Pardeep says the
+> production DB holds no real data — nothing to migrate. The design stays as the recipe if
+> that ever changes; integration now runs against a LOCAL replica from the repo instead.**
 > Source: DSP's production MySQL (support.anutech.in — tickets ~1,228, users ~2,166,
 > calls ~559 per its AUTO_INCREMENTs). Target: Cloud SQL, ANUTECH tenant
 > (`fbb976f1-9090-4f10-9726-0901bd144e42`).
