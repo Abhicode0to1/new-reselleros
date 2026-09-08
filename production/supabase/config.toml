@@ -65,11 +65,19 @@ schema_paths = []
 
 [db.seed]
 # DISABLED on purpose. `supabase start` seeds immediately after running
-# supabase/migrations/, and that folder is deliberately empty of the old history — the
-# schema comes from supabase/baseline.sql instead (see supabase/migrations-archive/README.md).
-# With seeding on, `supabase start` fails with `relation "public.tenants" does not exist`,
-# because it tries to insert rows into a database that has no tables yet.
-# `npm run setup` loads the baseline and THEN the seed, in that order.
+# supabase/migrations/, and seeding a database that has no tables yet fails with
+# `relation "public.tenants" does not exist`.
+#
+# Corrected 8 Sep 2026. This comment used to say the migrations folder "is deliberately
+# empty of the old history". It is not empty -- it holds 78 files, and every one of them
+# assumes the baseline already exists, so `supabase start` cannot run them either: it dies
+# on the OLDEST file (20260816094848, `relation "public.leads" does not exist`). That is
+# why [db.migrations] is switched off for the duration of the start by scripts/setup.mjs
+# and restored afterwards.
+#
+# The real order, which only `npm run setup` gets right:
+#   baseline.sql -> baseline-storage.sql -> seed.sql -> all 78 migrations, in order.
+# The archived 218 files live in supabase/migrations-archive/ (see its README).
 enabled = false
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"

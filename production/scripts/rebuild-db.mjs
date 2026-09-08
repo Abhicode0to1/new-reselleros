@@ -40,7 +40,7 @@
  * then re-run this script against a scratch project and confirm db-compare.mjs is clean.
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync, existsSync, readdirSync } from "node:fs";
 
 const NPX = process.platform === "win32" ? "npx.cmd" : "npx";
 const LOCAL = process.argv.includes("--local");
@@ -85,7 +85,7 @@ const LOCAL_DB_CONTAINER = (() => {
  *    than one command in it: "cannot insert multiple commands into a prepared
  *    statement". baseline.sql has thousands.
  */
-function run(sqlOrFile, { isFile = false } = {}) {
+function run(sqlOrFile, { isFile = false, singleTransaction = true, quiet = false } = {}) {
   let tmp = null;
   let file = sqlOrFile;
   if (!isFile) {
@@ -99,8 +99,13 @@ function run(sqlOrFile, { isFile = false } = {}) {
          reported as success. --single-transaction so a failure leaves nothing behind. */
       return execFileSync(
         "docker",
-        ["exec", "-i", LOCAL_DB_CONTAINER, "psql", "-U", "postgres", "-d", "postgres",
-         "-v", "ON_ERROR_STOP=1", "--single-transaction", "-q"],
+        ["exec", "-i",
+         /* Same reason the wipe sets client_min_messages: applying 78 migrations emits ~120
+            "does not exist, skipping" NOTICEs from their own `drop ... if exists` guards,
+            which reads like a catastrophe to someone running setup for the first time. */
+         ...(quiet ? ["-e", "PGOPTIONS=-c client_min_messages=warning"] : []),
+         LOCAL_DB_CONTAINER, "psql", "-U", "postgres", "-d", "postgres",
+         "-v", "ON_ERROR_STOP=1", ...(singleTransaction ? ["--single-transaction"] : []), "-q"],
         { encoding: "utf8", shell: false, maxBuffer: 64 * 1024 * 1024,
           input: readFileSync(file, "utf8") },
       );
@@ -154,8 +159,56 @@ for (const s of STEPS) {
   console.log("done");
 }
 
+/**
+ * The baseline is a SNAPSHOT, not the present. Measured 8 Sep 2026: the snapshot dated
+ * 2 Sep carries 87 tables, and applying supabase/migrations/ on top takes it to 125 -- so
+ * a developer who stopped at the baseline was missing roughly 38 tables' worth of schema,
+ * and 29 of the 53 files in supabase/tests/ failed against it on MISSING COLUMNS rather
+ * than on anything they were written to catch (subscriptions.term_months,
+ * public.personal_accounts, public.txn_category_rules, every unique (tenant_id, id)).
+ * That is not drift in the local copy -- those migrations have never reached production, so
+ * a snapshot of production cannot contain them. The baseline gets you production; the
+ * migrations get you HEAD, and HEAD is what you are about to write code against.
+ *
+ * Order is the whole game, and a SUBSET does not work: the Aug 24-25 batch is what adds
+ * unique (tenant_id, id) on quotes and creates provisioning_requests, and later migrations
+ * carry composite FKs into both. Applying only the newest few fails with
+ * "there is no unique constraint matching given keys for referenced table quotes".
+ *
+ * Nine of these files open their own begin;/commit;. Those must NOT also be wrapped in
+ * --single-transaction, or psql warns "there is already a transaction in progress" and the
+ * file half-applies while still reporting success.
+ */
 if (LOCAL) {
-  console.log(`\nRebuilt. Your local database now carries production's schema — and none of its data.`);
+  const migDir = "supabase/migrations";
+  const migrations = existsSync(migDir)
+    ? readdirSync(migDir).filter((f) => f.endsWith(".sql")).sort()
+    : [];
+
+  if (migrations.length) {
+    console.log(`\nApplying ${migrations.length} migrations on top of the baseline:`);
+    let applied = 0;
+    for (const f of migrations) {
+      const file = `${migDir}/${f}`;
+      const ownTx = /^\s*begin\s*;/im.test(readFileSync(file, "utf8"));
+      try {
+        run(file, { isFile: true, singleTransaction: !ownTx, quiet: true });
+        applied++;
+      } catch (e) {
+        const detail = (e.stderr || e.stdout || e.message || "").toString().trim();
+        const tail = detail.split(/\r?\n/).slice(-3).join("\n  ");
+        console.error(`\n  FAILED at ${f}\n  ${tail}`);
+        console.error(`\n  ${applied} migration(s) applied before it. This database is INCOMPLETE.`);
+        process.exit(1);
+      }
+    }
+    console.log(`  ${applied} applied, in order -- none skipped`);
+  }
+}
+
+if (LOCAL) {
+  console.log(`\nRebuilt. Your local database now carries production's schema — every migration on top of it,
+and none of production's data.`);
 } else {
   console.log(`\nRebuilt. Now verify it against production:\n  node scripts/db-compare.mjs ${PRODUCTION_REF} ${REF}`);
   console.log("Anything other than a clean match means the baseline is stale — regenerate it.");
