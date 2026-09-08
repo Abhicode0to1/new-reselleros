@@ -31,6 +31,28 @@
         "website"
       ],
       "port": 3100
+    },
+    {
+      "name": "dsp-backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start",
+        "--prefix",
+        "C:/dev/dsp/backend"
+      ],
+      "port": 5050
+    },
+    {
+      "name": "dsp-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "C:/dev/dsp/frontend"
+      ],
+      "port": 5173
     }
   ]
 }

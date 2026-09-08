@@ -7,6 +7,22 @@
 
 ---
 
+# 🟠 HANDOFF — 7 Sep 2026. Subdomain cutover ADHA hai — pehle ise pura karo.
+
+> App ka naya ghar: **reselleros.anutech.in** (live, cert bana, deploy ho chuka — commit 23eecf1).
+> Purana anutech.in bhi poora chalta hai. Plan: https://claude.ai/code/artifact/1410baa6-40f1-4dd5-b353-be7e40316baf
+>
+> **HO GAYA:** Kadam 1 (Cloud Run mapping + Cloudflare CNAME, DNS-only — Claude ne khud lagaya) · Kadam 2 (code 3 jagah + llms.txt, deploy FINAL=SUCCESS, canonical naya).
+> **BAAKI (Pardeep ne 7 Sep ko 'baad me' bola):**
+> - [ ] **Kadam 3** — GoTrue ko naya SITE_URL + allow-list (VM .env, auth container recreate) — exact paste-command chat me 7 Sep ko diya gaya hai; bina iske naye pate par Google-login purane pate par utaar deta hai. Iske baad SAB users ek baar re-login.
+> - [ ] **Kadam 4** — Razorpay dashboard: webhook URL + website URL → naya origin.
+> - [ ] **Kadam 5** — Cloudflare 301 redirect anutech.in/* → reselleros (/api/* CHHOD kar), purani mapping HATANI NAHI. Phir E2E verify.
+>
+> **DSP MERGE (7 Sep):** Phase 0 ✅ (pul live — DSP mare hue Mumbai-URL par tha, ab reselleros.anutech.in/api/v1 + nayi key; Test connection Success; Sync-all JAANBOOJH KAR skip — 27 asli emails jaati). Brick 1 ✅ (agent tooling: notes/time/canned — schema dono DB, test ALL PASS, UI deploy c529cb0, browser-verified TKT-TEST-TOOLING-1 par; PostgREST ko DDL ke baad NOTIFY reload chahiye). Brick 2 ✅ (AI runbooks: domain/hosting/SSL/spam/deleted-mail/billing-crossfire + naya domain_or_hosting topic — deploy ecbe1e0, 65/65 tests). Brick 3 ✅ CSAT (schema 20260907150000 dono DB ALL PASS + portal ★-widget + agent verdict-strip — deploy 4ab6444, browser-verified: CUSTOMER VERDICT ★×5 TKT-TEST-TOOLING-1 par). Agla: bot-intents ka baaki content? nahi — ho gaya; ab bacha: DSP data-migration design (1,228 tickets) + Phase-2 dup-delete + Phase-3 chat/calls buy-vs-build.
+
+
+---
+
 # 🟢 HANDOFF — 1 Sep 2026. Deep audit (4 auditor, sab naapa hua) ke 26 kaam — status YAHIN update hota hai.
 
 > Poori report: https://claude.ai/code/artifact/7cf5e0d1-b317-492d-ac54-d5a660e5fba8
