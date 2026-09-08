@@ -668,6 +668,128 @@ export type NotificationRow = {
 };
 type NotificationInsert = Omit<NotificationRow, "id" | "created_at" | "read_at"> & { id?: string; read_at?: string | null };
 
+/* ── Domain / hosting assets (migration 20260908100000) ──────────────────────
+   The system of record for what a customer OWNS at the registrar and on the
+   server, as distinct from what they are BILLED for — that stays on
+   `subscriptions`, and `subscription_id` links the two. `expires_at` here is
+   the provider's date; `subscriptions.renewal_date` is ours. They are supposed
+   to agree, and a disagreement is a real signal rather than a bug in one of
+   them, which is the whole reason they are stored separately.               */
+
+/** Registrar lifecycle — ICANN states, not our billing status. */
+export type DomainAssetStatus =
+  | "pending" | "active" | "expiring_soon" | "grace" | "redemption"
+  | "suspended" | "transferred_out" | "failed" | "cancelled";
+
+export type DomainRow = {
+  id:          string;
+  tenant_id:   string;
+  customer_id: string;
+  domain_name: string;
+  tld:         string;
+  status:      DomainAssetStatus;
+  registrar:             string;
+  registrar_order_id:    string | null;
+  registrar_customer_id: string | null;
+  registrar_contact_id:  string | null;
+  registered_at:      string | null;
+  /** The REGISTRAR's expiry, not the billing date. */
+  expires_at:         string | null;
+  registration_years: number | null;
+  auto_renew:         boolean;
+  privacy_protection: boolean;
+  transfer_lock:      boolean;
+  nameservers:        string[];
+  subscription_id:         string | null;
+  provisioning_request_id: string | null;
+  quote_id:                string | null;
+  /** ₹ whole rupees (§13). */
+  amount_paid:             number | null;
+  next_action_at:   string | null;
+  /** Distributed lock: null = free, a future timestamp = claimed by a worker. */
+  processing_until: string | null;
+  last_error:     string | null;
+  last_error_at:  string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+/* Required on insert = the four things the table cannot default or infer: whose
+   it is, and which name. Everything else is either DB-defaulted or genuinely
+   unknown at the moment a registration is claimed — the order id and the expiry
+   only exist after ResellerClub answers, and forcing the caller to spell out
+   `registrar_order_id: null` for each of them is noise that hides the four that
+   matter. */
+type DomainInsert =
+  Pick<DomainRow, "tenant_id" | "customer_id" | "domain_name" | "tld">
+  & Partial<Omit<DomainRow, "tenant_id" | "customer_id" | "domain_name" | "tld" | "created_at" | "updated_at">>;
+
+export type HostingAccountStatus =
+  | "pending" | "active" | "suspended" | "expired" | "terminated" | "failed";
+
+export type HostingAccountRow = {
+  id:          string;
+  tenant_id:   string;
+  customer_id: string;
+  domain_name: string;
+  status:      HostingAccountStatus;
+  server:      string;
+  da_username: string | null;
+  da_package:  string | null;
+  ip_address:  string | null;
+  nameservers: string[];
+  disk_quota_mb:      number | null;
+  bandwidth_quota_mb: number | null;
+  plan_code:    string | null;
+  plan_name:    string | null;
+  is_trial:      boolean;
+  trial_ends_at: string | null;
+  started_at:   string | null;
+  expires_at:   string | null;
+  suspended_at: string | null;
+  auto_renew:   boolean;
+  subscription_id:         string | null;
+  provisioning_request_id: string | null;
+  quote_id:                string | null;
+  amount_paid:             number | null;
+  next_action_at:   string | null;
+  processing_until: string | null;
+  last_error:      string | null;
+  last_error_at:   string | null;
+  /** Triage: retryable outage vs. something needing a human. */
+  last_error_kind: "hard_failure" | "collision_exhausted" | "server_unreachable" | null;
+  last_synced_at:  string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+/** Same reasoning as DomainInsert: owner + name are required, the rest arrives later. */
+type HostingAccountInsert =
+  Pick<HostingAccountRow, "tenant_id" | "customer_id" | "domain_name">
+  & Partial<Omit<HostingAccountRow, "tenant_id" | "customer_id" | "domain_name" | "created_at" | "updated_at">>;
+
+export type DnsRecordType = "A" | "AAAA" | "CNAME" | "MX" | "TXT" | "NS" | "SRV" | "CAA";
+
+/** A CACHE of the provider's zone, never the authority. See the migration header. */
+export type DnsRecordRow = {
+  id:        string;
+  tenant_id: string;
+  domain_id: string;
+  record_type: DnsRecordType;
+  host:        string;
+  value:       string;
+  ttl:         number;
+  /** Required for MX and SRV, forbidden otherwise — enforced by a check constraint. */
+  priority:    number | null;
+  provider_record_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type DnsRecordInsert =
+  Pick<DnsRecordRow, "tenant_id" | "domain_id" | "record_type" | "value">
+  & Partial<Omit<DnsRecordRow, "tenant_id" | "domain_id" | "record_type" | "value" | "created_at" | "updated_at">>;
+
 type CustomerRow = {
   id: string;
   tenant_id: string;
@@ -4073,6 +4195,10 @@ export type Database = {
       customers:     { Row: CustomerRow;     Insert: CustomerInsert;     Update: CustomerUpdate;     Relationships: [] };
       /** Migration 20260901130000 (audit B4) — in-app khabar, row per recipient; read_at DB me (localStorage nahi). */
       notifications: { Row: NotificationRow; Insert: NotificationInsert; Update: Partial<NotificationRow>; Relationships: [] };
+      /** Migration 20260908100000 (merge brick #5) — what the customer OWNS at the registrar / on the server. Billing stays on `subscriptions`. */
+      domains:          { Row: DomainRow;         Insert: DomainInsert;         Update: Partial<DomainRow>;         Relationships: [] };
+      hosting_accounts: { Row: HostingAccountRow; Insert: HostingAccountInsert; Update: Partial<HostingAccountRow>; Relationships: [] };
+      dns_records:      { Row: DnsRecordRow;      Insert: DnsRecordInsert;      Update: Partial<DnsRecordRow>;      Relationships: [] };
       customer_groups: { Row: CustomerGroupRow; Insert: CustomerGroupInsert; Update: CustomerGroupUpdate; Relationships: [] };
       items:         { Row: ItemRow;         Insert: ItemInsert;         Update: ItemUpdate;         Relationships: [] };
       leads:         { Row: LeadRow;         Insert: LeadInsert;         Update: LeadUpdate;         Relationships: [] };

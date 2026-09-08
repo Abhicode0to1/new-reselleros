@@ -105,3 +105,8 @@ supabase/.branches/
 # ===== Misc =====
 .vercel
 .netlify
+
+# ===== Local-only planning notes =====
+# Personal scratch docs, not part of the shared repo.
+TEAM-SCALING-PLAN.md
+TEAM-SCALING-PLAN-DETAIL.md

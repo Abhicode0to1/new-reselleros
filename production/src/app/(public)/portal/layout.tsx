@@ -16,6 +16,15 @@ import { PortalAccountMenu } from "./_components/portal-account-menu";
 const NAV: Array<{ href: string; label: string }> = [
   { href: "/portal/dashboard",    label: "Dashboard" },
   { href: "/portal/subscription", label: "Subscription" },
+  /* Assets before commerce. Domains and Hosting are the things the customer
+     OWNS and the things that can lapse; Shop and Orders are what they did.
+     Someone opening the portal because a site went down or a renewal notice
+     arrived is looking for these two, and burying them under Orders would put
+     the urgent thing behind the historical one. Added 8 Sep 2026 with the
+     `domains` / `hosting_accounts` tables — before those, neither page could
+     show anything, which is why the portal had no such section. */
+  { href: "/portal/domains",      label: "Domains" },
+  { href: "/portal/hosting",      label: "Hosting" },
   { href: "/portal/shop",         label: "Shop" },
   { href: "/portal/orders",       label: "Orders" },
   /* Before Invoices on purpose: Billing looks FORWARD at what is coming, Invoices

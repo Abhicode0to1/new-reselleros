@@ -12,12 +12,17 @@ import { rupee, formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-const PAYMENT_STATUS_COLOR: Record<string, "emerald" | "amber" | "rose" | "slate" | "indigo"> = {
-  received: "emerald",
-  partial:  "amber",
-  awaiting: "rose",
-  invoiced: "indigo",
-  none:     "slate",
+/* Badge takes `kind`, not `color`. Every one of these pills was passing
+   `color=` — which BadgeProps accepts only because it extends
+   HTMLAttributes, so it landed on the <span> as a dead DOM attribute and
+   the badge rendered muted grey whatever the status was: paid, overdue and
+   draft all looked identical. Fixed 8 Sep 2026. */
+const PAYMENT_STATUS_KIND: Record<string, "success" | "warning" | "danger" | "muted" | "info"> = {
+  received: "success",
+  partial:  "warning",
+  awaiting: "danger",
+  invoiced: "info",
+  none:     "muted",
 };
 
 export default async function PortalOrdersPage() {
@@ -61,7 +66,7 @@ export default async function PortalOrdersPage() {
                       {q.plan ?? "—"}{q.seats != null ? ` · ${q.seats} seats` : ""}
                     </p>
                   </div>
-                  <Badge color={PAYMENT_STATUS_COLOR[q.payment_status ?? "none"] ?? "slate"}>
+                  <Badge kind={PAYMENT_STATUS_KIND[q.payment_status ?? "none"] ?? "muted"}>
                     {(q.payment_status ?? "none").replace("_", " ")}
                   </Badge>
                 </div>
@@ -95,7 +100,7 @@ export default async function PortalOrdersPage() {
                   <td className="px-4 py-3 text-right font-semibold text-ink font-mono">{rupee(q.amount)}</td>
                   <td className="px-4 py-3 text-ink-3">{formatDate(q.created_date)}</td>
                   <td className="px-4 py-3">
-                    <Badge color={PAYMENT_STATUS_COLOR[q.payment_status ?? "none"] ?? "slate"}>
+                    <Badge kind={PAYMENT_STATUS_KIND[q.payment_status ?? "none"] ?? "muted"}>
                       {(q.payment_status ?? "none").replace("_", " ")}
                     </Badge>
                   </td>

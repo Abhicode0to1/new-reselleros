@@ -31,6 +31,7 @@ import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
 import { daWriteConfigured } from "@/lib/directadmin/provision";
+import { rcOrderingEnabled } from "@/lib/resellerclub/orders";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 
 const WEBHOOK_APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
@@ -336,17 +337,30 @@ export async function POST(request: NextRequest) {
        config read, because a config that could say "true" would be a config that can lie. */
     vendorApiConfigured: false,
     domainName: provisioningDomain,
-    /* HOSTING is now provisioned by us directly on DirectAdmin (2 Sep 2026), so it
-       IS connected — but only once the same explicit go-live gate the trial uses is
-       on (HOSTING_TRIAL_LIVE=1 + DA credentials present). DOMAIN stays false: we
-       read ResellerClub for availability/price but do NOT order on it yet, and a
-       registration is irreversible spend that must never flip on by config accident.
-       The hosting worker (/api/cron/provision-hosting) turns an unblocked hosting
-       request into a real cPanel account + login email. */
+    /* Both engine vendors are now connected, each behind its own explicit go-live
+       switch — HOSTING_TRIAL_LIVE for DirectAdmin, DOMAIN_REGISTER_LIVE for
+       ResellerClub. Neither is a mere "do we have credentials" check: the read
+       side (availability, pricing, package specs) uses the SAME credentials, so
+       credentials alone must never imply permission to spend.
+
+       DOMAIN was hardcoded false until 8 Sep 2026. It is open now by Pardeep's
+       decision, and it is worth being clear about what that does and does not
+       mean: a registration still has to get past everything above this line —
+       a signature-verified payment, in LIVE mode, for the exact quoted amount,
+       carrying a domain name — and then past the autonomy dial. This flag is
+       the last door, not the only one. It exists so an environment holding
+       production credentials (a preview deploy, a local run) can still be
+       refused even when all of that passes.
+
+       The workers turn an unblocked request into the real thing:
+       /api/cron/provision-hosting → cPanel account + login email;
+       /api/cron/provision-domain  → ResellerClub registration + asset row. */
     engineConnected:
       provisioningVendor === "hosting"
         ? process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured()
-        : false,
+        : provisioningVendor === "domain"
+          ? rcOrderingEnabled()
+          : false,
     dialMode: (await loadAutonomyPolicy(quote.tenant_id)).modes?.["provisioning.activate"] ?? "off",
   });
 

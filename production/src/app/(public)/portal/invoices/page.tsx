@@ -15,12 +15,17 @@ import { PayInvoiceButton } from "./_components/pay-invoice-button";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_COLOR: Record<string, "emerald" | "amber" | "rose" | "slate"> = {
-  paid:    "emerald",
-  pending: "amber",
-  overdue: "rose",
-  void:    "slate",
-  draft:   "slate",
+/* Badge takes `kind`, not `color`. Every one of these pills was passing
+   `color=` — which BadgeProps accepts only because it extends
+   HTMLAttributes, so it landed on the <span> as a dead DOM attribute and
+   the badge rendered muted grey whatever the status was: paid, overdue and
+   draft all looked identical. Fixed 8 Sep 2026. */
+const STATUS_KIND: Record<string, "success" | "warning" | "danger" | "muted"> = {
+  paid:    "success",
+  pending: "warning",
+  overdue: "danger",
+  void:    "muted",
+  draft:   "muted",
 };
 
 export default async function PortalInvoicesPage() {
@@ -75,7 +80,7 @@ export default async function PortalInvoicesPage() {
                     <p className="font-mono text-sm text-ink">{inv.id}</p>
                     <p className="mt-0.5 text-2xs text-ink-3">{formatDate(inv.invoice_date)}</p>
                   </div>
-                  <Badge color={STATUS_COLOR[inv.status] ?? "slate"}>{inv.status}</Badge>
+                  <Badge kind={STATUS_KIND[inv.status] ?? "muted"}>{inv.status}</Badge>
                 </div>
                 <div className="mt-3 flex items-end justify-between gap-3">
                   <div>
@@ -130,7 +135,7 @@ export default async function PortalInvoicesPage() {
                     {inv.gst_irn ?? "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge color={STATUS_COLOR[inv.status] ?? "slate"}>{inv.status}</Badge>
+                    <Badge kind={STATUS_KIND[inv.status] ?? "muted"}>{inv.status}</Badge>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-3">

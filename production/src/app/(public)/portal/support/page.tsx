@@ -21,12 +21,17 @@ import { RateTicket } from "@/components/features/support/ticket-rating";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_COLOR: Record<string, "emerald" | "amber" | "rose" | "slate" | "indigo"> = {
-  open:              "rose",
-  in_progress:       "amber",
-  awaiting_customer: "indigo",
-  resolved:          "emerald",
-  closed:            "slate",
+/* Badge takes `kind`, not `color`. Every one of these pills was passing
+   `color=` — which BadgeProps accepts only because it extends
+   HTMLAttributes, so it landed on the <span> as a dead DOM attribute and
+   the badge rendered muted grey whatever the status was: paid, overdue and
+   draft all looked identical. Fixed 8 Sep 2026. */
+const STATUS_KIND: Record<string, "success" | "warning" | "danger" | "muted" | "info"> = {
+  open:              "danger",
+  in_progress:       "warning",
+  awaiting_customer: "info",
+  resolved:          "success",
+  closed:            "muted",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -136,7 +141,7 @@ export default async function PortalSupportPage() {
                       )}
                     </div>
                   </div>
-                  <Badge color={STATUS_COLOR[t.status] ?? "slate"}>
+                  <Badge kind={STATUS_KIND[t.status] ?? "muted"}>
                     {STATUS_LABEL[t.status] ?? t.status}
                   </Badge>
                 </div>

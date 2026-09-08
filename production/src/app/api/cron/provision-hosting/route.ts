@@ -111,6 +111,45 @@ async function handle(req: Request) {
 
       await markProvisioningActivated(r.id, username);
 
+      /* Record what the customer now OWNS (migration 20260908100000).
+         Until this write existed, a provisioned account lived only on the
+         DirectAdmin server and as a `vendor_ref` on the queue row — nothing the
+         customer could ever be shown, which is why /portal/hosting had nothing
+         to list. `upsert` on the domain keeps a re-run idempotent, matching
+         daCreateAccount's own idempotency: the worker may legitimately run
+         twice over the same request and must not leave two accounts behind.
+
+         Non-fatal on failure. The cPanel account is already real and the login
+         email is about to go out; losing the bookkeeping row must not turn a
+         working account into a "failed" one. It is logged and the sweep can
+         re-derive it from DirectAdmin. */
+      try {
+        const { data: customerRow } = await admin
+          .from("quotes").select("customer_id").eq("id", r.quote_id).maybeSingle();
+        if (customerRow?.customer_id) {
+          const { error: assetErr } = await admin.from("hosting_accounts").upsert({
+            tenant_id:   r.tenant_id,
+            customer_id: customerRow.customer_id,
+            domain_name: domain,
+            status:      "active",
+            da_username: username,
+            da_package:  pkg,
+            plan_code:   r.plan ?? null,
+            plan_name:   pkg,
+            is_trial:    false,
+            started_at:  new Date().toISOString(),
+            quote_id:    r.quote_id,
+            provisioning_request_id: r.id,
+            last_synced_at: new Date().toISOString(),
+          }, { onConflict: "domain_name" });
+          if (assetErr) console.error("[provision-hosting] asset row not written:", assetErr.message);
+        } else {
+          console.error(`[provision-hosting] quote ${r.quote_id} has no customer — account provisioned but not recorded as owned`);
+        }
+      } catch (e) {
+        console.error("[provision-hosting] asset row crashed:", (e as Error).message);
+      }
+
       // Credential email — skip the password if the account merely already existed.
       if (email && DA_LOGIN_URL && !res.alreadyExisted) {
         const { alert: owner } = await loadOwnerAlert(admin, r.tenant_id);

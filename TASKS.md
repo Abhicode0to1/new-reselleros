@@ -7,6 +7,87 @@
 
 ---
 
+# 🟣 HANDOFF — 8 Sep 2026. Domain + hosting ka SYSTEM OF RECORD ban gaya; migration LAGNI BAAKI hai.
+
+> Pawan ne bola: domain/hosting service theek se chalao aur customer panel jodo, DMS
+> (`C:\xampp\htdocs\Domain-Management-Project`) se. Do faisle liye gaye:
+> **(1) DMS ko IS app me absorb karo** (bridge nahi) — kyunki DMS me abhi sirf **ek** asli
+> purchase hai (₹1500, 7 Sep, `pay_TZ1iZJxZAZw2Gv`), to data-migration aaj sabse sasta hai;
+> aur DMS ki `primary-billing-integration` branch (36 commit, aaj tak ka kaam) apna GST engine
+> bana rahi hai — do GST series = Rule 46 ki compliance dikkat, isliye ek ghar.
+> **(2) Domain registration ka darwaza KHOLA** — verified LIVE payment par.
+
+## ⚠️ PEHLA KAAM — bina iske do naye portal page CHALENGE NAHI
+
+- [ ] **Migration lagao**: `supabase/migrations/20260908100000_domain_hosting_assets.sql`
+      (`domains`, `hosting_accounts`, `dns_records` + RLS). Is session me **DB access tha hi
+      nahi** — CLI ka login gayab (`supabase projects list` → `LegacyPlatformAuthRequiredError`,
+      CLI 2.117.0), Docker band, MCP unauthorized. `npx supabase login` chahiye.
+      ⚠️ `resellersos-env` skill ki line "Pardeep already logged in hai" ab **galat** hai.
+- [ ] **SQL test chalao**: `supabase/tests/domain_hosting_assets_rls.test.sql`
+      (tenant isolation, customer isolation, customer INSERT/UPDATE/DELETE band, global
+      domain-name uniqueness, DNS ownership, MX-priority). **Abhi tak LIKHA hai, CHALA NAHI** —
+      reasoned-only, test-verified nahi. Pehle canary se harness laal karke dekho (§25).
+
+## ✅ Ho gaya (typecheck 0 · 6462 test pass · lint 0 · build 0, teeno naye route build me)
+
+- [x] **Asset schema** — `domains` / `hosting_accounts` / `dns_records`. Renewal engine
+      DUPLICATE **nahi** kiya: `subscriptions.vendor` me 'domain'/'hosting' pehle se hain aur
+      poora dunning ladder wahin hai. Batwara source-of-truth se: paisa `subscriptions` par,
+      registrar/server ka sach in tables par. `expires_at` (registrar) vs `renewal_date`
+      (billing) alag rakhe — inka na milna asli signal hai.
+- [x] **`classify.ts` + 42 test** — RC ke "error" jo asal me error nahi hain
+      (balance-pending / processing-lock / already-in-progress). Ye ek jagah hai jahan galti
+      = **domain do baar khareeda**. Mutation-checked (ordering todi → sirf sahi test laal).
+- [x] **`orders.ts` + 30 test** — register / renew / transfer / modify-ns / details / orderid,
+      fetch par (axios nahi). Gate: `rcOrderingEnabled()` = credentials **AUR**
+      `DOMAIN_REGISTER_LIVE=1`. Sirf credentials kaafi NAHI — read side (pricing/availability)
+      wahi key use karti hai.
+- [x] **Ek bug port hone se bacha** — DMS ka `renewDomain`/`transferDomain` HTTP 200 par RC ka
+      in-body `{status:"ERROR"}` padhta hi nahi (sirf `registerDomain` padhta hai), to refuse
+      hui renewal "renewed" likh jaati hai. `rcCall` har op ke liye normalise karta hai.
+- [x] **Domain gate KHULA** — `razorpay/route.ts` me `engineConnected` ab domain ke liye
+      `rcOrderingEnabled()`. Baaki guard jaise the: signature-verified, LIVE mode, rupee-exact
+      amount, autonomy dial.
+- [x] **`/api/cron/provision-domain`** — register → asset row → activated. Teen niyam file ke
+      header me: pending kabhi retry nahi; insert hi claim hai (global unique index); order-id
+      na mile to `pending` + naam se lookup.
+- [x] **provision-hosting ab `hosting_accounts` likhta hai** — warna /portal/hosting khaali.
+- [x] **Customer panel**: `/portal/domains` + `/portal/hosting` (nav me Subscription ke baad,
+      Shop se PEHLE — jo cheez lapse ho sakti hai wo history se aage). Expiry din me, urgency
+      ke saath. Auto-renew toggle **jaan-boojh kar nahi** — migration 0063 ka faisla.
+- [x] **Badge `color=` ka murda prop** — `Badge` `kind` leta hai; 10 file `color=` bhej rahi
+      thi jo HTMLAttributes ki wajah se chup-chaap DOM attribute ban ke gir jaata tha, yaani
+      **har status pill grey**. Teen customer-facing portal page theek kiye.
+      ⏳ Baaki **7 internal file** (accounting/aging, bills, profitability, saas-metrics,
+      tds-receivable ×2, tds-detail-dialog) — abhi bhi grey.
+
+## ⏳ Bacha hua (is kaam ka scope, poora nahi hua)
+
+- [ ] **DNS management** — `dns_records` table hai, UI/API nahi. DMS me `lib/resellerclub/dns.ts`
+      (418 line) + `lib/directadmin/dns.ts` port hona hai.
+- [ ] **RC customer/contact banana** — worker abhi `RESELLERCLUB_CUSTOMER_ID` +
+      `RESELLERCLUB_CONTACT_ID` env se leta hai aur na hone par **mana kar deta hai**
+      (galat account me domain jaana support case hai). DMS ka `customers.ts` (664 line)
+      port karna hai.
+- [ ] **Renewal sweep** — `next_action_at` / `processing_until` column hain, cron nahi.
+- [ ] **DMS ka data** — MongoDB → Supabase. Abhi 1 purchase, isliye ab sasta.
+- [ ] **Design gate** — `design-critique` / `accessibility-review` / `layout-audit` **nahi
+      chalaye**. CLAUDE.md §0.9 kehta hai "design done" = teeno pass. `layout-audit` §0 khaali
+      state par shuru hi nahi hota, aur DB access na hone se asli row hain hi nahi.
+      **Migration lagne + 1-2 asli row aane ke BAAD teeno chalane hain.**
+
+## ⚠️ Do dawe jo naapne par GALAT nikle
+
+1. **DMS "mara hua" nahi hai.** `resellerclub/index.ts:5-8` kehta hai iske public API 404 dete
+   hain kyunki GCP owner account kho gaya. Naapa: `app.anutech.in/api/health` → **200**, aaj
+   bhi deploy ho raha hai. Comment stale hai.
+2. **Jo folder bataya gaya wo purana hai.** `Domain-Management-Project-01-09-2026` ka aakhri
+   commit **18 Aug** ka hai. Zinda copy `C:\xampp\htdocs\Domain-Management-Project` hai
+   (branch `primary-billing-integration`, aaj 10:27 ka commit). Port ZINDA wale se hua.
+
+---
+
 # 🟠 HANDOFF — 7 Sep 2026. Subdomain cutover ADHA hai — pehle ise pura karo.
 
 > App ka naya ghar: **reselleros.anutech.in** (live, cert bana, deploy ho chuka — commit 23eecf1).

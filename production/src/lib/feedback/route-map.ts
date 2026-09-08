@@ -121,6 +121,8 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/portal", file: "src/app/(public)/portal/page.tsx" },
   { route: "/portal/billing", file: "src/app/(public)/portal/billing/page.tsx" },
   { route: "/portal/dashboard", file: "src/app/(public)/portal/dashboard/page.tsx" },
+  { route: "/portal/domains", file: "src/app/(public)/portal/domains/page.tsx" },
+  { route: "/portal/hosting", file: "src/app/(public)/portal/hosting/page.tsx" },
   { route: "/portal/invoices", file: "src/app/(public)/portal/invoices/page.tsx" },
   { route: "/portal/login", file: "src/app/(public)/portal/login/page.tsx" },
   { route: "/portal/orders", file: "src/app/(public)/portal/orders/page.tsx" },

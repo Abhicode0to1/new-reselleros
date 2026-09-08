@@ -41,22 +41,42 @@ export interface ReadyHostingRequest {
  * engine-not-connected or dial-hold row carries a blocker and is left alone.
  */
 export async function listReadyHostingRequests(limit = 50): Promise<ReadyHostingRequest[]> {
+  return listReadyEngineRequests("hosting", limit);
+}
+
+/**
+ * The same query for either engine vendor.
+ *
+ * Written as one function rather than a second copy because the four filters
+ * below are the whole safety property — queued, LIVE payment, no blocker — and
+ * a copy is a place for one of them to be forgotten. `amount_paid` comes along
+ * so the worker can stamp it on the asset row without a second read.
+ */
+export async function listReadyEngineRequests(
+  vendor: Extract<ProvisioningVendor, "hosting" | "domain">,
+  limit = 50,
+): Promise<ReadyEngineRequest[]> {
   const db = bare();
   if (!db) return [];
   const { data, error } = await db
     .from("provisioning_requests")
-    .select("id, tenant_id, quote_id, domain, plan")
-    .eq("vendor", "hosting")
+    .select("id, tenant_id, quote_id, domain, plan, amount_paid")
+    .eq("vendor", vendor)
     .eq("status", "queued")
     .eq("payment_mode", "live")
     .is("blocker", null)
     .order("created_at", { ascending: true })
     .limit(limit);
   if (error) {
-    console.error("[provisioning] list ready hosting failed:", error.message);
+    console.error(`[provisioning] list ready ${vendor} failed:`, error.message);
     return [];
   }
-  return (data ?? []) as ReadyHostingRequest[];
+  return (data ?? []) as ReadyEngineRequest[];
+}
+
+export interface ReadyEngineRequest extends ReadyHostingRequest {
+  /** ₹ whole rupees, as received. */
+  amount_paid: number | null;
 }
 
 export async function markProvisioningActivated(id: string, vendorRef: string): Promise<void> {

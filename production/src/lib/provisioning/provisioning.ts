@@ -165,19 +165,25 @@ export function decideProvisioning(input: ProvisioningInput): ProvisioningOutcom
   }
 
   if (isEngineVendor && !input.engineConnected) {
-    /* Ours to fulfil, so the true next step is "connect the engine", not "go to
-       a vendor console". Merge brick #4: the queue carries the plan and the name
-       so the order can be placed the moment that connection exists. */
-    const what = input.vendor === "domain"
-      ? `the registration of ${input.domainName?.trim()}`
-      : "the hosting account";
+    /* Ours to fulfil, so the true next step is "throw the switch", not "go to a
+       vendor console".
+       ⚠️ This message said "app.anutech.in has not been deployed with the
+       ordering connection" until 8 Sep 2026, which was true when brick #4 was
+       written and is not true now — both engines are called directly, and the
+       only thing standing between a paid order and an account is an env var.
+       Sending the desk to chase a deployment that is not the problem is worse
+       than saying nothing, so the message names the switch instead (§24). */
+    const isDomain = input.vendor === "domain";
+    const what = isDomain ? `the registration of ${input.domainName?.trim()}` : "the hosting account";
+    const engine = isDomain ? "ResellerClub" : "DirectAdmin";
+    const flag = isDomain ? "DOMAIN_REGISTER_LIVE=1" : "HOSTING_TRIAL_LIVE=1";
     return {
       action: "queue",
       blocker: "engine_not_connected",
       reason:
-        `${what} is set up on our own engine (${input.vendor === "domain" ? "ResellerClub" : "DirectAdmin"}), ` +
-        "which this app cannot order on yet — app.anutech.in has not been deployed with the ordering " +
-        "connection. The order is queued with the plan and name it needs.",
+        `${what} runs on our own engine (${engine}), and ordering is switched off in this ` +
+        `environment. Set ${flag} and make sure the ${engine} credentials are present, then ` +
+        "release this from the queue. It is stored with the plan and name it needs.",
     };
   }
 

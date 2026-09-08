@@ -115,8 +115,14 @@ export default async function PortalDashboardPage() {
 
       {/* Quick actions */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+        <QuickLink href="/portal/domains"      title="Domains"      sub="Renewals + expiry dates" />
+        <QuickLink href="/portal/hosting"      title="Hosting"      sub="Control panel + plan" />
         <QuickLink href="/portal/shop"         title="Shop"         sub="Buy more products" />
-        <QuickLink href="/portal/subscription" title="Subscription" sub="Manage plan + auto-renew" />
+        {/* Said "Manage plan + auto-renew" until 8 Sep 2026, which promised a
+            control the customer does not have: migration 0063 revoked the
+            auto-renew grant deliberately, because with no stored card an
+            "auto-renew ON" switch implies a charge that cannot happen. */}
+        <QuickLink href="/portal/subscription" title="Subscription" sub="Your plan + renewal date" />
         <QuickLink href="/portal/orders"       title="Orders"       sub="Quote + order history" />
         <QuickLink href="/portal/invoices"     title="Invoices"     sub="GST tax invoices" />
         <QuickLink href="/portal/support"      title="Support"      sub="Raise a ticket" />
@@ -186,7 +192,7 @@ function KV({
   );
 }
 
-function QuickLink({ href, title, sub }: { href: "/portal/shop" | "/portal/orders" | "/portal/invoices" | "/portal/profile" | "/portal/subscription" | "/portal/support"; title: string; sub: string }) {
+function QuickLink({ href, title, sub }: { href: "/portal/shop" | "/portal/orders" | "/portal/invoices" | "/portal/profile" | "/portal/subscription" | "/portal/support" | "/portal/domains" | "/portal/hosting"; title: string; sub: string }) {
   return (
     <Link href={href as never} className="block h-full">
       <Card className="p-4 h-full hover:bg-paper-2/40 transition-colors">

@@ -2,12 +2,22 @@
  * ResellerClub — direct integration (merge Plan B, 2 Sep 2026).
  *
  * ─── WHY THIS EXISTS ─────────────────────────────────────────────────────────
- * The engine (app.anutech.in) that used to answer domain availability and
- * pricing cannot be redeployed: its GCP project's owner account is lost, so its
- * public APIs still 404 and every search on the site dead-ends. Pardeep chose
- * the direct route — "wo api to me tumhe bhi de dunga … tum static ip wale kaam
- * ko complete karo" — so this app now asks ResellerClub itself, with the same
- * credentials the engine uses.
+ * Pardeep chose the direct route — "wo api to me tumhe bhi de dunga … tum static
+ * ip wale kaam ko complete karo" — so this app asks ResellerClub itself, with the
+ * same credentials the engine uses, rather than proxying through the engine.
+ *
+ * ⚠️ CORRECTED 8 Sep 2026. This paragraph used to say the engine
+ * "cannot be redeployed: its GCP project's owner account is lost, so its public
+ * APIs still 404 and every search on the site dead-ends". Measured:
+ * `app.anutech.in/api/health` returns **200**, and its repo
+ * (C:\xampp\htdocs\Domain-Management-Project, branch
+ * `primary-billing-integration`) was deployed the same morning. The engine is
+ * alive and under active development.
+ *
+ * The direct route is still the right one — it is fewer hops, and the decision
+ * to absorb that engine into this app was taken on 8 Sep — but "the engine is
+ * dead" was load-bearing in the wrong way: it was the stated reason domain
+ * ordering stayed switched off, and it was not true.
  *
  * The endpoints, auth params, product-key mapping and price-block shapes are
  * ported faithfully from the engine's own wrapper
