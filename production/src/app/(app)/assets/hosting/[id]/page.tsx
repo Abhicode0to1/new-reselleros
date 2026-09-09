@@ -6,7 +6,8 @@
  * in that order.
  *
  * ─── WHAT IS DELIBERATELY ABSENT ─────────────────────────────────────────────
- * There is no DNS editor here, and no suspend/unsuspend button, and neither is
+ * There IS a control-panel button now (9 Sep 2026 — DMS's getOneTimeLoginUrl,
+ * ported). There is still no DNS editor and no suspend/unsuspend, and neither is
  * an oversight:
  *
  *   · DNS. DirectAdmin's zone API needs per-user impersonation auth
@@ -32,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { daysUntil } from "@/lib/domains/lifecycle";
 import type { HostingAccountStatus } from "@/lib/supabase/database.types";
+import { OpenPanelButton } from "./panel-button";
 
 export const dynamic = "force-dynamic";
 
@@ -202,13 +204,20 @@ export default async function HostingDetailPage({ params }: { params: { id: stri
       </div>
 
       <Card className="p-5">
-        <h2 className="font-serif text-lg mb-2">DNS and server actions</h2>
-        <p className="text-sm text-ink-3">
-          Not available from here yet. A domain&apos;s DNS is editable at its own page when
-          ResellerClub holds the zone; a hosting account&apos;s zone lives on DirectAdmin, whose API
-          needs per-user authentication this app does not have yet. Suspend and terminate exist in
-          the code and are deliberately not wired to a button — destroying a customer&apos;s site and
-          mailboxes should not be one click away from a read-only screen.
+        <h2 className="font-serif text-lg mb-2">Server actions</h2>
+        <OpenPanelButton
+          hostingId={h.id}
+          domainName={h.domain_name}
+          daUsername={h.da_username}
+        />
+        <p className="mt-4 text-sm text-ink-3">
+          {/* Still stated rather than left as a silent gap — a screen that shows one action
+              implies the others were considered, so say what happened to them. */}
+          DNS for this account is not editable here: its zone lives on DirectAdmin, whose API needs
+          per-user authentication that only the control-panel link above uses so far. A
+          domain&apos;s DNS IS editable at its own page when ResellerClub holds the zone. Suspend
+          and terminate exist in the code and are deliberately not wired to a button — destroying a
+          customer&apos;s site and mailboxes wants a confirmation flow somebody has agreed to.
         </p>
       </Card>
     </div>
