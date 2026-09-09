@@ -63,8 +63,16 @@ const nextConfig = {
       // CSP connect-src is derived from below — keep both in step.
       ...(() => {
         try {
-          const h = new URL((process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "")).host;
-          return h && !h.endsWith(".supabase.co") ? [{ protocol: "https", hostname: h }] : [];
+          const u = new URL((process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, ""));
+          if (!u.hostname || u.hostname.endsWith(".supabase.co")) return [];
+          /* hostname, NOT host: a remotePattern hostname carrying ":54321" matches
+             nothing, because the port is a separate field. And the protocol follows the
+             URL for the same reason the CSP does — see headers() below. */
+          return [{
+            protocol: u.protocol === "http:" ? "http" : "https",
+            hostname: u.hostname,
+            ...(u.port ? { port: u.port } : {}),
+          }];
         } catch {
           return [];
         }
@@ -83,8 +91,20 @@ const nextConfig = {
     let supaConnect = "https://*.supabase.co wss://*.supabase.co";
     try {
       if (supaUrl) {
-        const h = new URL(supaUrl).host;
-        supaConnect = `https://${h} wss://${h} ${supaConnect}`;
+        const u = new URL(supaUrl);
+        /* Take the SCHEME from the URL, do not assume https. This line used to hardcode
+           https://+wss://, which is correct for every deployed environment and wrong for
+           every local one: a local stack is http://127.0.0.1:54321, the CSP then allowed
+           only the https:// form of that host, and the browser refused every client-side
+           Supabase call with "Refused to connect because it violates the document's
+           Content Security Policy". Measured 9 Sep 2026: it made /portal/login
+           unusable locally — portal_customer_exists never left the page — and because
+           this CSP is applied in dev too (deliberately, see below) there was no
+           environment in which the portal could be signed into by hand.
+           Deployed output is unchanged: an https:// URL still yields https://+wss://. */
+        const web = u.protocol === "http:" ? "http"  : "https";
+        const ws  = u.protocol === "http:" ? "ws"    : "wss";
+        supaConnect = `${web}://${u.host} ${ws}://${u.host} ${supaConnect}`;
       }
     } catch {
       /* malformed env → fall back to the wildcard above */
