@@ -1,0 +1,142 @@
+"use client";
+
+/**
+ * Portal section nav — both the inline desktop row and the narrow scrollable strip.
+ *
+ * ─── WHY THIS IS A CLIENT ISLAND ─────────────────────────────────────────────
+ * It needs the current path to say which section you are in, and `usePathname` is
+ * client-only. The portal layout is a Server Component (it reads the session), so the
+ * nav moved out here rather than dragging the whole layout across the boundary. Same
+ * shape as `components/layout/Sidebar.tsx` and `MobileBottomNav.tsx`, which resolve
+ * their active state the same way.
+ *
+ * ─── TWO THINGS THE DESIGN GATE FOUND HERE (9 Sep 2026) ──────────────────────
+ * Both were pre-existing, and both were made harder to live with by growing the nav
+ * from 8 items to 10 on 8 Sep.
+ *
+ * 1. NOTHING SAID WHICH SECTION YOU WERE IN. Measured: all 10 links resolved to one
+ *    computed style — rgb(112,105,97) at weight 400 — and there was no `aria-current`
+ *    anywhere in the portal. So the current page was indistinguishable both to the eye
+ *    and to a screen reader, on a nav that had just got longer. `aria-current="page"`
+ *    is the attribute for a current item that is not a toggle; `aria-pressed` would be
+ *    wrong here, because these are links and not buttons.
+ *
+ * 2. THE TAP TARGETS WERE 20px TALL. CLAUDE.md:605 (§20, CRITICAL) requires ≥44px, and
+ *    `portal/domains/page.tsx` calls the portal "a phone-first surface". The strip's
+ *    `py-2.5` sat on the CONTAINER, so it padded the row and not the link — the row was
+ *    40px and every link inside it 20px. Padding a parent does not grow a child's hit
+ *    area. The floor now sits on the <Link> itself, which is what `MobileBottomNav`
+ *    already does (`min-h-[56px]`, there because it stacks an icon over a label).
+ *
+ * The floor is applied to the STRIP and not to the inline desktop row, following the
+ * same split the app already makes: `MobileBottomNav` carries a touch floor and the
+ * desktop `Sidebar` does not. The strip is the surface a thumb uses.
+ */
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+
+/* Assets before commerce. Domains and Hosting are the things the customer OWNS and the
+   things that can lapse; Shop and Orders are what they did. Someone opening the portal
+   because a site went down or a renewal notice arrived is looking for these two, and
+   burying them under Orders would put the urgent thing behind the historical one. Added
+   8 Sep 2026 with the `domains` / `hosting_accounts` tables — before those, neither page
+   could show anything, which is why the portal had no such section. */
+const NAV: Array<{ href: string; label: string }> = [
+  { href: "/portal/dashboard",    label: "Dashboard" },
+  { href: "/portal/subscription", label: "Subscription" },
+  { href: "/portal/domains",      label: "Domains" },
+  { href: "/portal/hosting",      label: "Hosting" },
+  { href: "/portal/shop",         label: "Shop" },
+  { href: "/portal/orders",       label: "Orders" },
+  /* Billing and Invoices are both here on purpose — Billing is the payment method and
+     the plan, Invoices is the document history. An earlier version of this nav had no
+     Billing in it. */
+  { href: "/portal/billing",      label: "Billing" },
+  { href: "/portal/invoices",     label: "Invoices" },
+  { href: "/portal/support",      label: "Support" },
+  { href: "/portal/profile",      label: "Profile" },
+];
+
+/** Exact match, not startsWith: every portal section is a leaf, so a prefix match would
+ *  light up two rows the moment one href becomes a prefix of another. */
+function useActive() {
+  const pathname = usePathname();
+  return (href: string) => pathname === href;
+}
+
+/**
+ * The inline row. Shown only at 1080px — the header's own max-width — so it appears
+ * exactly when there is room for it; see the layout for that measurement.
+ *
+ * gap-4 rather than gap-5 is also load-bearing: the header row is capped at
+ * max-w-[1080px] with px-6, so everything competes for 1032px, and at gap-5 the nav
+ * group took 794 of it and left the brand 238 where it needs 252 — which truncated the
+ * reseller's business name to "Excel Technologies Pv...". Nine gaps at 4px less each
+ * returns 36px. If a future nav item eats that room, widen the budget or shorten labels;
+ * do not let the brand absorb it, because it carries min-w-0 and will give way silently.
+ */
+export function PortalNavInline() {
+  const isActive = useActive();
+  return (
+    <nav
+      aria-label="Portal sections"
+      className="hidden min-[1080px]:flex items-center gap-4 text-sm text-ink-3"
+    >
+      {NAV.map((n) => {
+        const active = isActive(n.href);
+        return (
+          <Link
+            key={n.href}
+            href={n.href as never}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "whitespace-nowrap transition-colors",
+              active ? "text-amber-ink font-medium" : "hover:text-ink",
+            )}
+          >
+            {n.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+/**
+ * The narrow strip — phone AND tablet, up to 1080px. It scrolls INSIDE itself
+ * (overflow-x-auto + min-w-max), which is why it never pushed the page sideways the way
+ * the inline row did before 9 Sep.
+ */
+export function PortalNavStrip() {
+  const isActive = useActive();
+  return (
+    <nav
+      className="min-[1080px]:hidden border-t border-hairline overflow-x-auto"
+      aria-label="Portal sections"
+    >
+      {/* No vertical padding here on purpose — it belongs on the links, or it pads the
+          row while leaving each tap target 20px tall. */}
+      <div className="flex items-center gap-5 px-6 text-sm text-ink-3 whitespace-nowrap min-w-max">
+        {NAV.map((n) => {
+          const active = isActive(n.href);
+          return (
+            <Link
+              key={n.href}
+              href={n.href as never}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                // touch-target floor (§20 / CLAUDE.md:605) — on the LINK, not the row
+                "inline-flex items-center min-h-[44px] transition-colors",
+                active ? "text-amber-ink font-medium" : "hover:text-ink",
+              )}
+            >
+              {n.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}

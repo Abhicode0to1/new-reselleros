@@ -33,7 +33,10 @@ export function PortalAccountMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2">
+      {/* min-h/min-w-[44px]: the trigger measured 49x28 on 9 Sep, under the ≥44px floor
+          CLAUDE.md:605 (§20) sets. The avatar stays 28px — the hit area grows around it,
+          which is why this is min-h and not h. */}
+      <DropdownMenuTrigger className="flex items-center justify-center gap-2 min-h-[44px] min-w-[44px] rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2">
         <Avatar initials={initials(customerName) || "?"} color="amber" size="sm" />
         <Icon name="chevron_down" size={13} className="text-ink-3" />
       </DropdownMenuTrigger>
