@@ -21,6 +21,9 @@
 import "server-only";
 import { randomBytes } from "crypto";
 import { parseDA } from "./index";
+import { isDaUsername } from "./user-auth";
+import { daAdminRequest } from "./admin-request";
+import { classifyDaFailure } from "./classify";
 
 const DA_URL = (process.env.DIRECTADMIN_URL?.trim() || "").replace(/\/+$/, "");
 const ADMIN_USER = process.env.DIRECTADMIN_ADMIN_USER?.trim() || "";
@@ -166,4 +169,99 @@ export async function daUnsuspendAccount(username: string): Promise<{ ok: boolea
  */
 export async function daDeleteAccount(username: string): Promise<{ ok: boolean; message: string }> {
   return daPost("/CMD_API_SELECT_USERS", { confirmed: "Confirm", delete: "Delete", select0: username });
+}
+
+/* ── Changing an account's package ────────────────────────────────────────────
+ *
+ * Ported from the DMS engine's `changePackage` (lib/directadmin/users.ts) and its
+ * typed wrapper (lib/integrations/directadmin/change-package.ts) on 9 Sep 2026.
+ *
+ * ─── WHY THIS IS A WRITE AND LIVES HERE ─────────────────────────────────────
+ * A package IS the account's limits — disk, bandwidth, how many databases. Moving
+ * an account onto a smaller one can take away resources it is currently using, so
+ * this belongs with the other irreversible calls rather than beside the reads in
+ * `accounts.ts`, whatever the symmetry of the names suggests.
+ *
+ * ─── IT NEEDS TO SAY *WHY* IT FAILED, WHICH daPost CANNOT ───────────────────
+ * The two failures a caller must tell apart are "no such package" (a seeding
+ * mistake — fail loudly, someone renamed a package on the server) and "DA is
+ * down" (retry the upgrade later, and do NOT tell the customer their plan change
+ * failed). `daPost` collapses both into `{ ok: false, message }`. So this one uses
+ * the newer transport in `admin-request.ts`, which reports how it failed — the
+ * older calls above are left alone deliberately; see that file's header.
+ */
+
+/**
+ * Case-correct a package name against the names the server actually has.
+ *
+ * DA's package names are case-sensitive and operators type them inconsistently.
+ * DMS solved this with `KNOWN_PACKAGES`, a compile-time list derived from its
+ * plan config — which is correct until somebody renames a package on the server,
+ * after which it silently sends the old name. This takes the list as an argument
+ * so a caller can pass `await daListPackages()`, the live truth. With no list it
+ * corrects nothing, which is the honest default.
+ */
+export function normalizePackageName(pkg: string, known: readonly string[] = []): string {
+  const p = (pkg ?? "").trim();
+  if (!p) return p;
+  return known.find((k) => k.toLowerCase() === p.toLowerCase()) ?? p;
+}
+
+/** DA package names: letters, digits, underscore, dash. */
+export function isPackageName(pkg: string): boolean {
+  return /^[A-Za-z0-9_-]{1,64}$/.test((pkg ?? "").trim());
+}
+
+export type DaChangePackageOutcome =
+  | { kind: "changed" }
+  /** Our own precondition failed; nothing was sent. */
+  | { kind: "refused"; reason: string }
+  /** DA is up and has no such account — the local row is stale. */
+  | { kind: "user_not_found"; reason: string }
+  /** DA has no package by that name. A configuration error, not a customer one. */
+  | { kind: "package_not_found"; reason: string }
+  /** DA is down. The account is UNCHANGED; retry is safe. */
+  | { kind: "unreachable"; reason: string }
+  | { kind: "not_authorised"; reason: string }
+  | { kind: "hard_failure"; reason: string };
+
+/**
+ * Move an account onto a different package. Changes real limits on success.
+ *
+ * Note that DA applies this immediately and does not report what the previous
+ * package was, so a caller wanting to undo it needs to have read the account's
+ * config (`daUserConfig`) BEFORE calling — there is nothing in the response to
+ * reconstruct it from.
+ */
+export async function daChangePackage(username: string, newPackage: string): Promise<DaChangePackageOutcome> {
+  if (!daWriteConfigured()) {
+    return { kind: "refused", reason: "DirectAdmin is not configured in this environment" };
+  }
+  if (!isDaUsername(username)) {
+    return { kind: "refused", reason: "that is not a DirectAdmin username, so nothing was changed" };
+  }
+  const pkg = (newPackage ?? "").trim();
+  if (!isPackageName(pkg)) {
+    return { kind: "refused", reason: "that is not a DirectAdmin package name, so nothing was changed" };
+  }
+
+  const res = await daAdminRequest("/CMD_API_MODIFY_USER", {
+    form: new URLSearchParams({ action: "package", user: username, package: pkg }),
+  });
+  if (res.kind === "refused") return res;
+  if (res.kind === "ok") return { kind: "changed" };
+
+  const v = classifyDaFailure("changePackage", res, ["user_not_found", "package_not_found"]);
+  switch (v.kind) {
+    case "user_not_found":
+      return { kind: "user_not_found", reason: v.reason };
+    case "package_not_found":
+      return { kind: "package_not_found", reason: v.reason };
+    case "unreachable":
+      return { kind: "unreachable", reason: v.reason };
+    case "not_authorised":
+      return { kind: "not_authorised", reason: v.reason };
+    default:
+      return { kind: "hard_failure", reason: v.reason };
+  }
 }
