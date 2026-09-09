@@ -55,20 +55,13 @@ import {
   type TransferOutcome,
   type LookupOutcome,
 } from "./classify";
+import { rcCall, rcWriteConfigured, rcOrderingEnabled } from "./call";
 
-const BASE = (process.env.RESELLERCLUB_API_URL?.trim() || "https://httpapi.com").replace(/\/+$/, "");
-const RESELLER_ID = process.env.RESELLERCLUB_RESELLER_ID?.trim() || "";
-const API_KEY = process.env.RESELLERCLUB_API_KEY?.trim() || "";
-
-/** Credentials present. NOT permission to order — see `rcOrderingEnabled`. */
-export function rcWriteConfigured(): boolean {
-  return RESELLER_ID.length > 0 && API_KEY.length > 0;
-}
-
-/** The money gate. Both halves, in one place, so a call site cannot check half. */
-export function rcOrderingEnabled(): boolean {
-  return rcWriteConfigured() && process.env.DOMAIN_REGISTER_LIVE === "1";
-}
+/* Transport and the money gate now live in ./call.ts - one normaliser for every RC
+   write module, so a second copy cannot re-learn RC quirks wrongly. The two gates are
+   re-exported because provision-domain and the Razorpay webhook import them from here,
+   and moving a file should not churn its call sites. */
+export { rcWriteConfigured, rcOrderingEnabled };
 
 /**
  * Nameservers a new registration is pointed at.
@@ -91,105 +84,6 @@ function defaultNameservers(): string[] {
     "deepak1299294.earth.orderbox-dns.com",
     "deepak1299294.mars.orderbox-dns.com",
   ];
-}
-
-/* ── Transport ──────────────────────────────────────────────────────────────── */
-
-/**
- * One call to ResellerClub, normalised into the three words `classify.ts`
- * understands.
- *
- * RC's conventions, all of which this has to absorb:
- *   · credentials go in the QUERY STRING on every request, including POSTs —
- *     there is no header auth;
- *   · errors come back with HTTP 200 and `{"status":"ERROR","message":…}`, or
- *     sometimes `{"error": "…"}` with no status at all;
- *   · `status` casing is inconsistent, hence the lowercase compare;
- *   · `"InvoicePaid"` with an error attached means the money moved but the
- *     order has not completed — pending, never a failure (observed by the
- *     engine; see its registration.ts).
- */
-async function rcCall(
-  path: string,
-  params: Record<string, string | string[]>,
-  method: "GET" | "POST",
-): Promise<RcRawResponse> {
-  if (!rcWriteConfigured()) {
-    return { status: "error", message: "ResellerClub credentials are not configured in this environment" };
-  }
-
-  const qs = new URLSearchParams();
-  qs.set("auth-userid", RESELLER_ID);
-  qs.set("api-key", API_KEY);
-  for (const [k, v] of Object.entries(params)) {
-    if (Array.isArray(v)) v.forEach((item) => qs.append(k, item));
-    else if (v !== "") qs.set(k, v);
-  }
-
-  const url = `${BASE}${path}?${qs.toString()}`;
-
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method,
-      cache: "no-store",
-      /* 60s, not the read side's 15s. A registration is a registry round-trip
-         and RC is routinely slow on it; timing out early does not cancel the
-         order, it only loses our record of it. */
-      signal: AbortSignal.timeout(60_000),
-    });
-  } catch (err) {
-    /* The URL is never logged — it carries the api-key in the query string. */
-    const message = (err as Error).message || "unreachable";
-    console.error(`[resellerclub] ${path} unreachable: ${message}`);
-    return { status: "error", message: `ResellerClub unreachable: ${message}` };
-  }
-
-  const text = await res.text().catch(() => "");
-
-  let body: Record<string, unknown> | null = null;
-  try {
-    body = text ? (JSON.parse(text) as Record<string, unknown>) : null;
-  } catch {
-    body = null;
-  }
-
-  if (!res.ok) {
-    /* A non-2xx still often carries RC's reason in the body — prefer it over
-       the bare status code, because "IP not whitelisted" is actionable and
-       "HTTP 403" is not (§24). */
-    const message =
-      (typeof body?.message === "string" && body.message) ||
-      (typeof body?.error === "string" && body.error) ||
-      `ResellerClub HTTP ${res.status}: ${text.slice(0, 200)}`;
-    console.error(`[resellerclub] ${path} HTTP ${res.status}: ${text.slice(0, 200)}`);
-    return { status: "error", message, data: body ?? undefined };
-  }
-
-  if (!body || typeof body !== "object") {
-    return { status: "error", message: `ResellerClub returned an unreadable body: ${text.slice(0, 200)}` };
-  }
-
-  const rawStatus = typeof body.status === "string" ? body.status.toLowerCase() : "";
-
-  /* The money moved but the order has not landed. Pending, not an error. */
-  if (rawStatus === "invoicepaid") {
-    return {
-      status: "pending",
-      message: typeof body.message === "string" ? body.message : "invoice paid, order not yet complete",
-      data: body,
-    };
-  }
-
-  if (rawStatus === "error" || typeof body.error === "string") {
-    const message =
-      (typeof body.message === "string" && body.message) ||
-      (typeof body.error === "string" && body.error) ||
-      "ResellerClub reported an error with no message";
-    return { status: "error", message, data: body };
-  }
-
-  return { status: "success", data: body };
 }
 
 /* ── Orders ─────────────────────────────────────────────────────────────────── */

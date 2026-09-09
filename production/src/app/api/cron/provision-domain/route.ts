@@ -44,6 +44,7 @@ import {
   rcDomainDetails,
 } from "@/lib/resellerclub/orders";
 import { mustNotRetry } from "@/lib/resellerclub/classify";
+import { rcEnsureRegistrant } from "@/lib/resellerclub/customers";
 import {
   listReadyEngineRequests,
   markProvisioningActivated,
@@ -80,7 +81,10 @@ async function authorized(req: Request): Promise<boolean> {
 export async function GET(req: Request) { return handle(req); }
 export async function POST(req: Request) { return handle(req); }
 
-type Outcome = "registered" | "pending-upstream" | "failed" | "no-domain" | "no-customer" | "crash";
+/* "registrant-unresolved" is kept apart from "failed" on purpose: it means the order
+   never reached ResellerClub, usually because the customer record is missing an
+   address the registry requires. Different queue, different fix. */
+type Outcome = "registered" | "pending-upstream" | "failed" | "no-domain" | "no-customer" | "registrant-unresolved" | "crash";
 
 async function handle(req: Request) {
   if (!(await authorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -92,17 +96,14 @@ async function handle(req: Request) {
       note: "domain ordering is not live in this environment (RESELLERCLUB credentials / DOMAIN_REGISTER_LIVE=1)",
     });
   }
-  if (!RC_CUSTOMER_ID || !RC_CONTACT_ID) {
-    /* Refuse rather than guess. ResellerClub files a registration against a
-       customer and a contact; sending the wrong ones puts the domain in
-       somebody else's account, and unpicking that is a support case with the
-       registrar, not a code fix. */
-    return NextResponse.json({
-      ran: true,
-      registered: 0,
-      note: "RESELLERCLUB_CUSTOMER_ID / RESELLERCLUB_CONTACT_ID are not set — a registration cannot be filed without them",
-    });
-  }
+  /* RESELLERCLUB_CUSTOMER_ID / RESELLERCLUB_CONTACT_ID are an OVERRIDE now, not a
+     precondition. This used to refuse the whole run unless both were set by hand, and
+     refusing was right at the time: RC files a registration against a customer and a
+     contact, and sending the wrong ones puts the domain in somebody else's account. But
+     ONE pair of env ids means every customer's domain is filed under the same registrant,
+     which is the same defect wearing a different hat. Since 9 Sep each order resolves its
+     OWN registrant from the customer record (lib/resellerclub/customers.ts). The env pair
+     still wins when it is set, for a single-account reseller who wants exactly that. */
 
   const admin = createAdminClient();
   const ready = await listReadyEngineRequests("domain");
@@ -179,8 +180,11 @@ async function handle(req: Request) {
              `registered_at` and `expires_at` are deliberately absent — they do not
              exist until RC answers, and writing them as null here would only
              restate what the column default already says. */
-          registrar_customer_id: RC_CUSTOMER_ID,
-          registrar_contact_id: RC_CONTACT_ID,
+          /* Left null unless the env override is set — the per-customer identity is
+             resolved AFTER the claim (see below) and stamped on then. Claiming first
+             keeps a lost race from creating an RC contact nobody needed. */
+          registrar_customer_id: RC_CUSTOMER_ID || null,
+          registrar_contact_id: RC_CONTACT_ID || null,
         })
         .select("id")
         .maybeSingle();
@@ -193,12 +197,64 @@ async function handle(req: Request) {
         continue;
       }
 
+      /* ── Who the domain is filed under ───────────────────────────────────
+         After the claim, before the order. A registrant is reusable and cheap; a
+         registration is neither, so the identity is settled while nothing is
+         irreversible yet. */
+      let filedUnder = { customerId: RC_CUSTOMER_ID, contactId: RC_CONTACT_ID };
+
+      if (!RC_CUSTOMER_ID || !RC_CONTACT_ID) {
+        const { data: buyer } = await admin
+          .from("customers")
+          .select("name, contact_email, contact_phone, address, city, state, pin_code")
+          .eq("id", quote.customer_id)
+          .maybeSingle();
+
+        const identity = await rcEnsureRegistrant({
+          email: buyer?.contact_email ?? "",
+          name: buyer?.name ?? quote.customer_name ?? "",
+          companyName: buyer?.name ?? null,
+          phone: buyer?.contact_phone ?? "",
+          address: {
+            line1: buyer?.address ?? "",
+            city: buyer?.city ?? "",
+            state: buyer?.state ?? "",
+            zipcode: buyer?.pin_code ?? "",
+          },
+        });
+
+        if (identity.kind !== "ready") {
+          /* Nothing was ordered, so the claim is released rather than left to the
+             sweep — the name stays available and the desk gets the reason. A
+             `refused` is a data problem (an incomplete customer record) and retrying
+             it unchanged cannot help, which is why the message says what to fix. */
+          await admin.from("domains").update({
+            status: "failed",
+            processing_until: null,
+            last_error: identity.reason,
+            last_error_at: new Date().toISOString(),
+          }).eq("id", claimed.id);
+          await markProvisioningFailed(r.id, `Could not establish the registrant at ResellerClub: ${identity.reason}`);
+          result.failed++; note("registrant-unresolved");
+          continue;
+        }
+
+        filedUnder = { customerId: identity.customerId, contactId: identity.contactId };
+
+        /* Stamped before the order, so a crash between here and RC still leaves a row
+           saying which registrant the attempt used. */
+        await admin.from("domains").update({
+          registrar_customer_id: identity.customerId,
+          registrar_contact_id: identity.contactId,
+        }).eq("id", claimed.id);
+      }
+
       /* ── The irreversible bit ─────────────────────────────────────────── */
       const outcome = await rcRegisterDomain({
         domainName: domain,
         years,
-        customerId: RC_CUSTOMER_ID,
-        contactId: RC_CONTACT_ID,
+        customerId: filedUnder.customerId,
+        contactId: filedUnder.contactId,
       });
 
       if (outcome.kind === "hard_failure") {
