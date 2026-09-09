@@ -87,7 +87,7 @@ export default async function DomainDetailPage({ params }: { params: { id: strin
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1200px] mx-auto">
-      <Link href={"/assets/domains" as never} className="text-2xs text-ink-3 hover:text-ink">← All domains</Link>
+      <Link href={"/assets/domains" as never} className="inline-flex items-center min-h-[44px] text-2xs text-ink-3 hover:text-ink">← All domains</Link>
 
       <div className="mt-2 mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">

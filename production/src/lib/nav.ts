@@ -236,6 +236,7 @@ export const APP_NAV: NavSection[] = [
          from this screen. The path is /assets/domains because /domains itself is
          the public marketing landing page. */
       { id: "domains",       href: "/assets/domains", label: "Domains",          icon: "globe",   roles: ["owner", "manager", "billing", "support"] },
+      { id: "hosting",       href: "/assets/hosting", label: "Hosting",          icon: "database", roles: ["owner", "manager", "billing", "support"] },
       { id: "renewals",      href: "/renewals",      label: "Renewals",          icon: "clock",   roles: ["owner", "manager", "billing", "support"] },
       { id: "invoices",      href: "/invoices",      label: "Invoices",          icon: "receipt", roles: ["owner", "manager", "billing"] },
       { id: "payments",      href: "/payments",      label: "Payments Received", icon: "rupee",   roles: ["owner", "manager", "billing"] },
@@ -406,6 +407,8 @@ export const SCREEN_TITLES: Record<string, string[]> = {
      run, a breadcrumb naming a page you are not on. */
   "/assets/domains":      ["Revenue", "Domains"],
   "/assets/domains/[id]": ["Revenue", "Domains", "Detail"],
+  "/assets/hosting":      ["Revenue", "Hosting"],
+  "/assets/hosting/[id]": ["Revenue", "Hosting", "Detail"],
   "/quotes":          ["Revenue", "Quotes"],
   "/quotes/new":      ["Revenue", "Quotes", "New"],
   "/quotes/[id]":     ["Revenue", "Quotes", "Detail"],
