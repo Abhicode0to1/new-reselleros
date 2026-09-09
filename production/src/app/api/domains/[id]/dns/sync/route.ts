@@ -46,7 +46,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
      is a write path. Ordered this way after an end-to-end check returned 409
      "no registrar customer id" to a portal customer who should simply have been
      told no: an unauthorized caller had learned something about the domain. */
-  /* A sync inserts, updates and DELETES mirror rows, so it is a write path. */
   const authz = await authorizeDomainWrite(supabase, domain.tenant_id);
   if (!authz.ok) return NextResponse.json({ ok: false, error: authz.error }, { status: authz.status });
 
