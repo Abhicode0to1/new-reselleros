@@ -1,0 +1,19 @@
+<!--
+  LOCAL ONLY. Supabase's hosted project has its own template; this file exists
+  because the DEFAULT magic-link template sends a LINK, and /portal/login asks the
+  customer to type a CODE. So locally the email arrived with nothing in it the form
+  would accept, and the customer portal could not be signed into by hand at all —
+  measured 9 Sep 2026, including reading the token straight out of auth.users, where
+  it is a PKCE token and not a typed code.
+
+  {{ .Token }} is the one thing the form needs. The link is kept underneath because
+  it is genuinely useful for a redirect test.
+-->
+<h2>Your sign-in code</h2>
+<p style="font:600 28px/1.2 ui-monospace,monospace;letter-spacing:.15em">{{ .Token }}</p>
+<p>Enter this on the sign-in screen. It expires in an hour.</p>
+<hr>
+<p style="font-size:12px;color:#666">
+  Or open <a href="{{ .ConfirmationURL }}">this link</a> — that path is the redirect
+  flow, not the code flow, so it will not complete a portal session.
+</p>

@@ -243,6 +243,17 @@ secure_password_change = false
 max_frequency = "1s"
 # Number of characters used in the email OTP.
 otp_length = 6
+
+# LOCAL ONLY, and it fixes a real dead end rather than styling an email.
+# GoTrue's DEFAULT magic-link template sends a LINK; /portal/login asks the customer
+# to type a CODE. So the email that arrived locally contained nothing the form would
+# accept, and the customer portal could not be signed into by hand in any local
+# environment. Measured 9 Sep 2026 - the token in auth.users is a PKCE token, so
+# there was nothing to read out of the database either.
+# The hosted project keeps its own template; this only affects `supabase start`.
+[auth.email.template.magic_link]
+subject = "Your sign-in code"
+content_path = "./supabase/templates/magic_link.html"
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
