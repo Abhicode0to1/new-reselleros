@@ -58,9 +58,36 @@ export default async function PortalLayout({ children }: { children: React.React
             </div>
           </Link>
           <div className="flex items-center gap-5">
-            {/* Desktop nav — inline */}
+            {/* Desktop nav — inline, and only once there is genuinely room for it.
+                This switches at 1080px — the header's OWN max-width — not at a
+                t-shirt breakpoint, and that is a measurement rather than a preference.
+                lg (1024px) was tried first and left a 34px band: 1024 is iPad LANDSCAPE,
+                and there the brand still truncated to 154px of the 188 it needs, because
+                below 1080 the header has less room than it is designed around. Tying the
+                switch to 1080 means the inline nav appears exactly when the header
+                reaches full width, and never before. With Domains and Hosting added (8 Sep) the inline nav needs
+                725px, and the header row around it 794px. At the md breakpoint the
+                viewport is 768px, so the row pushed the PAGE into horizontal scroll —
+                measured 9 Sep 2026: 66px over at 768px wide, 34px at 800, 4px at 830,
+                clear by 860. 768x1024 is iPad portrait, so this was a real device and
+                every /portal/* page had it, not just the two new ones. Hiding just those
+                two links in the browser took the overflow to 0, which is what identified
+                them. Below 1080 the scrollable strip below handles it, which is the pattern
+                that was already right; raising the threshold is what makes an 11th nav
+                item fail safe instead of silently breaking the page again. */}
+            {/* And gap-4, not gap-5, because the 4px matters. The header row is capped at
+                max-w-[1080px] with px-6, so everything competes for 1032px — that cap is
+                what makes this one viewport-INDEPENDENT: measured 9 Sep 2026 the brand
+                truncated to "Excel Technologies Pv..." at 1440 and at every width above
+                1080, because the nav group had grown to 794px and left the brand 238px
+                where it needed 252. The brand carries min-w-0, so it is the flex item that
+                silently gives, and what it gives up is the name of the business the
+                customer is buying from. Nine gaps at 4px less each returns 36px, which
+                covers the 14px shortfall with room over. If a future nav item eats that
+                room, widen the budget or shorten labels — do not let the brand absorb it
+                again. */}
             {session && (
-              <nav aria-label="Portal sections" className="hidden md:flex items-center gap-5 text-sm text-ink-3">
+              <nav aria-label="Portal sections" className="hidden min-[1080px]:flex items-center gap-4 text-sm text-ink-3">
                 {NAV.map((n) => (
                   <Link key={n.href} href={n.href as never} className="hover:text-ink whitespace-nowrap">
                     {n.label}
@@ -74,9 +101,11 @@ export default async function PortalLayout({ children }: { children: React.React
             )}
           </div>
         </div>
-        {/* Mobile nav — horizontally scrollable strip so every section stays reachable */}
+        {/* Narrow nav — phone AND tablet, up to 1080px. A horizontally scrollable strip so
+            every section stays reachable: it scrolls INSIDE itself (overflow-x-auto +
+            min-w-max), which is why it never pushed the page the way the inline nav did. */}
         {session && (
-          <nav className="md:hidden border-t border-hairline overflow-x-auto" aria-label="Portal sections">
+          <nav className="min-[1080px]:hidden border-t border-hairline overflow-x-auto" aria-label="Portal sections">
             <div className="flex items-center gap-5 px-6 py-2.5 text-sm text-ink-3 whitespace-nowrap min-w-max">
               {NAV.map((n) => (
                 <Link key={n.href} href={n.href as never} className="hover:text-ink">
