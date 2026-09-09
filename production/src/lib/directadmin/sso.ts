@@ -15,13 +15,11 @@
  *     the caller writes says WHO asked for WHICH account, and no more;
  *   · the caller is expected to hand it straight to the browser and forget it.
  *
- * ─── DA'S "LOGIN-AS" AUTH, WHICH THIS APP DID NOT HAVE ───────────────────────
- * The key is that HTTP Basic username becomes `admin|username`. Without the pipe
- * form DirectAdmin generates a session in the KEY OWNER's context — the admin —
- * so the link would open the reseller's own panel rather than the customer's,
- * which is both wrong and a good deal worse than an error. `lib/directadmin/`
- * had only admin auth before this, which is also why `directadmin/dns.ts` is
- * still unported: it needs this same mode.
+ * ─── DA'S "LOGIN-AS" AUTH ────────────────────────────────────────────────────
+ * The HTTP Basic username becomes `admin|username`, or the session lands in the
+ * KEY OWNER's context and the link opens the reseller's own panel instead of the
+ * customer's. That transport started here and now lives in `user-auth.ts`,
+ * because `dns.ts` needs the identical thing — see that file's header.
  *
  * ─── THE DENY LIST IS NOT DECORATION ─────────────────────────────────────────
  * The session is created with a set of commands explicitly denied, and the
@@ -38,14 +36,11 @@
  */
 import "server-only";
 import { parseDA } from "./index";
-
-const DA_URL = (process.env.DIRECTADMIN_URL?.trim() || "").replace(/\/+$/, "");
-const ADMIN_USER = process.env.DIRECTADMIN_ADMIN_USER?.trim() || "";
-const API_KEY = process.env.DIRECTADMIN_API_KEY?.trim() || "";
+import { daUserRequest, daUserAuthConfigured, isDaUsername } from "./user-auth";
 
 /** Same three-part check the rest of the module uses. */
 export function daSsoConfigured(): boolean {
-  return DA_URL.length > 0 && ADMIN_USER.length > 0 && API_KEY.length > 0;
+  return daUserAuthConfigured();
 }
 
 export const SSO_TTL_SECONDS = 5 * 60;
@@ -134,47 +129,23 @@ export async function daOneTimeLoginUrl(
     return { kind: "refused", reason: "DirectAdmin is not configured in this environment" };
   }
   const user = (username ?? "").trim();
-  /* DA usernames are lowercase alphanumeric. Refusing anything else keeps a
-     crafted value out of both the Basic-auth header and the form body. */
-  if (!/^[a-z0-9]{1,32}$/.test(user)) {
+  if (!isDaUsername(user)) {
     return { kind: "refused", reason: "that is not a DirectAdmin username, so no login was requested" };
   }
 
-  /* The pipe form is what makes the session the CUSTOMER's — see the header.
-     An admin asking for its own panel uses plain auth, since admin|admin is not
-     a thing DA accepts. */
-  const basicUser = user === ADMIN_USER ? ADMIN_USER : `${ADMIN_USER}|${user}`;
-  const auth = "Basic " + Buffer.from(`${basicUser}:${API_KEY}`).toString("base64");
+  /* The Login-As auth, the error=1 envelope and the HTML-login-page case all live
+     in user-auth.ts now — extracted when dns.ts needed exactly the same thing,
+     because a second copy of an auth mode is how the two drift until one is
+     acting as the wrong user. */
+  const res = await daUserRequest("/CMD_API_LOGIN_KEYS", user, { form: ssoRequestBody(user, redirect) });
+  if (res.kind !== "ok") return res;
 
-  let res: Response;
-  try {
-    res = await fetch(`${DA_URL}/CMD_API_LOGIN_KEYS`, {
-      method: "POST",
-      headers: { Authorization: auth, "Content-Type": "application/x-www-form-urlencoded" },
-      body: ssoRequestBody(user, redirect).toString(),
-      cache: "no-store",
-      signal: AbortSignal.timeout(20_000),
-    });
-  } catch (err) {
-    console.error(`[directadmin:sso] unreachable for ${user}: ${(err as Error).message}`);
-    return { kind: "hard_failure", reason: "Could not reach DirectAdmin." };
-  }
-
-  const text = await res.text().catch(() => "");
-
-  if (!res.ok) {
-    /* The body may carry DA's reason. It cannot carry a URL on a non-2xx, so
-       logging a truncated body here is safe — but keep it short. */
-    console.error(`[directadmin:sso] ${user} HTTP ${res.status}: ${text.slice(0, 160)}`);
-    return { kind: "hard_failure", reason: `DirectAdmin returned HTTP ${res.status}.` };
-  }
-
-  const url = extractSsoUrl(text);
+  const url = extractSsoUrl(res.text);
   if (!url) {
     /* Deliberately does NOT log the body: on a 200 the body may BE the URL in a
        shape this function failed to recognise, and logging it would write the
        credential to disk. */
-    console.error(`[directadmin:sso] ${user}: no usable URL in a 200 response (${text.length} bytes)`);
+    console.error(`[directadmin:sso] ${user}: no usable URL in a 200 response (${res.text.length} bytes)`);
     return { kind: "hard_failure", reason: "DirectAdmin accepted the request but returned no usable login link." };
   }
 
