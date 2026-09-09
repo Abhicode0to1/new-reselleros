@@ -7,6 +7,93 @@
 
 ---
 
+# 🟣 DMS PARITY — the inventory, 9 Sep 2026. Kya aa gaya, kya bacha, aur kya PORT NAHI hoga.
+
+> Pawan ne saaf kiya (9 Sep): **"our current is way big than DMS, so DMS functionality
+> is a small part of this new app"** aur **"this new app UI will be used"**. To lakshya
+> hai: DMS ki CAPABILITIES + DATA yahan aa jayen. DMS chalta rahega, par kaam ka ghar
+> yahi app hai.
+>
+> Naapa: DMS `lib/` = 170 file / 33,395 line. Ye app `src/` = 1,381 file / 298,881 line.
+> Yaani DMS ka poora integration layer is app ka ~11% hai. **DMS ka `app/` (233 file),
+> `components/`, `hooks/` PORT NAHI HO RAHE** — UI is app ki hai. Ek feature "ported"
+> tab hai jab wo IS app ke UI se chalta hai, file copy ho jane se nahi.
+
+## ✅ Capabilities jo aa gayi (lib layer)
+
+| DMS module | line | yahan |
+|---|---|---|
+| `resellerclub/client.ts` | 85 | `lib/resellerclub/call.ts` |
+| `resellerclub/registration.ts` | 424 | `lib/resellerclub/orders.ts` |
+| `resellerclub/renewal-transfer.ts` | 125 | `lib/resellerclub/orders.ts` |
+| `resellerclub/customers.ts` | 664 | `lib/resellerclub/customers.ts` (+21 test) |
+| `resellerclub/dns.ts` | 418 | `lib/resellerclub/dns.ts` (+23 test) |
+| `directadmin/packages.ts` | 150 | `lib/directadmin/index.ts` |
+| `directadmin/users.ts` — write half | ~200 | `lib/directadmin/provision.ts` |
+| `directadmin/users.ts` — usage half | ~60 | `lib/directadmin/index.ts` (+11 test) |
+
+Har port me DMS ke defect theek kiye gaye (error-as-absence, logged password,
+invented registrant data, scalar body, SRV/MX defaults, partial-read deletes) —
+detail commit message me hai.
+
+## ⏳ Capabilities jo BAKI hain (lib layer)
+
+- [ ] **`directadmin/dns.ts` (193)** — per-user impersonation auth (`ADMIN_USER|username`)
+      chahiye, jo `lib/directadmin/` me nahi hai. Iske 4 me se 1 function DMS me khud
+      DEAD hai (`updateDNSNameservers` throw karta hai). Reader me BIND zone-file
+      fallback parser bhi hai — asli complexity, aur abhi reproduce nahi kar sakte.
+- [ ] **`directadmin/users.ts` ke 5 read** — `getOneTimeLoginUrl` (desk ke liye "cPanel
+      me login" button — asli capability gap), `getUserConfig`, `getUserDomains`,
+      `changePackage`, `listUsers`.
+- [ ] **`directadmin/server.ts` (82)** aur `client.ts` ka bacha hissa (419 vs hamara
+      patla `index.ts`).
+- [ ] **`resellerclub/search.ts` (846)** — PARTIAL. Availability aur TLD pricing aa gaya
+      (`rcAvailability`, `rcTldPricing`); `searchDomainWithTlds` (multi-TLD suggestion)
+      aur `getResellerDetails` nahi.
+
+## 📊 Data models — 21 me se 14 ka ghar pehle se hai
+
+`Domain`→`domains` · `Hosting`→`hosting_accounts` · `HostingPlan`→`items` ·
+`Order`→`provisioning_requests` · `Payment`→`payments` · `SupportTicket`→`support_tickets` ·
+`User`→`customers` · `Settings`→`tenants` · `Counter`→`document_series` ·
+`CustomerActivity`/`SystemLog`→`activity_log` · `RenewalPayment`→`subscriptions` ·
+`WhatsAppMessageLog`→`email_log` · `TrialClaim`→`leads`
+
+**`PendingHosting` bhi cover hai** — naapa: uske saare field (`daUsername`, `error`,
+`status`) `hosting_accounts` ke `da_username` / `last_error` / `last_error_kind` /
+`status` me 1:1 baithte hain. Nayi table ki zaroorat nahi.
+
+## ⚠️ 5 models jinke faisle chahiye
+
+- [ ] **`Reseller` (103) — PARTIAL, aur sabse bada gap.** `tenants.tier`
+      (distributor|reseller) aur `parent_tenant_id` maujood hain, par DMS ke
+      **`walletBalance`, `markupPercent`, `slug`, `branding` (displayName/logoUrl/
+      supportEmail), `status`, `approvedAt/approvedBy` ka koi ghar NAHI hai**. Naapa:
+      poore schema me `markup`/`wallet`/`slug` column ek bhi nahi (`items.margin_pct`
+      aur `quotes.approved_margin_bps` product margin hain, sub-reseller markup nahi).
+      Ye white-label sub-reseller ka poora economics hai — chhota kaam nahi.
+- [ ] **`DomainWatch` (30)** — "ye domain free ho to batao". Asli customer feature,
+      yahan koi ghar nahi. Chhoti table + ek cron.
+- [ ] **`PendingDomain` (182)** — payment clear hone se PEHLE ka hold. Hamara
+      quote → payment → `provisioning_requests` spine isi ko cover karta dikhta hai;
+      **verify karna hai**, maan lena nahi.
+- [ ] **`RecurringChargeAttempt` (128)** — Razorpay **Tokens-flow** ka retry log
+      (merchant-initiated). Hamare paas `payment_mandates` + `invoice_dunning_log` hain.
+      Pehle ye tay karo ki ye app Tokens flow use karti hai ya Subscriptions flow —
+      Subscriptions flow me Razorpay khud retry karta hai aur ye model bekaar hai.
+- [ ] **`IPCheck` (67)** — outbound IP log (RC whitelisting diagnose karne ko). Table
+      se zyada ek endpoint ki cheez lagti hai. Sabse kam value.
+
+## 🔴 DATA MIGRATION — shuru hi nahi hui
+
+MongoDB → Supabase. DMS me **1 asli purchase** hai (₹1500, 7 Sep,
+`pay_TZ1iZJxZAZw2Gv`) — 8 Sep ka handoff isi liye kehta tha ki aaj sabse sasta hai,
+aur wo baat aaj bhi sach hai aur kaam aaj bhi baaki hai. DMS abhi bhi ZINDA hai
+(`app.anutech.in/api/health` → 200, naapa 9 Sep), to naya data wahan banta reh sakta
+hai — copy ek snapshot hai, ek baar ka kaam nahi.
+
+---
+
 # 🟣 HANDOFF — 8 Sep 2026 (shaam). LOCAL DB chalu ho gaya bina cloud login ke; aur PROD ~38 table PEECHHE hai.
 
 > Pawan ne bola: upstream `main` merge karo, app verify karo, test chalao. Merge karne ko
