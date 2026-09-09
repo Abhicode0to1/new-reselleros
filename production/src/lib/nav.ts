@@ -229,6 +229,13 @@ export const APP_NAV: NavSection[] = [
     items: [
       { id: "quotes",        href: "/quotes",        label: "Quotes",            icon: "file",    roles: ["owner", "manager", "sales"] },
       { id: "subscriptions", href: "/subscriptions", label: "Subscriptions",     icon: "refresh", roles: ["owner", "manager", "billing"] },
+      /* Assets before the paperwork about them, the same order the customer
+         portal uses: Domains and Hosting are the things that LAPSE, and burying
+         them under Invoices would put the urgent thing behind the historical
+         one. Support is included because a "my site is down" ticket is answered
+         from this screen. The path is /assets/domains because /domains itself is
+         the public marketing landing page. */
+      { id: "domains",       href: "/assets/domains", label: "Domains",          icon: "globe",   roles: ["owner", "manager", "billing", "support"] },
       { id: "renewals",      href: "/renewals",      label: "Renewals",          icon: "clock",   roles: ["owner", "manager", "billing", "support"] },
       { id: "invoices",      href: "/invoices",      label: "Invoices",          icon: "receipt", roles: ["owner", "manager", "billing"] },
       { id: "payments",      href: "/payments",      label: "Payments Received", icon: "rupee",   roles: ["owner", "manager", "billing"] },
@@ -394,6 +401,11 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/contacts/[id]":   ["Sales", "Contacts", "Profile"],
   "/referrals":       ["Sales", "Referrals"],
   "/online-orders":   ["Revenue", "Online Orders"],
+  /* Without these the breadcrumb falls all the way through getCrumb's walk-up to
+     ["Home", "Dashboard"] — which is what the Domains screen showed on its first
+     run, a breadcrumb naming a page you are not on. */
+  "/assets/domains":      ["Revenue", "Domains"],
+  "/assets/domains/[id]": ["Revenue", "Domains", "Detail"],
   "/quotes":          ["Revenue", "Quotes"],
   "/quotes/new":      ["Revenue", "Quotes", "New"],
   "/quotes/[id]":     ["Revenue", "Quotes", "Detail"],
