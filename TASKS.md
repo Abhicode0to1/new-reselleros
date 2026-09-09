@@ -84,13 +84,58 @@ detail commit message me hai.
 - [ ] **`IPCheck` (67)** — outbound IP log (RC whitelisting diagnose karne ko). Table
       se zyada ek endpoint ki cheez lagti hai. Sabse kam value.
 
-## 🔴 DATA MIGRATION — shuru hi nahi hui
+## 🔴 DATA MIGRATION — NAAPA GAYA, AUR SIFARISH HAI: transactional data NA laayein
 
-MongoDB → Supabase. DMS me **1 asli purchase** hai (₹1500, 7 Sep,
-`pay_TZ1iZJxZAZw2Gv`) — 8 Sep ka handoff isi liye kehta tha ki aaj sabse sasta hai,
-aur wo baat aaj bhi sach hai aur kaam aaj bhi baaki hai. DMS abhi bhi ZINDA hai
-(`app.anutech.in/api/health` → 200, naapa 9 Sep), to naya data wahan banta reh sakta
-hai — copy ek snapshot hai, ek baar ka kaam nahi.
+Atlas se seedha padha (read-only, 9 Sep 2026), `domain-management` DB — **1,005
+document, 26 collection**. Ginti ye hai:
+
+| collection | docs | |
+|---|---|---|
+| customeractivities | 905 | activity log |
+| systemlogs / ipchecks / settings | 34 / 15 / 17 | diagnostics + config |
+| hostingplans | 11 | catalogue |
+| users | 8 | 2 @exceltechnologies.in, 1 @srigangatechnologies.com, 3 @gmail.com, 2 guest |
+| orders | 2 | |
+| hostings / payments / supporttickets / trialclaims / counters | 1 each | |
+| **domains** | **0** | ek bhi domain record nahi |
+| resellers / domainwatches / pendingdomains / pendinghostings / recurringchargeattempts / renewalpayments | 0 | **feature use hi nahi hua** |
+
+**Ye TEST data hai, aur isliye import karna nuksaan hai:**
+
+1. **Ek hi hosting account hai: `tt.com`** — placeholder domain, plan Starter,
+   expiry 2027. Ise live asset banakar import karna galat hoga.
+2. **Orders test charge hain** — `hosting_trial` **₹2**, aur `renewal` **₹599.88**,
+   invoice number **INV-000031 / INV-000033**. Ye number GST-relevant
+   `document_series` me paraaye number ghusayenge (Rule 46 wali baat).
+3. **Price integer nahi hain** — 49.99 / 187.2 / 599.88, currency INR likha hai.
+   Hamare `items.msrp` / `wholesale` **integer rupee** hain (AGENTS.md), to
+   49.99 ko store karne ka matlab hai use badalna. ₹49.99/month me 10GB hosting
+   asli Indian price nahi hai — ye USD list se copy hua lagta hai.
+4. **`items.wholesale` NOT NULL hai aur DMS me cost price hai hi nahi.** Wo column
+   P&L, money-inbox aur waterfall me jaata hai, to koi bhi banaya hua cost seedha
+   accounting kharab karega.
+5. **Catalogue ki zaroorat hi nahi** — `POST /api/catalog/sync-hosting` pehle se
+   DirectAdmin se live specs kheenchta hai, jo DMS ki copy se behtar source hai.
+6. **Handoff ka payment id match nahi karta** — 8 Sep ka note kehta hai "₹1500,
+   `pay_TZ1iZJxZAZw2Gv`"; payments collection me jo ek row hai wo
+   **`pay_TXrc4NyzAXMGuw`** (₹1500) hai. Do me se ek galat hai — import se pehle
+   iska jawab chahiye, kyunki ye paise ka record hai.
+
+**Sifarish:** transactional data (orders / payments / hostings / invoices /
+counters) **import na karein**. Zyada se zyada **8 users → `customers`** laa sakte
+hain (sirf contact detail, koi paisa nahi), aur wo bhi optional hai. Baaki
+905 activity + 34 systemlog + 15 ipcheck diagnostic hain, business record nahi.
+
+Pawan ne 9 Sep ko khud kaha: *"that app was in testing mode anyway"* — naap us
+baat se poori tarah mel khaati hai. To DMS parity ka asli kaam **capability port
+karna** hai, data dhona nahi.
+
+**Jo 6 model "faisla chahiye" me the, unme se 5 ke paas 0 row hain** — matlab wo
+DMS me kabhi use hue hi nahi. To sawaal "migrate kaise karein" nahi, "ye feature
+chahiye ya nahi" hai:
+- `Reseller` 0 row — white-label sub-reseller kabhi chala hi nahi
+- `DomainWatch` 0 row · `PendingDomain` 0 · `PendingHosting` 0 ·
+  `RecurringChargeAttempt` 0 · `RenewalPayment` 0
 
 ---
 
