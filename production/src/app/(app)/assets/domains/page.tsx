@@ -116,7 +116,46 @@ export default async function DomainsPage() {
           description="A domain appears here once a paid order reaches the registrar. Until then it sits in the provisioning queue."
         />
       ) : (
-        <Card className="overflow-hidden">
+        <>
+          {/* Phone: a card list, because the table does not fit and the columns it
+              drops are the ones this screen exists for. Measured at 375px before
+              this existed: the table needed 613px in 309, and Renews (+165) and
+              Last error (+304) were both off the right edge — the lapse date and
+              the stuck-provisioning reason, on a screen whose whole job is "what
+              needs attention". §20 asks for a card alternative rather than a
+              horizontal scroll, and every other staff list here already has one;
+              this page was the outlier. */}
+          <ul className="md:hidden space-y-3">
+            {rows.map((d) => {
+              const s = STATUS[d.status as DomainAssetStatus] ?? STATUS.pending;
+              const r = renews(d.expires_at);
+              const customer = (d.customers as unknown as { name?: string } | null)?.name;
+              return (
+                <li key={d.id}>
+                  <Card className="p-4">
+                    <Link href={`/assets/domains/${d.id}` as never} className="flex items-start justify-between gap-3 min-h-[44px]">
+                      <span className="font-mono text-sm text-ink break-all underline decoration-hairline">{d.domain_name}</span>
+                      <Badge kind={s.kind} dot>{s.label}</Badge>
+                    </Link>
+                    <div className="mt-3 flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-3xs uppercase tracking-wider text-ink-3">Renews</p>
+                        <p className={`text-sm ${r.tone}`}>{r.text}</p>
+                      </div>
+                      <p className="text-2xs text-ink-3 text-right">
+                        {customer?.trim() || <span className="italic">customer unknown</span>}
+                      </p>
+                    </div>
+                    {d.last_error && (
+                      <p className="mt-3 text-2xs text-rose-ink border-t border-hairline pt-2">{d.last_error}</p>
+                    )}
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
+
+          <Card className="overflow-hidden hidden md:block">
           {/* Wide content scrolls inside its own container, never the page. */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -168,7 +207,8 @@ export default async function DomainsPage() {
               </tbody>
             </table>
           </div>
-        </Card>
+          </Card>
+        </>
       )}
     </div>
   );

@@ -232,7 +232,42 @@ export function DnsEditor({
           No records in our copy. {registrarLinked ? "Sync from the registrar to pull the live zone in." : ""}
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        {/* Phone: cards. A DNS row is six fields and none of them are droppable —
+            a value you cannot read is a value you cannot check — so below md it
+            becomes a stack rather than a sideways scroll. §20, and the same reason
+            the list page next door needed one. */}
+        <ul className="md:hidden divide-y divide-hairline">
+          {records.map((r) => (
+            <li key={r.id} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Badge kind="muted">{r.record_type}</Badge>
+                    <span className="font-mono text-sm text-ink break-all">{r.host}</span>
+                  </div>
+                  <p className="font-mono text-2xs text-ink-2 break-all mt-1">{r.value}</p>
+                  <p className="text-2xs text-ink-3 mt-1">
+                    TTL {r.ttl}s{r.priority !== null ? ` · priority ${r.priority}` : ""}
+                  </p>
+                </div>
+                {canManage && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => remove(r)}
+                    disabled={busy}
+                    aria-label={`Delete ${r.record_type} record for ${r.host}`}
+                  >
+                    <Icon name="trash" size={14} />
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-sm">
             <thead className="bg-paper-2/50 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               <tr>
@@ -272,6 +307,7 @@ export function DnsEditor({
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {canManage && registrarLinked && (
