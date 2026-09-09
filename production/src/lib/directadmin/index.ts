@@ -131,3 +131,102 @@ export async function daAllPackages(): Promise<DaPackage[] | null> {
   }
   return out;
 }
+
+/* ── Usage: what the server says an account is actually consuming ─────────────
+ *
+ * Ported from the DMS engine's lib/directadmin/users.ts (getUserUsage,
+ * getAllUserUsage) on 9 Sep 2026.
+ *
+ * ─── USAGE IS NOT QUOTA, AND THE COLUMN NAMES MAKE THAT EASY TO GET WRONG ────
+ * `CMD_API_SHOW_USER_USAGE` returns what an account has CONSUMED. Our
+ * `hosting_accounts.disk_quota_mb` / `bandwidth_quota_mb` are the LIMITS the plan
+ * grants, written at provisioning. Writing usage into either would replace a
+ * 10 GB allowance with "412 MB used" and nobody would notice until a customer
+ * was told their plan had shrunk. So these values are read and reported; the
+ * limits are reconciled from the PACKAGE (`daPackageDetails`), which is where a
+ * limit actually lives.
+ */
+
+export interface DaUsage {
+  /** MB consumed, not granted. -1 for unlimited, null when DA did not say. */
+  diskUsedMB: number | null;
+  bandwidthUsedMB: number | null;
+  domains: number | null;
+  emails: number | null;
+  databases: number | null;
+  /** DA reports this as "yes"/"no" on the usage record. */
+  suspended: boolean | null;
+}
+
+function toCount(v: string | string[] | undefined): number | null {
+  const s = Array.isArray(v) ? v[0] : v;
+  if (s === undefined) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * One account's usage out of DA's key/value record.
+ *
+ * Exported and pure because it is the half worth testing — the transport around
+ * it is a `daGet` away, and this is where DA's field names stop leaking.
+ */
+export function parseUserUsage(data: Record<string, string | string[]>): DaUsage {
+  const flag = (v: string | string[] | undefined): boolean | null => {
+    const s = Array.isArray(v) ? v[0] : v;
+    if (s === undefined) return null;
+    return /^(yes|true|1|on)$/i.test(s.trim());
+  };
+  return {
+    diskUsedMB: toMB(data.quota),
+    bandwidthUsedMB: toMB(data.bandwidth),
+    domains: toCount(data.vdomains ?? data.domains),
+    emails: toCount(data.nemails),
+    databases: toCount(data.mysql),
+    suspended: flag(data.suspended),
+  };
+}
+
+/**
+ * DA's bulk usage answer nests one query string inside another: the outer keys
+ * are usernames and each VALUE is itself URL-encoded
+ * (`user1=quota%3D412%26bandwidth%3D900`). Parsing only the outer layer yields a
+ * string where a record was expected, which is the kind of thing that reads as
+ * "no usage data" rather than as a bug.
+ */
+export function parseAllUserUsage(data: Record<string, string | string[]>): Record<string, DaUsage> {
+  const out: Record<string, DaUsage> = {};
+  for (const [user, raw] of Object.entries(data)) {
+    if (user === "error" || user === "text" || user === "details") continue;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (typeof value !== "string" || value === "") continue;
+    const inner = parseDA(value);
+    if (!inner) continue;
+    out[user] = parseUserUsage(inner);
+  }
+  return out;
+}
+
+/** One account's usage. null when DA could not be read; see parseUserUsage. */
+export async function daUserUsage(username: string): Promise<DaUsage | null> {
+  const data = await daGet("/CMD_API_SHOW_USER_USAGE", { user: username });
+  if (!data) return null;
+  return parseUserUsage(data);
+}
+
+/**
+ * Every account's usage in ONE call.
+ *
+ * The sweep uses this rather than a call per account, and that is not only about
+ * speed: this machine has already produced `exited 3221225794`
+ * (STATUS_DLL_INIT_FAILED) from launching ~120 processes in a loop, and the
+ * backup script had to be rewritten from per-table calls to three total for the
+ * same reason. A sweep over every hosting account is the same shape of mistake
+ * waiting to be made.
+ */
+export async function daAllUserUsage(): Promise<Record<string, DaUsage> | null> {
+  const data = await daGet("/CMD_API_SHOW_ALL_USER_USAGE");
+  if (!data) return null;
+  return parseAllUserUsage(data);
+}
+

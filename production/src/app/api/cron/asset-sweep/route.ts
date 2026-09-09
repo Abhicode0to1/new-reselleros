@@ -41,6 +41,7 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { rcDomainDetails } from "@/lib/resellerclub/orders";
 import { rcWriteConfigured } from "@/lib/resellerclub/call";
+import { daConfigured, daAllUserUsage } from "@/lib/directadmin";
 import {
   deriveDomainStatus,
   nextDomainCheckAt,
@@ -94,7 +95,13 @@ async function handle(req: Request) {
   const result = {
     ran_at: nowIso,
     domains: { due: 0, reconciled: 0, unchanged: 0, unreadable: 0, unclaimed_upstream: 0, lock_lost: 0 },
-    hosting: { checked: 0, expired: 0 },
+    hosting: {
+      checked: 0, expired: 0, synced: 0,
+      /* Named rather than counted: 'server does not know acmecorp1' is
+         actionable and '1 unknown' is not (§24). */
+      unknown_to_server: [] as string[],
+      server_read: null as string | null,
+    },
     /* Surfaced, never repaired — see lifecycle.ts. */
     billing_disagreements: [] as Array<{ domain: string; registrar_expiry: string | null; billing_renewal: string | null; days_apart: number }>,
     details: [] as Array<{ domain: string; outcome: DomainOutcome; from?: string; to?: string; note?: string }>,
@@ -222,19 +229,57 @@ async function handle(req: Request) {
 
   /* ── Hosting ──────────────────────────────────────────────────────────────── */
 
-  /* Date arithmetic only, and the limitation is real: there is no DirectAdmin
-     read in this app that reports an account's expiry, so unlike a domain there
-     is no upstream truth to reconcile against. What this does catch is an ended
-     trial still displaying as a live account. */
+  /* Two halves now.
+     
+     DATE ARITHMETIC still does the lifecycle, because DirectAdmin does not report
+     an expiry — a hosting account's end date is a billing fact, not a server one.
+     That catches an ended trial still displaying as a live account.
+
+     THE SERVER READ is what `last_synced_at` was always for. It was null on every
+     row, and /assets/hosting/[id] said so in as many words: "never — these values
+     are as provisioning left them". One CMD_API_SHOW_ALL_USER_USAGE answers for
+     every account at once, which is deliberate: this machine has already produced
+     STATUS_DLL_INIT_FAILED from launching ~120 processes in a loop, and a call per
+     account is that shape of mistake.
+
+     What it does NOT do is write usage into disk_quota_mb / bandwidth_quota_mb.
+     DA calls the consumed figure `quota` and those columns are the LIMITS the plan
+     grants, so copying one into the other would quietly shrink a customer's plan
+     to whatever they happen to be using. Usage is read to prove the account is
+     real and reachable; the limits stay where provisioning put them. */
   const { data: hosts } = await admin
     .from("hosting_accounts")
-    .select("id, domain_name, status, is_trial, trial_ends_at, expires_at")
+    .select("id, domain_name, status, is_trial, trial_ends_at, expires_at, da_username")
     .is("deleted_at", null)
     .in("status", ["active", "expired"])
     .limit(HOSTING_BATCH);
 
+  /* One call for everyone, before the loop. null means DA could not be read at
+     all — which is NOT evidence about any individual account, so in that case
+     nothing gets stamped and nothing gets flagged. */
+  const usage = daConfigured() ? await daAllUserUsage() : null;
+  if (!daConfigured()) result.hosting.server_read = "DirectAdmin is not configured — usage not read";
+  else if (usage === null) result.hosting.server_read = "DirectAdmin could not be read — no account was stamped or flagged";
+  else result.hosting.server_read = `read ${Object.keys(usage).length} accounts from the server`;
+
   for (const h of hosts ?? []) {
     result.hosting.checked++;
+
+    if (usage) {
+      const u = h.da_username ? usage[h.da_username] : undefined;
+      if (u) {
+        /* The server knows this account. That is the whole claim last_synced_at
+           makes, and it is worth making: it separates a stale number from one
+           nobody has ever checked. */
+        await admin.from("hosting_accounts").update({ last_synced_at: nowIso }).eq("id", h.id);
+        result.hosting.synced++;
+      } else if (h.da_username) {
+        /* DA answered and does not know this username. A real drift signal — the
+           account may have been removed on the server — but NOT a status change:
+           the same rule the domain half obeys. Recorded for a person. */
+        result.hosting.unknown_to_server.push(h.domain_name);
+      }
+    }
     const next = deriveHostingStatus({
       current: h.status as HostingAccountStatus,
       isTrial: !!h.is_trial,
