@@ -1614,6 +1614,37 @@ type ContractAmendmentRow = {
  *  is written ONLY by the signature-verified Razorpay webhook.
  * See migration 20260817090000 for why the app has no path to it.
  */
+/* ── egress_ip_checks (20260910140000) ───────────────────────────────
+   History of the outbound IP this deployment calls upstreams from. Both
+   ResellerClub and DirectAdmin gate on it and neither names it when refusing.
+   See lib/ops/egress-ip.ts. */
+export type EgressVerdictT = "match" | "mismatch" | "disagree" | "unknown" | "unverified";
+type EgressIpCheckRow = {
+  id: string;
+  tenant_id: string | null;
+  /** The agreed address. NULL when probes disagreed or none answered. */
+  observed_ip: string | null;
+  /** Every distinct address seen. More than one entry IS the finding. */
+  observed_ips: string[];
+  expected_ip: string | null;
+  /** `unknown` is NOT a mismatch — an unreachable probe says nothing. */
+  verdict: EgressVerdictT;
+  probes: unknown;
+  checked_by: string | null;
+  checked_at: string;
+};
+type EgressIpCheckInsert = {
+  id?: string;
+  tenant_id?: string | null;
+  observed_ip?: string | null;
+  observed_ips?: string[];
+  expected_ip?: string | null;
+  verdict: EgressVerdictT;
+  probes?: unknown;
+  checked_by?: string | null;
+  checked_at?: string;
+};
+
 /* ── recurring_charge_attempts (20260910110000) ─────────────────────────────
    One row per recurring-debit attempt the gateway REPORTED, successes and
    failures alike. Razorpay owns the retry schedule on the Subscriptions flow, so
@@ -4273,6 +4304,7 @@ export type Database = {
       contract_amendments: { Row: ContractAmendmentRow; Insert: never; Update: never; Relationships: [] };
       payment_mandates: { Row: PaymentMandateRow; Insert: PaymentMandateInsert; Update: Partial<PaymentMandateInsert>; Relationships: [] };
       recurring_charge_attempts: { Row: RecurringChargeAttemptRow; Insert: RecurringChargeAttemptInsert; Update: Partial<RecurringChargeAttemptInsert>; Relationships: [] };
+      egress_ip_checks: { Row: EgressIpCheckRow; Insert: EgressIpCheckInsert; Update: Partial<EgressIpCheckInsert>; Relationships: [] };
       subscription_billings: { Row: SubscriptionBillingRow; Insert: SubscriptionBillingInsert; Update: Partial<SubscriptionBillingInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
@@ -5399,6 +5431,7 @@ export type MrrSnapshot = MrrSnapshotRow;
 export type ContractAmendment = ContractAmendmentRow;
 export type PaymentMandate = PaymentMandateRow;
 export type RecurringChargeAttempt = RecurringChargeAttemptRow;
+export type EgressIpCheck = EgressIpCheckRow;
 export type PaymentMandateInsertT = PaymentMandateInsert;
 export type SubscriptionBilling = SubscriptionBillingRow;
 export type SubscriptionBillingInsertT = SubscriptionBillingInsert;
