@@ -7,6 +7,72 @@
 
 ---
 
+# 🟣 HANDOFF — 11 Sep 2026 (raat). Customer khud hosting plan bada kar sakta hai.
+
+Pardeep: "Implement this functionality fully." `daChangePackage` 9 Sep se
+bina kisi caller ke pada tha; ab uska ek caller hai.
+
+**Raasta** — `seat_requests` ka JUDWAA, jaan-boojh kar (dono ek hi samasya hain):
+customer `/portal/hosting` par plan chunta hai → `hosting_plan_changes` row
+(bina price) → rep `/assets/hosting` par verdict ke saath dekhta hai → Approve
+DirectAdmin ka package badalta hai, hamara record, subscription ka `mrr`, aur
+pro-rata quote banata hai.
+
+- **Price APPROVAL par, request par NAHI** — pro-rata roz girta hai, to request
+  par likha number wo hota jo charge nahi hota. Dono screen sirf MAHEENE ka
+  farq dikhati hain. Naapa: Standard → Plus = "₹62 more a month" (187.20−125).
+- **Order: server pehle, paisa baad me.** Quote pehle karke package fail ho, to
+  na-mili storage ka invoice — wahi shakl jiske liye provisioning-readiness
+  bana tha. Naapa (DA unconfigured): approve = 400, aur KUCH bhi nahi likha —
+  request pending, quote_id null, applied_at null, account Standard/25600 par.
+- **Quote `is_one_off`** — bina iske `record_payment` payment par DOOSRI
+  recurring subscription bana deta, jise renewal cron hamesha bill karta.
+  `is_add_seats` bhi nahi: wo `refund_payment` me "seats ghataiye" wali galat
+  salah deta.
+
+## 🔴 Do chhed jo NAAPNE par mile (soch kar nahi)
+1. **TRIAL upgrade ho sakta tha.** Portal chooser chhupata tha, bas — wahi ek
+   rok thi. Route ko seedha bulaya trial par (asli plan code ke saath): HTTP
+   200, request ban gayi. `provision-hosting` trial par bhi wahi
+   Starter/Standard/Plus likhta hai, to ye asli case hai. Trial ka koi paid
+   term nahi, `expires_at` null → poora saal ka farq bill hota. **Teen jagah
+   band kiya**: domain rule (purani request bhi approve na ho), request route,
+   decide route.
+2. **Staff card aur server ka verdict ALAG tha.** Card `plan_name` padhta tha,
+   route `plan_code ?? da_package ?? plan_name`. Browser me pakda: "Starter
+   Trial" naam wale trial par card kehta tha "kaun sa plan hai pata nahi",
+   jabki server kehta "ye trial hai". Ek hi function, alag input. Theek kiya.
+
+## ✅ Jaan-boojh kar jo NAHI hota
+- **Anjaan plan par KUCH nahi** offer hota (poori ladder nahi) — ho sakta hai
+  wo pehle se sabse bade plan par ho. Naapa: `biz-10` wali demo row par koi
+  chooser nahi, route 409.
+- **Downgrade is raaste se kabhi nahi** — chhota package = chhota disk quota,
+  DA turant lagata hai, live site tooot sakti hai; aur paisa credit note ka
+  maamla hai. Insaan ke paas jata hai, wajah ke saath.
+
+## Test
+66 unit test (4 mutation: naya rate charge → 3 laal; anjaan plan → 5;
+downgrade guard → 2; moved-underneath → 3). `hosting_plan_changes_rls.test.sql`
+(5 mutation, paanchon pakde). **Case 3 pehle GALAT wajah se laal ho raha tha** —
+insert ko unique index rok raha tha, RLS nahi; ab customer ke apne account par
+insert karta hai jahan sirf policy ka na hona rok sakta hai.
+
+Do purane guardrail ne ye kaam KHUD pakda (dono theek kiye, chupaye nahi):
+quote-sent stage rule, aur §24 toast ratchet.
+
+## ⚠️ Dhyan do
+- Ek local demo row (`acmecorp.in`) `biz-10` naam ke banaye hue plan code par
+  thi; ab `standard` par hai, taaki demo me ye feature dikhe.
+- **Plan ladder teen tier par hai** (`starter/standard/plus`, price
+  `site/lib/data/hosting-landing.ts` se — ek hi source). DMS ka catalogue sync
+  apne planId laata hai; agar wahan koi chautha tier aaya, to `plan-change.ts`
+  ki ladder me bhi jodna padega, warna wo plan "anjaan" rahega aur us par
+  upgrade offer nahi hoga (jo surakshit haalat hai, par adhoora).
+
+
+---
+
 # 🟣 HANDOFF — 11 Sep 2026 (shaam). Refund par hosting SUSPEND hoti hai, delete kabhi nahi.
 
 ## Faisla (Pardeep, 11 Sep)
