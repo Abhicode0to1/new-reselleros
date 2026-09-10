@@ -245,11 +245,17 @@ exception).
 
 - [ ] **Migration PROD par lagani hai** — `npx supabase login` chahiye (interactive), aur
       pehle upar wali drift padho: push akela chalana khatarnaak hai.
-- [ ] **Design gate** — `design-critique` / `accessibility-review` / `layout-audit` teeno
-      abhi tak nahi chalaye. Ab local DB hai, to 1-2 asli row seed karke chal sakte hain.
-- [ ] **Badge `color=` ka murda prop** — 7 internal file abhi bhi grey (accounting/aging,
-      bills, profitability, saas-metrics, tds-receivable ×2, tds-detail-dialog).
-- [ ] **DNS management** · **RC customer/contact** · **renewal sweep** — brick #5 ka bacha scope.
+- [x] **Design gate** ✅ 9–10 Sep — teeno chale, asli row par: 4 screen par pehli baar
+      (staff domains/hosting + portal), phir 10 Sep ko `/portal/domains` par dobara.
+      Asli regression mile aur theek hue — 613px table 309px me, `RENEWS`/`LAST ERROR`
+      screen se bahar, aur do reported-not-fixed finding.
+- [x] **Badge `color=` ka murda prop** ✅ 10 Sep — saari 16 jagah theek, `color` ab
+      **type error** hai. Naapa: 118 din purani invoice grey se laal.
+- [x] **DNS management** · **RC customer/contact** ✅ — dono ho gaye (upar dekho).
+- [x] **Renewal sweep** ✅ — `api/cron/asset-sweep` `next_action_at`/`processing_until`
+      dono padhta hai aur `processing_until` se row claim karta hai.
+      ⚠️ **Route hai, par PROD me use koi bulata nahi** — Cloud Scheduler job banana baki
+      hai. Ye ab bhi khula hai, neeche darj.
 - [ ] **🔑 `origin` remote URL me GitHub PAT plaintext pada hai** (`.git/config`). Rotate
       karo aur credential helper use karo.
 
@@ -267,15 +273,18 @@ exception).
 
 ## ⚠️ PEHLA KAAM — bina iske do naye portal page CHALENGE NAHI
 
-- [ ] **Migration lagao**: `supabase/migrations/20260908100000_domain_hosting_assets.sql`
-      (`domains`, `hosting_accounts`, `dns_records` + RLS). Is session me **DB access tha hi
-      nahi** — CLI ka login gayab (`supabase projects list` → `LegacyPlatformAuthRequiredError`,
-      CLI 2.117.0), Docker band, MCP unauthorized. `npx supabase login` chahiye.
-      ⚠️ `resellersos-env` skill ki line "Pardeep already logged in hai" ab **galat** hai.
-- [ ] **SQL test chalao**: `supabase/tests/domain_hosting_assets_rls.test.sql`
-      (tenant isolation, customer isolation, customer INSERT/UPDATE/DELETE band, global
-      domain-name uniqueness, DNS ownership, MX-priority). **Abhi tak LIKHA hai, CHALA NAHI** —
-      reasoned-only, test-verified nahi. Pehle canary se harness laal karke dekho (§25).
+- [x] **Migration LOCAL par lag gayi** ✅ 9 Sep — local Supabase stack khada hua aur
+      saari 78 migration lagi (127 table). `npx supabase login` ki zaroorat nahi padi.
+      ⚠️ **PROD par ab bhi nahi lagi** — wo neeche khula item hai (interactive login chahiye).
+      ⚠️ `resellersos-env` skill ki line "Pardeep already logged in hai" **galat** hai.
+- [x] **SQL test CHAL GAYE** ✅ 9 Sep — local par **47/53 pass**. Isi me ek asli bug mila:
+      test `users.name` padh raha tha jabki column `full_name` hai — yaani wo test kabhi
+      chala hi nahi tha.
+      ⚠️ **`npm run test:sql` LOCAL par chal hi nahi sakta** — `scripts/test-sql.mjs` me
+      `supabase db query --linked` HARDCODED hai (line 52), to local DB par wo
+      `LegacyProjectNotLinkedError` deta hai. 47/53 `docker exec psql` se nikale the.
+      Ye khula item hai: runner ko local mode chahiye, warna naya developer suite chala
+      hi nahi sakta — wahi kism ki dikkat jo `npm run setup` me thi.
 
 ## ✅ Ho gaya (typecheck 0 · 6462 test pass · lint 0 · build 0, teeno naye route build me)
 
