@@ -61,6 +61,8 @@ function renews(expiresAt: string | null): { text: string; tone: string } {
   return { text: formatDate(expiresAt), tone: "text-ink-2" };
 }
 
+import { PaidNotDelivered, type UndeliveredRow } from "./paid-not-delivered";
+
 export default async function DomainsPage() {
   const supabase = createClient();
 
@@ -68,7 +70,7 @@ export default async function DomainsPage() {
      definition of "yours", and it lives in the database. */
   const { data } = await supabase
     .from("domains")
-    .select("id, domain_name, status, expires_at, registrar_order_id, last_error, customer_id, customers ( name )")
+    .select("id, domain_name, status, expires_at, registrar_order_id, last_error, last_attempt_at, attempt_count, amount_paid, resolved_at, customer_id, customers ( name )")
     .is("deleted_at", null)
     .order("expires_at", { ascending: true, nullsFirst: false });
 
@@ -82,6 +84,26 @@ export default async function DomainsPage() {
   }).length;
   const stuck = rows.filter((d) => d.status === "failed" || !!d.last_error).length;
 
+  /* Paid for and not delivered: a failed registration nobody has dealt with.
+     Sorted by money because that is the order these should be looked at, with
+     unpriced rows LAST rather than as ₹0 — a missing amount is a gap in the
+     record, not a cheap problem (lib/domains/retry.ts). */
+  const undelivered: UndeliveredRow[] = rows
+    .filter((d) => d.status === "failed" && !d.resolved_at)
+    .map((d) => ({
+      id: d.id,
+      domain_name: d.domain_name,
+      amount_paid: d.amount_paid,
+      attempt_count: d.attempt_count ?? 0,
+      last_error: d.last_error,
+      last_attempt_at: d.last_attempt_at,
+      /* Same double cast the two render blocks below already use — the typed
+         client cannot infer this relation, and one inference quirk should not
+         be worked around three different ways in one file. */
+      customer_name: (d.customers as unknown as { name?: string } | null)?.name ?? null,
+    }))
+    .sort((a, b) => (b.amount_paid ?? -1) - (a.amount_paid ?? -1));
+
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
       <div className="mb-6">
@@ -90,6 +112,10 @@ export default async function DomainsPage() {
           Every domain registered on this account, what the registrar says about it, and where its DNS points.
         </p>
       </div>
+
+      {/* Above the counts on purpose: an expiring domain is a deadline, but a paid
+          domain that does not exist is money already taken. */}
+      <PaidNotDelivered initial={undelivered} />
 
       {(lapsing > 0 || stuck > 0) && (
         <div className="flex flex-wrap gap-3 mb-5">

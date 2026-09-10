@@ -36,9 +36,30 @@ export type DomainWriteAuthz =
  * tenant explicitly matters as well — a staff user of tenant A must not edit
  * tenant B's zone, and the upstream call would not know the difference.
  */
+/**
+ * What a customer who is refused should be told to do instead.
+ *
+ * Added 11 Sep 2026: this helper's refusal was written for the DNS routes and
+ * said so — "DNS records are managed by the team that sold you the domain". When
+ * the paid-but-undelivered resolve route reused the helper, a customer trying to
+ * resolve a failed registration was told about DNS records, which is a sentence
+ * about something they had not touched. Correct refusal, wrong subject.
+ *
+ * So the SUBJECT is a parameter and the shape of the sentence is not. The default
+ * keeps every existing caller's wording byte-identical.
+ */
+export type DomainWriteSubject = "dns" | "registration";
+
+const REFUSAL: Record<DomainWriteSubject, string> = {
+  dns: "DNS records are managed by the team that sold you the domain. Raise a request and they will make the change.",
+  registration:
+    "This is handled by the team that sold you the domain. Raise a request and they will sort it out for you.",
+};
+
 export async function authorizeDomainWrite(
   supabase: ReturnType<typeof createClient>,
   domainTenantId: string,
+  subject: DomainWriteSubject = "dns",
 ): Promise<DomainWriteAuthz> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, status: 401, error: "Not signed in." };
@@ -54,7 +75,7 @@ export async function authorizeDomainWrite(
     return {
       ok: false,
       status: 403,
-      error: "DNS records are managed by the team that sold you the domain. Raise a request and they will make the change.",
+      error: REFUSAL[subject],
     };
   }
   if (staff.is_active === false) {

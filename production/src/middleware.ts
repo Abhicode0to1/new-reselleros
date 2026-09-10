@@ -37,7 +37,13 @@ const PROTECTED_PREFIXES = [
   "/compliance",      // Pvt Ltd statutory compliance tracker
   "/accounting",      // /accounting/bills, /accounting/pnl, etc.
   "/whatsapp",
-  "/automations",
+  /* WAS "/automations", PLURAL, AND IT MATCHED NOTHING. The page is
+     `(app)/automation` — singular — so the prefix guarded a path that does not
+     exist while the real screen went ungated. That screen is the autonomy dial
+     and kill switch: the one place a person goes to stop the app emailing
+     customers unattended. Nothing links to the plural; corrected rather than
+     kept alongside, because two spellings is how this stays confusing. */
+  "/automation",
   "/campaigns",
   "/online-promos",
   "/coupons",
@@ -47,6 +53,35 @@ const PROTECTED_PREFIXES = [
   "/settings",
   "/team",
   "/partners",
+  /* ─── ADDED 11 SEP 2026, AND IT WAS MISSING FOR TWO DAYS ──────────────────
+     `/assets/domains` and `/assets/hosting` were built on 9 Sep and added to
+     APP_NAV, and this list is the other half the comment at the top demands
+     ("any new section's prefix must be added here for the auth gate + role guard
+     to fire"). It was not, so the app shell rendered on those two paths for a
+     request with no staff session — exactly what happened to `/vault` and
+     `/attendance/me` on 19 Aug, recorded below.
+
+     Found the same way as last time: by looking, not by reasoning. A portal
+     CUSTOMER's session reached /assets/domains and the page rendered, showing
+     their own rows. No data crossed a tenant — every query underneath runs under
+     RLS, and the write action refused with 403 — but a customer should never be
+     looking at the operator console, and an unauthenticated request should get
+     307 to /login rather than a shell.
+
+     A test now cross-checks APP_NAV against this list, so a fourth section
+     cannot be added without its prefix. */
+  "/assets",
+  /* ─── THE SAME GAP, SIX MORE TIMES ───────────────────────────────────
+     Found by the sync test written for /assets, which then reported these too —
+     every one a real page under (app) reachable in the sidebar with no auth gate
+     in front of it. None was noticed because nothing errors when a shell renders
+     that should have been a 307. */
+  "/my-expenses",
+  "/referrals",
+  "/marketing",
+  "/documents",
+  "/vendor-portal",
+  "/help",
   "/mobile",
   "/lead-gen",
   /* Internal bug-report triage queue. The role gate is the nav-derived one further
