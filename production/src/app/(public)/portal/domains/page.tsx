@@ -26,6 +26,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { expiryPhrase, summariseExpiries, type ExpiryUrgency } from "@/lib/domains/lifecycle";
+import { MAX_WATCHES_PER_CUSTOMER } from "@/lib/domains/watch";
+import { DomainWatches } from "../_components/domain-watches";
 import type { DomainAssetStatus } from "@/lib/supabase/database.types";
 
 export const dynamic = "force-dynamic";
@@ -75,6 +77,14 @@ export default async function PortalDomainsPage() {
     .from("domains")
     .select("id, domain_name, status, expires_at, registered_at, auto_renew, nameservers, privacy_protection, registration_years")
     .order("expires_at", { ascending: true, nullsFirst: false });
+
+  /* The customer's watches, read here so the island below renders with them
+     already on screen. RLS scopes this to the signed-in customer the same way
+     the domains query above is scoped — `domain_watches_own_select`. */
+  const { data: watchData } = await supabase
+    .from("domain_watches")
+    .select("id, domain_name, last_status, last_checked_at, notified_at")
+    .order("created_at", { ascending: false });
 
   const rows = data ?? [];
   /* Lapsed and expiring-soon are counted apart, because they need different
@@ -210,6 +220,11 @@ export default async function PortalDomainsPage() {
           </Card>
         </>
       )}
+
+      {/* Watching a name is offered whether or not they own any domains — somebody
+          with nothing registered yet is exactly the person who wanted a name that
+          was taken. */}
+      <DomainWatches initial={watchData ?? []} limit={MAX_WATCHES_PER_CUSTOMER} />
 
       {rows.length > 0 && (
         <p className="mt-4 text-2xs text-ink-3">
