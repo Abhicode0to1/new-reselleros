@@ -166,17 +166,85 @@ export async function rcTldPricing(tlds: readonly string[]): Promise<RcTldPrice[
 
 export interface RcAvailability {
   domain: string;      // "name.in"
-  available: boolean;  // strictly status === "available", as the engine decides it
+  /**
+   * Strictly `status === "available"`, as the engine decides it — or NULL when
+   * this particular name could not be determined. Null exists because of the
+   * malformed-key case below: the alternative is a row silently missing from the
+   * results, which reads as "we don't offer that" for a name that may be free.
+   */
+  available: boolean | null;
 }
 
 /**
- * Availability for one name across TLDs. Null = upstream unreachable/errored —
- * the caller must say "couldn't check", never guess.
+ * ResellerClub sometimes answers a multi-TLD query with ONE CONCATENATED KEY.
+ *
+ * Ported from the DMS engine's `searchDomainWithTlds` on 10 Sep 2026 — the one
+ * thing that function knew which this app did not. Asked for `acme` across
+ * `com,net,org`, RC occasionally returns
+ *
+ *     { "acme.com,net,org": { "status": "available" } }
+ *
+ * instead of three keys. Our reader mapped that to a single entry named
+ * `acme.com,net,org`, so the route's per-TLD lookups all missed and the search
+ * returned `{ domains: [] }` with HTTP 200 — an empty result page for a name
+ * that might be entirely free, with no error anywhere to explain it.
+ *
+ * The single status CANNOT be split across the three names: it is one answer to
+ * a question about three domains, and guessing which one it describes would be
+ * inventing availability. So the affected TLDs are re-asked one at a time, which
+ * is what DMS did and the only correct move.
  */
-export async function rcAvailability(
+export function looksConcatenated(key: string): boolean {
+  return key.includes(",");
+}
+
+/** Which TLDs a concatenated key was trying to answer for. */
+export function tldsInConcatenatedKey(key: string, name: string): string[] {
+  const out: string[] = [];
+  const parts = key.split(",").map((x) => x.trim()).filter(Boolean);
+  parts.forEach((part, i) => {
+    if (i === 0) {
+      /* The first part is a whole domain: "acme.com" -> "com". */
+      const stripped = part.toLowerCase().startsWith(`${name.toLowerCase()}.`)
+        ? part.slice(name.length + 1)
+        : part.split(".").slice(1).join(".");
+      if (stripped) out.push(stripped.toLowerCase());
+    } else {
+      /* The rest are bare TLDs: "net", "org". */
+      out.push(part.toLowerCase());
+    }
+  });
+  return out;
+}
+
+/**
+ * Read RC's availability JSON into entries, saying which TLDs still need asking.
+ *
+ * Pure, so the concatenated-key case can be tested without a network — it is
+ * rare enough in the wild that a test is the only thing keeping it handled.
+ */
+export function parseAvailability(
+  data: Record<string, { status?: string } | undefined>,
+  name: string,
+): { entries: RcAvailability[]; needsRetry: string[] } {
+  const entries: RcAvailability[] = [];
+  const needsRetry: string[] = [];
+
+  for (const [key, d] of Object.entries(data)) {
+    if (!d || typeof d !== "object") continue;
+    if (looksConcatenated(key)) {
+      needsRetry.push(...tldsInConcatenatedKey(key, name));
+      continue;
+    }
+    entries.push({ domain: key.toLowerCase(), available: d.status === "available" });
+  }
+  return { entries, needsRetry };
+}
+
+async function fetchAvailability(
   name: string,
   tlds: readonly string[],
-): Promise<RcAvailability[] | null> {
+): Promise<Record<string, { status?: string } | undefined> | null> {
   try {
     const res = await fetch(
       authedUrl("/api/domains/available.json", {
@@ -198,11 +266,50 @@ export async function rcAvailability(
       console.error(`[resellerclub] available returned error entry: ${JSON.stringify(data).slice(0, 200)}`);
       return null;
     }
-    return Object.entries(data)
-      .filter(([, d]) => d && typeof d === "object")
-      .map(([domain, d]) => ({ domain: domain.toLowerCase(), available: d!.status === "available" }));
+    return data;
   } catch (err) {
     console.error("[resellerclub] available unreachable:", (err as Error).message);
     return null;
   }
+}
+
+/**
+ * Availability for one name across TLDs. Null = upstream unreachable/errored —
+ * the caller must say "couldn't check", never guess.
+ *
+ * An entry with `available: null` means RC answered for the batch but not
+ * usefully for that name, and the re-ask failed too.
+ */
+export async function rcAvailability(
+  name: string,
+  tlds: readonly string[],
+): Promise<RcAvailability[] | null> {
+  const data = await fetchAvailability(name, tlds);
+  if (!data) return null;
+
+  const { entries, needsRetry } = parseAvailability(data, name);
+  if (needsRetry.length === 0) return entries;
+
+  console.warn(
+    `[resellerclub] available returned a concatenated key; re-asking ${needsRetry.length} TLD(s) individually`,
+  );
+
+  /* One request per affected TLD. Sequential rather than parallel: this is the
+     rare path, and a burst of single-TLD calls is the shape a rate limiter
+     objects to. The caller caps how many TLDs can be asked for. */
+  for (const tld of needsRetry) {
+    const one = await fetchAvailability(name, [tld]);
+    const hit = one
+      ? parseAvailability(one, name).entries.find((e) => e.domain === `${name.toLowerCase()}.${tld}`)
+      : undefined;
+    entries.push(
+      hit ?? {
+        /* Still no usable answer. Reported as unknown, never as taken — a name
+           shown as taken is one the customer will not try to buy. */
+        domain: `${name.toLowerCase()}.${tld}`,
+        available: null,
+      },
+    );
+  }
+  return entries;
 }

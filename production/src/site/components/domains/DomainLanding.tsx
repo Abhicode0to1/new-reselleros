@@ -690,7 +690,7 @@ function Alternates(p: { C: typeof C_TYPE; MONO: string; priceMono: (e?: React.C
           <div key={d.domain} style={{ display: "flex", alignItems: "center", gap: 10, background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: "13px 15px" }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.ink }} title={d.domain}>{d.domain}</div>
-              <div style={priceMono({ fontSize: 12, color: C.muted })}>{d.available ? (d.priceKnown ? `${inr(d.price)} · ₹0 with hosting` : "price on request") : "taken · WHOIS"}</div>
+              <div style={priceMono({ fontSize: 12, color: C.muted })}>{d.checked === false ? "couldn't check" : d.available ? (d.priceKnown ? `${inr(d.price)} · ₹0 with hosting` : "price on request") : "taken · WHOIS"}</div>
             </div>
             {d.available ? (
               <button onClick={() => onAddAlt(d)} style={{ appearance: "none", cursor: "pointer", background: C.accSurf, color: C.accent, border: `1px solid ${C.accBorder}`, borderRadius: 7, padding: "6px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}>Pick</button>

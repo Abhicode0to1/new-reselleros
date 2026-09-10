@@ -19,6 +19,16 @@ export const DEFAULT_TLDS = ["in", "com", "co.in", "org", "net"];
 export interface DomainResult {
   domain: string;
   available: boolean;
+  /**
+   * False when the registrar could not be made to answer for THIS name while
+   * answering for the others. Distinct from `available: false`, which is a real
+   * "somebody owns it" — and the distinction matters in one direction
+   * only: showing TAKEN for a name nobody owns loses a sale silently.
+   *
+   * Optional so an older payload — or the engine fallback path, which
+   * does not send it — reads as checked, which is what it was.
+   */
+  checked?: boolean;
   price: number;
   currency: string;
   years: number;
