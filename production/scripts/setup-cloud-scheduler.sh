@@ -168,6 +168,16 @@ JOBS=(
   # rather than arriving in the same minute as an invoice reminder.
   "resellersos-domain-watch|0 11 * * *|/api/cron/domain-watch|Check watched domain names and tell the customer when one frees up"
 
+  # EVERY 15 MINUTES, and that is the shortest interval in this file. It is not
+  # eagerness. `refund_payment` suspends hosting when a refund takes the last of
+  # the money off a quote, but a database transaction cannot call DirectAdmin, so
+  # between the refund and this run the state is: money returned, our records say
+  # suspended, and the customer's website is still serving. Daily would leave a
+  # site up for up to 24 hours after it was paid back for. Fifteen minutes is
+  # short enough that nobody has to think about the gap, and the run is free when
+  # the queue is empty (one indexed read, no writes).
+  "resellersos-hosting-suspend|*/15 * * * *|/api/cron/hosting-suspend|Tell DirectAdmin about hosting our records already suspended (refunds)"
+
   # ── The rest of what was missing ───────────────────────────────────
   #
   # 08:30 IST, GET — both taken from the route's own header rather than chosen here.
