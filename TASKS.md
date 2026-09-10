@@ -7,6 +7,52 @@
 
 ---
 
+# 🟣 HANDOFF — 11 Sep 2026 (shaam). Refund par hosting SUSPEND hoti hai, delete kabhi nahi.
+
+## Faisla (Pardeep, 11 Sep)
+> "Suspend the hosting but don't delete it. Admin will decide to delete it."
+
+Isliye `refund_payment` (migration `20260911130000`) ab, jab refund quote par
+**aakhri paisa** bhi wapas kar de, us quote ka **`active`** hosting `suspended`
+karta hai — `suspended_at`, `auto_renew=false`, aur `next_action_at=now()`.
+`terminated` KABHI nahi likhta, aur test wo poori table par jaanchta hai.
+
+- **Adhoora refund → site chalu.** ₹500 wapas karna ₹5,000 ki hosting band karne
+  ki wajah nahi hai.
+- **`pending` ko chhoda jata hai** — wo provision hua hi nahi, aur
+  paid-but-undelivered wale screen usi status par chhaante hain.
+- **DA ko batane wala aadha hissa**: `/api/cron/hosting-suspend` (har 15 min —
+  scheduler me sabse chhota interval, wajah wahin likhi hai). Beech ka waqt
+  khatarnak hai: paisa wapas, kitab me suspended, site CHALU.
+- **DA configure nahi hai to kuch clear nahi hota** — queue apni tareekh ke saath
+  bachi rehti hai. Browser se naapa: `due 1 · left_queued 1 · still_waiting
+  ["suspend-probe.in"]`, row ka `next_action_at` bacha, `attempt_count 0`.
+- Backoff `lib/hosting/suspend-backoff.ts` me (tested) — 15m/1h/4h/roz, koi
+  attempt-limit nahi.
+- `refund_suspends_hosting.test.sql` — **5 mutation, paanchon pakde gaye.**
+
+## 🔴 FAISLA CHAHIYE — admin ke paas delete ka koi raasta NAHI hai
+Naapa: `assets/hosting/[id]/page.tsx` ka apna header kehta hai ki
+`daSuspendAccount`/`daDeleteAccount` maujood hain aur **jaan-boojh kar kisi button
+se nahi jude** — kyunki terminate karna customer ki site aur mailbox mita deta
+hai, aur usko confirmation flow chahiye.
+
+To "admin decide karega" abhi **ho hi nahi sakta** app ke andar. Do raaste:
+
+- [ ] **(a) App me delete button** — owner-only, sirf `suspended` row par,
+      domain ka naam type karke confirm, poora audit, row `terminated` rehti hai
+      (mitayi nahi jati — GST/itihaas ke liye). Ye sabse zyada vinashkari action
+      hoga is app me, isliye CLAUDE.md §0.4 ke hisaab se pehle manzoori.
+- [ ] **(b) DirectAdmin me haath se delete karo**, app sirf darj kare. Iska bhi
+      ek chhed hai: `asset-sweep` DA se "ye username nahi milta" pakadta hai par
+      **status jaan-boojh kar nahi badalta** (`unknown_to_server` me darj karta
+      hai) — to koi cheez usse `terminated` nahi karegi.
+
+Jab tak faisla nahi, hosting `suspended` par rukti hai — jo surakshit haalat hai.
+
+
+---
+
 # 🟣 HANDOFF — 11 Sep 2026. SQL suite 53/53 pehli baar, aur ek ASLI portal bug mila.
 
 ## 🔴 Portal customer KUCH BHI likh nahi sakta tha — theek ho gaya
