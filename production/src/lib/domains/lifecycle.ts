@@ -22,6 +22,7 @@
  */
 
 import type { DomainAssetStatus, HostingAccountStatus } from "@/lib/supabase/database.types";
+import { daysBetween } from "@/lib/utils";
 
 /** Whole days from `now` to `at`. Negative when `at` is in the past. */
 export function daysUntil(at: string | Date, now: Date = new Date()): number {
@@ -227,4 +228,121 @@ export const DISAGREEMENT_TOLERANCE_DAYS = 7;
 
 export function disagreementIsWorthFlagging(days: number | null): boolean {
   return days !== null && Math.abs(days) > DISAGREEMENT_TOLERANCE_DAYS;
+}
+
+/* ── Saying it out loud ───────────────────────────────────────────────────────
+ *
+ * Added 9 Sep 2026, fixing two findings a layout audit of /portal/domains
+ * reported and this file is the right place to fix.
+ */
+
+/** How loudly an expiry should be shown. */
+export type ExpiryUrgency = "lapsed" | "critical" | "soon" | "calm" | "unknown";
+
+export interface ExpiryPhrase {
+  /** A RELATIVE phrase — never an absolute date. See below. */
+  text: string;
+  urgency: ExpiryUrgency;
+  days: number | null;
+}
+
+/**
+ * "How long have I got?", as a phrase.
+ *
+ * ─── FINDING 1: THE COLUMN THAT REPEATED THE COLUMN NEXT TO IT ───────────────
+ * The portal table has a `Renews` column and an `Expiry date` column. Past 60
+ * days out, `Renews` fell back to printing the formatted date — so the two
+ * columns showed the identical string, and on a phone the card printed the same
+ * date twice, side by side. A reader seeing a value duplicated assumes they have
+ * misread something, then hunts for the difference.
+ *
+ * The page's own header says expiry is "stated in days rather than a date the
+ * reader has to subtract from today", which is exactly right and exactly what
+ * the fallback abandoned. So this ALWAYS answers relatively. Far-out dates get a
+ * coarse phrase — "in about 8 months" — because nobody needs "in 243 days", and
+ * the absolute date is right there in the next column for anyone who does.
+ */
+export function expiryPhrase(expiresAt: string | Date | null | undefined, now: Date = new Date()): ExpiryPhrase {
+  if (!expiresAt) {
+    /* Not "expired". A missing date means the registrar has not confirmed one
+       yet, which is a normal state for a few minutes after a purchase. */
+    return { text: "date not confirmed", urgency: "unknown", days: null };
+  }
+  const t = expiresAt instanceof Date ? expiresAt.getTime() : new Date(expiresAt).getTime();
+  if (!Number.isFinite(t)) return { text: "date not confirmed", urgency: "unknown", days: null };
+
+  /* CALENDAR days, in IST — not `daysUntil`, which floors a fraction.
+     `daysUntil` is right for the sweep, where the question is "has the grace
+     window elapsed" and a partial day has not. It is wrong for a sentence a
+     customer reads: at 17:07 IST on the 9th, a domain expiring on the 21st is
+     twelve days away on any calendar, and flooring 11.5 shows "11 days left".
+     The error is worse in the past tense, where it rounds AWAY from now and a
+     name that lapsed eight days ago is announced as nine.
+
+     `daysUntil` is deliberately left as it is: `deriveDomainStatus` measures the
+     ICANN windows with it and shifting those thresholds is a separate decision
+     with its own consequences, not a display fix. */
+  const days = daysBetween(now, new Date(t));
+
+  if (days < 0) {
+    const ago = Math.abs(days);
+    return {
+      text: ago === 1 ? "Expired yesterday" : `Expired ${ago} days ago`,
+      urgency: "lapsed",
+      days,
+    };
+  }
+  if (days === 0) return { text: "Expires today", urgency: "critical", days };
+  if (days === 1) return { text: "Expires tomorrow", urgency: "critical", days };
+  if (days <= EXPIRING_SOON_DAYS) return { text: `${days} days left`, urgency: "critical", days };
+  if (days <= 60) return { text: `${days} days left`, urgency: "soon", days };
+
+  /* Coarse from here on. Months are approximated at 30.44 days — good enough for
+     a phrase whose whole job is "not soon", and the exact date is one column
+     over. */
+  const months = Math.round(days / 30.44);
+  if (months <= 1) return { text: "in about a month", urgency: "calm", days };
+  if (months < 12) return { text: `in about ${months} months`, urgency: "calm", days };
+  const years = Math.round(days / 365.25);
+  return { text: years <= 1 ? "in about a year" : `in about ${years} years`, urgency: "calm", days };
+}
+
+export interface ExpirySummary {
+  /** Already past their expiry date — a different sentence, not a louder one. */
+  lapsed: number;
+  /** Still in hand, but inside EXPIRING_SOON_DAYS. */
+  expiringSoon: number;
+}
+
+/**
+ * What the banner at the top of the page is allowed to claim.
+ *
+ * ─── FINDING 2: "2 DOMAINS EXPIRE WITHIN 30 DAYS" ABOUT ONE THAT ALREADY HAD ──
+ * The banner counted everything with `days <= 30`, and a lapsed domain has
+ * NEGATIVE days, so it was counted as expiring soon. The result told a customer
+ * a domain "expires within 30 days" when it had in fact lapsed twelve days
+ * earlier — wrong tense, wrong fact, and wrong advice: the two situations need
+ * different actions and one of them has a deadline attached (see GRACE_DAYS and
+ * REDEMPTION_DAYS above, where the name can still be recovered for a fee).
+ *
+ * `cancelled` and `transferred_out` are excluded because they are not this
+ * customer's problem any more; a name transferred away expiring at its new
+ * registrar is not something to interrupt anybody about.
+ */
+const NOT_OUR_PROBLEM: ReadonlySet<string> = new Set(["cancelled", "transferred_out"]);
+
+export function summariseExpiries(
+  domains: ReadonlyArray<{ expires_at: string | null; status: string }>,
+  now: Date = new Date(),
+): ExpirySummary {
+  let lapsed = 0;
+  let expiringSoon = 0;
+  for (const d of domains) {
+    if (NOT_OUR_PROBLEM.has(d.status)) continue;
+    const { days } = expiryPhrase(d.expires_at, now);
+    if (days === null) continue;
+    if (days < 0) lapsed += 1;
+    else if (days <= EXPIRING_SOON_DAYS) expiringSoon += 1;
+  }
+  return { lapsed, expiringSoon };
 }

@@ -24,7 +24,8 @@ import { requirePortalSession } from "@/lib/portal/session";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatDate, daysBetween } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { expiryPhrase, summariseExpiries, type ExpiryUrgency } from "@/lib/domains/lifecycle";
 import type { DomainAssetStatus } from "@/lib/supabase/database.types";
 
 export const dynamic = "force-dynamic";
@@ -48,16 +49,19 @@ const STATUS: Record<DomainAssetStatus, { label: string; kind: BadgeKind }> = {
   cancelled:       { label: "Cancelled",       kind: "muted"   },
 };
 
-/** Days to expiry as a phrase, with the urgency it deserves. */
-function expiry(expiresAt: string | null): { text: string; kind: BadgeKind; days: number | null } {
-  if (!expiresAt) return { text: "—", kind: "muted", days: null };
-  const days = daysBetween(new Date(), expiresAt);
-  if (days < 0)  return { text: `Expired ${Math.abs(days)}d ago`, kind: "danger",  days };
-  if (days === 0) return { text: "Expires today",                 kind: "danger",  days };
-  if (days <= 30) return { text: `${days}d left`,                 kind: "danger",  days };
-  if (days <= 60) return { text: `${days}d left`,                 kind: "warning", days };
-  return { text: formatDate(expiresAt), kind: "muted", days };
-}
+/**
+ * How an expiry is coloured. The phrase itself comes from
+ * `lib/domains/lifecycle.ts` — it is arithmetic about a deadline, which is worth
+ * testing, and it used to fall back to printing the same date as the column next
+ * to it. This is only the paint.
+ */
+const URGENCY_TEXT: Record<ExpiryUrgency, string> = {
+  lapsed:   "text-rose-ink",
+  critical: "text-rose-ink",
+  soon:     "text-amber-ink",
+  calm:     "text-ink-2",
+  unknown:  "text-ink-3",
+};
 
 export default async function PortalDomainsPage() {
   const session  = await requirePortalSession();
@@ -73,10 +77,11 @@ export default async function PortalDomainsPage() {
     .order("expires_at", { ascending: true, nullsFirst: false });
 
   const rows = data ?? [];
-  const urgent = rows.filter((d) => {
-    const e = expiry(d.expires_at);
-    return e.days !== null && e.days <= 30 && d.status !== "cancelled" && d.status !== "transferred_out";
-  });
+  /* Lapsed and expiring-soon are counted apart, because they need different
+     sentences: one has already happened. Counting them together is how the
+     banner came to tell a customer a domain "expires within 30 days" twelve
+     days after it had in fact lapsed. */
+  const { lapsed, expiringSoon } = summariseExpiries(rows, new Date());
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
@@ -87,11 +92,28 @@ export default async function PortalDomainsPage() {
         </p>
       </div>
 
-      {/* The one thing worth interrupting for. §24: says what, why, and where to go. */}
-      {urgent.length > 0 && (
+      {/* The one thing worth interrupting for. §24: says what, why, and where to go.
+          Two banners rather than one, because a name that has ALREADY lapsed is a
+          different situation with a different deadline — it can usually still be
+          recovered, but only for a while and usually for a fee. Telling somebody
+          it "expires within 30 days" would be both untrue and reassuring. */}
+      {lapsed > 0 && (
+        <Card className="p-4 mb-3 border-rose/40 bg-rose-soft/30">
+          <p className="text-sm text-ink-2">
+            <b>{lapsed === 1 ? "1 domain has already expired." : `${lapsed} domains have already expired.`}</b>{" "}
+            An expired name can usually still be recovered, but not for long and often for a
+            fee — after that it is released and anybody can register it.{" "}
+            <Link href="/portal/support/new" className="text-rose-ink underline">
+              Ask {reseller} about recovering it →
+            </Link>
+          </p>
+        </Card>
+      )}
+
+      {expiringSoon > 0 && (
         <Card className="p-4 mb-6 border-rose/40 bg-rose-soft/30">
           <p className="text-sm text-ink-2">
-            <b>{urgent.length === 1 ? "1 domain expires" : `${urgent.length} domains expire`} within 30 days.</b>{" "}
+            <b>{expiringSoon === 1 ? "1 domain expires" : `${expiringSoon} domains expire`} within 30 days.</b>{" "}
             A domain that lapses is released and someone else can register it.{" "}
             <Link href="/portal/support/new" className="text-rose-ink underline">
               Ask {reseller} to renew →
@@ -115,7 +137,7 @@ export default async function PortalDomainsPage() {
           {/* Phone: card list (§20 — the portal is a phone-first surface). */}
           <ul className="md:hidden space-y-3">
             {rows.map((d) => {
-              const e = expiry(d.expires_at);
+              const e = expiryPhrase(d.expires_at);
               const s = STATUS[d.status] ?? STATUS.pending;
               return (
                 <li key={d.id}>
@@ -127,13 +149,15 @@ export default async function PortalDomainsPage() {
                     <div className="mt-3 flex items-end justify-between gap-3">
                       <div>
                         <p className="text-3xs uppercase tracking-wider text-ink-3">Renews</p>
-                        <p className={`text-sm font-medium ${e.kind === "danger" ? "text-rose-ink" : e.kind === "warning" ? "text-amber-ink" : "text-ink-2"}`}>
+                        <p className={`text-sm font-medium ${URGENCY_TEXT[e.urgency]}`}>
                           {e.text}
                         </p>
                       </div>
-                      <p className="text-2xs text-ink-3">
-                        {d.expires_at ? formatDate(d.expires_at) : "date not confirmed"}
-                      </p>
+                      {/* The absolute date, next to the relative phrase — they
+                          complement each other. When there is no date the phrase
+                          already says so, and repeating it here was the other half
+                          of the duplicate-value finding. */}
+                      {d.expires_at && <p className="text-2xs text-ink-3">{formatDate(d.expires_at)}</p>}
                     </div>
                   </Card>
                 </li>
@@ -149,24 +173,30 @@ export default async function PortalDomainsPage() {
                   <tr>
                     <th className="text-left px-4 py-3">Domain</th>
                     <th className="text-left px-4 py-3">Status</th>
-                    <th className="text-left px-4 py-3">Renews</th>
-                    <th className="text-left px-4 py-3">Expiry date</th>
+                    {/* These two carry short phrases and a date. Left to wrap they
+                        break mid-phrase ("in about 10 / months") while the Domain
+                        column keeps its width — so they hold their line and the
+                        squeeze lands on Domain, which is the one that should absorb
+                        it: a 43-character name wrapping reads fine, a countdown
+                        broken in half does not. */}
+                    <th className="text-left px-4 py-3 whitespace-nowrap">Renews</th>
+                    <th className="text-left px-4 py-3 whitespace-nowrap">Expiry date</th>
                     <th className="text-left px-4 py-3">Privacy</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
                   {rows.map((d) => {
-                    const e = expiry(d.expires_at);
+                    const e = expiryPhrase(d.expires_at);
                     const s = STATUS[d.status] ?? STATUS.pending;
                     return (
                       <tr key={d.id} className="hover:bg-paper-2/40">
                         <td className="px-4 py-3 font-mono text-ink">{d.domain_name}</td>
                         <td className="px-4 py-3"><Badge kind={s.kind} dot>{s.label}</Badge></td>
-                        <td className={`px-4 py-3 font-medium ${e.kind === "danger" ? "text-rose-ink" : e.kind === "warning" ? "text-amber-ink" : "text-ink-2"}`}>
+                        <td className={`px-4 py-3 font-medium whitespace-nowrap ${URGENCY_TEXT[e.urgency]}`}>
                           {e.text}
                         </td>
-                        <td className="px-4 py-3 text-ink-3">
-                          {d.expires_at ? formatDate(d.expires_at) : "not confirmed yet"}
+                        <td className="px-4 py-3 text-ink-3 whitespace-nowrap">
+                          {d.expires_at ? formatDate(d.expires_at) : "—"}
                         </td>
                         <td className="px-4 py-3 text-ink-3">
                           {d.privacy_protection ? "On" : "Off"}

@@ -110,3 +110,6 @@ supabase/.branches/
 # Personal scratch docs, not part of the shared repo.
 TEAM-SCALING-PLAN.md
 TEAM-SCALING-PLAN-DETAIL.md
+
+# playwright-cli scratch (snapshots, console logs, screenshots from browser checks)
+production/.playwright-cli/

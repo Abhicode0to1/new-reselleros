@@ -9,7 +9,10 @@ import {
   GRACE_DAYS,
   REDEMPTION_DAYS,
   EXPIRING_SOON_DAYS,
+  expiryPhrase,
+  summariseExpiries,
 } from "./lifecycle";
+import { formatDate } from "@/lib/utils";
 
 /**
  * The sweep decides what a customer is told they own. Two failure directions
@@ -210,5 +213,129 @@ describe("expiryDisagreementDays — the signal the schema was built to show", (
     expect(disagreementIsWorthFlagging(expiryDisagreementDays(inDays(32), inDays(30)))).toBe(false);
     expect(disagreementIsWorthFlagging(expiryDisagreementDays(inDays(400), inDays(30)))).toBe(true);
     expect(disagreementIsWorthFlagging(null)).toBe(false);
+  });
+});
+
+/* ── The two /portal/domains findings ─────────────────────────────────────────
+ *
+ * Both were reported by a layout audit and both were still open. They are tested
+ * here rather than in the page because they are arithmetic about a deadline.
+ */
+
+describe("expiryPhrase — never the same string as the column next to it", () => {
+  const NOW = new Date("2026-09-09T12:00:00Z");
+
+  it("stays RELATIVE past 60 days, where it used to print the date", () => {
+    /* The bug: past 60 days the page fell back to `formatDate(expires_at)`, so
+       the `Renews` column and the `Expiry date` column showed the identical
+       string — and the phone card printed the same date twice, side by side. */
+    const far = expiryPhrase("2027-05-15T00:00:00Z", NOW);
+    expect(far.text).toBe("in about 8 months");
+    expect(far.urgency).toBe("calm");
+    /* The thing that actually went wrong: it must not be a formatted date. */
+    expect(far.text).not.toMatch(/\d{4}/);
+    expect(far.text).not.toBe(formatDate("2027-05-15T00:00:00Z"));
+  });
+
+  it("coarsens to years rather than counting to 800 days", () => {
+    expect(expiryPhrase("2029-09-09T12:00:00Z", NOW).text).toBe("in about 3 years");
+    expect(expiryPhrase("2027-09-09T12:00:00Z", NOW).text).toBe("in about a year");
+  });
+
+  it("counts days while the number still means something", () => {
+    expect(expiryPhrase("2026-09-09T12:00:00Z", NOW)).toMatchObject({ text: "Expires today", urgency: "critical" });
+    expect(expiryPhrase("2026-09-10T12:00:00Z", NOW)).toMatchObject({ text: "Expires tomorrow", urgency: "critical" });
+    expect(expiryPhrase("2026-09-24T12:00:00Z", NOW)).toMatchObject({ text: "15 days left", urgency: "critical" });
+    expect(expiryPhrase("2026-10-24T12:00:00Z", NOW)).toMatchObject({ text: "45 days left", urgency: "soon" });
+  });
+
+  it("counts CALENDAR days, not a floored fraction — the real-data case", () => {
+    /* This test exists because the first version of the fix passed the whole
+       suite while showing the wrong numbers on the actual page: every other case
+       here uses a midnight-to-midday pair where the two arithmetics agree.
+
+       `expires_at` is midnight UTC (that is how the registrar sends it) and a
+       person reads the page in the middle of the day. Flooring the fraction then
+       understates the future and OVERSTATES the past: a name that lapsed eight
+       days ago gets announced as nine, which is both wrong and alarming. */
+    const afternoon = new Date("2026-09-09T11:37:00Z");   // 17:07 IST
+    expect(expiryPhrase("2026-09-21T00:00:00Z", afternoon).days).toBe(12);
+    expect(expiryPhrase("2026-09-21T00:00:00Z", afternoon).text).toBe("12 days left");
+    expect(expiryPhrase("2026-09-01T00:00:00Z", afternoon).text).toBe("Expired 8 days ago");
+    /* And the boundaries still hold when `now` is not midnight. */
+    expect(expiryPhrase("2026-09-09T00:00:00Z", afternoon).text).toBe("Expires today");
+    expect(expiryPhrase("2026-09-10T00:00:00Z", afternoon).text).toBe("Expires tomorrow");
+  });
+
+  it("uses the past tense for a name that has already lapsed", () => {
+    expect(expiryPhrase("2026-08-28T12:00:00Z", NOW)).toMatchObject({ text: "Expired 12 days ago", urgency: "lapsed" });
+    expect(expiryPhrase("2026-09-08T12:00:00Z", NOW).text).toBe("Expired yesterday");
+  });
+
+  it("says a missing date is unconfirmed, not expired", () => {
+    /* Normal for a few minutes after a purchase. Calling it expired would be a
+       false alarm about the most alarming thing on the page. */
+    for (const input of [null, undefined, "", "not a date"]) {
+      const p = expiryPhrase(input as string | null, NOW);
+      expect(p.urgency).toBe("unknown");
+      expect(p.days).toBeNull();
+      expect(p.text).toBe("date not confirmed");
+    }
+  });
+});
+
+describe("summariseExpiries — the banner's claim", () => {
+  const NOW = new Date("2026-09-09T12:00:00Z");
+
+  it("does NOT count a lapsed domain as expiring soon", () => {
+    /* The bug: the filter was `days <= 30`, and a lapsed domain has NEGATIVE
+       days — so the banner said "2 domains expire within 30 days" about one that
+       had already lapsed twelve days earlier. Wrong tense, wrong fact, and wrong
+       advice, since recovering a lapsed name is a different conversation with a
+       deadline of its own. */
+    const got = summariseExpiries(
+      [
+        { expires_at: "2026-08-28T00:00:00Z", status: "grace" },   // lapsed 12d ago
+        { expires_at: "2026-09-20T00:00:00Z", status: "active" },  // 10d left
+      ],
+      NOW,
+    );
+    expect(got).toEqual({ lapsed: 1, expiringSoon: 1 });
+  });
+
+  it("counts the boundary day as soon, and the day after the window as neither", () => {
+    expect(summariseExpiries([{ expires_at: "2026-10-09T12:00:00Z", status: "active" }], NOW)).toEqual({
+      lapsed: 0,
+      expiringSoon: 1,
+    });
+    expect(summariseExpiries([{ expires_at: "2026-10-11T12:00:00Z", status: "active" }], NOW)).toEqual({
+      lapsed: 0,
+      expiringSoon: 0,
+    });
+  });
+
+  it("ignores names that are no longer this customer's problem", () => {
+    /* A domain transferred away, expiring at its new registrar, is not something
+       to interrupt anybody about. */
+    const got = summariseExpiries(
+      [
+        { expires_at: "2026-09-12T00:00:00Z", status: "transferred_out" },
+        { expires_at: "2026-08-01T00:00:00Z", status: "cancelled" },
+        { expires_at: "2026-09-12T00:00:00Z", status: "active" },
+      ],
+      NOW,
+    );
+    expect(got).toEqual({ lapsed: 0, expiringSoon: 1 });
+  });
+
+  it("ignores a domain with no expiry date rather than counting it as lapsed", () => {
+    expect(summariseExpiries([{ expires_at: null, status: "pending" }], NOW)).toEqual({
+      lapsed: 0,
+      expiringSoon: 0,
+    });
+  });
+
+  it("says nothing for an empty account", () => {
+    expect(summariseExpiries([], NOW)).toEqual({ lapsed: 0, expiringSoon: 0 });
   });
 });
