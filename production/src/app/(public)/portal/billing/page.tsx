@@ -75,7 +75,7 @@ export default async function PortalBillingPage() {
   const outstanding = active.reduce((s, x) => s + (x.outstanding_amount ?? 0), 0);
 
   return (
-    <div className="space-y-4">
+    <div className="max-w-[1080px] mx-auto px-6 py-8 space-y-4">
       <div>
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Billing</h1>
         <p className="text-sm text-ink-3 mt-1">

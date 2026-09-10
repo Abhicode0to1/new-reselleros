@@ -126,4 +126,31 @@ describe("the customer portal's page titles are one typeface, one size", () => {
       `A portal subhead differs from "${CANONICAL_SUBHEAD}":\n  ${offenders.join("\n  ")}`,
     ).toEqual([]);
   });
+
+  /* ─── The page shell, which is the same drift one level out ────────────────
+     Billing was missing this wrapper altogether, and the h1 class was only the
+     visible half of that. Measured at 390px before the fix: the heading sat at
+     x=0 — the words touching the edge of the phone — against 24px on the other
+     nine. At 1280px it was worse: 0 instead of 124px, so Billing's content ran
+     edge-to-edge across the browser while every other page was a centred
+     1080px column.
+
+     The max-width deliberately VARIES — 1080 for a listing, 800 for the
+     profile form, 680 for the ticket form — so it is not part of the rule. The
+     padding is: a portal page whose text can touch the screen edge is a bug on
+     the device most of these customers are holding. */
+  const SHELL = /max-w-\[\d+px\] mx-auto px-6 py-8/;
+
+  it("every page with a title also carries the page shell", () => {
+    const offenders: string[] = [];
+    for (const file of new Set(headings.map((h) => h.file))) {
+      const src = readFileSync(join(PORTAL_ROOT, file), "utf8");
+      if (!SHELL.test(src)) offenders.push(file);
+    }
+    expect(
+      offenders,
+      `These portal pages have a title but no "max-w-[…px] mx-auto px-6 py-8" ` +
+        `wrapper, so their text runs to the edge of the screen:\n  ${offenders.join("\n  ")}`,
+    ).toEqual([]);
+  });
 });

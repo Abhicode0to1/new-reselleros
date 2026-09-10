@@ -33,9 +33,11 @@
  * desktop `Sidebar` does not. The strip is the surface a thumb uses.
  */
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { centredScrollLeft, scrollEdges } from "@/lib/portal/nav-scroll";
 
 /* Assets before commerce. Domains and Hosting are the things the customer OWNS and the
    things that can lapse; Shop and Orders are what they did. Someone opening the portal
@@ -108,35 +110,124 @@ export function PortalNavInline() {
  * The narrow strip — phone AND tablet, up to 1080px. It scrolls INSIDE itself
  * (overflow-x-auto + min-w-max), which is why it never pushed the page sideways the way
  * the inline row did before 9 Sep.
+ *
+ * ─── WHAT 9 SEP MISSED, MEASURED 11 SEP ──────────────────────────────────────
+ * `aria-current` fixed "nothing says which section you are in" for a screen reader and
+ * NOT for the eye. At 390px the strip is 774px wide and it never moved, so:
+ *
+ *     fully visible   Dashboard, Subscription, Domains, Hosting
+ *     off-screen      Shop, Orders, Billing, Invoices, Support, Profile
+ *
+ * A customer on `/portal/billing` therefore saw a nav opening on Dashboard with nothing
+ * highlighted anywhere in it — which reads as "no section is current", the exact state
+ * the amber label was added to end. Six of ten sections. Two things were needed:
+ *
+ *   1. SCROLL THE CURRENT SECTION INTO VIEW. `scrollLeft` is set directly rather than
+ *      calling `scrollIntoView`, because that walks up to every scrollable ancestor —
+ *      it would have jumped the whole PAGE to bring a nav link into view, which on a
+ *      phone means the customer lands below the heading they navigated for.
+ *
+ *   2. SAY THAT THE STRIP SCROLLS AT ALL. Even scrolled correctly, a customer on
+ *      Dashboard has no way to know Billing exists. The only hint in the 390px
+ *      screenshot was "Shop" happening to be clipped mid-word, which is luck — a label
+ *      ending flush with the edge would have made the strip look complete. So the
+ *      overflowing edges are faded, and only while something is really past them.
+ *
+ * The maths for both lives in `lib/portal/nav-scroll.ts`, tested against this strip's
+ * real measured geometry, because jsdom has no layout and could not check any of it.
  */
 export function PortalNavStrip() {
   const isActive = useActive();
+  const pathname = usePathname();
+  const stripRef = React.useRef<HTMLElement | null>(null);
+  const [edges, setEdges] = React.useState({ left: false, right: false });
+
+  /* Declared BEFORE the edge effect on purpose: effects run in order, so the edge read
+     below sees the position this one just set rather than the stale 0. */
+  React.useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const link = strip.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!link) return;
+    const linkRect = link.getBoundingClientRect();
+    strip.scrollLeft = centredScrollLeft({
+      /* Into the strip's own scrolled space — see nav-scroll.ts. Via rects and not
+         `offsetLeft`, which is relative to whichever ancestor happens to be positioned
+         and would silently change meaning if a wrapper gained `relative`. */
+      linkLeft: linkRect.left - strip.getBoundingClientRect().left + strip.scrollLeft,
+      linkWidth: linkRect.width,
+      viewportWidth: strip.clientWidth,
+      scrollWidth: strip.scrollWidth,
+    });
+  }, [pathname]);
+
+  React.useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const read = () =>
+      setEdges(
+        scrollEdges({
+          scrollLeft: strip.scrollLeft,
+          viewportWidth: strip.clientWidth,
+          scrollWidth: strip.scrollWidth,
+        }),
+      );
+    read();
+    strip.addEventListener("scroll", read, { passive: true });
+    /* Rotating the phone changes which edges overflow, and there is no scroll event for
+       that. Guarded because this file is imported by tests in environments without it. */
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(read) : null;
+    ro?.observe(strip);
+    return () => {
+      strip.removeEventListener("scroll", read);
+      ro?.disconnect();
+    };
+  }, [pathname]);
+
   return (
-    <nav
-      className="min-[1080px]:hidden border-t border-hairline overflow-x-auto"
-      aria-label="Portal sections"
-    >
-      {/* No vertical padding here on purpose — it belongs on the links, or it pads the
-          row while leaving each tap target 20px tall. */}
-      <div className="flex items-center gap-5 px-6 text-sm text-ink-3 whitespace-nowrap min-w-max">
-        {NAV.map((n) => {
-          const active = isActive(n.href);
-          return (
-            <Link
-              key={n.href}
-              href={n.href as never}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                // touch-target floor (§20 / CLAUDE.md:605) — on the LINK, not the row
-                "inline-flex items-center min-h-[44px] transition-colors",
-                active ? "text-amber-ink font-medium" : "hover:text-ink",
-              )}
-            >
-              {n.label}
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    /* The fades are siblings of the scroller, not children of it — a child of an
+       overflow container scrolls away with the content, so an inner fade would slide
+       off the moment it was needed. `relative` therefore lives out here. */
+    <div className="relative min-[1080px]:hidden border-t border-hairline">
+      <nav ref={stripRef} className="overflow-x-auto" aria-label="Portal sections">
+        {/* No vertical padding here on purpose — it belongs on the links, or it pads the
+            row while leaving each tap target 20px tall. */}
+        <div className="flex items-center gap-5 px-6 text-sm text-ink-3 whitespace-nowrap min-w-max">
+          {NAV.map((n) => {
+            const active = isActive(n.href);
+            return (
+              <Link
+                key={n.href}
+                href={n.href as never}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  // touch-target floor (§20 / CLAUDE.md:605) — on the LINK, not the row
+                  "inline-flex items-center min-h-[44px] transition-colors",
+                  active ? "text-amber-ink font-medium" : "hover:text-ink",
+                )}
+              >
+                {n.label}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* `from-paper` matches the header this sits in — see portal/layout.tsx. Decoration
+          only: aria-hidden so it is not announced, pointer-events-none so it cannot eat
+          a tap meant for the link underneath it. */}
+      {edges.left && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-paper to-transparent"
+        />
+      )}
+      {edges.right && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-paper to-transparent"
+        />
+      )}
+    </div>
   );
 }
