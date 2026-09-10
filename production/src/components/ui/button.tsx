@@ -52,7 +52,8 @@ const buttonVariants = cva(
         sm: "h-8 px-3 text-xs",
         md: "h-9 px-4 text-sm",
         lg: "h-11 px-6 text-base",
-        icon: "h-9 w-9 p-0",
+        /* 36px box, 44px hit area on a phone — see .touch-44 in globals.css. */
+        icon: "h-9 w-9 p-0 touch-44",
       },
     },
     defaultVariants: {
@@ -157,7 +158,11 @@ export interface IconButtonProps
 const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   ({ icon, size = "md", className, ...props }, ref) => {
     const iconSize = size === "lg" ? 20 : size === "sm" ? 14 : 16;
-    const sizeClass = size === "lg" ? "h-11 w-11" : size === "sm" ? "h-7 w-7" : "h-9 w-9";
+    /* `lg` is already 44px. The smaller two get the hit area without the box,
+       so a phone tap lands where it was aimed and no desktop layout shifts —
+       see .touch-44 in globals.css. */
+    const sizeClass =
+      size === "lg" ? "h-11 w-11" : size === "sm" ? "h-7 w-7 touch-44" : "h-9 w-9 touch-44";
 
     return (
       <Button

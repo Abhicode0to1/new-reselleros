@@ -139,6 +139,41 @@
    Reusable utility patterns
    ============================================================ */
 @layer utilities {
+  /* ── A 44px touch target on a smaller button ───────────────────────────────
+   *
+   * CLAUDE.md §20 requires every touch target on a phone to be at least 44px.
+   * Icon-only buttons are 36px (`size="icon"`, and IconButton's default), which
+   * is comfortable with a mouse and is the density the desktop screens are
+   * designed around — but on a phone it is a miss-and-try-again, and the ones
+   * it hurts most are the icon-only DELETE buttons, where a mis-tap either does
+   * nothing or hits the wrong row.
+   *
+   * Growing the box was the obvious fix and the wrong one: the primitive is
+   * used in over a thousand places, and 44px squares in dense toolbars would
+   * change layouts nobody has looked at. So the BOX stays 36px and the HIT AREA
+   * grows — a centred, invisible pseudo-element outside the layout, which is
+   * exactly what WCAG 2.5.8 measures. Nothing moves; the target is 44px.
+   *
+   * Phone only. Above 768px a mouse is doing the pointing and the 36px density
+   * is deliberate.
+   */
+  @media (max-width: 767px) {
+    .touch-44 {
+      position: relative;
+    }
+    .touch-44::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+      /* Cosmetic only — it must never paint or trap a scroll. */
+      background: transparent;
+    }
+  }
+
   .skeleton-shimmer {
     background: linear-gradient(
       90deg,
