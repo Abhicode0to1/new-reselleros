@@ -29,6 +29,63 @@ import { spawnSync } from "node:child_process";
 const DIR = "supabase/tests";
 const only = process.argv.slice(2).find((a) => !a.startsWith("-")) ?? null;
 
+/* ── KAUNSA DATABASE ─────────────────────────────────────────────────────────
+ *
+ * 10 Sep 2026 tak yahan `--linked` HARDCODED tha, yaani ye script sirf production
+ * par chal sakti thi. Local stack par har ek file `LegacyProjectNotLinkedError`
+ * deti thi — 53 me se 53. Aur is repo me TASKS.md me likha "47/53 pass" bhi isi
+ * script se nahi, `docker exec psql` se nikala gaya tha.
+ *
+ * Wahi shakl jo `npm run setup` me thi: jo command likhi hui hai, wahi chal nahi
+ * sakti. Naye developer ke paas local DB hai aur suite chalane ka koi raasta nahi.
+ *
+ * Default `--linked` hi raha, jaan-boojh kar — usse badalne se `npm run test:sql`
+ * ka matlab chupchaap badal jaata, aur "maine test chalaye" kehne wala aadmi ye
+ * na jaan pata ki kis database par chalaye. Naya raasta maangna padta hai:
+ *   npm run test:sql          → production (jaisa pehle tha)
+ *   npm run test:sql:local    → local stack
+ */
+const LOCAL = process.argv.slice(2).includes("--local");
+const TARGET_NAME = LOCAL ? "LOCAL stack" : "PRODUCTION (linked)";
+
+/* ── LOCAL PAR CLI KAAM NAHI KARTI, AUR YE NAAPA HUA HAI ─────────────────────
+ *
+ * Pehli koshish `supabase db query --local` thi. Wo ek hi statement chala sakti
+ * hai: har test file `begin; … rollback;` hai, to CLI kehti hai
+ *
+ *     cannot insert multiple commands into a prepared statement
+ *
+ * `--db-url` bhi wahi deti hai — dono ek hi prepared-statement raaste se jaate
+ * hain. Management API (yaani `--linked`) multi-statement sambhal leta hai,
+ * local wala nahi. Isliye local ke liye seedha `psql`, container ke andar.
+ *
+ * Container ka naam config.toml ke `project_id` se banta hai — hardcode nahi,
+ * warna doosre developer ki machine par (jahan project_id alag hai) ye chup-chaap
+ * "docker error" degi aur wo isse test-failure samjhega.
+ *
+ * ─── ON_ERROR_STOP=1 KYUN, AUR YE SABSE ZAROORI LINE HAI ────────────────────
+ * Iske BINA psql exception par bhi **exit 0** deta hai. Naapa:
+ *     canary (raise exception) bina flag → exit 0   ← poori suite jhooth
+ *     canary (raise exception) flag ke saath → exit 3
+ * Yaani bina is flag ke ye script 53/53 "pass" chhaap deti aur ek bhi test
+ * chala hi nahi hota. Canary isi ke liye hai, aur usne isi ko pakda.
+ */
+const PROJECT_ID = (() => {
+  try {
+    const toml = readFileSync("supabase/config.toml", "utf8");
+    return /^\s*project_id\s*=\s*"([^"]+)"/m.exec(toml)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+})();
+const DB_CONTAINER = PROJECT_ID ? `supabase_db_${PROJECT_ID}` : null;
+
+if (LOCAL && !DB_CONTAINER) {
+  console.error("RUKA — supabase/config.toml me `project_id` nahi mila, to local");
+  console.error("       database ka container naam pata nahi chal raha.");
+  process.exit(6);
+}
+
 /* ── 1. Surakshit hai ya nahi — kuch chalane se pehle ── */
 const files = readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();
 const unsafe = files.filter((f) => {
@@ -49,10 +106,34 @@ const TRANSIENT = /TransportError|LegacyDbConfigLoginRole|ECONNRESET|fetch faile
 
 function runOne(path) {
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const r = spawnSync("npx", ["supabase", "db", "query", "--linked", "-f", path], {
-      encoding: "utf8", shell: true, timeout: 120_000,
-    });
+    const r = LOCAL
+      ? spawnSync(
+          "docker",
+          ["exec", "-i", DB_CONTAINER, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-f", "-"],
+          { encoding: "utf8", input: readFileSync(path, "utf8"), timeout: 120_000 },
+        )
+      : spawnSync("npx", ["supabase", "db", "query", "--linked", "-f", path], {
+          encoding: "utf8", shell: true, timeout: 120_000,
+        });
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+    /* Docker khud band ho to wo test ka fail nahi hai. Naam se batao, warna
+       aadmi 53 "FAIL" dekh kar apne SQL me galti dhoondhta rahega. */
+    if (LOCAL && /Cannot connect to the Docker daemon|No such container|docker: not found|error during connect/i.test(out)) {
+      console.error(`\nRUKA — local database tak pahunch nahi: ${DB_CONTAINER}`);
+      console.error("       Docker Desktop chalu hai? Phir:  npx supabase start");
+      console.error("       Ye test ka fail NAHI hai.");
+      process.exit(7);
+    }
+    /* Ek deewar jo kisi ka poora session kha sakti hai. Bina `--local` ke, jis
+       machine par project linked nahi hai, HAR file yahi error deti hai — aur
+       error khud ye nahi batata ki local ka raasta maujood hai. Isliye yahan
+       batata hai, ek baar, aur ruk jaata hai. */
+    if (!LOCAL && /LegacyProjectNotLinkedError|Cannot find project ref/i.test(out)) {
+      console.error("\nRUKA — is machine par koi Supabase project linked nahi hai.");
+      console.error("       Local stack par chalane ke liye:  npm run test:sql:local");
+      console.error("       Production par chalane ke liye:    npx supabase link  (interactive)");
+      process.exit(5);
+    }
     /* Windows par process khatam ho jaane ka apna code hai — use "test fail" batana
        poori report ko jhootha bana dega. (backup:db isi par do baar mara tha.) */
     if (r.status === 3221225794) return { ok: false, out, fatal: "process launch (0xC0000142)" };
@@ -70,7 +151,11 @@ if (c.ok) {
   console.error("       yaani neeche ka har green jhooth hota. Harness theek karo pehle.");
   process.exit(3);
 }
-console.log("canary laal — harness sach me fail hota hai. ab asli test.\n");
+console.log(`canary laal — harness sach me fail hota hai. ab asli test.`);
+/* Target ka naam har run me, shuru me AUR aakhir me. "Maine test chalaye" ek
+   adhoora vaakya hai jab tak ye pata na ho ki kis database par — aur ek hi flag
+   ka farq hai production aur local me. */
+console.log(`chal raha hai: ${TARGET_NAME}\n`);
 
 /* ── 3. Asli test ── */
 const list = only ? files.filter((f) => f.includes(only)) : files;
@@ -141,10 +226,21 @@ if (fast.ok && reachedEnd) {
 console.log(`\n${((Date.now() - t0) / 1000).toFixed(0)}s`);
 
 /* ── 4. Nateeja ── */
-console.log(`\n${list.length - failed.length}/${list.length} pass`);
+console.log(`\n${list.length - failed.length}/${list.length} pass  ·  ${TARGET_NAME}`);
 for (const f of failed) {
   console.log(`\n───── ${f.name}`);
-  const why = f.out.match(/ERROR:[^\\"]{0,400}/g);
+  /* Quote par NA rukna, local par.
+   *
+   * Purana pattern `/ERROR:[^\\"]{0,400}/` tha, jo `"` par ruk jaata hai. Prod ke
+   * JSON output me wo theek tha; psql ke saade output me wo theek WAHI cheez kaat
+   * deta hai jo chahiye:
+   *     ERROR:  relation "backup.snapshots" does not exist
+   * chhap kar aata tha  ->  `ERROR:  relation`
+   * Do failure ka pata isi wajah se nahi chal raha tha. DETAIL bhi saath, kyunki
+   * duplicate-key me asli khabar ("Key (id)=(1111…) already exists") wahin hoti hai. */
+  const why = LOCAL
+    ? f.out.match(/^(?:psql:[^:]*:\d+: )?(?:ERROR|DETAIL|HINT):.*$/gm)
+    : f.out.match(/ERROR:[^\\"]{0,400}/g);
   console.log((why ? why.join("\n") : f.out.slice(0, 600)).trim());
 }
 process.exit(failed.length ? 1 : 0);

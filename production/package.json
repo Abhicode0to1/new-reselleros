@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:sql": "node scripts/test-sql.mjs",
+    "test:sql:local": "node scripts/test-sql.mjs --local",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "setup": "node scripts/setup.mjs",
