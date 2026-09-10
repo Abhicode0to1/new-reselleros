@@ -7,6 +7,63 @@
 
 ---
 
+# 🟣 HANDOFF — 11 Sep 2026. SQL suite 53/53 pehli baar, aur ek ASLI portal bug mila.
+
+## 🔴 Portal customer KUCH BHI likh nahi sakta tha — theek ho gaya
+
+`log_row_change()` (13 table par audit trigger) `auth.uid()` ko
+`activity_log.user_id` me daalta hai, aur wo column `public.users` (STAFF) par FK
+hai. Portal customer sirf `customer_users` me hota hai, `users` me NAHI. To uska
+har write 23503 se marta tha. Naapa gaya, anumaan nahi:
+
+    insert into public.leads (…)   → 23503 activity_log_user_id_fkey
+    set_subscription_auto_renew(…) → 23503 activity_log_user_id_fkey
+
+Yaani `/portal/shop` ka **"Request a quote"** (`portal_request_quote` → `leads`)
+aur `/portal/subscription` ka **auto-renew toggle** — dono asli customer ke liye
+tootey hue the. service_role/anon par asar nahi tha (trigger `auth.uid() is null`
+par pehle hi lautta hai), isliye kabhi dikha nahi.
+
+**Kyun kabhi pakda nahi gaya:** `portal_set_auto_renew` test apna auth user
+`from auth.users limit 1` se UDHAAR leta tha — aur wo hamesha kisi STAFF ka nikla.
+To test portal RPC ko staff ban kar chala raha tha aur pass ho raha tha. Wo us din
+laal hua jis din ek asli customer portal me login kiya.
+
+Fix (`20260911120000`): staff ka row bilkul pehle jaisa; portal customer ka row
+`user_id = null` ke saath likha jata hai aur customer ka email label me SABSE
+AAGE (label 120 par kata hai). Read path pehle se null-safe tha — naapa:
+`activity.ts` ka embed LEFT join hai, `activity/page.tsx` me `actor?.full_name ??
+"Someone"`, `performance.ts:163` me `if (a.user_id)`, aur RLS policy sirf
+`tenant_id` dekhti hai.
+
+## ✅ SQL suite 53/53 (pehle 50/53)
+
+- **`backup` schema drift capture** (`20260911110000`) — 7 public function
+  `backup.snapshots` padhte the, aur use koi migration BANATI nahi thi (baseline
+  `public`-only dump tha; DDL `migrations-archive/0210`+`0211` me chhoot gaya).
+  Taaza DB par saaton tootey hue the. Function body `cloudsql/07-sync-…` se
+  verbatim liye gaye — wo khud live DB ke `pg_get_functiondef` se bana hai. Prod
+  par no-op (sab `if not exists` / `create or replace`).
+- **`offsite_export_service_role_only`** — case 3 ASLI data par tika tha ("ek saal
+  me koi snapshot mila?"), to taaza DB par hamesha laal. Ab fixture khud banata
+  hai, aur DO row per tenant — ek se `distinct on` ki jaanch nakli thi. Naya
+  assertion: PURANA snapshot na jaye. Mutation-tested (order flip → laal,
+  `distinct on` hataya → laal).
+- **`portal_set_auto_renew`** — apna auth user banata hai, udhaar nahi leta.
+
+## ⏳ Isme se jo BACHA hai
+- [ ] **Nightly backup sweep ki sehat kahin monitor NAHI hoti.** Wo sawaal pehle
+      `offsite_export…` test me chhupa hua tha aur maine wahan se jaan-boojh kar
+      hataya (rollback wale test se cron ki sehat naapna galat jagah hai).
+      `lib/ops/health-digest.ts` uska ghar hai — abhi wahan backup ka koi zikr
+      nahi hai.
+- [ ] **`supabase db reset` se poora verify nahi hua** — dono nayi migration
+      haath se (idempotent) lagayi gayi hain aur suite 53/53 hai, par saaf reset
+      is machine par nahi chalaya gaya.
+
+
+---
+
 # 🟣 DMS PARITY — the inventory, 9 Sep 2026. Kya aa gaya, kya bacha, aur kya PORT NAHI hoga.
 
 > Pawan ne saaf kiya (9 Sep): **"our current is way big than DMS, so DMS functionality

@@ -14,7 +14,8 @@
 --   hai: ek `create or replace` jo revoke ke bina aaye, aur darwaza chup-chaap khul jaye.
 --   Us din koi error nahi aayega. Sirf ye file laal hogi.
 --
--- SAFETY: kuch banata nahi, kuch badalta nahi, aur rollback par khatam.
+-- SAFETY: `backup.snapshots` me fixture row daalta hai (neeche case 3 se pehle), aur
+-- kuch nahi badalta. Sab kuch is transaction ke andar hai aur rollback par khatam.
 
 begin;
 
@@ -74,6 +75,43 @@ begin
   perform set_config('request.jwt.claims', '', true);
 end $$;
 
+-- ── 2a. FIXTURE: har tenant ka ek snapshot ─────────────────────────
+--
+-- 11 Sep 2026 ko joda gaya. Case 3 pehle ASLI data par tika hua tha — "ek saal me koi
+-- snapshot mila ya nahi". Wo production par chalta tha kyunki wahan raat ka sweep chal
+-- raha hai, aur ek TAAZA database par hamesha laal hota tha: khaali `backup.snapshots`
+-- par test kehta tha "sweep chala hi nahi", jabki sach ye tha ki is database me kabhi
+-- kuch chala hi nahi.
+--
+-- Do alag sawaal ek assertion me mile hue the:
+--   (a) function ka SHAPE sahi hai kya  — ye regression test ka kaam hai
+--   (b) prod par cron chal raha hai kya — ye MONITORING ka kaam hai
+--
+-- (a) ke liye data khud banaya jata hai, to case 3 har jagah poori taakat se chalta hai.
+-- (b) is file me ab NAHI hai, aur wo jaan-boojh kar hai — rollback wale test se cron ki
+-- sehat naapna galat jagah hai. Wo abhi kahin bhi covered NAHI hai; `lib/ops/health-digest.ts`
+-- uska ghar hai, aur ye us kaam ka nishaan hai.
+--
+-- Prod par snapshot pehle se hote hain; ye row unse NAYI hai, isliye
+-- `distinct on (tenant_id) order by created_at desc` isi ko chunega. Yaani dono jagah
+-- ek jaisa vyavhaar, bina prod ke data par bharosa kiye.
+-- DO row per tenant, jaan-boojh kar. Ek se `distinct on (tenant_id)` ki jaanch NAKLI ho
+-- jaati hai: agar function poora itihaas lauta de, ek-row-per-tenant par ginti bilkul
+-- wahi dikhti hai jo sahi jawab me hoti. Do row par galti pakdi jaati hai — aur label se
+-- ye bhi saabit hota hai ki NAYA chuna gaya, purana nahi. Wo baat pehle kisi bhi
+-- assertion se saabit nahi hoti thi.
+insert into backup.snapshots (tenant_id, label, kind, table_count, payload, created_at)
+select t.id, 'fixture PURANA — ye nahi jana chahiye', 'auto', 1,
+       jsonb_build_object('tenants', jsonb_build_array(jsonb_build_object('id', t.id))),
+       now() - interval '2 days'
+from public.tenants t;
+
+insert into backup.snapshots (tenant_id, label, kind, table_count, payload, created_at)
+select t.id, 'fixture NAYA — yahi jana chahiye', 'auto', 1,
+       jsonb_build_object('tenants', jsonb_build_array(jsonb_build_object('id', t.id))),
+       now()
+from public.tenants t;
+
 -- ── 3. Jo lautata hai wo sach me kaam ka ho ─────────────────────────────────
 do $$
 declare
@@ -82,14 +120,16 @@ declare
   v_distinct int;
   v_empty    int;
 begin
-  /* Poore itihaas ki khidki, taaki test us raat bhi chale jab cron abhi chala na ho. */
+  /* Poore itihaas ki khidki. Case 2a ki row `now()` par hai, to ye usse hamesha andar leta hai. */
   v_out := public.export_snapshots_for_offsite(now() - interval '365 days');
 
   if jsonb_typeof(v_out) <> 'array' then
     raise exception 'FAIL 3: array nahi, % mila', jsonb_typeof(v_out);
   end if;
   if jsonb_array_length(v_out) = 0 then
-    raise exception 'FAIL 3: ek saal me ek bhi snapshot nahi — ya sweep chala hi nahi, ya ye function galat jagah dekh raha hai';
+    /* Ab ye do-matlab wala nahi hai. Case 2a ne HAR tenant ka snapshot daala hai, to
+       khaali aana ek hi cheez ka matlab hai: function padh nahi paa raha. */
+    raise exception 'FAIL 3: fixture daalne ke BAAD bhi ek bhi snapshot nahi — function galat jagah dekh raha hai';
   end if;
 
   /* Har tenant ka SIRF EK (sabse naya). Poora itihaas bhejna har raat pichhli raaton ki
@@ -113,6 +153,15 @@ begin
   select count(*) into v_tenants from public.tenants;
   if v_distinct <> v_tenants then
     raise exception 'FAIL 3: % tenant hain par sirf % ka backup ja raha hai', v_tenants, v_distinct;
+  end if;
+
+  /* Aur NAYA hi chuna gaya, purana nahi. `distinct on` ke saath `order by` galat likha ho
+     to ye function chalega, array ka size bilkul sahi hoga, aur wo har raat MAHINE PURANA
+     snapshot off-site bhejta rahega. Us galti ka koi doosra lakshan nahi hai. */
+  select count(*) into v_empty from jsonb_array_elements(v_out) x
+   where x->>'label' like 'fixture PURANA%';
+  if v_empty > 0 then
+    raise exception 'FAIL 3: % tenant ka PURANA snapshot bheja gaya — distinct on ka order galat hai', v_empty;
   end if;
 end $$;
 
