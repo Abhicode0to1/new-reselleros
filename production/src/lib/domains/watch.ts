@@ -197,3 +197,24 @@ export function canAddWatch(currentCount: number): { ok: true } | { ok: false; r
   }
   return { ok: true };
 }
+
+/**
+ * `acme.co.in` → name `acme`, tld `co.in`.
+ *
+ * Splits on the FIRST dot, not the last. `rcAvailability` takes a bare label
+ * plus a TLD, and for a multi-level TLD the label is only the first part —
+ * splitting on the last dot would ask ResellerClub about "acme.co" under ".in",
+ * which is a different name that may well be free while the one the customer
+ * watched is not. That is the wrong answer in the direction that sends an email.
+ *
+ * Returns null rather than guessing when there is no usable split.
+ */
+export function splitDomain(domain: string): { name: string; tld: string } | null {
+  const d = (domain ?? "").trim().toLowerCase();
+  const i = d.indexOf(".");
+  if (i <= 0 || i === d.length - 1) return null;
+  const name = d.slice(0, i);
+  const tld = d.slice(i + 1);
+  if (!name || !tld || tld.startsWith(".") || tld.endsWith(".")) return null;
+  return { name, tld };
+}

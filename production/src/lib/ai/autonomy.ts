@@ -243,6 +243,24 @@ export const AI_ACTIONS = {
     today: "auto",
     supports: ["off", "hold", "auto"],
   },
+  "watch.send": {
+    label: "Tell a customer a domain they watched is now free",
+    /* `auto`, and unlike `followup.send` this one is not a judgement call the
+       agent could misjudge. The customer ASKED to be told about this exact name,
+       the trigger is a fact rather than a moment somebody picked, and it fires
+       once per watch — api/cron/domain-watch sets `notified_at` before sending,
+       so there is no version of this that pesters.
+
+       What makes it worth a dial at all is the other direction: the email is
+       only as good as the availability reading behind it, and "acme.com is free"
+       about a name that is not free costs more trust than the feature earns
+       back. `lib/domains/watch.ts` refuses to send on anything short of a
+       positive reading — but if that ever turns out to be wrong in the wild,
+       this is the row somebody reaches for, and having to deploy to stop a
+       wrong email is the situation the whole dial exists to avoid. */
+    today: "auto",
+    supports: ["off", "hold", "auto"],
+  },
 } as const satisfies Record<string, AiActionSpec>;
 
 export type AiAction = keyof typeof AI_ACTIONS;

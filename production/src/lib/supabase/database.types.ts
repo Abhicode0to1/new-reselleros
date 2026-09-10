@@ -1614,6 +1614,40 @@ type ContractAmendmentRow = {
  *  is written ONLY by the signature-verified Razorpay webhook.
  * See migration 20260817090000 for why the app has no path to it.
  */
+/* ── domain_watches (20260910130000) ─────────────────────────────────
+   One-shot "tell me when this name is free" alerts. See lib/domains/watch.ts —
+   an email requires a POSITIVE availability reading, never the absence of a
+   taken one. */
+export type WatchStatusT = "available" | "taken" | "unknown";
+type DomainWatchRow = {
+  id: string;
+  tenant_id: string;
+  customer_id: string;
+  domain_name: string;
+  last_checked_at: string | null;
+  /** `unknown` is real and is the default — a failed check must never notify. */
+  last_status: WatchStatusT;
+  /** Set ONCE. A non-null value retires the row from the sweep. */
+  notified_at: string | null;
+  consecutive_errors: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type DomainWatchInsert = {
+  id?: string;
+  tenant_id: string;
+  customer_id: string;
+  domain_name: string;
+  last_checked_at?: string | null;
+  last_status?: WatchStatusT;
+  notified_at?: string | null;
+  consecutive_errors?: number;
+  last_error?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 /* ── egress_ip_checks (20260910140000) ───────────────────────────────
    History of the outbound IP this deployment calls upstreams from. Both
    ResellerClub and DirectAdmin gate on it and neither names it when refusing.
@@ -4305,6 +4339,7 @@ export type Database = {
       payment_mandates: { Row: PaymentMandateRow; Insert: PaymentMandateInsert; Update: Partial<PaymentMandateInsert>; Relationships: [] };
       recurring_charge_attempts: { Row: RecurringChargeAttemptRow; Insert: RecurringChargeAttemptInsert; Update: Partial<RecurringChargeAttemptInsert>; Relationships: [] };
       egress_ip_checks: { Row: EgressIpCheckRow; Insert: EgressIpCheckInsert; Update: Partial<EgressIpCheckInsert>; Relationships: [] };
+      domain_watches: { Row: DomainWatchRow; Insert: DomainWatchInsert; Update: Partial<DomainWatchInsert>; Relationships: [] };
       subscription_billings: { Row: SubscriptionBillingRow; Insert: SubscriptionBillingInsert; Update: Partial<SubscriptionBillingInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
@@ -5432,6 +5467,7 @@ export type ContractAmendment = ContractAmendmentRow;
 export type PaymentMandate = PaymentMandateRow;
 export type RecurringChargeAttempt = RecurringChargeAttemptRow;
 export type EgressIpCheck = EgressIpCheckRow;
+export type DomainWatch = DomainWatchRow;
 export type PaymentMandateInsertT = PaymentMandateInsert;
 export type SubscriptionBilling = SubscriptionBillingRow;
 export type SubscriptionBillingInsertT = SubscriptionBillingInsert;

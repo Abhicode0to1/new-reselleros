@@ -6,6 +6,7 @@ import {
   applyCheck,
   watchableDomain,
   canAddWatch,
+  splitDomain,
   MAX_WATCH_ERRORS,
   WATCH_INTERVAL_HOURS,
   MAX_WATCHES_PER_CUSTOMER,
@@ -190,5 +191,31 @@ describe("canAddWatch", () => {
   it("says how to make room rather than only refusing", () => {
     const v = canAddWatch(20);
     expect(!v.ok && v.reason).toMatch(/Remove one/);
+  });
+});
+
+describe("splitDomain — the FIRST dot, not the last", () => {
+  it("splits an ordinary name", () => {
+    expect(splitDomain("acme.com")).toEqual({ name: "acme", tld: "com" });
+  });
+
+  it("keeps a multi-level TLD whole — the case that would send a wrong email", () => {
+    /* `rcAvailability` takes a bare label plus a TLD. Splitting on the LAST dot
+       would ask ResellerClub about "acme.co" under ".in" — a different name,
+       which may well be free while the one the customer watched is not. Wrong in
+       the one direction that sends the email. */
+    expect(splitDomain("acme.co.in")).toEqual({ name: "acme", tld: "co.in" });
+    expect(splitDomain("acme.co.uk")).toEqual({ name: "acme", tld: "co.uk" });
+    expect(splitDomain("shop.acme.com")).toEqual({ name: "shop", tld: "acme.com" });
+  });
+
+  it("normalises case and spacing", () => {
+    expect(splitDomain("  ACME.CoM ")).toEqual({ name: "acme", tld: "com" });
+  });
+
+  it("returns null rather than guessing at something unsplittable", () => {
+    for (const bad of ["", "   ", "acme", ".com", "acme.", "."]) {
+      expect(splitDomain(bad), JSON.stringify(bad)).toBeNull();
+    }
   });
 });
