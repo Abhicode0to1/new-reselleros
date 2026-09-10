@@ -355,9 +355,30 @@ exception).
         `sandbox_tenant_isolation` (tenant 7e57e57e… chahiye, seed me nahi),
         `subscriptions_item_id` (tenant fbb976f1… — buy-page tenant — ka catalog padhta
         hai, jo local par khaali hai; hamare saare item 1111… ke neeche hain).
-      Ye chaar seed aur test ke ek hi database me hone ka nateeja hain. Fixture dheela
-      karke hara karna aasan hai par galat — test phir galat wajah se pass hone lagta hai.
-      **Faisla chahiye: seed ke UUID badlein, ya test apne alag UUID namespace me jaayen.**
+      ✅ **11 Sep: Pardeep ne doosra raasta chuna — test apne namespace me. 51/53 ho gaye.**
+      Reserved prefix `7e57e57e-` (hex-leet "TESTEST", pehle se is repo ka rivaaj).
+      Naapa pehle: poori suite me 213 UUID hain par jo ASLI takkar kar sakte hain
+      (tests ∩ seed.sql) wo sirf **2** the — to 213 badalne ka matlab 211 bekaar edit tha.
+      Namespace wahan lagaya jahan takkar hai, aur **enforce har jagah**.
+      · Takkar wale 2: `quote_accepted_on_first_payment` (1111…), `txn_category_rules`
+        (2222…) — dono apna throwaway tenant banate the, bas id wahi chun li thi jo seed
+        baad me le gaya.
+      · Udhaar wale 2: `sandbox_tenant_isolation` aur `subscriptions_item_id` ek ASLI
+        karmchari ke account (`3caa0f07…`) aur asli buy-page tenant (`fbb976f1…`) par
+        baithe the. Ab dono apna tenant/owner/item khud banate hain. Note: sandbox file ne
+        ye sabak 29 Aug ko EK BAAR seekh liya tha ("fixes that at the root") — par sirf
+        sandbox side par; live side khada reh gaya tha.
+      · **Guard ne ek paanchvi file pakdi jo maine dekhi hi nahi thi**:
+        `offsite_export_service_role_only` me bhi wahi karmchari id thi (drift ki wajah se
+        wo file pehle hi mar jaati thi, to dikhi nahi). Usse asli user ki zaroorat hi nahi
+        thi — case ko bas `auth.uid()` non-null chahiye.
+      **Enforcement (`src/lib/testing/sql-fixture-namespace.test.ts`), teen disha me:**
+      test seed ki id na le · seed reserved namespace na le · koi test production id
+      (karmchari/live tenant) na naame. Teen mutation, teeno pakde gaye.
+      ⏳ **Bache hue 2 = ASLI DRIFT**, jaan-boojh kar laal: `offsite_export_service_role_only`
+      aur `pre_reset_shield` ko `backup` schema aur `backup.snapshots` chahiye, jo PROD me
+      hain par kisi committed migration me nahi (bug #34 ka parivaar). Iska ilaaj migration
+      hai, dheela test nahi.
 
 ## ✅ Ho gaya (typecheck 0 · 6462 test pass · lint 0 · build 0, teeno naye route build me)
 
