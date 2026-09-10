@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 #
-# Cloud Scheduler jobs for the six ResellerOS cron endpoints.
+# Cloud Scheduler jobs for every ResellerOS cron endpoint.
+#
+# ─── IT SAID "SIX", AND THERE WERE 22 ────────────────────────────────────
+# 11 Sep 2026: counted. The app has 22 cron routes; this file declared 12. The ten
+# that were missing had been added since it was written, and each one was the same
+# failure this file exists to prevent — "a job that looks configured, is documented
+# as scheduled, and never runs".
+#
+# Four of the ten were the domain and hosting path, end to end:
+#
+#   provision-domain    a customer PAYS and nothing registers the name
+#   provision-hosting   the same for a hosting account
+#   asset-sweep         expiry dates never refresh, so the portal's "12d left" is
+#                       true on the day of purchase and drifts from the next morning
+#   domain-watch        watched names are never checked, so no alert ever fires
+#
+# The first of those is the worst thing in the list: money taken, nothing delivered,
+# and no error anywhere because the job that would have done the work was never
+# asked to run.
 #
 # ─── WHY THIS FILE EXISTS ────────────────────────────────────────────────────
 # The repo carries a vercel.json with a `crons` block, and three of the six cron
@@ -121,6 +139,68 @@ JOBS=(
   # somebody moves that dial from /automation this job prepares each call — number, script,
   # the figures it is allowed to quote — files it on the call record, and dials nothing.
   "resellersos-ai-telecall-renewals|30 10 * * 1-5|/api/cron/ai-telecall-renewals|AI voice reminder for subscriptions renewing in 5 days"
+  # ── The domain and hosting path ─────────────────────────────────────
+  #
+  # EVERY 5 MINUTES, and that is the point: the customer has already paid. A daily
+  # sweep would mean somebody buys a domain in the morning and it appears tomorrow,
+  # which reads as a broken shop. Five minutes is as close to immediate as a cron
+  # gets, and the ceiling it puts on ResellerClub is 12 calls an hour even with a
+  # backlog.
+  #
+  # Safe at this frequency because the INSERT is the claim: `domains_name_unique` is
+  # a global unique index, so a second worker reaching the same name loses the
+  # insert and skips. Overlapping runs cannot double-order.
+  #
+  # And safe to schedule BEFORE the money gate is open: without
+  # DOMAIN_REGISTER_LIVE=1 the route refuses every order and reports why, so this
+  # job can be in place waiting rather than remembered later.
+  "resellersos-provision-domain|*/5 * * * *|/api/cron/provision-domain|Register paid domains at ResellerClub"
+  "resellersos-provision-hosting|*/5 * * * *|/api/cron/provision-hosting|Create paid hosting accounts on DirectAdmin"
+  # 08:00 IST — BEFORE the 09:00 renewal cron, and the ordering is the reason for the
+  # time. Renewals decide what to chase from `expires_at`; this sweep is what makes
+  # `expires_at` true. Run the other way round and every renewal decision is made on
+  # yesterday's arithmetic. Same argument as dunning sitting after renewals below.
+  "resellersos-asset-sweep|0 8 * * *|/api/cron/asset-sweep|Refresh domain/hosting expiry and status from the registrar"
+  # 11:00 IST, once a day. Once, because lib/domains/watch.ts checks a watch at most
+  # every 24h and a second run would find nothing to do. 11:00 rather than the 09:00
+  # block: this one mails a CUSTOMER good news about a name they wanted, and it is
+  # the only mail they get from us that is not about money — worth its own slot
+  # rather than arriving in the same minute as an invoice reminder.
+  "resellersos-domain-watch|0 11 * * *|/api/cron/domain-watch|Check watched domain names and tell the customer when one frees up"
+
+  # ── The rest of what was missing ───────────────────────────────────
+  #
+  # 08:30 IST, GET — both taken from the route's own header rather than chosen here.
+  # It is silent when nothing is wrong, so a daily slot costs nothing on a good day.
+  "resellersos-health-digest|30 8 * * *|/api/cron/health-digest|Read production logs and email only if something broke"
+  # 01:00 IST — after the midnight backup, before every other money job. A billing
+  # run that creates invoices should land before renewals (09:00) and dunning (09:15)
+  # look at what is owed, or those two spend a day working from a stale picture.
+  # The route states it survives at-least-once delivery, which is what makes a
+  # scheduled retry safe here.
+  "resellersos-billing|0 1 * * *|/api/cron/billing|Split-cycle subscription billing"
+  # EVERY 15 MINUTES. An enquiry sitting unread is a lead going cold, and this is the
+  # path an emailed enquiry arrives on — the same frequency as the support-SLA sweep
+  # below, for the same reason: the cheaper half would tolerate hourly, the expensive
+  # half would not.
+  "resellersos-gmail-inbox|*/15 * * * *|/api/cron/gmail-inbox|Pull inbound enquiry mail"
+  # EVERY 10 MINUTES, and the route explains why in one sentence: a customer answered
+  # the exact question the app asked, the reply died on a 15-second Gemini timeout,
+  # "and the next call minutes later would have worked. There was simply nobody to
+  # make it." Ten minutes is that call. Not five: this path produced duplicate
+  # replies once (the entity_id fix, 1 Sep) and there is no reason to sit close to
+  # the edge of a bug that has already happened.
+  "resellersos-ai-reply-retry|*/10 * * * *|/api/cron/ai-reply-retry|Retry replies that died on an upstream timeout"
+  # EVERY 30 MINUTES — the figure is the route's own. The in-app reminder is mounted
+  # in the (app) layout, so it only fires for somebody who already has the app open;
+  # this job is what reaches the people who do not, which is precisely the group a
+  # reminder is for.
+  "resellersos-attendance-reminders|*/30 * * * *|/api/cron/attendance-reminders|Remind staff who have not marked attendance"
+  # 23:00 IST — end of day, once. It distils lessons from the day's conversations, so
+  # running it before the day is over would teach it half a day. Latest of all the
+  # jobs here on purpose: nothing waits on its output.
+  "resellersos-ai-reflection|0 23 * * *|/api/cron/ai-reflection|Distil the day's conversations into lessons for the agent"
+
 )
 
 echo "Region:  $REGION"
