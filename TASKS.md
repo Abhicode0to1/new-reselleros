@@ -333,11 +333,31 @@ exception).
 - [x] **SQL test CHAL GAYE** ✅ 9 Sep — local par **47/53 pass**. Isi me ek asli bug mila:
       test `users.name` padh raha tha jabki column `full_name` hai — yaani wo test kabhi
       chala hi nahi tha.
-      ⚠️ **`npm run test:sql` LOCAL par chal hi nahi sakta** — `scripts/test-sql.mjs` me
-      `supabase db query --linked` HARDCODED hai (line 52), to local DB par wo
-      `LegacyProjectNotLinkedError` deta hai. 47/53 `docker exec psql` se nikale the.
-      Ye khula item hai: runner ko local mode chahiye, warna naya developer suite chala
-      hi nahi sakta — wahi kism ki dikkat jo `npm run setup` me thi.
+      ✅ **11 Sep: `npm run test:sql:local` ban gaya** — poori suite **4 second** me.
+      CLI ka `--local` kaam nahi karta (`cannot insert multiple commands into a prepared
+      statement`, kyunki har test `begin; … rollback;` hai; `--db-url` bhi wahi deta hai),
+      isliye local ke liye seedha container ke andar `psql`. Sabse zaroori line
+      `ON_ERROR_STOP=1` hai — uske bina psql exception par bhi exit 0 deta hai, yaani
+      script 53/53 "PASS" chhaap deti aur ek bhi test chalta hi nahi. **Canary ne yahi
+      pakda** (pehli local koshish par wo HARA ho gaya tha).
+      `npm run test:sql` waisa hi hai (production). Unlinked machine par ab wo ek second
+      me rukta hai aur dono raaste batata hai.
+
+      **Chhe failure ka nidan ho gaya — koi bhi CODE ka bug nahi:**
+      · *Schema drift (2)* — `backup` schema aur `backup.snapshots` PROD me hain par
+        kisi committed migration me nahi, to migrations se bani DB me nahi hote.
+        Wahi parivaar jo bug #34 (coupon/promo) ka hai. → `offsite_export_service_role_only`,
+        `pre_reset_shield`
+      · *Local fixture ka mel nahi (4)* — demo seed aur test fixture ek hi hardcoded UUID
+        use karte hain, ya test ko wo data chahiye jo seed banata hi nahi:
+        `quote_accepted_on_first_payment` (tenant 1111… seed me pehle se),
+        `txn_category_rules` (tenant 2222… wahi baat),
+        `sandbox_tenant_isolation` (tenant 7e57e57e… chahiye, seed me nahi),
+        `subscriptions_item_id` (tenant fbb976f1… — buy-page tenant — ka catalog padhta
+        hai, jo local par khaali hai; hamare saare item 1111… ke neeche hain).
+      Ye chaar seed aur test ke ek hi database me hone ka nateeja hain. Fixture dheela
+      karke hara karna aasan hai par galat — test phir galat wajah se pass hone lagta hai.
+      **Faisla chahiye: seed ke UUID badlein, ya test apne alag UUID namespace me jaayen.**
 
 ## ✅ Ho gaya (typecheck 0 · 6462 test pass · lint 0 · build 0, teeno naye route build me)
 
