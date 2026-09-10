@@ -166,14 +166,52 @@ rollback;
 
 -- ── 9. The real client path: role `authenticated`, RLS on ───────────────────
 --
--- Runs against the LIVE ANUTECH DIGITAL tenant and its real catalog, because the
--- thing being tested is whether RLS + function grants let the trigger see `items`
--- at all — a synthetic tenant created as service_role would not prove that. Rolled
--- back, so nothing is left behind.
+-- What this proves: RLS plus the function grants let the trigger read `items` from a
+-- REAL CLIENT SESSION, not just from a service-role connection that bypasses RLS.
+--
+-- IT USED TO BORROW THE LIVE TENANT, AND THAT WAS THE WRONG WAY TO PROVE IT.
+-- This block authenticated as `3caa0f07-…` — a real employee's account — inside the
+-- live buy-page tenant, on the reasoning that "a synthetic tenant created as
+-- service_role would not prove that". The sibling file
+-- `sandbox_tenant_isolation.test.sql` shows the reasoning is wrong: fixtures inserted
+-- BEFORE `set local role authenticated` are setup, and the assertions that follow run
+-- as an impersonated `authenticated` user with RLS fully in force. That proves exactly
+-- the same thing, and it does not need a particular employee to still work here.
+--
+-- The cost of borrowing was already paid twice, in this very file: the comment below
+-- records it going red on 29 Aug because a named catalog row had been edited away, and
+-- the fix then was to pick a row dynamically. That made it survive catalog edits but
+-- kept the root — a test resting on rows nobody promised to keep. On a database built
+-- from `supabase/migrations` there is no such catalog at all, so it failed at the very
+-- first sanity check with "authenticated user sees 0 items".
+--
+-- Now it creates its own tenant, owner and single catalog row in the reserved
+-- `7e57e57e-` fixture namespace. Rolled back, so nothing is left behind.
 begin;
+
+insert into public.tenants (id, name, email, doc_code, tier) values
+  ('7e57e57e-0003-4000-8000-000000000003', 'ZZ SUBS-ITEM TEST TENANT',
+   'zz-subsitem@example.invalid', 'ZZSUB', 'reseller')
+on conflict (id) do nothing;
+
+insert into auth.users (id, email) values
+  ('5a5a5a5a-0000-4000-8000-00000000000d', 'subsitem-owner@example.test');
+
+insert into public.users (id, tenant_id, email, full_name, role, is_active) values
+  ('5a5a5a5a-0000-4000-8000-00000000000d', '7e57e57e-0003-4000-8000-000000000003',
+   'subsitem-owner@example.test', 'Subs-item Owner', 'owner', true);
+
+/* Exactly ONE active Google item, so the `plan_key` uniqueness the block below
+   requires is true by construction rather than by luck of what the catalog holds. */
+insert into public.items (id, tenant_id, name, vendor, msrp, wholesale, is_active) values
+  ('5a5a5a5a-subsitem-ctrl-item', '7e57e57e-0003-4000-8000-000000000003',
+   'Google Workspace Business Starter', 'google', 270, 200, true);
+
+-- Everything above is setup, done before the role switch. Everything below runs as a
+-- real client session with RLS enforced.
 set local role authenticated;
 select set_config('request.jwt.claims',
-  '{"sub":"3caa0f07-44d1-42ee-91b3-2123e04853b1","role":"authenticated"}', true);
+  '{"sub":"5a5a5a5a-0000-4000-8000-00000000000d","role":"authenticated"}', true);
 
 do $$
 declare v_item text; v_items int; v_expect text; v_plan text;
@@ -212,7 +250,7 @@ begin
   end if;
 
   insert into public.subscriptions (id, tenant_id, customer_name, plan, vendor, seats, mrr, status)
-    values ('bbbb0248-9999-0000-0000-000000000009','fbb976f1-9090-4f10-9726-0901bd144e42',
+    values ('bbbb0248-9999-0000-0000-000000000009','7e57e57e-0003-4000-8000-000000000003',
             'RLS Probe', v_plan, 'google', 10, 8640, 'active');
 
   select item_id into v_item from public.subscriptions

@@ -46,8 +46,13 @@ begin
   /* Ye doosra pehra hai, aur ise alag se naapna zaroori hai: case 1 grant jaanchta hai,
      ye body jaanchta hai. Ek din koi migration `grant execute ... to authenticated` likh
      de, to case 1 laal hoga aur ye hara — dono milkar batayenge ki kya toota. */
+  /* Koi bhi uuid kaafi hai — is case ko sirf ITNA chahiye ki `auth.uid()` NULL na ho,
+     taaki function ke body ka pehra chale. Pehle yahan ek ASLI karmchari ka account id
+     pada tha (`3caa0f07-…`), jiski zaroorat hi nahi thi: ye user maujood ho ya na ho,
+     test ka nateeja wahi rehta hai. Reserved fixture namespace se lena isliye behtar hai
+     ki koi ise "live data chahiye" na samjhe. */
   perform set_config('request.jwt.claims',
-    json_build_object('sub', '3caa0f07-44d1-42ee-91b3-2123e04853b1',
+    json_build_object('sub', '7e57e57e-0004-4000-8000-000000000004',
                       'role', 'authenticated')::text, true);
   begin
     perform public.export_snapshots_for_offsite(now() - interval '1 day');
