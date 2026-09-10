@@ -62,6 +62,8 @@ function renews(expiresAt: string | null): { text: string; tone: string } {
 }
 
 import { PaidNotDelivered, type UndeliveredRow } from "@/components/features/assets/paid-not-delivered";
+import { ProvisioningBanner } from "@/components/features/assets/provisioning-banner";
+import { deploymentProvisioningReadiness } from "@/lib/provisioning/readiness.server";
 
 export default async function DomainsPage() {
   const supabase = createClient();
@@ -83,6 +85,17 @@ export default async function DomainsPage() {
     return days !== null && days <= 30 && d.status !== "cancelled" && d.status !== "transferred_out";
   }).length;
   const stuck = rows.filter((d) => d.status === "failed" || !!d.last_error).length;
+
+  /* Can this deployment actually deliver what it is selling? Silent when it can.
+     Needs the tenant because Razorpay keys are per-tenant while ResellerClub and
+     DirectAdmin are server-wide — see readiness.server.ts. */
+  const { data: me } = await supabase.auth.getUser();
+  const { data: staff } = me?.user
+    ? await supabase.from("users").select("tenant_id").eq("id", me.user.id).maybeSingle()
+    : { data: null };
+  const readiness = staff?.tenant_id
+    ? await deploymentProvisioningReadiness(staff.tenant_id)
+    : null;
 
   /* Paid for and not delivered: a failed registration nobody has dealt with.
      Sorted by money because that is the order these should be looked at, with
@@ -115,6 +128,7 @@ export default async function DomainsPage() {
 
       {/* Above the counts on purpose: an expiring domain is a deadline, but a paid
           domain that does not exist is money already taken. */}
+      {readiness && <ProvisioningBanner readiness={readiness.domain} />}
       <PaidNotDelivered initial={undelivered} asset="domain" />
 
       {(lapsing > 0 || stuck > 0) && (

@@ -29,6 +29,8 @@ import { formatDate } from "@/lib/utils";
 import { daysUntil } from "@/lib/domains/lifecycle";
 import type { HostingAccountStatus } from "@/lib/supabase/database.types";
 import { PaidNotDelivered, type UndeliveredRow } from "@/components/features/assets/paid-not-delivered";
+import { ProvisioningBanner } from "@/components/features/assets/provisioning-banner";
+import { deploymentProvisioningReadiness } from "@/lib/provisioning/readiness.server";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +107,17 @@ export default async function HostingPage() {
   }).length;
   const stuck = sorted.filter((r) => r.status === "failed" || !!r.last_error).length;
 
+  /* Can this deployment actually deliver what it is selling? Silent when it can.
+     Needs the tenant because Razorpay keys are per-tenant while ResellerClub and
+     DirectAdmin are server-wide — see readiness.server.ts. */
+  const { data: me } = await supabase.auth.getUser();
+  const { data: staff } = me?.user
+    ? await supabase.from("users").select("tenant_id").eq("id", me.user.id).maybeSingle()
+    : { data: null };
+  const readiness = staff?.tenant_id
+    ? await deploymentProvisioningReadiness(staff.tenant_id)
+    : null;
+
   /* Paid for and not delivered. Possible at all only since 11 Sep: before that
      `provision-hosting` wrote no row on failure, so a customer who had paid left
      nothing behind for this list to read — see the cron's recordHostingFailure. */
@@ -133,6 +146,7 @@ export default async function HostingPage() {
 
       {/* Above the counts, as on the domains screen: an expiring account is a
           deadline, a paid account that does not exist is money already taken. */}
+      {readiness && <ProvisioningBanner readiness={readiness.hosting} />}
       <PaidNotDelivered initial={undelivered} asset="hosting" />
 
       {(endingSoon > 0 || stuck > 0 || trials > 0) && (
