@@ -307,17 +307,24 @@ exception).
 - [x] **Badge `color=` ka murda prop** — `Badge` `kind` leta hai; 10 file `color=` bhej rahi
       thi jo HTMLAttributes ki wajah se chup-chaap DOM attribute ban ke gir jaata tha, yaani
       **har status pill grey**. Teen customer-facing portal page theek kiye.
-      ⏳ Baaki **7 internal file** (accounting/aging, bills, profitability, saas-metrics,
-      tds-receivable ×2, tds-detail-dialog) — abhi bhi grey.
+      ✅ **10 Sep: baaki 7 internal file bhi theek** (accounting/aging, bills,
+      profitability, saas-metrics, tds-receivable ×2, tds-detail-dialog) + ek aathvi
+      (customer-insights) jo dono prop bhej rahi thi. Ab `color` **type error** hai
+      (`color?: never`), to ye galti build tod degi — bug ki poori tabiyat hi yahi
+      thi ki wo COMPILE ho jaata tha. `toneToKind()` colour-naam se `kind` banata hai,
+      kyunki wahi STATUS_COLOR map kuch page par `tone=` ko bhi jaata hai.
+      Naapa (/accounting/aging, 3 asli overdue invoice): pehle bg 243,241,236 +
+      text 112,105,97 (grey) aur `color="rose"` DOM par pada hua; ab bg 254,236,236 +
+      text 164,25,25 (6.8:1, WCAG AA paas). 118 din purani invoice grey se laal hui.
 
 ## ⏳ Bacha hua (is kaam ka scope, poora nahi hua)
 
-- [ ] **DNS management** — `dns_records` table hai, UI/API nahi. DMS me `lib/resellerclub/dns.ts`
-      (418 line) + `lib/directadmin/dns.ts` port hona hai.
-- [ ] **RC customer/contact banana** — worker abhi `RESELLERCLUB_CUSTOMER_ID` +
-      `RESELLERCLUB_CONTACT_ID` env se leta hai aur na hone par **mana kar deta hai**
-      (galat account me domain jaana support case hai). DMS ka `customers.ts` (664 line)
-      port karna hai.
+- [x] **DNS management** — `lib/resellerclub/dns.ts` (+23 test) aur
+      `lib/directadmin/dns.ts` (+22 test) dono aa gaye, saath me `api/domains/[id]/dns/*`
+      aur staff DNS editor. `planDnsSync` adhoore read par delete se MANA karta hai.
+- [x] **RC customer/contact banana** — `lib/resellerclub/customers.ts` (+21 test):
+      `rcEnsureRegistrant` env ke bharose ke bina customer/contact bana leta hai.
+      Fail hui lookup ko "koi customer nahi" padhna — DMS ka defect — test me pinned.
 - [ ] **Renewal sweep** — `next_action_at` / `processing_until` column hain, cron nahi.
 - [ ] **DMS ka data** — MongoDB → Supabase. Abhi 1 purchase, isliye ab sasta.
 - [ ] **Design gate** — `design-critique` / `accessibility-review` / `layout-audit` **nahi
