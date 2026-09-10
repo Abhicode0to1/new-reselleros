@@ -182,7 +182,7 @@ async function handle(req: Request): Promise<NextResponse> {
       continue;
     }
 
-    const sent = await sendEmail({
+    const outcome = await sendEmail({
       to: customer.contact_email,
       from: FROM_EMAIL,
       kind: "domain_watch_available",
@@ -204,14 +204,28 @@ async function handle(req: Request): Promise<NextResponse> {
       return null;
     });
 
-    if (!sent) {
+    /* ─── `status`, NOT truthiness (fixed 11 Sep 2026) ─────────────────────
+       This read `if (!sent)`, and `sendEmail` returns an OBJECT on every path —
+       `{ status: "sent" | "stubbed" | "failed", … }`. So the test only ever
+       caught a thrown exception, and a send that came back `failed` was treated
+       as a success: the watch stayed stamped `notified_at` and the rollback
+       below had never once run. Found while writing the domain-expiry cron,
+       which had copied the same line.
+
+       `stubbed` is not-sent as well: it means this deployment has no mail
+       provider, so nothing left the building. */
+    if (!outcome || outcome.status !== "sent") {
       /* Roll the claim back. A watch marked notified whose email never left is
          worse than a duplicate: the customer never learns, and the row will
          never be checked again. */
       await admin.from("domain_watches")
         .update({ notified_at: null, last_error: "the alert email could not be sent — will try again" })
         .eq("id", row.id);
-      note(`${row.domain_name} is available but the email failed — claim released, will retry`);
+      note(
+        `${row.domain_name} is available but the email did not go (` +
+          `${!outcome ? "send threw" : outcome.status === "stubbed" ? "no email provider configured" : outcome.errorMessage || "failed"}` +
+          `) — claim released, will retry`,
+      );
       continue;
     }
 

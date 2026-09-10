@@ -176,7 +176,16 @@ JOBS=(
   # site up for up to 24 hours after it was paid back for. Fifteen minutes is
   # short enough that nobody has to think about the gap, and the run is free when
   # the queue is empty (one indexed read, no writes).
-  "resellersos-hosting-suspend|*/15 * * * *|/api/cron/hosting-suspend|Tell DirectAdmin about hosting our records already suspended (refunds)"
+  "resellersos-hosting-suspend|*/15 * * * *|/api/cron/hosting-suspend|Suspend or restore hosting on DirectAdmin to match our record"
+
+  # 09:30 IST, once a day, and the 08:00 asset-sweep MUST have run first. That job
+  # is what refreshes domains.expires_at from the registrar; warning people before
+  # it runs means warning them from dates up to a day stale — including a customer
+  # whose domain was renewed yesterday. 90 minutes is slack for a slow sweep.
+  #
+  # Once a day and not more: the cadence is 30/14/7/1 days and lapsed, one notice
+  # per step per term, so a second run the same day would find nothing to do.
+  "resellersos-domain-expiry|30 9 * * *|/api/cron/domain-expiry|Warn a customer before their domain lapses (and the owner once it has)"
 
   # ── The rest of what was missing ───────────────────────────────────
   #

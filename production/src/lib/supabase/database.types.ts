@@ -828,6 +828,29 @@ type HostingPlanChangeInsert =
   Pick<HostingPlanChangeRow, "tenant_id" | "hosting_account_id" | "domain_name" | "requested_plan_code">
   & Partial<Omit<HostingPlanChangeRow, "tenant_id" | "hosting_account_id" | "domain_name" | "requested_plan_code" | "created_at" | "updated_at">>;
 
+/* ── Domain expiry warnings (20260911150000) ─────────────────────────────────
+   One row per notice sent. `term_expires_at` is part of the unique key, so a
+   renewal makes the whole cadence available again — see the migration. */
+export type RenewalNoticeStepDb = "d30" | "d14" | "d7" | "d1" | "lapsed";
+
+export type DomainRenewalNoticeRow = {
+  id:               string;
+  tenant_id:        string;
+  domain_id:        string;
+  step:             RenewalNoticeStepDb;
+  /** The expiry this notice was about. A DATE — the cadence counts calendar days. */
+  term_expires_at:  string;
+  recipient_email:  string | null;
+  subject:          string | null;
+  /** Null with a non-null `error` means the send failed and was recorded. */
+  sent_at:          string | null;
+  error:            string | null;
+  created_at:       string;
+};
+type DomainRenewalNoticeInsert =
+  Pick<DomainRenewalNoticeRow, "tenant_id" | "domain_id" | "step" | "term_expires_at">
+  & Partial<Omit<DomainRenewalNoticeRow, "tenant_id" | "domain_id" | "step" | "term_expires_at" | "created_at">>;
+
 export type DnsRecordType = "A" | "AAAA" | "CNAME" | "MX" | "TXT" | "NS" | "SRV" | "CAA";
 
 /** A CACHE of the provider's zone, never the authority. See the migration header. */
@@ -4371,6 +4394,7 @@ export type Database = {
       domains:          { Row: DomainRow;         Insert: DomainInsert;         Update: Partial<DomainRow>;         Relationships: [] };
       hosting_accounts: { Row: HostingAccountRow; Insert: HostingAccountInsert; Update: Partial<HostingAccountRow>; Relationships: [] };
       hosting_plan_changes: { Row: HostingPlanChangeRow; Insert: HostingPlanChangeInsert; Update: Partial<HostingPlanChangeRow>; Relationships: [] };
+      domain_renewal_notices: { Row: DomainRenewalNoticeRow; Insert: DomainRenewalNoticeInsert; Update: Partial<DomainRenewalNoticeRow>; Relationships: [] };
       dns_records:      { Row: DnsRecordRow;      Insert: DnsRecordInsert;      Update: Partial<DnsRecordRow>;      Relationships: [] };
       customer_groups: { Row: CustomerGroupRow; Insert: CustomerGroupInsert; Update: CustomerGroupUpdate; Relationships: [] };
       items:         { Row: ItemRow;         Insert: ItemInsert;         Update: ItemUpdate;         Relationships: [] };
