@@ -168,7 +168,10 @@ export async function daUserConfig(username: string): Promise<DaUserConfigOutcom
 
 /** Loose hostname test for the key-based fallback — see defect 5. */
 export function looksLikeHostname(v: string): boolean {
-  return /^(?!-)[a-z0-9-]{1,63}(?:\.(?!-)[a-z0-9-]{1,63})+$/i.test(v.trim());
+  /* A label may not START OR END with a hyphen (RFC 1123). This first guarded
+     only the start, so "acme-.com" passed — same slip as lib/domains/watch.ts,
+     found there by a test and fixed in both on 10 Sep 2026. */
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i.test(v.trim());
 }
 
 /**
