@@ -98,9 +98,24 @@ is app par lagta hi nahi, aur donon jagah is file ka apna andaza GALAT tha:
       accounting ka sabse purana bug hai: running total aur uske movement alag ho jaate
       hain aur phir koi nahi bata sakta ki kaun galat hai. Balance ab `sum(entries)` hai
       aur kabhi store nahi hota. `bps` (percent nahi) — `approved_margin_bps` jaisa.
-      ⚠️ **Markup ka ghar aur arithmetic ban gaya, par kisi price surface par LAGA nahi.**
-      5 me se 3 jagah lagana 0 jagah lagane se BURA hai (customer ko do daam dikhenge).
-      Wo alag kaam hai.
+      ❌ **Markup HATA diya gaya (11 Sep, migration 20260910150000).** Lagane baithe to
+      naapa: `items` tenant-scoped hai aur usme `wholesale` (lagat) + `msrp` (bikri) +
+      `margin_pct` (GENERATED) pehle se hain. Asli row: Google Workspace Enterprise —
+      wholesale ₹2,050, msrp ₹2,400, margin 14%. Yaani reseller ka margin **per item
+      pehle se maujood hai**, aur ek tenant-wide percentage se zyada barik hai.
+      Quote/invoice `msrp` se daam lete hain jo PEHLE SE retail hai — to us par 2.5%
+      lagane se customer se ₹2,460 liya jaata jabki intended ₹350 already ₹2,400 ke
+      andar tha. **Double count, har line par, chupchaap.**
+      Public storefront bhi use nahi kar sakta tha: wo ek hi tenant par pinned hai
+      (`BUY_PAGE_TENANT_ID`), to public request me reseller ka context hi nahi hai.
+      DMS ko percentage ki zaroorat thi kyunki wahan EK shared catalogue tha aur reseller
+      apna daam set hi nahi kar sakta tha. Is app ne har tenant ko apna catalogue diya,
+      isliye percentage bekaar ho gaya. Column bina ye jaanche port hua tha ki jo samasya
+      wo hal karta tha wo ab bachi hai ya nahi — wahi step chhoot gaya tha.
+      Inert chhodne se behtar hataana: bina istemal ka aisa column jo price control jaisa
+      dikhe, na hone se bura hai (`compliance.send` ko AI_ACTIONS se isi wajah se hataya
+      gaya tha). Flat-percentage model kabhi chahiye to usse pehle per-reseller storefront
+      chahiye (`tenants.slug` usi ke liye hai) — wo feature ka faisla hai, pada hua column nahi.
 - [x] **`DomainWatch` (30)** → `domain_watches` + `lib/domains/watch.ts` (25 test).
       Poora risk EK email hai: "available!" jo available na ho, chup rehne se bura hai.
       Isliye email ke liye **POSITIVE `available` reading chahiye**, `taken` ki

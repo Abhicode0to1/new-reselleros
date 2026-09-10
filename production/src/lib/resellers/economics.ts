@@ -75,50 +75,29 @@ export function canTrade(input: {
   }
 }
 
-/* ── Markup ──────────────────────────────────────────────────────────────────── */
-
-/** 100% in basis points. A markup above this is refused as a likely typo. */
-export const MAX_MARKUP_BPS = 10_000;
-
-export function isValidMarkupBps(bps: number): boolean {
-  return Number.isInteger(bps) && bps >= 0 && bps <= MAX_MARKUP_BPS;
-}
-
-/**
- * Our price plus the reseller's markup, in WHOLE RUPEES.
+/* ── Markup: REMOVED, and this is the note explaining why ──────────────────
  *
- * Basis points and integer rupees throughout, and rounded ONCE at the end.
- * Percent-as-float is how two screens come to disagree by ₹1: 2.5% of ₹899 is
- * ₹22.475, and whether that becomes ₹22 or ₹23 must not depend on which code
- * path asked.
+ * `applyMarkup`, `resellerMargin`, `markupLabel` and `tenants.markup_bps` lived
+ * here for a day (10 Sep 2026) and were removed the same day, before anything
+ * used them — see migration 20260910150000. Wiring them up would have corrupted
+ * customer totals rather than filling a gap.
  *
- * Rounds half up, which is the direction Indian invoicing conventionally takes
- * and the same choice `rupee()` makes elsewhere in the app.
+ * A RESELLER'S MARGIN ALREADY EXISTS, PER ITEM. `items` is tenant-scoped and
+ * carries `wholesale` (what it costs this tenant), `msrp` (what this tenant
+ * sells it for) and `margin_pct`, GENERATED from the two. A real row on this
+ * database: Google Workspace Enterprise, wholesale ₹2,050, msrp ₹2,400, margin
+ * 14%. Quotes and invoices price from `msrp`, which is already retail — so 2.5%
+ * on top would have charged ₹2,460 while the intended ₹350 was already inside
+ * the ₹2,400.
+ *
+ * DMS needed a percentage because it had ONE shared catalogue and a reseller
+ * there could not set their own price. This app gave every tenant its own
+ * catalogue, which makes the percentage redundant. The column was ported
+ * faithfully without first asking whether the problem still existed; that
+ * question is the missing step, and this note is here so the next person to
+ * reach for a markup finds the answer instead of the column.
  */
-export function applyMarkup(ourPrice: number, markupBps: number): number {
-  if (!Number.isFinite(ourPrice) || ourPrice < 0) return 0;
-  if (!isValidMarkupBps(markupBps)) return Math.round(ourPrice);
-  return Math.round(ourPrice * (1 + markupBps / 10_000));
-}
 
-/**
- * What the reseller keeps on one sale, in whole rupees.
- *
- * Derived from the same rounding as `applyMarkup`, not computed independently —
- * otherwise `ourPrice + margin` can fail to equal the price the customer was
- * actually shown, which is the kind of ₹1 that costs an afternoon.
- */
-export function resellerMargin(ourPrice: number, markupBps: number): number {
-  return applyMarkup(ourPrice, markupBps) - Math.round(Math.max(0, ourPrice));
-}
-
-/** Basis points as a phrase for a screen. 250 → "2.5%". */
-export function markupLabel(bps: number): string {
-  if (!isValidMarkupBps(bps)) return "—";
-  if (bps === 0) return "no markup";
-  const pct = bps / 100;
-  return `${Number.isInteger(pct) ? pct : pct.toFixed(2).replace(/0$/, "")}%`;
-}
 
 /* ── The wallet ──────────────────────────────────────────────────────────────── */
 
