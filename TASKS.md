@@ -31,25 +31,46 @@
 | `directadmin/packages.ts` | 150 | `lib/directadmin/index.ts` |
 | `directadmin/users.ts` — write half | ~200 | `lib/directadmin/provision.ts` |
 | `directadmin/users.ts` — usage half | ~60 | `lib/directadmin/index.ts` (+11 test) |
+| `directadmin/users.ts` — SSO | ~100 | `lib/directadmin/sso.ts` (+12 test) |
+| `directadmin/dns.ts` | 193 | `lib/directadmin/dns.ts` (+22 test) |
+| `directadmin/users.ts` — read half | ~200 | `lib/directadmin/accounts.ts` (+32 test) |
+| `directadmin/users.ts` — changePackage | ~40 | `lib/directadmin/provision.ts` |
+| `integrations/directadmin/classify.ts` | 221 | `lib/directadmin/classify.ts` (+20 test) |
+| `directadmin/server.ts` | 82 | `lib/directadmin/server.ts` (+8 test) |
+| `resellerclub/search.ts` — multi-TLD | ~250 | `lib/resellerclub/index.ts` (+14 test) |
+| `resellerclub/search.ts` — wallet | ~90 | `lib/resellerclub/reseller.ts` (+12 test) |
 
 Har port me DMS ke defect theek kiye gaye (error-as-absence, logged password,
-invented registrant data, scalar body, SRV/MX defaults, partial-read deletes) —
-detail commit message me hai.
+invented registrant data, scalar body, SRV/MX defaults, partial-read deletes,
+hardcoded TTL, unencoded delete selector, string-only `.startsWith`,
+`domainExists` ka false-on-failure, `suspended` string, price-less domain drop,
+logged wallet balance) — detail commit message me hai.
 
-## ⏳ Capabilities jo BAKI hain (lib layer)
+## ✅ lib layer POORA ho gaya — 10 Sep 2026
 
-- [ ] **`directadmin/dns.ts` (193)** — per-user impersonation auth (`ADMIN_USER|username`)
-      chahiye, jo `lib/directadmin/` me nahi hai. Iske 4 me se 1 function DMS me khud
-      DEAD hai (`updateDNSNameservers` throw karta hai). Reader me BIND zone-file
-      fallback parser bhi hai — asli complexity, aur abhi reproduce nahi kar sakte.
-- [ ] **`directadmin/users.ts` ke 5 read** — `getOneTimeLoginUrl` (desk ke liye "cPanel
-      me login" button — asli capability gap), `getUserConfig`, `getUserDomains`,
-      `changePackage`, `listUsers`.
-- [ ] **`directadmin/server.ts` (82)** aur `client.ts` ka bacha hissa (419 vs hamara
-      patla `index.ts`).
-- [ ] **`resellerclub/search.ts` (846)** — PARTIAL. Availability aur TLD pricing aa gaya
-      (`rcAvailability`, `rcTldPricing`); `searchDomainWithTlds` (multi-TLD suggestion)
-      aur `getResellerDetails` nahi.
+DirectAdmin aur ResellerClub, dono ka capability port khatam. Jo jaan-boojh kar
+NAHI aaya, aur kyun:
+
+- **`updateDNSNameservers`** — DMS me khud dead hai (body sirf throw karta hai).
+  Aisa function port karne se wo available dikhne lagta, bas.
+- **DA par MX/SRV likhna** — REFUSE karta hai, reason ke saath. DMS ke signature me
+  priority hi nahi thi, to uske through bani MX bina priority ki thi = mail outage.
+  DA ka parameter shape version se badalta hai aur yahan koi DA server nahi hai
+  jispar naapa ja sake; anumaan bhejne se wo record banta jo resolve hota hai par
+  galat jagah point karta.
+- **DMS ke `searchDomainWithTlds` ka baaki 250 line** — usme ek badtar defect tha:
+  `if (price > 0)` — yaani AVAILABLE domain jiski pricing lookup fail ho gayi,
+  result se GAYAB. Hamara route wo pehle se theek karta hai (`priceKnown: false` →
+  "price on request"). Sirf concatenated-key handling aayi.
+- **`client.ts` ka circuit breaker / rate limiter (419 line)** — yahan har module
+  apna timeout aur typed failure deta hai; ek global breaker jodne se do jagah
+  faisla hone lagta. Zaroorat padi to alag kaam.
+
+### Ek discrepancy jo ANJAANA chhoda gaya, chupaya nahi
+Hamara `daSuspendAccount` `suspend=Suspend` bhejta hai, DMS `dosuspend=Suspend`
+(aur ulta `dounsuspend`). Dono shakl asli DA installation me milti hain. Yahan se
+koi DirectAdmin server pahunch me nahi hai, aur live suspend path par anumaan
+lagana theek nahi — asli server par confirm karke hi kisi ek par bharosa karna.
 
 ## 📊 Data models — 21 me se 14 ka ghar pehle se hai
 
