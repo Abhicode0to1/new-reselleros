@@ -63,7 +63,7 @@ export default async function PortalHostingPage() {
   /* Scoped by RLS (`hosting_accounts_select_own_customer`), not by a filter here. */
   const { data } = await supabase
     .from("hosting_accounts")
-    .select("id, domain_name, status, plan_name, plan_code, da_username, expires_at, trial_ends_at, is_trial, disk_quota_mb, bandwidth_quota_mb, started_at")
+    .select("id, domain_name, status, plan_name, plan_code, da_username, expires_at, trial_ends_at, is_trial, disk_quota_mb, bandwidth_quota_mb, started_at, resolved_at")
     .order("expires_at", { ascending: true, nullsFirst: false });
 
   const rows = data ?? [];
@@ -180,13 +180,35 @@ export default async function PortalHostingPage() {
                     </div>
                   )}
 
-                  {h.status === "failed" && (
+                  {h.status === "failed" && !h.resolved_at && (
                     /* §24 — never a dead end. The customer did nothing wrong and
                        must not be left staring at the word "failed". */
                     <p className="mt-4 pt-4 border-t border-hairline text-2xs text-rose-ink">
                       Setup did not complete. {reseller} has been told and is on it — you have not
                       been charged twice.{" "}
                       <Link href="/portal/support/new" className="underline">Chase it up</Link>.
+                    </p>
+                  )}
+
+                  {h.status === "failed" && h.resolved_at && (
+                    /* ─── ONCE SOMEBODY HAS DEALT WITH IT, STOP SAYING THEY ARE ON IT ──
+                       The message above is true right up until an operator resolves
+                       the row — and then it keeps promising that somebody is working
+                       on something that has already been settled, which is how a
+                       customer comes to chase a refund they have already had.
+
+                       It does NOT say WHAT was decided. The four resolutions
+                       (`refunded`, `re_registered`, `alternative_offered`,
+                       `written_off`) are an OPERATOR vocabulary: "written off" is an
+                       accounting decision about our own books, and showing that
+                       sentence to the person who paid would be worse than the stale
+                       message it replaces. So this says the true, safe thing — it has
+                       been dealt with, here is how to ask — and the detail lives in
+                       the activity log where it belongs. */
+                    <p className="mt-4 pt-4 border-t border-hairline text-2xs text-ink-3">
+                      Setup did not complete, and {reseller} has since sorted this out with you.{" "}
+                      <Link href="/portal/support/new" className="underline">Ask about it</Link> if
+                      anything still looks wrong.
                     </p>
                   )}
                 </Card>
