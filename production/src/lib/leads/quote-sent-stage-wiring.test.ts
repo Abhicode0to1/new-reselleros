@@ -147,6 +147,10 @@ describe("every writer of a sent quote is accounted for", () => {
     "create-renewal-quote.ts":   "renewal quote for an existing customer — sets customer_id, never lead_id",
     "create-extension-quote.ts": "extension quote for an existing customer — no lead_id",
     "add-seats.ts":              "add-seats upsell for an existing customer — no lead_id",
+    /* Verified by reading it: the pro-rata upgrade quote sets `customer_id` from the
+       hosting account and never `lead_id`. The customer raised it from the portal, so
+       they stopped being a lead before the account existed. */
+    "apply-plan-upgrade.ts":     "hosting plan upgrade for an existing customer — no lead_id",
     /* Creates the lead AND the quote together, so it sets the stage at insert time. There is
        no prior stage for a forward-only rule to move forward from. */
     "route.ts:checkout":         "public buy-page checkout — sets the stage at insert",

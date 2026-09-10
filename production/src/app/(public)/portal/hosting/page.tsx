@@ -24,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, daysBetween } from "@/lib/utils";
 import { OpenPanelButton } from "../_components/open-panel-button";
+import { UpgradePlanControl } from "../_components/upgrade-plan-control";
 import type { HostingAccountStatus } from "@/lib/supabase/database.types";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,19 @@ export default async function PortalHostingPage() {
     .order("expires_at", { ascending: true, nullsFirst: false });
 
   const rows = data ?? [];
+
+  /* Upgrade requests this customer already has waiting.
+     Scoped by RLS (`hosting_plan_changes_select_own_customer`), like the accounts
+     above — the customer's own id never appears as a filter here. Read as a MAP
+     so the card can replace its chooser with "already asked" rather than offering
+     a button that would 409; see upgrade-plan-control.tsx. */
+  const { data: pendingChanges } = await supabase
+    .from("hosting_plan_changes")
+    .select("hosting_account_id, requested_plan_code")
+    .eq("status", "pending");
+  const pendingByAccount = new Map(
+    (pendingChanges ?? []).map((c) => [c.hosting_account_id, c.requested_plan_code]),
+  );
   /* A trial counts down to trial_ends_at; a paid account to expires_at. Reading
      the wrong one tells a trial customer they have a year. */
   const endsAt = (r: { is_trial: boolean; trial_ends_at: string | null; expires_at: string | null }) =>
@@ -230,6 +244,22 @@ export default async function PortalHostingPage() {
                       <Link href="/portal/support/new" className="underline">Ask about it</Link> if
                       anything still looks wrong.
                     </p>
+                  )}
+
+                  {/* ─── MOVE TO A BIGGER PLAN ───────────────────────────────
+                      Only on a LIVE account, and only a paid one. A trial has no
+                      term to pro-rate against and no money on it, so "upgrade"
+                      there means "convert to paid" — a different conversation
+                      with a different price, and offering this instead would
+                      quote the difference between two plans when the customer
+                      has paid for neither. */}
+                  {h.status === "active" && !h.is_trial && (
+                    <UpgradePlanControl
+                      hostingId={h.id}
+                      domainName={h.domain_name}
+                      currentPlanCode={h.plan_code ?? h.plan_name}
+                      pendingTo={pendingByAccount.get(h.id) ?? null}
+                    />
                   )}
                 </Card>
               </li>

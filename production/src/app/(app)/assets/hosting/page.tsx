@@ -29,6 +29,8 @@ import { formatDate } from "@/lib/utils";
 import { daysUntil } from "@/lib/domains/lifecycle";
 import type { HostingAccountStatus } from "@/lib/supabase/database.types";
 import { PaidNotDelivered, type UndeliveredRow } from "@/components/features/assets/paid-not-delivered";
+import { HostingUpgradeRequests, type UpgradeRequestRow } from "@/components/features/assets/hosting-upgrade-requests";
+import type { HostingStatusForChange } from "@/lib/hosting/plan-change";
 import { ProvisioningBanner } from "@/components/features/assets/provisioning-banner";
 import { deploymentProvisioningReadiness } from "@/lib/provisioning/readiness.server";
 
@@ -54,6 +56,7 @@ const ERROR_KIND: Record<string, string> = {
 
 type Row = {
   id: string; domain_name: string; status: string; plan_name: string | null;
+  plan_code: string | null; da_package: string | null;
   da_username: string | null; is_trial: boolean; trial_ends_at: string | null;
   expires_at: string | null; last_error: string | null; last_error_kind: string | null;
   customer_id: string; customers: unknown;
@@ -85,7 +88,7 @@ export default async function HostingPage() {
 
   const { data } = await supabase
     .from("hosting_accounts")
-    .select("id, domain_name, status, plan_name, da_username, is_trial, trial_ends_at, expires_at, last_error, last_error_kind, last_attempt_at, attempt_count, amount_paid, resolved_at, customer_id, customers ( name )")
+    .select("id, domain_name, status, plan_name, plan_code, da_package, da_username, is_trial, trial_ends_at, expires_at, last_error, last_error_kind, last_attempt_at, attempt_count, amount_paid, resolved_at, customer_id, customers ( name )")
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
@@ -135,6 +138,48 @@ export default async function HostingPage() {
     .sort((a, b) => (b.amount_paid ?? -1) - (a.amount_paid ?? -1));
   const trials = sorted.filter((r) => r.is_trial && r.status === "active").length;
 
+  /* ─── Customers waiting to be moved to a bigger plan ──────────────────────
+     The `live_plan_code` and `hosting_status` on each row are read from the
+     ACCOUNT here and NOT from the request, which is the whole point: the card
+     shows the same verdict the server enforces, and that verdict depends on what
+     the account is RIGHT NOW. Reading the plan off the request would show a rep
+     an Approve button for a request the server will refuse. */
+  const { data: changeRows } = await supabase
+    .from("hosting_plan_changes")
+    .select("id, hosting_account_id, domain_name, from_plan_code, requested_plan_code, requested_by_email, note, created_at")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const upgradeRequests: UpgradeRequestRow[] = (changeRows ?? []).map((c) => {
+    const acct = byId.get(c.hosting_account_id);
+    return {
+      id: c.id,
+      domain_name: c.domain_name,
+      from_plan_code: c.from_plan_code,
+      requested_plan_code: c.requested_plan_code,
+      requested_by_email: c.requested_by_email,
+      note: c.note,
+      created_at: c.created_at,
+      /* ─── THE SAME PRECEDENCE THE SERVER USES ─────────────────────────
+         `plan_code ?? da_package ?? plan_name`, exactly as the decide route
+         reads it. This started as `plan_name` alone and that was a real bug,
+         caught in the browser on 11 Sep: a trial whose plan_name was "Starter
+         Trial" made the card say "we cannot tell which plan this account is
+         on" while the server would have said "this is a free trial". Same
+         function, different inputs, different verdicts — which defeats the
+         whole point of the card showing the server's verdict. */
+      live_plan_code: acct?.plan_code ?? acct?.da_package ?? acct?.plan_name ?? null,
+      /* A request whose account is not in this list at all (deleted, or another
+         tenant's — RLS would have removed it) is reported as `terminated`, which
+         `assessPlanChange` refuses with a sentence. Defaulting to `active` would
+         offer a rep an Approve button for an account that is not there. */
+      hosting_status: (acct?.status ?? "terminated") as HostingStatusForChange,
+      is_trial: !!acct?.is_trial,
+      customer_name: (acct?.customers as unknown as { name?: string } | null)?.name ?? null,
+    };
+  });
+
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
       <div className="mb-6">
@@ -148,6 +193,10 @@ export default async function HostingPage() {
           deadline, a paid account that does not exist is money already taken. */}
       {readiness && <ProvisioningBanner readiness={readiness.hosting} />}
       <PaidNotDelivered initial={undelivered} asset="hosting" />
+
+      {/* Above the table, below the money-at-risk list: an upgrade is work
+          somebody is waiting on, and it should not be below a hundred rows. */}
+      <HostingUpgradeRequests initial={upgradeRequests} />
 
       {(endingSoon > 0 || stuck > 0 || trials > 0) && (
         <div className="flex flex-wrap gap-3 mb-5">

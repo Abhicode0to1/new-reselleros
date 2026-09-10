@@ -791,6 +791,43 @@ type HostingAccountInsert =
   Pick<HostingAccountRow, "tenant_id" | "customer_id" | "domain_name">
   & Partial<Omit<HostingAccountRow, "tenant_id" | "customer_id" | "domain_name" | "created_at" | "updated_at">>;
 
+/* ── Customer-raised hosting plan upgrades (20260911140000) ──────────────────
+   The twin of `seat_requests`. Note what is NOT here: an amount. An upgrade is
+   priced pro-rata AT APPROVAL because the figure falls every day the request
+   waits, so the only recorded amount is on the quote `quote_id` points at. */
+export type HostingPlanChangeStatus =
+  | "pending" | "approved" | "rejected" | "withdrawn" | "failed";
+
+export type HostingPlanChangeRow = {
+  id:                 string;
+  tenant_id:          string;
+  hosting_account_id: string;
+  customer_id:        string | null;
+  /** Denormalised, like seat_requests.customer_name — the audit trail has to be
+   *  readable after the account row is renamed or closed. */
+  domain_name:        string;
+  /** The plan as it was when they asked. The ONLY way to detect that somebody
+   *  changed the plan by hand in between — see lib/hosting/plan-change.ts. */
+  from_plan_code:      string | null;
+  requested_plan_code: string;
+  note:                string | null;
+  requested_by_email:  string | null;
+  status:              HostingPlanChangeStatus;
+  quote_id:            string | null;
+  decided_by:          string | null;
+  decided_at:          string | null;
+  decision_note:       string | null;
+  /** Null on an `approved` row means the quote exists and DirectAdmin has NOT
+   *  been moved yet — our records and the server disagree. */
+  applied_at:          string | null;
+  da_result:           string | null;
+  created_at:          string;
+  updated_at:          string;
+};
+type HostingPlanChangeInsert =
+  Pick<HostingPlanChangeRow, "tenant_id" | "hosting_account_id" | "domain_name" | "requested_plan_code">
+  & Partial<Omit<HostingPlanChangeRow, "tenant_id" | "hosting_account_id" | "domain_name" | "requested_plan_code" | "created_at" | "updated_at">>;
+
 export type DnsRecordType = "A" | "AAAA" | "CNAME" | "MX" | "TXT" | "NS" | "SRV" | "CAA";
 
 /** A CACHE of the provider's zone, never the authority. See the migration header. */
@@ -4333,6 +4370,7 @@ export type Database = {
       /** Migration 20260908100000 (merge brick #5) — what the customer OWNS at the registrar / on the server. Billing stays on `subscriptions`. */
       domains:          { Row: DomainRow;         Insert: DomainInsert;         Update: Partial<DomainRow>;         Relationships: [] };
       hosting_accounts: { Row: HostingAccountRow; Insert: HostingAccountInsert; Update: Partial<HostingAccountRow>; Relationships: [] };
+      hosting_plan_changes: { Row: HostingPlanChangeRow; Insert: HostingPlanChangeInsert; Update: Partial<HostingPlanChangeRow>; Relationships: [] };
       dns_records:      { Row: DnsRecordRow;      Insert: DnsRecordInsert;      Update: Partial<DnsRecordRow>;      Relationships: [] };
       customer_groups: { Row: CustomerGroupRow; Insert: CustomerGroupInsert; Update: CustomerGroupUpdate; Relationships: [] };
       items:         { Row: ItemRow;         Insert: ItemInsert;         Update: ItemUpdate;         Relationships: [] };
