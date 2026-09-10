@@ -100,3 +100,45 @@ describe("extractSsoUrl — DA answers this endpoint in more than one shape", ()
     expect(extractSsoUrl("error=1&text=You+cannot+create+keys+for+this+user")).toBeNull();
   });
 });
+
+describe("who the session is for changes what it may do", () => {
+  /* Two ways to get this wrong and they fail in opposite directions:
+       · a CUSTOMER carrying the staff deny list cannot change their own hosting
+         password from the panel we just sent them into — a broken product;
+       · a STAFF session WITHOUT it can be turned into permanent access, which is
+         the account takeover the list was written to prevent.
+     So both are pinned, and the default is the locked-down one. */
+
+  it("a STAFF session carries every denial", () => {
+    const body = ssoRequestBody("acmecorp1", "CMD_USER_STATS", NOW, "staff");
+    const denied = SSO_DENIED_COMMANDS.map((_, i) => body.get(`select_deny${i}`));
+    expect(denied).toEqual([...SSO_DENIED_COMMANDS]);
+  });
+
+  it("STAFF is the DEFAULT, so an un-migrated caller stays locked down", () => {
+    /* The signature gained a parameter on 11 Sep. Every existing call site omits
+       it, and omitting it must not quietly widen a support session. */
+    const body = ssoRequestBody("acmecorp1", "CMD_USER_STATS", NOW);
+    expect(body.get("select_deny0")).toBe(SSO_DENIED_COMMANDS[0]);
+  });
+
+  it("a CUSTOMER session carries NO denials at all", () => {
+    /* It is their own account. Every host on earth lets the owner change their
+       own password and set up 2FA. */
+    const body = ssoRequestBody("acmecorp1", "CMD_USER_STATS", NOW, "customer");
+    for (let i = 0; i < SSO_DENIED_COMMANDS.length + 2; i++) {
+      expect(body.get(`select_deny${i}`), `select_deny${i}`).toBeNull();
+    }
+  });
+
+  it("everything else about the session is identical for both", () => {
+    /* Single-use, self-clearing, five minutes, no email to the customer — those
+       are properties of a one-time URL, not of who asked for it. Without this a
+       future edit could widen the customer session's lifetime by accident. */
+    const staff = ssoRequestBody("acmecorp1", "CMD_USER_STATS", NOW, "staff");
+    const cust = ssoRequestBody("acmecorp1", "CMD_USER_STATS", NOW, "customer");
+    for (const k of ["max_uses", "clear_key", "type", "notify", "expiry_timestamp", "user", "redirect-url"]) {
+      expect(cust.get(k), k).toBe(staff.get(k));
+    }
+  });
+});

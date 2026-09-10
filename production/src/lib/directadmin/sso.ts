@@ -45,7 +45,29 @@ export function daSsoConfigured(): boolean {
 
 export const SSO_TTL_SECONDS = 5 * 60;
 
-/** Commands the borrowed session must not be able to run — see the header. */
+/**
+ * WHO the session is for. It changes what the session may do, and getting this
+ * backwards is the difference between a crippled panel and a takeover.
+ *
+ * ─── ADDED 11 SEP 2026, WHEN THE CUSTOMER PORTAL NEEDED ONE ──────────────
+ * The deny list below was written for STAFF borrowing a customer's panel to help
+ * them, and it is right for that: a support session must not be convertible into
+ * permanent access. But it was the only list, so when the portal needed a
+ * "open my control panel" button the choice was between giving a customer a
+ * session that cannot change their OWN password, or dropping the guard for
+ * everybody.
+ *
+ * Neither. The audience is now explicit:
+ *
+ *   `staff`    — somebody else's panel, opened to help. Locked down.
+ *   `customer` — their OWN panel, opened by them. Full rights, because a hosting
+ *                 account whose owner cannot change their password, manage their
+ *                 own login keys or set up 2FA is not hosting they control — and
+ *                 every host on earth gives them that.
+ */
+export type SsoAudience = "staff" | "customer";
+
+/** Commands a BORROWED (staff) session must not be able to run — see the header. */
 export const SSO_DENIED_COMMANDS = [
   "CMD_USER_PASSWD",
   "CMD_LOGIN_KEYS",
@@ -66,7 +88,12 @@ export type DaSsoOutcome =
  * parts, and a test that pins them is cheaper than noticing later that a refactor
  * dropped one.
  */
-export function ssoRequestBody(username: string, redirect: string, now = new Date()): URLSearchParams {
+export function ssoRequestBody(
+  username: string,
+  redirect: string,
+  now = new Date(),
+  audience: SsoAudience = "staff",
+): URLSearchParams {
   const body = new URLSearchParams({
     action: "create",
     type: "one_time_url",
@@ -80,7 +107,13 @@ export function ssoRequestBody(username: string, redirect: string, now = new Dat
     clear_key: "yes",
     expiry_timestamp: String(Math.floor(now.getTime() / 1000) + SSO_TTL_SECONDS),
   });
-  SSO_DENIED_COMMANDS.forEach((cmd, i) => body.set(`select_deny${i}`, cmd));
+  /* A customer in their own panel gets no deny list. See SsoAudience: denying
+     CMD_USER_PASSWD to the account's OWNER would mean they cannot change their
+     own hosting password from the panel we just sent them into, which is not a
+     restriction — it is a broken product. */
+  if (audience === "staff") {
+    SSO_DENIED_COMMANDS.forEach((cmd, i) => body.set(`select_deny${i}`, cmd));
+  }
   return body;
 }
 
@@ -124,6 +157,7 @@ export function extractSsoUrl(text: string): string | null {
 export async function daOneTimeLoginUrl(
   username: string,
   redirect = "CMD_USER_STATS",
+  audience: SsoAudience = "staff",
 ): Promise<DaSsoOutcome> {
   if (!daSsoConfigured()) {
     return { kind: "refused", reason: "DirectAdmin is not configured in this environment" };
@@ -137,7 +171,9 @@ export async function daOneTimeLoginUrl(
      in user-auth.ts now — extracted when dns.ts needed exactly the same thing,
      because a second copy of an auth mode is how the two drift until one is
      acting as the wrong user. */
-  const res = await daUserRequest("/CMD_API_LOGIN_KEYS", user, { form: ssoRequestBody(user, redirect) });
+  const res = await daUserRequest("/CMD_API_LOGIN_KEYS", user, {
+    form: ssoRequestBody(user, redirect, new Date(), audience),
+  });
   if (res.kind !== "ok") return res;
 
   const url = extractSsoUrl(res.text);

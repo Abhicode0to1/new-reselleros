@@ -23,6 +23,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, daysBetween } from "@/lib/utils";
+import { OpenPanelButton } from "../_components/open-panel-button";
 import type { HostingAccountStatus } from "@/lib/supabase/database.types";
 
 export const dynamic = "force-dynamic";
@@ -160,20 +161,39 @@ export default async function PortalHostingPage() {
                     </div>
                   </dl>
 
-                  {/* The answer to "where do I log in", one tap away. Only for an
-                      account that can actually be logged into. */}
-                  {CONTROL_PANEL && h.da_username && (h.status === "active" || h.status === "suspended") && (
+                  {/* ─── "WHERE DO I LOG IN" ─────────────────────────────────
+                      Two ways, and the order matters. The BUTTON mints a one-time
+                      DirectAdmin session and drops the customer straight in — no
+                      password needed, which is the whole point: until 11 Sep the
+                      only route was the manual link below, so a customer who had
+                      forgotten their hosting password had to raise a ticket and
+                      wait for somebody to reset it.
+
+                      The manual link stays underneath rather than being replaced.
+                      It works when DirectAdmin SSO is not configured in this
+                      environment, and it is the honest fallback when the one-time
+                      link fails for any reason. */}
+                  {h.da_username && h.status === "active" && (
                     <div className="mt-4 pt-4 border-t border-hairline flex flex-wrap items-center gap-3">
+                      <OpenPanelButton hostingId={h.id} domainName={h.domain_name} />
+                      <span className="text-2xs text-ink-3">
+                        Opens straight into your panel — no password needed.
+                      </span>
+                    </div>
+                  )}
+
+                  {CONTROL_PANEL && h.da_username && (h.status === "active" || h.status === "suspended") && (
+                    <div className={`flex flex-wrap items-center gap-3 ${h.status === "active" ? "mt-2" : "mt-4 pt-4 border-t border-hairline"}`}>
                       <a
                         href={CONTROL_PANEL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-amber-ink underline"
+                        className="text-2xs text-amber-ink underline"
                       >
-                        Open control panel →
+                        Or sign in yourself →
                       </a>
                       <span className="text-2xs text-ink-3">
-                        Sign in as <span className="font-mono">{h.da_username}</span>. Forgotten the
+                        as <span className="font-mono">{h.da_username}</span>. Forgotten the
                         password?{" "}
                         <Link href="/portal/support/new" className="underline">Ask for a reset</Link>.
                       </span>
