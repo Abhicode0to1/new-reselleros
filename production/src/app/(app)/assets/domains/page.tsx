@@ -61,7 +61,7 @@ function renews(expiresAt: string | null): { text: string; tone: string } {
   return { text: formatDate(expiresAt), tone: "text-ink-2" };
 }
 
-import { PaidNotDelivered, type UndeliveredRow } from "./paid-not-delivered";
+import { PaidNotDelivered, type UndeliveredRow } from "@/components/features/assets/paid-not-delivered";
 
 export default async function DomainsPage() {
   const supabase = createClient();
@@ -115,7 +115,7 @@ export default async function DomainsPage() {
 
       {/* Above the counts on purpose: an expiring domain is a deadline, but a paid
           domain that does not exist is money already taken. */}
-      <PaidNotDelivered initial={undelivered} />
+      <PaidNotDelivered initial={undelivered} asset="domain" />
 
       {(lapsing > 0 || stuck > 0) && (
         <div className="flex flex-wrap gap-3 mb-5">

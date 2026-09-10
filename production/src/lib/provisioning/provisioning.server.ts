@@ -33,6 +33,11 @@ export interface ReadyHostingRequest {
   quote_id: string;
   domain: string | null;
   plan: string | null;
+  /* ₹ whole rupees, as received. `listReadyEngineRequests` has always selected
+     this — the interface simply did not declare it, so the hosting caller could
+     not see a field that was already in the row. Declared 11 Sep 2026 when the
+     paid-but-undelivered row needed the amount on it. */
+  amount_paid: number | null;
 }
 
 /**

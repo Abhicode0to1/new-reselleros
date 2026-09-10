@@ -777,6 +777,14 @@ export type HostingAccountRow = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /* ── Paid, but not delivered (20260911100000) ─────────────────────────
+     The same names as on `domains`, so lib/domains/retry.ts governs both. */
+  attempt_count:   number;
+  last_attempt_at: string | null;
+  resolved_at:     string | null;
+  resolved_by:     string | null;
+  resolution:      string | null;
+  resolution_note: string | null;
 };
 /** Same reasoning as DomainInsert: owner + name are required, the rest arrives later. */
 type HostingAccountInsert =

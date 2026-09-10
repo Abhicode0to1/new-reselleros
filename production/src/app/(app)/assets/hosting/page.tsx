@@ -28,6 +28,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/lib/utils";
 import { daysUntil } from "@/lib/domains/lifecycle";
 import type { HostingAccountStatus } from "@/lib/supabase/database.types";
+import { PaidNotDelivered, type UndeliveredRow } from "@/components/features/assets/paid-not-delivered";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,10 @@ type Row = {
   da_username: string | null; is_trial: boolean; trial_ends_at: string | null;
   expires_at: string | null; last_error: string | null; last_error_kind: string | null;
   customer_id: string; customers: unknown;
+  /* Paid, not delivered (20260911100000). Same names as on `domains`, so one
+     retry policy and one queue component serve both. */
+  amount_paid: number | null; attempt_count: number | null;
+  last_attempt_at: string | null; resolved_at: string | null;
 };
 
 /** The ONE place the trial/paid distinction is made. */
@@ -78,7 +83,7 @@ export default async function HostingPage() {
 
   const { data } = await supabase
     .from("hosting_accounts")
-    .select("id, domain_name, status, plan_name, da_username, is_trial, trial_ends_at, expires_at, last_error, last_error_kind, customer_id, customers ( name )")
+    .select("id, domain_name, status, plan_name, da_username, is_trial, trial_ends_at, expires_at, last_error, last_error_kind, last_attempt_at, attempt_count, amount_paid, resolved_at, customer_id, customers ( name )")
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
@@ -99,6 +104,22 @@ export default async function HostingPage() {
     return at !== null && daysUntil(at) <= 14 && r.status !== "terminated";
   }).length;
   const stuck = sorted.filter((r) => r.status === "failed" || !!r.last_error).length;
+
+  /* Paid for and not delivered. Possible at all only since 11 Sep: before that
+     `provision-hosting` wrote no row on failure, so a customer who had paid left
+     nothing behind for this list to read — see the cron's recordHostingFailure. */
+  const undelivered: UndeliveredRow[] = sorted
+    .filter((r) => r.status === "failed" && !r.resolved_at)
+    .map((r) => ({
+      id: r.id,
+      domain_name: r.domain_name,
+      amount_paid: r.amount_paid,
+      attempt_count: r.attempt_count ?? 0,
+      last_error: r.last_error,
+      last_attempt_at: r.last_attempt_at,
+      customer_name: (r.customers as unknown as { name?: string } | null)?.name ?? null,
+    }))
+    .sort((a, b) => (b.amount_paid ?? -1) - (a.amount_paid ?? -1));
   const trials = sorted.filter((r) => r.is_trial && r.status === "active").length;
 
   return (
@@ -109,6 +130,10 @@ export default async function HostingPage() {
           Every hosting account on this tenant, what the server says about it, and when it runs out.
         </p>
       </div>
+
+      {/* Above the counts, as on the domains screen: an expiring account is a
+          deadline, a paid account that does not exist is money already taken. */}
+      <PaidNotDelivered initial={undelivered} asset="hosting" />
 
       {(endingSoon > 0 || stuck > 0 || trials > 0) && (
         <div className="flex flex-wrap gap-3 mb-5">

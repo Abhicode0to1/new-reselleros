@@ -3,6 +3,13 @@
 /**
  * Paid for, not delivered — the queue, and the one action on it.
  *
+ * ─── ONE COMPONENT, BOTH ASSETS ─────────────────────────────────────────────
+ * Domains and hosting fail the same way after money changes hands, and an
+ * operator reading one list should not have to learn a second layout to read the
+ * other. `asset` picks the endpoint and two nouns; nothing else differs. Moved
+ * out of `(app)/assets/domains/` on 11 Sep when hosting gained the same queue —
+ * a copy would have been the third place this repo learned that lesson.
+ *
  * ─── WHY THIS IS THE MOST IMPORTANT LIST ON THE SCREEN ──────────────────────
  * Every row is a customer who has PAID US and has no domain. Almost always the
  * ResellerClub wallet was empty when the order went up (see
@@ -55,7 +62,26 @@ const RESOLUTION_LABEL: Record<Resolution, string> = {
   written_off: "Written off",
 };
 
-export function PaidNotDelivered({ initial }: { initial: UndeliveredRow[] }) {
+/** Which asset this queue is for. Picks the endpoint and the wording. */
+export type QueueAsset = "domain" | "hosting";
+
+const ENDPOINT: Record<QueueAsset, (id: string) => string> = {
+  domain: (id) => `/api/domains/${id}/resolve`,
+  hosting: (id) => `/api/hosting/${id}/resolve`,
+};
+
+const THING: Record<QueueAsset, string> = {
+  domain: "the domain",
+  hosting: "the hosting account",
+};
+
+export function PaidNotDelivered({
+  initial,
+  asset = "domain",
+}: {
+  initial: UndeliveredRow[];
+  asset?: QueueAsset;
+}) {
   const [rows, setRows] = React.useState(initial);
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [resolution, setResolution] = React.useState<Resolution>("refunded");
@@ -78,7 +104,7 @@ export function PaidNotDelivered({ initial }: { initial: UndeliveredRow[] }) {
     }
     setBusy(true);
     try {
-      const res = await fetch(`/api/domains/${id}/resolve`, {
+      const res = await fetch(ENDPOINT[asset](id), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resolution, note }),
@@ -117,7 +143,7 @@ export function PaidNotDelivered({ initial }: { initial: UndeliveredRow[] }) {
       </div>
       <p className="text-sm text-ink-3 mt-1">
         {rows.length === 1 ? "This customer has" : "These customers have"} paid and {rows.length === 1 ? "does" : "do"} not
-        have the domain. Retries have run out, so each one needs a decision.
+        have {THING[asset]}. Retries have run out, so each one needs a decision.
       </p>
 
       <ul className="mt-4 space-y-3">
@@ -183,7 +209,7 @@ export function PaidNotDelivered({ initial }: { initial: UndeliveredRow[] }) {
                   />
                 </label>
                 <p className="text-2xs text-ink-3">
-                  This records the decision. It does <b>not</b> issue a refund or register anything —
+                  This records the decision. It does <b>not</b> issue a refund or provision anything —
                   do that first, then write down what you did.
                 </p>
                 <Button
