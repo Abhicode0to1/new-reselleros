@@ -84,26 +84,64 @@ lagana theek nahi — asli server par confirm karke hi kisi ek par bharosa karna
 `status`) `hosting_accounts` ke `da_username` / `last_error` / `last_error_kind` /
 `status` me 1:1 baithte hain. Nayi table ki zaroorat nahi.
 
-## ⚠️ 5 models jinke faisle chahiye
+## ✅ 5 models — Pawan ne 10 Sep ko kaha "Yes we need them". Paanchon ho gaye.
 
-- [ ] **`Reseller` (103) — PARTIAL, aur sabse bada gap.** `tenants.tier`
-      (distributor|reseller) aur `parent_tenant_id` maujood hain, par DMS ke
-      **`walletBalance`, `markupPercent`, `slug`, `branding` (displayName/logoUrl/
-      supportEmail), `status`, `approvedAt/approvedBy` ka koi ghar NAHI hai**. Naapa:
-      poore schema me `markup`/`wallet`/`slug` column ek bhi nahi (`items.margin_pct`
-      aur `quotes.approved_margin_bps` product margin hain, sub-reseller markup nahi).
-      Ye white-label sub-reseller ka poora economics hai — chhota kaam nahi.
-- [ ] **`DomainWatch` (30)** — "ye domain free ho to batao". Asli customer feature,
-      yahan koi ghar nahi. Chhoti table + ek cron.
-- [ ] **`PendingDomain` (182)** — payment clear hone se PEHLE ka hold. Hamara
-      quote → payment → `provisioning_requests` spine isi ko cover karta dikhta hai;
-      **verify karna hai**, maan lena nahi.
-- [ ] **`RecurringChargeAttempt` (128)** — Razorpay **Tokens-flow** ka retry log
-      (merchant-initiated). Hamare paas `payment_mandates` + `invoice_dunning_log` hain.
-      Pehle ye tay karo ki ye app Tokens flow use karti hai ya Subscriptions flow —
-      Subscriptions flow me Razorpay khud retry karta hai aur ye model bekaar hai.
-- [ ] **`IPCheck` (67)** — outbound IP log (RC whitelisting diagnose karne ko). Table
-      se zyada ek endpoint ki cheez lagti hai. Sabse kam value.
+Do ko JAISA-KA-TAISA port nahi kiya — verify karne par pata chala ki DMS ka model
+is app par lagta hi nahi, aur donon jagah is file ka apna andaza GALAT tha:
+
+- [x] **`Reseller` (103)** → `tenants` par `slug`, `reseller_status`, `markup_bps`,
+      `display_name`, `support_email`, `approved_at/by` + **`reseller_wallet_entries`
+      ledger** + `lib/resellers/economics.ts` (38 test).
+      **Nayi table nahi**: reseller pehle se ek tenant hai (`tier` + `parent_tenant_id`),
+      do identity dene se wo aapas me ulat-pher karti.
+      **Wallet ek LEDGER hai, column nahi** — DMS me `walletBalance: Number` tha, jo
+      accounting ka sabse purana bug hai: running total aur uske movement alag ho jaate
+      hain aur phir koi nahi bata sakta ki kaun galat hai. Balance ab `sum(entries)` hai
+      aur kabhi store nahi hota. `bps` (percent nahi) — `approved_margin_bps` jaisa.
+      ⚠️ **Markup ka ghar aur arithmetic ban gaya, par kisi price surface par LAGA nahi.**
+      5 me se 3 jagah lagana 0 jagah lagane se BURA hai (customer ko do daam dikhenge).
+      Wo alag kaam hai.
+- [x] **`DomainWatch` (30)** → `domain_watches` + `lib/domains/watch.ts` (25 test).
+      Poora risk EK email hai: "available!" jo available na ho, chup rehne se bura hai.
+      Isliye email ke liye **POSITIVE `available` reading chahiye**, `taken` ki
+      gairmaujoodgi kaafi NAHI. One-shot: `notified_at` ek baar, phir row retire.
+      Domain area ki ekmatra customer-writable table — aur surakshit hai, kyunki watch
+      na kuch kharchta hai na provision karta.
+- [x] **`PendingDomain` (182)** → `domains` par `attempt_count`, `last_attempt_at`,
+      `resolved_at/by`, `resolution(_note)` + `lib/domains/retry.ts` (17 test).
+      **Is file ka andaza galat tha**: ye "payment se PEHLE ka hold" nahi hai. DMS ka
+      apna default reason bolta hai — "Domain registration failed - likely due to
+      insufficient funds". Yaani **customer ne PAISE DE DIYE aur domain nahi mila**.
+      5 attempt, 1h/4h/12h/24h backoff (ghante, minute nahi — intezaar aadmi ke wallet
+      top-up ka hai), phir RUK jaata hai aur operator queue me baith jaata hai. Wo
+      hand-off hi feature hai.
+- [x] **`RecurringChargeAttempt` (128)** → `recurring_charge_attempts` +
+      `lib/payments/charge-attempts.ts` (20 test). **Is file ka sawaal sahi tha aur
+      jawab "Subscriptions flow" nikla**, to retry ENGINE port nahi hua (Razorpay khud
+      retry karta hai; `next_attempt_at` column jaan-boojh kar nahi hai — doosre ke
+      scheduler ke baare me anumaan screen par blank se bura hai).
+      Jo asal me missing tha: **har attempt ka RECORD**. `subscription.pending` aur
+      `subscription.halted` dono mandate ko `paused` karte the, to "paused" ek baar ka
+      bank decline aur mahine bhar fail hota card alag nahi bata sakta tha.
+      ⚠️ **Aur webhook ka header JHOOTH bol raha tha**: "payment.failed — log so
+      Pardeep can follow up", jabki code `ignored` return karta tha. Ab hota hai.
+- [x] **`IPCheck` (67)** → `egress_ip_checks` + `lib/ops/egress-ip.ts` (21 test) +
+      `GET /api/admin/egress-ip`. **"Sabse kam value" bhi galat tha**: RC aur DA DONO
+      egress IP par gate karte hain aur DONO refuse karte waqt uska naam nahi lete (RC
+      ka error text bad-key jaisa, DA ka HTML login page galat-password jaisa). To koi
+      bhi upstream band ho to pehla sawaal yahi hai.
+      DMS se do sudhaar: (1) IP ka MATCH batata hai, sirf IP nahi; (2) **consensus** —
+      DMS pehla jawab le leta tha, yahan do probe alag bole to wo khud finding hai
+      (`disagree`), kyunki allowlist par ek hi address ho sakta hai.
+      Aur **jawab na aana MISMATCH nahi hai** — warna aadmi wo allowlist theek karne
+      jaata jo kabhi kharab hi nahi thi.
+
+Paanchon me: migration real DB par chalayi aur constraint HAATH SE TODKAR dekhe,
+aur har module par mutation (kul 22) — sab pakde gaye. Ek weak test bhi isi tarah
+mila: reseller margin ko alag se compute karne wala mutation 42 hand-picked daam
+par ZINDA bacha; `100 * 1.025` floating point me 102.49999999999999 hai, to ₹100
+par 2.5% ka margin ₹2 hai par alag compute karne par ₹3 — aur ₹100+₹3 wo daam nahi
+jo kisi ko dikhaya gaya. Ab loop ₹5,000 tak har rupee par chalta hai.
 
 ## 🔴 DATA MIGRATION — NAAPA GAYA, AUR SIFARISH HAI: transactional data NA laayein
 
