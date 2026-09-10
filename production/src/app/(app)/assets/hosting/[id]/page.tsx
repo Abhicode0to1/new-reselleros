@@ -34,6 +34,7 @@ import { formatDate } from "@/lib/utils";
 import { daysUntil } from "@/lib/domains/lifecycle";
 import type { HostingAccountStatus } from "@/lib/supabase/database.types";
 import { OpenPanelButton } from "./panel-button";
+import { RestoreButton } from "./restore-button";
 
 export const dynamic = "force-dynamic";
 
@@ -210,14 +211,28 @@ export default async function HostingDetailPage({ params }: { params: { id: stri
           domainName={h.domain_name}
           daUsername={h.da_username}
         />
+        {/* ─── ONLY ON A SUSPENDED ACCOUNT ─────────────────────────────────
+            Rendered conditionally rather than disabled: a greyed-out "Restore"
+            on a live account is a question the operator has to answer for
+            themselves, and the answer ("it is not suspended") is already on the
+            status pill at the top of this page. */}
+        {h.status === "suspended" && (
+          <RestoreButton hostingId={h.id} domainName={h.domain_name} />
+        )}
+
         <p className="mt-4 text-sm text-ink-3">
           {/* Still stated rather than left as a silent gap — a screen that shows one action
               implies the others were considered, so say what happened to them. */}
           DNS for this account is not editable here: its zone lives on DirectAdmin, whose API needs
           per-user authentication that only the control-panel link above uses so far. A
-          domain&apos;s DNS IS editable at its own page when ResellerClub holds the zone. Suspend
-          and terminate exist in the code and are deliberately not wired to a button — destroying a
-          customer&apos;s site and mailboxes wants a confirmation flow somebody has agreed to.
+          domain&apos;s DNS IS editable at its own page when ResellerClub holds the zone.{" "}
+          {/* Corrected 11 Sep 2026: restoring IS wired now — it is the safe direction and
+              destroys nothing. Suspend and terminate are still not, and the reason is
+              unchanged. Leaving the old sentence would have been a stale claim on the one
+              screen an operator checks before doing it by hand. */}
+          A suspended account can be restored above. Suspending and terminating are still not
+          wired to a button — destroying a customer&apos;s site and mailboxes wants a
+          confirmation flow somebody has agreed to, and a refund is what suspends today.
         </p>
       </Card>
     </div>

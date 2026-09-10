@@ -1,8 +1,19 @@
 /**
- * GET|POST /api/cron/hosting-suspend — make "suspended" true on the SERVER.
+ * GET|POST /api/cron/hosting-suspend — make DirectAdmin match our record.
  *
  * Schedule: every 15 minutes. This is the second half of a decision the database
  * has already made, and until it runs the decision is only on paper.
+ *
+ * ─── THE PATH SAYS "SUSPEND"; THE JOB IS BOTH DIRECTIONS ────────────────────
+ * It suspends AND restores. The name is from 11 Sep, when suspending was all it
+ * did; the restore half arrived the same day, once it became clear that
+ * `refund_payment` could take an account off and nothing in the app could put it
+ * back — `daUnsuspendAccount` existed with no caller anywhere.
+ *
+ * One job and one queue rather than two, deliberately. Both directions are
+ * driven by the same `next_action_at` column, so splitting them would mean two
+ * scheduled jobs polling one column with opposite filters, racing on the same
+ * rows. The path is left alone so the Cloud Scheduler entry stays valid.
  *
  * ─── WHY THIS EXISTS AT ALL ──────────────────────────────────────────────────
  * `refund_payment` suspends hosting when a refund takes the last of the money off
@@ -17,11 +28,18 @@
  * Every minute this route does not run is a minute in that state. That is why it
  * is scheduled at 15 minutes rather than daily.
  *
- * ─── IT ONLY EVER SUSPENDS ───────────────────────────────────────────────────
+ * ─── IT NEVER DELETES ───────────────────────────────────────────────────────
  * `daDeleteAccount` exists in the same module and is NOT imported here, on
  * purpose. This route has no delete path, no "terminate after N days", and no
  * cleanup mode. Deleting a customer's site and mailboxes is a decision a person
  * makes; a scheduled job must never be the thing that makes it.
+ *
+ * ─── WHICH DIRECTION IS NOT DECIDED HERE ────────────────────────────────────
+ * `serverIntentFor` decides, in `lib/hosting/suspension-intent.ts`, with its own
+ * tests. Because the two actions are opposites on somebody's live hosting chosen
+ * by one comparison: invert it and this job suspends every ACTIVE account with a
+ * queued action, which would look like a mass outage with no error anywhere. The
+ * dispatch below only acts on the answer.
  *
  * ─── AN UNCONFIGURED SERVER IS NOT A FINISHED JOB ────────────────────────────
  * If DirectAdmin credentials are missing, the row is left with its
@@ -49,7 +67,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
-import { daSuspendAccount, daWriteConfigured } from "@/lib/directadmin/provision";
+import { daSuspendAccount, daUnsuspendAccount, daWriteConfigured } from "@/lib/directadmin/provision";
+import { serverIntentFor, type HostingSuspensionStatus } from "@/lib/hosting/suspension-intent";
 import { nextSuspendAttemptAt } from "@/lib/hosting/suspend-backoff";
 
 export const dynamic = "force-dynamic";
@@ -88,22 +107,27 @@ async function handle(req: Request): Promise<NextResponse> {
     ran_at: nowIso,
     due: 0,
     suspended_on_server: 0,
+    restored_on_server: 0,
     failed: 0,
     left_queued: 0,
+    skipped: 0,
     server: "" as string,
     /* Named, not counted. "3 failed" cannot be acted on. */
-    failures: [] as Array<{ domain: string; reason: string }>,
+    failures: [] as Array<{ domain: string; action: string; reason: string }>,
     still_waiting: [] as string[],
+    /* Why a due row was not acted on. Without this a run reading
+       "17 due, 0 sent" looks like a broken job. */
+    skipped_reasons: [] as string[],
   };
 
-  /* Rows the RPC marked and nobody has carried out yet.
-     `status = 'suspended'` AND a due `next_action_at` together mean exactly
-     "our record says off, the server has not been told". Clearing the date is
-     what marks it done, so this query is also the queue. */
+  /* Rows where our record and the server disagree, in EITHER direction.
+     A due `next_action_at` is what says "the server has not been told"; the
+     status says which way. Both are read here and `serverIntentFor` decides —
+     the query no longer filters on status, because filtering it here would put
+     the direction rule in two places. */
   const { data: due, error } = await admin
     .from("hosting_accounts")
-    .select("id, domain_name, da_username, attempt_count, next_action_at")
-    .eq("status", "suspended")
+    .select("id, domain_name, status, da_username, attempt_count, next_action_at, deleted_at")
     .is("deleted_at", null)
     .not("next_action_at", "is", null)
     .lte("next_action_at", nowIso)
@@ -129,20 +153,42 @@ async function handle(req: Request): Promise<NextResponse> {
   result.server = "DirectAdmin is configured";
 
   for (const h of due ?? []) {
-    /* No username means provisioning never got far enough to create an account,
-       so there is nothing on the server to suspend. The record stays
-       `suspended` — which is correct, the customer has no service — and the
-       date is cleared because no amount of retrying will find an account that
-       does not exist. */
-    if (!h.da_username) {
-      await admin.from("hosting_accounts").update({ next_action_at: null }).eq("id", h.id);
+    const intent = serverIntentFor({
+      status: h.status as HostingSuspensionStatus,
+      nextActionAt: h.next_action_at,
+      daUsername: h.da_username,
+      deletedAt: h.deleted_at,
+      now,
+    });
+
+    if (intent.action === "none") {
+      /* Two shapes of "nothing to do", and they need opposite handling.
+
+         A row with no DirectAdmin username has nothing on the server in either
+         direction, and no amount of retrying will find an account that does not
+         exist — so the date is CLEARED and the row stops coming back.
+
+         Everything else (a status this job cannot act on) keeps its date. The
+         status may yet change to one that can be acted on, and throwing the
+         queue entry away would lose the fact that the server still needs
+         telling. */
+      if (!h.da_username) {
+        await admin.from("hosting_accounts").update({ next_action_at: null }).eq("id", h.id);
+      }
+      result.skipped++;
+      result.skipped_reasons.push(`${h.domain_name}: ${intent.reason}`);
       continue;
     }
 
     let ok = false;
     let reason = "";
     try {
-      const r = await daSuspendAccount(h.da_username);
+      /* The ONLY place the two directions diverge. `h.da_username` is non-null
+         here — `serverIntentFor` refuses without it. */
+      const r =
+        intent.action === "suspend"
+          ? await daSuspendAccount(h.da_username as string)
+          : await daUnsuspendAccount(h.da_username as string);
       ok = r.ok;
       reason = r.message;
     } catch (e) {
@@ -161,7 +207,8 @@ async function handle(req: Request): Promise<NextResponse> {
           last_error_kind: null,
         })
         .eq("id", h.id);
-      result.suspended_on_server++;
+      if (intent.action === "suspend") result.suspended_on_server++;
+      else result.restored_on_server++;
       continue;
     }
 
@@ -172,7 +219,7 @@ async function handle(req: Request): Promise<NextResponse> {
         attempt_count: attempts,
         last_attempt_at: nowIso,
         next_action_at: nextSuspendAttemptAt(attempts, now),
-        last_error: `Suspend failed: ${reason}`.slice(0, 500),
+        last_error: `${intent.action === "suspend" ? "Suspend" : "Restore"} failed: ${reason}`.slice(0, 500),
         last_error_at: nowIso,
         /* `server_unreachable` and not `hard_failure`: the account still exists
            and the intent is still valid, which is what makes this retryable.
@@ -182,9 +229,9 @@ async function handle(req: Request): Promise<NextResponse> {
       })
       .eq("id", h.id);
 
-    console.error(`[hosting-suspend] ${h.domain_name} (${h.da_username}): ${reason}`);
+    console.error(`[hosting-suspend] ${intent.action} ${h.domain_name} (${h.da_username}): ${reason}`);
     result.failed++;
-    result.failures.push({ domain: h.domain_name, reason });
+    result.failures.push({ domain: h.domain_name, action: intent.action, reason });
   }
 
   return NextResponse.json({ ran: true, ...result });
