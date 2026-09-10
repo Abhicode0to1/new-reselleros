@@ -711,6 +711,20 @@ export type DomainRow = {
   last_error:     string | null;
   last_error_at:  string | null;
   last_synced_at: string | null;
+  /* ── Paid, but not delivered (20260910100000) ───────────────────────────────
+     A failed registration is a domain the customer HAS PAID FOR AND DOES NOT
+     HAVE. These carry the bounded retry budget and the trail of who dealt with
+     it — see lib/domains/retry.ts. */
+  /** Upstream attempts made, including the first. 0 = never tried. */
+  attempt_count:    number;
+  last_attempt_at:  string | null;
+  /** Set when a person dealt with it. NULL = still open (the operator queue). */
+  resolved_at:      string | null;
+  /** Staff `users.id`, never a customer. */
+  resolved_by:      string | null;
+  /** 'refunded' | 're_registered' | 'alternative_offered' | 'written_off'. */
+  resolution:       string | null;
+  resolution_note:  string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

@@ -44,6 +44,7 @@ import {
   rcDomainDetails,
 } from "@/lib/resellerclub/orders";
 import { mustNotRetry } from "@/lib/resellerclub/classify";
+import { decideRegistrationRetry } from "@/lib/domains/retry";
 import { rcEnsureRegistrant } from "@/lib/resellerclub/customers";
 import {
   listReadyEngineRequests,
@@ -185,17 +186,87 @@ async function handle(req: Request) {
              keeps a lost race from creating an RC contact nobody needed. */
           registrar_customer_id: RC_CUSTOMER_ID || null,
           registrar_contact_id: RC_CONTACT_ID || null,
+          /* The claim IS the attempt — everything below this line either orders or
+             records why it could not, so counting here cannot under-count. */
+          attempt_count: 1,
+          last_attempt_at: new Date().toISOString(),
         })
         .select("id")
         .maybeSingle();
 
-      if (claimErr || !claimed) {
-        /* Almost always the unique index: another worker has it, or the name is
-           already ours from an earlier run. Either way this run must not order. */
-        console.warn(`[provision-domain] could not claim ${domain}: ${claimErr?.message ?? "no row"}`);
-        result.pending++; note("pending-upstream");
-        continue;
+      let claimedId = claimed?.id ?? null;
+
+      if (!claimedId) {
+        /* The insert lost. Two very different reasons, and telling them apart is
+           the whole of the retry feature (lib/domains/retry.ts):
+
+           · another worker holds it, or it is already ours and live — this run
+             must not order, and must not touch the row;
+           · it is OUR OWN earlier FAILED attempt at a domain the customer has
+             already paid for. Almost always an empty ResellerClub wallet, which
+             fixes itself the moment somebody tops up. That is worth re-ordering,
+             a bounded number of times, on a backoff.
+
+           Before 10 Sep the second case was left for somebody to retry by hand,
+           which is a thing nobody does at 2am. */
+        const { data: existing } = await admin
+          .from("domains")
+          .select("id, status, attempt_count, last_attempt_at, resolved_at, tenant_id")
+          .eq("domain_name", domain)
+          .is("deleted_at", null)
+          .maybeSingle();
+
+        const decision = existing
+          ? decideRegistrationRetry({
+              status: existing.status,
+              attemptCount: existing.attempt_count ?? 0,
+              lastAttemptAt: existing.last_attempt_at,
+              resolvedAt: existing.resolved_at,
+            })
+          : null;
+
+        if (!existing || !decision || decision.kind !== "retry") {
+          console.warn(
+            `[provision-domain] not claiming ${domain}: ${claimErr?.message ?? "insert lost"}` +
+            (decision ? ` — ${decision.kind}: ${"reason" in decision ? decision.reason : ""}` : ""),
+          );
+          result.pending++; note("pending-upstream");
+          continue;
+        }
+
+        /* Re-claim our own failed row. `.eq("status", "failed")` in the update is
+           the lock: if another worker got here first the row is no longer failed,
+           this update matches nothing, and we skip rather than double-order. */
+        const nextAttempt = (existing.attempt_count ?? 0) + 1;
+        const { data: reclaimed } = await admin
+          .from("domains")
+          .update({
+            status: "pending",
+            processing_until: claimedUntil,
+            attempt_count: nextAttempt,
+            last_attempt_at: new Date().toISOString(),
+            /* Cleared because this attempt is about to write its own outcome.
+               Leaving the old reason would make a fresh failure look stale. */
+            last_error: null,
+            last_error_at: null,
+          })
+          .eq("id", existing.id)
+          .eq("status", "failed")
+          .select("id")
+          .maybeSingle();
+
+        if (!reclaimed) {
+          console.warn(`[provision-domain] ${domain}: another worker took the retry`);
+          result.pending++; note("pending-upstream");
+          continue;
+        }
+        console.log(`[provision-domain] retrying ${domain}, attempt ${nextAttempt}`);
+        claimedId = reclaimed.id;
       }
+
+      /* Both paths above either set this or `continue`d, so it is a string from
+         here on — said once rather than asserted at each of the five uses. */
+      const domainRowId: string = claimedId;
 
       /* ── Who the domain is filed under ───────────────────────────────────
          After the claim, before the order. A registrant is reusable and cheap; a
@@ -233,7 +304,7 @@ async function handle(req: Request) {
             processing_until: null,
             last_error: identity.reason,
             last_error_at: new Date().toISOString(),
-          }).eq("id", claimed.id);
+          }).eq("id", domainRowId);
           await markProvisioningFailed(r.id, `Could not establish the registrant at ResellerClub: ${identity.reason}`);
           result.failed++; note("registrant-unresolved");
           continue;
@@ -246,7 +317,7 @@ async function handle(req: Request) {
         await admin.from("domains").update({
           registrar_customer_id: identity.customerId,
           registrar_contact_id: identity.contactId,
-        }).eq("id", claimed.id);
+        }).eq("id", domainRowId);
       }
 
       /* ── The irreversible bit ─────────────────────────────────────────── */
@@ -267,7 +338,7 @@ async function handle(req: Request) {
           processing_until: null,
           last_error: outcome.reason,
           last_error_at: new Date().toISOString(),
-        }).eq("id", claimed.id);
+        }).eq("id", domainRowId);
         await markProvisioningFailed(r.id, `ResellerClub refused the registration: ${outcome.reason}`);
 
         const { alert: owner } = await loadOwnerAlert(admin, r.tenant_id);
@@ -292,7 +363,7 @@ async function handle(req: Request) {
           last_error: `ResellerClub has not completed this yet (${outcome.kind}) — re-checking, not re-ordering`,
           last_error_at: new Date().toISOString(),
           next_action_at: new Date(Date.now() + 30 * 60_000).toISOString(),
-        }).eq("id", claimed.id);
+        }).eq("id", domainRowId);
         result.pending++; note("pending-upstream");
         continue;
       }
@@ -326,7 +397,7 @@ async function handle(req: Request) {
         last_error: orderId ? null : "Registered at ResellerClub but no order id yet — looking it up",
         last_error_at: orderId ? null : new Date().toISOString(),
         last_synced_at: new Date().toISOString(),
-      }).eq("id", claimed.id);
+      }).eq("id", domainRowId);
 
       if (orderId) {
         await markProvisioningActivated(r.id, orderId);
