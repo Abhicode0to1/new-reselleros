@@ -7,6 +7,81 @@
 
 ---
 
+# 🟣 HANDOFF — 11 Sep 2026 (raat, dusra hissa). Hosting wapas chalu ho sakti hai; domain lapse hone se pehle khabar jati hai.
+
+## ✅ 1. `daUnsuspendAccount` ka caller — jo chhed maine khud khola tha
+Subah `refund_payment` ko hosting suspend karne ki taakat mili, aur app me use
+wapas chalu karne ka koi raasta nahi tha. `daUnsuspendAccount` 9 Sep ke port se
+bina caller pada tha (uska apna comment kehta tha "trial convert hone par use
+hota hai" — wo caller bhi nahi tha).
+
+- `/assets/hosting/[id]` par **Restore** button (sirf suspended par). Wajah ka
+  field optional hai, par actor + waqt hamesha audit me.
+- `/api/hosting/[id]/restore` — row ko active karta hai aur `next_action_at`
+  stamp karta hai; **server ko cron batata hai**, ye route DA ko chhoota nahi.
+  Jawab me saaf likha hai ki site 15 min me wapas aayegi, "ho gaya" nahi.
+- **`/api/cron/hosting-suspend` ab DONO taraf kaam karta hai** (naam purana hai,
+  scheduler entry bachane ke liye — header me likha hai). Ek queue, ek job.
+- **Direction ka faisla `lib/hosting/suspension-intent.ts` me hai, test ke saath**
+  — kyunki ulta ho jaye to job har CHALU account suspend kar degi. 13 test,
+  4 mutation (donon direction swap → 4 laal; ternary → 5; due comparison → 1;
+  deleted check → 1).
+- **Asli system par naapa** (DA ko `127.0.0.1:9` par point karke): suspended →
+  `action: "suspend"`, active+queued → `action: "restore"`, terminated+queued →
+  skipped wajah ke saath. Failure par attempt_count 1, `last_error_kind
+  server_unreachable`, aur theek **15 min** ka backoff.
+
+## ✅ 2. Domain lapse hone se pehle khabar — pehle KOI nahi thi
+Naapa: `asset-sweep` tareekh sahi rakhta tha aur kisi ko batata nahi tha. Is DB
+me `acme-legacy.net` 9 din pehle lapse ho chuka tha, kisi ko pata nahi.
+
+- Cadence 30/14/7/1 din + lapse ke baad ek. Customer ko countdown; **owner ko
+  sirf lapse par** (har step par alert wo shor hai jise reseller filter karna
+  seekh jata hai).
+- **Email me daam NAHI hai** — renewal quote ke waqt rate card se banta hai.
+  Aur `rcRenewDomain` import bhi nahi hai: paisa kharch karne wala kaam wahan
+  hai jahan customer ne pehle se de diya ho.
+- Unique key `(domain_id, step, term_expires_at)` — **term** isliye ki renewal
+  par cadence khud reset ho jaye. Sirf `(domain_id, step)` hota to customer ko
+  zindagi me ek baar khabar milti aur doosra lapse bhi chup-chaap hota.
+- 29 test, 5 mutation. Sabse zaroori: "kaun sa step" aur "bheja gaya kya" ko ek
+  loop me MILANA — mera pehla version wahi karta tha, to 11 din bache hone par
+  (14-din ka bhej chuke the) wo "30 din bache hain" bhej deta tha.
+
+## 🔴 3. Ek PURANA bug jo chalane se mila (sirf padhne se nahi)
+`sendEmail` HAR raaste par ek OBJECT lautata hai — `{status:
+"sent"|"stubbed"|"failed"}` — aur sirf anpekshit throw par reject karta hai. To
+ye, jo dekhne me sambhla hua lagta hai, jaanch NAHI hai:
+
+    const sent = await sendEmail({…}).catch(() => null);
+    if (!sent) { rollBack(); return; }
+
+Resend key ke bina teeno send `failed` aaye, `email_log` me failed darj hua, aur
+mere notice row par `sent_at` lag gaya — table dawa kar rahi thi ki customer ko
+bata diya. **`domain-watch` me wahi line thi** (maine wahin se copy ki thi),
+yaani uska claim-rollback ek baar bhi nahi chala tha jab se wo file bani.
+
+Dono theek. 48 call site ka audit kiya, koi aur nahi mila.
+`send-result-checked.test.ts` pehra hai — jaal abhi bhi maujood hai, kyunki
+function failure par bhi truthy object lautata hai.
+
+## ⏳ Domain renewal ka BAAKI hissa — do me se do
+Pardeep ka faisla (11 Sep): **domain subscription NAHI banega, apna raasta
+hoga** (warna ₹900/saal ka domain ₹75/mahine ka MRR ban jata).
+
+- [ ] **Domain ke liye renewal QUOTE ka raasta** — `lib/renewals/` poora
+      subscription par tika hai (`createRenewalQuote` subscription id leta hai),
+      aur kisi domain par subscription nahi hai. Naya raasta banega.
+- [ ] **Paid hone par RC par renew karna** — `rcRenewDomain` maujood hai aur
+      sahi hai (gate + `exp-date` se duplicate rok). **Par is DB ke KISI domain
+      par `registrar_order_id` nahi hai**, yaani aaj ye code ek bhi row par chal
+      hi nahi sakta. `DOMAIN_REGISTER_LIVE=1` bhi chahiye. Isliye jaan-boojh kar
+      NAHI banaya — bina verify kiye paisa kharch karne wala code likhna is
+      repo ke apne §0.4 ke khilaf hai.
+
+
+---
+
 # 🟣 HANDOFF — 11 Sep 2026 (raat). Customer khud hosting plan bada kar sakta hai.
 
 Pardeep: "Implement this functionality fully." `daChangePackage` 9 Sep se
