@@ -40,10 +40,22 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { sendEmail } from "@/lib/email/send";
-import { buildDigest, digestText, type LogRow } from "@/lib/ops/health-digest";
+import { buildDigest, digestText, type LogRow, type WalletState } from "@/lib/ops/health-digest";
+import { rcResellerAccount } from "@/lib/resellerclub/reseller";
+import { rcWriteConfigured } from "@/lib/resellerclub/call";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/**
+ * Wallet is se neeche ho to khabar bhejo.
+ *
+ * YE NAAPA HUA NAHI HAI — shuruaati anumaan hai: ek .com reseller cost par
+ * takreeban ₹1000 hai, to ₹5000 matlab "abhi bhi paanch registration ki
+ * gunjaish". Pehli baar email aane ke baad Pardeep ke hisaab se badal lena —
+ * `RESELLERCLUB_LOW_BALANCE_INR` se bina deploy badalta hai.
+ */
+const LOW_BALANCE_FLOOR_INR = Number(process.env.RESELLERCLUB_LOW_BALANCE_INR ?? "5000") || 5000;
 
 const PROJECT = "resellsubsos-prod";
 const SERVICE = "resellersos";
@@ -143,7 +155,19 @@ async function handle(req: Request) {
     }, { status: 403 });
   }
 
-  const digest = buildDigest(hours, { http: toRows(http), stderr: toRows(stderr) });
+  /* RC wallet — roz ek baar, isi digest ke saath. Alag cron nahi banaya: sawaal
+     wahi hai ("kuch bigda hai?"), aur ye digest chup rehna jaanta hai. Credential
+     na ho (har local machine) to jaancha hi nahi jaata — null, aur us par chup. */
+  const wallet: WalletState | null = rcWriteConfigured()
+    ? await (async () => {
+        const out = await rcResellerAccount();
+        return out.kind === "read"
+          ? { available: out.account.availableBalance, floor: LOW_BALANCE_FLOOR_INR }
+          : { available: null, floor: LOW_BALANCE_FLOOR_INR, reason: out.reason };
+      })()
+    : null;
+
+  const digest = buildDigest(hours, { http: toRows(http), stderr: toRows(stderr) }, wallet);
 
   if (digest.clean) return NextResponse.json({ ok: true, clean: true, hours });
 

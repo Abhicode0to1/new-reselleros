@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildDigest, digestText, scrub, worthReading, shorten, ist } from "./health-digest";
+import { buildDigest, digestText, scrub, worthReading, shorten, ist, walletWorthReporting, type WalletState } from "./health-digest";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Neeche ka har test 28 Aug 2026 ke asli logon par baitha hai — us din production ke logs
@@ -213,5 +213,84 @@ describe("digestText — email me kya jata hai", () => {
       stderr: [{ timestamp: t(1), text: "}" }],
     });
     expect(digestText(noisy, "https://app")).toContain("1 aur line");
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ResellerClub wallet — 10 Sep 2026 ko joda gaya.
+
+   Jo bachana hai wo ek hi cheez hai: customer ka paisa liya ja chuka ho aur
+   domain register na ho, kyunki wallet khali tha. Aur is file ka apna sabak
+   yahan dohra jaata hai — "padh hi nahi paya" ko "sab theek hai" jaisa dikhna
+   mana hai.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+const w = (available: number | null, floor = 5000, reason?: string): WalletState =>
+  ({ available, floor, reason });
+
+describe("wallet — kab bolna hai", () => {
+  it("floor se neeche ho to bolta hai", () => {
+    expect(walletWorthReporting(w(1200))).toBe(true);
+    expect(walletWorthReporting(w(4999))).toBe(true);
+  });
+
+  it("floor par ya uske upar chup rehta hai", () => {
+    expect(walletWorthReporting(w(5000))).toBe(false);
+    expect(walletWorthReporting(w(50000))).toBe(false);
+  });
+
+  it("padha na ja sake to BOLTA hai — chup nahi rehta", () => {
+    /* Isi file ke banne ki wajah: 28 Aug ko teen bug hafton chhupe rahe the
+       kyunki "kuch nahi mila" aur "padh hi nahi paya" ek jaise dikhte the. */
+    expect(walletWorthReporting(w(null, 5000, "ResellerClub unreachable"))).toBe(true);
+  });
+
+  it("jaancha hi na gaya ho to chup — wo khabar nahi hai", () => {
+    /* Local machine par RC credential nahi hote. Us par roz email bhejna
+       digest ko padhne layak nahi chhodega. */
+    expect(walletWorthReporting(null)).toBe(false);
+    expect(walletWorthReporting(undefined)).toBe(false);
+  });
+
+  it("sacha khali wallet aur na-pata, dono bolte hain — par alag alag", () => {
+    const empty = digestText(buildDigest(24, { http: [], stderr: [] }, w(0)), "https://app");
+    const unknown = digestText(buildDigest(24, { http: [], stderr: [] }, w(null, 5000, "HTTP 403")), "https://app");
+    expect(empty).toContain("wallet kam hai");
+    expect(unknown).toContain("padha nahi ja saka");
+    /* Na-pata ko "khali" kehna galat hai, aur mail padhne wala usi par kaam karega. */
+    expect(unknown).toContain("khali NAHI hai");
+    expect(unknown).not.toContain("wallet kam hai");
+  });
+});
+
+describe("wallet — digest ko clean rehne se rokta hai", () => {
+  it("kam wallet par digest clean NAHI hai, to email jaata hai", () => {
+    /* Ye asli asar hai. `clean` par hi route chup rehna tay karta hai, to is
+       flag ke bina balance padha jaakar bhi kisi tak nahi pahunchta. */
+    const d = buildDigest(24, { http: [], stderr: [] }, w(800));
+    expect(d.clean).toBe(false);
+    expect(d.wallet?.available).toBe(800);
+  });
+
+  it("na-padh-paane par bhi clean nahi", () => {
+    expect(buildDigest(24, { http: [], stderr: [] }, w(null, 5000, "unreachable")).clean).toBe(false);
+  });
+
+  it("theek wallet par clean rehta hai — log saaf hon to", () => {
+    const d = buildDigest(24, { http: [], stderr: [] }, w(90000));
+    expect(d.clean).toBe(true);
+  });
+
+  it("wallet na diya jaaye to purana vyavhaar jaisa ka waisa", () => {
+    /* 25 purane test isi par baithe hain: teesra argument optional hai. */
+    const d = buildDigest(24, { http: [], stderr: [] });
+    expect(d.clean).toBe(true);
+    expect(d.wallet).toBeNull();
+  });
+
+  it("theek wallet ke saath bhi asli gadbad chhupti nahi", () => {
+    const d = buildDigest(24, { http: [{ timestamp: t(1), status: 500, url: "/a" }], stderr: [] }, w(90000));
+    expect(d.clean).toBe(false);
+    expect(digestText(d, "https://app")).not.toContain("wallet");
   });
 });
