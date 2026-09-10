@@ -24,7 +24,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Badge, toneToKind } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { rupee, formatDate } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -134,7 +134,7 @@ export function TdsDetailDialog({ open, onOpenChange, tds }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             TDS Entry
-            <Badge color={statusColor(tds.status)}>{TDS_STATUS_LABEL[tds.status]}</Badge>
+            <Badge kind={toneToKind(statusColor(tds.status))}>{TDS_STATUS_LABEL[tds.status]}</Badge>
           </DialogTitle>
           <DialogDescription>
             {TDS_STATUS_DESCRIPTION[tds.status]}

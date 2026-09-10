@@ -23,7 +23,7 @@ import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Badge, toneToKind } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
@@ -477,9 +477,9 @@ export default function TdsYearEndPage() {
                       <td className="px-3 py-2 font-mono text-ink">{m.row26AS.tan}</td>
                       <td className="px-3 py-2 text-right font-mono">{rupee(m.row26AS.amount)}</td>
                       <td className="px-3 py-2">
-                        {m.status === "matched" && <Badge color="emerald">Matched</Badge>}
-                        {m.status === "amount-mismatch" && <Badge color="amber">Amount mismatch</Badge>}
-                        {m.status === "no-match-in-system" && <Badge color="rose">Not in system</Badge>}
+                        {m.status === "matched" && <Badge kind="success">Matched</Badge>}
+                        {m.status === "amount-mismatch" && <Badge kind="warning">Amount mismatch</Badge>}
+                        {m.status === "no-match-in-system" && <Badge kind="danger">Not in system</Badge>}
                       </td>
                       <td className="px-3 py-2">
                         {m.matchedTdsRows.length > 0 ? (
@@ -635,7 +635,7 @@ export default function TdsYearEndPage() {
                     <td className="px-4 py-2.5 text-right font-mono text-ink-2">{rupee(r.gross_amount)}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-rose">{rupee(r.tds_amount)}</td>
                     <td className="px-4 py-2.5">
-                      <Badge color={STATUS_COLOR[r.status]}>{TDS_STATUS_LABEL[r.status]}</Badge>
+                      <Badge kind={toneToKind(STATUS_COLOR[r.status])}>{TDS_STATUS_LABEL[r.status]}</Badge>
                     </td>
                   </tr>
                 ))}

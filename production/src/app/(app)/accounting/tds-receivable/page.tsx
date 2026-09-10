@@ -18,7 +18,7 @@ import * as React from "react";
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Badge, toneToKind } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
@@ -243,7 +243,7 @@ export default function TdsReceivablePage() {
                     <td className="px-4 py-3 text-right font-mono font-semibold text-rose">{rupee(r.tds_amount)}</td>
                     <td className="px-4 py-3 text-right text-ink-3 font-mono">{Number(r.rate_pct).toFixed(2)}%</td>
                     <td className="px-4 py-3">
-                      <Badge color={STATUS_COLOR[r.status]}>{TDS_STATUS_LABEL[r.status]}</Badge>
+                      <Badge kind={toneToKind(STATUS_COLOR[r.status])}>{TDS_STATUS_LABEL[r.status]}</Badge>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">
                       {r.invoice_id ? (
@@ -275,7 +275,7 @@ export default function TdsReceivablePage() {
                           {formatDate(r.payment_received_date)} · {r.section} @ {Number(r.rate_pct).toFixed(2)}%
                         </div>
                       </div>
-                      <Badge color={STATUS_COLOR[r.status]}>{TDS_STATUS_LABEL[r.status]}</Badge>
+                      <Badge kind={toneToKind(STATUS_COLOR[r.status])}>{TDS_STATUS_LABEL[r.status]}</Badge>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-2xs">
                       <div>

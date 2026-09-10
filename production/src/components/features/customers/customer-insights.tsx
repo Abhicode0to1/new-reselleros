@@ -444,10 +444,6 @@ export function CustomerContactActions({ customer }: { customer: Customer }) {
   );
 }
 
-const VENDOR_COLOR: Record<string, "info" | "indigo" | "amber" | "slate"> = {
-  google: "info", microsoft: "indigo", zoho: "amber", other: "slate",
-};
-
 /** Billing cycle / term, derived from the start↔renewal span. */
 function subTerm(start: string | null, renewal: string | null): string | null {
   if (!start || !renewal) return null;
@@ -486,7 +482,13 @@ export function SubscriptionList({ subs }: { subs: Subscription[] }) {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-ink truncate">{s.plan}</span>
-                <Badge kind={active ? "success" : "muted"} color={VENDOR_COLOR[s.vendor] ?? "slate"} size="sm" dot>{s.status}</Badge>
+                {/* A `color={VENDOR_COLOR[…]}` used to be passed here as well. It did
+                    nothing — `kind` is what paints a badge — and VENDOR_COLOR had no
+                    other reader, so the vendor colour was never on screen at all. The
+                    map is gone rather than wired up: `kind` is already carrying the
+                    fact worth a colour here (is the subscription live), a badge only
+                    gets one look, and the vendor is legible in the plan name beside it. */}
+                <Badge kind={active ? "success" : "muted"} size="sm" dot>{s.status}</Badge>
                 {term && <Badge kind="muted" size="sm">{term}</Badge>}
               </div>
               <div className="text-2xs text-ink-3 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">

@@ -585,7 +585,7 @@ export default function SaasMetricsPage() {
                         <td className="px-4 py-3 text-right font-mono text-ink-2">{rupee(c.startedMRR)}</td>
                         <td className="px-4 py-3 text-right font-mono text-ink-2">{c.retainedCount}</td>
                         <td className="px-4 py-3 text-right">
-                          <Badge color={c.retentionPct >= 80 ? "emerald" : c.retentionPct >= 60 ? "amber" : "rose"}>
+                          <Badge kind={c.retentionPct >= 80 ? "success" : c.retentionPct >= 60 ? "warning" : "danger"}>
                             {c.retentionPct.toFixed(0)}%
                           </Badge>
                         </td>

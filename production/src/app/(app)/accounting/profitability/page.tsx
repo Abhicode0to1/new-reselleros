@@ -388,7 +388,7 @@ export default function ProfitabilityPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-mono">
-                      <Badge color={r.health === "green" ? "emerald" : r.health === "amber" ? "amber" : "rose"}>
+                      <Badge kind={r.health === "green" ? "success" : r.health === "amber" ? "warning" : "danger"}>
                         {r.marginPct.toFixed(1)}%
                       </Badge>
                     </td>
@@ -446,7 +446,7 @@ export default function ProfitabilityPage() {
                         {r.quoteCount} {r.quoteCount === 1 ? "quote" : "quotes"} · {r.seatCount} seats
                       </div>
                     </div>
-                    <Badge color={r.health === "green" ? "emerald" : r.health === "amber" ? "amber" : "rose"}>
+                    <Badge kind={r.health === "green" ? "success" : r.health === "amber" ? "warning" : "danger"}>
                       {r.marginPct.toFixed(1)}%
                     </Badge>
                   </div>
