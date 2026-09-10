@@ -63,6 +63,14 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             className={cn(
               "flex-1 bg-transparent border-0 outline-none text-sm text-ink placeholder:text-ink-4",
               "px-3 py-2 min-w-0",
+              /* §20: 44px minimum touch target on a phone, released above `md`
+                 where a pointer is doing the work.
+                 It sits on the INPUT and not on the wrapper, and the first
+                 version of this got that wrong. A 44px wrapper around a 36px
+                 input leaves two 4px strips that look tappable and are not — the
+                 wrapper is a div, not a label, so tapping them focuses nothing.
+                 Measured: the wrapper read 44px while the field itself stayed 36. */
+              "min-h-[44px] md:min-h-0",
               prefix && "pl-2",
               suffix && "pr-2",
               "disabled:cursor-not-allowed",

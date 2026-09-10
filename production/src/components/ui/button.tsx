@@ -48,9 +48,28 @@ const buttonVariants = cva(
         link:
           "bg-transparent text-amber underline-offset-4 hover:underline p-0 h-auto",
       },
+      /* ─── MOBILE-FIRST HEIGHTS, AND THIS WAS A REAL §20 VIOLATION ───────────
+       * CLAUDE.md §20 requires every touch target on a phone to be at least 44px.
+       * These were `h-8` (32px) and `h-9` (36px) at EVERY width, and `md` is the
+       * default — so on a phone essentially every button in the app was under the
+       * floor, including the primary action on /portal/shop and "Open control
+       * panel" on /portal/hosting, on a surface the portal's own code calls "a
+       * phone-first surface".
+       *
+       * Measured at 390px before this change: 18 targets under 44px on
+       * /portal/shop, 3 on /portal/domains, 3 on /portal/hosting (32px), 2 on
+       * /portal/support.
+       *
+       * Unlike the icon-only fix, the BOX grows here rather than just the hit
+       * area. A 44px-tall text button on a phone is what every mobile interface
+       * does and what §20 is asking for; the invisible-hit-area trick was only
+       * needed for icon buttons, where growing the box would have moved a
+       * thousand desktop layouts. Above `md` the original density is restored
+       * exactly, so no desktop screen changes.
+       */
       size: {
-        sm: "h-8 px-3 text-xs",
-        md: "h-9 px-4 text-sm",
+        sm: "h-11 md:h-8 px-3 text-xs",
+        md: "h-11 md:h-9 px-4 text-sm",
         lg: "h-11 px-6 text-base",
         /* 36px box, 44px hit area on a phone — see .touch-44 in globals.css. */
         icon: "h-9 w-9 p-0 touch-44",
