@@ -7,7 +7,17 @@
  * Events we care about:
  *   - `payment.captured`  — money actually moved into our settlement balance
  *   - `order.paid`        — Razorpay considers the order complete
- *   - `payment.failed`    — log so Pardeep can follow up
+ *   - `subscription.*`    — the standing permission to debit (lib/payments/mandate.ts)
+ *   - `payment.failed`, `subscription.charged|pending|halted`
+ *                         — recorded as recurring-debit ATTEMPTS
+ *                           (lib/payments/charge-attempts.ts)
+ *
+ * ─── A CORRECTION, 10 Sep 2026 ────────────────────────────────────────
+ * This list used to say `payment.failed — log so Pardeep can follow up`, and the
+ * code below said `// (We could log failed payments to a separate table for
+ * follow-up later.)` and then returned `ignored`. The header documented a
+ * feature that did not exist, which is worse than a gap: anyone reading it
+ * concluded failed debits were being followed up. They now are.
  *
  * For each successful capture, we:
  *   1. Verify the HMAC signature using RAZORPAY_WEBHOOK_SECRET (must be set!)
@@ -37,6 +47,7 @@ import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 const WEBHOOK_APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
+import { readChargeAttempt, needsAttention } from "@/lib/payments/charge-attempts";
 import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
@@ -214,12 +225,31 @@ export async function POST(request: NextRequest) {
      whole system entitled to write `active` on a payment mandate. The signature has
      already been verified against THIS tenant's secret above; nothing downstream of
      that check can be forged. See lib/payments/mandate.ts. */
+  /* ── Recurring debits: record the attempt, whatever it was ────────────────
+     BEFORE the mandate handler and before the success-only filter, because both
+     of those drop the information this needs. The mandate handler maps
+     `subscription.pending` and `subscription.halted` to the same `paused`, and
+     the filter below returns `ignored` for `payment.failed`.
+
+     Neither is wrong for its own purpose — but between them, a decline left no
+     trace at all, so "paused" could not tell a one-off bank decline from a card
+     that had been failing for a month, and nobody could see WHICH amount failed
+     or why. Autopay silently not collecting while the customer keeps the service
+     is the failure being closed here.
+
+     Recording never blocks the event: a failure to write the row is logged and
+     the handler carries on, because losing our record is much cheaper than
+     making Razorpay retry a webhook we had already acted on. */
+  await recordChargeAttempt(admin, event, body, tenantParam).catch((e) => {
+    console.error("[webhooks/razorpay] could not record the charge attempt:", (e as Error).message);
+  });
+
   if (event.startsWith("subscription.")) {
     return handleMandateEvent(admin, event, rawBody, tenantParam);
   }
 
-  // Only act on payment-success events — ignore failure / authorized / etc.
-  // (We could log failed payments to a separate table for follow-up later.)
+  // Only act on payment-success events for the ORDER path below. Failures are no
+  // longer dropped on the floor — they were recorded above.
   if (event !== "payment.captured" && event !== "order.paid") {
     return NextResponse.json({ received: true, ignored: event });
   }
@@ -584,4 +614,87 @@ async function handleMandateEvent(
 
   console.info(`[webhooks/razorpay] mandate ${mandate.id}: ${mandate.status} → ${next} (${event})`);
   return NextResponse.json({ received: true, mandate: mandate.id, status: next });
+}
+
+/**
+ * Write one recurring-debit attempt, if this event is one.
+ *
+ * Everything about READING the event is in lib/payments/charge-attempts.ts and is
+ * tested there; this is only the write. Returns quietly for the events that are
+ * not debits, which is most of them.
+ *
+ * The tenant is resolved from the mandate the gateway subscription belongs to —
+ * not from the URL parameter alone — so an attempt cannot be filed against a
+ * tenant that does not own the subscription. When there is no mandate to resolve
+ * (an event for a subscription we have no record of), the row is still written
+ * against the URL tenant IF the signature verified for it: an unattributable
+ * decline is still worth seeing, and dropping it would recreate the gap this
+ * closes.
+ */
+async function recordChargeAttempt(
+  admin: ReturnType<typeof createAdminClient>,
+  event: string,
+  body: { payload?: { payment?: { entity?: unknown }; subscription?: { entity?: unknown } } },
+  tenantParam: string | null,
+): Promise<void> {
+  const facts = readChargeAttempt(event, {
+    payment: body.payload?.payment?.entity as Parameters<typeof readChargeAttempt>[1]["payment"],
+    subscription: body.payload?.subscription?.entity as Parameters<typeof readChargeAttempt>[1]["subscription"],
+  });
+  if (!facts) return;
+
+  /* The mandate is the link to everything else — tenant, customer, subscription
+     — and `payment_mandates.gateway_subscription_id` is unique, so this is an
+     exact lookup rather than a guess. */
+  const { data: mandate } = facts.gatewaySubscriptionId
+    ? await admin
+        .from("payment_mandates")
+        .select("id, tenant_id, customer_id, subscription_id, test_mode")
+        .eq("gateway_subscription_id", facts.gatewaySubscriptionId)
+        .maybeSingle()
+    : { data: null };
+
+  const tenantId = mandate?.tenant_id ?? tenantParam;
+  if (!tenantId) {
+    /* Nothing to file it against. Logged rather than dropped silently, because a
+       decline with no home is itself a sign something is misconfigured. */
+    console.warn(
+      `[webhooks/razorpay] ${event}: no tenant for subscription ${facts.gatewaySubscriptionId ?? "(none)"} — attempt not recorded`,
+    );
+    return;
+  }
+
+  const { error } = await admin.from("recurring_charge_attempts").insert({
+    tenant_id: tenantId,
+    customer_id: mandate?.customer_id ?? null,
+    subscription_id: mandate?.subscription_id ?? null,
+    mandate_id: mandate?.id ?? null,
+    gateway: "razorpay",
+    gateway_subscription_id: facts.gatewaySubscriptionId,
+    gateway_payment_id: facts.gatewayPaymentId,
+    gateway_order_id: facts.gatewayOrderId,
+    amount: facts.amount,
+    outcome: facts.outcome,
+    error_code: facts.errorCode,
+    error_description: facts.errorDescription,
+    /* The mandate knows which keys it was made under; fall back to test-mode
+       rather than claiming a live debit we cannot vouch for. */
+    test_mode: mandate?.test_mode ?? true,
+    occurred_at: facts.occurredAt.toISOString(),
+  });
+
+  if (error) {
+    /* 23505 is the unique violation, i.e. Razorpay redelivered a webhook. That is
+       documented behaviour, not a fault, and the row already exists — so it is
+       not worth an error line. */
+    if (error.code === "23505") return;
+    throw new Error(error.message);
+  }
+
+  if (needsAttention(facts.outcome)) {
+    console.warn(
+      `[webhooks/razorpay] recurring debit ${facts.outcome} for subscription ${facts.gatewaySubscriptionId ?? "(unknown)"}` +
+      (facts.errorDescription ? `: ${facts.errorDescription}` : ""),
+    );
+  }
 }

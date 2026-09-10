@@ -1614,6 +1614,54 @@ type ContractAmendmentRow = {
  *  is written ONLY by the signature-verified Razorpay webhook.
  * See migration 20260817090000 for why the app has no path to it.
  */
+/* ── recurring_charge_attempts (20260910110000) ─────────────────────────────
+   One row per recurring-debit attempt the gateway REPORTED, successes and
+   failures alike. Razorpay owns the retry schedule on the Subscriptions flow, so
+   this is the record and not a scheduler — there is deliberately no
+   `next_attempt_at`. See lib/payments/charge-attempts.ts. */
+export type ChargeOutcomeT = "succeeded" | "failed" | "pending_retry" | "halted";
+type RecurringChargeAttemptRow = {
+  id: string;
+  tenant_id: string;
+  /** All three nullable: an attempt outlives the rows it points at. */
+  customer_id: string | null;
+  subscription_id: string | null;
+  mandate_id: string | null;
+  gateway: string;
+  gateway_subscription_id: string | null;
+  gateway_payment_id: string | null;
+  gateway_order_id: string | null;
+  /** ₹ whole rupees (§13). Null when the event carried no amount. */
+  amount: number | null;
+  /** `halted` = the gateway GAVE UP; nothing collects until re-authorisation. */
+  outcome: ChargeOutcomeT;
+  error_code: string | null;
+  /** Razorpay's own wording, which is what an operator reads. */
+  error_description: string | null;
+  test_mode: boolean;
+  /** The GATEWAY's timestamp, not our receipt time — webhooks arrive late. */
+  occurred_at: string;
+  created_at: string;
+};
+type RecurringChargeAttemptInsert = {
+  id?: string;
+  tenant_id: string;
+  customer_id?: string | null;
+  subscription_id?: string | null;
+  mandate_id?: string | null;
+  gateway?: string;
+  gateway_subscription_id?: string | null;
+  gateway_payment_id?: string | null;
+  gateway_order_id?: string | null;
+  amount?: number | null;
+  outcome: ChargeOutcomeT;
+  error_code?: string | null;
+  error_description?: string | null;
+  test_mode?: boolean;
+  occurred_at?: string;
+  created_at?: string;
+};
+
 type PaymentMandateRow = {
   id: string;
   tenant_id: string;
@@ -4224,6 +4272,7 @@ export type Database = {
       mrr_snapshots: { Row: MrrSnapshotRow; Insert: MrrSnapshotInsert; Update: Partial<MrrSnapshotInsert>; Relationships: [] };
       contract_amendments: { Row: ContractAmendmentRow; Insert: never; Update: never; Relationships: [] };
       payment_mandates: { Row: PaymentMandateRow; Insert: PaymentMandateInsert; Update: Partial<PaymentMandateInsert>; Relationships: [] };
+      recurring_charge_attempts: { Row: RecurringChargeAttemptRow; Insert: RecurringChargeAttemptInsert; Update: Partial<RecurringChargeAttemptInsert>; Relationships: [] };
       subscription_billings: { Row: SubscriptionBillingRow; Insert: SubscriptionBillingInsert; Update: Partial<SubscriptionBillingInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
@@ -5349,6 +5398,7 @@ export type SeatRequest = SeatRequestRow;
 export type MrrSnapshot = MrrSnapshotRow;
 export type ContractAmendment = ContractAmendmentRow;
 export type PaymentMandate = PaymentMandateRow;
+export type RecurringChargeAttempt = RecurringChargeAttemptRow;
 export type PaymentMandateInsertT = PaymentMandateInsert;
 export type SubscriptionBilling = SubscriptionBillingRow;
 export type SubscriptionBillingInsertT = SubscriptionBillingInsert;
