@@ -77,8 +77,8 @@ export default async function PortalBillingPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-serif text-2xl text-ink">Billing</h1>
-        <p className="text-sm text-ink-3 mt-0.5">
+        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Billing</h1>
+        <p className="text-sm text-ink-3 mt-1">
           What {session.tenantName} will charge you, and when.
         </p>
       </div>

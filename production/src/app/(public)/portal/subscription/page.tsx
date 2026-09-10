@@ -104,7 +104,7 @@ export default function PortalSubscriptionPage() {
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
       <div className="mb-6">
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Your subscription</h1>
+        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Your Subscription</h1>
         <p className="text-sm text-ink-3 mt-1">
           Manage your plan, seats, and renewal settings.
         </p>
