@@ -215,18 +215,68 @@ export async function daUserUsage(username: string): Promise<DaUsage | null> {
 }
 
 /**
- * Every account's usage in ONE call.
+ * Every account's usage. One call where the server supports it, else one each.
  *
- * The sweep uses this rather than a call per account, and that is not only about
- * speed: this machine has already produced `exited 3221225794`
- * (STATUS_DLL_INIT_FAILED) from launching ~120 processes in a loop, and the
- * backup script had to be rewritten from per-table calls to three total for the
- * same reason. A sweep over every hosting account is the same shape of mistake
- * waiting to be made.
+ * ─── THE BULK ENDPOINT DOES NOT EXIST ON THIS SERVER ────────────────────────
+ * `CMD_API_SHOW_ALL_USER_USAGE` was the only implementation until 11 Sep 2026,
+ * the first day this app had real DirectAdmin credentials. Measured against
+ * server1.anutech.in:
+ *
+ *   /CMD_API_SHOW_ALL_USER_USAGE        → 200, and an HTML PAGE (the web UI)
+ *   /CMD_API_SHOW_ALL_USERS             → 200, list[]=… (5 accounts)
+ *   /CMD_API_SHOW_USER_USAGE?user=X     → 200, bandwidth=…&quota=…
+ *
+ * A 200 carrying HTML is not an API answer, so `daGet` returned null and
+ * `asset-sweep` reported "DirectAdmin could not be read — no account was stamped
+ * or flagged" for every run. Identical in symptom to the server being down, which
+ * is why nothing noticed. (DMS's `getAllUserUsage` calls the same endpoint and has
+ * the same bug; it was not the source of the fix.)
+ *
+ * ─── THE FALLBACK IS SEQUENTIAL AND CAPPED, ON PURPOSE ──────────────────────
+ * The original comment here argued for one call over N, citing this machine
+ * producing `exited 3221225794` from ~120 processes in a loop. That was about
+ * PROCESSES and does not apply to HTTP requests — but the instinct is right, so
+ * the fallback awaits one at a time rather than flooding somebody's control panel,
+ * and stops at MAX. A reseller past that cap gets partial usage, which the caller
+ * already handles: `asset-sweep` treats an absent account as "not stamped", not
+ * as "gone".
+ *
+ * The bulk call is still tried first, because a newer DirectAdmin may well answer
+ * it and one call is better than fifty.
  */
+const MAX_USAGE_FALLBACK = 200;
+
 export async function daAllUserUsage(): Promise<Record<string, DaUsage> | null> {
-  const data = await daGet("/CMD_API_SHOW_ALL_USER_USAGE");
-  if (!data) return null;
-  return parseAllUserUsage(data);
+  const bulk = await daGet("/CMD_API_SHOW_ALL_USER_USAGE");
+  if (bulk) {
+    const parsed = parseAllUserUsage(bulk);
+    /* An empty object from a server that HAS accounts means the endpoint
+       answered with something that is not usage — the HTML case. Fall through
+       rather than reporting "no accounts have usage". */
+    if (Object.keys(parsed).length > 0) return parsed;
+  }
+
+  const users = await daGet("/CMD_API_SHOW_ALL_USERS");
+  if (!users) return null;
+
+  /* `list[]` comes back as an array, or as a single string when there is one
+     account. Both shapes, because a one-account server is a real deployment. */
+  const raw = users["list[]"] ?? users.list;
+  const names = (Array.isArray(raw) ? raw : raw ? [String(raw)] : [])
+    .map((n) => String(n).trim())
+    .filter(Boolean)
+    .slice(0, MAX_USAGE_FALLBACK);
+
+  if (names.length === 0) return null;
+
+  const out: Record<string, DaUsage> = {};
+  for (const name of names) {
+    const one = await daUserUsage(name);
+    /* A single unreadable account is not an unreadable server. Skip it and keep
+       going — the caller's job is to notice an account it expected and did not
+       get, which it can only do if the others are present. */
+    if (one) out[name] = one;
+  }
+  return out;
 }
 

@@ -76,6 +76,12 @@ export const READ_NOT_FOUND_FRAGMENTS = [
   "no entity found",
   "no domain",
   "does not exist",
+  /* RC's ACTUAL wording, seen 11 Sep 2026 with live credentials:
+     "Website doesn't exist for anutech.in". The contraction is not covered by
+     "does not exist", so a domain that simply is not on this reseller account
+     was classified as a hard_failure — i.e. "ResellerClub is broken" instead of
+     "not ours". asset-sweep treats those two very differently. */
+  "doesn't exist",
   "could not find",
 ] as const;
 

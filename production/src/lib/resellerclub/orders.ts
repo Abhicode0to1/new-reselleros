@@ -238,9 +238,16 @@ export async function rcTransferDomain(args: {
  * ask by name. A read, so it does not need the ordering gate.
  */
 export async function rcOrderIdFor(domainName: string): Promise<LookupOutcome<string>> {
-  const res = await rcCall("/api/domains/orderid.json", {
-    "domain-name": domainName.trim().toLowerCase(),
-  }, "GET");
+  const res = await rcCall(
+    "/api/domains/orderid.json",
+    { "domain-name": domainName.trim().toLowerCase() },
+    "GET",
+    /* This endpoint answers with a BARE NUMBER — `122709027`, not an object.
+       Measured against the live API. Without this the body is "unreadable" and
+       every domain reads as a ResellerClub fault. `call.ts` already anticipated
+       the shape; it just has to be asked for. */
+    { allowScalar: true },
+  );
 
   /* RC answers this one with a bare number, not an object, so a successful body
      parses to something that is not a Record. Handle it before classify sees it. */
@@ -248,8 +255,17 @@ export async function rcOrderIdFor(domainName: string): Promise<LookupOutcome<st
     return { kind: "not_found", reason: "ResellerClub answered with no order id" };
   }
   return classifyLookup(res, (d) => {
-    const v = d.orderid ?? d.result ?? d.response;
-    return v != null ? String(v) : null;
+    /* `value` FIRST, and it is the one that actually arrives: `allowScalar` in
+       call.ts wraps a bare body as `{ value }`. Without it this function
+       returned not_found for every domain that exists — measured 11 Sep 2026
+       against the live API, where orderid.json answered `200 122709027` and this
+       read `undefined`. `provision-domain`'s order-id recovery path depends on
+       it, so that had never worked either.
+
+       The other three keys stay as a hedge against RC moving to an object. */
+    const v = d.value ?? d.orderid ?? d.result ?? d.response;
+    const id = v == null ? "" : String(v).trim();
+    return /^\d+$/.test(id) ? id : null;
   });
 }
 
@@ -271,8 +287,31 @@ export interface RcDomainDetails {
  * app never sees `endtime` or `orderstatus`.
  */
 export async function rcDomainDetails(domainName: string): Promise<LookupOutcome<RcDomainDetails>> {
+  /* ─── TWO CALLS, BECAUSE ONE DOES NOT WORK ────────────────────────────────
+     RC's `details.json` DOES NOT ACCEPT A DOMAIN NAME. Asked for one it answers
+     `HTTP 500 {"status":"ERROR","message":"Required parameter missing: order-id"}`
+     — every time, for every domain. Proven against the live API on 11 Sep 2026,
+     the first day this app had real credentials:
+
+       details.json?domain-name=anutechpvtltd.co.in  → 500, "missing: order-id"
+       orderid.json?domain-name=anutechpvtltd.co.in  → 200, "122709027"
+       details.json?order-id=122709027               → 200, full details
+
+     So this function had never worked, and nothing noticed: `asset-sweep` marked
+     every domain "unreadable" and moved on, which is exactly what it does when
+     ResellerClub is unreachable. The symptom of the bug and the symptom of an
+     outage were the same sentence.
+
+     `rcOrderIdFor` already existed for `provision-domain`'s recovery path, so
+     this reuses it rather than adding a second by-name lookup. The first
+     failure passes straight through: "not on our account" (not_found) and
+     "ResellerClub is down" (hard_failure) must stay distinct all the way to the
+     caller, because asset-sweep and the renewal cron act on the difference. */
+  const idOutcome = await rcOrderIdFor(domainName);
+  if (idOutcome.kind !== "found") return idOutcome;
+
   const res = await rcCall("/api/domains/details.json", {
-    "domain-name": domainName.trim().toLowerCase(),
+    "order-id": idOutcome.value,
     "options": "All",
   }, "GET");
 
@@ -288,7 +327,11 @@ export async function rcDomainDetails(domainName: string): Promise<LookupOutcome
       .filter((v) => v && v !== "undefined");
 
     const details: RcDomainDetails = {
-      orderId: d.orderid != null ? String(d.orderid) : null,
+      /* `idOutcome.value` is the fallback: we asked BY this id, so it is true
+         even if the response omits the echo. Without it a details payload
+         missing `orderid` would be discarded as not_found at the bottom of this
+         function — for a domain we had just successfully looked up. */
+      orderId: d.orderid != null ? String(d.orderid) : idOutcome.value,
       domainName: typeof d.domainname === "string" ? d.domainname : null,
       expiryEpochSeconds: num(d.endtime),
       status: typeof d.currentstatus === "string" ? d.currentstatus
