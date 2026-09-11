@@ -46,12 +46,16 @@ export default async function PortalLayout({ children }: { children: React.React
       {session && <PortalSidebar brandName={brandName} gstin={gstin} />}
 
       <div className={session ? "flex-1 flex flex-col min-w-0" : "contents"}>
-      <header className="border-b border-hairline bg-paper">
+      <header className={session ? "h-14 border-b border-hairline bg-paper flex-shrink-0" : "border-b border-hairline bg-paper"}>
         {/* Signed in, the rail carries the brand and the header is a thin strip
             like the staff TopBar; signed out it is the whole chrome, so it keeps
             the centred measure. */}
+        {/* `h-14` belongs on the <header>, not here: with it on the inner div the
+           1px border is added OUTSIDE the 56px and the bar measures 57. The
+           staff TopBar puts it on the element that carries the border
+           (`topbar.tsx:57`), so the two now measure the same 56px. */}
         <div className={session
-          ? "px-6 h-14 flex items-center gap-4"
+          ? "px-6 h-full flex items-center gap-4"
           : "max-w-[1080px] mx-auto px-6 py-4 flex items-center justify-between gap-4"}>
           {/* min-h-[44px] for the ≥44px floor (CLAUDE.md:605, §20). It measured 236x36 on
               9 Sep — the 36px comes from the w-9 h-9 logo. Free of layout cost here: the

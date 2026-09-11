@@ -126,6 +126,7 @@ export function PortalSection({
   sub,
   actions,
   children,
+  bare,
   flush,
   className,
 }: {
@@ -133,16 +134,36 @@ export function PortalSection({
   sub?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
-  /** Renders the heading alone, for a body that is already made of cards. */
+  /**
+   * No card at all — just the heading, for a body that is its own set of cards.
+   *
+   * Named `bare` and not `flush` since 11 Sep 2026: `Card` ALREADY has a `flush`
+   * prop and it means something else entirely — "no padding on the body", for a
+   * full-bleed table. Two props called `flush` one component apart, meaning
+   * different things, is a trap for whoever reads this next.
+   */
+  bare?: boolean;
+  /** Card's own `flush`: drop the body padding, for a full-bleed list. */
   flush?: boolean;
   className?: string;
 }) {
-  if (flush) {
+  if (bare) {
     return (
       <section className={className ?? "mb-8"}>
+        {/* ─── THE SAME ELEMENT AND STYLE `CardTitle` USES ────────────────────
+            Measured 11 Sep 2026 against the staff dashboard: `Card`'s `title`
+            prop renders `CardTitle`, which is an **h3** with
+            `text-sm font-semibold text-ink leading-tight` (card.tsx:100). This
+            branch was rendering `<h2 className="font-serif text-lg">` — a
+            different tag AND a different style for the same thing, so the
+            portal disagreed with the staff app and with its own non-flush
+            branch, which goes through Card.
+
+            Matching it means a flush section and a carded section are the same
+            heading, which is the whole point of having one component. */}
         <div className="flex items-end justify-between gap-3 mb-3">
           <div>
-            <h2 className="font-serif text-lg">{title}</h2>
+            <h3 className="text-sm font-semibold text-ink leading-tight">{title}</h3>
             {sub && <p className="text-2xs text-ink-3 mt-0.5">{sub}</p>}
           </div>
           {actions}
@@ -152,7 +173,7 @@ export function PortalSection({
     );
   }
   return (
-    <Card title={title} sub={sub} actions={actions} className={className ?? "mb-8"}>
+    <Card title={title} sub={sub} actions={actions} flush={flush} className={className ?? "mb-8"}>
       {children}
     </Card>
   );

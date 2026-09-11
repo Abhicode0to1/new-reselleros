@@ -232,8 +232,15 @@ export default async function PortalDashboardPage() {
           replaced a grid of eight tiles that duplicated the nav bar — see the
           header. When there is genuinely nothing, EmptyState says so in one
           line rather than leaving the reader to infer it from a blank. */}
-      {/* `flush`: the body is already a list of cards, and a card inside a card
-          is the thing that made the old portal look padded-out. */}
+      {/* ─── ONE CARD, ROWS INSIDE — the staff "Today's Focus" ──────────────
+          Measured against `(app)/dashboard/page.tsx`: that section is
+          `<Card title sub flush>` with rows in it, not a heading floating above
+          a stack of separate cards. Mine was the latter, which is why the
+          portal still read as looser even after the type and tokens matched.
+
+          `flush` here is CARD's flush — no body padding — so the rows can run
+          to the card's edges and carry their own separators, exactly as the
+          staff rows do. */}
       <PortalSection
         title="Needs your attention"
         sub={
@@ -244,36 +251,41 @@ export default async function PortalDashboardPage() {
         flush
       >
         {focus.length === 0 ? (
-          <Card className="p-6">
+          <div className="px-4 pb-4">
             <EmptyState
               icon="check"
               title="Nothing needs you right now"
               body={`Your account is in order. ${waName} will get in touch before anything is due.`}
               compact
             />
-          </Card>
+          </div>
         ) : (
-          <ul className="space-y-2">
+          <ul className="px-4 pb-3">
             {focus.map((f, i) => (
-              <li key={i}>
-                <Card className="p-4">
-                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-ink">{f.title}</span>
-                        {f.tone === "rose" && <Badge kind="danger">Now</Badge>}
-                        {f.tone === "amber" && <Badge kind="warning">Soon</Badge>}
-                      </div>
-                      <div className="text-2xs text-ink-3 mt-0.5">{f.detail}</div>
+              <li
+                key={i}
+                className={
+                  i === focus.length - 1
+                    ? "py-3"
+                    : "py-3 border-b border-hairline"
+                }
+              >
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-ink">{f.title}</span>
+                      {f.tone === "rose" && <Badge kind="danger">Now</Badge>}
+                      {f.tone === "amber" && <Badge kind="warning">Soon</Badge>}
                     </div>
-                    <Link
-                      href={f.href as never}
-                      className="text-sm text-amber-ink underline whitespace-nowrap min-h-[44px] inline-flex items-center"
-                    >
-                      {f.cta} →
-                    </Link>
+                    <div className="text-2xs text-ink-3 mt-0.5">{f.detail}</div>
                   </div>
-                </Card>
+                  <Link
+                    href={f.href as never}
+                    className="text-sm text-amber-ink underline whitespace-nowrap min-h-[44px] inline-flex items-center"
+                  >
+                    {f.cta} →
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>
@@ -284,9 +296,9 @@ export default async function PortalDashboardPage() {
           Unchanged in substance: this card was already using the app's idiom.
           The only edit is the empty branch, which was a centred paragraph and
           is now the same EmptyState as everywhere else. */}
-      <PortalSection title="Your subscription" flush>
+      <PortalSection title="Your subscription">
         {primary ? (
-          <Card className="p-6">
+          <div>
             <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
               <div>
                 <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-1">
@@ -330,7 +342,7 @@ export default async function PortalDashboardPage() {
                 <SeatUsage used={primary.used} seats={primary.seats} usedSyncedAt={primary.used_synced_at} />
               </div>
             )}
-          </Card>
+          </div>
         ) : (
           /* ─── ONE LINE, NOT AN ILLUSTRATION ──────────────────────────────
              `EmptyState` is the app's shared empty treatment and it is centred
@@ -343,12 +355,10 @@ export default async function PortalDashboardPage() {
 
              So the reassuring, page-defining empty state above keeps the
              primitive, and this says the same thing in a sentence. */
-          <Card className="p-4">
-            <p className="text-sm text-ink-3">
-              No subscription on file. If you have just ordered, it appears here within 24 hours
-              of setup — otherwise {waName} can tell you where it is.
-            </p>
-          </Card>
+          <p className="text-sm text-ink-3">
+            No subscription on file. If you have just ordered, it appears here within 24 hours
+            of setup — otherwise {waName} can tell you where it is.
+          </p>
         )}
       </PortalSection>
 
