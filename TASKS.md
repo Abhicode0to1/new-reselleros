@@ -7,6 +7,71 @@
 
 ---
 
+# 🟣 HANDOFF — 11 Sep 2026. DMS ka env chala kar dekha. Dono credentials CHALTE hain; hamara code teen jagah nahi chalta tha.
+
+## ✅ Credentials dono kaam karte hain
+- **ResellerClub** — rate card sync hua: **7 TLD**. Account me **5 asli domain** hain
+  (anutechpvtltd.co.in, theexcelhosting.{net,info,com,online}).
+- **DirectAdmin** — `server1.anutech.in:2222` se 5 account pade. Aur uske package
+  bilkul wahi teen hain jo `lib/hosting/plan-change.ts` maanta hai:
+  **Starter / Standard / Plus**.
+
+## 🗺 ENV KA NAAM ALAG HAI — copy karne se pehle padho
+| hamara naam | DMS ka naam |
+|---|---|
+| `RESELLERCLUB_RESELLER_ID` | **`RESELLERCLUB_ID`** (auth-userid) |
+| `RESELLERCLUB_API_KEY` | **`RESELLERCLUB_SECRET`** |
+| `RESELLERCLUB_API_URL` | wahi |
+| `DIRECTADMIN_*` (URL/ADMIN_USER/API_KEY/IP) | wahi |
+
+**JAAL:** DMS me apna ek `RESELLERCLUB_RESELLER_ID` bhi hai, jo doosri cheez ke
+liye hai. Use hamare `RESELLERCLUB_RESELLER_ID` me daal dene se auth TOOT jayega.
+
+## 🔴 Teen bug — sirf asli credentials se dikhe (commit ee7d1544)
+1. **`rcDomainDetails` kabhi chala hi nahi tha.** RC ka `details.json`
+   domain-name leta hi NAHI — `500 "Required parameter missing: order-id"`.
+   Do call chahiye: `orderid.json` (naam se, **bare number** lautata hai) phir
+   `details.json` (order-id se). Teen cheezein alag-alag tooti hui thi, aur
+   `rcOrderIdFor` bhi `value` key nahi padh raha tha — yaani
+   `provision-domain` ka recovery path bhi kabhi nahi chala.
+2. **"hamara nahi" ko "RC kharab hai" bataya ja raha tha.** RC kehta hai
+   "Website **doesn't** exist" — fragment list me sirf "does not exist" tha.
+3. **DirectAdmin ka bulk usage endpoint is server par NAHI hai** —
+   `CMD_API_SHOW_ALL_USER_USAGE` 200 ke saath **HTML page** deta hai. Ab bulk
+   pehle try hota hai, phir per-user (sequential, 200 tak capped).
+
+**Teeno ek jaisa dikhte the**: "upstream padh nahi paaye" — yaani bug aur outage
+ka ek hi sandesh. Isliye kisi ne kabhi dekha nahi.
+
+Fix ke baad: `anutechpvtltd.co.in` **reconciled**, expiry `2026-10-09`, order
+`122709027` — RC ke apne data se bilkul same. Naqli naam `unclaimed_upstream`.
+DA: "read 5 accounts from the server".
+
+## ⏳ AB KYA CHAHIYE (naapa hua)
+- [ ] **Email ka koi raasta nahi hai.** Hamara app sirf **Resend ya Gmail** se
+      bhejta hai. DMS ke paas `SMTP_*` hai, jo hum use NAHI kar sakte. To domain
+      expiry ki chetavni abhi bhi nahi jayegi — `Resend 401` naapa hua.
+      Chahiye: Resend API key + verified domain, ya per-tenant Gmail OAuth.
+- [ ] **Rate card BECHNE ka daam hai, LAAGAT nahi.** Sync
+      `/api/products/customer-price.json` se hota hai. `wholesale` pehli baar
+      register price par set hota hai, to **domain ka margin report jhootha
+      hoga**. Chahiye: `reseller-price.json` bhi sync karein, ya haath se cost
+      daalein. (Naapa: renew HAR TLD par register se MEHNGA hai — .net par
+      ₹1559 vs ₹2015. Isliye renewal `prices.renew` se hi lagna chahiye.)
+- [ ] **RC ke 5 asli domain hamare DB me nahi hain** (DMS ke MongoDB me hain).
+      Renewal unpar tabhi lagega jab data aayega. Achhi khabar: sweep ab
+      `registrar_order_id` khud bhar deta hai.
+- [ ] **`DOMAIN_REGISTER_LIVE=1` aur `HOSTING_TRIAL_LIVE=1`** — jaan-boojh kar
+      band hain. Inke bina koi kharidari nahi hoti.
+- [ ] **`CRON_SECRET`** — DMS ke paas hai; Cloud Scheduler ke liye chahiye.
+
+**Credentials sirf PADHNE ke liye use kiye** — koi `*_LIVE` flag kabhi set nahi
+kiya, to koi kharidari mumkin hi nahi thi. `.env.local` backup se wapas, probe
+script mita diye, demo row jaisi thi waisi kar di.
+
+
+---
+
 # 🟣 HANDOFF — 11 Sep 2026. Domain renewal ka poora raasta bana — aur `rcRenewDomain` ko pehla caller mila.
 
     /api/cron/domain-expiry          chetavni, bina daam ke
