@@ -123,13 +123,13 @@ export default function PortalSubscriptionPage() {
               label: "Per month",
               value: activeSubs.reduce((s, x) => s + (x.mrr ?? 0), 0),
               asCurrency: true,
-              icon: "indian_rupee",
+              icon: "rupee",
             },
             {
               label: "Outstanding",
               value: activeSubs.reduce((s, x) => s + (x.outstanding_amount ?? 0), 0),
               asCurrency: true,
-              icon: "alert_triangle",
+              icon: "alert",
               accent: activeSubs.some((x) => (x.outstanding_amount ?? 0) > 0) ? "rose" : "emerald",
             },
           ]}

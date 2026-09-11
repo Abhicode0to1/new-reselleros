@@ -63,18 +63,18 @@ export default async function PortalInvoicesPage() {
           the reader to do something. */}
       <PortalStats
         items={[
-          { label: "Invoices", value: rows.length, icon: "receipt_indian_rupee" },
+          { label: "Invoices", value: rows.length, icon: "receipt" },
           {
             label: "Unpaid",
             value: unpaidCount,
-            icon: "alert_triangle",
+            icon: "alert",
             accent: unpaidCount > 0 ? "rose" : "emerald",
           },
           {
             label: "Amount due",
             value: amountDue,
             asCurrency: true,
-            icon: "indian_rupee",
+            icon: "rupee",
             accent: amountDue > 0 ? "rose" : "emerald",
           },
         ]}
@@ -92,7 +92,7 @@ export default async function PortalInvoicesPage() {
       {rows.length === 0 ? (
         <Card className="p-6">
           <EmptyState
-            icon="receipt_indian_rupee"
+            icon="receipt"
             title="No invoices yet"
             body={`They appear here once ${reseller} raises a tax invoice against your paid order.`}
             compact

@@ -107,7 +107,7 @@ export default async function PortalHostingPage() {
           total is how it stops being visible. */}
       <PortalStats
         items={[
-          { label: "Accounts", value: rows.length, icon: "server" },
+          { label: "Accounts", value: rows.length, icon: "package" },
           {
             label: "Live",
             value: rows.filter((r) => r.status === "active").length,
@@ -117,7 +117,7 @@ export default async function PortalHostingPage() {
           {
             label: "Not live",
             value: rows.filter((r) => r.status !== "active").length,
-            icon: "alert_triangle",
+            icon: "alert",
             accent: rows.some((r) => r.status !== "active") ? "rose" : "ink",
           },
           {
@@ -150,7 +150,7 @@ export default async function PortalHostingPage() {
       {rows.length === 0 ? (
         <Card className="p-6">
           <EmptyState
-            icon="server"
+            icon="package"
             title="No hosting yet"
             body="An account you buy appears here within a few minutes, and the login reaches you by email at the same time."
             action={

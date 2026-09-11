@@ -183,7 +183,7 @@ export default async function PortalDashboardPage() {
            action is asking for something, so this is the same slot with the
            only verb they actually have. */
         action={
-          <Button asChild variant="primary" icon="message_circle">
+          <Button asChild variant="primary" icon="message">
             <Link href="/portal/support/new">Ask for help</Link>
           </Button>
         }
@@ -198,7 +198,7 @@ export default async function PortalDashboardPage() {
           {
             label: "Hosting",
             value: liveHosting,
-            icon: "server",
+            icon: "package",
             trend: allHosting.length > liveHosting ? `${allHosting.length - liveHosting} not live` : undefined,
             trendKind: allHosting.length > liveHosting ? "down" : "neutral",
           },
@@ -206,7 +206,7 @@ export default async function PortalDashboardPage() {
             label: "Amount due",
             value: amountDue,
             asCurrency: true,
-            icon: "receipt_indian_rupee",
+            icon: "receipt",
             accent: amountDue > 0 ? "rose" : "emerald",
           },
           {

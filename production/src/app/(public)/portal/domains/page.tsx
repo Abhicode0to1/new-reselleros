@@ -124,7 +124,7 @@ export default async function PortalDomainsPage() {
           {
             label: "Expired",
             value: lapsed,
-            icon: "alert_triangle",
+            icon: "alert",
             accent: lapsed > 0 ? "rose" : "emerald",
             trend: lapsed > 0 ? "can often still be saved" : undefined,
           },

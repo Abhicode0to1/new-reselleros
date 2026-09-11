@@ -14,9 +14,10 @@
  */
 import Link from "next/link";
 import { getPortalSession } from "@/lib/portal/session";
-import { initials } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import { PortalAccountMenu } from "./_components/portal-account-menu";
-import { PortalNavInline, PortalNavStrip } from "./_components/portal-nav";
+import { PortalNavStrip } from "./_components/portal-nav";
+import { PortalSidebar } from "./_components/portal-sidebar";
 
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
@@ -26,16 +27,44 @@ export default async function PortalLayout({ children }: { children: React.React
   const gstin     = session?.tenantGstin ?? null;
 
   return (
-    <div className="min-h-screen bg-paper-2/40 flex flex-col">
+    /* ─── THE STAFF APP'S SHELL: RAIL + CONTENT COLUMN ────────────────────────
+       Changed 11 Sep 2026 — Pardeep: "i want my customer portal UI to
+       consistent with old panel."
+
+       The portal had already been moved onto the app's primitives, type,
+       tokens, header shape and titled-card sections, and it STILL read as a
+       different product. This is why: `(app)/layout.tsx` is
+       `flex min-h-screen` with a 240px rail and a content column, and this was
+       a centred 1080px column under a full-width bar. Shape decides what a
+       screen looks like long before styling does.
+
+       Signed OUT — the sign-in page — there is no rail, because there is
+       nothing to navigate and a customer who cannot get in should not be shown
+       ten links they cannot open. */
+    <div className={session ? "flex min-h-screen bg-paper-2/50" : "min-h-screen bg-paper-2/40 flex flex-col"}>
+      {session && <PortalSidebar brandName={brandName} gstin={gstin} />}
+
+      <div className={session ? "flex-1 flex flex-col min-w-0" : "contents"}>
       <header className="border-b border-hairline bg-paper">
-        <div className="max-w-[1080px] mx-auto px-6 py-4 flex items-center justify-between gap-4">
+        {/* Signed in, the rail carries the brand and the header is a thin strip
+            like the staff TopBar; signed out it is the whole chrome, so it keeps
+            the centred measure. */}
+        <div className={session
+          ? "px-6 py-3 flex items-center justify-between gap-4"
+          : "max-w-[1080px] mx-auto px-6 py-4 flex items-center justify-between gap-4"}>
           {/* min-h-[44px] for the ≥44px floor (CLAUDE.md:605, §20). It measured 236x36 on
               9 Sep — the 36px comes from the w-9 h-9 logo. Free of layout cost here: the
               account-menu trigger next to it already sets the row to 44px, so this grows
               the hit area without growing the header. */}
+          {/* `md:hidden` when signed in: the rail shows this on desktop, and two
+              copies of the same brand on one screen is what the staff app
+              deliberately avoids. On a phone there is no rail, so it stays. */}
           <Link
             href={session ? "/portal/dashboard" : "/portal"}
-            className="flex items-center gap-3 min-w-0 min-h-[44px]"
+            className={cn(
+              "flex items-center gap-3 min-w-0 min-h-[44px]",
+              session && "md:hidden",
+            )}
           >
             <div className="w-9 h-9 bg-ink text-paper rounded-md grid place-items-center font-serif text-base flex-shrink-0">
               {mark}
@@ -55,7 +84,9 @@ export default async function PortalLayout({ children }: { children: React.React
             {/* Section nav lives in _components/portal-nav.tsx — it needs usePathname to
                 mark the current section, and this layout is a Server Component. The
                 measurements behind its 1080px threshold and gap-4 are documented there. */}
-            {session && <PortalNavInline />}
+            {/* The desktop row is gone — the rail is the navigation now. The
+                phone strip below stays: it scrolls the active item into view and
+                is a one-tap nav, which a hamburger sheet would not be. */}
             {/* Account menu — always top-right when signed in (mobile + desktop) */}
             {session && (
               <PortalAccountMenu customerName={session.customerName} email={session.userEmail} />
@@ -64,7 +95,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
         {session && <PortalNavStrip />}
       </header>
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 min-w-0">{children}</main>
       <footer className="border-t border-hairline bg-paper py-6 text-center text-xs text-ink-3 px-6">
         {session ? (
           <>
@@ -76,6 +107,7 @@ export default async function PortalLayout({ children }: { children: React.React
           <>Customer Portal · Powered by ResellerOS</>
         )}
       </footer>
+      </div>
     </div>
   );
 }
