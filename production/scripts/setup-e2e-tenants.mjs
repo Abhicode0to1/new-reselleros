@@ -26,7 +26,37 @@ const env = Object.fromEntries(
     .filter((l) => l && !l.startsWith("#") && l.includes("="))
     .map((l) => {
       const idx = l.indexOf("=");
-      return [l.slice(0, idx).trim(), l.slice(idx + 1).trim().replace(/^"|"$/g, "")];
+      const key = l.slice(0, idx).trim();
+      const raw = l.slice(idx + 1).trim();
+      /* ─── A QUOTED VALUE ENDS AT ITS CLOSING QUOTE ──────────────────────────
+         Everything after it is a comment. This used to be
+         `.replace(/^"|"$/g, "")`, which strips a quote from each END of the
+         line — so a trailing comment stayed INSIDE the value.
+
+         Measured 11 Sep 2026. `.env.local` carries
+
+           SUPABASE_SERVICE_ROLE_KEY="ey…"  # LOCAL demo key — same on every local supabase
+
+         and the parsed "key" was 217 characters of JWT plus that sentence. It
+         went into an HTTP header, and Node refused it:
+
+           TypeError: Cannot convert argument to a ByteString because the
+           character at index 191 has a value of 8212
+
+         8212 is the em dash in the comment. The message names a character
+         offset and no file, so it reads as a corrupt service-role key — which
+         sends you rotating a key that was never wrong. `supabase.auth.admin`
+         reported it as an `AuthRetryableFetchError` with `status: 0`, i.e. it
+         looked like the local stack being unreachable too.
+
+         Eleven other scripts in this directory carry the same block verbatim
+         and are broken the same way; recorded in TASKS.md rather than fixed
+         here, because this one is what the current task needed. */
+      const quoted = raw.match(/^"([^"]*)"/) ?? raw.match(/^'([^']*)'/);
+      /* Unquoted values get the same treatment dotenv gives them: a comment
+         starts at whitespace followed by `#`. The space is required, so a `#`
+         inside an unquoted value survives. */
+      return [key, quoted ? quoted[1] : raw.replace(/\s+#.*$/, "")];
     })
 );
 
