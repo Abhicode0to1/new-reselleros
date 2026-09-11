@@ -36,7 +36,7 @@ Your database is yours alone. Nothing you do touches production or anyone else's
 
 ```bash
 npm run dev          # the app          → http://localhost:3000
-npm run db:studio    # browse your DB   → http://localhost:54323
+npm run db:studio    # browse your DB   → http://localhost:14323
 npm run db:stop      # stop the DB      (it keeps running otherwise)
 ```
 

@@ -18,7 +18,7 @@
 --
 -- ─── THEN SIGN IN AS THE CUSTOMER ───────────────────────────────────────────
 --   1. /portal/login  ->  portal-test@anutech.invalid  ->  "Email me a code"
---   2. read the 6-digit code at  http://127.0.0.1:54324   (Supabase's local
+--   2. read the 6-digit code at  http://127.0.0.1:14324   (Supabase's local
 --      mail catcher — nothing leaves the machine, and the address is .invalid
 --      so there is no real inbox anywhere)
 --   3. paste it

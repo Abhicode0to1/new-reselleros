@@ -94,7 +94,7 @@ const nextConfig = {
         const u = new URL(supaUrl);
         /* Take the SCHEME from the URL, do not assume https. This line used to hardcode
            https://+wss://, which is correct for every deployed environment and wrong for
-           every local one: a local stack is http://127.0.0.1:54321, the CSP then allowed
+           every local one: a local stack is http://127.0.0.1:14321, the CSP then allowed
            only the https:// form of that host, and the browser refused every client-side
            Supabase call with "Refused to connect because it violates the document's
            Content Security Policy". Measured 9 Sep 2026: it made /portal/login

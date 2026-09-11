@@ -140,7 +140,7 @@ console.log(`
 Done.
 
   npm run dev          start the app        → http://localhost:3000
-  npm run db:studio    browse the database  → http://localhost:54323
+  npm run db:studio    browse the database  → http://localhost:14323
   npm run db:stop      stop the database    (it keeps running otherwise)
 
 Your database is LOCAL and yours alone — nothing you do here touches production or
