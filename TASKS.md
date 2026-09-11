@@ -7,6 +7,78 @@
 
 ---
 
+# 🟣 HANDOFF — 11 Sep 2026. Domain renewal ka poora raasta bana — aur `rcRenewDomain` ko pehla caller mila.
+
+    /api/cron/domain-expiry          chetavni, bina daam ke
+    /api/domains/:id/renewal-quote   reseller daam ke saath quote uthata hai
+    customer paisa deta hai          (aam quote flow, badla nahi)
+    /api/cron/domain-renew           ResellerClub par file karta hai
+
+Staff uthata hai, customer nahi — chetavni wali email kehti hai "hume reply
+karo", to khud-daam wala button us email ka ulta bolta.
+
+## 💰 Daam: ANUMAAN nahi, INKAAR
+`priceRenewal` discriminated result deta hai, to "is extension ka rate nahi hai"
+ek CASE hai jise caller ko sambhalna padta hai — number galti se mil hi nahi
+sakta. Aur yahi is DB ki asli haalat hai: **zero `DOMAIN-%` item**, kyunki rate
+card RC credentials ke bina sync nahi hota. Browser me naapa: inkaar padhta hai
+"There is no rate card entry… Run Sync domains… **Do not quote a figure by
+hand**".
+
+`renew: 0` bhi utna hi sakht inkaar hai — wo feed ka khaali number hai, muft
+renewal nahi. ₹0 ka quote accept hota, paid hota, aur phir asli daam par file
+hota.
+
+**35 test, 5 mutation.** Sabse zaroori: sabse LAMBA suffix jeetta hai —
+`acme.co.in` `.co.in` aur `.in` dono par khatam hota hai, chhota match `.co.in`
+ko `.in` ke daam par bech deta, har aise domain par, hamesha.
+
+## 🛑 Paisa kharch karne wala faisla alag file me, tested
+`decideRenewalFiling` — **28 test, 6 mutation**. Teen mehngi galtiyan:
+- bina paise file karna (reseller customer ko saal khareed ke de raha hai)
+- DO BAAR file karna (renewal ho chuka par darj nahi — poore daam par dobara)
+- aise term par file karna jispar registrar razi nahi
+
+Doosre ke liye `from_expires_at` hai. RC ka `exp-date` duplicate tabhi pakadta
+hai jab hum wahi bhejein jo registrar ke paas HAI — to cron har baar pehle
+`rcDomainDetails` padhta hai. Jo domain pehle hi aage badh chuka: **renewed darj,
+doosri call NAHI**. Jiska RC wala expiry hamare quote se PEECHHE hai: insaan ke
+paas — record registrar se aage tha, term aur raqam dono shak me hain.
+
+**Adhoora bhugtan kaafi NAHI** — alag se assert kiya, kyunki yahi wo cheez hai
+jise koi chhoot dena chahega.
+
+## ✅ Naapa gaya, LIVE gate khula rakh ke
+RC ko `127.0.0.1:9` par point karke, `DOMAIN_REGISTER_LIVE=1`:
+
+    quote UNPAID → gate "ordering is on", filed 0, waiting 1
+    quote PAID   → filed 0, refused: "no order id … nothing to renew there"
+
+Yaani paisa aa jane aur gate khule hone par BHI, order confirm na ho to file
+nahi karta. Row `quoted` hi rahi, attempt_count 1, wajah darj, backoff laga.
+Gate band par: kuch nahi likha, kuch nahi hataya, queue salaamat.
+
+Quote khud bhi naapa: 2 × ₹1150 = ₹2300 + 18% = **₹2714**, `is_one_off` (warna
+payment par doosri subscription ban jati). Duplicate guard bhi — aur wo **jo
+quote number jala use naam se batata hai**, kyunki GST series ka rollback nahi
+hota.
+
+## ⚠️ Jo naapa NAHI gaya, saaf-saaf
+**Ek bhi KAMYAB renewal nahi dekha gaya.** Is DB ke kisi domain par
+`registrar_order_id` nahi hai aur money gate band hai. Inkaar ke raaste, money
+gate, duplicate guard aur gate-band wala vyavhaar — sab chalte hue system par
+naapa. Kamyab raasta sirf `rcRenewDomain` ke typed outcome se tarka hai.
+**Asli RC credentials milne ke baad ek asli renewal dekhna zaroori hai** ispar
+bharosa karne se pehle. Route ke header me bhi yahi likha hai.
+
+## Ek cheez jo browser ne pakdi
+Renewal card ka badge har `quoted` row par "Waiting on payment" kehta tha.
+Customer ke paisa dene aur cron ke inkaar karne ke BAAD bhi wahi likha rehta.
+Ab asli rukawat dikhata hai: error ho to "Needs attention".
+
+
+---
+
 # 🟣 HANDOFF — 11 Sep 2026 (raat, dusra hissa). Hosting wapas chalu ho sakti hai; domain lapse hone se pehle khabar jati hai.
 
 ## ✅ 1. `daUnsuspendAccount` ka caller — jo chhed maine khud khola tha
