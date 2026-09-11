@@ -20,7 +20,7 @@
  */
 import type { NotificationClass } from "@/lib/mastery/quiet-hours";
 
-export type EmailProvider = "resend" | "gmail";
+export type EmailProvider = "resend" | "gmail" | "smtp";
 
 /** Gmail's send-only scope. Anything less cannot send, however valid the token. */
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
@@ -48,6 +48,14 @@ export interface ProviderInput {
   senderScopes?: string | null;
   /** Is the platform Resend key present? */
   resendConfigured: boolean;
+  /**
+   * Is a plain SMTP relay configured (`SMTP_HOST`/`PORT`/`USER`/`PASS`)?
+   *
+   * Added 11 Sep 2026 so the DMS deployment's own credentials work unchanged.
+   * Optional, so every existing caller and test keeps its meaning: absent is
+   * "no relay", which is what was true before.
+   */
+  smtpConfigured?: boolean;
   /** What kind of message this is. Drives the caution, never the routing. */
   messageClass?: NotificationClass;
 }
@@ -84,21 +92,66 @@ export function canSendWithScopes(scopes: string | null | undefined): boolean {
 }
 
 export function resolveEmailProvider(input: ProviderInput): ProviderDecision {
-  const wantsGmail = (input.requested ?? "resend").toLowerCase() === "gmail";
-  const requested: EmailProvider = wantsGmail ? "gmail" : "resend";
+  const asked = (input.requested ?? "resend").toLowerCase();
+  const wantsGmail = asked === "gmail";
+  const wantsSmtp = asked === "smtp";
+  const requested: EmailProvider = wantsGmail ? "gmail" : wantsSmtp ? "smtp" : "resend";
 
+  /* The bounce caution, shared by every transport that does not report one.
+     Resend keeps a suppression list and tells us about bounces; Gmail and a
+     plain relay both answer "accepted" and let the bounce arrive later as mail
+     in somebody's inbox. Stating it per-transport rather than once because the
+     sentence has to name which transport, or an operator cannot act on it. */
+  const bounceCaution = (via: string): string | null => {
+    const cls = input.messageClass;
+    return cls && BOUNCE_SENSITIVE.has(cls)
+      ? `Sending a ${cls} message through ${via}: bounces are not reported, so a dead address will look like a successful send.`
+      : null;
+  };
+
+  const smtpDecision = (reason: string, fellBack: boolean): ProviderDecision => ({
+    provider: "smtp",
+    requested,
+    fellBack,
+    reason,
+    caution: bounceCaution("an SMTP relay"),
+    blocked: null,
+  });
+
+  /* ─── THE FALLBACK CHAIN ───────────────────────────────────────────────────
+     Resend, then SMTP, then blocked. SMTP sits BELOW Resend because Resend
+     reports bounces and a relay does not — but it sits ABOVE `blocked`, and
+     that is the whole point of this change: a deployment with working relay
+     credentials and no Resend key used to be told "no email provider is
+     configured" and send nothing. Measured on the DMS environment, which is
+     exactly that deployment. A configured transport beats no transport. */
   const resendOr = (reason: string, fellBack: boolean): ProviderDecision => {
     if (input.resendConfigured) {
       return { provider: "resend", requested, fellBack, reason, caution: null, blocked: null };
+    }
+    if (input.smtpConfigured) {
+      return smtpDecision(
+        fellBack ? `${reason}, and there is no Resend key — sent through the SMTP relay instead` : reason,
+        fellBack,
+      );
     }
     return {
       provider: "resend", requested, fellBack, reason,
       caution: null,
       blocked: fellBack
-        ? `${reason} and no Resend key is configured either, so this message cannot be sent at all.`
+        ? `${reason} and no Resend key or SMTP relay is configured either, so this message cannot be sent at all.`
         : "No email provider is configured, so this message cannot be sent.",
     };
   };
+
+  /* Asked for explicitly. Honoured when it can work, and when it cannot the
+     tenant is told why rather than silently rerouted. */
+  if (wantsSmtp) {
+    if (input.smtpConfigured) {
+      return smtpDecision("Tenant sends through their own SMTP relay.", false);
+    }
+    return resendOr("SMTP is selected but the relay is not configured on this server", true);
+  }
 
   if (!wantsGmail) {
     return resendOr("Tenant sends through Resend.", false);
@@ -118,17 +171,12 @@ export function resolveEmailProvider(input: ProviderInput): ProviderDecision {
     return resendOr("The chosen Gmail account has not granted permission to send mail", true);
   }
 
-  const cls = input.messageClass;
-  const caution = cls && BOUNCE_SENSITIVE.has(cls)
-    ? `Sending a ${cls} message through Gmail: bounces are not reported, so a dead address will look like a successful send.`
-    : null;
-
   return {
     provider: "gmail",
     requested,
     fellBack: false,
     reason: "Tenant sends through their own Gmail account.",
-    caution,
+    caution: bounceCaution("Gmail"),
     blocked: null,
   };
 }
