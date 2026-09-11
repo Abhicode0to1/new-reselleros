@@ -32,6 +32,7 @@
  * that needs two taps, to match a surface a customer rarely uses on a phone.
  */
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn, initials } from "@/lib/utils";
@@ -45,13 +46,19 @@ import { Icon } from "@/components/ui/icon";
  * design, and the grouping is honest: it is the order a customer meets these
  * things in. What you own, what you owe, then who to ask.
  */
-const GROUPS: Array<{ section: string; items: Array<{ href: string; label: string; icon: string }> }> = [
+const GROUPS: Array<{
+  section: string;
+  icon: string;
+  items: Array<{ href: string; label: string; icon: string }>;
+}> = [
   {
     section: "Home",
+    icon: "home",
     items: [{ href: "/portal/dashboard", label: "Dashboard", icon: "home" }],
   },
   {
     section: "Your services",
+    icon: "layers",
     items: [
       { href: "/portal/domains", label: "Domains", icon: "globe" },
       { href: "/portal/hosting", label: "Hosting", icon: "package" },
@@ -61,6 +68,7 @@ const GROUPS: Array<{ section: string; items: Array<{ href: string; label: strin
   },
   {
     section: "Money",
+    icon: "rupee",
     items: [
       { href: "/portal/orders", label: "Orders", icon: "inbox" },
       { href: "/portal/invoices", label: "Invoices", icon: "receipt" },
@@ -69,6 +77,7 @@ const GROUPS: Array<{ section: string; items: Array<{ href: string; label: strin
   },
   {
     section: "Account",
+    icon: "user",
     items: [
       { href: "/portal/support", label: "Support", icon: "ticket" },
       { href: "/portal/profile", label: "Profile", icon: "user" },
@@ -90,6 +99,33 @@ export function PortalSidebar({
   const isActive = (href: string) =>
     href === "/portal/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
+  /* Single-open, like the staff rail: a group the reader opened wins, otherwise
+     the one holding the current page is open. `""` means "all shut". */
+  const [manualOpen, setManualOpen] = React.useState<string | null>(null);
+  React.useEffect(() => setManualOpen(null), [pathname]);
+
+  const renderLink = (item: { href: string; label: string; icon: string }) => {
+    const active = isActive(item.href);
+    return (
+      <Link
+        key={item.href}
+        href={item.href as never}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "group flex items-center gap-2.5 px-3 rounded-md text-sm transition-colors min-h-[44px]",
+          active ? "bg-amber-soft text-amber-ink font-medium" : "text-ink-2 hover:bg-paper-2 hover:text-ink",
+        )}
+      >
+        <Icon
+          name={item.icon}
+          size={15}
+          className={cn("flex-shrink-0", active ? "text-amber" : "text-ink-3 group-hover:text-ink-2")}
+        />
+        <span className="flex-1 truncate">{item.label}</span>
+      </Link>
+    );
+  };
+
   return (
     <aside className="hidden md:flex flex-col border-r border-hairline bg-paper sticky top-0 h-screen w-60 flex-shrink-0">
       {/* Brand — the same block as the staff rail, with the reseller's mark. */}
@@ -105,42 +141,55 @@ export function PortalSidebar({
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-3 px-2" aria-label="Portal sections">
-        {GROUPS.map((group) => (
-          <div key={group.section} className="mb-4">
-            <div className="px-3 mb-1 text-3xs uppercase tracking-wider text-ink-3 font-semibold">
-              {group.section}
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5" aria-label="Portal sections">
+        {/* ─── THE STAFF RAIL'S GROUP ROW, NOT AN UPPERCASE LABEL ─────────────
+            Corrected 11 Sep 2026, comparing the two rails side by side. I had
+            written small uppercase headings and described them in the commit as
+            "the same headings" — they are not. `Sidebar.tsx:240` renders a group
+            as a BUTTON: section icon, label, and a chevron, with the children
+            indented under a left hairline. That is the vocabulary; uppercase
+            text was my invention sitting next to it.
+
+            A single-item group renders as a plain link, which is what the staff
+            rail does too (`Sidebar.tsx:232`) — a chevron that expands one item
+            is a control that does nothing. */}
+        {GROUPS.map((group) => {
+          const groupActive = group.items.some((i) => isActive(i.href));
+
+          if (group.items.length === 1) return <div key={group.section}>{renderLink(group.items[0])}</div>;
+
+          const open = manualOpen !== null ? group.section === manualOpen : groupActive;
+          return (
+            <div key={group.section}>
+              <button
+                type="button"
+                onClick={() => setManualOpen(open ? "" : group.section)}
+                aria-expanded={open}
+                className={cn(
+                  "group w-full flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                  groupActive ? "text-ink font-medium" : "text-ink-2 hover:bg-paper-2 hover:text-ink",
+                )}
+              >
+                <Icon
+                  name={group.icon}
+                  size={17}
+                  className={cn("flex-shrink-0", groupActive ? "text-amber" : "text-ink-3 group-hover:text-ink-2")}
+                />
+                <span className="flex-1 text-left">{group.section}</span>
+                <Icon
+                  name={open ? "chevron_down" : "chevron_right"}
+                  size={14}
+                  className="text-ink-3/60 group-hover:text-ink-3"
+                />
+              </button>
+              {open && (
+                <div className="mt-0.5 mb-1 ml-[19px] pl-2 border-l border-hairline space-y-0.5">
+                  {group.items.map(renderLink)}
+                </div>
+              )}
             </div>
-            <div className="space-y-0.5">
-              {group.items.map((item) => {
-                const active = isActive(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href as never}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "group flex items-center gap-2.5 px-3 rounded-md text-sm transition-colors min-h-[44px]",
-                      active
-                        ? "bg-amber-soft text-amber-ink font-medium"
-                        : "text-ink-2 hover:bg-paper-2 hover:text-ink",
-                    )}
-                  >
-                    <Icon
-                      name={item.icon}
-                      size={15}
-                      className={cn(
-                        "flex-shrink-0",
-                        active ? "text-amber" : "text-ink-3 group-hover:text-ink-2",
-                      )}
-                    />
-                    <span className="flex-1 truncate">{item.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* The reseller's GSTIN sat in the footer of every page. It belongs here:

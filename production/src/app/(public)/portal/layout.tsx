@@ -18,6 +18,7 @@ import { cn, initials } from "@/lib/utils";
 import { PortalAccountMenu } from "./_components/portal-account-menu";
 import { PortalNavStrip } from "./_components/portal-nav";
 import { PortalSidebar } from "./_components/portal-sidebar";
+import { PortalBreadcrumb } from "./_components/portal-breadcrumb";
 
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
@@ -50,7 +51,7 @@ export default async function PortalLayout({ children }: { children: React.React
             like the staff TopBar; signed out it is the whole chrome, so it keeps
             the centred measure. */}
         <div className={session
-          ? "px-6 py-3 flex items-center justify-between gap-4"
+          ? "px-6 h-14 flex items-center gap-4"
           : "max-w-[1080px] mx-auto px-6 py-4 flex items-center justify-between gap-4"}>
           {/* min-h-[44px] for the ≥44px floor (CLAUDE.md:605, §20). It measured 236x36 on
               9 Sep — the 36px comes from the w-9 h-9 logo. Free of layout cost here: the
@@ -80,6 +81,19 @@ export default async function PortalLayout({ children }: { children: React.React
               {session && <div className="text-3xs text-ink-3 mt-1">Customer Portal</div>}
             </div>
           </Link>
+          {/* ─── BREADCRUMB LEFT, ACCOUNT RIGHT — the staff TopBar's layout ────
+              Fixed 11 Sep 2026. With the rail carrying the brand, the header had
+              nothing left in it and the account chip sat at the LEFT edge of an
+              otherwise empty bar, which reads as a broken row rather than a
+              quiet one. `topbar.tsx:92` puts a breadcrumb on the left, a
+              `flex-1` spacer after it, and everything else on the right.
+
+              Hidden on a phone for the same reason it is there: the row belongs
+              to the brand and the account when there is no space. */}
+          {session && <PortalBreadcrumb />}
+
+          <div className="flex-1" />
+
           <div className="flex items-center gap-5">
             {/* Section nav lives in _components/portal-nav.tsx — it needs usePathname to
                 mark the current section, and this layout is a Server Component. The
