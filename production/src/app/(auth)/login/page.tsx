@@ -25,7 +25,29 @@ type FormData = z.infer<typeof schema>;
 // Demo accounts shown only in development. Kept in sync with the actual
 // tenants in Supabase — when a tenant is added/removed or its password
 // rotated, update this list. Hidden in production builds.
-const DEMO_USERS: Array<{ label: string; email: string; password: string }> = [
+/**
+ * `portal: true` means this account signs in at the CUSTOMER door, not here.
+ *
+ * Added 11 Sep 2026 — Pardeep: "beside these add a seperate account just for
+ * testing with Hosting and Domain Customer panel / those two have admin level
+ * and tenant level access".
+ *
+ * It cannot be an autofill row like the other two, and the reason is the
+ * product's design rather than an omission: the customer portal has NO PASSWORD.
+ * It signs in with a 6-digit emailed code (`/portal/login`, `signInWithOtp`), so
+ * there is nothing to type into the password field on this page — and this form
+ * signs into the STAFF area, which `staff-area-guard` would bounce a customer
+ * out of anyway.
+ *
+ * So the row links to the portal with the address prefilled. Showing it here at
+ * all is the point of the request: all three test identities are visible in one
+ * place, instead of the customer side being undiscoverable.
+ */
+type DemoAccount =
+  | { label: string; email: string; password: string; portal?: false; note?: string }
+  | { label: string; email: string; portal: true; note: string };
+
+const DEMO_USERS: DemoAccount[] = [
   /* 26 Aug 2026: yahan teesri entry thi — `darshan@exceltechnologies.in`. DB me wo user
      MAUJOOD NAHI HAI, to wo button dabane par sirf login fail hota tha. Upar likha comment
      ("kept in sync with the actual tenants in Supabase") sach nahi nikla, jo aisi list ke
@@ -37,6 +59,20 @@ const DEMO_USERS: Array<{ label: string; email: string; password: string }> = [
      bata raha tha, jo wo nahi hai. Ek hi shabd, do bilkul alag matlab. */
   { label: "Anutech Digital",            email: "pardeep@anutech.in",           password: "ResellerOS@2026" },
   { label: "Excel Technologies · Owner", email: "pardeep@exceltechnologies.in", password: "ExcelTech@2026"  },
+  /* ─── THE CUSTOMER SIDE ───────────────────────────────────────────────────
+     Seeded by `scripts/seed-portal-test-customer.sql`, which asserts against
+     `portal_customer_exists()` before it finishes — because the entry that
+     used to sit here named a user who was NOT in the database, so the button
+     only ever failed. A demo row that cannot be verified rots the same way.
+
+     Carries 2 hosting accounts (one suspended, for the restore control) and
+     2 domains (one 9 days from expiry, for the renewal path). */
+  {
+    label: "Portal Test Customer · Hosting + Domains",
+    email: "portal-test@anutech.invalid",
+    portal: true,
+    note: "customer panel · emailed code, no password",
+  },
 ];
 
 function LoginPageInner() {
@@ -120,20 +156,40 @@ function LoginPageInner() {
             </div>
           </div>
           <ul className="space-y-1.5">
-            {DEMO_USERS.map((u) => (
-              <li key={u.email}>
-                <button
-                  type="button"
-                  onClick={() => fillDemo(u.email, u.password)}
-                  className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
-                >
-                  <div className="font-medium text-ink">{u.label}</div>
-                  <div className="text-2xs text-ink-3 font-mono">
-                    {u.email} · <span className="text-amber-ink">{u.password}</span>
-                  </div>
-                </button>
-              </li>
-            ))}
+            {DEMO_USERS.map((u) =>
+              u.portal ? (
+                /* A LINK, not an autofill — see the DemoAccount doc. A plain
+                   anchor rather than `router.push`, because the href carries a
+                   query string and typedRoutes has no type for that. */
+                <li key={u.email}>
+                  <a
+                    href={`/portal/login?email=${encodeURIComponent(u.email)}`}
+                    className="block rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
+                  >
+                    <div className="font-medium text-ink">
+                      {u.label}
+                      <span className="ml-1.5 text-2xs font-normal text-indigo">→ customer portal</span>
+                    </div>
+                    <div className="text-2xs text-ink-3 font-mono">
+                      {u.email} · <span className="text-indigo">{u.note}</span>
+                    </div>
+                  </a>
+                </li>
+              ) : (
+                <li key={u.email}>
+                  <button
+                    type="button"
+                    onClick={() => fillDemo(u.email, u.password)}
+                    className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
+                  >
+                    <div className="font-medium text-ink">{u.label}</div>
+                    <div className="text-2xs text-ink-3 font-mono">
+                      {u.email} · <span className="text-amber-ink">{u.password}</span>
+                    </div>
+                  </button>
+                </li>
+              ),
+            )}
           </ul>
         </div>
       )}

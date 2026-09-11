@@ -53,7 +53,19 @@ function PortalLoginInner() {
   const [preNoCustomer, setPreNoCustomer] = React.useState(false);
   const [resending, setResending] = React.useState(false);
 
-  const emailForm = useForm<EmailForm>({ resolver: zodResolver(emailSchema) });
+  /* ─── `?email=` PREFILL ────────────────────────────────────────────────────
+     Filled by the dev box on the staff login page, which links here rather than
+     autofilling a password this door does not have.
+
+     Prefill ONLY — arriving with the parameter does not send a code. Sending on
+     page load would turn any link into a way to fire one-time codes at a real
+     customer's inbox, which is a nuisance somebody else pays for. The visitor
+     presses the button. */
+  const prefillEmail = params.get("email") ?? "";
+  const emailForm = useForm<EmailForm>({
+    resolver: zodResolver(emailSchema),
+    defaultValues: { email: prefillEmail },
+  });
   const codeForm = useForm<CodeForm>({ resolver: zodResolver(codeSchema) });
 
   /** Check the email is a customer, then send a 6-digit code. Returns success. */
@@ -254,6 +266,34 @@ function PortalLoginInner() {
               <Icon name="mail" size={14} className="mr-1.5" />
               Email me a sign-in code
             </Button>
+
+            {/* ─── DEV ONLY: WHERE THE CODE ACTUALLY GOES ────────────────────
+                Locally nothing leaves the machine — Supabase catches every
+                message in its own inbox. Without this line the flow looks
+                broken on a dev box: the form says "check your email", the
+                email is in a Docker container nobody mentioned, and the tester
+                concludes sign-in is down. The demo address is `.invalid` on
+                purpose, so there is no real inbox to check either.
+
+                `NODE_ENV` is inlined at build time, so this whole block is
+                absent from a production bundle rather than hidden by CSS. */}
+            {process.env.NODE_ENV !== "production" && (
+              <div className="rounded-md border border-indigo/30 bg-indigo-50 px-3 py-2 text-2xs leading-relaxed text-ink-2">
+                <b className="text-indigo">Dev mode</b> — no mail leaves this machine. Read the
+                6-digit code in the local inbox:{" "}
+                <a
+                  href="http://127.0.0.1:54324"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-indigo underline"
+                >
+                  127.0.0.1:54324
+                </a>
+                . The test customer is{" "}
+                <span className="font-mono">portal-test@anutech.invalid</span> — seed or refresh it
+                with <span className="font-mono">scripts/seed-portal-test-customer.sql</span>.
+              </div>
+            )}
 
             <p className="text-2xs text-ink-3 text-center leading-relaxed">
               No passwords. We email you a one-time code that signs you in.
