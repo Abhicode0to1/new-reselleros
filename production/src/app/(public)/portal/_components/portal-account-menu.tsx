@@ -28,7 +28,20 @@ export function PortalAccountMenu({
   async function signOut() {
     const { createClient } = await import("@/lib/supabase/client");
     await createClient().auth.signOut();
-    window.location.href = "/portal/login";
+    /* ─── WHERE A SIGNED-OUT CUSTOMER LANDS ───────────────────────────────────
+       `/portal/login` in production, and that is not negotiable: `/login` is the
+       STAFF door and asks for a password, which a portal customer does not have
+       and cannot be given. Sending a real customer there strands them on a form
+       they can never complete — the §24 dead end, on the way out.
+
+       In DEVELOPMENT it goes to `/login` instead. Pardeep, 11 Sep 2026: "when
+       logging out? why go there? not at login screen directly" — `/login` is
+       where the demo accounts box is, so signing out of the portal to test
+       something else meant navigating back by hand every time.
+
+       `NODE_ENV` is inlined at build time, so a production bundle contains only
+       the `/portal/login` branch. */
+    window.location.href = process.env.NODE_ENV === "development" ? "/login" : "/portal/login";
   }
 
   return (
