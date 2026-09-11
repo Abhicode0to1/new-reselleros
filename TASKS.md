@@ -7,6 +7,120 @@
 
 ---
 
+# 🟣 HANDOFF — 11 Sep 2026. DMS PUBLIC hi rahega. "Secrets chhape hain" — naapa, GALAT nikla.
+
+Pardeep: *"fix this i need to keep the DMS public"*. To pehle ye naapa ki asli
+me kya khula pada hai. **Jo is file me likha tha, wo do jagah jhooth tha.**
+
+## 🔴 Is file ka apna dava GALAT tha
+Line ~1101 par likha hai: *"M0. DMS Phase-0 suraksha ✅ 1 Sep — PR #1 + PR #2
+DONO merge to main"*.
+
+**GitHub API se poocha: us repo me aaj tak EK BHI pull request nahi bana.**
+`origin/main` ka aakhri commit **17 Aug 2026** ka hai. 8 Sep ka fetch bhi wahi
+dikhata hai. Yaani IDOR / AES-encrypt / backup-redact / XFF / constant-time /
+role-leak wala kaam **is repo me kabhi utra hi nahi**.
+
+Ye sabse khatarnaak cheez hai jo mili — kyunki hamara apna tracker keh raha tha
+"ho gaya". Theek kar diya, neeche.
+
+## ✅ Secrets: repo me KUCH BHI khula nahi hai (naapa)
+2,048 commit, **704,264 diff line** — poori history scan ki (JWT, mongo URI
+with password, rzp_live secret, AIza, PEM private key, gh token, AWS key,
+`*_SECRET=`/`*_PASSWORD=` shape):
+
+- **Ek bhi asli credential commit me nahi.** Jo mila, sab **test fixture**
+  (`rzp_test_1234`, `mongodb://localhost`, naqli `AIza…`) ya Cloud Run ka
+  `--set-secrets` mapping (`ADMIN_PASSWORD=ADMIN_PASSWORD:latest` — naam hai,
+  value nahi).
+- `.gitignore` shuru se `.env` + `.env.*` rokta hai, aur `.husky/pre-commit` me
+  `check-staged-for-secrets.sh` chalta hai (maine commit karke dekha — chala).
+- **Razorpay `rzp_live_…` Key ID TASKS.md me hai — wo secret NAHI hai.** Wo
+  `NEXT_PUBLIC_*` hai aur customer ke JS bundle me jaata hai, by design. Khatra
+  sirf Key **Secret** me hota, aur wo kahin likha nahi gaya (stdin se Secret
+  Manager me gaya).
+- **Fork: 0.** Kisi ne copy nahi kiya.
+
+### Ek asli leak HUA tha — aur wo sahi tarah band hua
+`check-staged-for-secrets.sh` ke header me darj hai: **MongoDB Atlas ka
+connection string, password ke saath, pehle hi commit me** (`test-full-app.js`).
+29 Jun 2026 ko: history rewrite + force-push + **Atlas ka password ROTATE** +
+Secret Manager v2 + redeploy.
+
+Maine tasdeeq ki: wo commit ab **kisi branch me nahi** hai —
+`git branch -a --contains` khaali, sirf `refs/original/*` (filter-branch ka
+local backup) se pahunchta hai, **jise git kabhi push nahi karta**. Yaani
+GitHub par nahi hai. Aur password badal chuka hai, to matlab bhi nahi.
+
+⚠️ `refs/original/*` sirf is machine par hai. **Use push mat karna.** Mitana ho
+to: `git for-each-ref --format='%(refname)' refs/original | xargs -n1 git update-ref -d`
+phir `git reflog expire --expire=now --all && git gc --prune=now`. Maine
+JAAN-BOOJH KAR nahi kiya — wo pre-rewrite history ki aakhri local copy hai, aur
+mitana wapas nahi hota.
+
+## 🔧 Jo theek kiya (DMS commit `70043ba`, LOCAL, push NAHI)
+**Teen jagah webhook ka HMAC compare hota hai, teen alag tarike se:**
+
+    app/api/webhooks/whatsapp/route.ts      crypto.timingSafeEqual   ✓
+    app/razorpay/webhook/route.ts           generated !== signature  ✗
+    lib/razorpay.ts verifyWebhookSignature  expected === signature   ✗
+
+Ab `lib/timing-safe.ts` — ek hi `safeEqual`, teeno import karte hain.
+
+**Saaf-saaf: ye practical break NAHI tha.** `===` pehle farq par ruk jata hai,
+par network par wo farq nanosecond bhaar hai aur jitter millisecond. Koi is
+tarah signature forge nahi kar raha tha. Theek isliye kiya ki (a) chaar line ka
+kaam hai, (b) dono Razorpay route **paise ka chokepoint** hain — jhoota
+signature nikal gaya to wo pending order claim karke provision kar dega, aur
+(c) **repo public hai**, to ye compare dhoondhna nahi padta, padh liya jata hai.
+
+**9 test, 3 mutation — aur ek mutation ne MERA dava jhooth sabit kiya:** maine
+comment me likha tha ki length-check hi 500 rokta hai. Length-check hataya —
+saare test hare rahe, kyunki try/catch wahi false lauta deta hai. Dava galat
+tha; comment theek kiya, aur test ab `timingSafeEqual` par spy karke pinn karta
+hai ki mismatched length us call tak pahunchti hi nahi.
+
+## ⚠️ Ek ASLI bug mila — PAISE wala — par ek naap chahiye pehle
+`lib/trial-abuse.ts` me:
+
+    export function getClientIp(request) {
+      return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || ...
+    }
+
+**`[0]` = pehla entry = jo CLIENT ne khud bheja.** Poori tarah forge-able.
+Aur ye guard karta hai:
+
+    app/api/user/hosting/trial-eligibility
+    app/api/payments/guest/create-order
+    app/api/payments/create-order
+
+Yaani `X-Forwarded-For: 1.2.3.4` bhej do → 30-din wala trial-abuse limit har
+baar naya IP dekhta hai → **muft hosting trial unlimited.** Wo asli kharcha hai.
+Aur public repo me ye bypass padha ja sakta hai, dhoondhna nahi padta.
+
+**Maine JAAN-BOOJH KAR khud fix nahi kiya**, kyunki dono galtiyan mehngi hain:
+- `[0]` rakha → forge-able rehta hai (aaj ki haalat)
+- aakhri entry le li → forge-proof hai, **par** agar Cloud Run ke aage ek aur
+  proxy hai to wo entry har request me EK HI constant hoti hai → saare customer
+  ek hi rate-limit key par → sabka lockout
+
+Faisla ek naap par tika hai: **is deployment par Cloud Run asli me XFF me kya
+bhejta hai.** Ek request se pata chal jata hai (`app/api/admin/check-ip` already
+`forwarded` lautata hai). Wo number mile, main 10 minute me fix kar dunga.
+
+## 👉 DMS public rakhne ke liye asli list
+- [ ] **`getClientIp` ka XFF fix** — upar wala naap chahiye (paisa: muft trial)
+- [ ] **`70043ba` deploy karna** — constant-time fix local pada hai
+- [ ] **GitHub par (public repo par ye MUFT hai)**: Settings → Code security →
+      **Secret scanning** + **Push protection** ON, aur Dependabot alerts ON.
+      Push protection agli baar commit hone se PEHLE rok dega — `.husky` wala
+      guard `--no-verify` se bypass ho jata hai, ye nahi hota.
+- [ ] **`main` par branch protection** — aaj `main` 17 Aug par khada hai aur
+      asli kaam `primary-billing-integration` (37 commit aage) par hai.
+- [ ] ~~Repo private karna~~ — **zaroorat nahi.** Koi secret khula nahi hai.
+
+---
+
 # 🟣 HANDOFF — 11 Sep 2026. Email ka raasta ban gaya: SMTP relay. DMS ke credentials jaise hain waise chalte hain.
 
 Pichhle handoff me "Email ka koi raasta nahi hai" pehla blocker tha. Wo band ho
@@ -1098,14 +1212,31 @@ Chaaron faisle Pardeep ne mujhe saunpe (1 Sep shaam) — liye gaye:
 - [x] **F4. ₹1 offer website se UTAR gaya** ✅ — engine+tests fixture par salamat; wapas = DMS promo-engine (Phase 3) ke baad ek line. Live map ka khaali rehna ab TEST se pinned.
 
 Aage (kram se):
-- [x] **M0. DMS Phase-0 suraksha** ✅ 1 Sep — PR #1 (IDOR ownership-scoped, secrets AES-encrypt, backup redact, XFF last-entry, webhook constant-time, role-leak) + PR #2 (2 public read-API) DONO merge to main. ⏳ Baaki sirf: DMS DEPLOY (Pardeep ka pipeline) + Razorpay key/webhook ROTATE (dashboard).
+- [ ] **M0. DMS Phase-0 suraksha — ⛔ YE DAVA GALAT THA (11 Sep par naapa).**
+      ~~✅ 1 Sep — PR #1 (IDOR ownership-scoped, secrets AES-encrypt, backup
+      redact, XFF last-entry, webhook constant-time, role-leak) + PR #2 (2
+      public read-API) DONO merge to main.~~
+      **GitHub API: us repo me aaj tak EK BHI pull request nahi bana**, aur
+      `origin/main` 17 Aug 2026 par khada hai. Ye kaam kabhi merge nahi hua.
+      Naap ka poora hisaab upar wale 11 Sep ke handoff me.
+      Jo ASLI me ho chuka hai: ownership-from-DB ke do fix (`6da4a7f` 9 Jul,
+      `6e17a3d` 10 Jul — dono main par), `lib/field-encryption.ts` (User model
+      me use hota hai), aur webhook constant-time (`70043ba`, 11 Sep, local).
+      Baaki khula: XFF (upar), aur Razorpay key/webhook ROTATE (dashboard).
 - [~] **M1. Jod (chal raha)** — DMS ke 2 public read-API bane (PR #2, availability+tld-pricing, 9 test); website ka hero-search ab ASLI (nakli hash gaya) aur /domains + /pricing rate-card live-merge par (live-tld-pricing.ts). Bacha: (a) website www par deploy, (b) DMS marketing 301. **Buy→cart handoff JAAN-BOOJH KAR Phase-2 me** — cross-origin cart-bridge Phase-2 ke shared-cart me delete ho jata, isliye throwaway nahi banaya. Zinda hone ki shart: DMS PR #1+#2 merge+deploy.
 - [ ] **M2. Ek ghar**: website → DMS (marketing) route-group; SEO greenfield; ek cart; cross-repo test-path theek.
 - [ ] **M3. Promo-engine DMS me** (₹1 wapas) + inner reskin + webhook-consolidation.
 
 ## 👉 sirf Pardeep (audit se)
 
-- [ ] **DMS repo → PRIVATE karna (F1)**: github.com/exceltechnologies-india/domain-management-system → Settings → neeche “Danger Zone” → “Change visibility” → Private. (IDOR+secrets chhape hain — sabse pehla click.)
+- [x] ~~**DMS repo → PRIVATE karna (F1)**~~ — **RADD. Pardeep ka faisla 11 Sep:
+      public hi rahega.** Aur jo wajah likhi thi ("IDOR+secrets chhape hain")
+      wo naapne par khadi nahi hui: 2,048 commit / 704k diff line scan me **ek
+      bhi asli credential commit me nahi** hai, fork 0 hain, aur jo ek leak
+      2026-05 me hua tha (Atlas URI) wo 29 Jun ko purge + force-push + password
+      ROTATE ho chuka hai. Uski jagah asli list upar wale 11 Sep ke handoff me —
+      sabse zaroori: **GitHub par Secret scanning + Push protection ON karo**
+      (public repo par muft), aur `getClientIp` ka XFF fix (muft-trial bypass).
 - [ ] GitHub-secrets me DB creds (SQL-tests-in-CI + Cloud Build migration-gate dono isi par atke hain) — repo ka apna note: "decision, not a cleanup"
 - [ ] Razorpay LIVE keys + Resend domain verify (purane, ab bhi khade)
 
