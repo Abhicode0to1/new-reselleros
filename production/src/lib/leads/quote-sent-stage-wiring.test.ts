@@ -151,6 +151,10 @@ describe("every writer of a sent quote is accounted for", () => {
        hosting account and never `lead_id`. The customer raised it from the portal, so
        they stopped being a lead before the account existed. */
     "apply-plan-upgrade.ts":     "hosting plan upgrade for an existing customer — no lead_id",
+    /* Verified by reading it: the renewal quote takes `customer_id` from the DOMAIN
+       and never sets `lead_id`. A renewal is for somebody who bought the name from
+       us a year ago — they stopped being a lead before the domain existed. */
+    "route.ts:renewal-quote":    "domain renewal quote for an existing customer — no lead_id",
     /* Creates the lead AND the quote together, so it sets the stage at insert time. There is
        no prior stage for a forward-only rule to move forward from. */
     "route.ts:checkout":         "public buy-page checkout — sets the stage at insert",

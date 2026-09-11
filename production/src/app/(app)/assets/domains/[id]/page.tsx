@@ -15,6 +15,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
+import { RenewalControl, type OpenRenewal } from "./renewal-control";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { daysUntil, expiryDisagreementDays, disagreementIsWorthFlagging } from "@/lib/domains/lifecycle";
@@ -82,6 +83,17 @@ export default async function DomainDetailPage({ params }: { params: { id: strin
 
   const s = STATUS[domain.status as DomainAssetStatus] ?? STATUS.pending;
   const days = domain.expires_at ? daysUntil(domain.expires_at) : null;
+
+  /* The most recent renewal, whatever state it is in. Newest first and one row:
+     the card shows the current position, not a history — and the unique index
+     means there can only ever be one OPEN one. */
+  const { data: renewals } = await supabase
+    .from("domain_renewals")
+    .select("id, quote_id, years, from_expires_at, status, last_error, new_expires_at, renewed_at")
+    .eq("domain_id", domain.id)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const latestRenewal: OpenRenewal | null = (renewals ?? [])[0] ?? null;
   const customer = (domain.customers as unknown as { name?: string } | null)?.name;
   const gap = expiryDisagreementDays(domain.expires_at, sub?.renewal_date ?? null);
 
@@ -180,6 +192,17 @@ export default async function DomainDetailPage({ params }: { params: { id: strin
           )}
         </Card>
       </div>
+
+      {/* ─── RENEWAL ─────────────────────────────────────────────────────
+          Below the two fact cards and above DNS: renewing is the action an
+          operator comes to this page to take when a domain is close to its
+          date, and DNS is the one they come for at any other time. */}
+      <RenewalControl
+        domainId={domain.id}
+        domainName={domain.domain_name}
+        expiresAt={domain.expires_at}
+        open={latestRenewal}
+      />
 
       <DnsEditor
         domainId={domain.id}

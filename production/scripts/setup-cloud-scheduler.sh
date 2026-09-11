@@ -187,6 +187,16 @@ JOBS=(
   # per step per term, so a second run the same day would find nothing to do.
   "resellersos-domain-expiry|30 9 * * *|/api/cron/domain-expiry|Warn a customer before their domain lapses (and the owner once it has)"
 
+  # EVERY 30 MINUTES. A customer who has just paid to renew a domain is waiting,
+  # and the gap between their payment and the registrar being told is a gap in
+  # which the domain can lapse. Not */15 like hosting-suspend: each item here is
+  # a live purchase and a read before it, so the run is not free, and a renewal
+  # is never as urgent as a site that is up when the books say it is off.
+  #
+  # It files nothing unless DOMAIN_REGISTER_LIVE=1 and the credentials are set —
+  # with the gate shut it writes nothing and leaves the queue intact.
+  "resellersos-domain-renew|*/30 * * * *|/api/cron/domain-renew|File a PAID domain renewal at ResellerClub"
+
   # ── The rest of what was missing ───────────────────────────────────
   #
   # 08:30 IST, GET — both taken from the route's own header rather than chosen here.

@@ -851,6 +851,37 @@ type DomainRenewalNoticeInsert =
   Pick<DomainRenewalNoticeRow, "tenant_id" | "domain_id" | "step" | "term_expires_at">
   & Partial<Omit<DomainRenewalNoticeRow, "tenant_id" | "domain_id" | "step" | "term_expires_at" | "created_at">>;
 
+/* ── Domain renewals (20260911160000) ────────────────────────────────────────
+   One attempt to renew one term. The only link from a paid renewal quote to
+   rcRenewDomain — see the migration for why this is NOT provisioning_requests. */
+export type DomainRenewalStatus = "quoted" | "renewed" | "failed" | "cancelled";
+
+export type DomainRenewalRow = {
+  id:          string;
+  tenant_id:   string;
+  domain_id:   string;
+  domain_name: string;
+  customer_id: string | null;
+  years:       number;
+  /** The expiry this renewal was quoted against — the duplicate guard. */
+  from_expires_at: string;
+  quote_id:    string;
+  status:      DomainRenewalStatus;
+  registrar_order_id: string | null;
+  renewed_at:  string | null;
+  /** From ResellerClub's own answer, never computed. */
+  new_expires_at: string | null;
+  attempt_count: number;
+  next_action_at: string | null;
+  last_error:    string | null;
+  last_error_at: string | null;
+  created_at:  string;
+  updated_at:  string;
+};
+type DomainRenewalInsert =
+  Pick<DomainRenewalRow, "tenant_id" | "domain_id" | "domain_name" | "from_expires_at" | "quote_id">
+  & Partial<Omit<DomainRenewalRow, "tenant_id" | "domain_id" | "domain_name" | "from_expires_at" | "quote_id" | "created_at" | "updated_at">>;
+
 export type DnsRecordType = "A" | "AAAA" | "CNAME" | "MX" | "TXT" | "NS" | "SRV" | "CAA";
 
 /** A CACHE of the provider's zone, never the authority. See the migration header. */
@@ -4395,6 +4426,7 @@ export type Database = {
       hosting_accounts: { Row: HostingAccountRow; Insert: HostingAccountInsert; Update: Partial<HostingAccountRow>; Relationships: [] };
       hosting_plan_changes: { Row: HostingPlanChangeRow; Insert: HostingPlanChangeInsert; Update: Partial<HostingPlanChangeRow>; Relationships: [] };
       domain_renewal_notices: { Row: DomainRenewalNoticeRow; Insert: DomainRenewalNoticeInsert; Update: Partial<DomainRenewalNoticeRow>; Relationships: [] };
+      domain_renewals: { Row: DomainRenewalRow; Insert: DomainRenewalInsert; Update: Partial<DomainRenewalRow>; Relationships: [] };
       dns_records:      { Row: DnsRecordRow;      Insert: DnsRecordInsert;      Update: Partial<DnsRecordRow>;      Relationships: [] };
       customer_groups: { Row: CustomerGroupRow; Insert: CustomerGroupInsert; Update: CustomerGroupUpdate; Relationships: [] };
       items:         { Row: ItemRow;         Insert: ItemInsert;         Update: ItemUpdate;         Relationships: [] };
