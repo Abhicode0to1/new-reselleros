@@ -201,7 +201,14 @@ export function PortalNavStrip() {
     /* The fades are siblings of the scroller, not children of it — a child of an
        overflow container scrolls away with the content, so an inner fade would slide
        off the moment it was needed. `relative` therefore lives out here. */
-    <div className="relative min-[1080px]:hidden border-t border-hairline">
+    /* ─── `md:hidden`, NOT `min-[1080px]:hidden` ─────────────────────────────
+       The 1080 threshold paired this strip with `PortalNavInline`, which showed
+       at exactly the header's max-width. The rail replaced that row on 11 Sep
+       2026 and appears at `md` — so the old threshold left a window where BOTH
+       navigations were on screen. Measured: at 820px and 1024px two navs
+       visible (a 791px rail and a 44px strip); only at 1100px did it come right.
+       It now hides exactly where the rail appears. */
+    <div className="relative md:hidden border-t border-hairline">
       <nav ref={stripRef} className="overflow-x-auto" aria-label="Portal sections">
         {/* No vertical padding here on purpose — it belongs on the links, or it pads the
             row while leaving each tap target 20px tall. */}

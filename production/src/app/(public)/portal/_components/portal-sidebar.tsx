@@ -112,7 +112,12 @@ export function PortalSidebar({
         href={item.href as never}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "group flex items-center gap-2.5 px-3 rounded-md text-sm transition-colors min-h-[44px]",
+          /* `md:min-h-0` to match the staff rail exactly. This rail is
+             `hidden md:flex`, so its 44px only ever applied on DESKTOP — where
+             a floor for fingers does nothing but make every row 14px taller
+             than the staff app's. The phone's touch targets are the scrolling
+             strip in portal-nav.tsx, which carries its own 44px. */
+          "group flex items-center gap-2.5 px-3 rounded-md text-sm transition-colors min-h-[44px] md:min-h-0 py-1.5",
           active ? "bg-amber-soft text-amber-ink font-medium" : "text-ink-2 hover:bg-paper-2 hover:text-ink",
         )}
       >

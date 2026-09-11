@@ -112,7 +112,9 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                 key={m.href}
                 href={m.href as never}
                 onClick={onNavigate}
-                className="flex items-center gap-2 rounded-lg border border-hairline bg-amber-soft/40 px-3 py-2.5 text-sm font-semibold text-ink hover:bg-amber-soft active:bg-amber-soft/70"
+                /* The quick-action tiles measured 42px in the phone sheet — 2px short of
+                   the §20 floor. Same responsive treatment as the nav rows above. */
+                className="flex items-center gap-2 rounded-lg border border-hairline bg-amber-soft/40 px-3 py-2.5 text-sm font-semibold text-ink hover:bg-amber-soft active:bg-amber-soft/70 min-h-[44px] md:min-h-0"
               >
                 <Icon name={m.icon} size={16} className="text-amber shrink-0" />
                 {/* Same reason as the two below: a label clipped to an ellipsis has hidden part
@@ -148,7 +150,20 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                 rel={it.external ? "noopener noreferrer" : undefined}
                 title={collapsed ? (it.hint ? `${it.label} — ${it.hint}` : it.label) : it.hint}
                 className={cn(
-                  "group relative flex items-center rounded-md text-sm transition-colors",
+                  /* ─── §20's 44px FLOOR, ON THE PHONE ONLY ──────────────────
+                     Measured 11 Sep 2026 at 390px with the sheet open: nine
+                     links between 32px and 42px, every one under the floor.
+                     This component is SHARED — `Sidebar` renders it as the
+                     desktop rail (`hidden md:flex`) and `MobileSidebar` renders
+                     it inside the phone sheet (`md:hidden`) — so the rows a
+                     thumb has to hit and the rows a cursor clicks are the same
+                     markup.
+
+                     `md:min-h-0` because the floor is about fingers. Applying
+                     44px on the desktop rail too would add ~14px to every one
+                     of forty-odd rows and push the lower groups off a laptop
+                     screen, to fix a problem a mouse does not have. */
+                  "group relative flex items-center rounded-md text-sm transition-colors min-h-[44px] md:min-h-0",
                   collapsed ? "justify-center px-0 py-2" : child ? "gap-2 pl-8 pr-3 py-1.5 text-[13px]" : "gap-2.5 px-3 py-1.5",
                   isActive
                     ? "bg-amber-soft text-amber-ink font-medium"
@@ -189,7 +204,12 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                       href={item.href as any}
                       onClick={onNavigate}
                       className={cn(
-                        "group flex items-center gap-2.5 rounded-md text-sm transition-colors flex-1 px-3 py-1.5",
+                        /* Same §20 floor as the plain row — this is the variant
+                           for an item that HAS children, where the link and the
+                           expand chevron share the row. It measured 41px in the
+                           phone sheet after the first fix, because the floor
+                           went on the other renderer only. */
+                        "group flex items-center gap-2.5 rounded-md text-sm transition-colors flex-1 px-3 py-1.5 min-h-[44px] md:min-h-0",
                         active ? "bg-amber-soft text-amber-ink font-medium" : "text-ink-2 hover:bg-paper-2 hover:text-ink"
                       )}
                       aria-current={active ? "page" : undefined}
@@ -244,7 +264,11 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                 onClick={() => toggleSection(section.section)}
                 aria-expanded={open}
                 className={cn(
-                  "group w-full flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                  /* Same floor, same reason: 8 of 9 group rows measured under
+                     44px in the phone sheet (min 36px), and a group row is the
+                     thing you tap FIRST — its children are not reachable until
+                     it is hit. */
+                  "group w-full flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors min-h-[44px] md:min-h-0",
                   sectionActive ? "text-ink font-medium" : "text-ink-2 hover:bg-paper-2 hover:text-ink"
                 )}
               >
@@ -267,7 +291,7 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
           <Link
             href={"/platform" as never}
             className={cn(
-              "group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors mt-1 border-t border-hairline pt-3",
+              "group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors mt-1 border-t border-hairline pt-3 min-h-[44px] md:min-h-0",
               pathname.startsWith("/platform")
                 ? "text-amber font-medium"
                 : "text-ink-2 hover:bg-paper-2 hover:text-ink",
