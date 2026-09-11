@@ -131,7 +131,19 @@ export function resolveEmailProvider(input: ProviderInput): ProviderDecision {
     }
     if (input.smtpConfigured) {
       return smtpDecision(
-        fellBack ? `${reason}, and there is no Resend key — sent through the SMTP relay instead` : reason,
+        fellBack
+          ? `${reason}, and there is no Resend key — sent through the SMTP relay instead`
+          : /* NOT `reason`: that sentence reads "Tenant sends through Resend."
+               and this message went through the relay. It is recorded against
+               the send, so a wrong one turns into a wrong answer weeks later to
+               "which transport carried this?".
+
+               It states the CAUSE and not the route, because the route is
+               already carried by `provider` here and by `email_log.provider` in
+               the record. Measured in the browser: a reason that also named the
+               relay produced "Mail is going out through the SMTP relay … so
+               this went through the SMTP relay instead." */
+            "No Resend key is configured on this workspace.",
         fellBack,
       );
     }
@@ -178,5 +190,99 @@ export function resolveEmailProvider(input: ProviderInput): ProviderDecision {
     reason: "Tenant sends through their own Gmail account.",
     caution: bounceCaution("Gmail"),
     blocked: null,
+  };
+}
+
+/**
+ * "Is mail going out right now?" — the settings card's headline.
+ *
+ * ─── ANSWERED BY THE ROUTER, NOT BESIDE IT ──────────────────────────────────
+ * The card used to compute this itself, one ternary per provider, and it drifted
+ * the moment the fallback chain grew a third link. Measured 11 Sep 2026 with the
+ * SMTP relay configured and no Resend key: `sendEmail` sent the message through
+ * the relay, and the card said "No mail is going out. Resend is selected but no
+ * API key is set, so emails are recorded as sent and silently discarded." Every
+ * clause of that was false, and it pointed the reader at a fix for a system that
+ * was working.
+ *
+ * The same flaw sat on the Gmail branch before the relay existed: a broken Gmail
+ * grant with a good Resend key reported "No mail is going out" while every
+ * message left through Resend.
+ *
+ * So the question is now answered by asking `resolveEmailProvider` what it would
+ * do and reading its verdict. Two implementations of one decision is the bug;
+ * there is now one.
+ *
+ * ─── AND A FALLBACK IS NOT THE SAME AS FINE ─────────────────────────────────
+ * Collapsing this to a boolean would hide the case that matters most: mail is
+ * going out, but not the way the tenant asked, and the transport carrying it may
+ * not report bounces. `fellBack` keeps that a third state instead of a green
+ * badge that quietly means something else.
+ */
+export interface SendCapability {
+  /** False only when NOTHING can carry a message. */
+  canSend: boolean;
+  /** The transport that would actually carry it, fallback included. */
+  via: EmailProvider;
+  /**
+   * Sending, but not through the transport this workspace selected.
+   *
+   * BROADER than `ProviderDecision.fellBack`, deliberately. That flag means
+   * "the tenant explicitly asked for gmail or smtp and it could not be used",
+   * so it is FALSE for the case this card most needs to show: Resend selected,
+   * no key anywhere, relay configured — mail leaves through the relay, the
+   * tenant believes Resend is carrying it, and therefore believes bounces are
+   * being reported. This compares what would carry the message against what is
+   * selected, which is the question the screen is actually asking.
+   *
+   * Never true when nothing can send: "going out through something else" and
+   * "not going out" must not appear together.
+   */
+  usingFallback: boolean;
+  /** One sentence naming the route taken, or why the selected one was not. */
+  reason: string;
+  /** Set only when nothing can send. The card shows it verbatim. */
+  blocked: string | null;
+}
+
+export interface SendCapabilityInput {
+  /** `tenants.email_provider`. */
+  provider: string | null | undefined;
+  /** `tenants.gmail_sender_user_id` — null when no sender was ever designated. */
+  gmailSenderUserId?: string | null;
+  /** Whether that account has a stored refresh token. */
+  gmailHasRefreshToken?: boolean;
+  /** The granted scopes for that account. NULL means unknown, which cannot send. */
+  gmailScopes?: string | null;
+  /** A Resend key anywhere — the tenant's own or the deployment's. */
+  resendConfigured: boolean;
+  /** `SMTP_HOST`/`PORT`/`USER`/`PASS` all present. */
+  smtpConfigured: boolean;
+}
+
+export function describeSendCapability(input: SendCapabilityInput): SendCapability {
+  const decision = resolveEmailProvider({
+    requested: input.provider,
+    senderUserId: input.gmailSenderUserId ?? null,
+    senderRefreshToken: input.gmailHasRefreshToken ? "present" : null,
+    senderScopes: input.gmailScopes ?? null,
+    resendConfigured: input.resendConfigured,
+    smtpConfigured: input.smtpConfigured,
+    /* Deliberately no `messageClass`: the bounce caution belongs to a message,
+       not to a settings screen. The card states the transport's bounce
+       behaviour on its own, once, where the transport is chosen. */
+  });
+
+  const canSend = decision.blocked === null;
+  return {
+    canSend,
+    via: decision.provider,
+    /* Compared, not copied from `decision.fellBack` — see the field's doc. The
+       blocked path also reports a fallback (the tenant asked for something
+       unusable), so it is gated on canSend or the screen would say "going out
+       through something else" beside "nothing is going out". */
+    usingFallback: canSend && decision.provider !== decision.requested,
+    reason: decision.reason,
+    blocked: decision.blocked,
   };
 }

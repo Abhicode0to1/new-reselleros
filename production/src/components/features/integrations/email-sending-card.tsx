@@ -14,6 +14,9 @@
  * The switch itself cannot select a transport that cannot send — the server
  * checks the target's scopes and returns 409 with the missing step, and that
  * message is shown verbatim rather than replaced with "Something went wrong".
+ * Choosing SMTP is held to the same rule: the server connects and authenticates
+ * against the relay first, sending nothing, and hands back the relay's own words
+ * if it is refused.
  */
 "use client";
 
@@ -29,8 +32,11 @@ import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { blockerText, type SenderCandidate } from "@/lib/email/sender-candidates";
 
+/** The one place a transport's machine name becomes words for a person. */
+const TRANSPORT_LABEL = { resend: "Resend", gmail: "Gmail", smtp: "the SMTP relay" } as const;
+
 interface EmailSettings {
-  provider: "resend" | "gmail";
+  provider: "resend" | "gmail" | "smtp";
   fromAddress: string | null;
   fromName: string | null;
   hasResendKey: boolean;
@@ -48,6 +54,16 @@ interface EmailSettings {
   senderCandidates: SenderCandidate[];
   /** Only the owner may switch it — PATCH enforces the same. */
   canChooseSender: boolean;
+  /** The deployment-wide relay. `description` is host, port and login — no password. */
+  smtp: { configured: boolean; description: string };
+  /** The router's own verdict — see `describeSendCapability`. */
+  capability: {
+    canSend: boolean;
+    via: "resend" | "gmail" | "smtp";
+    usingFallback: boolean;
+    reason: string;
+    blocked: string | null;
+  };
   canSendNow: boolean;
 }
 
@@ -128,6 +144,7 @@ export default function EmailSendingCard() {
   }
 
   const gmailReady = data.gmail.canSend;
+  const cap = data.capability;
 
   return (
     <Card className="p-5">
@@ -138,52 +155,95 @@ export default function EmailSendingCard() {
             How renewal reminders, invoices and quotes leave this workspace.
           </p>
         </div>
-        <Badge kind={data.canSendNow ? "success" : "danger"}>
-          {data.canSendNow ? "Sending" : "Not sending"}
+        {/* ── THREE STATES, NOT TWO ──────────────────────────────────────
+            "Sending" and "Not sending" hid the case that costs money: mail IS
+            leaving, through something other than what this workspace selected,
+            and that transport may not report bounces. A green badge over a
+            silent fallback is the same comfortable lie this card was built to
+            stop. */}
+        <Badge kind={!cap.canSend ? "danger" : cap.usingFallback ? "warning" : "success"}>
+          {!cap.canSend ? "Not sending" : cap.usingFallback ? "Falling back" : "Sending"}
         </Badge>
       </div>
 
-      {/* The sentence that matters. Stated before any configuration detail. */}
-      {!data.canSendNow && (
+      {/* The sentence that matters. Stated before any configuration detail, and
+          in the SERVER's words: `blocked` and `reason` come from the same
+          function that routes a real message, so this box cannot describe a
+          situation the sender does not actually have. The card used to write
+          these sentences itself and they went stale — with the relay configured
+          and no Resend key it said "no API key is set, so emails are recorded as
+          sent and silently discarded" while every message was being delivered. */}
+      {!cap.canSend && (
         <div className="mb-4 flex gap-2.5 rounded-lg border border-rose/30 bg-rose-soft/40 p-3">
           <Icon name="alert_triangle" className="mt-0.5 h-4 w-4 shrink-0 text-rose" />
           <div className="text-xs leading-relaxed text-ink-2">
             <span className="font-medium text-ink">No mail is going out.</span>{" "}
-            {data.provider === "gmail"
-              ? "Gmail is selected but the connected account cannot send."
-              : "Resend is selected but no API key is set, so emails are recorded as sent and silently discarded."}
+            {cap.blocked}
           </div>
         </div>
       )}
 
-      {/* ── Provider ─────────────────────────────────────────────────────── */}
+      {cap.canSend && cap.usingFallback && (
+        <div className="mb-4 flex gap-2.5 rounded-lg border border-amber/40 bg-amber-soft/40 p-3">
+          <Icon name="alert_triangle" className="mt-0.5 h-4 w-4 shrink-0 text-amber-ink" />
+          <div className="text-xs leading-relaxed text-ink-2">
+            <span className="font-medium text-ink">
+              Mail is going out through {TRANSPORT_LABEL[cap.via]}, not what is selected here.
+            </span>{" "}
+            {/* Some reasons end in a full stop and some do not — the Gmail
+                ones are clause fragments ("…no sending account is chosen").
+                Appending unconditionally printed "…relay instead.. Bounces",
+                which the browser found and no unit test would have. */}
+            {cap.reason.replace(/\.$/, "")}.{" "}
+            {cap.via !== "resend" &&
+              "Bounces are not reported on that path, so a dead address will look like a successful send."}
+          </div>
+        </div>
+      )}
+
+      {/* ── Provider ─────────────────────────────────────────────────────────
+          One column on a phone. Three of these side by side at 390px leaves
+          each tile about 120px wide, and "Reports bounces. Needs a verified
+          domain." then wraps to five lines of two words. */}
       <Label>Provider</Label>
-      <div className="mb-4 mt-1.5 grid grid-cols-2 gap-2">
-        {(["resend", "gmail"] as const).map((p) => {
+      <div className="mb-4 mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {(["resend", "gmail", "smtp"] as const).map((p) => {
           const active = data.provider === p;
+          /* An unconfigured relay is OFFERED and disabled, not hidden. Hiding it
+             makes "this deployment has no relay" and "this app cannot use a
+             relay" the same screen, and the first is fixed by four env vars
+             while the second sends somebody looking for code that already
+             exists. The subtitle names them. */
+          const unavailable = p === "smtp" && !data.smtp.configured;
           return (
             <button
               key={p}
               type="button"
               onClick={() => save.mutate({ provider: p })}
-              disabled={save.isPending}
+              disabled={save.isPending || unavailable}
               className={[
                 "rounded-lg border p-3 text-left transition-colors",
                 active ? "border-amber bg-amber-soft/40" : "border-hairline hover:bg-paper-2",
+                unavailable ? "cursor-not-allowed opacity-60 hover:bg-transparent" : "",
               ].join(" ")}
             >
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-ink">
-                  {p === "resend" ? "Resend" : "Gmail"}
+                  {p === "resend" ? "Resend" : p === "gmail" ? "Gmail" : "SMTP relay"}
                 </span>
                 {active && <Icon name="check" size={14} className="text-amber-ink" />}
               </div>
               <p className="mt-0.5 text-2xs leading-snug text-ink-3">
                 {p === "resend"
                   ? "Reports bounces. Needs a verified domain."
-                  : gmailReady
-                    ? `Sends as ${data.gmail.email}`
-                    : "Not connected for sending"}
+                  : p === "gmail"
+                    ? gmailReady
+                      ? `Sends as ${data.gmail.email}`
+                      : "Not connected for sending"
+                    : data.smtp.configured
+                      /* Host, port and login, from the server. Never the password. */
+                      ? data.smtp.description
+                      : "Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS"}
               </p>
             </button>
           );
@@ -191,13 +251,27 @@ export default function EmailSendingCard() {
       </div>
 
       {/* Stated plainly because it is the reason Resend is the default and it is
-          invisible until a customer's address goes dead. */}
+          invisible until a customer's address goes dead. The relay carries the
+          identical warning — a 250 from a relay means it ACCEPTED the message,
+          and the bounce arrives hours later as mail in the relay login's own
+          inbox, where nobody is looking. */}
       {data.provider === "gmail" && (
         <p className="mb-4 text-2xs leading-relaxed text-ink-3">
           Gmail does not report bounces. A dead customer address will fail
           silently and this app will still record the email as sent.
         </p>
       )}
+      {data.provider === "smtp" && (
+        <p className="mb-4 text-2xs leading-relaxed text-ink-3">
+          A plain relay does not report bounces either &mdash; a dead customer
+          address will look like a successful send, and the bounce goes to the
+          relay&rsquo;s own mailbox. Mail also leaves as the relay&rsquo;s
+          address rather than the From below, because a relay may only send as
+          the identity it signed in with; your From address becomes the reply-to
+          instead. This relay is shared by every workspace on this deployment.
+        </p>
+      )}
+
 
       {/* ── Gmail connection ─────────────────────────────────────────────── */}
       <div className="mb-4 rounded-lg border border-hairline p-3">

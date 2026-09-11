@@ -11,7 +11,18 @@
  * before storing it, and says which step is missing.
  *
  * That check is the entire reason this is a route and not a form writing
- * straight to the table.
+ * straight to the table. SMTP got the same treatment on 11 Sep 2026: selecting
+ * it runs `smtpVerify()` first, which connects and authenticates and sends
+ * nothing, so `email_provider = 'smtp'` can only ever be stored against a relay
+ * that has actually let us in. Credentials that are present and wrong are
+ * indistinguishable from credentials that work until a send fails — which is
+ * the trap the invalid `RESEND_API_KEY` on this very deployment sets — and the
+ * only cheap way out of it is to try them at the moment somebody chooses them.
+ *
+ * The relay is deployment-wide, not per tenant: it comes from `SMTP_*` in the
+ * environment, so every workspace that selects it sends as the same identity.
+ * Stated on the card, because the alternative is a reseller discovering it from
+ * a customer.
  *
  * ─── THE RESEND KEY IS SEALED HERE ───────────────────────────────────────────
  * It goes through the same envelope as every other credential, and a blank field
@@ -20,7 +31,8 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { canSendWithScopes, type EmailProvider } from "@/lib/email/provider";
+import { canSendWithScopes, describeSendCapability, type EmailProvider } from "@/lib/email/provider";
+import { smtpConfigured, smtpDescription, smtpVerify } from "@/lib/email/smtp-transport";
 import { listSenderCandidates, type SenderCandidateInput } from "@/lib/email/sender-candidates";
 import { resolveSecretField } from "@/lib/integrations/secret-field";
 import { encryptSecret, isVaultConfigured } from "@/lib/crypto/vault";
@@ -107,6 +119,12 @@ async function loadContext(userId: string) {
     senderId, isDesignated,
     email: null as string | null,
     canSend: false,
+    /* Kept apart from `canSend` because the capability sentence has to name
+       WHICH step is missing, and "not connected" and "connected but not allowed
+       to send" send the operator to different places. Neither is returned to
+       the browser — the card gets the derived sentence, not the scope string. */
+    hasRefreshToken: false,
+    scopes: null as string | null,
   };
   if (senderId) {
     const { data: tok } = await admin
@@ -116,6 +134,8 @@ async function loadContext(userId: string) {
     gmail = {
       ...gmail,
       email: tok?.google_email ?? null,
+      hasRefreshToken: Boolean(tok?.refresh_token),
+      scopes: tok?.scopes ?? null,
       canSend: Boolean(tok?.refresh_token) && canSendWithScopes(tok?.scopes ?? null),
     };
   }
@@ -135,6 +155,7 @@ export async function GET() {
   if (!ctx) return NextResponse.json({ error: "No tenant." }, { status: 403 });
 
   const provider = ctx.tenant?.email_provider ?? "resend";
+  const hasSmtp = smtpConfigured();
 
   /* Who COULD be the sending account. PATCH has always accepted a gmailSenderUserId and the
      card never sent one, so the sender stayed whoever configured email first — which is why
@@ -142,6 +163,20 @@ export async function GET() {
      list is the missing half. Ineligible teammates are included on purpose: "not in the
      list" and "has not connected Google" are different problems. */
   const candidates = await loadSenderCandidates(ctx.me.tenant_id);
+
+  const capability = describeSendCapability({
+    provider,
+    /* The stored sender only. `loadContext` falls back to the CALLER for the
+       connection panel, which is right there and wrong here: "no sending
+       account has been chosen" is a real, separate blocker and the router says
+       so in its own words. */
+    gmailSenderUserId: ctx.tenant?.gmail_sender_user_id ?? null,
+    gmailHasRefreshToken: ctx.gmail.hasRefreshToken,
+    gmailScopes: ctx.gmail.scopes,
+    /* The tenant's own key or the deployment's — either one sends. */
+    resendConfigured: ctx.hasResendKey || Boolean(process.env.RESEND_API_KEY?.trim()),
+    smtpConfigured: hasSmtp,
+  });
 
   return NextResponse.json({
     provider,
@@ -151,13 +186,34 @@ export async function GET() {
     hasResendKey: ctx.hasResendKey,
     /** True when the deployment-wide fallback is available. */
     hasEnvResendKey: Boolean(process.env.RESEND_API_KEY?.trim()),
-    gmail: ctx.gmail,
+    /* Projected, not spread: `ctx.gmail` also carries the refresh-token flag
+       and the raw scope string, which the card has no use for. The derived
+       sentence is what it needs. */
+    gmail: {
+      senderId: ctx.gmail.senderId,
+      isDesignated: ctx.gmail.isDesignated,
+      email: ctx.gmail.email,
+      canSend: ctx.gmail.canSend,
+    },
     senderCandidates: candidates,
     /** Only the owner may switch it — PATCH enforces the same. */
     canChooseSender: ctx.me.role === "owner",
-    canSendNow: provider === "gmail"
-      ? ctx.gmail.canSend
-      : ctx.hasResendKey || Boolean(process.env.RESEND_API_KEY?.trim()),
+    /* Deployment-wide, from `SMTP_*`. `description` is host, port and login —
+       never the password; that is the whole reason `smtpDescription()` exists
+       rather than the card assembling the string from fields of its own. */
+    smtp: {
+      configured: hasSmtp,
+      description: smtpDescription(),
+    },
+    /* ─── "CAN WE SEND" IS ASKED OF THE ROUTER ──────────────────────────────
+       This used to be a ternary here, and it went stale the moment the fallback
+       chain grew a third link: with the relay configured and no Resend key,
+       `sendEmail` sent the mail and this line said it could not. Now the same
+       function that routes a message answers the question, so the card and the
+       cron cannot disagree. See `describeSendCapability`. */
+    capability,
+    /** Kept as the flat boolean the badge reads. Derived, never computed twice. */
+    canSendNow: capability.canSend,
   });
 }
 
@@ -182,8 +238,32 @@ export async function PATCH(req: NextRequest) {
   // ── provider ──────────────────────────────────────────────────────────────
   if (body.provider !== undefined) {
     const p = str(body.provider);
-    if (p !== "resend" && p !== "gmail") {
-      return NextResponse.json({ error: "Provider must be resend or gmail." }, { status: 400 });
+    if (p !== "resend" && p !== "gmail" && p !== "smtp") {
+      return NextResponse.json({ error: "Provider must be resend, gmail or smtp." }, { status: 400 });
+    }
+    if (p === "smtp") {
+      /* ─── THE RELAY IS TRIED BEFORE IT IS STORED ────────────────────────
+         The same rule as the Gmail scope check above, and for a stronger
+         reason: there is no scope to inspect, so presence is all a cheap check
+         could report — and presence is what made the invalid RESEND_API_KEY on
+         this deployment look configured while every send 401'd. `smtpVerify()`
+         connects and authenticates and sends NOTHING, so this costs one
+         handshake and puts no test message in anybody's inbox. */
+      if (!smtpConfigured()) {
+        return NextResponse.json({
+          error: "No SMTP relay is configured on this server, so mail sent through it would go nowhere. "
+               + "Set SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASS in the environment, then switch.",
+        }, { status: 409 });
+      }
+      const check = await smtpVerify();
+      if (!check.ok) {
+        /* The relay's own words. "Invalid login" and "connection refused" send
+           an operator to different places, and a generic failure sends them
+           nowhere — the same reasoning as passing Gmail's message through. */
+        return NextResponse.json({
+          error: `The SMTP relay refused these credentials, so nothing was changed. ${check.detail}`,
+        }, { status: 409 });
+      }
     }
     if (p === "gmail") {
       const senderId = str(body.gmailSenderUserId) || ctx.gmail.senderId || user.id;
