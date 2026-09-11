@@ -7,6 +7,200 @@
 
 ---
 
+# 🟣 HANDOFF — 11 Sep 2026. Email ka raasta ban gaya: SMTP relay. DMS ke credentials jaise hain waise chalte hain.
+
+Pichhle handoff me "Email ka koi raasta nahi hai" pehla blocker tha. Wo band ho
+gaya — commit `bf587e10`.
+
+    pehle:  Resend  ya  per-tenant Gmail   ← DMS ke paas dono nahi
+    ab:     Resend  ya  Gmail  ya  SMTP relay
+
+## 🔑 Env ke naam DMS ke naam hain — JAAN-BOOJH kar
+`SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_SECURE` —
+bilkul wahi naam jo DMS me hain, to credentials **bina rename** girte hain.
+ResellerClub ke ulta, jahan DMS ka `RESELLERCLUB_ID` hamara
+`RESELLERCLUB_RESELLER_ID` hai (upar wala JAAL dekho).
+
+`SMTP_FROM` optional hai — tab kaam aata hai jab relay login se alag (achha
+dikhne wala) address bhejne deta hai.
+
+## 📬 SMTP, Gmail ki shreni me hai — Resend ki nahi
+`provider.ts` ka poora design EK farq par khada hai: **Resend bounce batata
+hai** aur suppression list rakhta hai; **Gmail kuch nahi batata** — mara hua
+address bhi success lautata hai aur bounce ghanton baad bhejne wale ke inbox me
+aata hai.
+
+Plain relay bilkul Gmail jaisa hai. `250 OK` ka matlab relay ne **le liya**, na
+ki kisi ko **mila**. To bounce-sensitive mail par relay wahi chetavni uthata hai
+jo Gmail uthata hai, aur dono configured hon to **Resend hi jeetta hai**. Relay
+farsh hai, pasand nahi.
+
+## ✉️ From relay ki pehchaan hai, caller ki nahi
+DMS ka relay `smtp.gmail.com:587` as `noreply@anutech.in` (app password) hai,
+aur Gmail aisa From **nahi** bhejta jo us account ke liye verified na ho.
+Idhar lagbhag har caller `RESEND_FROM_DEFAULT` bhejta hai — unset hone par
+`onboarding@resend.dev`, jo Gmail ke liye kuch bhi nahi.
+
+To `SMTP_FROM ?? SMTP_USER` jeetta hai. Par caller ka address phenka nahi jata —
+wo **Reply-To** ban jata hai (jab asli address ho aur caller ne khud Reply-To na
+diya ho), to customer reply kare to reseller tak pahunche, no-reply box me nahi.
+Warna "email chal gaya" seedha "har message 5.7.0 par reject" ban jata — aur wo
+error certificate ki dikkat jaisa padhta hai.
+
+## 🔴 Do CHECK constraint the — doosra CHUPCHAP mar raha tha
+1. `tenants_email_provider_check` sirf `resend|gmail` deta tha — transport bana
+   hone ke baad bhi tenant ko `smtp` par **set hi nahi kar sakte the**.
+2. `email_log_provider_check` sirf `resend|gmail|stub` deta tha. Aur
+   `recordEmail` jaan-boojh kar apni galti nigal jata hai (toota log, bhejna na
+   rok de). Natija: **message chala gaya, cron ne `sent: 2` bola, aur audit row
+   chupchap gir gaya.** Audit trail me chhed theek wahan, jis transport par ab
+   saari dak jaati hai — is chhed ka matlab "koi mail nahi gaya" padhta hai, jo
+   jhooth hai. Migration `20260911170000_email_provider_smtp.sql`.
+
+## ⚠️ Tenant ko KHUD maangna padta hai — fallback kaafi nahi
+Resolver relay par fallback karta hai jab Resend configured na ho. **Par is
+deployment me `RESEND_API_KEY` HAI — galat wala.** To `resendConfigured` true,
+Resend chuna jata hai, har message 401, aur chalta hua relay bekaar pada rehta
+hai. Maujood aur galat key, chalti key se alag nahi dikhti — jab tak bhejna
+fail na ho.
+
+Isliye prod par: `SMTP_*` env me daalo **aur** tenant ka
+`email_provider = 'smtp'` karo.
+
+Jaan-boojh kar bhejte waqt fallback NAHI kiya: Resend message le sakta hai aur
+phir timeout report kar sakta hai, to "doosre transport se dobara bhejo"
+customer ke inbox me **do renewal notice** daal dega.
+
+## ✅ Asli relay par naapa
+    verify()  — jodta hai, auth karta hai, kuch BHEJTA nahi:
+               OK -> smtp.gmail.com:587 as noreply@anutech.in (STARTTLS)
+               (isse port-587-means-STARTTLS wala andaza bhi sahi sabit hua)
+
+    domain-expiry cron, tenant smtp par:
+               sent 2, aur email_log me TEEN `smtp|sent` row — relay ke asli
+               Message-ID ke saath (do customer warning, ek owner alert)
+
+**Ye asli sends the.** Do demo address `rajesh@acmecorp.com` par gaye (bounce
+`noreply@anutech.in` par wapas aayega). **Ek owner alert sach me
+`pardeep@exceltechnologies.in` par pahunch gaya** — demo domain
+`acme-legacy.net` ke baare me; `loadOwnerAlert` tenant ka apna email nikalta hai,
+isliye. Iske alawa kuch bahar nahi gaya.
+
+**45 naye test, 5 mutation:** relay "blocked" se aage nahi → 5 red; relay Resend
+se aage → 2 red; bounce chetavni hatai → 3 red; `rejected` recipient ignore → 1
+red; har failure retryable → 1 red.
+
+Nayi dependency: **nodemailer 6.10.1** — zero runtime deps, server-only, browser
+bundle me nahi jata. SMTP ek TCP wire protocol hai; fetch se bolne ka koi raasta
+nahi. Sasta option (Resend key, zero code) pehle rakha gaya tha.
+
+## 🔌 Switch bhi chahiye tha — transport akela kaafi nahi (commit `d1cb3b50`)
+Transport ban gaya tha par **use ON karne ka koi raasta nahi tha.** PATCH
+`resend|gmail` ke alawa kuch maanta hi nahi tha, to tenant maine HAATH se SQL
+se badla tha. Aur `smtpVerify()` / `smtpDescription()` likhe, export kiye, aur
+koi bulata hi nahi tha. SQL prompt se hi khulne wali cheez = dead end (§24).
+
+**Ab: Settings → Integrations → Email sending me teesra tile.**
+
+### Chunne se PEHLE relay try hota hai
+Gmail ke scope-check ka wahi niyam, par wajah zyada mazboot: Gmail me scope
+dekhne ko hota hai, relay me sirf "maujood hai ya nahi" — aur yahi wo cheez hai
+jisne galat `RESEND_API_KEY` ko "configured" dikhaya tha. To SMTP chunte hi
+`smtpVerify()` chalta hai: judta hai, auth karta hai, **kuch bhejta NAHI**.
+
+Naapa (mare hue port par): tile dabao → **409** — "The SMTP relay refused these
+credentials, so nothing was changed. connect ECONNREFUSED ::1:1025" — aur
+`tenants.email_provider` `resend` hi raha. **Mana kiya, kuch store nahi hua.**
+
+### 🔴 Card JHOOTH bolne wala tha — sawaal router ke paas chala gaya
+Badge har provider ke liye apna ternary tha. Relay configured + Resend key nahi
+→ `sendEmail` mail **BHEJ** raha tha aur card laal box me keh raha tha:
+
+> "No mail is going out. Resend is selected but no API key is set, so emails are
+> recorded as sent and silently discarded."
+
+Har baat jhooth, aur padhne wale ko chalte hue system ko "theek" karne bhej
+raha tha. **Yahi kharaabi Gmail wali branch me relay se pehle se thi**: toota
+Gmail grant + sahi Resend key → "No mail is going out", jabki har message Resend
+se ja raha tha.
+
+Ab `describeSendCapability` `resolveEmailProvider` se poochta hai "tu kya
+karta" aur uska faisla padhta hai. **Ek faisla, ek jagah** — card aur cron ab
+alag baat nahi kah sakte, dhyaan rakhne se nahi, banawat se.
+
+### Teen haalat, do nahi
+Chupchap fallback par hara badge wahi aaram-dayak jhooth hai jise rokne ke liye
+ye card bana tha. `usingFallback` jaan-boojh kar `ProviderDecision.fellBack` se
+**CHAUDA** hai — wo flag sabse zaroori case me FALSE hai (Resend default hai,
+koi "maangta" nahi), to key-rahit + relay-wale workspace me koi fallback dikhta
+hi nahi jabki relay hi bhej raha hai.
+
+### Do bug — karke mile, padh kar nahi
+1. `resolveEmailProvider` relay ko message deta tha aur reason likhta tha
+   "Tenant sends through Resend." Wo line **send ke saath darj hoti hai**, to
+   hafton baad "kis transport ne le jaya?" ka jawab GALAT deti.
+2. Banner par "…relay instead**..** Bounces are not reported" — kuch reason
+   poore-viram par khatam hote hain, Gmail wale adhoore vaakya hain. **Browser
+   me mila; koi unit test nahi pakadta.** Isse ye bhi tay hua ki reason WAJAH
+   batayega, raasta nahi — raasta `via` aur `email_log.provider` dono me pehle
+   se hai.
+
+### ✅ Browser me naapa (local stack, e2e owner fixture)
+    env me relay nahi   badge "Sending" · relay tile DISABLED, subtitle me chaar
+                        env var ke naam · koi banner nahi
+    relay + key nahi    badge "Falling back" · amber banner relay ka naam aur
+                        bounce ka natija bolta hai · tile par host:port aur
+                        login — password KABHI nahi · click → 409, kuch store
+                        nahi
+    phone 390px         card scrollWidth 356 = clientWidth, body 390 = 390,
+                        tile ek-ek line me, 78px unche
+
+Bina-configure wala tile **DIKHTA hai, dabta nahi** — chhupa dene se "is
+deployment par relay nahi hai" aur "ye app relay use hi nahi kar sakta" ek hi
+screen ban jate hain, aur doosra insaan ko pehle se maujood code dhoondhne
+bhejta hai.
+
+**17 naye test, 4 mutation.**
+
+## 🐞 Aur raaste me: `.env.local` parser 12 script me toota hai (commit `14abe0ea`)
+Browser check ke liye local owner fixture banani thi, aur
+`scripts/setup-e2e-tenants.mjs` chala hi nahi:
+
+    TypeError: Cannot convert argument to a ByteString because the character
+    at index 191 has a value of 8212
+
+**8212 = em dash.** `.env.local` me hai
+`SUPABASE_SERVICE_ROLE_KEY="ey…"  # LOCAL demo key — same on every local supabase`
+aur parser `.replace(/^"|"$/g, "")` tha — jo LINE ke dono siron se ek quote
+hatata hai, to comment value ke ANDAR reh gaya.
+
+**Khatra ye hai ki error kahan bhejta hai:** message character-offset batata hai,
+file nahi; aur `supabase.auth.admin` isko `AuthRetryableFetchError status: 0`
+bana deta hai. Yaani padhne me lagta hai "service-role key kharab hai" ya "local
+stack band hai" — dono ke mehnge galat ilaaj hain: sahi key rotate karna, ya
+theek Docker stack restart karna.
+
+Theek kiya: quoted value apne **band hone wale quote** par khatam. Unquoted ko
+dotenv jaisa: comment space+`#` se shuru.
+
+- [ ] **Baaki GYARAH script me wahi block hai** — `backup-tenant-data`,
+      `create-user`, `delete-tenants`, `import-dms-users`,
+      `set-cloudrun-master-key`, `set-doc-code`, `set-tenant-hierarchy`,
+      `setup`, `webhook-selftest`, `check-embed-ambiguity`,
+      `delete-stranded-auth-users`. Jaise hi koi parsed value header me daalega,
+      wahi error. Ek shared helper hi sahi hai — email ke commit me 12 file ka
+      refactor nahi ghusaya, aur inme se ek **backup** ko chhoota hai.
+
+## ⏳ Isme ab bhi kya baaki hai
+- [ ] Prod par `SMTP_*` daalna aur tenant ka `email_provider = 'smtp'` karna.
+- [ ] Migration `20260911170000` prod par lagana — prod abhi ~38 table peechhe
+      hai, aur `npx supabase login` interactive chahiye.
+- [ ] Relay ka bounce mailbox koi nahi dekhta. `noreply@anutech.in` par bounce
+      aate hain aur wahan koi nahi jhankta — Gmail transport ke saath bhi yahi
+      chhed hai, naya nahi.
+
+---
+
 # 🟣 HANDOFF — 11 Sep 2026. DMS ka env chala kar dekha. Dono credentials CHALTE hain; hamara code teen jagah nahi chalta tha.
 
 ## ✅ Credentials dono kaam karte hain
@@ -48,10 +242,12 @@ Fix ke baad: `anutechpvtltd.co.in` **reconciled**, expiry `2026-10-09`, order
 DA: "read 5 accounts from the server".
 
 ## ⏳ AB KYA CHAHIYE (naapa hua)
-- [ ] **Email ka koi raasta nahi hai.** Hamara app sirf **Resend ya Gmail** se
-      bhejta hai. DMS ke paas `SMTP_*` hai, jo hum use NAHI kar sakte. To domain
-      expiry ki chetavni abhi bhi nahi jayegi — `Resend 401` naapa hua.
-      Chahiye: Resend API key + verified domain, ya per-tenant Gmail OAuth.
+- [x] ~~**Email ka koi raasta nahi hai.**~~ **BAN GAYA** — SMTP transport,
+      commit `bf587e10`, upar wala handoff. DMS ke `SMTP_*` jaise hain waise
+      chalte hain; asli relay se teen mail gaye. Baaki: prod par `SMTP_*` daalna
+      aur tenant ka `email_provider = 'smtp'` karna — kyunki maujood-par-galat
+      `RESEND_API_KEY` bhi "configured" gina jata hai, to khud-ba-khud fallback
+      is case ko nahi bachata.
 - [ ] **Rate card BECHNE ka daam hai, LAAGAT nahi.** Sync
       `/api/products/customer-price.json` se hota hai. `wholesale` pehli baar
       register price par set hota hai, to **domain ka margin report jhootha
