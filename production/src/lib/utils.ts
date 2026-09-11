@@ -108,7 +108,42 @@ export function num(n: number | null | undefined): string {
 
 /**
  * Format a date in IST as "DD MMM YYYY" (e.g., "15 May 2026").
+ *
+ * ─── IT WAS ONLY *PARTLY* IST UNTIL 11 SEP 2026 ─────────────────────────────
+ * The old body read:
+ *
+ *   const day   = d.getDate();                                        // ← local
+ *   const month = d.toLocaleString("en-IN", { month: "short",
+ *                                   timeZone: "Asia/Kolkata" });      // ← IST
+ *   const year  = d.getFullYear();                                    // ← local
+ *
+ * Only the MONTH was pinned. `getDate()` and `getFullYear()` read the running
+ * process's timezone — and production runs on Cloud Run, which is UTC. So every
+ * date in the app was rendered from a UTC day with an IST month name.
+ *
+ * For most of the day those agree and nothing looks wrong. They stop agreeing
+ * for any timestamp after 18:30 UTC, which is the evening in India — and across
+ * a month boundary the result is a date that exists in NEITHER timezone.
+ * Measured with TZ=UTC:
+ *
+ *   2026-09-30T19:00:00Z  (1 Oct 2026, 00:30 IST)
+ *     old output   30 Oct 2026     ← the UTC day, the IST month
+ *     correct      1 Oct 2026
+ *
+ * 129 files call this. It is on invoices, expiry dates, renewal dates and
+ * payment receipts — so the wrong version was printing a wrong day on money
+ * documents, and a nonexistent one at every month end.
+ *
+ * It was invisible from here because this machine's own timezone IS
+ * Asia/Calcutta, so local runs and the whole test suite agreed with the bug.
+ * Found only because a suspension-notice test forced TZ=UTC to check something
+ * else. `formatDate.test.ts` now forces UTC on purpose.
+ *
+ * Every part now comes from ONE formatter with the zone pinned, so day, month
+ * and year cannot disagree with each other again.
  */
+const IST = "Asia/Kolkata";
+
 export function formatDate(
   input: Date | string | number | null | undefined,
   format: "short" | "long" | "relative" = "short"
@@ -126,14 +161,25 @@ export function formatDate(
     return formatDate(d, "short");
   }
 
-  const day = d.getDate();
-  const month = d.toLocaleString("en-IN", { month: "short", timeZone: "Asia/Kolkata" });
-  const year = d.getFullYear();
+  /* One formatter, one timezone. Assembling the parts separately is what let
+     the day and the month come from different clocks. */
+  const date = d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: IST,
+  });
+
   if (format === "long") {
-    const time = d.toLocaleString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata", hour12: true });
-    return `${day} ${month} ${year} · ${time}`;
+    const time = d.toLocaleString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: IST,
+      hour12: true,
+    });
+    return `${date} · ${time}`;
   }
-  return `${day} ${month} ${year}`;
+  return date;
 }
 
 /**

@@ -26,6 +26,7 @@ import { formatDate, daysBetween } from "@/lib/utils";
 import { OpenPanelButton } from "../_components/open-panel-button";
 import { UpgradePlanControl } from "../_components/upgrade-plan-control";
 import type { HostingAccountStatus } from "@/lib/supabase/database.types";
+import { describeSuspension } from "@/lib/portal/suspension-notice";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ export default async function PortalHostingPage() {
   /* Scoped by RLS (`hosting_accounts_select_own_customer`), not by a filter here. */
   const { data } = await supabase
     .from("hosting_accounts")
-    .select("id, domain_name, status, plan_name, plan_code, da_username, expires_at, trial_ends_at, is_trial, disk_quota_mb, bandwidth_quota_mb, started_at, resolved_at")
+    .select("id, domain_name, status, plan_name, plan_code, da_username, expires_at, trial_ends_at, is_trial, suspended_at, disk_quota_mb, bandwidth_quota_mb, started_at, resolved_at")
     .order("expires_at", { ascending: true, nullsFirst: false });
 
   const rows = data ?? [];
@@ -245,6 +246,40 @@ export default async function PortalHostingPage() {
                       anything still looks wrong.
                     </p>
                   )}
+
+                  {h.status === "suspended" && (() => {
+                    /* ─── §24: A RED PILL IS NOT AN EXPLANATION ──────────────
+                       Until 11 Sep 2026 a suspended account rendered the word
+                       "Suspended" and nothing else — no reason, no date, and
+                       nothing about whether the site and mailboxes still
+                       existed. Found in the browser on the portal test fixture.
+
+                       The reason is DERIVED, never guessed: there is no
+                       `suspension_reason` column, so `describeSuspension` says
+                       "a person paused this, ask them" whenever the dates do
+                       not actually show a trial or a term running out — which
+                       is exactly what a refund mid-term leaves behind. */
+                    const notice = describeSuspension({
+                      isTrial: h.is_trial,
+                      trialEndsAt: h.trial_ends_at,
+                      expiresAt: h.expires_at,
+                      suspendedAt: h.suspended_at,
+                    });
+                    return (
+                      <div className="mt-4 pt-4 border-t border-hairline">
+                        <p className="text-2xs text-rose-ink">{notice.headline}</p>
+                        {/* The sentence the old card was missing entirely, and the
+                            first thing somebody looking at this needs. */}
+                        <p className="text-2xs text-ink-2 mt-1.5">{notice.reassurance}</p>
+                        <Link
+                          href={notice.actionRoute === "shop" ? "/portal/shop" : "/portal/support/new"}
+                          className="inline-block mt-2 text-2xs text-amber-ink underline"
+                        >
+                          {notice.action} →
+                        </Link>
+                      </div>
+                    );
+                  })()}
 
                   {/* ─── MOVE TO A BIGGER PLAN ───────────────────────────────
                       Only on a LIVE account, and only a paid one. A trial has no
