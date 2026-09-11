@@ -14,6 +14,7 @@
  */
 import "server-only";
 import type { RcRawResponse } from "./classify";
+import { domainOrderingAllowed } from "@/lib/provisioning/live-gates";
 
 const BASE = (process.env.RESELLERCLUB_API_URL?.trim() || "https://httpapi.com").replace(/\/+$/, "");
 const RESELLER_ID = process.env.RESELLERCLUB_RESELLER_ID?.trim() || "";
@@ -26,7 +27,11 @@ export function rcWriteConfigured(): boolean {
 
 /** The money gate. Both halves, in one place, so a call site cannot check half. */
 export function rcOrderingEnabled(): boolean {
-  return rcWriteConfigured() && process.env.DOMAIN_REGISTER_LIVE === "1";
+  /* The flag defaults to OPEN as of 11 Sep 2026 (see lib/provisioning/
+     live-gates.ts). Credentials are now the half that actually stops a fresh
+     or misconfigured deployment from ordering, which is why they are checked
+     first and why no caller may check only one half. */
+  return rcWriteConfigured() && domainOrderingAllowed();
 }
 
 export interface RcCallOptions {

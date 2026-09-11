@@ -40,7 +40,6 @@ import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
-import { daWriteConfigured } from "@/lib/directadmin/provision";
 import { rcOrderingEnabled } from "@/lib/resellerclub/orders";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 
@@ -49,6 +48,7 @@ import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
 import { readChargeAttempt, needsAttention } from "@/lib/payments/charge-attempts";
 import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
+import { hostingProvisioningEnabled } from "@/lib/directadmin/provision";
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || "";
 const FROM_EMAIL     = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
@@ -387,7 +387,7 @@ export async function POST(request: NextRequest) {
        /api/cron/provision-domain  → ResellerClub registration + asset row. */
     engineConnected:
       provisioningVendor === "hosting"
-        ? process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured()
+        ? hostingProvisioningEnabled()
         : provisioningVendor === "domain"
           ? rcOrderingEnabled()
           : false,

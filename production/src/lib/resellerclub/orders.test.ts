@@ -71,10 +71,45 @@ function stubFetch(body: unknown, status = 200) {
 /* ── The gate ───────────────────────────────────────────────────────────────── */
 
 describe("the money gate", () => {
-  it("credentials alone do NOT permit ordering — the read side has the same key", async () => {
+  /* ⚠️ TRUE ONLY UNDER TEST, AND THAT IS THE POINT.
+     Until 11 Sep 2026 `DOMAIN_REGISTER_LIVE` was opt-in, so credentials without
+     the flag meant "do not order" everywhere. Pardeep then asked for the gate
+     to default ON ("keep those turned on by default until admin ask
+     otherwise"), so in production credentials alone DO now permit ordering.
+
+     A test run keeps the old opt-in rule, because a unit test must never be
+     able to buy a domain — see lib/provisioning/live-gates.ts. This assertion
+     is therefore pinning the test-environment carve-out, not the product rule,
+     and the production rule is pinned separately below. Reading it as the
+     product rule is exactly the mistake this comment exists to prevent. */
+  it("credentials alone do NOT permit ordering IN A TEST RUN", async () => {
     const rc = await load(CREDS);
     expect(rc.rcWriteConfigured()).toBe(true);
     expect(rc.rcOrderingEnabled()).toBe(false);
+  });
+
+  /* The product rule, pinned by removing the test markers the carve-out keys
+     off. If this ever fails, the default silently went back to opt-in and a
+     deployment that forgot the flag would sell domains it never orders. */
+  it("OUTSIDE a test run, credentials alone DO permit ordering — the new default", async () => {
+    const savedNode = process.env.NODE_ENV;
+    const savedVitest = process.env.VITEST;
+    const savedWorker = process.env.VITEST_WORKER_ID;
+    try {
+      // @ts-expect-error — NODE_ENV is typed as a literal union
+      process.env.NODE_ENV = "production";
+      delete process.env.VITEST;
+      delete process.env.VITEST_WORKER_ID;
+      const rc = await load(CREDS);
+      expect(rc.rcOrderingEnabled()).toBe(true);
+    } finally {
+      // @ts-expect-error — restoring the literal union
+      process.env.NODE_ENV = savedNode;
+      if (savedVitest === undefined) delete process.env.VITEST;
+      else process.env.VITEST = savedVitest;
+      if (savedWorker === undefined) delete process.env.VITEST_WORKER_ID;
+      else process.env.VITEST_WORKER_ID = savedWorker;
+    }
   });
 
   it("the flag alone does not either", async () => {
@@ -88,9 +123,36 @@ describe("the money gate", () => {
     expect(rc.rcOrderingEnabled()).toBe(true);
   });
 
-  it("only the exact string '1' counts — 'true' and 'yes' do not open a money gate", async () => {
-    for (const v of ["true", "yes", "0", "", "TRUE"]) {
+  /* ─── THE RISK CHANGED DIRECTION ─────────────────────────────────────────
+     This test used to read "only the exact string '1' counts — 'true' and
+     'yes' do not open a money gate", which was right while the gate was
+     opt-in: a vague value must not be read as permission.
+
+     With the default OPEN the expensive mistake is the mirror image. Somebody
+     switching ordering OFF in a hurry writes `false`, or `off`, or `disabled` —
+     and under the old `=== "1"` rule every one of those did close it, by
+     accident of not being "1". Under a parsed rule they only close it if the
+     parser knows them. So what has to be pinned now is that every plausible
+     way of writing "off" actually stops an order. */
+  it("every plausible spelling of OFF closes the gate", async () => {
+    for (const v of ["0", "false", "no", "off", "disabled", "disable", "none", "FALSE", " Off "]) {
       const rc = await load({ ...CREDS, DOMAIN_REGISTER_LIVE: v });
+      expect(rc.rcOrderingEnabled(), `${JSON.stringify(v)} should close the gate`).toBe(false);
+    }
+  });
+
+  it("the on spellings open it, so a reasonable value is not read as off", async () => {
+    for (const v of ["1", "true", "yes", "on", "enabled", "live", "TRUE"]) {
+      const rc = await load({ ...CREDS, DOMAIN_REGISTER_LIVE: v });
+      expect(rc.rcOrderingEnabled(), `${JSON.stringify(v)} should open the gate`).toBe(true);
+    }
+  });
+
+  /* Unset inside a test run stays shut — the carve-out, checked here beside the
+     spellings so the three rules are readable together. */
+  it("unset or empty is shut in a test run", async () => {
+    for (const v of [undefined, ""]) {
+      const rc = await load(v === undefined ? CREDS : { ...CREDS, DOMAIN_REGISTER_LIVE: v });
       expect(rc.rcOrderingEnabled()).toBe(false);
     }
   });

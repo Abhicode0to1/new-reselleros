@@ -24,6 +24,7 @@ import { parseDA } from "./index";
 import { isDaUsername } from "./user-auth";
 import { daAdminRequest } from "./admin-request";
 import { classifyDaFailure } from "./classify";
+import { hostingProvisioningAllowed } from "@/lib/provisioning/live-gates";
 
 const DA_URL = (process.env.DIRECTADMIN_URL?.trim() || "").replace(/\/+$/, "");
 const ADMIN_USER = process.env.DIRECTADMIN_ADMIN_USER?.trim() || "";
@@ -35,6 +36,20 @@ function authHeader(): string {
 
 export function daWriteConfigured(): boolean {
   return DA_URL.length > 0 && ADMIN_USER.length > 0 && API_KEY.length > 0;
+}
+
+/**
+ * The money gate for hosting — credentials AND permission, in one place.
+ *
+ * Added 11 Sep 2026 alongside the default flip. `HOSTING_TRIAL_LIVE` used to be
+ * compared to `"1"` inline at four separate call sites, which was survivable
+ * while the default was closed: forgetting the check failed SAFE. With the
+ * default open a forgotten half now fails towards creating a real account on a
+ * real server, so the halves are fused the way `rcOrderingEnabled()` has always
+ * fused them for domains.
+ */
+export function hostingProvisioningEnabled(): boolean {
+  return daWriteConfigured() && hostingProvisioningAllowed();
 }
 
 /**

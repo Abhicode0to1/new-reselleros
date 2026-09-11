@@ -60,11 +60,11 @@ export interface PathReadiness {
 export interface ProvisioningEnv {
   /** `rcWriteConfigured()` — ResellerClub id + key present. */
   rcConfigured: boolean;
-  /** `DOMAIN_REGISTER_LIVE === "1"`. */
+  /** `domainOrderingAllowed()` — open unless explicitly switched off. */
   domainRegisterLive: boolean;
   /** `daWriteConfigured()` — DirectAdmin url + admin user + key present. */
   daConfigured: boolean;
-  /** `HOSTING_TRIAL_LIVE === "1"`. */
+  /** `hostingProvisioningAllowed()` — open unless explicitly switched off. */
   hostingTrialLive: boolean;
   /**
    * From `razorpayReadiness().canCollect`. Whether a customer can be charged at
@@ -78,9 +78,20 @@ const UPSTREAM: Record<ProvisioningPath, string> = {
   hosting: "DirectAdmin",
 };
 
+/**
+ * The switch, named so an operator can find it.
+ *
+ * ⚠️ Both gates default to OPEN as of 11 Sep 2026 (Pardeep: "keep those turned
+ * on by default until admin ask otherwise"). So a SHUT gate is no longer the
+ * factory setting somebody forgot to change — it is a value somebody set. The
+ * copy below therefore says "it was switched off" and tells them to remove it,
+ * rather than the old "set DOMAIN_REGISTER_LIVE=1", which now reads as advice to
+ * turn on something that is already on and sends the reader looking for a
+ * missing variable that is not the problem (§24).
+ */
 const FLAG: Record<ProvisioningPath, string> = {
-  domain: "DOMAIN_REGISTER_LIVE=1",
-  hosting: "HOSTING_TRIAL_LIVE=1",
+  domain: "DOMAIN_REGISTER_LIVE",
+  hosting: "HOSTING_TRIAL_LIVE",
 };
 
 const THING: Record<ProvisioningPath, string> = {
@@ -129,7 +140,8 @@ function judge(
         : `${upstream} is connected, but ordering is switched off.`,
       detail:
         `${upstream}'s credentials are present, so searches and prices work — but ordering is off. ` +
-        `${queued} Set ${FLAG[path]} on the service to turn it on.` +
+        `${queued} Ordering is ON by default, so this is switched off deliberately: ` +
+        `${FLAG[path]} is set to an off value on the service. Remove it, or set it to 1, to allow orders.` +
         (canCollect
           ? ` Razorpay CAN currently charge a customer, which is what makes this urgent rather than just incomplete.`
           : ` Nothing can be charged in this deployment yet, so nobody is at risk today.`),

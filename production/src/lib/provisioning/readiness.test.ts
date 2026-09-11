@@ -47,8 +47,23 @@ describe("the state that loses money: gate shut while Razorpay can charge", () =
 
   it("names the exact env var, so the fix does not need a code search", () => {
     const r = provisioningReadiness(env({ domainRegisterLive: false, hostingTrialLive: false }));
-    expect(r.domain.detail).toContain("DOMAIN_REGISTER_LIVE=1");
-    expect(r.hosting.detail).toContain("HOSTING_TRIAL_LIVE=1");
+    expect(r.domain.detail).toContain("DOMAIN_REGISTER_LIVE");
+    expect(r.hosting.detail).toContain("HOSTING_TRIAL_LIVE");
+  });
+
+  /* ─── THE INSTRUCTION HAD TO FLIP WITH THE DEFAULT ───────────────────────
+     This copy used to read "Set DOMAIN_REGISTER_LIVE=1 on the service to turn
+     it on." Since 11 Sep 2026 both gates default to OPEN, so a shut gate is not
+     a forgotten setting — it is one somebody set. Telling the reader to add a
+     variable that is already effectively on sends them hunting for a cause that
+     is not there, which is the dead end §24 is about. */
+  it("says the gate was switched off deliberately, not that a flag is missing", () => {
+    const r = provisioningReadiness(env({ domainRegisterLive: false }));
+    expect(r.domain.detail).toMatch(/on by default/i);
+    expect(r.domain.detail).toMatch(/switched off deliberately|set to an off value/i);
+    /* And it must NOT give the old instruction. */
+    expect(r.domain.detail).not.toContain("DOMAIN_REGISTER_LIVE=1");
+    expect(r.domain.detail).not.toMatch(/Set DOMAIN_REGISTER_LIVE to turn it on/i);
   });
 
   it("still reports reads as WORKING, which is why the state looks fine", () => {

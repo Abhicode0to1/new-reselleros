@@ -4,6 +4,7 @@ import { rcWriteConfigured } from "@/lib/resellerclub/call";
 import { daWriteConfigured } from "@/lib/directadmin/provision";
 import { createAdminClient } from "@/lib/supabase/server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
+import { domainOrderingAllowed, hostingProvisioningAllowed } from "@/lib/provisioning/live-gates";
 
 /**
  * `provisioningReadiness()` with this deployment's facts filled in.
@@ -59,9 +60,9 @@ export async function deploymentProvisioningReadiness(tenantId: string): Promise
 
   return provisioningReadiness({
     rcConfigured: rcWriteConfigured(),
-    domainRegisterLive: process.env.DOMAIN_REGISTER_LIVE === "1",
+    domainRegisterLive: domainOrderingAllowed(),
     daConfigured: daWriteConfigured(),
-    hostingTrialLive: process.env.HOSTING_TRIAL_LIVE === "1",
+    hostingTrialLive: hostingProvisioningAllowed(),
     canCollect,
   });
 }

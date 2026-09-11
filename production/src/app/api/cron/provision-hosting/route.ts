@@ -18,9 +18,10 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
-import { daCreateAccount, daWriteConfigured, genUsername, genPassword } from "@/lib/directadmin/provision";
+import { daCreateAccount, genUsername, genPassword } from "@/lib/directadmin/provision";
 import { listReadyHostingRequests, markProvisioningActivated, markProvisioningFailed } from "@/lib/provisioning/provisioning.server";
 import { decideRegistrationRetry } from "@/lib/domains/retry";
+import { hostingProvisioningEnabled } from "@/lib/directadmin/provision";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -55,7 +56,7 @@ export async function POST(req: Request) { return handle(req); }
 async function handle(req: Request) {
   if (!(await authorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  if (!daWriteConfigured() || process.env.HOSTING_TRIAL_LIVE !== "1") {
+  if (!hostingProvisioningEnabled()) {
     return NextResponse.json({ ran: true, activated: 0, note: "hosting provisioning not live (DA creds / HOSTING_TRIAL_LIVE)" });
   }
 

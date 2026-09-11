@@ -176,14 +176,19 @@ export function decideProvisioning(input: ProvisioningInput): ProvisioningOutcom
     const isDomain = input.vendor === "domain";
     const what = isDomain ? `the registration of ${input.domainName?.trim()}` : "the hosting account";
     const engine = isDomain ? "ResellerClub" : "DirectAdmin";
-    const flag = isDomain ? "DOMAIN_REGISTER_LIVE=1" : "HOSTING_TRIAL_LIVE=1";
+    /* Named without "=1": both gates default to OPEN since 11 Sep 2026, so
+       reaching this branch means the flag was SET to an off value (or the
+       credentials are missing). Telling the desk to "set it to 1" would send
+       them to add a variable that is already effectively on. */
+    const flag = isDomain ? "DOMAIN_REGISTER_LIVE" : "HOSTING_TRIAL_LIVE";
     return {
       action: "queue",
       blocker: "engine_not_connected",
       reason:
         `${what} runs on our own engine (${engine}), and ordering is switched off in this ` +
-        `environment. Set ${flag} and make sure the ${engine} credentials are present, then ` +
-        "release this from the queue. It is stored with the plan and name it needs.",
+        `environment. Ordering is on by default, so either ${flag} is set to an off value or the ` +
+        `${engine} credentials are missing. Fix whichever it is, then release this from the queue. ` +
+        "It is stored with the plan and name it needs.",
     };
   }
 

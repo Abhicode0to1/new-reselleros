@@ -23,7 +23,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { verifyTrialToken } from "@/lib/hosting/trial-token";
-import { daCreateAccount, daWriteConfigured, genUsername, genPassword } from "@/lib/directadmin/provision";
+import { daCreateAccount, genUsername, genPassword } from "@/lib/directadmin/provision";
+import { hostingProvisioningEnabled } from "@/lib/directadmin/provision";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
   const email = lead.contact_email || "";
   const firstName = (lead.contact_name || "there").split(" ")[0];
 
-  const canProvision = process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured() && domain.length >= 3;
+  const canProvision = hostingProvisioningEnabled() && domain.length >= 3;
 
   // Re-anchor the trial clock to confirmation time (the 15 days start now).
   const startedAt = new Date();
