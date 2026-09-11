@@ -44,6 +44,45 @@ export const runtime = "nodejs";
 /** 404, so a probe cannot tell this route from one that never existed. */
 const GONE = () => NextResponse.json({ error: "Not found" }, { status: 404 });
 
+/**
+ * Is this "the database is not running" wearing a different hat?
+ *
+ * ─── WHY THIS EXISTS ────────────────────────────────────────────────────────
+ * Measured 11 Sep 2026: clicking the demo row with the local stack down showed
+ *
+ *   {"error":"Could not prepare the demo user: fetch failed"}
+ *
+ * "fetch failed" is Node's words for a refused TCP connection, and passing it
+ * through named the wrong thing entirely — it reads as a bug in this route, and
+ * a person then goes looking through code that is working. The actual cause is
+ * that nothing is listening on the Supabase URL.
+ *
+ * Every one of the three upstream calls below fails identically when the stack
+ * is down, so the check is shared rather than repeated three times with three
+ * different wordings.
+ */
+function isUpstreamDown(message: string | undefined): boolean {
+  return /fetch failed|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket hang up|network|Failed to fetch/i.test(
+    message ?? "",
+  );
+}
+
+/** Says what is actually wrong, and the command that fixes it (§24). */
+function upstreamDownResponse() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "(NEXT_PUBLIC_SUPABASE_URL is unset)";
+  return NextResponse.json(
+    {
+      error: `The local Supabase stack is not reachable at ${url}, so nobody can sign in — this is not a problem with the demo account.`,
+      nextStep:
+        "Start it with `npx supabase start` in production/. If that fails on a port with " +
+        "\"an attempt was made to access a socket in a way forbidden by its access permissions\", " +
+        "Windows has reserved the port range: run `net stop winnat` then `net start winnat` in an " +
+        "Administrator shell and start it again.",
+    },
+    { status: 503 },
+  );
+}
+
 export async function POST(request: NextRequest) {
   if (process.env.NODE_ENV === "production") return GONE();
 
@@ -72,6 +111,10 @@ export async function POST(request: NextRequest) {
   });
   /* "already registered" is the expected case on every run after the first. */
   if (createErr && !/already|exists|registered/i.test(createErr.message)) {
+    /* The commonest failure here by far is the stack being down, and saying
+       "could not prepare the demo user" for that sends the reader into this
+       file instead of to their terminal. */
+    if (isUpstreamDown(createErr.message)) return upstreamDownResponse();
     return NextResponse.json(
       { error: `Could not prepare the demo user: ${createErr.message}` },
       { status: 500 },
@@ -85,6 +128,7 @@ export async function POST(request: NextRequest) {
   });
   const tokenHash = link?.properties?.hashed_token;
   if (linkErr || !tokenHash) {
+    if (isUpstreamDown(linkErr?.message)) return upstreamDownResponse();
     return NextResponse.json(
       { error: `Could not mint a sign-in token: ${linkErr?.message ?? "no token returned"}` },
       { status: 500 },
@@ -99,6 +143,7 @@ export async function POST(request: NextRequest) {
     token_hash: tokenHash,
   });
   if (verifyErr || !verified.user?.email) {
+    if (isUpstreamDown(verifyErr?.message)) return upstreamDownResponse();
     return NextResponse.json(
       { error: `Sign-in failed: ${verifyErr?.message ?? "no session"}` },
       { status: 500 },
