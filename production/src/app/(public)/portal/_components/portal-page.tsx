@@ -19,20 +19,48 @@
  * `EmptyState` carry no hooks, so these stay server components too — a "use
  * client" here would drag each page's data fetching into the browser.
  */
+import { Card } from "@/components/ui/card";
 import { KPI } from "@/components/shared/kpi";
 
 /**
- * The heading block: serif title, one line of what the page is for.
+ * The heading block — the staff dashboard's header, in a customer's words.
  *
- * Identical on all twelve pages already — centralised so it stays that way,
- * and so the spacing below it is decided once rather than per page (it was
- * `mb-6` on some and `mb-8` on others).
+ * ─── WHY IT GREW AN EYEBROW AND AN ACTION SLOT ──────────────────────────────
+ * Put side by side on 11 Sep 2026, the staff header carries three things this
+ * one did not: a small uppercase line above the title, a primary action pinned
+ * to the right of it, and the whole row as `flex items-end justify-between`
+ * rather than a plain block. `dashboard/page.tsx:533` is the original.
+ *
+ * Without them the portal reads as a document and the staff app reads as a
+ * tool, whatever the fonts and colours match — the title sat alone over an
+ * empty right half of the screen.
+ *
+ * Both are optional: a page with nothing to do on it should not grow a button
+ * for the sake of symmetry, which is how a header ends up with "Refresh".
  */
-export function PortalPageHeader({ title, sub }: { title: string; sub: string }) {
+export function PortalPageHeader({
+  title,
+  sub,
+  eyebrow,
+  action,
+}: {
+  title: string;
+  sub: string;
+  /** Small uppercase line above the title — the date, or where you are. */
+  eyebrow?: string;
+  /** The one thing to do from this page, pinned right like the staff header. */
+  action?: React.ReactNode;
+}) {
   return (
-    <div className="mb-6">
-      <h1 className="font-serif text-3xl md:text-4xl tracking-tight">{title}</h1>
-      <p className="text-sm text-ink-3 mt-1">{sub}</p>
+    <div className="flex items-end justify-between gap-3 flex-wrap mb-6">
+      <div>
+        {eyebrow && (
+          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">{eyebrow}</p>
+        )}
+        <h1 className="font-serif text-3xl md:text-4xl tracking-tight leading-tight">{title}</h1>
+        <p className="text-sm text-ink-3 mt-1">{sub}</p>
+      </div>
+      {action && <div className="flex gap-2">{action}</div>}
     </div>
   );
 }
@@ -78,30 +106,54 @@ export function PortalStats({ items }: { items: PortalStat[] }) {
 }
 
 /**
- * A section: serif heading, optional one-line explanation, then the content.
+ * A section — a TITLED CARD, which is how the staff app titles a section.
  *
- * The dashboard grew this shape first ("Needs your attention", "Your
- * subscription") and every other page wants it. Without it each page invents
- * its own heading size — measured before this existed: `text-lg`, `text-xl`
- * and a bare `<h2>` with no class, on three pages of the same portal.
+ * ─── WHY THE HEADING MOVED INSIDE THE CARD ──────────────────────────────────
+ * `Card` has taken `title` / `sub` / `actions` props all along, and the staff
+ * app uses them: measured 11 Sep 2026, `<Card title=…>` appears 30 times under
+ * `(app)/` and `components/features/`, and twice in the whole portal.
+ *
+ * So the portal was floating an `<h2>` above an untitled card while the staff
+ * app put the same words inside one. That is most of why the two screens read
+ * differently even with identical type and colour: a heading outside a box
+ * leaves a gap above every section, and the page loosens.
+ *
+ * `flush` is offered because a section whose body is its own list of cards
+ * should not be a card inside a card.
  */
 export function PortalSection({
   title,
   sub,
+  actions,
   children,
+  flush,
   className,
 }: {
   title: string;
   sub?: string;
+  actions?: React.ReactNode;
   children: React.ReactNode;
+  /** Renders the heading alone, for a body that is already made of cards. */
+  flush?: boolean;
   className?: string;
 }) {
+  if (flush) {
+    return (
+      <section className={className ?? "mb-8"}>
+        <div className="flex items-end justify-between gap-3 mb-3">
+          <div>
+            <h2 className="font-serif text-lg">{title}</h2>
+            {sub && <p className="text-2xs text-ink-3 mt-0.5">{sub}</p>}
+          </div>
+          {actions}
+        </div>
+        {children}
+      </section>
+    );
+  }
   return (
-    <section className={className ?? "mb-8"}>
-      <h2 className="font-serif text-lg mb-1">{title}</h2>
-      {sub && <p className="text-2xs text-ink-3 mb-3">{sub}</p>}
-      {!sub && <div className="mb-3" />}
+    <Card title={title} sub={sub} actions={actions} className={className ?? "mb-8"}>
       {children}
-    </section>
+    </Card>
   );
 }

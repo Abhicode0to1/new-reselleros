@@ -44,7 +44,8 @@ import { Badge } from "@/components/ui/badge";
 import { rupee, formatDate, daysBetween } from "@/lib/utils";
 import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
 import { SeatUsage } from "../_components/seat-usage";
-import { PortalPageHeader, PortalStats } from "../_components/portal-page";
+import { PortalPageHeader, PortalStats, PortalSection } from "../_components/portal-page";
+import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,18 @@ export default async function PortalDashboardPage() {
   const session = await requirePortalSession();
   const supabase = createClient();
   const today = new Date().toISOString().slice(0, 10);
+  /* Same eyebrow the staff dashboard carries, same shape: FRIDAY, 11 SEPTEMBER
+     2026. In IST, because `formatDate` pins the zone and a UTC server would
+     otherwise put a customer in India on yesterday after 18:30. */
+  const dateLabel = new Date()
+    .toLocaleDateString("en-IN", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Asia/Kolkata",
+    })
+    .toUpperCase();
 
   /* Every read is RLS-scoped to this customer — see lib/portal/session.ts. */
   const [{ data: subs }, { data: unpaidInvoices }, { data: domains }, { data: hosting }] =
@@ -163,8 +176,17 @@ export default async function PortalDashboardPage() {
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
       <PortalPageHeader
+        eyebrow={dateLabel}
         title={`Welcome, ${session.customerName}`}
         sub="Your domains, hosting and invoices — all in one place."
+        /* The staff header pins its primary action right; a customer's one
+           action is asking for something, so this is the same slot with the
+           only verb they actually have. */
+        action={
+          <Button asChild variant="primary" icon="message_circle">
+            <Link href="/portal/support/new">Ask for help</Link>
+          </Button>
+        }
       />
 
       {/* ─── NUMBERS FIRST, the same primitive the staff dashboard opens with.
@@ -210,14 +232,17 @@ export default async function PortalDashboardPage() {
           replaced a grid of eight tiles that duplicated the nav bar — see the
           header. When there is genuinely nothing, EmptyState says so in one
           line rather than leaving the reader to infer it from a blank. */}
-      <section className="mb-8">
-        <h2 className="font-serif text-lg mb-1">Needs your attention</h2>
-        <p className="text-2xs text-ink-3 mb-3">
-          {focus.length === 0
+      {/* `flush`: the body is already a list of cards, and a card inside a card
+          is the thing that made the old portal look padded-out. */}
+      <PortalSection
+        title="Needs your attention"
+        sub={
+          focus.length === 0
             ? "We check your renewals, invoices and sites here."
-            : `${focus.length} thing${focus.length === 1 ? "" : "s"} to look at.`}
-        </p>
-
+            : `${focus.length} thing${focus.length === 1 ? "" : "s"} to look at.`
+        }
+        flush
+      >
         {focus.length === 0 ? (
           <Card className="p-6">
             <EmptyState
@@ -253,14 +278,13 @@ export default async function PortalDashboardPage() {
             ))}
           </ul>
         )}
-      </section>
+      </PortalSection>
 
       {/* ─── THEN THE DETAIL ────────────────────────────────────────────────
           Unchanged in substance: this card was already using the app's idiom.
           The only edit is the empty branch, which was a centred paragraph and
           is now the same EmptyState as everywhere else. */}
-      <section className="mb-8">
-        <h2 className="font-serif text-lg mb-3">Your subscription</h2>
+      <PortalSection title="Your subscription" flush>
         {primary ? (
           <Card className="p-6">
             <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
@@ -326,7 +350,7 @@ export default async function PortalDashboardPage() {
             </p>
           </Card>
         )}
-      </section>
+      </PortalSection>
 
       {/* ─── HELP ───────────────────────────────────────────────────────────
           Left-aligned like everything else. It was centred, which is the one
