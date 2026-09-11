@@ -29,6 +29,8 @@ import { expiryPhrase, summariseExpiries, type ExpiryUrgency } from "@/lib/domai
 import { MAX_WATCHES_PER_CUSTOMER } from "@/lib/domains/watch";
 import { DomainWatches } from "../_components/domain-watches";
 import type { DomainAssetStatus } from "@/lib/supabase/database.types";
+import { PortalPageHeader, PortalStats } from "../_components/portal-page";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export const dynamic = "force-dynamic";
 
@@ -93,14 +95,46 @@ export default async function PortalDomainsPage() {
      days after it had in fact lapsed. */
   const { lapsed, expiringSoon } = summariseExpiries(rows, new Date());
 
+  /* The soonest date still ahead of us. `rows` is already sorted by expiry
+     ascending with nulls last, so this is the first row that has a date and
+     has not gone — the same number the dashboard shows, from the same order. */
+  const nextDue = rows.find((r) => r.expires_at && new Date(r.expires_at) >= new Date());
+
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Your Domains</h1>
-        <p className="text-sm text-ink-3 mt-1">
-          Every domain registered on your account, and when each one is due to renew.
-        </p>
-      </div>
+      <PortalPageHeader
+        title="Your Domains"
+        sub="Every domain registered on your account, and when each one is due to renew."
+      />
+
+      {/* The counts this page already worked out for its banners, stated as
+          numbers first — the shape every portal page now opens with. `lapsed`
+          and `expiringSoon` stay apart here for the same reason the banners
+          keep them apart: one has already happened. */}
+      <PortalStats
+        items={[
+          { label: "Domains", value: rows.length, icon: "globe" },
+          {
+            label: "Expiring soon",
+            value: expiringSoon,
+            icon: "clock",
+            accent: expiringSoon > 0 ? "amber" : "ink",
+            trend: expiringSoon > 0 ? "within 30 days" : undefined,
+          },
+          {
+            label: "Expired",
+            value: lapsed,
+            icon: "alert_triangle",
+            accent: lapsed > 0 ? "rose" : "emerald",
+            trend: lapsed > 0 ? "can often still be saved" : undefined,
+          },
+          {
+            label: "Next renewal",
+            value: nextDue ? formatDate(nextDue.expires_at) : "—",
+            icon: "calendar",
+          },
+        ]}
+      />
 
       {/* The one thing worth interrupting for. §24: says what, why, and where to go.
           Two banners rather than one, because a name that has ALREADY lapsed is a
@@ -133,14 +167,18 @@ export default async function PortalDomainsPage() {
       )}
 
       {rows.length === 0 ? (
-        <Card className="p-8 text-center">
-          <p className="text-sm text-ink-3">
-            No domains on your account yet. A domain you buy appears here within a few
-            minutes of the payment clearing.
-          </p>
-          <Link href="/portal/shop" className="inline-block mt-4 text-sm text-amber-ink underline">
-            Search for a domain →
-          </Link>
+        <Card className="p-6">
+          <EmptyState
+            icon="globe"
+            title="No domains yet"
+            body="A domain you buy appears here within a few minutes of the payment clearing."
+            action={
+              <Link href="/portal/shop" className="text-sm text-amber-ink underline">
+                Search for a domain →
+              </Link>
+            }
+            compact
+          />
         </Card>
       ) : (
         <>

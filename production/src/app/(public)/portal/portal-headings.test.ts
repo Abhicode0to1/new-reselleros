@@ -85,13 +85,48 @@ describe("the customer portal's page titles are one typeface, one size", () => {
   const headings = portalHeadings();
 
   /* The denominator first. A scan that silently found nothing would pass every
-     assertion below it, and this file would sit green while enforcing air. */
+     assertion below it, and this file would sit green while enforcing air.
+
+     ⚠️ THE SHAPE OF THIS CHANGED ON 11 Sep 2026. It demanded ten or more inline
+     `<h1 className="…">` under the portal, which was right while every page
+     declared its own. Most now take the title from `PortalPageHeader`, so the
+     inline count legitimately fell to a handful and this assertion failed on
+     correct code — the count was measuring COPIES, and removing the copies was
+     the point.
+
+     What matters is unchanged: that the scan found something to check, and that
+     every title still wears one style. So the denominator now counts inline
+     headings PLUS the shared component, and the style check covers both. */
   it("actually parsed the portal's page titles", () => {
     expect(
       headings.length,
       "No <h1 className=\"…\"> found under src/app/(public)/portal — the scan is " +
         "broken or the pages moved, not that the portal has no titles.",
-    ).toBeGreaterThanOrEqual(10);
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  /* The shared header is where most titles now come from, so it has to exist
+     and has to wear the same style. If it were deleted or restyled, the check
+     above would still pass on the few inline ones and miss the nine pages that
+     render through here. */
+  it("the shared PortalPageHeader carries the house title style", () => {
+    const shared = readFileSync(join(PORTAL_ROOT, "_components/portal-page.tsx"), "utf8");
+    const m = shared.match(/<h1\s+className="([^"]*)"/);
+    expect(m, "PortalPageHeader has no <h1> — the portal's titles come from here").toBeTruthy();
+    expect(m![1].startsWith(CANONICAL_H1)).toBe(true);
+  });
+
+  /* And that the pages actually USE it. A shared header nobody imports is how
+     the copies come back one page at a time. */
+  it("most portal pages take their title from the shared header", () => {
+    let usesShared = 0;
+    for (const full of walk(PORTAL_ROOT)) {
+      const rel = full.slice(PORTAL_ROOT.length + 1).split("\\").join("/");
+      if (NOT_A_PORTAL_PAGE.includes(rel)) continue;
+      if (!rel.endsWith("page.tsx")) continue;
+      if (/<PortalPageHeader/.test(readFileSync(full, "utf8"))) usesShared += 1;
+    }
+    expect(usesShared, "no portal page imports PortalPageHeader").toBeGreaterThanOrEqual(8);
   });
 
   it.each(portalHeadings())("$file wears the house title style", ({ file, className }) => {
@@ -144,6 +179,14 @@ describe("the customer portal's page titles are one typeface, one size", () => {
   it("every page with a title also carries the page shell", () => {
     const offenders: string[] = [];
     for (const file of new Set(headings.map((h) => h.file))) {
+      /* `_components/portal-page.tsx` owns the <h1> for most pages now, and it
+         is a COMPONENT — the shell belongs to the page that renders it. Without
+         this the check fails on the very refactor that removed the drift it was
+         written to catch. */
+      /* `(^|/)page.tsx$`, not `endsWith("page.tsx")` — the shared component is
+         named `portal-page.tsx`, which ends with those characters and slipped
+         straight through the first version of this guard. */
+      if (!/(^|\/)page\.tsx$/.test(file)) continue;
       const src = readFileSync(join(PORTAL_ROOT, file), "utf8");
       if (!SHELL.test(src)) offenders.push(file);
     }

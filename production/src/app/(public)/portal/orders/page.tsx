@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { rupee, formatDate } from "@/lib/utils";
+import { PortalPageHeader, PortalStats } from "../_components/portal-page";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export const dynamic = "force-dynamic";
 
@@ -39,18 +41,44 @@ export default async function PortalOrdersPage() {
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Your Orders</h1>
-        <p className="text-sm text-ink-3 mt-1">
-          Every quote and order on your account. Tax invoices are on the
-          <span className="font-semibold text-ink"> Invoices</span> tab.
-        </p>
-      </div>
+      <PortalPageHeader
+        title="Your Orders"
+        sub="Every quote and order on your account. Tax invoices are on the Invoices tab."
+      />
+
+      <PortalStats
+        items={[
+          { label: "Orders", value: rows.length, icon: "inbox" },
+          /* The vocabulary is this page's own — `PAYMENT_STATUS_KIND` above —
+             not one invented here. I first wrote `payment_status === "paid"`,
+             which does not exist in the union; tsc caught it. The real values
+             are none / awaiting / partial / invoiced / received, and only
+             `received` means the money has actually arrived. */
+          {
+            label: "Awaiting payment",
+            value: rows.filter((r) => r.payment_status === "awaiting" || r.payment_status === "partial").length,
+            icon: "clock",
+            accent: rows.some((r) => r.payment_status === "awaiting" || r.payment_status === "partial")
+              ? "amber"
+              : "ink",
+          },
+          {
+            label: "Paid",
+            value: rows.filter((r) => r.payment_status === "received").length,
+            icon: "check",
+            accent: "emerald",
+          },
+        ]}
+      />
 
       {rows.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-ink-3">
-          No orders yet. New orders take a few minutes to appear after {reseller}
-          enters them in the system. Message {reseller} if you expect one to be here.
+        <Card className="p-6">
+          <EmptyState
+            icon="inbox"
+            title="No orders yet"
+            body={`New orders take a few minutes to appear after ${reseller} enters them. Message ${reseller} if you expect one to be here.`}
+            compact
+          />
         </Card>
       ) : (
         <>

@@ -18,6 +18,7 @@ import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/utils";
 import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
 import { RateTicket } from "@/components/features/support/ticket-rating";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export const dynamic = "force-dynamic";
 
@@ -91,15 +92,17 @@ export default async function PortalSupportPage() {
       </div>
 
       {rows.length === 0 ? (
-        <Card className="p-8 text-center">
-          <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-paper-2 grid place-items-center">
-            <Icon name="ticket" size={26} className="text-ink-3" />
-          </div>
-          <h2 className="font-serif text-xl mb-2">No tickets yet</h2>
-          <p className="text-sm text-ink-3 mb-5 max-w-md mx-auto">
-            Have a billing question, technical issue, or want to change your plan?
-            Raise a ticket — {reseller} responds within 4 business hours.
-          </p>
+        /* This was EmptyState re-implemented by hand — its own circle, its own
+           icon size, its own serif heading — which is how the portal ended up
+           with four slightly different empty states. Same content, the shared
+           primitive. */
+        <Card className="p-6">
+          <EmptyState
+            icon="ticket"
+            title="No tickets yet"
+            body={`Have a billing question, a technical issue, or want to change your plan? Raise a ticket — ${reseller} responds within 4 business hours.`}
+            compact
+          />
           <Button asChild variant="primary">
             <Link href="/portal/support/new">
               <Icon name="plus" size={14} className="mr-1.5" />

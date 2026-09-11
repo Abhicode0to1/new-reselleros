@@ -27,6 +27,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { rupee, formatDate, daysBetween } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { SeatUsage } from "../_components/seat-usage";
+import { PortalPageHeader, PortalStats } from "../_components/portal-page";
+import { EmptyState } from "@/components/shared/empty-state";
 
 interface Sub {
   id:                 string;
@@ -103,18 +105,50 @@ export default function PortalSubscriptionPage() {
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Your Subscription</h1>
-        <p className="text-sm text-ink-3 mt-1">
-          Manage your plan, seats, and renewal settings.
-        </p>
-      </div>
+      <PortalPageHeader
+        title="Your Subscription"
+        sub="Your plan, seats and renewal date."
+      />
+
+      {activeSubs.length > 0 && (
+        <PortalStats
+          items={[
+            { label: "Plans", value: activeSubs.length, icon: "layers" },
+            {
+              label: "Seats",
+              value: activeSubs.reduce((s, x) => s + (x.seats ?? 0), 0),
+              icon: "users",
+            },
+            {
+              label: "Per month",
+              value: activeSubs.reduce((s, x) => s + (x.mrr ?? 0), 0),
+              asCurrency: true,
+              icon: "indian_rupee",
+            },
+            {
+              label: "Outstanding",
+              value: activeSubs.reduce((s, x) => s + (x.outstanding_amount ?? 0), 0),
+              asCurrency: true,
+              icon: "alert_triangle",
+              accent: activeSubs.some((x) => (x.outstanding_amount ?? 0) > 0) ? "rose" : "emerald",
+            },
+          ]}
+        />
+      )}
 
       {activeSubs.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-ink-3">
-          No active subscription on file. Raise a request on the{" "}
-          <Link href="/portal/support" className="text-amber-ink underline">Support</Link>{" "}
-          tab if you expect one to be here.
+        <Card className="p-6">
+          <EmptyState
+            icon="inbox"
+            title="No active subscription"
+            body="If you expect one to be here, raise a request and somebody will look."
+            action={
+              <Link href="/portal/support" className="text-sm text-amber-ink underline">
+                Ask about it →
+              </Link>
+            }
+            compact
+          />
         </Card>
       ) : (
         <div className="space-y-4">

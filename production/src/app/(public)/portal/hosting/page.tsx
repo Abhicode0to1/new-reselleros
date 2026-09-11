@@ -27,6 +27,8 @@ import { OpenPanelButton } from "../_components/open-panel-button";
 import { UpgradePlanControl } from "../_components/upgrade-plan-control";
 import type { HostingAccountStatus } from "@/lib/supabase/database.types";
 import { describeSuspension } from "@/lib/portal/suspension-notice";
+import { PortalPageHeader, PortalStats } from "../_components/portal-page";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export const dynamic = "force-dynamic";
 
@@ -95,12 +97,38 @@ export default async function PortalHostingPage() {
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Your Hosting</h1>
-        <p className="text-sm text-ink-3 mt-1">
-          Your hosting accounts, where to log in, and what each one includes.
-        </p>
-      </div>
+      <PortalPageHeader
+        title="Your Hosting"
+        sub="Your hosting accounts, where to log in, and what each one includes."
+      />
+
+      {/* Live and not-live counted apart: a suspended site is the thing a
+          customer opens this page to understand, and folding it into a single
+          total is how it stops being visible. */}
+      <PortalStats
+        items={[
+          { label: "Accounts", value: rows.length, icon: "server" },
+          {
+            label: "Live",
+            value: rows.filter((r) => r.status === "active").length,
+            icon: "check",
+            accent: "emerald",
+          },
+          {
+            label: "Not live",
+            value: rows.filter((r) => r.status !== "active").length,
+            icon: "alert_triangle",
+            accent: rows.some((r) => r.status !== "active") ? "rose" : "ink",
+          },
+          {
+            label: "Ending soon",
+            value: endingSoon.length,
+            icon: "clock",
+            accent: endingSoon.length > 0 ? "amber" : "ink",
+            trend: endingSoon.length > 0 ? "within 14 days" : undefined,
+          },
+        ]}
+      />
 
       {endingSoon.length > 0 && (
         <Card className="p-4 mb-6 border-rose/40 bg-rose-soft/30">
@@ -120,14 +148,18 @@ export default async function PortalHostingPage() {
       )}
 
       {rows.length === 0 ? (
-        <Card className="p-8 text-center">
-          <p className="text-sm text-ink-3">
-            No hosting on your account yet. An account you buy appears here within a few
-            minutes, and the login reaches you by email at the same time.
-          </p>
-          <Link href="/portal/shop" className="inline-block mt-4 text-sm text-amber-ink underline">
-            See hosting plans →
-          </Link>
+        <Card className="p-6">
+          <EmptyState
+            icon="server"
+            title="No hosting yet"
+            body="An account you buy appears here within a few minutes, and the login reaches you by email at the same time."
+            action={
+              <Link href="/portal/shop" className="text-sm text-amber-ink underline">
+                See hosting plans →
+              </Link>
+            }
+            compact
+          />
         </Card>
       ) : (
         <ul className="space-y-4">

@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { rupee, formatDate } from "@/lib/utils";
 import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
 import { PayInvoiceButton } from "./_components/pay-invoice-button";
+import { PortalPageHeader, PortalStats } from "../_components/portal-page";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,12 @@ export default async function PortalInvoicesPage() {
     .order("invoice_date", { ascending: false });
 
   const rows = invoices ?? [];
+  /* `net_payable` is what the customer actually owes after any TDS; `amount` is
+     the pre-deduction figure. Falling back to `amount` would overstate the
+     total on every invoice where tax was deducted at source. */
+  const unpaid = rows.filter((r) => r.status === "pending" || r.status === "overdue");
+  const unpaidCount = unpaid.length;
+  const amountDue = unpaid.reduce((s, r) => s + (r.net_payable ?? r.amount ?? 0), 0);
 
   const totalOutstanding = rows
     .filter((i) => i.status === "pending" || i.status === "overdue")
@@ -46,12 +54,31 @@ export default async function PortalInvoicesPage() {
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Tax Invoices</h1>
-        <p className="text-sm text-ink-3 mt-1">
-          GST tax invoices issued to your account · HSN 998313 · 18% GST.
-        </p>
-      </div>
+      <PortalPageHeader
+        title="Tax Invoices"
+        sub="GST tax invoices issued to your account · HSN 998313 · 18% GST."
+      />
+
+      {/* What is owed comes first: it is the only number on this page that asks
+          the reader to do something. */}
+      <PortalStats
+        items={[
+          { label: "Invoices", value: rows.length, icon: "receipt_indian_rupee" },
+          {
+            label: "Unpaid",
+            value: unpaidCount,
+            icon: "alert_triangle",
+            accent: unpaidCount > 0 ? "rose" : "emerald",
+          },
+          {
+            label: "Amount due",
+            value: amountDue,
+            asCurrency: true,
+            icon: "indian_rupee",
+            accent: amountDue > 0 ? "rose" : "emerald",
+          },
+        ]}
+      />
 
       {totalOutstanding > 0 && (
         <Card className="p-4 mb-6 border-rose/40 bg-rose-soft/30">
@@ -63,9 +90,13 @@ export default async function PortalInvoicesPage() {
       )}
 
       {rows.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-ink-3">
-          No invoices issued yet. They appear here once {reseller} raises a tax
-          invoice against your paid order.
+        <Card className="p-6">
+          <EmptyState
+            icon="receipt_indian_rupee"
+            title="No invoices yet"
+            body={`They appear here once ${reseller} raises a tax invoice against your paid order.`}
+            compact
+          />
         </Card>
       ) : (
         <>

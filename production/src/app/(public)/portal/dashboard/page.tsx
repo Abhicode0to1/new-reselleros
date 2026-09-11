@@ -39,12 +39,12 @@ import Link from "next/link";
 import { requirePortalSession } from "@/lib/portal/session";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
-import { KPI } from "@/components/shared/kpi";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { rupee, formatDate, daysBetween } from "@/lib/utils";
 import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
 import { SeatUsage } from "../_components/seat-usage";
+import { PortalPageHeader, PortalStats } from "../_components/portal-page";
 
 export const dynamic = "force-dynamic";
 
@@ -162,56 +162,48 @@ export default async function PortalDashboardPage() {
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">
-          Welcome, {session.customerName}
-        </h1>
-        <p className="text-sm text-ink-3 mt-1">
-          Your domains, hosting and invoices — all in one place.
-        </p>
-      </div>
+      <PortalPageHeader
+        title={`Welcome, ${session.customerName}`}
+        sub="Your domains, hosting and invoices — all in one place."
+      />
 
       {/* ─── NUMBERS FIRST, the same primitive the staff dashboard opens with.
           Four, because that is what a customer has: what they own, what is
           live, what they owe, and the next date that matters. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-        <KPI label="Domains" value={allDomains.length} icon="globe" />
-        <KPI
-          label="Hosting"
-          value={liveHosting}
-          icon="server"
-          trend={
-            allHosting.length > liveHosting
-              ? `${allHosting.length - liveHosting} not live`
-              : undefined
-          }
-          trendKind={allHosting.length > liveHosting ? "down" : "neutral"}
-        />
-        <KPI
-          label="Amount due"
-          value={amountDue}
-          asCurrency
-          icon="receipt_indian_rupee"
-          accent={amountDue > 0 ? "rose" : "emerald"}
-        />
-        <KPI
-          label="Next renewal"
-          value={nextExpiry?.expires_at ? formatDate(nextExpiry.expires_at) : "—"}
-          icon="calendar"
-          accent={
-            nextExpiry && typeof nextExpiry.days === "number" && nextExpiry.days <= 30
-              ? "amber"
-              : "ink"
-          }
-          trend={
-            nextExpiry && typeof nextExpiry.days === "number"
-              ? nextExpiry.days <= 0
-                ? "expired"
-                : `in ${nextExpiry.days} days`
-              : undefined
-          }
-        />
-      </div>
+      <PortalStats
+        items={[
+          { label: "Domains", value: allDomains.length, icon: "globe" },
+          {
+            label: "Hosting",
+            value: liveHosting,
+            icon: "server",
+            trend: allHosting.length > liveHosting ? `${allHosting.length - liveHosting} not live` : undefined,
+            trendKind: allHosting.length > liveHosting ? "down" : "neutral",
+          },
+          {
+            label: "Amount due",
+            value: amountDue,
+            asCurrency: true,
+            icon: "receipt_indian_rupee",
+            accent: amountDue > 0 ? "rose" : "emerald",
+          },
+          {
+            label: "Next renewal",
+            value: nextExpiry?.expires_at ? formatDate(nextExpiry.expires_at) : "—",
+            icon: "calendar",
+            accent:
+              nextExpiry && typeof nextExpiry.days === "number" && nextExpiry.days <= 30
+                ? "amber"
+                : "ink",
+            trend:
+              nextExpiry && typeof nextExpiry.days === "number"
+                ? nextExpiry.days <= 0
+                  ? "expired"
+                  : `in ${nextExpiry.days} days`
+                : undefined,
+          },
+        ]}
+      />
 
       {/* ─── THEN WHAT NEEDS A PERSON ───────────────────────────────────────
           The staff dashboard's "Today's Focus" in a customer's vocabulary. It

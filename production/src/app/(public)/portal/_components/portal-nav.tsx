@@ -84,8 +84,21 @@ export function PortalNavInline() {
   return (
     <nav
       aria-label="Portal sections"
-      className="hidden min-[1080px]:flex items-center gap-4 text-sm text-ink-3"
+      className="hidden min-[1080px]:flex items-center gap-0.5 text-sm text-ink-3"
     >
+      {/* ─── THE STAFF SIDEBAR'S ACTIVE STATE, NOT A SECOND ONE ──────────────
+          Changed 11 Sep 2026 — Pardeep: "Including navbar design". The app had
+          two vocabularies for the same idea (design-critique §4): the staff
+          Sidebar marks the current section with a filled pill,
+          `bg-amber-soft text-amber-ink font-medium`, and this used colour and
+          weight alone. Colour-only is legible but it is a DIFFERENT language,
+          and a customer who has seen the staff app should not have to learn a
+          second one to find where they are.
+
+          `gap-1` with padding inside each item, rather than `gap-4` with none —
+          a pill needs its own box, and spacing between boxes reads as spacing
+          between pills. It also gives every item a 44px hit area (§20), which
+          bare text links did not have. */}
       {NAV.map((n) => {
         const active = isActive(n.href);
         return (
@@ -94,8 +107,8 @@ export function PortalNavInline() {
             href={n.href as never}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "whitespace-nowrap transition-colors",
-              active ? "text-amber-ink font-medium" : "hover:text-ink",
+              "whitespace-nowrap transition-colors rounded-md px-2 min-h-[44px] inline-flex items-center",
+              active ? "bg-amber-soft text-amber-ink font-medium" : "hover:bg-paper-2 hover:text-ink",
             )}
           >
             {n.label}
@@ -200,10 +213,12 @@ export function PortalNavStrip() {
                 key={n.href}
                 href={n.href as never}
                 aria-current={active ? "page" : undefined}
+                /* Same pill as the desktop row above and as the staff Sidebar,
+                   so the current section looks the same on every surface. */
                 className={cn(
                   // touch-target floor (§20 / CLAUDE.md:605) — on the LINK, not the row
                   "inline-flex items-center min-h-[44px] transition-colors",
-                  active ? "text-amber-ink font-medium" : "hover:text-ink",
+                  active ? "bg-amber-soft text-amber-ink font-medium rounded-md" : "hover:text-ink",
                 )}
               >
                 {n.label}

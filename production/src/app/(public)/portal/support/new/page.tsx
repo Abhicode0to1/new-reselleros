@@ -104,6 +104,11 @@ export default function NewTicketPage() {
   }
 
   return (
+    /* 680px rather than the portal's usual 1080: this is a FORM, and a text
+       field stretched to 1080px is a line nobody wants to read back or proof.
+       Recorded 11 Sep 2026 because an undocumented odd width is indistinguishable
+       from drift — `profile` was 800 for no reason anybody had written down, and
+       it was brought back in line. */
     <div className="max-w-[680px] mx-auto px-6 py-8">
       <div className="mb-6">
         <Link href="/portal/support" className="text-xs text-ink-3 hover:text-ink">

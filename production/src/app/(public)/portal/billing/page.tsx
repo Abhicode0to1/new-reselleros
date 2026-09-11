@@ -36,6 +36,7 @@ import { localDateISO } from "@/lib/leads/outcomes";
 import { grossAmount } from "@/lib/quotes/amounts";
 import { AutopayCard } from "./autopay-card";
 import type { MandateStatus } from "@/lib/payments/mandate";
+import { PortalPageHeader } from "../_components/portal-page";
 
 export const dynamic = "force-dynamic";
 
@@ -76,12 +77,10 @@ export default async function PortalBillingPage() {
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8 space-y-4">
-      <div>
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Billing</h1>
-        <p className="text-sm text-ink-3 mt-1">
-          What {session.tenantName} will charge you, and when.
-        </p>
-      </div>
+      <PortalPageHeader
+        title="Billing"
+        sub={`What ${session.tenantName} will charge you, and when.`}
+      />
 
       {outstanding > 0 && (
         <Card>
