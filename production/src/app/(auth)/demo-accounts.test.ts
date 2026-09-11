@@ -68,14 +68,25 @@ describe("the dev demo-account list", () => {
   });
 
   /* ─── THE PORTAL ROW IS A DIFFERENT DOOR, NOT A MISSING PASSWORD ──────────
-     The customer portal signs in with an emailed 6-digit code and has no
-     password at all, and this form signs into the STAFF area, which
-     `staff-area-guard` bounces a customer out of. So the entry must stay a LINK
-     to /portal/login. Somebody "completing" it by adding a password field would
-     produce a row that looks usable and cannot work. */
-  it("links the portal entry to /portal/login instead of autofilling", () => {
+     The customer portal has no password — it signs in with an emailed code —
+     and this form signs into the STAFF area, which `staff-area-guard` bounces a
+     customer out of. So the row cannot autofill anything.
+
+     It POSTs to the dev sign-in route, which mints and verifies the same
+     one-time token the email would have carried. A POST on purpose: that route
+     establishes a session, and a GET which does that is one prefetch or pasted
+     URL away from firing by itself.
+
+     Until 11 Sep 2026 this linked to /portal/login with the address prefilled,
+     which left three more steps (send, open the mail catcher, copy six digits).
+     Pardeep: "shouldn't i be logged in directly like others login of owner and
+     tenet". */
+  it("posts the portal entry to the dev sign-in instead of autofilling", () => {
     expect(LOGIN).toMatch(/portal:\s*true/);
-    expect(LOGIN).toContain("/portal/login?email=");
+    expect(LOGIN).toContain("/api/dev/portal-signin");
+    expect(LOGIN).toMatch(/method="post"/);
+    /* Not a link — a GET here would be the prefetch problem above. */
+    expect(LOGIN).not.toContain("/portal/login?email=");
     /* No password on the portal entry — checked by locating the object that
        carries `portal: true` and making sure it has no password key. */
     const start = LOGIN.indexOf("const DEMO_USERS");

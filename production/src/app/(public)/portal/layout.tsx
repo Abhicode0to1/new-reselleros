@@ -7,6 +7,10 @@
  * we show a neutral "Customer Portal" brand, because the visitor's reseller
  * isn't known until they authenticate. Accent stays the house amber (no
  * per-tenant colours in v1).
+ *
+ * The "Customer Portal" sub-label under the brand is therefore rendered ONLY
+ * with a session: unauthenticated, the brand line already says those words and
+ * printing them twice is what the sign-in page did until 11 Sep 2026.
  */
 import Link from "next/link";
 import { getPortalSession } from "@/lib/portal/session";
@@ -38,7 +42,13 @@ export default async function PortalLayout({ children }: { children: React.React
             </div>
             <div className="min-w-0">
               <div className="font-serif text-base leading-none truncate">{brandName}</div>
-              <div className="text-3xs text-ink-3 mt-1">Customer Portal</div>
+              {/* ─── ONLY WHEN THERE IS A NAME ABOVE IT ──────────────────────
+                  The line below labels what the reseller's name IS. With no
+                  session there is no reseller name, `brandName` falls back to
+                  "Customer Portal" — and this printed the identical words
+                  underneath it. Reported 11 Sep 2026 from the sign-in page,
+                  which is the FIRST thing a customer sees. */}
+              {session && <div className="text-3xs text-ink-3 mt-1">Customer Portal</div>}
             </div>
           </Link>
           <div className="flex items-center gap-5">

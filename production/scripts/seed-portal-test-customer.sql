@@ -16,6 +16,17 @@
 --   cd production
 --   npx supabase db query --local -f scripts/seed-portal-test-customer.sql
 --
+-- ─── THEN SIGN IN AS THE CUSTOMER ───────────────────────────────────────────
+--   1. /portal/login  ->  portal-test@anutech.invalid  ->  "Email me a code"
+--   2. read the 6-digit code at  http://127.0.0.1:54324   (Supabase's local
+--      mail catcher — nothing leaves the machine, and the address is .invalid
+--      so there is no real inbox anywhere)
+--   3. paste it
+--
+-- That step used to be explained in a dev-only banner ON the sign-in page.
+-- Removed 11 Sep 2026: it was scaffolding on a screen customers see, and this
+-- is the file somebody already has open when they set the account up.
+--
 -- Idempotent: every row is keyed on a fixed fixture UUID and upserted, so
 -- re-running refreshes the dates rather than duplicating the customer.
 --

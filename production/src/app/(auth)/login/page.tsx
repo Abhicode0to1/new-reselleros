@@ -34,14 +34,14 @@ type FormData = z.infer<typeof schema>;
  *
  * It cannot be an autofill row like the other two, and the reason is the
  * product's design rather than an omission: the customer portal has NO PASSWORD.
- * It signs in with a 6-digit emailed code (`/portal/login`, `signInWithOtp`), so
- * there is nothing to type into the password field on this page — and this form
- * signs into the STAFF area, which `staff-area-guard` would bounce a customer
- * out of anyway.
+ * It signs in with a 6-digit emailed code, and this form signs into the STAFF
+ * area, which `staff-area-guard` would bounce a customer out of anyway.
  *
- * So the row links to the portal with the address prefilled. Showing it here at
- * all is the point of the request: all three test identities are visible in one
- * place, instead of the customer side being undiscoverable.
+ * So the row POSTs to `/api/dev/portal-signin`, which mints and verifies the
+ * same one-time token the email would have carried and drops you on the
+ * customer dashboard — one click, matching the two staff rows. It is dev-only
+ * and refuses any address that is not `.invalid`, so it cannot sign anybody in
+ * as a real customer.
  */
 type DemoAccount =
   | { label: string; email: string; password: string; portal?: false; note?: string }
@@ -71,7 +71,7 @@ const DEMO_USERS: DemoAccount[] = [
     label: "Portal Test Customer · Hosting + Domains",
     email: "portal-test@anutech.invalid",
     portal: true,
-    note: "customer panel · emailed code, no password",
+    note: "customer panel · one click, no password",
   },
 ];
 
@@ -158,22 +158,33 @@ function LoginPageInner() {
           <ul className="space-y-1.5">
             {DEMO_USERS.map((u) =>
               u.portal ? (
-                /* A LINK, not an autofill — see the DemoAccount doc. A plain
-                   anchor rather than `router.push`, because the href carries a
-                   query string and typedRoutes has no type for that. */
+                /* ─── ONE CLICK, LIKE THE OTHER TWO ─────────────────────────
+                   This used to link to /portal/login with the address
+                   prefilled, which left three more steps: press send, open the
+                   Docker mail catcher, copy six digits. Pardeep, 11 Sep 2026:
+                   "why do i need to confirm email id anyway / shouldn't i be
+                   logged in directly like others login of owner and tenet".
+
+                   A FORM POST, not a link: the route it hits establishes a
+                   session, and a GET that does that is one prefetch or pasted
+                   URL away from firing by itself. The route is dev-only and
+                   refuses any address that is not `.invalid`. */
                 <li key={u.email}>
-                  <a
-                    href={`/portal/login?email=${encodeURIComponent(u.email)}`}
-                    className="block rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
-                  >
-                    <div className="font-medium text-ink">
-                      {u.label}
-                      <span className="ml-1.5 text-2xs font-normal text-indigo">→ customer portal</span>
-                    </div>
-                    <div className="text-2xs text-ink-3 font-mono">
-                      {u.email} · <span className="text-indigo">{u.note}</span>
-                    </div>
-                  </a>
+                  <form action="/api/dev/portal-signin" method="post">
+                    <input type="hidden" name="email" value={u.email} />
+                    <button
+                      type="submit"
+                      className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
+                    >
+                      <div className="font-medium text-ink">
+                        {u.label}
+                        <span className="ml-1.5 text-2xs font-normal text-indigo">→ sign in</span>
+                      </div>
+                      <div className="text-2xs text-ink-3 font-mono">
+                        {u.email} · <span className="text-indigo">{u.note}</span>
+                      </div>
+                    </button>
+                  </form>
                 </li>
               ) : (
                 <li key={u.email}>

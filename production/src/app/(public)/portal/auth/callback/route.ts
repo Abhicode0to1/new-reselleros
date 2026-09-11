@@ -16,7 +16,8 @@
  * so RLS would block them from reading `customers`.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { linkAuthUserToCustomer } from "@/lib/portal/link-customer";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -49,47 +50,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/portal/login?error=auth_failed`);
   }
 
-  // Already linked?
-  const { data: existingLink } = await supabase
-    .from("customer_users")
-    .select("id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-  if (existingLink) {
-    return NextResponse.redirect(`${origin}/portal/dashboard`);
-  }
+  /* Already-linked, find-the-customer and insert-the-link moved to
+     lib/portal/link-customer.ts on 11 Sep 2026, because the dev one-click
+     sign-in needs the identical step. This decides WHICH CUSTOMER'S DATA the
+     session can read, so two copies of it would be a cross-tenant leak waiting
+     for one of them to drift. Behaviour and redirects here are unchanged. */
+  const linked = await linkAuthUserToCustomer({ authUserId: user.id, email: user.email });
 
-  // Find a customer by email (case-insensitive). Admin client bypasses RLS
-  // because the user has no link row yet → can't read customers normally.
-  const admin = createAdminClient();
-  const { data: customer } = await admin
-    .from("customers")
-    .select("id, tenant_id, contact_email")
-    .ilike("contact_email", user.email)
-    .limit(1)
-    .maybeSingle();
-
-  if (!customer) {
+  if (!linked.ok) {
+    if (linked.reason === "link_failed") {
+      console.error("[portal/auth/callback] link insert failed:", linked.detail);
+    }
     // Sign them out so they don't end up half-authed with no portal access
     await supabase.auth.signOut();
-    return NextResponse.redirect(`${origin}/portal/login?error=no_customer`);
-  }
-
-  // Insert the link
-  const { error: linkErr } = await admin
-    .from("customer_users")
-    .insert({
-      tenant_id:     customer.tenant_id,
-      customer_id:   customer.id,
-      auth_user_id:  user.id,
-      email:         user.email,
-      role:          "admin",
-      last_login_at: new Date().toISOString(),
-    });
-  if (linkErr) {
-    console.error("[portal/auth/callback] link insert failed:", linkErr);
-    await supabase.auth.signOut();
-    return NextResponse.redirect(`${origin}/portal/login?error=auth_failed`);
+    const why = linked.reason === "no_customer" ? "no_customer" : "auth_failed";
+    return NextResponse.redirect(`${origin}/portal/login?error=${why}`);
   }
 
   return NextResponse.redirect(`${origin}/portal/dashboard`);
