@@ -371,8 +371,17 @@ DA: "read 5 accounts from the server".
 - [ ] **RC ke 5 asli domain hamare DB me nahi hain** (DMS ke MongoDB me hain).
       Renewal unpar tabhi lagega jab data aayega. Achhi khabar: sweep ab
       `registrar_order_id` khud bhar deta hai.
-- [ ] **`DOMAIN_REGISTER_LIVE=1` aur `HOSTING_TRIAL_LIVE=1`** — jaan-boojh kar
-      band hain. Inke bina koi kharidari nahi hoti.
+- [x] ~~**`DOMAIN_REGISTER_LIVE=1` aur `HOSTING_TRIAL_LIVE=1`** — jaan-boojh kar
+      band hain.~~ **ULTA KAR DIYA — 11 Sep, Pardeep: "keep those turned on by
+      default until admin ask otherwise"** (commit `47365e74`). Ab dono gate
+      **default me KHULE** hain: prod par kuch set karne ki zaroorat NAHI.
+      Band karne ke liye flag ko `0`/`false`/`off`/`disabled` set karo.
+      ⚠️ Ye ek fail-safe ULTA hua hai: pehle khaali env = "kuch na khareedo",
+      ab khaali env = "khareedo". Bacha hua brake sirf **credentials** hai
+      (`RESELLERCLUB_*` / `DIRECTADMIN_*` ke bina kuch order nahi hota) aur
+      **test run** (wahan purana opt-in niyam chalta hai — unit test kabhi
+      domain nahi khareed sakta). Is machine ke `.env.local` me dono
+      credentials NAHI hain, to local dev abhi bhi kuch order nahi karega.
 - [ ] **`CRON_SECRET`** — DMS ke paas hai; Cloud Scheduler ke liye chahiye.
 
 **Credentials sirf PADHNE ke liye use kiye** — koi `*_LIVE` flag kabhi set nahi
