@@ -23,6 +23,21 @@
     --amber:           20 91% 41%;       /* #C2410C */
     --amber-soft:      28 100% 95%;      /* #FFF3E6 */
     --amber-ink:       18 87% 33%;       /* #9F3409 */
+    /* ─── TEXT *ON* AN AMBER FILL, AND THE HOVER/ACTIVE STEPS ────────────
+       Added 12 Sep 2026. `bg-amber text-white` measured 4.76:1 here and
+       2.99:1 in dark mode — below AA 4.5 — because --amber is LIGHT on dark
+       (it has to be: `text-amber` is 736 uses and reads on a dark ground at
+       6.15:1). One token cannot be both a dark fill and a light text colour,
+       so the FOREGROUND moves instead: white here, near-black there.
+
+       hover/active were `bg-amber/90` and `/80`, which blend toward whatever
+       is behind them — i.e. toward the page, and away from the fill. In light
+       mode that lightened an already-marginal fill to 4.11 and 3.53. These
+       steps move the other way, so every state gains contrast on hover
+       rather than losing it. All twelve states measured; worst is 4.76. */
+    --amber-fg:        0 0% 100%;        /* white on the light-mode fill */
+    --amber-hover:     20 91% 35%;       /* 6.17:1 */
+    --amber-active:    20 91% 30%;       /* 7.68:1 */
 
     /* Status colors */
     --emerald:         142 71% 28%;      /* #166534 */
@@ -30,6 +45,9 @@
     --emerald-ink:     142 71% 22%;      /* text ON emerald-soft — see the note below */
     --rose:            0 76% 50%;        /* #DC2626 */
     --rose-soft:       0 86% 96%;        /* #FEE2E2 */
+    --rose-fg:         0 0% 100%;        /* see --amber-fg */
+    --rose-hover:      0 76% 43%;        /* 6.12:1 */
+    --rose-active:     0 76% 38%;        /* 7.33:1 */
     --rose-ink:        0 74% 37%;        /* text ON rose-soft — see the note below */
 
     /* ─── WHY -ink EXISTS, AND WHY THESE TWO WERE MISSING ──────────────────────
@@ -84,12 +102,22 @@
     --amber:           20 95% 55%;
     --amber-soft:      22 50% 18%;
     --amber-ink:       28 100% 80%;
+    /* Near-black ON the fill, because the fill is light here — the mirror of
+       the light theme, and the reason this is a token and not `text-white`.
+       6.01:1. The hover/active steps get LIGHTER for the same reason: away
+       from the dark text, not toward the dark page. */
+    --amber-fg:        24 13% 9%;        /* the light theme's --ink */
+    --amber-hover:     20 95% 65%;       /* 7.53:1 */
+    --amber-active:    20 95% 72%;       /* 8.94:1 */
 
     --emerald:         142 71% 50%;
     --emerald-soft:    142 30% 15%;
     --emerald-ink:     142 70% 75%;      /* light on dark, as --amber-ink is here */
     --rose:            0 86% 65%;
     --rose-soft:       0 40% 18%;
+    --rose-fg:         24 13% 9%;        /* 5.46:1 — see --amber-fg */
+    --rose-hover:      0 86% 72%;        /* 6.80:1 */
+    --rose-active:     0 86% 78%;        /* 8.41:1 */
     --rose-ink:        0 90% 80%;        /* light on dark, as --amber-ink is here */
     --indigo:          240 65% 65%;
     --indigo-soft:     232 30% 18%;

@@ -2130,7 +2130,7 @@ export default function VendorPortalPage() {
               >
                 {/* Best Value Ribbon */}
                 {bid.isBestValue && (
-                  <div className="absolute -top-3 right-4 bg-amber-500 text-white font-bold text-3xs uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs flex items-center gap-1">
+                  <div className="absolute -top-3 right-4 bg-amber text-amber-fg font-bold text-3xs uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs flex items-center gap-1">
                     <Icon name="award" size={12} />
                     <span>Best Price & Margin Deal</span>
                   </div>
@@ -2904,7 +2904,7 @@ export default function VendorPortalPage() {
             <Button
               size="sm"
               onClick={() => setIsCompareModalOpen(true)}
-              className="bg-primary text-white font-bold text-xs hover:bg-primary/90"
+              className="bg-amber text-amber-fg font-bold text-xs hover:bg-amber-hover"
             >
               ⚔️ Compare Matrix ({comparedBidIds.length})
             </Button>

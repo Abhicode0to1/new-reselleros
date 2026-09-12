@@ -275,7 +275,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                   className={`py-1.5 px-2 rounded-md border text-2xs font-bold uppercase tracking-wider transition-all ${
                     priority === p
                       ? p === "critical"
-                        ? "bg-rose text-white border-rose shadow-sm"
+                        ? "bg-rose text-rose-fg border-rose shadow-sm"
                         : p === "high"
                         ? "bg-amber text-paper border-amber shadow-sm"
                         : "bg-ink text-paper border-ink shadow-sm"

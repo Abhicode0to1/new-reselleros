@@ -96,7 +96,7 @@ const stackStyles = "flex flex-col items-end gap-2.5";
 // Main FAB — amber pill, generous touch target (h-14 = 56px).
 const mainButtonStyles = cn(
   "inline-flex items-center justify-center gap-2",
-  "rounded-full bg-amber text-white shadow-lg shadow-amber/30",
+  "rounded-full bg-amber text-amber-fg shadow-lg shadow-amber/30",
   "h-14 px-5",
   "hover:brightness-105 active:brightness-95 transition-shadow",
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2",

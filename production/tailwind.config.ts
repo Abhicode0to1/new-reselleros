@@ -72,6 +72,13 @@ const config: Config = {
           DEFAULT: "hsl(var(--amber) / <alpha-value>)",
           soft: "hsl(var(--amber-soft) / <alpha-value>)",
           ink: "hsl(var(--amber-ink) / <alpha-value>)",
+          /* `fg` is text ON an amber fill — white in light, near-black in dark.
+             `text-white` cannot do that job, which is why filled buttons read
+             2.99:1 in dark mode until 12 Sep 2026. hover/active darken in
+             light and lighten in dark: always away from the text. */
+          fg: "hsl(var(--amber-fg) / <alpha-value>)",
+          hover: "hsl(var(--amber-hover) / <alpha-value>)",
+          active: "hsl(var(--amber-active) / <alpha-value>)",
         },
         // Status colors
         /* `ink` is the readable text colour on the matching `soft` fill. Amber and indigo had
@@ -87,6 +94,9 @@ const config: Config = {
           DEFAULT: "hsl(var(--rose) / <alpha-value>)",
           soft: "hsl(var(--rose-soft) / <alpha-value>)",
           ink: "hsl(var(--rose-ink) / <alpha-value>)",
+          fg: "hsl(var(--rose-fg) / <alpha-value>)",          /* see amber.fg */
+          hover: "hsl(var(--rose-hover) / <alpha-value>)",
+          active: "hsl(var(--rose-active) / <alpha-value>)",
         },
         indigo: {
           DEFAULT: "hsl(var(--indigo) / <alpha-value>)",

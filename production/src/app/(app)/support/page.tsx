@@ -256,7 +256,7 @@ export default function SupportPage() {
             <Icon name="bug" size={15} />
             <span>🐛 Bug Reports &amp; Testing</span>
             {scopeCounts.team_testing > 0 && (
-              <span className="text-3xs px-1.5 py-0.5 rounded-full bg-rose text-white font-bold">
+              <span className="text-3xs px-1.5 py-0.5 rounded-full bg-rose text-rose-fg font-bold">
                 {scopeCounts.team_testing}
               </span>
             )}

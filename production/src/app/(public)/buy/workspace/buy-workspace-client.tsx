@@ -1516,7 +1516,7 @@ export function BuyWorkspaceClient({
                     <button
                       type="button"
                       onClick={() => setBuyNowTier(selectedTierObj)}
-                      className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all bg-amber text-paper hover:bg-amber/90 active:bg-amber/80 shadow-md hover:shadow-lg h-10 px-5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
+                      className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all bg-amber text-paper hover:bg-amber-hover active:bg-amber-active shadow-md hover:shadow-lg h-10 px-5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2"
                     >
                       <Icon name="zap" size={14} />
                       Buy now

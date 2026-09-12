@@ -32,12 +32,21 @@ const buttonVariants = cva(
         // Quiet / default — white with hairline border (most common)
         default:
           "bg-paper text-ink border border-hairline hover:bg-paper-2 active:bg-paper-2/80",
+        /* ─── text-amber-fg, NOT text-white ──────────────────────────
+           Measured 12 Sep 2026 on a real dark-mode render: white on the
+           dark-theme amber fill is 2.99:1, against AA's 4.5. --amber is light
+           in dark mode because it also has to work as `text-amber` on a dark
+           ground (736 uses, 6.15:1 there) — so the foreground moves, not the
+           fill. `bg-amber-hover` / `-active` replace `/90` and `/80`, which
+           blended toward the PAGE and cost contrast on hover: primary went
+           4.76 → 4.11 → 3.53 across rest/hover/active. Now every state gains.
+           383 `variant="primary"` uses across 172 files ride on this line. */
         // Primary — brand amber
         primary:
-          "bg-amber text-white hover:bg-amber/90 active:bg-amber/80 shadow-sm",
+          "bg-amber text-amber-fg hover:bg-amber-hover active:bg-amber-active shadow-sm",
         // Destructive — for delete, cancel-subscription, etc.
         danger:
-          "bg-rose text-white hover:bg-rose/90 active:bg-rose/80 shadow-sm",
+          "bg-rose text-rose-fg hover:bg-rose-hover active:bg-rose-active shadow-sm",
         // Ghost — minimal, for icon-heavy toolbars
         ghost:
           "bg-transparent text-ink hover:bg-paper-2 active:bg-paper-2/80",

@@ -145,7 +145,7 @@ export function SolutionPackagePicker({
                     r.resolved.length === 0
                       ? "cursor-not-allowed bg-paper-2 text-ink-3"
                       : r.complete
-                        ? "bg-amber text-white hover:bg-amber/90"
+                        ? "bg-amber text-amber-fg hover:bg-amber-hover"
                         : "border border-amber/60 bg-amber-soft text-amber-ink hover:bg-amber-soft/70",
                   )}
                 >

@@ -580,7 +580,7 @@ export default function ContactsPage() {
           </button>
           <button
             onClick={() => startCampaign("whatsapp")}
-            className="text-xs px-3 py-1 rounded-full bg-amber text-paper hover:bg-amber/90 transition-colors flex items-center gap-1"
+            className="text-xs px-3 py-1 rounded-full bg-amber text-paper hover:bg-amber-hover transition-colors flex items-center gap-1"
           >
             <Icon name="whatsapp" size={12} /> WhatsApp blast
           </button>

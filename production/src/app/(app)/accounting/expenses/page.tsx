@@ -425,7 +425,7 @@ export default function ExpensesPage() {
                 onClick={() => setRange(r)}
                 className={`rounded-full px-2.5 py-0.5 text-2xs font-medium border transition-colors ${
                   active
-                    ? "bg-amber text-white border-amber"
+                    ? "bg-amber text-amber-fg border-amber"
                     : "bg-paper border-hairline text-ink-2 hover:border-hairline-strong"
                 }`}
               >
@@ -440,7 +440,7 @@ export default function ExpensesPage() {
             aria-pressed={unpaidOnly}
             className={`rounded-full px-2.5 py-0.5 text-2xs font-medium border transition-colors ${
               unpaidOnly
-                ? "bg-amber text-white border-amber"
+                ? "bg-amber text-amber-fg border-amber"
                 : "bg-paper border-hairline text-ink-2 hover:border-hairline-strong"
             }`}
           >

@@ -2230,8 +2230,8 @@ function LeadDetailSheet({
               onClick={nextAction.onClick}
               className={cn(
                 "w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-semibold transition-colors",
-                nextAction.tone === "amber"   && "bg-amber text-white hover:bg-amber/90",
-                nextAction.tone === "rose"    && "bg-rose text-white hover:bg-rose/90",
+                nextAction.tone === "amber"   && "bg-amber text-amber-fg hover:bg-amber-hover",
+                nextAction.tone === "rose"    && "bg-rose text-rose-fg hover:bg-rose-hover",
                 nextAction.tone === "emerald" && "bg-emerald text-white hover:bg-emerald/90",
                 nextAction.tone === "indigo"  && "bg-indigo text-white hover:bg-indigo/90",
               )}

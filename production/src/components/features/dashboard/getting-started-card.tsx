@@ -129,7 +129,7 @@ export function GettingStartedCard({
                 <Link
                   href={s.href as Route}
                   className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
-                    isNext ? "bg-amber text-white hover:bg-amber-ink" : "border border-hairline text-ink-2 hover:bg-paper-2"
+                    isNext ? "bg-amber text-amber-fg hover:bg-amber-ink" : "border border-hairline text-ink-2 hover:bg-paper-2"
                   }`}
                 >
                   {s.cta}

@@ -307,7 +307,7 @@ function PinPad({ employee, requireSelfie, onClose }: { employee: Employee; requ
               ))}
               <button onClick={back} className="h-14 rounded-lg text-ink-3 hover:bg-paper-2" aria-label="Backspace"><Icon name="arrow_left" size={20} className="mx-auto" /></button>
               <button onClick={() => push("0")} className="h-14 rounded-lg border border-hairline text-xl font-medium text-ink hover:bg-paper-2">0</button>
-              <button onClick={submit} disabled={pin.length < 4 || mark.isPending} className="h-14 rounded-lg bg-amber text-white font-medium disabled:opacity-40" aria-label="Submit"><Icon name="check" size={22} className="mx-auto" /></button>
+              <button onClick={submit} disabled={pin.length < 4 || mark.isPending} className="h-14 rounded-lg bg-amber text-amber-fg font-medium disabled:opacity-40" aria-label="Submit"><Icon name="check" size={22} className="mx-auto" /></button>
             </div>
           </>
         )}

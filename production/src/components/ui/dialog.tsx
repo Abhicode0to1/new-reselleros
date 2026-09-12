@@ -197,6 +197,24 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={setRefs}
+      /* ─── aria-modal, WHICH RADIX DOES NOT SET ──────────────────────────
+         Measured 12 Sep 2026 on a real render: `role="dialog"` was present
+         and `aria-modal` was null. That is Radix's own choice, not a
+         misconfiguration — @radix-ui/react-dialog 1.1.15 emits no aria-modal
+         anywhere in its bundle, and instead marks sibling content
+         `aria-hidden="true"`, which is the more compatible mechanism and does
+         the real work. Verified: with a dialog open, the siblings carry it.
+
+         WAI-ARIA still asks a modal dialog to say so, and some assistive tech
+         announces "dialog" differently when it does. Belt and braces: Radix's
+         aria-hidden keeps working, this adds the declaration.
+
+         Hardcoded `true` rather than derived, because `Dialog` is
+         `DialogPrimitive.Root` with modal left at its default and no call site
+         in this app passes `modal={false}`. If one ever does, this has to
+         become conditional — an aria-modal on a non-modal dialog tells a
+         screen-reader user the rest of the page is unreachable when it is not. */
+      aria-modal="true"
       style={{
         ...(size ? { ["--dlg-w"]: `${size.w}px`, ["--dlg-h"]: `${size.h}px` } : {}),
         ...(pos ? { ["--dlg-x"]: `${pos.dx}px`, ["--dlg-y"]: `${pos.dy}px` } : {}),

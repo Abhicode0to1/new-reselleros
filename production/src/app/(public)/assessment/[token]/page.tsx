@@ -241,7 +241,7 @@ export default function TakeAssessmentPage() {
 
       {err && <p className="text-[12px] text-rose mt-3">{err}</p>}
       <button type="button" onClick={submit} disabled={submitting}
-        className="mt-4 w-full rounded-md bg-amber text-paper font-medium py-2.5 text-sm hover:bg-amber/90 disabled:opacity-60">
+        className="mt-4 w-full rounded-md bg-amber text-paper font-medium py-2.5 text-sm hover:bg-amber-hover disabled:opacity-60">
         {submitting ? "Submitting…" : "Submit test"}
       </button>
     </Shell>
