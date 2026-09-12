@@ -465,38 +465,55 @@ function ResellerTierCard() {
         </Badge>
       </div>
 
-      {/* Three cases:
-          1. Distributor (has or will have children) — Excel Tech
-          2. Reseller with parent — Anutech Digital
-          3. Reseller without parent — independent peer tenant (most signups) */}
-      {/* Merged Management Hierarchy Summary */}
-      <div className="mt-4 pt-3 border-t border-hairline space-y-2">
-        <div className="flex items-center justify-between text-xs font-bold text-ink">
-          <span className="flex items-center gap-1.5">
-            <Icon name="globe" size={14} className="text-primary" />
-            <span>Distributor &amp; Subsidiary Merged Management</span>
-          </span>
-          <Badge kind="success" size="sm">Active Mapping</Badge>
+      {/* ─── THE TENANT'S OWN HIERARCHY, NOT A WORKED EXAMPLE ───────────
+          This block was four hardcoded rows — "Master Distributor: Anutech
+          Digital (anutech.in)", "Managed Subsidiary: Excel Technologies
+          (exceltechnologies.in)", separate GSTINs, "Merged (TopBar Workspace
+          Switcher Active)" — under a green "Active Mapping" badge, rendered
+          identically for EVERY tenant. Any reseller opening Settings was told
+          they had a managed subsidiary they had never heard of, and that a
+          mapping was active. `get_my_tenant_with_parent()` is fetched into
+          `data` twenty lines above and was not used by any of it.
+
+          The last row was also describing something that no longer exists: the
+          TopBar workspace switcher was removed on 2026-08-13 (see the comments
+          left behind in partners/page.tsx and vendor-portal).
+
+          Now it prints the row that RPC returned, and renders nothing at all
+          when there is no parent — which is most signups, and where four lines
+          of confident hierarchy were most misleading. */}
+      {data?.parent_tenant_id && (
+        <div className="mt-4 pt-3 border-t border-hairline space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold text-ink">
+            <span className="flex items-center gap-1.5">
+              <Icon name="globe" size={14} className="text-primary" />
+              <span>Your distributor</span>
+            </span>
+          </div>
+          <div className="p-3 bg-paper-2/70 rounded-lg text-xs space-y-1.5 border border-hairline font-mono">
+            <div className="flex justify-between gap-3">
+              <span className="text-ink-3 shrink-0">Distributor:</span>
+              <span className="text-ink font-bold truncate">{data.parent_name ?? "—"}</span>
+            </div>
+            {data.parent_gstin && (
+              <div className="flex justify-between gap-3">
+                <span className="text-ink-3 shrink-0">Their GSTIN:</span>
+                <span className="text-ink truncate">{data.parent_gstin}</span>
+              </div>
+            )}
+            <div className="flex justify-between gap-3">
+              <span className="text-ink-3 shrink-0">You trade as:</span>
+              <span className="text-ink font-bold truncate">{data.name}</span>
+            </div>
+            {/* The one claim in the original block that was true of every
+                tenant, and the one that matters for filing. */}
+            <div className="flex justify-between gap-3">
+              <span className="text-ink-3 shrink-0">Legal identities:</span>
+              <span className="text-emerald font-semibold shrink-0">Separate GSTINs &amp; tax filings</span>
+            </div>
+          </div>
         </div>
-        <div className="p-3 bg-paper-2/70 rounded-lg text-xs space-y-1.5 border border-hairline font-mono">
-          <div className="flex justify-between">
-            <span className="text-ink-3">Master Distributor:</span>
-            <span className="text-ink font-bold">Anutech Digital (anutech.in)</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-ink-3">Managed Subsidiary:</span>
-            <span className="text-primary font-bold">Excel Technologies (exceltechnologies.in)</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-ink-3">Legal Identities:</span>
-            <span className="text-emerald font-semibold">Separate GSTINs &amp; Tax Filings</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-ink-3">Business Operations:</span>
-            <span className="text-amber-ink font-semibold">Merged (TopBar Workspace Switcher Active)</span>
-          </div>
-        </div>
-      </div>
+      )}
     </Card>
   );
 }
