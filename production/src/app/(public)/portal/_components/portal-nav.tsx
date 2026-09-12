@@ -199,8 +199,10 @@ export function PortalNavStrip() {
 
   return (
     /* The fades are siblings of the scroller, not children of it — a child of an
-       overflow container scrolls away with the content, so an inner fade would slide
-       off the moment it was needed. `relative` therefore lives out here. */
+       overflow container scrolls away with the content, so an inner fade would
+       slide off the moment it was needed. They are positioned against this
+       element, which is why it must be a positioned one: `sticky` is, so it
+       does that job as well as `relative` used to. */
     /* ─── `md:hidden`, NOT `min-[1080px]:hidden` ─────────────────────────────
        The 1080 threshold paired this strip with `PortalNavInline`, which showed
        at exactly the header's max-width. The rail replaced that row on 11 Sep
@@ -208,7 +210,13 @@ export function PortalNavStrip() {
        navigations were on screen. Measured: at 820px and 1024px two navs
        visible (a 791px rail and a 44px strip); only at 1100px did it come right.
        It now hides exactly where the rail appears. */
-    <div className="relative md:hidden border-t border-hairline">
+    /* `sticky top-14` — 56px, the height of the bar above it. This used to be a
+       child of <header> with a `border-t` dividing it from the bar; it now sits
+       BELOW the header, so the header's own `border-b` is that divider and this
+       carries the one under itself. Opaque `bg-paper` rather than the bar's
+       `bg-paper/95`: the edge fades are `from-paper`, and over a translucent
+       ground they would fade to the wrong colour. */
+    <div className="sticky top-14 z-20 md:hidden border-b border-hairline bg-paper">
       <nav ref={stripRef} className="overflow-x-auto" aria-label="Portal sections">
         {/* No vertical padding here on purpose — it belongs on the links, or it pads the
             row while leaving each tap target 20px tall. */}

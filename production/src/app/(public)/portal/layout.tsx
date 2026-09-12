@@ -19,6 +19,7 @@ import { PortalAccountMenu } from "./_components/portal-account-menu";
 import { PortalNavStrip } from "./_components/portal-nav";
 import { PortalSidebar } from "./_components/portal-sidebar";
 import { PortalBreadcrumb } from "./_components/portal-breadcrumb";
+import { PortalThemeToggle } from "./_components/portal-theme-toggle";
 
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
@@ -43,10 +44,30 @@ export default async function PortalLayout({ children }: { children: React.React
        nothing to navigate and a customer who cannot get in should not be shown
        ten links they cannot open. */
     <div className={session ? "flex min-h-screen bg-paper-2/50" : "min-h-screen bg-paper-2/40 flex flex-col"}>
-      {session && <PortalSidebar brandName={brandName} gstin={gstin} />}
+      {session && (
+        <PortalSidebar
+          brandName={brandName}
+          gstin={gstin}
+          customerName={session.customerName}
+          email={session.userEmail}
+        />
+      )}
 
       <div className={session ? "flex-1 flex flex-col min-w-0" : "contents"}>
-      <header className={session ? "h-14 border-b border-hairline bg-paper flex-shrink-0" : "border-b border-hairline bg-paper"}>
+      {/* ─── THE STAFF TOPBAR'S OWN FOUR PROPERTIES ─────────────────────
+          Measured against `topbar.tsx:57` on 11 Sep 2026, from Pardeep's two
+          screenshots. The heights matched; these did not:
+            · sticky top-0 z-30 — the staff bar stays put while the page scrolls
+              and the portal's scrolled away, so on a long invoice list the
+              customer lost the breadcrumb and the account menu entirely
+            · bg-paper/95 + backdrop-blur-sm — content passing UNDER a sticky bar
+              has to show through it; an opaque bar is what an unsticky one wants
+            · px-3 md:px-4 (16px) against px-6 (24px) — 8px of inset that made
+              the two bars' left edges disagree with each other and with the rail
+            · gap-2 against gap-4
+          Signed out there is no rail and no app shell, so the bar keeps its
+          centred measure and does not stick. */}
+      <header className={session ? "sticky top-0 z-30 h-14 border-b border-hairline bg-paper/95 backdrop-blur-sm flex-shrink-0" : "border-b border-hairline bg-paper"}>
         {/* Signed in, the rail carries the brand and the header is a thin strip
             like the staff TopBar; signed out it is the whole chrome, so it keeps
             the centred measure. */}
@@ -55,7 +76,7 @@ export default async function PortalLayout({ children }: { children: React.React
            staff TopBar puts it on the element that carries the border
            (`topbar.tsx:57`), so the two now measure the same 56px. */}
         <div className={session
-          ? "px-6 h-full flex items-center gap-4"
+          ? "px-3 md:px-4 h-full flex items-center gap-2"
           : "max-w-[1080px] mx-auto px-6 py-4 flex items-center justify-between gap-4"}>
           {/* min-h-[44px] for the ≥44px floor (CLAUDE.md:605, §20). It measured 236x36 on
               9 Sep — the 36px comes from the w-9 h-9 logo. Free of layout cost here: the
@@ -98,21 +119,42 @@ export default async function PortalLayout({ children }: { children: React.React
 
           <div className="flex-1" />
 
-          <div className="flex items-center gap-5">
-            {/* Section nav lives in _components/portal-nav.tsx — it needs usePathname to
-                mark the current section, and this layout is a Server Component. The
-                measurements behind its 1080px threshold and gap-4 are documented there. */}
-            {/* The desktop row is gone — the rail is the navigation now. The
-                phone strip below stays: it scrolls the active item into view and
-                is a one-tap nav, which a hamburger sheet would not be. */}
-            {/* Account menu — always top-right when signed in (mobile + desktop) */}
+          {/* ─── THE RIGHT-HAND CLUSTER ──────────────────────────────
+              `gap-5` was 20px where the staff bar uses the header's own `gap-2`.
+
+              Section nav lives in _components/portal-nav.tsx — it needs
+              usePathname to mark the current section, and this layout is a
+              Server Component. The desktop row is gone: the rail is the
+              navigation now. The phone strip below stays — it scrolls the active
+              item into view and is a one-tap nav, which a sheet would not be. */}
+          <div className="flex items-center gap-2">
+            {session && <PortalThemeToggle />}
+            {/* ─── md:hidden ──────────────────────────────────────
+                On desktop the account chip is at the foot of the rail, where the
+                staff app keeps it — which is what leaves this bar carrying the
+                same kind of thing the staff bar carries. On a phone the rail is
+                `hidden md:flex`, so the compact chip is the only way out. */}
             {session && (
-              <PortalAccountMenu customerName={session.customerName} email={session.userEmail} />
+              <div className="md:hidden">
+                <PortalAccountMenu customerName={session.customerName} email={session.userEmail} />
+              </div>
             )}
           </div>
         </div>
-        {session && <PortalNavStrip />}
       </header>
+      {/* ─── THE PHONE STRIP IS A BAND OF ITS OWN, NOT A HEADER CHILD ───────
+          Measured at 390px on 11 Sep 2026: the strip stuck 44px out of the
+          BOTTOM of a header fixed at `h-14`, so on every phone page it sat on
+          top of the first 44px of the content — and once the bar became sticky
+          and translucent it would have sat on top of whatever scrolled past.
+
+          It cannot simply be given room inside the header: `h-14` has to stay on
+          the element carrying the border, or the 1px is added outside the 56px
+          and the bar measures 57 against the staff bar's 56 (the reason it moved
+          there in 68ca1a1b). So the strip becomes the next band down, sticking
+          at `top-14` — directly under the bar, which is where it was drawn
+          anyway, and now it stays there while the page scrolls. */}
+      {session && <PortalNavStrip />}
       <main className="flex-1 min-w-0">{children}</main>
       <footer className="border-t border-hairline bg-paper py-6 text-center text-xs text-ink-3 px-6">
         {session ? (

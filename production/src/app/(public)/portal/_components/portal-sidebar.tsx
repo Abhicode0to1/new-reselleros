@@ -37,6 +37,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn, initials } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+import { PortalAccountMenu } from "./portal-account-menu";
 
 /**
  * Ten flat links became four groups.
@@ -88,9 +89,13 @@ const GROUPS: Array<{
 export function PortalSidebar({
   brandName,
   gstin,
+  customerName,
+  email,
 }: {
   brandName: string;
   gstin?: string | null;
+  customerName: string;
+  email: string;
 }) {
   const pathname = usePathname();
 
@@ -206,6 +211,16 @@ export function PortalSidebar({
           GSTIN <span className="font-mono">{gstin}</span>
         </div>
       )}
+
+      {/* ─── IDENTITY LAST, WHERE THE STAFF RAIL PUTS IT ─────────────────
+          `Sidebar.tsx:323` is the staff app's final block: a bordered footer
+          holding the avatar, the name and the email. It is why the staff top bar
+          has no account chip — and why the portal's bar had one where the staff
+          bar has none. The GSTIN line stays above it, in the slot the staff rail
+          gives its Collapse toggle. */}
+      <div className="border-t border-hairline p-3 flex-shrink-0">
+        <PortalAccountMenu variant="rail" customerName={customerName} email={email} />
+      </div>
     </aside>
   );
 }

@@ -64,7 +64,7 @@ export function PortalBreadcrumb() {
     >
       {crumbs.map((c, i) => (
         <React.Fragment key={`${c}-${i}`}>
-          {i > 0 && <Icon name="chevron_right" size={12} className="text-ink-3/60 flex-shrink-0" />}
+          {i > 0 && <Icon name="chevron_right" size={12} className="text-ink-4 flex-shrink-0" />}
           <span className={i === crumbs.length - 1 ? "font-semibold text-ink truncate" : "truncate"}>
             {c}
           </span>

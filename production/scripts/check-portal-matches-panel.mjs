@@ -26,6 +26,12 @@
  *  B. Touch targets at 390px on both navigations.
  *  C. Exactly one navigation visible at every width, on both.
  *  D. The shell tokens on every portal page, not just the dashboard.
+ *  E. The navigation bar itself — the bar's own box, the row inside it, and the
+ *     rail's user chip. Added 11 Sep 2026 after Pardeep put the two bars side by
+ *     side. A measures the PAGE and had nothing to say about either bar beyond
+ *     its height, which is how four differences survived a run reporting 39/39:
+ *     the portal bar did not stick, was opaque, was inset 24px against 16px, and
+ *     carried the account chip that the staff bar deliberately does not.
  *
  * Read with getComputedStyle and getBoundingClientRect. Never from class names:
  * identical classes render differently inside different parents, and different
@@ -114,6 +120,84 @@ const PROBE = () => {
   o["sectionTitle.fontFamily"] = (g(h3, "fontFamily") ?? "").split(",")[0].replace(/["']/g, "");
   o["sectionTitle.fontSize"] = h3 ? px(g(h3, "fontSize")) : "(none)";
   return o;
+};
+
+/** The navigation bar, measured on its own — section E. */
+const NAVBAR = () => {
+  const px = (n) => `${Math.round(parseFloat(n) || 0)}px`;
+  const g = (el, p) => (el ? getComputedStyle(el)[p] : null);
+  const o = {};
+
+  const h = document.querySelector("header");
+  const r = h?.getBoundingClientRect();
+  o["bar.height"] = h ? px(g(h, "height")) : "(none)";
+  o["bar.position"] = g(h, "position") ?? "(none)";
+  o["bar.zIndex"] = g(h, "zIndex") ?? "(none)";
+  o["bar.background"] = g(h, "backgroundColor") ?? "(none)";
+  o["bar.backdropFilter"] = g(h, "backdropFilter") ?? "(none)";
+  o["bar.borderBottom"] = h ? `${px(g(h, "borderBottomWidth"))} ${g(h, "borderBottomColor")}` : "(none)";
+
+  /* The flex row holding the controls: the <header> itself in the staff app, an
+     inner wrapper in the portal. Found via the breadcrumb's parent — walking
+     down by "has a single child" picked the wrong element in the portal and
+     reported 0px padding as a difference that was really a bad selector. */
+  const row = h?.querySelector('nav[aria-label="Breadcrumb"]')?.parentElement ?? null;
+  o["row.paddingLeft"] = row ? px(g(row, "paddingLeft")) : "(none)";
+  o["row.paddingRight"] = row ? px(g(row, "paddingRight")) : "(none)";
+  o["row.gap"] = row ? px(g(row, "columnGap")) : "(none)";
+  o["row.alignItems"] = g(row, "alignItems") ?? "(none)";
+
+  /* Nothing may hang out of the bar. At 390px the portal's phone strip stuck
+     44px out of the bottom of a fixed `h-14` header and sat on the page. */
+  let over = 0;
+  if (h) for (const el of h.querySelectorAll("*")) {
+    const b = el.getBoundingClientRect();
+    if (b.height > 0 && b.bottom > r.bottom + 0.5) over = Math.max(over, Math.round(b.bottom - r.bottom));
+  }
+  o["bar.childOverflowBelow"] = `${over}px`;
+
+  /* offsetParent, not a class match: `md:hidden` leaves the node in the DOM and
+     querySelector cannot tell a hidden chip from a shown one. */
+  const barMenu = h ? [...h.querySelectorAll('[aria-haspopup="menu"]')].filter((e) => e.offsetParent !== null) : [];
+  o["bar.accountMenuVisible"] = barMenu.length ? "yes" : "no";
+  o["bar.controlCount"] = String(h ? [...h.querySelectorAll("button")].filter((e) => e.offsetParent !== null).length : 0);
+
+  /* The rail's user chip, by Radix's own attribute rather than by position: the
+     staff rail wraps its column in an extra div, so "last child" is that div. */
+  const aside = [...document.querySelectorAll("aside")].find((a) => a.offsetParent !== null);
+  const trig = aside ? [...aside.querySelectorAll('[aria-haspopup="menu"]')].pop() : null;
+  const foot = trig?.parentElement;
+  o["railChip.present"] = trig ? "yes" : "no";
+  o["railChip.height"] = trig ? `${Math.round(trig.getBoundingClientRect().height)}px` : "(none)";
+  o["railChip.padding"] = trig ? px(g(trig, "paddingTop")) : "(none)";
+  o["railChip.gap"] = trig ? px(g(trig, "columnGap")) : "(none)";
+  o["railChip.radius"] = trig ? px(g(trig, "borderRadius")) : "(none)";
+  o["railChip.atRailBottom"] =
+    foot && aside && foot.getBoundingClientRect().bottom >= aside.getBoundingClientRect().bottom - 24 ? "yes" : "no";
+  o["railFooter.padding"] = foot ? px(g(foot, "paddingTop")) : "(none)";
+  o["railFooter.borderTop"] = foot ? `${px(g(foot, "borderTopWidth"))} ${g(foot, "borderTopColor")}` : "(none)";
+  const nm = trig?.querySelector("div > div");
+  o["railChip.nameSize"] = nm ? px(g(nm, "fontSize")) : "(none)";
+  o["railChip.nameWeight"] = g(nm, "fontWeight") ?? "(none)";
+  const em = nm?.nextElementSibling;
+  o["railChip.emailSize"] = em ? px(g(em, "fontSize")) : "(none)";
+  o["railChip.emailColor"] = g(em, "color") ?? "(none)";
+  o["railChip.emailFamily"] = (g(em, "fontFamily") ?? "(none)").split(",")[0].replace(/["']/g, "");
+  return o;
+};
+
+/* ─── THE TWO THAT ARE ALLOWED TO DIFFER ─────────────────────────────
+   These two are content differences, not design ones. They are MEASURED and
+   printed on their own line rather than left out of the probe: a check that
+   silently skips the rows it expects to disagree cannot tell a deliberate
+   difference from a new one — if a notification bell turned up in the portal
+   bar tomorrow, an omitted row would say nothing and this line says 2 → 3. */
+const DECLARED = {
+  "bar.controlCount":
+    "the staff bar's Report Bug / Search / Quick actions / bell are staff tools — " +
+    '"authority can be reduced". The theme toggle is a reader\'s preference, so the portal keeps that one.',
+  "railChip.height":
+    "the staff chip prints a third line for the user's ROLE. A portal customer does not have one.",
 };
 
 const browser = await chromium.launch({ channel: "chrome" });
@@ -221,5 +305,63 @@ for (const p of PAGES) {
 }
 const ok = shells.every((s) => s.rail === A["rail.width"].replace("px", "") * 1 && s.header === 56 && s.h1 === 36 && s.crumb);
 console.log(`D. every portal page       rail ${[...new Set(shells.map((s) => s.rail))].join("/")}px · header ${[...new Set(shells.map((s) => s.header))].join("/")}px · h1 ${[...new Set(shells.map((s) => s.h1))].join("/")}px · breadcrumb on ${shells.filter((s) => s.crumb).length}/${shells.length}  → ${ok ? "all match the dashboard" : "MISMATCH"}`);
+
+// ── E ─────────────────────────────────────────────────────
+for (const page of [staff, portal]) {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.waitForTimeout(300);
+}
+await staff.goto("http://localhost:3000/dashboard", { waitUntil: "load" });
+await staff.waitForLoadState("networkidle").catch(() => {});
+await staff.waitForTimeout(1200);
+await portal.goto("http://localhost:3000/portal/dashboard", { waitUntil: "load" });
+await portal.waitForLoadState("networkidle").catch(() => {});
+await portal.waitForTimeout(1200);
+const NA = await staff.evaluate(NAVBAR);
+const NB = await portal.evaluate(NAVBAR);
+let nSame = 0, nDiff = 0, nUn = 0;
+const nBad = [];
+const nDeclared = [];
+for (const k of [...new Set([...Object.keys(NA), ...Object.keys(NB)])]) {
+  const a = String(NA[k]), b = String(NB[k]);
+  if (k in DECLARED) { nDeclared.push(`· ${k}: staff ${a}  |  portal ${b} — ${DECLARED[k]}`); continue; }
+  if (a === "(none)" && b === "(none)") { nUn++; nBad.push(`? ${k}: unmeasured on both`); }
+  else if (a === b) nSame++;
+  else { nDiff++; nBad.push(`≠ ${k}: staff ${a}  |  portal ${b}`); }
+}
+console.log(
+  `E. navbar properties      same ${nSame} · different ${nDiff} · unmeasured ${nUn}` +
+  ` · declared ${nDeclared.length}  (of ${nSame + nDiff + nUn + nDeclared.length})`,
+);
+nBad.forEach((l) => console.log("     " + l));
+nDeclared.forEach((l) => console.log("     " + l));
+
+/* The phone: the strip must sit BELOW the bar rather than through it, and both
+   must stay put once the page scrolls. */
+await portal.setViewportSize({ width: 390, height: 850 });
+await portal.waitForTimeout(900);
+const phone = await portal.evaluate(async () => {
+  const read = () => {
+    const h = document.querySelector("header");
+    const strip = [...document.querySelectorAll('nav[aria-label="Portal sections"]')]
+      .filter((n) => n.offsetParent !== null)[0];
+    const r = h.getBoundingClientRect();
+    let over = 0;
+    for (const el of h.querySelectorAll("*")) {
+      const b = el.getBoundingClientRect();
+      if (b.height > 0 && b.bottom > r.bottom + 0.5) over = Math.max(over, Math.round(b.bottom - r.bottom));
+    }
+    return { bar: Math.round(r.top), strip: strip ? Math.round(strip.getBoundingClientRect().top) : null, over };
+  };
+  const rest = read();
+  window.scrollTo(0, 600);
+  await new Promise((r) => setTimeout(r, 400));
+  return { rest, scrolled: read(), y: Math.round(window.scrollY) };
+});
+console.log(
+  `E'. portal @390px         header overflow ${phone.rest.over}px (want 0) · ` +
+  `at rest bar/strip ${phone.rest.bar}/${phone.rest.strip}px · ` +
+  `scrolled ${phone.y}px bar/strip ${phone.scrolled.bar}/${phone.scrolled.strip}px (both must stay)`,
+);
 
 await browser.close();
