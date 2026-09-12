@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "gate": "node --no-warnings scripts/gate.mjs",
+    "sweep": "node --no-warnings scripts/sweep.mjs",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
