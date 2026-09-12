@@ -23,6 +23,7 @@ import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
+import { HostingSection, type HostingPlan } from "./hosting-buy";
 
 export interface ShopProduct {
   id: string;
@@ -48,12 +49,16 @@ type FormData = z.infer<typeof schema>;
 
 export function ShopClient({
   products,
+  hostingPlans,
   ownedPlans,
+  customerEmail,
   resellerName,
   resellerPhone,
 }: {
   products: ShopProduct[];
+  hostingPlans: HostingPlan[];
   ownedPlans: string[];
+  customerEmail: string;
   resellerName: string;
   resellerPhone: string | null;
 }) {
@@ -77,15 +82,26 @@ export function ShopClient({
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
+      {/* The subtitle no longer promises "no payment now" for everything on the
+          page — hosting is bought here, and only the licences are quoted. */}
       <header className="mb-8">
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Add more to your workspace</h1>
         <p className="text-sm text-ink-3 mt-1">
-          Browse products from {resellerName}. Request a quote and we&apos;ll send you a
-          GST invoice-ready price — no payment now.
+          Browse products from {resellerName}. Buy hosting online, or request a quote for
+          licences and we&apos;ll send you a GST invoice-ready price.
         </p>
       </header>
 
-      {products.length === 0 ? (
+      {/* Hosting first: it is the only thing on this page that can be bought
+          outright, so burying it under the quote-only grid would hide the one
+          action that completes here. */}
+      {hostingPlans.length > 0 && (
+        <div className="mb-10">
+          <HostingSection plans={hostingPlans} email={customerEmail} resellerName={resellerName} />
+        </div>
+      )}
+
+      {products.length === 0 && hostingPlans.length === 0 ? (
         <Card className="p-8 text-center text-sm text-ink-3">
           No products are listed right now. Please{" "}
           {resellerPhone
@@ -95,7 +111,7 @@ export function ShopClient({
             : <>contact {resellerName}</>}{" "}
           for the catalogue.
         </Card>
-      ) : (
+      ) : products.length === 0 ? null : (
         <div className="space-y-10">
           {grouped.map(({ vendor, items }) => (
             <section key={vendor}>

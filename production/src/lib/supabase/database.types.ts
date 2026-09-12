@@ -4937,6 +4937,30 @@ export type Database = {
         }[];
       };
       /**
+       * The hosting plans a portal customer may browse and buy
+       * (migration 20260912100000). Priced per ACCOUNT per month, not per seat,
+       * which is why it is a separate function rather than more columns on
+       * portal_list_products. Customer-safe fields only — no wholesale/margin.
+       *
+       * `features` is jsonb: an array of strings on rows written by
+       * sync_hosting_catalog, and coalesced to `[]` for any row without it, so
+       * a caller still has to narrow it before rendering.
+       */
+      portal_list_hosting_plans: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          name: string;
+          price_month: number;
+          period: string | null;
+          hsn: string | null;
+          quota_mb: number | null;
+          bandwidth_mb: number | null;
+          features: Json;
+          popular: boolean;
+        }[];
+      };
+      /**
        * Customer requests a quote for a product → creates a lead in the
        * reseller's pipeline (migration 0068). Returns the new lead id.
        */
