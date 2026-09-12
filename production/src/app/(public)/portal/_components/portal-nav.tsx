@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Portal section nav — both the inline desktop row and the narrow scrollable strip.
+ * Portal section nav — the narrow scrollable strip shown below the header on phones.
  *
  * ─── WHY THIS IS A CLIENT ISLAND ─────────────────────────────────────────────
  * It needs the current path to say which section you are in, and `usePathname` is
@@ -66,57 +66,6 @@ const NAV: Array<{ href: string; label: string }> = [
 function useActive() {
   const pathname = usePathname();
   return (href: string) => pathname === href;
-}
-
-/**
- * The inline row. Shown only at 1080px — the header's own max-width — so it appears
- * exactly when there is room for it; see the layout for that measurement.
- *
- * gap-4 rather than gap-5 is also load-bearing: the header row is capped at
- * max-w-[1080px] with px-6, so everything competes for 1032px, and at gap-5 the nav
- * group took 794 of it and left the brand 238 where it needs 252 — which truncated the
- * reseller's business name to "Excel Technologies Pv...". Nine gaps at 4px less each
- * returns 36px. If a future nav item eats that room, widen the budget or shorten labels;
- * do not let the brand absorb it, because it carries min-w-0 and will give way silently.
- */
-export function PortalNavInline() {
-  const isActive = useActive();
-  return (
-    <nav
-      aria-label="Portal sections"
-      className="hidden min-[1080px]:flex items-center gap-0.5 text-sm text-ink-3"
-    >
-      {/* ─── THE STAFF SIDEBAR'S ACTIVE STATE, NOT A SECOND ONE ──────────────
-          Changed 11 Sep 2026 — Pardeep: "Including navbar design". The app had
-          two vocabularies for the same idea (design-critique §4): the staff
-          Sidebar marks the current section with a filled pill,
-          `bg-amber-soft text-amber-ink font-medium`, and this used colour and
-          weight alone. Colour-only is legible but it is a DIFFERENT language,
-          and a customer who has seen the staff app should not have to learn a
-          second one to find where they are.
-
-          `gap-1` with padding inside each item, rather than `gap-4` with none —
-          a pill needs its own box, and spacing between boxes reads as spacing
-          between pills. It also gives every item a 44px hit area (§20), which
-          bare text links did not have. */}
-      {NAV.map((n) => {
-        const active = isActive(n.href);
-        return (
-          <Link
-            key={n.href}
-            href={n.href as never}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "whitespace-nowrap transition-colors rounded-md px-2 min-h-[44px] inline-flex items-center",
-              active ? "bg-amber-soft text-amber-ink font-medium" : "hover:bg-paper-2 hover:text-ink",
-            )}
-          >
-            {n.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
 }
 
 /**
@@ -204,12 +153,17 @@ export function PortalNavStrip() {
        element, which is why it must be a positioned one: `sticky` is, so it
        does that job as well as `relative` used to. */
     /* ─── `md:hidden`, NOT `min-[1080px]:hidden` ─────────────────────────────
-       The 1080 threshold paired this strip with `PortalNavInline`, which showed
-       at exactly the header's max-width. The rail replaced that row on 11 Sep
-       2026 and appears at `md` — so the old threshold left a window where BOTH
-       navigations were on screen. Measured: at 820px and 1024px two navs
-       visible (a 791px rail and a 44px strip); only at 1100px did it come right.
-       It now hides exactly where the rail appears. */
+       The 1080 threshold paired this strip with a desktop row, `PortalNavInline`,
+       which showed at exactly the header's max-width. The rail replaced that row
+       on 11 Sep 2026 and appears at `md` — so the old threshold left a window
+       where BOTH navigations were on screen. Measured: at 820px and 1024px two
+       navs visible (a 791px rail and a 44px strip); only at 1100px did it come
+       right. It now hides exactly where the rail appears.
+
+       The row itself was deleted on 12 Sep 2026: once the rail took over, nothing
+       imported it, and a nav that renders nowhere still has to be read and kept
+       consistent by whoever changes the other two. Its active-pill treatment was
+       not lost — that is what `portal-sidebar.tsx` renders. */
     /* `sticky top-14` — 56px, the height of the bar above it. This used to be a
        child of <header> with a `border-t` dividing it from the bar; it now sits
        BELOW the header, so the header's own `border-b` is that divider and this
