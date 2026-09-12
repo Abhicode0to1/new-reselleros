@@ -17,13 +17,12 @@
  * Exits non-zero if the ambiguous form has stopped failing (meaning this guard no
  * longer proves anything) or if the pinned form has started failing.
  */
-import { readFileSync } from "node:fs";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
-const env = {};
-for (const line of readFileSync(".env.local", "utf8").split(/\r?\n/)) {
-  const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-  if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
-}
+/* Shared parser — this was six copies of a regex that stripped a quote off each
+   END OF THE LINE, so a quoted value followed by a comment kept the comment.
+   See scripts/lib/env-local.mjs for the error it produced. */
+const env = loadEnvLocal();
 const URL_ = env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 if (!URL_ || !ANON) { console.error("Missing NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY"); process.exit(2); }

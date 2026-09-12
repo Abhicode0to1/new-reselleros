@@ -33,6 +33,7 @@
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
 const arg = (k, d = null) => {
   const hit = process.argv.find((a) => a.startsWith(`--${k}=`));
@@ -50,11 +51,9 @@ const FROM_DB = process.argv.includes("--from-db");
  * it is never printed, not even masked.
  */
 async function secretFromDb(tenantId) {
-  const env = {};
-  for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
-    const m = /^([A-Z_][A-Z0-9_]*)=(.*)$/.exec(line.trim());
-    if (m) env[m[1]] = m[2].replace(/^["']|["']$/g, "");
-  }
+  /* Shared parser — this copy also kept a trailing comment inside a quoted
+     value, and the value here is a webhook SECRET used to sign a request. */
+  const env = loadEnvLocal();
   const url = env.NEXT_PUBLIC_SUPABASE_URL, key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing from .env.local");
 

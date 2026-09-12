@@ -24,6 +24,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
 const KEEPER = "fbb976f1-9090-4f10-9726-0901bd144e42";       // ANUTECH DIGITAL PVT LTD
 const DELETE_IDS = [
@@ -61,11 +62,10 @@ if (new Set(DELETE_IDS).size !== DELETE_IDS.length) {
   process.exit(2);
 }
 
-const env = {};
-for (const line of readFileSync(".env.local", "utf8").split(/\r?\n/)) {
-  const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-  if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
-}
+/* Shared parser — this was six copies of a regex that stripped a quote off each
+   END OF THE LINE, so a quoted value followed by a comment kept the comment.
+   See scripts/lib/env-local.mjs for the error it produced. */
+const env = loadEnvLocal();
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });

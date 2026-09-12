@@ -59,8 +59,9 @@
  *
  * Add --dry-run to see exactly what would be executed, with the value masked.
  */
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
 const REGION = process.env.REGION ?? "asia-south1";
 const SERVICE = process.env.SERVICE ?? "resellersos";
@@ -73,11 +74,13 @@ if (!existsSync(".env.local")) {
   process.exit(2);
 }
 
-const line = readFileSync(".env.local", "utf8")
-  .split(/\r?\n/)
-  .find((l) => l.startsWith(`${VAR}=`));
-
-const value = line ? line.slice(VAR.length + 1).trim() : "";
+/* Through the shared parser, not `line.slice(VAR.length + 1)`. That kept the
+   surrounding quotes AND any trailing comment, and this value is pushed to
+   Cloud Run as a production secret. The 32-byte check below would have refused
+   it — but its message ("decodes to N bytes … Regenerate") sends you to replace
+   a key that was never wrong, which is the same wrong turn the service-role key
+   sent people on. See scripts/lib/env-local.mjs. */
+const value = (loadEnvLocal()[VAR] ?? "").trim();
 
 if (!value) {
   console.error(`${VAR} is not set in .env.local.`);

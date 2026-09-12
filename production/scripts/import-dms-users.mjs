@@ -27,6 +27,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { createClient } from "@supabase/supabase-js";
 import { mapDmsUser } from "../src/lib/dms/user-to-customer.ts";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
 const DMS_ROOT = process.env.DMS_ROOT?.trim() || "C:/xampp/htdocs/Domain-Management-Project";
 const argv = process.argv.slice(2);
@@ -40,24 +41,11 @@ if (!argv.includes("--tenant") || !/^[0-9a-f-]{36}$/i.test(tenantId)) {
   process.exit(2);
 }
 
-/* Read .env.local the same way scripts/backup-tenant-data.mjs does — Next loads
-   it for the app, a standalone script does not, and adding dotenv for one file is
-   a dependency nobody asked for. */
-/* A value may be quoted AND carry a trailing # comment — .env.local here has
-   `SUPABASE_SERVICE_ROLE_KEY="eyJ..."  # LOCAL demo key - ...`. Taking everything
-   after the `=` swallows the comment into the credential, and the first symptom
-   is an em-dash 240 characters into an HTTP header:
-     "Cannot convert argument to a ByteString ... value of 8212".
-   So: quoted value wins, otherwise strip an unquoted trailing comment. */
-const dotEnv = {};
-for (const line of readFileSync(".env.local", "utf8").split(/\r?\n/)) {
-  const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-  if (!m) continue;
-  const raw = m[2].trim();
-  const quoted = raw.match(/^"([^"]*)"|^'([^']*)'/);
-  dotEnv[m[1]] = quoted ? (quoted[1] ?? quoted[2]) : raw.replace(/\s+#.*$/, "").trim();
-}
-
+/* Next loads .env.local for the app; a standalone script does not, and adding
+   dotenv for one file is a dependency nobody asked for. This file used to carry
+   its own correct-but-separate parser — the quoting and trailing-comment rules,
+   and the em-dash ByteString error behind them, now live in one place. */
+const dotEnv = loadEnvLocal();
 /* Service role, because this writes across a tenant the operator names rather
    than the one a session happens to be in. */
 const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || dotEnv.NEXT_PUBLIC_SUPABASE_URL || "").trim();
