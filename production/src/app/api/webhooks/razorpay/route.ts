@@ -39,7 +39,7 @@ import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
-import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
+import { queueProvisioning, recordPendingHostingAccount } from "@/lib/provisioning/provisioning.server";
 import { rcOrderingEnabled } from "@/lib/resellerclub/orders";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 
@@ -408,6 +408,52 @@ export async function POST(request: NextRequest) {
       note:        provisioning.reason,
     });
     console.log(`[webhooks/razorpay] provisioning ${queued} for ${quote.id} — ${provisioning.reason}`);
+
+    /* ─── AND PUT IT WHERE THE CUSTOMER CAN SEE IT ───────────────────
+       The queue row above is read by the provisioning worker and by nothing
+       else — no portal page, no staff screen. The confirmation email sent a few
+       lines below already tells this customer "Your hosting account is being set
+       up now", and without this their Hosting page would show nothing at all.
+
+       Every hosting order is queued WITH a blocker today (DirectAdmin
+       unconfigured, test-mode key, dial off), so that window is not a gap of
+       seconds — it is everything, forever, until an operator acts. Recorded as
+       'pending', which the portal renders as "Setting up": true from the
+       customer's side whatever the blocker is. The blocker itself stays in
+       `provisioning_requests`, where the operator reads it. */
+    if (provisioningVendor === "hosting") {
+      /* Re-read, do NOT reuse the `quote` fetched above: `record_payment` sets
+         `quotes.customer_id` itself (migration 0157, line 381), upserting the
+         customer as part of recording the money. The snapshot taken before that
+         RPC still carries whatever the checkout wrote — and the public cart
+         writes `customer_id: null` by design, because a website visitor is not
+         a customer yet. Using the stale row would skip a portal record for
+         exactly the orders that most need one. */
+      const { data: paid } = await admin
+        .from("quotes").select("customer_id").eq("id", quote.id).maybeSingle();
+      /* The line is named "<Plan> — <domain>" so an invoice line stands alone.
+         The Hosting page already prints the domain as the heading, so the plan
+         sub-label there would read "Starter Hosting — webhooktest.in" under a
+         heading saying "webhooktest.in", where every other row reads "Standard".
+         Only that exact suffix is removed — not a general split on the dash,
+         which would truncate a plan whose own name contains one. */
+      const line = Array.isArray(quote.line_items) ? (quote.line_items[0] as { name?: string } | undefined) : undefined;
+      const planName = (line?.name ?? "").replace(
+        new RegExp(`\\s*—\\s*${(provisioningDomain ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+        "",
+      ).trim();
+
+      const shown = await recordPendingHostingAccount({
+        tenantId:    quote.tenant_id,
+        quoteId:     quote.id,
+        customerId:  paid?.customer_id ?? null,
+        domain:      provisioningDomain,
+        planName:    planName || quote.plan || null,
+        planCode:    quote.plan ?? null,
+        amountPaid:  paymentAmount,
+      });
+      console.log(`[webhooks/razorpay] portal hosting row ${shown} for ${quote.id}`);
+    }
   } else {
     console.warn(`[webhooks/razorpay] not provisioning ${quote.id} — ${provisioning.reason}`);
   }

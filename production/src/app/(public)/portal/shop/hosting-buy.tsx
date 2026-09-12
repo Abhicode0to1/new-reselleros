@@ -45,6 +45,11 @@ import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
 import { loadRazorpayCheckout } from "@/lib/razorpay/checkout-client";
+/* The SAME rate and the SAME rounding the server charges with. This used to be
+   a local `const GST_RATE = 18` — two copies of one number, so a change to the
+   rate would have shown the customer one total in the dialog and charged them
+   another. hosting-order.ts has no server imports, so a client may use it. */
+import { HOSTING_GST_RATE, hostingOrderTotals } from "@/lib/portal/hosting-order";
 
 export interface HostingPlan {
   id: string;
@@ -74,8 +79,6 @@ interface BuyResponse {
   alreadyHosted?: boolean;
   notConfigured?: boolean;
 }
-
-const GST_RATE = 18;
 
 /** MB → the unit a person reads. 10240 is "10 GB", not "10240 MB". */
 function storage(mb: number | null): string | null {
@@ -119,7 +122,7 @@ export function HostingSection({
               <div className="mb-4">
                 <span className="font-serif text-2xl text-ink">{rupee(p.price_month)}</span>
                 <span className="text-xs text-ink-3"> {p.period || "/mo"}</span>
-                <div className="text-2xs text-ink-3 mt-0.5">+ {GST_RATE}% GST · billed monthly</div>
+                <div className="text-2xs text-ink-3 mt-0.5">+ {HOSTING_GST_RATE}% GST · billed monthly</div>
               </div>
 
               {(disk || bw || p.features.length > 0) && (
@@ -185,7 +188,8 @@ function BuyHostingDialog({
     if (plan) { setDomain(""); setError(null); setBusy(false); }
   }, [plan]);
 
-  const total = plan ? Math.round(plan.price_month * (1 + GST_RATE / 100)) : 0;
+  const totals = plan ? hostingOrderTotals(plan.price_month) : null;
+  const total = totals?.amount ?? 0;
 
   async function onBuy() {
     if (!plan) return;
@@ -290,8 +294,8 @@ function BuyHostingDialog({
                 <span className="tabular-nums">{rupee(plan.price_month)}</span>
               </div>
               <div className="flex items-center justify-between text-ink-3 text-xs mt-1">
-                <span>GST {GST_RATE}%</span>
-                <span className="tabular-nums">{rupee(total - plan.price_month)}</span>
+                <span>GST {HOSTING_GST_RATE}%</span>
+                <span className="tabular-nums">{rupee(total - (totals?.subtotal ?? plan.price_month))}</span>
               </div>
               <div className="flex items-center justify-between font-medium border-t border-hairline mt-2 pt-2">
                 <span>Total today</span>
