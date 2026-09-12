@@ -316,7 +316,11 @@ export default function QuotesPage() {
   const pipelineMarginUnknownCount = marginablePipeline.filter((m) => !m.known).length;
   const acceptedCount = counts.accepted ?? 0;
   const sentishCount = (counts.sent ?? 0) + (counts.viewed ?? 0);
-  const expiringCount = sentishCount;
+  /* Named for what it counts. It was `expiringCount`, and the card below said
+     "Expiring within 7 days are highest priority" — but sent + viewed has
+     nothing to do with an expiry date, so the number and the sentence describing
+     it were never about the same thing. */
+  const awaitingReplyCount = sentishCount;
   const winRate = quotesByWorkspace.length > 0
     ? Math.round((acceptedCount / Math.max(1, quotesByWorkspace.length - (counts.draft ?? 0))) * 100)
     : 0;
@@ -561,24 +565,27 @@ export default function QuotesPage() {
                   </div>
 
                   {/* Quote Intelligence */}
-                  {expiringCount > 0 && (
+                  {/* The button was `toast.success("Nudge sent for N expiring
+                      quotes")` and nothing else — no email, no record, and the
+                      operator was told their customers had been chased. There is
+                      no nudge endpoint to wire it to, so it now does the one
+                      real thing available: opens the list it is talking about. */}
+                  {awaitingReplyCount > 0 && (
                     <GeminiCard
                       title="Quote intelligence"
                       actions={
                         <Button
                           size="sm"
                           variant="primary"
-                          icon="mail"
-                          onClick={() => {
-                            toast.success(`Nudge sent for ${expiringCount} expiring quotes`);
-                          }}
+                          icon="arrow-right"
+                          onClick={() => setTab("sent")}
                         >
-                          Nudge expiring quotes
+                          Show these quotes
                         </Button>
                       }
                       compact
                     >
-                      <b>{expiringCount} quote{expiringCount === 1 ? "" : "s"} out for review.</b> Expiring within 7 days are highest priority — send a nudge to those customers.
+                      <b>{awaitingReplyCount} quote{awaitingReplyCount === 1 ? "" : "s"} sent and awaiting a reply.</b> Open one to send it again or call the customer.
                     </GeminiCard>
                   )}
                 </div>

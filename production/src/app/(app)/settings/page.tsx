@@ -854,11 +854,14 @@ function IntegrationsTab() {
                 <p className="text-xs text-ink-3">{it.sub}</p>
               </div>
             </div>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => toast.info(`Setting up ${it.name}`)}
-            >
+            {/* Disabled, matching GoogleContactsIntegrationCard's own
+                not-configured branch a few lines above. It was
+                `toast.info("Setting up …")` — a button that announced it was
+                setting up an integration that has no code behind it. This file's
+                own TABS comment sets the rule it broke: a "Coming soon"
+                dead-end "reads as half-built to a non-technical owner — it was
+                to stay out until it did something". */}
+            <Button variant="ghost" size="sm" disabled title="Not available yet">
               Setup
             </Button>
           </div>

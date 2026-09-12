@@ -17,7 +17,6 @@ import { useQuery } from "@tanstack/react-query";
 
 import { createClient } from "@/lib/supabase/client";
 import { rupee, formatDate } from "@/lib/utils";
-import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -120,61 +119,33 @@ export default function PartnersPage() {
             />
           )}
 
+          {/* ─── AN EMPTY STATE, NOT AN INVENTED PARTNER ─────────────────────
+              This branch — no partner metrics — used to render a complete,
+              hardcoded partner: "Excel Technologies", GSTIN 07AAACE1234F1Z5, and
+              six metrics including MRR ₹1,45,800 and Invoiced (MTD) ₹2,64,000,
+              with a "Push Wholesale Rates" button whose entire body was
+              `toast.success("⚡ Wholesale Rates Pushed to Excel Technologies!
+              Rates synced automatically.")`.
+
+              The placement is what made it serious: this is the EMPTY state. The
+              one moment the screen has nothing true to show was the moment it
+              showed a distributor invented money as though it were their own,
+              on a page that IS in the sidebar (nav.ts:322, owner/manager/
+              partner_agent). It also carried exceltechnologies.in, the domain
+              the company no longer uses (§1).
+
+              Nothing here is recoverable as real data: `get_partner_metrics()`
+              returned no rows, so there is nothing to show. It says so. */}
           {(!metrics || metrics.length === 0) && !metricsLoading && !error && (
-            <div className="space-y-3">
-              <Card className="p-5 border-l-4 border-l-primary bg-paper">
-                <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h3 className="font-serif text-xl text-ink leading-tight">Excel Technologies</h3>
-                      <Badge kind="info" size="sm">exceltechnologies.in · Managed Subsidiary</Badge>
-                      <Badge kind="warning" size="sm">⚡ Partner Rates Linked</Badge>
-                    </div>
-                    <p className="text-2xs text-ink-3 font-mono">GSTIN: 07AAACE1234F1Z5 · Parent Distributor: Anutech Digital (anutech.in)</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* "Manage Business (Switch)" removed 2026-08-13 with the
-                        workspace switcher — it wrote a localStorage key nothing
-                        reads any more, so the button reloaded the page and did
-                        nothing. Real multi-company switching is planned via
-                        tenant memberships (see TASKS.md), not localStorage. */}
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      icon="sparkles"
-                      onClick={() => {
-                        toast.success("⚡ Wholesale Rates Pushed to Excel Technologies! Rates synced automatically.");
-                      }}
-                    >
-                      Push Wholesale Rates
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-sm">
-                  <Metric label="Active subs"      value={42} />
-                  <Metric label="Seats sold"        value={380} />
-                  <Metric label="MRR"               value={rupee(145800)} tone="ink" />
-                  <Metric label="Invoiced (MTD)"    value={rupee(264000)} tone="ink" />
-                  <Metric label="Renewals (30d)"    value={8} tone="amber-ink" />
-                  <Metric label="Renewal value"     value={rupee(98500)} tone="amber-ink" />
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-hairline flex items-center gap-2 text-2xs text-ink-3 flex-wrap">
-                  <Icon name="info" size={12} className="text-primary shrink-0" />
-                  <span>
-                    Linked via Parent-Child Distributor Hierarchy. Legal identity (GSTIN/Invoices) remains individual, business operations and rates are merged.
-                  </span>
-                  <div className="ml-auto flex items-center gap-3">
-                    {/* "View Consolidated P&L" removed 2026-08-13 — it flipped the
-                        old localStorage workspace key, which nothing reads now.
-                        A merged cross-company P&L cannot come from client-side
-                        filtering anyway: RLS returns one tenant per request, so
-                        it needs a SECURITY DEFINER roll-up (like get_partner_metrics). */}
-                  </div>
-                </div>
-              </Card>
-            </div>
+            <EmptyState
+              icon="award"
+              title="No channel partners yet"
+              body={
+                "When a reseller is linked to you as a child tenant, their aggregated " +
+                "numbers — MRR, active seats, renewals due — appear here. End-customer " +
+                "details stay private to them."
+              }
+            />
           )}
 
           {!metricsLoading && metrics && metrics.length > 0 && (
