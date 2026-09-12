@@ -339,10 +339,44 @@ const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 );
 DialogHeader.displayName = "DialogHeader";
 
+/**
+ * The footer sticks to the bottom of the dialog's scroll area.
+ *
+ * ─── WHY ────────────────────────────────────────────────────────────────────
+ * `DialogContent` is `max-h-[90vh] overflow-y-auto`, so a tall dialog scrolls —
+ * and the footer scrolled with it, taking the primary action out of view.
+ * Measured 12 Sep 2026 on the hosting buy dialog at 390×568 (an iPhone SE):
+ * the dialog filled the viewport, scrolled 91px internally, and "Pay ₹2,949"
+ * sat 15px BELOW the fold. It was reachable by scrolling, which is exactly the
+ * problem — the one control the dialog exists for looked absent.
+ *
+ * `sticky` has no effect when there is nothing to scroll, so short dialogs are
+ * unchanged.
+ *
+ * ─── NO NEGATIVE MARGINS, DELIBERATELY ──────────────────────────────────────
+ * The first version carried `-mx-5 px-5 md:-mx-6 md:px-6` to make the bar span
+ * the dialog's padding. That assumed every dialog has `p-5`/`md:p-6` — and 11
+ * pass `p-0` to DialogContent instead, where a -20px margin would have hung
+ * the footer outside the dialog on both sides. Two of those 11 have a footer at
+ * all (merge-leads-dialog, project-tasks), so the damage would have been two
+ * screens — found by grepping the call sites before shipping it, not by seeing
+ * it, which is the only reason the number is two and not discovered later.
+ *
+ * Those two set their own padding and background on the footer, and `cn`'s
+ * tailwind-merge lets a call site's `p-4` beat this `pt-3`, so they keep the
+ * spacing they had.
+ *
+ * They were never needed: a dialog's children live inside its padding box, so
+ * nothing ever scrolls through the side gutters for the bar to cover.
+ *
+ * `bg-paper` not a translucent fill: this sits over moving content, and the
+ * §5 token is what keeps it right in both themes.
+ */
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
       "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-2",
+      "sticky bottom-0 z-10 bg-paper pt-3",
       className
     )}
     {...props}
