@@ -1,16 +1,35 @@
 /**
- * Online Orders — matches prototype screen "online-orders".
+ * Online Orders — incoming orders from the buy-workspace page (paid + trial).
  *
- * Admin view for incoming orders from the buy-workspace-v2 page (paid + trial).
- * Shows real-time provisioning pipeline: new → provisioning → DNS pending → active.
+ * The rows are REAL: `leads` whose source starts "buy-workspace", with the
+ * pipeline status derived from the lead's stage. The header used to say the data
+ * was mock and to "replace ONLINE_ORDERS with a Supabase query" — that constant
+ * was removed when the screen was wired to Supabase, and the note outlived it by
+ * long enough to be quoted back as fact. Corrected 12 Sep 2026.
  *
- * NOTE: Order data is currently mock/demo. When buy-workspace-v2 is live,
- * replace ONLINE_ORDERS with a Supabase query on an `orders` table.
+ * ─── WHAT THIS SCREEN DOES NOT DO ───────────────────────────────────────────
+ * It cannot act on an order. Every button here was once a `toast` announcing
+ * work that never happened — thirteen of them, four claiming SUCCESS: "DNS guide
+ * re-sent", "Conversion quote sent", "Call logged", "Winback email queued". An
+ * operator clicking "Send convert quote" on a real customer was told it had gone
+ * to them. Nothing had been sent, and nothing recorded that it had not.
+ *
+ * Those buttons are gone rather than disabled: a control that cannot act is not
+ * a feature waiting to be finished, it is a promise being made on every render.
+ * What remains is what this screen can honestly offer — the order, and one tap
+ * to the customer through WhatsApp, phone or email, which are links and so
+ * cannot lie. When provisioning retry and quote-sending exist as real endpoints,
+ * they belong back here; git has the shapes they had.
+ *
+ * ─── IT ALSO CANNOT SHOW A HOSTING ORDER ────────────────────────────────────
+ * The query filters `source ILIKE 'buy-workspace%'`. A hosting sale from the
+ * cart carries source 'buy-cart-direct', and one from the customer portal
+ * creates no lead at all — the buyer is already a customer. Hosting orders are
+ * visible on /assets/hosting, which reads `hosting_accounts`.
  */
 "use client";
 
 import * as React from "react";
-import { toast } from "sonner";
 import { GeminiCard } from "@/components/shared/gemini-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -245,116 +264,73 @@ function OrderDetailDrawer({
           </DrawerSection>
         </div>
 
-        {/* Action bar */}
-        <div className="flex flex-wrap gap-2 border-t border-hairline bg-paper-2 px-6 py-3">
-          {isPaid && order.status === "provisioning" && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => toast.info("Re-running provisioning…")}
-            >
-              <Icon name="refresh" size={12} />
-              Retry provisioning
-            </Button>
-          )}
-          {isPaid && order.status === "dns-pending" && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => toast.success("DNS guide re-sent")}
-            >
-              <Icon name="mail" size={12} />
-              Re-send DNS guide
-            </Button>
-          )}
-          {isPaid && order.status === "issue" && (
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => toast.info("Escalating to Google support…")}
-            >
-              <Icon name="alert" size={12} />
-              Escalate to Google
-            </Button>
-          )}
-          {!isPaid &&
-            order.status === "trial-active" &&
-            (order.trialDay ?? 0) >= 7 && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => toast.success("Conversion quote sent")}
-              >
-                <Icon name="rupee" size={12} />
-                Send convert quote
-              </Button>
-            )}
-          {!isPaid &&
-            order.status === "trial-active" &&
-            (order.trialDay ?? 0) < 7 && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => toast.success("Call logged")}
-              >
-                <Icon name="phone" size={12} />
-                Log AM call
-              </Button>
-            )}
-          {!isPaid && order.status === "trial-expired" && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => toast.success("Winback email queued")}
-            >
-              <Icon name="mail" size={12} />
-              Send winback
-            </Button>
-          )}
+        {/* ─── ACTION BAR: ONLY WHAT ACTUALLY HAPPENS ──────────────────────
+            Six buttons were removed here on 12 Sep 2026 — Retry provisioning,
+            Re-send DNS guide, Escalate to Google, Send convert quote, Log AM
+            call, Send winback — plus an "Invoice" download and an "Admin
+            console" link. Every one was `onClick={() => toast(...)}` and nothing
+            else; this screen performs no writes at all. Four announced SUCCESS:
+            "DNS guide re-sent", "Conversion quote sent", "Call logged",
+            "Winback email queued". On a real customer's order that is not an
+            unfinished feature, it is a false statement made to the operator who
+            then stops chasing the thing they believe is done.
 
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => toast.info(`WhatsApp: ${order.contact.name}`)}
-          >
-            <Icon name="whatsapp" size={12} />
-            WhatsApp
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => toast.info(`Calling ${order.contact.phone}`)}
-          >
-            <Icon name="phone" size={12} />
-            Call
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => toast.info(`Email: ${order.contact.email}`)}
-          >
-            <Icon name="mail" size={12} />
-            Email
-          </Button>
-          {isPaid && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => toast.info("Downloading invoice PDF…")}
-            >
-              <Icon name="download" size={12} />
-              Invoice
-            </Button>
-          )}
-          <div className="flex-1" />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => toast.info("Opening Google Admin Console")}
-          >
-            <Icon name="external" size={12} />
-            Admin console
-          </Button>
+            "Invoice" went the same way: these orders are LEADS, and a lead has
+            no invoice to download. "Admin console" opened nothing.
+
+            What is left reaches the customer through the OS, so it cannot claim
+            anything it did not do — the link either opens or it doesn't. Each is
+            disabled when the lead has no such contact detail, rather than
+            offering a tel: link to "—". */}
+        <div className="flex flex-wrap gap-2 border-t border-hairline bg-paper-2 px-6 py-3">
+          {(() => {
+            const phoneDigits = (order.contact.phone ?? "").replace(/\D/g, "");
+            const hasPhone = phoneDigits.length >= 10;
+            const email = order.contact.email ?? "";
+            const hasEmail = email.includes("@");
+            return (
+              <>
+                <Button asChild={hasPhone} variant="default" size="sm" disabled={!hasPhone}
+                        title={hasPhone ? undefined : "No phone number on this order"}>
+                  {hasPhone ? (
+                    <a href={`https://wa.me/${phoneDigits.length === 10 ? "91" + phoneDigits : phoneDigits}`}
+                       target="_blank" rel="noopener noreferrer">
+                      <Icon name="whatsapp" size={12} />
+                      WhatsApp
+                    </a>
+                  ) : (
+                    <><Icon name="whatsapp" size={12} />WhatsApp</>
+                  )}
+                </Button>
+
+                <Button asChild={hasPhone} variant="default" size="sm" disabled={!hasPhone}
+                        title={hasPhone ? undefined : "No phone number on this order"}>
+                  {/* `tel:` gets digits only — a tel: URI with spaces in it is
+                      not one (RFC 3966), even though browsers forgive it. */}
+                  {hasPhone ? (
+                    <a href={`tel:+${phoneDigits.length === 10 ? "91" + phoneDigits : phoneDigits}`}>
+                      <Icon name="phone" size={12} />
+                      Call
+                    </a>
+                  ) : (
+                    <><Icon name="phone" size={12} />Call</>
+                  )}
+                </Button>
+
+                <Button asChild={hasEmail} variant="default" size="sm" disabled={!hasEmail}
+                        title={hasEmail ? undefined : "No email address on this order"}>
+                  {hasEmail ? (
+                    <a href={`mailto:${email}?subject=${encodeURIComponent(`Your order ${order.id}`)}`}>
+                      <Icon name="mail" size={12} />
+                      Email
+                    </a>
+                  ) : (
+                    <><Icon name="mail" size={12} />Email</>
+                  )}
+                </Button>
+              </>
+            );
+          })()}
         </div>
       </SheetContent>
     </Sheet>
@@ -659,31 +635,25 @@ export default function OnlineOrdersPage() {
         <GeminiCard
           title="Orders AI · Today's focus"
           compact
-          actions={
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => toast.info("Escalating Hotel Asia issue to Google support")}
-              >
-                <Icon name="alert" size={12} />
-                Fix Hotel Asia issue
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => toast.info("Calling Beta Industries — new trial")}
-              >
-                <Icon name="phone" size={12} />
-                Welcome call to Beta
-              </Button>
-            </div>
-          }
         >
+          {/* ─── THE COUNTS ARE REAL; THE STORY WAS NOT ──────────────────────
+              This read: "Hotel Asia provisioning is stuck (domain conflict) —
+              fix to unblock ₹4.9L revenue. Cosmo Tech is on Day 11 of trial…
+              Beta Industries just signed up…", with buttons to escalate Hotel
+              Asia and call Beta. None of those companies exist. The invented
+              narrative sat in the same sentence as `{issues}` and `{trialEx}`,
+              which ARE computed from this tenant's rows — so the fabricated half
+              borrowed the credibility of the half that was true, on a screen
+              headed "Today's focus".
+
+              What is left is only what the data supports. The numbers say which
+              orders need attention; the cards below say which ones. */}
           <strong className="text-ink">
-            {issues} blocker · {trialEx} conversion opportunity.
+            {issues} blocker{issues === 1 ? "" : "s"} · {trialEx} conversion opportunit{trialEx === 1 ? "y" : "ies"}.
           </strong>{" "}
-          Hotel Asia provisioning is stuck (domain conflict) — fix to unblock ₹4.9L revenue. Cosmo Tech is on Day 11 of trial with high engagement — perfect time to send convert quote. Beta Industries just signed up — first call within 2 hours is your conversion edge.
+          {issues === 0 && trialEx === 0
+            ? "Nothing is stuck and no trial is near its end."
+            : "Open an order below for the customer's contact details."}
         </GeminiCard>
       </div>
 
