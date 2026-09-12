@@ -6,6 +6,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { resolveTenantId } from "./tenant-id";
 import type { Customer, Database } from "@/lib/supabase/database.types";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
@@ -65,18 +66,14 @@ export function useCreateCustomer() {
     mutationFn: async (input: Omit<CustomerInsert, "tenant_id">) => {
       const supabase = createClient();
 
-      let tenantId = "11111111-1111-1111-1111-111111111111";
-      const { data: authData } = await supabase.auth.getUser();
-      if (authData?.user) {
-        const { data: me } = await supabase
-          .from("users")
-          .select("tenant_id")
-          .eq("id", authData.user.id)
-          .single();
-        if (me?.tenant_id) {
-          tenantId = me.tenant_id;
-        }
-      }
+      /* ─── THE TENANT IS RESOLVED, NOT GUESSED ───────────────────────
+         Was `let tenantId = "11111111-…"` with the real lookup only overwriting
+         it on success — so an expired session inserted this row into a hardcoded
+         workspace instead of refusing. `resolveTenantId` throws, and the throw is
+         the correct outcome: no row beats a row in somebody else's tenant.
+         It is also the shared query, so this no longer costs two round-trips of
+         its own (see queries/tenant-id.ts). */
+      const tenantId = await resolveTenantId(supabase as never);
 
       const { data, error } = await supabase
         .from("customers")
@@ -84,36 +81,14 @@ export function useCreateCustomer() {
         .select()
         .single();
 
-      if (error) {
-        console.warn("Dev mode customer insert warning:", error.message);
-        const newCust: Customer = {
-          id: `CUST-${Date.now()}`,
-          tenant_id: tenantId,
-          name: input.name ?? "New Customer",
-          domain: input.domain ?? null,
-          gstin: input.gstin ?? null,
-          state: input.state ?? null,
-          state_code: input.state_code ?? null,
-          health: 100,
-          contact_name: input.contact_name ?? null,
-          contact_title: input.contact_title ?? null,
-          contact_email: input.contact_email ?? null,
-          contact_phone: input.contact_phone ?? null,
-          since: new Date().toISOString().split("T")[0],
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          is_active: true,
-          customer_number: `CUST-${Math.floor(Math.random() * 1000)}`,
-          place_of_supply: input.state ? `27-${input.state}` : null,
-          unused_credits: 0,
-          zoho_contact_id: null,
-          customer_type: "business",
-          city: null,
-        } as unknown as Customer;
-
-        qc.setQueryData<Customer[]>(["customers"], (old) => [newCust, ...(old ?? [])]);
-        return newCust;
-      }
+      /* ─── A FAILED INSERT IS A FAILURE ─────────────────────────────
+         This used to catch the error, build a fake row with a `CUST-${Date.now()}`
+         id, push it into the React Query cache and return it — which let
+         `onSuccess` fire and tell the operator "Customer added". Nothing had been
+         saved, and the row disappeared on the next reload. Reporting a write
+         that did not happen as a success is exactly what CLAUDE.md §0.4 forbids;
+         the error now reaches onError, which shows it. */
+      if (error) throw new Error(error.message);
       return data;
     },
     onSuccess: () => {

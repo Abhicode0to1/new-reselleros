@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
+import { resolveTenantId } from "./tenant-id";
 import type { Lead, Database } from "@/lib/supabase/database.types";
 import type { JunkReasonId } from "@/lib/leads/qualification";
 
@@ -243,52 +244,29 @@ export function useCreateLead() {
     mutationFn: async (lead: Omit<LeadInsert, "tenant_id">) => {
       const supabase = createClient();
 
-      let tenantId = "11111111-1111-1111-1111-111111111111"; // default dev/demo tenant
-      const { data: authData } = await supabase.auth.getUser();
-      if (authData?.user) {
-        const { data: me } = await supabase
-          .from("users")
-          .select("tenant_id")
-          .eq("id", authData.user.id)
-          .single();
-        if (me?.tenant_id) {
-          tenantId = me.tenant_id;
-        }
-      }
+      /* ─── THE TENANT IS RESOLVED, NOT GUESSED ───────────────────────
+         Was `let tenantId = "11111111-…"` with the real lookup only overwriting
+         it on success — so an expired session inserted this row into a hardcoded
+         workspace instead of refusing. `resolveTenantId` throws, and the throw is
+         the correct outcome: no row beats a row in somebody else's tenant.
+         It is also the shared query, so this no longer costs two round-trips of
+         its own (see queries/tenant-id.ts). */
+      const tenantId = await resolveTenantId(supabase as never);
 
-      // Insert lead with tenant_id
       const { data, error } = await supabase
         .from("leads")
         .insert({ ...lead, tenant_id: tenantId })
         .select()
         .single();
 
-      if (error) {
-        console.warn("Dev mode lead insert warning:", error.message);
-        // Dev fallback lead object so UI succeeds seamlessly
-        const lObj = lead as Record<string, unknown>;
-        const newLead: Lead = {
-          id: `L-${Date.now()}`,
-          tenant_id: tenantId,
-          company: lead.company ?? "New Prospect",
-          plan: lead.plan ?? "Google Workspace Std",
-          seats: lead.seats ?? 1,
-          value: lead.value ?? 0,
-          stage: lead.stage ?? "new",
-          source: lead.source ?? "manual",
-          contact_name: (lObj.contact_name as string) ?? null,
-          contact_email: (lObj.contact_email as string) ?? (lObj.email as string) ?? null,
-          contact_phone: (lObj.contact_phone as string) ?? (lObj.phone as string) ?? null,
-          city: (lObj.city as string) ?? null,
-          state: (lObj.state as string) ?? null,
-          is_junk: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } as unknown as Lead;
-
-        qc.setQueryData<Lead[]>(["leads"], (old) => [newLead, ...(old ?? [])]);
-        return newLead;
-      }
+      /* ─── A FAILED INSERT IS A FAILURE ─────────────────────────────
+         This used to catch the error, build a fake row with a `L-${Date.now()}`
+         id, push it into the React Query cache and return it — which let
+         `onSuccess` fire and tell the operator "Lead created". Nothing had been
+         saved, and the row disappeared on the next reload. Reporting a write
+         that did not happen as a success is exactly what CLAUDE.md §0.4 forbids;
+         the error now reaches onError, which shows it. */
+      if (error) throw new Error(error.message);
       return data;
     },
     onSuccess: () => {
