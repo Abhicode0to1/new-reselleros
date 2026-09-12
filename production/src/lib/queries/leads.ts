@@ -1,8 +1,13 @@
 /**
- * Leads — server + client data hooks.
+ * Leads — client data hooks.
  *
- * Server: use `fetchLeads()` in Server Components.
- * Client: use `useLeads()` hook (TanStack Query).
+ * `useLeads()` and friends (TanStack Query). This file is `"use client"`.
+ *
+ * It said "Server: use `fetchLeads()` in Server Components" until 12 Sep 2026.
+ * There is no `fetchLeads` — there never has been — so a reader following that
+ * line went looking for an export that does not exist, in a file that could not
+ * hold one. A Server Component wanting leads queries Supabase directly, the way
+ * the portal pages do.
  */
 "use client";
 

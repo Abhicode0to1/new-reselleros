@@ -137,7 +137,7 @@ export function num(n: number | null | undefined): string {
  * It was invisible from here because this machine's own timezone IS
  * Asia/Calcutta, so local runs and the whole test suite agreed with the bug.
  * Found only because a suspension-notice test forced TZ=UTC to check something
- * else. `formatDate.test.ts` now forces UTC on purpose.
+ * else. `format-date-ist.test.ts` now forces UTC on purpose.
  *
  * Every part now comes from ONE formatter with the zone pinned, so day, month
  * and year cannot disagree with each other again.

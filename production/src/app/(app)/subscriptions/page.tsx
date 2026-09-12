@@ -602,9 +602,11 @@ export default function SubscriptionsPage() {
                 {/* Vendor, and the term with what renewal actually bills —
                     both desktop-only until now.
 
-                    NO MARGIN BADGE HERE, deliberately. `estimateMargin()` is
-                    `mrr * 0.83`, a hardcoded heuristic, so it returns 17% for
-                    every subscription that has ever existed. Putting it on the
+                    NO MARGIN BADGE HERE, deliberately. The heuristic this
+                    rules out was `cost = mrr × 0.83` — a flat 17% for every
+                    subscription that has ever existed — and it has since been
+                    removed from this file (see the note at the top). The rule
+                    outlives it: do not add one back. Putting it on the
                     card would place a fabricated constant next to real numbers
                     and imply cost data is tracked. Same rule as the seat-
                     utilisation gate: don't assert what isn't measured. */}

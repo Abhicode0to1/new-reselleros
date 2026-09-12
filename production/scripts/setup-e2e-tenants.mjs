@@ -7,7 +7,7 @@
  *
  *   node scripts/setup-e2e-tenants.mjs
  *
- * Outputs the tenant IDs + credentials that e2e/fixtures/tenants.ts
+ * Outputs the tenant IDs + credentials that e2e/fixtures/seed-auth.ts
  * consumes. Credentials are intentionally hardcoded (these are test
  * accounts in test data, not production secrets).
  *
@@ -36,7 +36,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// Test fixture definitions — kept in sync with e2e/fixtures/tenants.ts
+// Test fixture definitions — kept in sync with e2e/fixtures/seed-auth.ts
 const FIXTURES = [
   {
     email:    "e2e-tenant-a@resellersos.test",
@@ -163,7 +163,7 @@ async function main() {
   }
 
   console.log("\n✅ DONE — fixtures ready");
-  console.log("\nCopy these into e2e/fixtures/tenants.ts if the values drift:");
+  console.log("\nCopy these into e2e/fixtures/seed-auth.ts if the values drift:");
   for (const r of results) {
     console.log(`  ${r.email.padEnd(38)} tenant=${r.tenantId} user=${r.authUserId}`);
   }
