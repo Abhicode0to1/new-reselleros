@@ -84,15 +84,47 @@ export function resetRateLimiter(): void {
 }
 
 /**
- * Request ka IP — Cloud Run par `x-forwarded-for` ki PEHLI entry hi client
- * hai (aage wali proxy ki hoti hain). Header hi na ho (seedha container par
- * curl) to sab ek hi balti me girte hain — wo bhi bounded hai, khula nahi.
+ * How many entries OUR OWN infrastructure appends to `x-forwarded-for`.
+ *
+ * 1 for a Cloud Run service reached directly (deploy.sh: `gcloud run deploy`,
+ * no load balancer) — Google appends the connecting IP and nothing else.
+ * Set XFF_TRUSTED_HOPS=2 if an external Application Load Balancer is ever put
+ * in front: the ALB appends `<client-ip>,<load-balancer-ip>`, so the client
+ * moves one place further from the end.
+ */
+const TRUSTED_HOPS = Math.max(1, Number(process.env.XFF_TRUSTED_HOPS ?? "1") || 1);
+
+/**
+ * Request ka asli IP — `x-forwarded-for` ke DAAYE se, baaye se nahi.
+ *
+ * ─── YE PEHLE GALAT THA ──────────────────────────────────────────
+ * Purana comment kehta tha "PEHLI entry hi client hai". Google ke apne
+ * dastavez iske ulat hain: agar request me pehle se `x-forwarded-for` hai to
+ * infrastructure usme APPEND karta hai —
+ *     X-Forwarded-For: <existing-value>,<client-ip>,<load-balancer-ip>
+ * — aur "the load balancer does not verify any IP addresses that precede the
+ * client-ip". Matlab `[0]` wahi hai jo BHEJNE WALE ne likha. Koi bhi
+ * `curl -H "x-forwarded-for: 1.2.3.4"` bhej kar apna IP badal sakta tha.
+ *
+ * Iska asar do jagah tha, dono me chup-chaap:
+ *   · middleware ka public-API rate limit — har request par naya nakli IP =
+ *     nayi balti = koi seema nahi.
+ *   · attendance ka office-IP darwaza, jiska comment daawa karta tha
+ *     "the browser can't forge it".
+ *
+ * Imaandar client ke liye kuch nahi badla: wo XFF bhejta hi nahi, to list me
+ * ek hi entry hoti hai aur pehli = aakhri. Sirf jhooth bolne wale par asar.
  */
 export function clientIp(headers: Headers): string {
   const fwd = headers.get("x-forwarded-for");
   if (fwd) {
-    const first = fwd.split(",")[0]?.trim();
-    if (first) return first;
+    const parts = fwd.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 0) {
+      /* Sirf utna hi bharosa jitna humara apna infra likhta hai. Client kitni
+         bhi entries aage jod de, ginti daaye se hoti hai. */
+      const idx = Math.max(0, parts.length - TRUSTED_HOPS);
+      return parts[idx] ?? parts[parts.length - 1];
+    }
   }
   return headers.get("x-real-ip")?.trim() || "unknown";
 }
@@ -126,4 +158,13 @@ export function publicApiLimit(pathname: string): { limit: number; windowMs: num
   // Baaki public GET/POST (catalog, promo, coupons, quote-accept…):
   // udaar par bounded.
   return { limit: 120, windowMs: 5 * 60_000 };
+}
+
+/**
+ * `clientIp` ka null-wala roop — audit log ke liye, jahan "unknown" likhne se
+ * behtar hai khaali chhod dena. Wahi daaye-se-ginti, wahi bharosa.
+ */
+export function clientIpOrNull(headers: Headers): string | null {
+  const ip = clientIp(headers);
+  return ip === "unknown" ? null : ip;
 }
