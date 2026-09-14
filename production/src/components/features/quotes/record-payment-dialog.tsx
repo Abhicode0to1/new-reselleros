@@ -643,12 +643,12 @@ export function RecordPaymentDialog({
           <div
             onMouseDown={handleResizeStart}
             title="↔️ Click and drag left/right to stretch or shrink form panel"
-            className={`absolute left-0 top-0 bottom-0 w-4 -ml-2 cursor-ew-resize hover:bg-rose-500/20 bg-transparent z-[100] flex items-center justify-center group select-none ${
-              isDragging ? "bg-rose-500/30" : ""
+            className={`absolute left-0 top-0 bottom-0 w-4 -ml-2 cursor-ew-resize hover:bg-rose/20 bg-transparent z-[100] flex items-center justify-center group select-none ${
+              isDragging ? "bg-rose/30" : ""
             }`}
           >
-            <div className="w-1.5 h-24 bg-rose-500 hover:bg-rose-600 rounded-full shadow-md group-hover:scale-125 transition-all flex items-center justify-center">
-              <div className="w-0.5 h-6 bg-white/80 rounded-full" />
+            <div className="w-1.5 h-24 bg-rose hover:bg-rose-hover rounded-full shadow-md group-hover:scale-125 transition-all flex items-center justify-center">
+              <div className="w-0.5 h-6 bg-rose-fg/80 rounded-full" />
             </div>
           </div>
 
@@ -662,7 +662,7 @@ export function RecordPaymentDialog({
               <button
                 type="button"
                 onClick={() => setReportBugOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-full shadow-2xs transition-all hover:scale-105"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-ink bg-rose-soft hover:bg-rose-soft/70 border border-rose/30 rounded-full shadow-2xs transition-all hover:scale-105"
                 title="Report Bug / Issue on this Record Payment drawer"
               >
                 <Icon name="bug" size={14} />
@@ -773,7 +773,7 @@ export function RecordPaymentDialog({
 
           {/* Partial-payment status preview */}
           {willBePartial && (
-            <div className="rounded-md bg-indigo-50 border border-indigo/30 px-3 py-2 text-xs text-indigo flex items-start gap-2">
+            <div className="rounded-md bg-indigo-soft border border-indigo/30 px-3 py-2 text-xs text-indigo flex items-start gap-2">
               <Icon name="info" size={13} className="flex-shrink-0 mt-0.5" />
               <span>
                 This payment of <b>{rupee(watchedAmount)}</b> brings total received to <b>{rupee(newRunningTotal)}</b>.

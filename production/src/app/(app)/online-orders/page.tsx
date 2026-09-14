@@ -132,10 +132,10 @@ function ProgressStep({
   state: ProgressState;
 }) {
   const cfg: Record<ProgressState, { colorCls: string; bgCls: string; statusLabel: string }> = {
-    done:    { colorCls: "text-emerald-600", bgCls: "bg-emerald-50", statusLabel: "Completed"  },
-    active:  { colorCls: "text-amber",       bgCls: "bg-amber-50",   statusLabel: "Running…"   },
+    done:    { colorCls: "text-emerald-ink", bgCls: "bg-emerald-soft", statusLabel: "Completed"  },
+    active:  { colorCls: "text-amber",       bgCls: "bg-amber-soft",   statusLabel: "Running…"   },
     pending: { colorCls: "text-ink-3",       bgCls: "bg-paper-2",    statusLabel: "Pending"    },
-    failed:  { colorCls: "text-rose-600",    bgCls: "bg-rose-50",    statusLabel: "Failed — needs attention" },
+    failed:  { colorCls: "text-rose-ink",    bgCls: "bg-rose-soft",    statusLabel: "Failed — needs attention" },
   };
   const c = cfg[state];
   return (
@@ -247,8 +247,8 @@ function OrderDetailDrawer({
               className={cn(
                 "flex gap-2.5 rounded-lg border p-3 text-sm text-ink",
                 order.status === "issue"
-                  ? "border-rose-200 bg-rose-50"
-                  : "border-amber-200 bg-amber-50",
+                  ? "border-rose/30 bg-rose-soft"
+                  : "border-amber/30 bg-amber-soft",
               )}
             >
               <Icon
@@ -256,7 +256,7 @@ function OrderDetailDrawer({
                 size={14}
                 className={cn(
                   "mt-0.5 shrink-0",
-                  order.status === "issue" ? "text-rose-600" : "text-amber",
+                  order.status === "issue" ? "text-rose-ink" : "text-amber",
                 )}
               />
               <p>{order.nextAction}</p>
