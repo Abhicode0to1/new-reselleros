@@ -420,6 +420,7 @@ export default function ExpensesPage() {
             const active = range.from === r.from && range.to === r.to;
             return (
               <button
+                aria-pressed={active}
                 key={p.id}
                 type="button"
                 onClick={() => setRange(r)}

@@ -383,6 +383,7 @@ export default function CustomersPage() {
                 const isDebt = v.id === "unpaid";
                 return (
                   <button
+                    aria-pressed={active}
                     key={v.id}
                     type="button"
                     onClick={() => setView(v.id)}
@@ -722,6 +723,7 @@ export default function CustomersPage() {
                 const active = c.id === selectedId;
                 return (
                   <button
+                    aria-pressed={active}
                     key={c.id}
                     type="button"
                     onClick={() => setSelectedId(c.id)}
@@ -797,7 +799,16 @@ function SortHead({
 }) {
   const active = sort.key === sortKey;
   return (
-    <th className={cn("group px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider", align === "right" ? "text-right" : "text-left")}>
+    <th
+      /* aria-sort belongs on the HEADER CELL, not on the button inside it.
+         The button's aria-label already says the direction, but that is only
+         heard when focus lands on the button; a reader moving through the
+         table itself was told nothing about which column it is sorted by.
+         "none" on the inactive ones is required — omitting it says "not
+         sortable", which is a different claim. */
+      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+      className={cn("group px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider", align === "right" ? "text-right" : "text-left")}
+    >
       <button
         type="button"
         onClick={() => onSort(sortKey)}

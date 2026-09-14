@@ -12,7 +12,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  chordStep, CHORD_IDLE, shouldIgnore, listAction, moveIndex, actionRoute,
+  chordStep, CHORD_IDLE, shouldIgnore, listAction, moveIndex, actionRoute, isActivationTarget,
   type ChordState,
 } from "@/lib/keyboard/shortcuts";
 
@@ -133,6 +133,12 @@ export function useListKeys({ count, onOpen, enabled = true }: ListKeysOptions):
 
       const action = listAction(e.key);
       if (!action) return;
+
+      /* Enter belongs to whatever is focused. This listener is on WINDOW and
+         preventDefault()s, so without this a Tab to any button on these six
+         screens made Enter do nothing — the list ate it before the button saw
+         it. j / k / Escape are the list's own keys and still work anywhere. */
+      if (action === "open" && isActivationTarget(e.target)) return;
 
       /* Escape is handled even with nothing selected — it is also "close this", and a
          dialog above us will have stopped propagation before we see it. */

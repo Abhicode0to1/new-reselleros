@@ -329,6 +329,7 @@ function TabButton({
                  :                      "bg-ink-3";
   return (
     <button
+      aria-pressed={active}
       type="button"
       onClick={onClick}
       className={`inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border transition-colors ${

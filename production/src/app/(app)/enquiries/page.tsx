@@ -822,6 +822,7 @@ export default function EnquiriesPage() {
               {!viewingSentReply && (
               <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-1.5 shrink-0">
                 <Button
+                  aria-pressed={selected.starred}
                   size="sm"
                   variant={selected.starred ? "default" : "ghost"}
                   onClick={() => setState.mutate({ id: selected.id, starred: !selected.starred })}

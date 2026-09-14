@@ -539,7 +539,18 @@ export default function SupportPage() {
                       <div
                         key={idx}
                         onClick={() => setPreviewImage({ name: att.name, url: att.url || "" })}
-                        className="rounded-lg border border-hairline bg-paper-2/60 p-2.5 flex items-center gap-3 group hover:border-primary hover:bg-paper-2 cursor-pointer transition-all shadow-xs"
+                        /* Mouse-only before this: cursor-pointer and an onClick, with
+                           no role, no tab stop and no key handler (WCAG 2.1.1, Level A). */
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Preview ${att.name}`}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setPreviewImage({ name: att.name, url: att.url || "" });
+                          }
+                        }}
+                        className="rounded-lg border border-hairline bg-paper-2/60 p-2.5 flex items-center gap-3 group hover:border-primary hover:bg-paper-2 cursor-pointer transition-all shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset"
                       >
                         {att.url ? (
                           <div className="relative w-16 h-16 rounded bg-ink/10 overflow-hidden shrink-0 border border-hairline">

@@ -349,7 +349,16 @@ function SidebarContent({ onNavigate, collapsed = false, onToggle }: { onNavigat
                     "Loading…" means loading and nothing else: not-signed-in and
                     signed-in-with-no-workspace each say so, and say what to do. */}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">
+                  <div
+                    className="text-sm font-medium truncate"
+                    /* Measured clipping 67px on every screen ("Pardeep (Excel
+                       Technologie…"). The EMAIL line below has carried a title
+                       since it was written; this one never did, so the full name
+                       was unreachable — on screen and to a reader. Only the
+                       member branch needs it: the other strings are short fixed
+                       sentences that cannot clip. */
+                    title={identity.status === "member" ? (me?.fullName ?? me?.authEmail ?? undefined) : undefined}
+                  >
                     {identity.status === "member"
                       ? (me?.fullName ?? me?.authEmail ?? "You")
                       : identity.status === "stranded"

@@ -217,6 +217,7 @@ export default function EmailSendingCard() {
           const unavailable = p === "smtp" && !data.smtp.configured;
           return (
             <button
+              aria-pressed={active}
               key={p}
               type="button"
               onClick={() => save.mutate({ provider: p })}

@@ -280,6 +280,7 @@ export default function ProfitabilityPage() {
               const active = range.from === target.from && range.to === target.to;
               return (
                 <button
+                  aria-pressed={active}
                   key={q.label}
                   type="button"
                   onClick={() => setRange(target)}

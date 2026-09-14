@@ -1402,6 +1402,7 @@ export function BuyWorkspaceClient({
                     const isActive = selectedTierId === id;
                     return (
                       <button
+                        aria-pressed={isActive}
                         key={id}
                         type="button"
                         onClick={() => setSelectedTierId(id)}
@@ -3017,6 +3018,7 @@ function BuyNowDialog({
                     const pricePm = t.promoPrice ?? t.annualPrice ?? 0;
                     return (
                       <button
+                        aria-pressed={active}
                         key={t.id}
                         type="button"
                         onClick={() => setTierId(t.id)}
@@ -3084,6 +3086,7 @@ function BuyNowDialog({
                   const active = seats === n;
                   return (
                     <button
+                      aria-pressed={active}
                       key={n}
                       type="button"
                       onClick={() => setSeats(n)}

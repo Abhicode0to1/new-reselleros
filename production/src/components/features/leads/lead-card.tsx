@@ -56,9 +56,21 @@ export function LeadCard({ lead, isDragging, onDragStart, onDragEnd, onClick }: 
       }}
       onDragEnd={onDragEnd}
       onClick={() => onClick?.(lead)}
+      /* Opening a lead was mouse-only: the card's onClick had no keyboard path,
+         and the only focusable thing inside it is the WhatsApp button below —
+         so a keyboard user could message a lead but not open it (WCAG 2.1.1,
+         Level A). It stays a <div> because it is draggable; a <button> cannot
+         be. role + tabIndex + Enter/Space is the repair §7 names. */
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${lead.company || lead.contact_name || "lead"}`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(lead); }
+      }}
       className={cn(
         "bg-paper border rounded-lg p-3 group relative transition-all duration-150 hover:shadow-sm",
         "cursor-grab active:cursor-grabbing",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset",
         isHighValue
           ? "border-emerald/50 ring-1 ring-emerald/15 shadow-sm"
           : "border-hairline hover:border-hairline-strong",

@@ -323,6 +323,7 @@ function MarkFiledDialog({
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick}
+      aria-pressed={active}
       className={`rounded-full px-2.5 py-0.5 text-2xs font-medium border transition-colors ${
         active ? "bg-amber text-amber-fg border-amber" : "bg-paper border-hairline text-ink-2 hover:border-hairline-strong"
       }`}>

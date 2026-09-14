@@ -220,6 +220,7 @@ export default function TasksPage() {
 function WorkloadChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
   return (
     <button
+      aria-pressed={active}
       type="button"
       onClick={onClick}
       className={cn(

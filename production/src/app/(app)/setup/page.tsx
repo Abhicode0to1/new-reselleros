@@ -368,6 +368,7 @@ function StepImport({
           const active = data.importMode === opt.id;
           return (
             <button
+              aria-pressed={active}
               key={opt.id}
               type="button"
               onClick={() => {

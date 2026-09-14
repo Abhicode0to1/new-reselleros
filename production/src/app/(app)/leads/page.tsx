@@ -4175,19 +4175,33 @@ function LeadListView({
 
   const SortHeader = ({ col, label, align = "left", sticky = false }: { col: SortCol; label: string; align?: "left" | "right"; sticky?: boolean }) => (
     <th
-      onClick={() => onSort(col)}
+      /* The click used to sit on the <th> itself, with no tab stop, no key
+         handler and no name — so sorting the app's busiest table was mouse-only
+         (WCAG 2.1.1, Level A). It moves to a real <button>, which cannot wrap
+         the whole cell because <ResizeGrip> lives here too and a control inside
+         a control is invalid.
+
+         aria-sort stays on the CELL, which is where a reader moving through the
+         table reads it. "none" on the others is required: leaving it off says
+         "not sortable", which is a different claim. */
+      aria-sort={sortBy === col ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
       className={cn(
-        GRID_TH, "relative cursor-pointer select-none hover:text-ink",
+        GRID_TH, "relative select-none",
         align === "right" && "text-right",
         sticky && cn("bg-paper-2", STICK_L_IDENTITY, STICK_HEAD),
       )}
     >
-      <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        aria-label={`Sort by ${label}${sortBy === col ? (sortDir === "asc" ? " (ascending)" : " (descending)") : ""}`}
+        className="inline-flex items-center gap-1 cursor-pointer hover:text-ink rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+      >
         {label}
         {sortBy === col && (
           <Icon name={sortDir === "asc" ? "chevron_up" : "chevron_down"} size={11} />
         )}
-      </span>
+      </button>
       <ResizeGrip col={col} />
     </th>
   );

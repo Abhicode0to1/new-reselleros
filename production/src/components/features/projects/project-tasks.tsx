@@ -456,6 +456,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
 
                             return (
                               <button
+                                aria-pressed={isSelected}
                                 key={oIdx}
                                 type="button"
                                 onClick={() => setAnswers({ ...answers, [idx]: optText })}

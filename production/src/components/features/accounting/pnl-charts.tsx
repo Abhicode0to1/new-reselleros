@@ -102,6 +102,7 @@ export function ProfitDonut({
 
       <div className="space-y-1.5">
         <button
+          aria-pressed={selected === "all"}
           type="button"
           onClick={() => onSelect("all")}
           className={cn(
@@ -114,6 +115,7 @@ export function ProfitDonut({
 
         {slices.map((s, i) => (
           <button
+            aria-pressed={selected === s.vendor}
             key={s.vendor}
             type="button"
             onClick={() => onSelect(s.vendor)}
