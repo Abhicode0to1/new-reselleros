@@ -347,6 +347,16 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
               <Icon name="info" size={13} className="text-ink-3" />
             </div>
 
+            {/* The four columns need 712px (220 + 170 + 170 + 100 + gaps) and the
+                dialog gives them 348 on a phone. The rounded box around them is
+                `overflow-hidden`, so 364px — Cost and Margin, the two columns this
+                table exists for — were clipped with no way to reach them. Measured
+                in the Add Item dialog at 390px: client 348, scroll 712.
+
+                A scroll container rather than a stack: every row is a set of aligned
+                number inputs, and stacking them loses the column comparison that is
+                the point of a pricing matrix. */}
+            <div className="overflow-x-auto">
             {/* Header row */}
             <div className="grid grid-cols-[minmax(220px,1fr)_170px_170px_100px] gap-3 px-4 py-2 bg-paper border-b border-hairline text-3xs uppercase tracking-wider text-ink-3 font-semibold">
               <div>Commitment</div>
@@ -431,6 +441,7 @@ export function ItemForm({ open, onOpenChange, item }: ItemFormProps) {
                 </div>
               );
             })}
+            </div>
           </div>
 
           {/* ─── USD price (export / international deals) ─── */}
