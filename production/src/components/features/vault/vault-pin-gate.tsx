@@ -111,7 +111,7 @@ export function VaultPinGate({ children }: { children: React.ReactNode }) {
           <Button
             type="submit"
             disabled={locked || pin.length !== PIN_LENGTH || verify.isPending}
-            className="w-full bg-primary text-white font-bold"
+            className="w-full bg-primary text-primary-foreground font-bold"
           >
             {verify.isPending ? "Check kar rahe hain…" : "Unlock"}
           </Button>

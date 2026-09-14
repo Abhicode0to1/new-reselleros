@@ -123,7 +123,7 @@ function QueueRow({
             }}
             className={cn(
               "inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-3 text-xs font-bold",
-              "bg-primary text-white hover:opacity-90",
+              "bg-primary text-primary-foreground hover:opacity-90",
             )}
           >
             <Icon name="mobile" size={14} /> Call now

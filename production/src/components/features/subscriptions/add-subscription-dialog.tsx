@@ -666,7 +666,7 @@ export function AddSubscriptionDialog({ open, onOpenChange, onSuccess }: Props) 
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting} className="bg-primary text-white font-bold px-5">
+            <Button type="submit" disabled={submitting} className="bg-primary text-primary-foreground font-bold px-5">
               {submitting ? "Creating Records..." : "⚡ Activate Subscription & Auto-Sync Ledger"}
             </Button>
           </div>

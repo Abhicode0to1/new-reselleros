@@ -834,7 +834,7 @@ function CompareVendorsModal({
                         onPlacePo(b);
                         onClose();
                       }}
-                      className="bg-primary text-white font-bold text-xs"
+                      className="bg-primary text-primary-foreground font-bold text-xs"
                     >
                       🛒 Issue PO
                     </Button>
@@ -1012,7 +1012,7 @@ function EditVendorCardModal({
                     }}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                       isSel
-                        ? "bg-primary text-white border-primary font-bold shadow-2xs"
+                        ? "bg-primary text-primary-foreground border-primary font-bold shadow-2xs"
                         : "bg-paper border-hairline text-ink hover:border-primary/40"
                     }`}
                   >
@@ -1900,7 +1900,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("comparison")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "comparison"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1912,7 +1912,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("calculator")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "calculator"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1924,7 +1924,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("rfqs")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "rfqs"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1936,7 +1936,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("scorecards")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "scorecards"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1948,7 +1948,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("addBid")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "addBid"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1960,7 +1960,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("bills")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "bills"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1972,7 +1972,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("keys")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "keys"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1984,7 +1984,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("agreements")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "agreements"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -2017,7 +2017,7 @@ export default function VendorPortalPage() {
                   onClick={() => setVendorSourceFilter("dbOnly")}
                   className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     vendorSourceFilter === "dbOnly"
-                      ? "bg-primary text-white shadow-2xs font-extrabold"
+                      ? "bg-primary text-primary-foreground shadow-2xs font-extrabold"
                       : "text-ink-3 hover:text-ink"
                   }`}
                 >

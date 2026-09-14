@@ -175,7 +175,7 @@ export default function PersonalExpensesPage() {
             <Icon name="arrow_down" size={14} className="mr-1.5" />
             Drawing
           </Button>
-          <Button onClick={() => openNew("expense")} className="bg-primary text-white">
+          <Button onClick={() => openNew("expense")} className="bg-primary text-primary-foreground">
             <Icon name="plus" size={14} className="mr-1.5" />
             Kharcha
           </Button>
@@ -362,7 +362,7 @@ export default function PersonalExpensesPage() {
 
           <div className="flex justify-end gap-2 pt-3">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} loading={save.isPending} className="bg-primary text-white">
+            <Button onClick={handleSave} loading={save.isPending} className="bg-primary text-primary-foreground">
               {form.id ? "Update" : "Add"}
             </Button>
           </div>

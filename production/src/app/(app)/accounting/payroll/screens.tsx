@@ -483,7 +483,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
             type="button"
             onClick={() => setEmpTab("ctc")}
             className={`flex-1 py-2 px-3 rounded-lg text-center transition-all cursor-pointer ${
-              empTab === "ctc" ? "bg-primary text-white shadow-2xs font-extrabold" : "text-ink-3 hover:text-ink"
+              empTab === "ctc" ? "bg-primary text-primary-foreground shadow-2xs font-extrabold" : "text-ink-3 hover:text-ink"
             }`}
           >
             💼 CTC &amp; Salary Breakdown

@@ -184,7 +184,7 @@ export function AttendanceReminder() {
         </DialogHeader>
 
         <div className="flex flex-col gap-2 pt-1">
-          <Button onClick={handleGo} className="w-full bg-primary text-white font-bold">
+          <Button onClick={handleGo} className="w-full bg-primary text-primary-foreground font-bold">
             {isCheckIn ? "Attendance page kholo" : "Check out karo"}
           </Button>
           <div className="flex gap-2">

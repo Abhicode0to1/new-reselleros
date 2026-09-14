@@ -121,7 +121,7 @@ export function VaultPinSettings() {
               size="sm"
               onClick={handleSave}
               disabled={busy || next.length !== PIN_LENGTH || (configured && current.length !== PIN_LENGTH)}
-              className="bg-primary text-white"
+              className="bg-primary text-primary-foreground"
             >
               {configured ? "PIN badlo" : "PIN set karo"}
             </Button>

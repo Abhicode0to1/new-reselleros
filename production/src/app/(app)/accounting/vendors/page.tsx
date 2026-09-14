@@ -400,7 +400,7 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
                     }}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                       isSel
-                        ? "bg-primary text-white border-primary font-bold shadow-2xs"
+                        ? "bg-primary text-primary-foreground border-primary font-bold shadow-2xs"
                         : "bg-paper border-hairline text-ink hover:border-primary/40"
                     }`}
                   >

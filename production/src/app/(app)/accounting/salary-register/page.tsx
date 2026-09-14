@@ -228,7 +228,7 @@ function MonthRegister() {
           type="button"
           onClick={() => setRegisterTab("ctc")}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-            registerTab === "ctc" ? "bg-primary text-white shadow-2xs font-extrabold" : "text-ink-3 hover:text-ink"
+            registerTab === "ctc" ? "bg-primary text-primary-foreground shadow-2xs font-extrabold" : "text-ink-3 hover:text-ink"
           }`}
         >
           💼 CTC (Cost to Company) Master Register ({empQ.data?.length ?? 0})

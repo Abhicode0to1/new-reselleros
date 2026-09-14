@@ -238,7 +238,7 @@ function FeedbackCard({ row, userId }: { row: FeedbackWithShots; userId: string 
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <Button size="sm" onClick={handleAutoFix} disabled={busy} className="bg-primary text-white">
+        <Button size="sm" onClick={handleAutoFix} disabled={busy} className="bg-primary text-primary-foreground">
           <Icon name="sparkles" size={14} className="mr-1.5" />
           Run AI Auto-Fix
         </Button>

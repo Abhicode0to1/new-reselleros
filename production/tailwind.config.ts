@@ -121,7 +121,13 @@ const config: Config = {
         ring: "hsl(var(--amber) / <alpha-value>)",
         primary: {
           DEFAULT: "hsl(var(--amber) / <alpha-value>)",
-          foreground: "hsl(0 0% 100% / <alpha-value>)",
+          /* --amber-fg, not a frozen white. `primary` IS `--amber` (line above),
+             and --amber flips: rgb(200,73,9) light, rgb(249,104,31) dark. White
+             on the dark fill measures 2.99:1 — the same failure amber.fg was
+             added to fix, missed here because the grep that found it looked for
+             `bg-amber` and these 32 call sites say `bg-primary`. --amber-fg is
+             white in light and near-black in dark: 4.76:1 and 6.01:1. */
+          foreground: "hsl(var(--amber-fg) / <alpha-value>)",
         },
         secondary: {
           DEFAULT: "hsl(var(--paper-2) / <alpha-value>)",
