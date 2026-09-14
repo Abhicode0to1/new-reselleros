@@ -24,9 +24,17 @@ import {
  * BUTTON, not an input. Without this, pressing `q` while the Add Lead dialog is open — with
  * focus resting on Cancel — navigates away and takes whatever was typed with it.
  *
- * Radix marks its open dialogs with `data-state="open"`, and every dialog in this app is a
- * Radix one (components/ui/dialog.tsx). `role="alertdialog"` is checked too, since a confirm
- * is the worst possible thing to navigate out of.
+ * Radix marks its open dialogs with `data-state="open"`, and `role="alertdialog"` is checked
+ * too, since a confirm is the worst possible thing to navigate out of.
+ *
+ * This comment used to say "every dialog in this app is a Radix one", and that was false —
+ * SEVEN overlays carry role="dialog" on a plain <div>, two of them on the customer-facing
+ * quote acceptance page. None of them set data-state, so this guard could not see any of
+ * them and the g-chord shortcuts fired while they were on screen. They now set it
+ * explicitly (see useHandRolledModal), which is what makes the selector below true again.
+ * The cookie banner in site/components/chrome/Chrome.tsx is the one exception and is
+ * deliberate: it is a persistent notice rather than something the reader opened, so it
+ * must not swallow keys or take focus.
  */
 function isDialogOpen(): boolean {
   if (typeof document === "undefined") return false;

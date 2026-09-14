@@ -67,6 +67,7 @@ function SlaBadge({ tier, dueAt, respondedAt }: {
   );
 }
 import type { SupportTicketRow, SupportTicketStatus } from "@/lib/supabase/database.types";
+import { useHandRolledModal } from "@/lib/hooks/useHandRolledModal";
 
 export type ViewScope = "all" | "tenant_feedback" | "team_testing";
 
@@ -120,6 +121,13 @@ export default function SupportPage() {
   const [scope, setScope] = React.useState<ViewScope>("tenant_feedback");
   const [statusFilter, setStatusFilter] = React.useState<"all" | SupportTicketStatus>("all");
   const [selected, setSelected] = React.useState<SupportTicketRow | null>(null);
+
+  /* Hand-written overlay rather than <Dialog>: Escape, the isDialogOpen()
+     guard and focus placement all come from the hook. */
+  const ticketModalRef = useHandRolledModal<HTMLDivElement>(
+    () => setSelected(null),
+    Boolean(selected),
+  );
 
   /* ── Request a live 1-on-1 call ────────────────────────────────────────────
      The plan check lives in /api/support/call-request, not here. This only asks
@@ -420,7 +428,10 @@ export default function SupportPage() {
       {/* Ticket Detail Modal — opens when any bug/ticket card is clicked */}
       {selected && (
         <div
-          className="fixed inset-0 z-50 bg-ink/50 flex items-center justify-center p-4 backdrop-blur-xs overflow-y-auto"
+          ref={ticketModalRef}
+          tabIndex={-1}
+          data-state="open"
+          className="fixed inset-0 z-50 bg-ink/50 flex items-center justify-center p-4 backdrop-blur-xs overflow-y-auto outline-none"
           onClick={() => setSelected(null)}
           role="dialog"
           aria-modal="true"

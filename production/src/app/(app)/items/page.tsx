@@ -34,6 +34,7 @@ import { rupee } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type { Item, PartnerCatalogRow, TenantWithParent } from "@/lib/supabase/database.types";
+import { useHandRolledModal } from "@/lib/hooks/useHandRolledModal";
 
 const VENDOR_TABS: TabBarItem[] = [
   { id: "all",       label: "All" },
@@ -931,11 +932,18 @@ function DuplicateConfirmDialog(props: {
     wholesaleDiff > 0 ? "text-rose"    :
     wholesaleDiff < 0 ? "text-emerald" : "text-ink-3";
 
+  /* Hand-written overlay, so Escape, the isDialogOpen() guard and focus are
+     all this hook's job — see useHandRolledModal. */
+  const modalRef = useHandRolledModal<HTMLDivElement>(onCancel);
+
   return (
     <div
+      ref={modalRef}
+      tabIndex={-1}
+      data-state="open"
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm flex items-center justify-center p-4 outline-none"
       onClick={onCancel}
     >
       <div

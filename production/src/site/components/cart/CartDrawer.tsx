@@ -10,10 +10,18 @@ import Link from "@/site/components/ui/SiteLink";
 import { useRouter } from "next/navigation";
 import { useCart } from "./CartProvider";
 import { rupee, cycleLabel } from "@/site/lib/money";
+import { useHandRolledModal } from "@/lib/hooks/useHandRolledModal";
 
 export function CartDrawer() {
   const cart = useCart();
   const router = useRouter();
+  /* Above the early return: a hook cannot be called conditionally. Escape closes
+     the drawer and focus moves into it — neither happened before, so a keyboard
+     user had a panel over the page with no way out but the mouse. */
+  const drawerRef = useHandRolledModal<HTMLElement>(
+    cart.closeDrawer,
+    cart.drawerOpen && cart.lines.length > 0,
+  );
   if (!cart.drawerOpen || cart.lines.length === 0) return null;
 
   const t = cart.totals;
@@ -30,6 +38,9 @@ export function CartDrawer() {
         aria-hidden
       />
       <aside
+        ref={drawerRef}
+        tabIndex={-1}
+        data-state="open"
         role="dialog"
         aria-label="Cart"
         style={{

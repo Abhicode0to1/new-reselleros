@@ -17,6 +17,7 @@ import {
   cycleInvoicesPerYear, cycleUnitLabel, cycleScheduleLabel, cycleFromLegacyCommitment,
 } from "@/lib/quotes/billing";
 import { quoteInstalments } from "@/lib/billing/instalments";
+import { useHandRolledModal } from "@/lib/hooks/useHandRolledModal";
 
 /** Customer-SAFE quote shape — no cost/margin. Built server-side in page.tsx. */
 export type PublicQuote = {
@@ -81,6 +82,12 @@ export function QuoteAcceptView({
   const [paid, setPaid] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [poOpen, setPoOpen] = React.useState(false);
+
+  /* These two overlays are hand-written rather than <Dialog>, so they get none
+     of what Radix provides. Measured on this page before the hook existed:
+     Escape did nothing, and focus stayed on the trigger BEHIND the overlay. */
+  const poRef = useHandRolledModal<HTMLDivElement>(() => setPoOpen(false), poOpen);
+  const confirmRef = useHandRolledModal<HTMLDivElement>(() => setConfirmOpen(false), confirmOpen);
   const [poNumber, setPoNumber] = React.useState("");
   const [poNotes, setPoNotes] = React.useState("");
 
@@ -890,7 +897,13 @@ export function QuoteAcceptView({
       {/* Accept with Purchase Order (PO) Dialog */}
       {poOpen && (
         <div
-          className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          ref={poRef}
+          tabIndex={-1}
+          /* data-state, so the app's own isDialogOpen() can see this overlay —
+             it matches [data-state="open"], which only Radix was setting, so
+             the g-chord shortcuts fired while this was on screen. */
+          data-state="open"
+          className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4 outline-none"
           onClick={() => !accepting && setPoOpen(false)}
           role="dialog"
           aria-modal="true"
@@ -964,7 +977,10 @@ export function QuoteAcceptView({
       {/* Accept confirmation — styled dialog, not a browser confirm() */}
       {confirmOpen && (
         <div
-          className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          ref={confirmRef}
+          tabIndex={-1}
+          data-state="open"
+          className="fixed inset-0 z-50 bg-ink/40 flex items-end sm:items-center justify-center p-0 sm:p-4 outline-none"
           onClick={() => !accepting && setConfirmOpen(false)}
           role="dialog"
           aria-modal="true"
