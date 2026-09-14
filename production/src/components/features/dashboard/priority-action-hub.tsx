@@ -26,7 +26,7 @@ export function PriorityActionHub({
       {/* Priority Action Banner */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Card 1: Renewals Attention */}
-        <Card className="p-4 border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent relative overflow-hidden shadow-xs">
+        <Card className="p-4 border-amber/30 bg-gradient-to-br from-amber/10 via-amber/5 to-transparent relative overflow-hidden shadow-xs">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <Badge kind="warning" size="sm" dot>Attention Needed</Badge>
@@ -41,15 +41,15 @@ export function PriorityActionHub({
                   : "All subscription renewals are up to date for the next 30 days."}
               </p>
             </div>
-            <div className="h-10 w-10 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 grid place-items-center shrink-0">
+            <div className="h-10 w-10 rounded-full bg-amber/15 text-amber-ink grid place-items-center shrink-0">
               <Icon name="clock" size={20} />
             </div>
           </div>
-          <div className="mt-4 flex items-center justify-between border-t border-amber-500/20 pt-3">
+          <div className="mt-4 flex items-center justify-between border-t border-amber/20 pt-3">
             <span className="text-2xs font-medium text-muted-foreground">
               Auto-cadence active
             </span>
-            <Button asChild size="sm" variant="outline" className="h-7 text-xs border-amber-500/30 hover:bg-amber-500/10">
+            <Button asChild size="sm" variant="outline" className="h-7 text-xs border-amber/30 hover:bg-amber/10">
               <Link href="/renewals">
                 View Renewals <Icon name="chevron_right" size={14} className="ml-1" />
               </Link>
@@ -58,7 +58,7 @@ export function PriorityActionHub({
         </Card>
 
         {/* Card 2: Quotes to Send */}
-        <Card className="p-4 border-blue-500/30 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent relative overflow-hidden shadow-xs">
+        <Card className="p-4 border-indigo/30 bg-gradient-to-br from-indigo/10 via-indigo/5 to-transparent relative overflow-hidden shadow-xs">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <Badge kind="info" size="sm" dot>Drafts &amp; Pending</Badge>
@@ -73,15 +73,15 @@ export function PriorityActionHub({
                   : "Create new quotes with Google, Microsoft or Zoho templates."}
               </p>
             </div>
-            <div className="h-10 w-10 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 grid place-items-center shrink-0">
+            <div className="h-10 w-10 rounded-full bg-indigo/15 text-indigo-ink grid place-items-center shrink-0">
               <Icon name="file" size={20} />
             </div>
           </div>
-          <div className="mt-4 flex items-center justify-between border-t border-blue-500/20 pt-3">
+          <div className="mt-4 flex items-center justify-between border-t border-indigo/20 pt-3">
             <span className="text-2xs font-medium text-muted-foreground">
               Quote Builder
             </span>
-            <Button asChild size="sm" variant="outline" className="h-7 text-xs border-blue-500/30 hover:bg-blue-500/10">
+            <Button asChild size="sm" variant="outline" className="h-7 text-xs border-indigo/30 hover:bg-indigo/10">
               <Link href="/quotes">
                 Open Quotes <Icon name="chevron_right" size={14} className="ml-1" />
               </Link>
@@ -90,7 +90,7 @@ export function PriorityActionHub({
         </Card>
 
         {/* Card 3: Receivables & Payments */}
-        <Card className="p-4 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent relative overflow-hidden shadow-xs">
+        <Card className="p-4 border-emerald/30 bg-gradient-to-br from-emerald/10 via-emerald/5 to-transparent relative overflow-hidden shadow-xs">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <Badge kind="success" size="sm" dot>Collections</Badge>
@@ -105,15 +105,15 @@ export function PriorityActionHub({
                   : "No pending receivables across active customer accounts."}
               </p>
             </div>
-            <div className="h-10 w-10 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 grid place-items-center shrink-0">
+            <div className="h-10 w-10 rounded-full bg-emerald/15 text-emerald-ink grid place-items-center shrink-0">
               <Icon name="rupee" size={20} />
             </div>
           </div>
-          <div className="mt-4 flex items-center justify-between border-t border-emerald-500/20 pt-3">
+          <div className="mt-4 flex items-center justify-between border-t border-emerald/20 pt-3">
             <span className="text-2xs font-medium text-muted-foreground">
               Payments Hub
             </span>
-            <Button asChild size="sm" variant="outline" className="h-7 text-xs border-emerald-500/30 hover:bg-emerald-500/10">
+            <Button asChild size="sm" variant="outline" className="h-7 text-xs border-emerald/30 hover:bg-emerald/10">
               <Link href="/payments">
                 View Payments <Icon name="chevron_right" size={14} className="ml-1" />
               </Link>
