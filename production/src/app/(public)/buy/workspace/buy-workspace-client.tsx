@@ -719,16 +719,30 @@ function FounderHero({ waMessage }: { waMessage: string }) {
         </div>
       </div>
 
-      {/* Main card — white surface, generous padding, subtle border */}
+      {/* Main card — the page's paper, generous padding, subtle border.
+          It was `bg-white`, and every line of text inside it is a THEME TOKEN:
+          text-ink, text-ink-3, text-amber-ink. This page follows the app theme
+          (measured: with the stored theme dark, body goes rgb(22,20,18) and
+          body text goes cream) — but a literal white card does not follow
+          anything. So in dark mode the card stayed white while its text turned
+          cream, and "Pardeep Sharma" measured 1.05:1 against its own card. The
+          signed promise underneath it measured the same. On the page that asks
+          for the money.
+
+          bg-paper is rgb(250,249,245) in light — a 2% shift from white that
+          nobody will see — and flips properly in dark. The white things that
+          MUST stay white are the brand assets (the Google G mark, the Premier
+          Partner badge) and the mock inbox screenshot, which is a picture of a
+          white UI; those are left alone. */}
       <div
-        className="bg-white rounded-2xl border-2 border-amber/40 p-7"
+        className="bg-paper rounded-2xl border-2 border-amber/40 p-7"
         style={{ boxShadow: "0 30px 60px -15px rgba(60,64,67,0.20)" }}
       >
         {/* Avatar + identity */}
         <div className="flex items-center gap-4 mb-5 pt-2">
           <div
             className="w-20 h-20 rounded-full grid place-items-center font-serif text-3xl text-paper shadow-md flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, #1A1815 0%, #4A3B28 100%)" }}
+            style={{ background: "linear-gradient(135deg, hsl(var(--ink)) 0%, hsl(var(--ink) / 0.82) 100%)" }}
             aria-hidden="true"
           >
             PS
@@ -1282,6 +1296,12 @@ export function BuyWorkspaceClient({
           <div
             className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-3xs font-semibold border border-[#FBBF24]"
             style={{
+              /* FIXED on purpose, unlike the two ink surfaces above. This is the
+                 Google Premier Partner pill: its gold (#FCD34D) is a brand
+                 colour and does not flip, so its ground must not either. I DID
+                 flip it, and the measurement caught it immediately — gold on a
+                 near-white ground scored 1.37:1 in dark mode. A fixed
+                 foreground needs a fixed surface. */
               background: "linear-gradient(135deg, #1A1815 0%, #2D2418 100%)",
               color: "#FCD34D",
             }}
@@ -1334,7 +1354,13 @@ export function BuyWorkspaceClient({
           background:
             "radial-gradient(circle at 80% 30%, rgba(66,133,244,0.08) 0%, transparent 50%)," +
             "radial-gradient(circle at 20% 70%, rgba(234,67,53,0.05) 0%, transparent 50%)," +
-            "linear-gradient(180deg, rgba(250,248,242,1) 0%, rgba(250,248,242,0.96) 100%)",
+            /* hsl(var(--paper)), not a frozen rgba: this literal was #FAF8F2 —
+               exactly --paper in the LIGHT theme — so the hero kept a near-white
+               ground while the text on it uses theme tokens and turns cream in
+               dark mode. Measured on this page with the stored theme dark:
+               "Indian SMEs" and the headline scored 1.01:1 against their own
+               hero. The page that asks for the money rendered nearly blank. */
+            "linear-gradient(180deg, hsl(var(--paper)) 0%, hsl(var(--paper) / 0.96) 100%)",
         }}
       >
         {/* Floating icons moved into the BadgeBurst (right column) so they
@@ -2007,8 +2033,12 @@ function PricingCard({
       {tier.isPopular && billing === "annual" && (
         <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
           <div
-            className="px-4 py-1.5 text-paper text-2xs font-bold uppercase tracking-wider rounded-md shadow-md"
-            style={{ background: "linear-gradient(135deg, #DC2626 0%, #B91C1C 100%)" }}
+            /* --rose, not #DC2626 — which is the same colour, frozen. With the
+               literal the strip stayed red in both themes while `text-paper` on
+               it turned near-black in dark: measured 2.84:1. text-rose-fg is the
+               foreground this fill already has a token for. */
+            className="px-4 py-1.5 text-rose-fg text-2xs font-bold uppercase tracking-wider rounded-md shadow-md"
+            style={{ background: "linear-gradient(135deg, hsl(var(--rose)) 0%, hsl(var(--rose) / 0.88) 100%)" }}
           >
             20% OFF · First 20 users · 12 months
           </div>
