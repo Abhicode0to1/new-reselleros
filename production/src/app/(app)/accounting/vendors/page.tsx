@@ -160,7 +160,6 @@ export default function VendorsPage() {
                     <tr
                       key={v.id}
                       className="group hover:bg-paper-2/50 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset"
-                      role="button"
                       tabIndex={0}
                       aria-label={`Open ${v.name}`}
                       onClick={() => setDetailVendor(v)}

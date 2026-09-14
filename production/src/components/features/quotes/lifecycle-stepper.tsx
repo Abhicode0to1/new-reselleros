@@ -39,7 +39,7 @@ export function LifecycleStepper({ steps, dead }: { steps: LifecycleStep[]; dead
                   title={step.detail}
                   className={cn(
                     "grid h-6 w-6 shrink-0 place-items-center rounded-full border-2 text-2xs font-bold",
-                    step.state === "done"    && "border-emerald bg-emerald text-white",
+                    step.state === "done"    && "border-emerald bg-emerald text-emerald-fg",
                     step.state === "current" && "border-amber bg-paper text-amber-ink",
                     step.state === "todo"    && "border-hairline-strong bg-paper text-ink-3",
                     step.state === "skipped" && "border-dashed border-hairline-strong bg-paper text-ink-3",

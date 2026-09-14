@@ -185,8 +185,14 @@ export function PortalNavStrip() {
                 /* Same pill as the desktop row above and as the staff Sidebar,
                    so the current section looks the same on every surface. */
                 className={cn(
-                  // touch-target floor (§20 / CLAUDE.md:605) — on the LINK, not the row
-                  "inline-flex items-center min-h-[44px] transition-colors",
+                  /* Touch-target floor (§20 / CLAUDE.md:605) — on the LINK, not the row.
+                     BOTH axes: the height was here and the width was not, so at
+                     390px "Shop" measured 35.7px wide, "Billing" 39.8 and
+                     "Profile" 42.6 — short labels, short targets. The strip is
+                     already 545px of items in a 390px viewport and scrolls, so
+                     the 14px this adds costs nothing but a little more scroll.
+                     justify-center keeps the label centred in the wider pill. */
+                  "inline-flex items-center justify-center min-h-[44px] min-w-[44px] transition-colors",
                   active ? "bg-amber-soft text-amber-ink font-medium rounded-md" : "hover:text-ink",
                 )}
               >

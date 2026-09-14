@@ -753,8 +753,8 @@ function FounderHero({ waMessage }: { waMessage: string }) {
           href={whatsappLink(waMessage)}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl font-medium text-paper text-base transition-transform hover:scale-[1.02] mb-2.5"
-          style={{ background: "#25D366", boxShadow: "0 10px 24px rgba(37,211,102,0.30)" }}
+          className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl font-medium bg-whatsapp text-whatsapp-fg text-base transition-transform hover:scale-[1.02] mb-2.5"
+          style={{ boxShadow: "0 10px 24px rgba(37,211,102,0.30)" }}
         >
           <Icon name="whatsapp" size={20} className="text-paper" />
           WhatsApp {PARDEEP_PHONE_DISPLAY}
@@ -1533,8 +1533,8 @@ export function BuyWorkspaceClient({
                 href={whatsappLink(waMessage)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-lg font-medium text-paper transition-transform hover:scale-[1.02] text-base"
-                style={{ background: "#25D366", boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
+                className="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-lg font-medium bg-whatsapp text-whatsapp-fg transition-transform hover:scale-[1.02] text-base"
+                style={{ boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
               >
                 <Icon name="whatsapp" size={20} className="text-paper" />
                 WhatsApp Pardeep — quote in 10 min
@@ -1922,8 +1922,8 @@ export function BuyWorkspaceClient({
         href={whatsappLink(waMessage)}
         target="_blank"
         rel="noopener noreferrer"
-        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg text-paper font-medium text-sm transition-transform hover:scale-105"
-        style={{ background: "#25D366" }}
+        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg bg-whatsapp text-whatsapp-fg font-medium text-sm transition-transform hover:scale-105"
+       
         aria-label="Chat with Pardeep on WhatsApp"
       >
         <Icon name="whatsapp" size={18} className="text-paper" />

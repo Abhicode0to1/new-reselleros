@@ -320,8 +320,8 @@ export default function AgingPage() {
                             `Hi from ${bizName} — ${rupee(r.total)} is pending on your account. When can we expect the payment?`)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-paper"
-                          style={{ background: "#25D366" }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-whatsapp text-whatsapp-fg"
+                         
                         >
                           <Icon name="whatsapp" size={12} /> WhatsApp
                         </a>

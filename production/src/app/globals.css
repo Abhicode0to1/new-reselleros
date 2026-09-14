@@ -42,6 +42,7 @@
     /* Status colors */
     --emerald:         142 71% 28%;      /* #166534 */
     --emerald-soft:    138 50% 92%;      /* #DCFCE7 */
+    --emerald-fg:      0 0% 100%;        /* 5.42:1 on the fill — see --amber-fg */
     --emerald-ink:     142 71% 22%;      /* text ON emerald-soft — see the note below */
     --rose:            0 76% 50%;        /* #DC2626 */
     --rose-soft:       0 86% 96%;        /* #FEE2E2 */
@@ -71,9 +72,24 @@
        be nudged without re-running the numbers. */
     --indigo:          240 65% 42%;      /* #3730A3 */
     --indigo-soft:     232 100% 95%;     /* #E0E7FF */
+    --indigo-fg:       0 0% 100%;        /* 10.62:1 on the fill */
     --indigo-ink:      244 55% 32%;      /* #2D2873 */
     --slate:           215 25% 35%;      /* #475569 */
     --slate-soft:      210 25% 95%;      /* #ECEFF3 */
+    --slate-fg:        0 0% 100%;        /* 7.49:1 on the fill */
+
+    /* ── WhatsApp, the one brand colour in the app ─────────────────────────
+       #25D366 is WhatsApp's own green and it does NOT flip with the theme —
+       a brand mark that changed shade in dark mode would stop being the brand
+       mark. So both themes define it identically, which is the point of
+       writing it here rather than inline at eight call sites.
+
+       --whatsapp-fg exists because `text-paper` on this green measured
+       1.88:1 on every one of those call sites — a primary CTA nobody could
+       read. Near-black on it is 9.0:1. WhatsApp's own guidance puts white
+       here; white on this green is 2.0:1 and fails AA, so it is not followed. */
+    --whatsapp:        142 70% 49%;      /* #25D366 */
+    --whatsapp-fg:     24 13% 9%;        /* 9.0:1 — see above */
 
     /* shadcn semantic aliases (computed from tokens above) */
     --background:      45 33% 97%;
@@ -112,6 +128,8 @@
 
     --emerald:         142 71% 50%;
     --emerald-soft:    142 30% 15%;
+    --emerald-fg:      24 13% 9%;        /* 9.67:1 — white scored 1.86 here, which is
+                                            why `text-white` on this fill was a bug */
     --emerald-ink:     142 70% 75%;      /* light on dark, as --amber-ink is here */
     --rose:            0 86% 65%;
     --rose-soft:       0 40% 18%;
@@ -119,11 +137,21 @@
     --rose-hover:      0 86% 72%;        /* 6.80:1 */
     --rose-active:     0 86% 78%;        /* 8.41:1 */
     --rose-ink:        0 90% 80%;        /* light on dark, as --amber-ink is here */
-    --indigo:          240 65% 65%;
+    /* Was 65%. At that lightness NOTHING passed AA on it: white scored 4.32,
+       near-black 4.16 — and `text-indigo` on the page scored 4.25, so the
+       token was failing as a fill AND as text. 70% clears both (5.30 on the
+       fill, 5.42 on the page) without losing the hue. */
+    --indigo:          240 65% 70%;
     --indigo-soft:     232 30% 18%;
+    --indigo-fg:       24 13% 9%;        /* 5.30:1 on the fill above */
     --indigo-ink:      232 50% 80%;
     --slate:           215 25% 65%;
     --slate-soft:      215 20% 18%;
+    --slate-fg:        24 13% 9%;        /* 6.90:1 — white scored 2.60 here */
+
+    /* Identical to the light theme on purpose — see the note there. */
+    --whatsapp:        142 70% 49%;
+    --whatsapp-fg:     24 13% 9%;
 
     --background:      24 10% 8%;
     --foreground:      45 33% 97%;
@@ -184,6 +212,14 @@
    *
    * Phone only. Above 768px a mouse is doing the pointing and the 36px density
    * is deliberate.
+   *
+   * ⚠️ IT DOES NOTHING INSIDE A SCROLL CONTAINER, AND FAILS SILENTLY.
+   * `overflow: auto` clips the ::after box to the ancestor's padding box, so on
+   * a 38px-tall chip in an `overflow-x-auto` row the hit area stays 38px while
+   * the class sits there looking applied. Measured on /quotes: elementFromPoint
+   * 21px above a TabBar chip returned the page container, not the button.
+   * For anything inside a scrolling row, grow the BOX on phones instead —
+   * `min-h-11 md:min-h-0` is what the chip rows use.
    */
   @media (max-width: 767px) {
     .touch-44 {
@@ -277,5 +313,43 @@
      `-translate-x/y-1/2` centring utilities so the user's offset wins. */
   .dlg-movable.dlg-movable {
     transform: translate(calc(-50% + var(--dlg-x, 0px)), calc(-50% + var(--dlg-y, 0px))) !important;
+  }
+}
+
+/* ── prefers-reduced-motion ──────────────────────────────────────────────────
+ *
+ * The marketing site has honoured this since it shipped (site.css:136) — but
+ * that rule is scoped to `.anutech-site`, and site.css is imported only by
+ * (marketing)/layout.tsx. So the staff panel and the customer portal, the two
+ * surfaces people sit in front of all day, honoured nothing. Measured: 14
+ * infinite animations in the app (9 `animate-pulse`, 4 `animate-spin`, 1
+ * `animate-ping`) and zero `motion-reduce:` guards at any call site.
+ *
+ * `prefers-reduced-motion` is not a taste setting. People who set it include
+ * those with vestibular disorders, for whom movement causes real nausea, and
+ * the OS has already asked them. Ignoring the answer is the defect.
+ *
+ * SPINNERS ARE THE ONE EXEMPTION, and deliberately so. `animate-spin` is only
+ * ever on `Loader2` — an activity indicator (button.tsx:129,144). A frozen
+ * spinner does not read as "calm", it reads as "this app has hung", so a
+ * person cancels a save that was about to succeed. WCAG 2.2.2 is about content
+ * that moves while you are trying to read it; a progress indicator is the
+ * named exception. It keeps turning.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* :where() keeps specificity at 0 so nothing here out-weighs a real rule;
+     the !important is what does the work. */
+  :where(.animate-spin) {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
   }
 }

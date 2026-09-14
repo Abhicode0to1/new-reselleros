@@ -357,7 +357,7 @@ export default function CustomersPage() {
                   className="bg-paper-2/40 border border-hairline hover:border-rose/60 transition-colors rounded-lg p-3 text-left cursor-pointer"
                 >
                   <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">To Collect (Unpaid)</p>
-                  <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{rupee(totalReceivables, { compact: true })}</p>
+                  <p className="font-serif text-lg font-bold text-rose-ink tabular-nums mt-0.5">{rupee(totalReceivables, { compact: true })}</p>
                 </button>
               </div>
             </div>
@@ -387,7 +387,7 @@ export default function CustomersPage() {
                     type="button"
                     onClick={() => setView(v.id)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer shrink-0",
+                      "min-h-11 md:min-h-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer shrink-0",
                       active
                         ? "border-amber bg-amber-soft text-amber-ink"
                         : "border-hairline text-ink-2 hover:bg-paper-2",
@@ -410,7 +410,7 @@ export default function CustomersPage() {
                 onClick={() => { setShowArchived((v) => !v); setSelectedId(null); }}
                 aria-pressed={showArchived}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer shrink-0",
+                  "min-h-11 md:min-h-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer shrink-0",
                   showArchived ? "border-amber bg-amber-soft text-amber-ink" : "border-hairline text-ink-3 hover:text-ink hover:bg-paper-2",
                 )}
                 title={showArchived ? "Back to active customers" : "Show archived customers"}
@@ -431,7 +431,7 @@ export default function CustomersPage() {
               type="button"
               onClick={() => toggleSort("mrr")}
               className={cn(
-                "px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
+                "min-h-11 md:min-h-0 px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
                 sort.key === "mrr" ? "bg-amber-soft border-amber text-amber-ink" : "border-hairline hover:bg-paper-2 text-ink-2",
               )}
             >
@@ -441,7 +441,7 @@ export default function CustomersPage() {
               type="button"
               onClick={() => toggleSort("receivables")}
               className={cn(
-                "px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
+                "min-h-11 md:min-h-0 px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
                 sort.key === "receivables" ? "bg-rose-soft border-rose text-rose-ink" : "border-hairline hover:bg-paper-2 text-ink-2",
               )}
             >
@@ -451,7 +451,7 @@ export default function CustomersPage() {
               type="button"
               onClick={() => toggleSort("name")}
               className={cn(
-                "px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
+                "min-h-11 md:min-h-0 px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
                 sort.key === "name" ? "bg-amber-soft border-amber text-amber-ink" : "border-hairline hover:bg-paper-2 text-ink-2",
               )}
             >
@@ -544,7 +544,7 @@ export default function CustomersPage() {
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 text-2xs px-2 py-0.5 rounded bg-emerald-soft text-emerald font-medium hover:bg-emerald hover:text-white transition-colors"
+                          className="min-h-11 md:min-h-0 inline-flex items-center gap-1 text-2xs px-2 py-0.5 rounded bg-emerald-soft text-emerald font-medium hover:bg-emerald hover:text-emerald-fg transition-colors"
                         >
                           <Icon name="message_square" size={12} /> WhatsApp
                         </a>
@@ -602,7 +602,6 @@ export default function CustomersPage() {
                         key={c.id}
                         ref={c.id === kbSelectedId ? selectedRowRef : undefined}
                         onClick={() => setSelectedId(c.id)}
-                        role="button"
                         tabIndex={0}
                         aria-label={`Open ${primaryName}`}
                         /* aria-selected, not only a tint: a screen reader has to know which

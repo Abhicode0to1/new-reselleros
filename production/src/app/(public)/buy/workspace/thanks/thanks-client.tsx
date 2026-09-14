@@ -74,8 +74,8 @@ export function ThanksClient({
               href={whatsappLink("Hi Pardeep, I just paid for Google Workspace but the confirmation page can't find my order.")}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-5 h-11 rounded-lg font-medium text-paper"
-              style={{ background: "#25D366" }}
+              className="inline-flex items-center justify-center gap-2 px-5 h-11 rounded-lg font-medium bg-whatsapp text-whatsapp-fg"
+             
             >
               <Icon name="whatsapp" size={18} />
               WhatsApp Pardeep
@@ -305,8 +305,8 @@ export function ThanksClient({
             href={whatsappLink(waSupportMsg)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-lg font-medium text-paper transition-transform hover:scale-[1.02] text-base mb-4"
-            style={{ background: "#25D366", boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
+            className="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-lg font-medium bg-whatsapp text-whatsapp-fg transition-transform hover:scale-[1.02] text-base mb-4"
+            style={{ boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
           >
             <Icon name="whatsapp" size={20} className="text-paper" />
             WhatsApp Pardeep — {PARDEEP_PHONE_DISPLAY}

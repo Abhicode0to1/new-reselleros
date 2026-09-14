@@ -378,10 +378,14 @@ export default async function PortalDashboardPage() {
               rel="noopener noreferrer"
               /* WhatsApp's own green, deliberately: this is a third-party brand
                  affordance and the colour is how it is recognised at a glance.
-                 The one place in the portal that is not a token, and it is a
-                 decision rather than an oversight (§5). */
-              className="inline-flex items-center justify-center gap-2 px-6 h-11 rounded-lg font-medium text-paper text-sm"
-              style={{ background: "#25D366" }}
+                 It is now `--whatsapp` rather than an inline hex — same colour,
+                 same decision, but written once for the eight call sites that
+                 make it instead of eight times.
+
+                 The label was `text-paper` and measured 1.88:1 on that green.
+                 `--whatsapp-fg` is near-black, 9.0:1. Neither token flips with
+                 the theme, because the brand colour behind them does not. */
+              className="inline-flex items-center justify-center gap-2 px-6 h-11 rounded-lg font-medium bg-whatsapp text-whatsapp-fg text-sm"
             >
               WhatsApp {waName}
               {waDisplay ? ` · ${waDisplay}` : ""}

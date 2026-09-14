@@ -58,7 +58,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "relative inline-flex items-center gap-2 px-3 py-2 text-sm font-medium",
+      "min-h-11 md:min-h-0 relative inline-flex items-center gap-2 px-3 py-2 text-sm font-medium",
       "text-ink-3 hover:text-ink transition-colors",
       "border-b-2 border-transparent -mb-px",
       "data-[state=active]:text-ink data-[state=active]:border-amber",
@@ -126,7 +126,7 @@ function TabBar({ value, onChange, items, className }: TabBarProps) {
             disabled={item.disabled}
             onClick={() => onChange(item.id)}
             className={cn(
-              "relative inline-flex items-center gap-2 px-3 py-2 text-sm font-medium whitespace-nowrap",
+              "min-h-11 md:min-h-0 relative inline-flex items-center gap-2 px-3 py-2 text-sm font-medium whitespace-nowrap",
               "transition-colors border-b-2 -mb-px",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-2 rounded-t-md",
               active

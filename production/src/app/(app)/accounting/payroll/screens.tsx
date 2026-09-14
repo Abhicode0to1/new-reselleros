@@ -229,7 +229,6 @@ export function EmployeesTab() {
                     <tr
                       key={e.id}
                       className="group cursor-pointer hover:bg-paper-2/40 transition-colors"
-                      role="button"
                       tabIndex={0}
                       aria-label={`Open ${toTitleCase(e.name)}'s profile`}
                       onClick={() => setViewEmp(e)}

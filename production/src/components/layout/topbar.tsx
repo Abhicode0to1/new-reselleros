@@ -59,7 +59,7 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
       <button
         type="button"
         onClick={onMobileMenuClick}
-        className="md:hidden p-1.5 -ml-1 text-ink-3 hover:text-ink rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+        className="md:hidden touch-44 p-1.5 -ml-1 text-ink-3 hover:text-ink rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
         aria-label="Open menu"
       >
         <Icon name="menu" size={20} />
@@ -109,7 +109,7 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
           <button
             type="button"
             onClick={() => setFeedbackOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-soft/80 border border-rose/30 hover:bg-rose-soft text-rose-ink text-xs font-semibold transition-all shadow-sm"
+            className="touch-44 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-soft/80 border border-rose/30 hover:bg-rose-soft text-rose-ink text-xs font-semibold transition-all shadow-sm"
           >
             <Icon name="bug" size={14} className="text-rose-ink" />
             <span className="hidden sm:inline">Report Bug</span>
@@ -122,7 +122,7 @@ export function TopBar({ onMobileMenuClick, crumb: crumbOverride }: TopBarProps)
       <button
         type="button"
         onClick={() => cmdk.setOpen(true)}
-        className="flex items-center gap-2 h-8 px-2.5 rounded-md border border-hairline bg-paper-2 hover:bg-paper-3 text-xs text-ink-3 transition-colors"
+        className="touch-44 flex items-center gap-2 h-8 px-2.5 rounded-md border border-hairline bg-paper-2 hover:bg-paper-3 text-xs text-ink-3 transition-colors"
         aria-label="Search customers, leads, quotes, invoices and domains"
       >
         <Icon name="search" size={14} />

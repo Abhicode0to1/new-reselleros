@@ -34,10 +34,10 @@ const avatarVariants = cva(
       color: {
         ink:     "bg-ink text-paper",
         amber:   "bg-amber text-amber-fg",
-        emerald: "bg-emerald text-white",
-        indigo:  "bg-indigo text-white",
+        emerald: "bg-emerald text-emerald-fg",
+        indigo:  "bg-indigo text-indigo-fg",
         rose:    "bg-rose text-rose-fg",
-        slate:   "bg-slate text-white",
+        slate:   "bg-slate text-slate-fg",
         muted:   "bg-paper-2 text-ink-2",
       },
     },

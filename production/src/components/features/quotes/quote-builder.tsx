@@ -1615,7 +1615,7 @@ export function QuoteBuilder() {
                         onClick={() => setUsdPricingBasis(val)}
                         className={cn(
                           "px-2.5 py-1 text-2xs rounded transition-colors",
-                          usdPricingBasis === val ? "bg-indigo text-white font-medium" : "text-ink-3 hover:text-ink",
+                          usdPricingBasis === val ? "bg-indigo text-indigo-fg font-medium" : "text-ink-3 hover:text-ink",
                         )}
                       >
                         {label}

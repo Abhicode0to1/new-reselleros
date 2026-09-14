@@ -329,7 +329,7 @@ function MonthRegister() {
                   <tr
                     key={p.id}
                     className="cursor-pointer hover:bg-paper-2/40 transition-colors"
-                    role="button" tabIndex={0}
+ tabIndex={0}
                     onClick={() => router.push(`/accounting/salary-register?employee=${p.employee_id}` as never)}
                     onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); router.push(`/accounting/salary-register?employee=${p.employee_id}` as never); } }}
                   >

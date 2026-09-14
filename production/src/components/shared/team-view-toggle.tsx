@@ -59,7 +59,7 @@ export function TeamViewToggle({
             onClick={() => onChange(m)}
             aria-pressed={mode === m}
             className={cn(
-              "rounded-md px-2.5 py-1 text-[12px] transition-colors",
+              "min-h-11 md:min-h-0 rounded-md px-2.5 py-1 text-[12px] transition-colors",
               mode === m ? "bg-ink text-paper font-semibold" : "text-ink-2 hover:bg-paper-2",
             )}
           >

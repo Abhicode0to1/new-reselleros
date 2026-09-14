@@ -116,7 +116,7 @@ export function GettingStartedCard({
             >
               <span
                 className={`grid place-items-center h-6 w-6 rounded-full shrink-0 ${
-                  s.done ? "bg-emerald text-white" : "border-2 border-hairline-strong text-transparent"
+                  s.done ? "bg-emerald text-emerald-fg" : "border-2 border-hairline-strong text-transparent"
                 }`}
               >
                 {s.done && <Icon name="check" size={13} />}

@@ -901,7 +901,7 @@ function LeadsPageInner() {
                 onClick={() => setView("kanban")}
                 aria-pressed={effectiveView === "kanban"}
                 className={cn(
-                  "px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors cursor-pointer",
+                  "min-h-11 md:min-h-0 px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors cursor-pointer",
                   effectiveView === "kanban" ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-paper-2"
                 )}
                 title="Kanban view — best for stage flow"
@@ -913,7 +913,7 @@ function LeadsPageInner() {
                 onClick={() => setView("list")}
                 aria-pressed={effectiveView === "list"}
                 className={cn(
-                  "px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-hairline cursor-pointer",
+                  "min-h-11 md:min-h-0 px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-hairline cursor-pointer",
                   effectiveView === "list" ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-paper-2"
                 )}
                 title="List view — best for scanning many leads"
@@ -2232,8 +2232,8 @@ function LeadDetailSheet({
                 "w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-semibold transition-colors",
                 nextAction.tone === "amber"   && "bg-amber text-amber-fg hover:bg-amber-hover",
                 nextAction.tone === "rose"    && "bg-rose text-rose-fg hover:bg-rose-hover",
-                nextAction.tone === "emerald" && "bg-emerald text-white hover:bg-emerald/90",
-                nextAction.tone === "indigo"  && "bg-indigo text-white hover:bg-indigo/90",
+                nextAction.tone === "emerald" && "bg-emerald text-emerald-fg hover:bg-emerald/90",
+                nextAction.tone === "indigo"  && "bg-indigo text-indigo-fg hover:bg-indigo/90",
               )}
             >
               <Icon name={nextAction.icon} size={14} />

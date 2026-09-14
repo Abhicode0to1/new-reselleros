@@ -694,7 +694,16 @@ export default function SubscriptionsPage() {
                       key={s.id}
                       ref={kbSelected ? selectedSubRef : undefined}
                       /* aria-selected as well as the tint: a screen reader has to know
-                         which row Enter will open. */
+                         which row Enter will open.
+
+                         This row used to also carry role="button", which is what
+                         stopped that working. `aria-selected` is valid on a row
+                         and NOT on a button, so it was being dropped — the very
+                         announcement this line exists to make. Overriding the
+                         role also took the row out of the table, so its cells
+                         lost their column headers. The row keeps its native role
+                         now; tabIndex and onKeyDown still make it operable.
+                         Same change at seven other tables. */
                       aria-selected={kbSelected}
                       className={cn(
                         "group border-b border-hairline last:border-0 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset",
@@ -702,7 +711,6 @@ export default function SubscriptionsPage() {
                           ? "bg-amber-soft/60 ring-1 ring-inset ring-amber/40"
                           : "hover:bg-paper-2/50",
                       )}
-                      role="button"
                       tabIndex={0}
                       aria-label={`Open ${cleanDisplayName(s.customer_name)}`}
                       onClick={() => s.customer_id && router.push(`/customers/${s.customer_id}` as never)}

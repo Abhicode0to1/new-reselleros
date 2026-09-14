@@ -89,6 +89,7 @@ const config: Config = {
           DEFAULT: "hsl(var(--emerald) / <alpha-value>)",
           soft: "hsl(var(--emerald-soft) / <alpha-value>)",
           ink: "hsl(var(--emerald-ink) / <alpha-value>)",
+          fg: "hsl(var(--emerald-fg) / <alpha-value>)",          /* see amber.fg */
         },
         rose: {
           DEFAULT: "hsl(var(--rose) / <alpha-value>)",
@@ -102,10 +103,17 @@ const config: Config = {
           DEFAULT: "hsl(var(--indigo) / <alpha-value>)",
           soft: "hsl(var(--indigo-soft) / <alpha-value>)",
           ink: "hsl(var(--indigo-ink) / <alpha-value>)",
+          fg: "hsl(var(--indigo-fg) / <alpha-value>)",          /* see amber.fg */
+        },
+        /* The one brand colour. Same in both themes — see globals.css. */
+        whatsapp: {
+          DEFAULT: "hsl(var(--whatsapp) / <alpha-value>)",
+          fg: "hsl(var(--whatsapp-fg) / <alpha-value>)",
         },
         slate: {
           DEFAULT: "hsl(var(--slate) / <alpha-value>)",
           soft: "hsl(var(--slate-soft) / <alpha-value>)",
+          fg: "hsl(var(--slate-fg) / <alpha-value>)",          /* see amber.fg */
         },
         // shadcn/ui compatibility
         border: "hsl(var(--hairline) / <alpha-value>)",

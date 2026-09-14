@@ -224,8 +224,8 @@ export function TdsDetailDialog({ open, onOpenChange, tds }: Props) {
             href={whatsappLink(chaseMessage)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 w-full px-4 h-11 rounded-lg font-medium text-paper transition-transform hover:scale-[1.01] text-sm"
-            style={{ background: "#25D366" }}
+            className="inline-flex items-center justify-center gap-2 w-full px-4 h-11 rounded-lg font-medium bg-whatsapp text-whatsapp-fg transition-transform hover:scale-[1.01] text-sm"
+           
           >
             <Icon name="whatsapp" size={16} />
             {tds.status === "pending_cert" ? "Chase customer for Form 16A" : "Chase deposit proof"}

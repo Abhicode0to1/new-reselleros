@@ -390,7 +390,7 @@ function InvoicesPageInner() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-amber-ink gap-1 text-xs px-2 h-7"
+                  className="text-amber-ink gap-1 text-xs px-2 h-7 min-h-11 md:min-h-0"
                 >
                   <span>{pendingOpen ? "Collapse" : "Expand"}</span>
                   <Icon name={pendingOpen ? "chevron_up" : "chevron_down"} size={14} />
@@ -928,7 +928,6 @@ function InvoiceRow({
     <>
     <tr
       className="group border-b border-hairline last:border-0 hover:bg-paper-2/50 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset"
-      role="button"
       tabIndex={0}
       aria-label={`Open invoice ${inv.id}`}
       onClick={() => setPreviewOpen(true)}

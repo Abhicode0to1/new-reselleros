@@ -453,7 +453,6 @@ export default function ContactsPage() {
                   <tr
                     key={c.id}
                     onClick={() => openContact(c)}
-                    role="button"
                     tabIndex={0}
                     aria-label={`Open ${c.name ?? c.email ?? "contact"}`}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openContact(c); } }}
