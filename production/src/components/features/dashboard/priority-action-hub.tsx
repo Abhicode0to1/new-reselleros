@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusPill } from "@/components/ui/status-pill";
 import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
 
@@ -29,7 +29,7 @@ export function PriorityActionHub({
         <Card className="p-4 border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent relative overflow-hidden shadow-xs">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <StatusPill status="expiring" label="Attention Needed" size="sm" />
+              <Badge kind="warning" size="sm" dot>Attention Needed</Badge>
               <h4 className="text-sm font-semibold text-foreground mt-2">
                 {expiringRenewalsCount > 0
                   ? `${expiringRenewalsCount} Renewals Expiring Soon`
@@ -61,7 +61,7 @@ export function PriorityActionHub({
         <Card className="p-4 border-blue-500/30 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent relative overflow-hidden shadow-xs">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <StatusPill status="sent" label="Drafts & Pending" size="sm" />
+              <Badge kind="info" size="sm" dot>Drafts &amp; Pending</Badge>
               <h4 className="text-sm font-semibold text-foreground mt-2">
                 {draftQuotesCount > 0
                   ? `${draftQuotesCount} Draft Quotes to Finalize`
@@ -93,7 +93,7 @@ export function PriorityActionHub({
         <Card className="p-4 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent relative overflow-hidden shadow-xs">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <StatusPill status="paid" label="Collections" size="sm" />
+              <Badge kind="success" size="sm" dot>Collections</Badge>
               <h4 className="text-sm font-semibold text-foreground mt-2">
                 {pendingCollectValue > 0
                   ? `${rupee(pendingCollectValue)} Outstanding Owed`

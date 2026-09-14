@@ -28,7 +28,6 @@ import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead, useLeadQuotes, type LeadQuoteRef } from "@/lib/queries/leads";
-import { StatusPill } from "@/components/ui/status-pill";
 import Link from "next/link";
 import { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { InlineCell } from "@/components/features/leads/inline-cell";
@@ -104,6 +103,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button, IconButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { unifiedStatus } from "@/lib/quotes/status-badge";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -4773,7 +4773,12 @@ function LeadListView({
                       hai — rang-andha padhne wala bhi Draft/Sent padh sake. */}
                   {leadQuotes?.[lead.id] && (() => {
                     const q: LeadQuoteRef = leadQuotes[lead.id];
-                    const word = (q.status ?? "draft").charAt(0).toUpperCase() + (q.status ?? "draft").slice(1);
+                    /* `unifiedStatus` — the SAME function /quotes calls, which is what
+                       "wahi rang jo /quotes par hain" above actually asks for. The old
+                       status pill carried a palette of its own, so the two screens
+                       showed different colours for one row — and once a quote was paid,
+                       different words too. The word still travels with the colour. */
+                    const u = unifiedStatus(q);
                     return (
                       <Link
                         href={`/quotes/${q.id}` as never}
@@ -4781,7 +4786,7 @@ function LeadListView({
                         title={`Open ${q.id}`}
                         className="mt-0.5 inline-flex"
                       >
-                        <StatusPill status={q.status ?? "draft"} size="sm" label={`…${q.id.slice(-4)} · ${word}`} />
+                        <Badge kind={u.kind} size="sm" dot>{`…${q.id.slice(-4)} · ${u.label}`}</Badge>
                       </Link>
                     );
                   })()}

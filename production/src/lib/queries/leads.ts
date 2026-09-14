@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
 import { resolveTenantId } from "./tenant-id";
-import type { Lead, Database } from "@/lib/supabase/database.types";
+import type { Lead, Quote, Database } from "@/lib/supabase/database.types";
 import type { JunkReasonId } from "@/lib/leads/qualification";
 
 // ============================================================
@@ -58,7 +58,18 @@ export function useLeads() {
  */
 export interface LeadQuoteRef {
   id: string;
-  status: string | null;
+  /* The table's own union, not `string` — `unifiedStatus` narrows on these
+     exact members, and a widened type here meant /leads could not call the
+     function /quotes uses. */
+  status: Quote["status"];
+  /* The payment fields travel too, so /leads can call the SAME `unifiedStatus`
+     that /quotes calls. With only `status`, a quote that had been PAID showed
+     "Out for review" here while /quotes showed "Paid" — two screens
+     contradicting each other about the same row. They cost nothing: the select
+     below was already fetching this table in one round-trip. */
+  payment_status: Quote["payment_status"];
+  amount: Quote["amount"];
+  payment_amount: Quote["payment_amount"];
 }
 
 export function useLeadQuotes() {
@@ -68,13 +79,22 @@ export function useLeadQuotes() {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("quotes")
-        .select("id, lead_id, status, created_at")
+        .select("id, lead_id, status, created_at, payment_status, amount, payment_amount")
         .not("lead_id", "is", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       const map: Record<string, LeadQuoteRef> = {};
-      for (const q of (data ?? []) as { id: string; lead_id: string | null; status: string | null }[]) {
-        if (q.lead_id && !map[q.lead_id]) map[q.lead_id] = { id: q.id, status: q.status };
+      type Row = {
+        id: string; lead_id: string | null; status: Quote["status"];
+        payment_status: Quote["payment_status"]; amount: Quote["amount"]; payment_amount: Quote["payment_amount"];
+      };
+      for (const q of (data ?? []) as Row[]) {
+        if (q.lead_id && !map[q.lead_id]) {
+          map[q.lead_id] = {
+            id: q.id, status: q.status,
+            payment_status: q.payment_status, amount: q.amount, payment_amount: q.payment_amount,
+          };
+        }
       }
       return map;
     },
