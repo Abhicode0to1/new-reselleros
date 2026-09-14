@@ -248,10 +248,23 @@ Use serif for **moments that matter** (page titles, big numbers, customer-facing
 
 ## 8. Component rules
 
-### Naming
-- PascalCase for components: `LeadCard.tsx`
-- camelCase for utilities: `formatDate.ts`
-- kebab-case for routes: `(app)/online-orders/page.tsx`
+### Naming — CORRECTED 2026-09-14, these two rules were backwards
+
+This section said "PascalCase for components: `LeadCard.tsx`" and "camelCase for utilities:
+`formatDate.ts`". **Neither file exists, and the codebase does the opposite of both.** Counted:
+
+| | rule said | actually |
+|---|---|---|
+| `src/components/**/*.tsx` | PascalCase | **kebab-case 205**, PascalCase 2 |
+| `src/lib/**/*.ts` | camelCase | **kebab-case 429**, camelCase 9 |
+
+- **kebab-case for components**: `lead-card.tsx`, `record-payment-dialog.tsx`
+- **kebab-case for utilities**: `format-date-ist.ts`, `status-badge.ts`
+- **kebab-case for routes**: `(app)/online-orders/page.tsx`
+
+PascalCase survives in 31 files — the PDF templates (`InvoicePDF.tsx`), a few layout components
+(`Sidebar.tsx`, `MobileBottomNav.tsx`) and most of `src/site`. Follow the file you are next to;
+do not rename anything to match this table.
 
 ### Structure
 - One component per file, default export
@@ -305,8 +318,13 @@ Never use `fetch()` directly in components. Always go through Supabase or a type
 ## 11. Error handling
 
 - Every Supabase call wrapped: check `error` before using `data`
-- Every page has `error.tsx` boundary
-- Every async client component has `loading.tsx`
+- Every page has `error.tsx` boundary — **aspirational: there is 1 in the whole app** (counted
+  2026-09-14). Worth knowing before you trust it as a description.
+- ~~Every async client component has `loading.tsx`~~ — **there are ZERO `loading.tsx` files.**
+  This rule has never been followed by anything. Loading state is done with `<Skeleton>` inside the
+  component instead (`components/ui/skeleton.tsx`), which is a real pattern with real call sites.
+  Left here struck through rather than deleted, because "we decided not to" and "nobody got round
+  to it" are different facts and the next person should be told which this is: nobody has said.
 - Never throw raw errors to the user. Map to friendly messages.
 - Always log errors to Sentry: `Sentry.captureException(error)`
 
@@ -397,6 +415,7 @@ npm run lint                   # ESLint
 npm run test                   # Vitest unit tests
 npm run test:e2e               # Playwright E2E
 npm run build                  # production build (locally test)
+npm run sweep                  # 4 advisory audits — see below
 
 # Before pushing
 npm run lint && npm run typecheck && npm run test
@@ -406,6 +425,27 @@ git push origin feat/branch-name
 # → Vercel auto-deploys preview
 # → after merge: production deploys
 ```
+
+### `npm run sweep` — four advisory audits (added 2026-09-14)
+
+Each is a `scripts/find-*.py` and each prints CANDIDATES, not verdicts. None gates CI: a non-zero
+exit would turn an advisory into a gate by the back door and start failing builds over a comment
+somebody wrote correctly. **The COUNT moving is the signal.**
+
+| sweep | baseline | what it catches |
+|---|---|---|
+| `fake-actions` | 1 | a handler that only toasts — a button that looks like it did something |
+| `fake-data` | 22 | fabricated figures. Noisy by design: a CSV template and an invented metric look alike |
+| `stale-claims` | 0 + 0 | a comment naming a file or identifier that does not exist |
+| `frozen-tokens` | 36 + 60 | a colour literal equal to a theme token's LIGHT value |
+
+`frozen-tokens` exists because the §5 checks grep Tailwind **class names**, and the worst colour
+bug this app has had was an inline `style={{}}` literal: the public purchase page hardcoded
+`rgba(250,248,242)`, which IS `--paper` in light, so its hero stayed near-white while the text on
+it turned cream — 28 AA failures in dark mode, the worst at 1.01:1, and every colour check called
+that page clean. Most of its baseline is legitimate (email HTML has no dark mode, the PWA manifest
+colour is static, `src/site` is scoped to its own CSS); a brand mark and a frozen `--paper` are the
+same bytes and only a person can tell them apart.
 
 ---
 

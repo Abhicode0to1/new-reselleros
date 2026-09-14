@@ -11,8 +11,10 @@ CLAUDE.md §0.9 requires this skill and it did not exist until 25 Aug 2026. §8 
 > input needs a `<Label>` · Use semantic HTML (`<nav>`, `<main>`, `<button>` not `<div onClick>`) ·
 > Color contrast WCAG 2.1 AA minimum"
 
-> ⚠️ **29 Aug 2026: this file's `aria-pressed` counts had gone stale** (11 → 20 app-wide, 1 → 10 on
-> `/leads`) because somebody fixed them. **Re-measure before reporting any number here.**
+> ⚠️ **Re-measured 14 Sep 2026, and they had gone stale AGAIN** — `aria-pressed` 11 → 20 → **60**
+> app-wide, because somebody keeps fixing them. `text-[9px]`, which §5 below called this app's
+> worst contrast problem with 47 uses, is now **0**. **Re-measure before reporting any number
+> here.** Every command is in the file; running them costs seconds.
 >
 > Keyboard reach, focus visibility and contrast are this file's job. A control that is reachable and
 > readable but sits in a column the user cannot see is a different defect — that is **`layout-audit`**.
@@ -93,9 +95,11 @@ Verified: on `/leads` the line grep said 30 unlabelled `truncate`; the element w
 A button that holds an on/off state and does not say so reads to a screen reader as a plain
 button. The user can press it and cannot tell it is now active.
 
-⚠️ **Re-measured 29 Aug 2026, and the numbers had moved in the GOOD direction.** This said 11
-app-wide and **one** on `/leads`. Today: **20** app-wide and **10** on `/leads`. The gap this
-section was written about has largely been closed.
+⚠️ **Re-measured twice, and the numbers moved in the GOOD direction both times.** This said 11
+app-wide and **one** on `/leads`. 29 Aug: 20 app-wide. 14 Sep 2026: **60** app-wide, plus **14**
+`aria-current` and **4** `aria-sort` (which was 0 — sortable headers announced nothing, and the
+button inside them carried the direction where only a focused reader would hear it). The gap this
+section was written about is largely closed.
 
 That does not retire the check, it changes what a finding looks like: zero on a screen is still a
 finding; some-but-not-all is a question about which controls were missed. **Run the greps below.
@@ -194,8 +198,9 @@ was written to catch does not currently exist here.
 
 ## 3. Icon-only buttons need a name
 
-**51** `<IconButton>` uses app-wide — re-measured 29 Aug 2026, unchanged. Each renders a glyph and
-nothing else, so without a label a screen reader announces "button".
+**53** `<IconButton>` uses app-wide — re-measured 14 Sep 2026 (51 on 29 Aug). Each renders a glyph
+and nothing else, so without a label a screen reader announces "button". **All 53 carry one**, so
+this section is CLEAN — but the check stays, because one unlabelled addition is one silent button.
 
 ```bash
 grep -n "<IconButton" $F | grep -v "aria-label" 
@@ -236,7 +241,7 @@ about a title on an element with room to spare is noise.
 
 ## 5. Contrast, computed from the tokens
 
-**52** tokens in `globals.css` (was 48 — re-measured 29 Aug 2026), and both themes matter —
+**74** tokens in `globals.css` (48 → 52 → 74, re-measured 14 Sep 2026), and both themes matter —
 `:root` and the dark override.
 
 Compute rather than judge. In the browser, on the real screen:
@@ -261,17 +266,28 @@ that test, then parses as black, and every element comes back at **1.0:1**. That
 fabricated failures**. Walk until `alpha >= 0.95`, fall back to `<html>`, and if nothing is opaque
 **skip the element and report it as skipped** rather than inventing a number.
 
-**What actually fails here, and it is the same finding as the type problem:** both failures on
-`/leads` are at **9px** —
+**Three: A GRADIENT IS NOT A `backgroundColor`, and the walk steps straight past it** — measuring
+the text against whatever sits BEHIND the gradient. Measured 14 Sep 2026: an avatar painted with
+`linear-gradient(135deg, #1A1815, #4A3B28)` and cream text came back as "cream on cream, 1.01:1",
+because the walk skipped the gradient and found the page. Skipping such elements is honest but left
+35 unmeasured on one page. Pull the gradient's own stops out of `backgroundImage` —
+`getComputedStyle` resolves every one to `rgb()`/`rgba()` — and score the text against the WORST
+stop, which is the pixel a reader can actually land on.
 
-```
-rgb(171,165,155) on rgb(243,241,236) · 9px · 2.17:1  ("Filter")
-rgb(224,31,31)   on rgb(254,236,236) · 9px · 4.20:1  ("🔥 Hot")
-```
+**Four: `offsetParent` IS NULL FOR EVERY `position: fixed` ELEMENT.** Any visibility filter built
+on it reports open modals, FABs and sticky bars as invisible, so they are silently never measured.
+Use the rect plus `visibility`/`display` instead. This cost a full round on the dialog audit, where
+two open modals were reported as "not visible" while they were on screen.
 
-The smallest text is also the lowest contrast, and `text-[9px]` has 47 uses app-wide with no rung
-in any scale to hold it. Report the contrast, then point at `docs/TYPE-SCALE-PROPOSAL.md` — raising
-9px to the scale's floor fixes both at once.
+**What used to fail here was 9px text — and that is now FIXED.** This section said `text-[9px]` had
+47 uses app-wide with no rung to hold it, and named two failures on `/leads`. Re-measured
+14 Sep 2026: **`text-[9px]` is 0 app-wide**, and the whole of `text-[Npx]` below 12px is 0. Do not
+go looking for it.
+
+What replaced it as this app's real contrast problem is a COLOUR that cannot flip, not a size —
+see §2 of `design-critique` and `scripts/find-frozen-tokens.py`. A literal frozen at a token's
+light value keeps a surface pale while the token text on it turns cream. Measured on the public
+purchase page: 28 failures in dark mode, the worst at 1.01:1, on the screen that asks for money.
 
 ---
 
@@ -285,7 +301,10 @@ grep -nE 'tone|variant|kind' $F | grep -iE 'rose|emerald|amber|danger|success' |
 ```
 
 For each coloured state, check there is also a word, an icon, or a number. `components/ui/badge.tsx`
-and `status-pill.tsx` are where the pattern is set — read them before flagging a call site.
+is where the pattern is set — read it before flagging a call site. (`status-pill.tsx` used to be
+named here too. It was deleted on 14 Sep 2026: a second status vocabulary used 5 times against
+Badge's 458, carrying 87 raw palette values, and showing DIFFERENT colours from /quotes for the
+same quote. `unifiedStatus()` in `lib/quotes/status-badge.ts` is the one mapping now.)
 
 ---
 
@@ -299,7 +318,23 @@ grep -n "tabIndex=\"-1\"\|tabindex=\"-1\"" $F
 
 A `<div onClick>` is not reachable by keyboard and not announced as actionable. `role="button"`
 plus `tabIndex={0}` plus a key handler is the repair — or just use `<button>`, which is what §8
-says.
+says. **Narrow the grep by reading**: of 26 hits on one pass, 24 were `stopPropagation` guards,
+dismissal backdrops, or elements that already declare a role. Two were real.
+
+⚠️ **AND CHECK THAT ENTER REACHES THE CONTROL AT ALL.** `useListKeys` listens on WINDOW, maps
+Enter to "open the highlighted row", and calls `preventDefault()`. `shouldIgnore` skips TYPING
+targets, and a button is not one — so on all six list screens (/customers, /enquiries, /leads,
+/payments, /quotes, /subscriptions) tabbing to ANY button and pressing Enter did nothing at all,
+until `isActivationTarget()` was added on 14 Sep 2026.
+
+The tell was an asymmetry worth remembering: **click worked, Space worked, Enter did not** — Space
+only worked because Space is not in `listAction`. If a control responds to one activation key and
+not the other, something above it is eating the key.
+
+```js
+// with a control focused, did anything cancel the key before it arrived?
+el.addEventListener("keydown", (e) => console.log(e.key, e.defaultPrevented), true);
+```
 
 **Then tab the screen in the browser** and record the order. A dialog that does not trap focus, or
 a drawer that leaves focus behind it, is a finding no grep will find:

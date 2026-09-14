@@ -34,6 +34,20 @@ Ye **enabled hai**. To sahi kaam "koi skill dhoondho" nahi, **"wo do skill banao
 
 Aur banane layak material sach me maujood hai — isliye skill **generic nahi**, is app ki hogi:
 
+> ⚠️ **Ye table 25 Aug 2026 ka hai aur ab PURANA hai — 14 Sep 2026 ko dobara naapa gaya.**
+> Itihaas mita nahi rahe (ye document batata hai ki skills kyun banayi gayin), lekin koi number
+> yahan se copy mat karo:
+>
+> | | Tab (25 Aug) | Ab (14 Sep 2026) |
+> |---|---|---|
+> | `globals.css` tokens | 48 | **74** |
+> | `tailwind.config.ts` me `fontSize` | nahi tha | **hai** — `3xs` 10px, `2xs` 11px |
+> | arbitrary `text-[Npx]` | 2,305 | **294**, aur 12px se chhota **0** |
+> | `components/ui/` primitives | 28 | **27** — `status-pill.tsx` 14 Sep ko hata diya |
+>
+> Skills ab maujood hain: `.claude/skills/design-critique`, `accessibility-review`, `layout-audit`.
+> Har ek me apne naap aur apne jhoothe-positive likhe hain. **Number wahan se lo, yahan se nahi.**
+
 | Material | Kitna |
 |---|---|
 | `globals.css` design tokens | **48 CSS variable** (amber/emerald/hairline/ink/paper + 3 font) |
