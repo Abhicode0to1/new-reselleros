@@ -48,6 +48,17 @@ const SWEEPS = [
     file: "scripts/find-stale-claims.py",
     expect: "0 files, 0 identifiers",
   },
+  {
+    name: "frozen-tokens",
+    file: "scripts/find-frozen-tokens.py",
+    expect: "36 near-exact, 60 looser — most are legitimate; the COUNT moving is the signal",
+    /* Noisy by design, like fake-data: a brand mark and a frozen --paper are
+       the same bytes, and only a person can say which is which. It exists
+       because the §5 class greps CANNOT see inline style literals — the buy
+       page's hero was unreadable in dark mode for exactly that reason, and
+       every colour sweep in this repo reported it as clean. */
+    quiet: true,
+  },
 ];
 
 function run(s) {
