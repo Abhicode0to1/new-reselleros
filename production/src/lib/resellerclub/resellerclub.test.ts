@@ -26,6 +26,22 @@ describe("productKeyFor — the TLD → ResellerClub product-key ladder", () => 
   it("returns null for a TLD the price map doesn't carry — never a guess", () => {
     expect(productKeyFor("xyz", PRICING)).toBeNull();
   });
+
+  /* .co.in is one of the FIVE TLDs every search on this site asks for
+     (DEFAULT_TLDS, in both the public route and site/lib/domain-search), and
+     until 16 Sep 2026 it resolved to nothing: ResellerClub files it under the
+     third-level .in product, which no rung of the ladder spelled. Measured
+     against the live account that day — .in ₹863, .com ₹1199, .org ₹1350,
+     .net ₹1559, and .co.in "Price on request", every single time. */
+  it("finds a multi-level TLD under its third-level product (co.in → thirdleveldotin)", () => {
+    expect(productKeyFor("co.in", PRICING)).toBe("thirdleveldotin");
+    expect(productKeyFor(".CO.IN", PRICING)).toBe("thirdleveldotin");
+  });
+  it("does not invent a third-level key for an ordinary TLD", () => {
+    /* "net" must never become "thirdleveldotnet" — the rung only fires on a
+       dotted TLD, so a single-label miss stays an honest null. */
+    expect(productKeyFor("net", PRICING)).toBeNull();
+  });
 });
 
 describe("extractTldPrice — the numbers that reach the public site", () => {
@@ -38,6 +54,10 @@ describe("extractTldPrice — the numbers that reach the public site", () => {
     expect(p.register).toBeNull();
     expect(p.renew).toBeNull();
     expect(p.transfer).toBeNull();
+  });
+  it("a .co.in card now carries a real number instead of \"Price on request\"", () => {
+    const p = extractTldPrice("co.in", PRICING);
+    expect(p).toEqual({ tld: ".co.in", register: 649, renew: 649, transfer: 649, currency: "INR" });
   });
   it("multi-year keys are ignored — only the 1-year price is quoted", () => {
     /* addnewdomain["2"] = 1500 exists for .in; the card must still say 799. */

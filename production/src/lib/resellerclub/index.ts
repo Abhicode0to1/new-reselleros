@@ -93,6 +93,19 @@ export function productKeyFor(tld: string, pricing: CustomerPricingMap): string 
     clean.toUpperCase(),
     `dot${clean}`,
     `dom${clean}`,
+    /* A multi-level TLD is one RC product per registry, filed under the LAST
+       label: ".co.in" is sold as "thirdleveldotin", alongside .net.in, .org.in
+       and the rest of the third-level .in family. Ported from the engine
+       (domain-management-system: lib/pricing-service.ts:193), which has billed
+       this same reseller account with it for years.
+
+       This is not a nicety. ".co.in" is one of the FIVE TLDs every search on
+       this site asks for — DEFAULT_TLDS, in both api/domains/availability and
+       site/lib/domain-search — and no rung above spells its key, so the card
+       said "Price on request" every single time. Measured against the live
+       account, 16 Sep 2026: .in 863, .com 1199, .org 1350, .net 1559, and
+       .co.in nothing at all. It is 779. */
+    clean.includes(".") ? `thirdleveldot${clean.split(".").pop()}` : "",
     `centralnicza${clean}`,
     `centralnicus${clean}`,
   ].filter(Boolean) as string[];
