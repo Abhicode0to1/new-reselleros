@@ -50,6 +50,13 @@ import { loadRazorpayCheckout } from "@/lib/razorpay/checkout-client";
    rate would have shown the customer one total in the dialog and charged them
    another. hosting-order.ts has no server imports, so a client may use it. */
 import { HOSTING_GST_RATE, hostingOrderTotals } from "@/lib/portal/hosting-order";
+/* The SAME function the checkout route validates with — `cleanDomain` is pure
+   and has no server imports. Measured before this: "abc" and "example .com"
+   both ENABLED the Pay button, so the customer clicked Pay on the money path
+   and waited for a round-trip to be told what the helper line already said.
+   Sharing the function is the point: a second client-side regex would be a
+   second rule, and the two would drift. */
+import { cleanDomain } from "@/lib/customers/card-fields";
 
 export interface HostingPlan {
   id: string;
@@ -181,6 +188,15 @@ function BuyHostingDialog({
 }) {
   const router = useRouter();
   const [domain, setDomain] = React.useState("");
+  const [touched, setTouched] = React.useState(false);
+
+  /* What the server will actually use. cleanDomain NORMALISES as well as
+     refuses — it strips scheme, www., path and query — so a customer who
+     pastes "https://www.Example.com/about" gets example.com rather than a
+     rejection. Showing them that is kinder than silently changing it. */
+  const cleaned = cleanDomain(domain);
+  const domainReady = Boolean(cleaned);
+  const normalised = Boolean(cleaned && cleaned !== domain.trim().toLowerCase());
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -273,17 +289,37 @@ function BuyHostingDialog({
               both and wires `aria-describedby` to whichever is showing, so a
               screen reader hears the refusal. A loose <p> underneath would be
               visible and unannounced. */}
-          <FormField label="Domain" htmlFor="hosting-domain">
+          <FormField label="Domain" htmlFor="hosting-domain" required>
             <Input
               id="hosting-domain"
               placeholder="example.com"
               value={domain}
+              required
               autoComplete="off"
               spellCheck={false}
-              error={error ?? undefined}
-              helper="Just the domain — no http:// and no trailing path."
+              /* A phone capitalises the first letter of a text field and offers
+                 autocorrect, so "example.com" was being typed as "Example.com"
+                 with a squiggly underline. inputMode="url" also puts the dot and
+                 the slash on the main keyboard. */
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              error={
+                error ??
+                /* Only AFTER they leave the field. Nagging somebody who has typed
+                   "e" on their way to "example.com" is worse than saying nothing. */
+                (touched && domain.trim() && !domainReady
+                  ? "That doesn't look like a domain. Enter it like example.com — no http:// and no trailing path."
+                  : undefined)
+              }
+              helper={
+                normalised
+                  ? `We'll set it up on ${cleaned} — that is this domain without the extra parts.`
+                  : "Just the domain — no http:// and no trailing path."
+              }
+              onBlur={() => setTouched(true)}
               onChange={(e) => { setDomain(e.target.value); setError(null); }}
-              onKeyDown={(e) => { if (e.key === "Enter" && domain.trim()) void onBuy(); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && domainReady) void onBuy(); }}
             />
           </FormField>
 
@@ -297,12 +333,17 @@ function BuyHostingDialog({
                 <span>GST {HOSTING_GST_RATE}%</span>
                 <span className="tabular-nums">{rupee(total - (totals?.subtotal ?? plan.price_month))}</span>
               </div>
-              <div className="flex items-center justify-between font-medium border-t border-hairline mt-2 pt-2">
-                <span>Total today</span>
-                <span className="tabular-nums">{rupee(total)}</span>
+              {/* Measured before this: "Total today" rendered at the same 14px as
+                  the plan name, and the RENEWAL line — the recurring commitment —
+                  was the smallest text in the dialog at 11px, below even the GST
+                  row. On a subscription purchase that is the wrong way round. */}
+              <div className="flex items-center justify-between border-t border-hairline mt-2 pt-2">
+                <span className="font-medium">Total today</span>
+                <span className="text-base font-semibold tabular-nums">{rupee(total)}</span>
               </div>
-              <div className="text-2xs text-ink-3 mt-1.5">
-                Then {rupee(total)} every month. Cancel any time by contacting {resellerName}.
+              <div className="text-xs text-ink-2 mt-1.5">
+                Then <span className="font-medium tabular-nums">{rupee(total)}</span> every month.
+                Cancel any time by contacting {resellerName}.
               </div>
             </div>
           )}
@@ -310,7 +351,17 @@ function BuyHostingDialog({
 
         <DialogFooter>
           <Button variant="default" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button variant="primary" loading={busy} disabled={!domain.trim()} onClick={onBuy}>
+          {/* `domainReady`, not `domain.trim()`: the old test let "abc" through and
+              the refusal arrived from the server after a click on the money path.
+              title carries the reason, because a greyed button with no explanation
+              is a small dead end (§24). */}
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={!domainReady}
+            title={domainReady ? undefined : "Enter the domain first — for example, example.com"}
+            onClick={onBuy}
+          >
             {plan ? `Pay ${rupee(total)}` : "Pay"}
           </Button>
         </DialogFooter>
