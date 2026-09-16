@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { expiryPhrase, summariseExpiries, type ExpiryUrgency } from "@/lib/domains/lifecycle";
 import { MAX_WATCHES_PER_CUSTOMER } from "@/lib/domains/watch";
-import { DomainWatches } from "../_components/domain-watches";
+import { DomainTools } from "../_components/domain-tools";
 import type { DomainAssetStatus } from "@/lib/supabase/database.types";
 import { PortalPageHeader, PortalStats } from "../_components/portal-page";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -262,7 +262,10 @@ export default async function PortalDomainsPage() {
       {/* Watching a name is offered whether or not they own any domains — somebody
           with nothing registered yet is exactly the person who wanted a name that
           was taken. */}
-      <DomainWatches initial={watchData ?? []} limit={MAX_WATCHES_PER_CUSTOMER} />
+      {/* Search + watch together: a name that comes back TAKEN can go straight
+          into the watch box below it, which is the whole point of putting the
+          search on this page rather than sending the customer elsewhere. */}
+      <DomainTools initialWatches={watchData ?? []} limit={MAX_WATCHES_PER_CUSTOMER} />
 
       {rows.length > 0 && (
         <p className="mt-4 text-2xs text-ink-3">

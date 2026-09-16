@@ -53,10 +53,31 @@ function statusLabel(row: WatchRowView): { text: string; kind: "success" | "mute
   return { text: row.last_checked_at ? "No answer yet" : "Not checked yet", kind: "warning" };
 }
 
-export function DomainWatches({ initial, limit }: { initial: WatchRowView[]; limit: number }) {
+export function DomainWatches({
+  initial,
+  limit,
+  prefill,
+}: {
+  initial: WatchRowView[];
+  limit: number;
+  /* Sent by the search above when a name comes back TAKEN. The nonce is what
+     makes a second click on the SAME domain refill the box — keying on the
+     value alone would make it a no-op. */
+  prefill?: { value: string; nonce: number };
+}) {
   const [rows, setRows] = React.useState(initial);
   const [name, setName] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!prefill?.value) return;
+    setName(prefill.value);
+    /* Not "touched" yet: the customer did not type this, so showing them a
+       validation verdict on it would be answering a question nobody asked. */
+    setTouched(false);
+    document.getElementById("watch-domain")?.scrollIntoView({ block: "center", behavior: "smooth" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.nonce]);
 
   const open = rows.filter((r) => !r.notified_at).length;
 

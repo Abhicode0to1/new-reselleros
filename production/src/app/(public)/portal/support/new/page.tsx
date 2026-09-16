@@ -4,7 +4,7 @@
  * /portal/support/new — raise a new support ticket.
  */
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -51,12 +51,24 @@ function newTicketId(): string {
   return `TKT-${stamp}-${rand}`;
 }
 
-export default function NewTicketPage() {
+function NewTicketForm() {
   const router = useRouter();
+
+  /* The domain search on /portal/domains links here with the name already in
+     hand ("Please register acme.in"). Without this the link would land on an
+     empty box and the customer would retype what they had just searched for —
+     a promise the URL made and the form did not keep. Trimmed and capped
+     because it arrives from a query string. */
+  const params = useSearchParams();
+  const presetSubject = (params.get("subject") ?? "").trim().slice(0, 200);
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { category: "billing", priority: "normal" },
+    defaultValues: {
+      category: "billing",
+      priority: "normal",
+      ...(presetSubject ? { subject: presetSubject } : {}),
+    },
   });
 
   async function onSubmit(values: FormData) {
@@ -179,5 +191,16 @@ export default function NewTicketPage() {
         </form>
       </Card>
     </div>
+  );
+}
+
+/* NewTicketForm reads useSearchParams(), which Next requires to sit under a
+   Suspense boundary so the static prerender can bail out instead of failing
+   the build — same shape as /invoices and /portal/login. */
+export default function NewTicketPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <NewTicketForm />
+    </React.Suspense>
   );
 }
