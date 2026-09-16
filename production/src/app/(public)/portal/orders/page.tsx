@@ -4,6 +4,7 @@
  * Includes accepted / sent / paid / invoiced quotes — anything they've
  * been billed for. Customer can see status + amount + when sent.
  */
+import Link from "next/link";
 import { requirePortalSession } from "@/lib/portal/session";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
@@ -19,6 +20,31 @@ export const dynamic = "force-dynamic";
    HTMLAttributes, so it landed on the <span> as a dead DOM attribute and
    the badge rendered muted grey whatever the status was: paid, overdue and
    draft all looked identical. Fixed 8 Sep 2026. */
+/**
+ * Where an order LED. Measured 16 Sep 2026: this screen showed a paid ₹235 order
+ * and the whole <main> contained ZERO links — nothing to click, on the page a
+ * customer opens to ask "what did I buy and where is it?".
+ *
+ * Only for an order that actually produced something. `received` is the only
+ * status that means the money arrived (the others in the map below are none /
+ * awaiting / partial / invoiced), and promising "View hosting" for an unpaid
+ * order would be a link to an account that does not exist yet.
+ *
+ * The `hosting-` prefix is not a guess: `hostingPlanLabel` in
+ * lib/portal/hosting-order.ts builds every hosting plan label that way, and the
+ * public cart writes the same shape. Everything else on this screen is a
+ * workspace plan — measured: "Plus", "Plus + Voice", "Workspace Std".
+ */
+function orderDestination(
+  plan: string | null,
+  paymentStatus: string | null,
+): { href: string; label: string } | null {
+  if (paymentStatus !== "received") return null;
+  return (plan ?? "").startsWith("hosting-")
+    ? { href: "/portal/hosting", label: "View hosting" }
+    : { href: "/portal/subscription", label: "View subscription" };
+}
+
 const PAYMENT_STATUS_KIND: Record<string, "success" | "warning" | "danger" | "muted" | "info"> = {
   received: "success",
   partial:  "warning",
@@ -102,6 +128,17 @@ export default async function PortalOrdersPage() {
                   <p className="font-mono text-lg font-semibold text-ink">{rupee(q.amount)}</p>
                   <p className="text-2xs text-ink-3">{formatDate(q.created_date)}</p>
                 </div>
+                {(() => {
+                  const to = orderDestination(q.plan, q.payment_status);
+                  return to ? (
+                    <Link
+                      href={to.href as never}
+                      className="mt-3 inline-flex min-h-11 items-center text-xs font-medium text-amber-ink hover:underline"
+                    >
+                      {to.label} →
+                    </Link>
+                  ) : null;
+                })()}
               </Card>
             </li>
           ))}
@@ -117,6 +154,7 @@ export default async function PortalOrdersPage() {
                 <th className="text-right px-4 py-3">Amount</th>
                 <th className="text-left  px-4 py-3">Created</th>
                 <th className="text-left  px-4 py-3">Status</th>
+                <th className="text-right px-4 py-3"><span className="sr-only">What this order gave you</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
@@ -131,6 +169,19 @@ export default async function PortalOrdersPage() {
                     <Badge kind={PAYMENT_STATUS_KIND[q.payment_status ?? "none"] ?? "muted"}>
                       {(q.payment_status ?? "none").replace("_", " ")}
                     </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {(() => {
+                      const to = orderDestination(q.plan, q.payment_status);
+                      return to ? (
+                        <Link
+                          href={to.href as never}
+                          className="inline-flex min-h-11 items-center text-xs font-medium text-amber-ink hover:underline"
+                        >
+                          {to.label} →
+                        </Link>
+                      ) : null;
+                    })()}
                   </td>
                 </tr>
               ))}
