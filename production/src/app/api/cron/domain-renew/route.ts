@@ -31,17 +31,28 @@
  * WITHOUT a second call.
  *
  * ─── THE GATE, AND WHAT IT DOES WHEN SHUT ───────────────────────────────────
- * `rcRenewDomain` refuses unless credentials are present AND
- * `DOMAIN_REGISTER_LIVE=1`. With the gate shut this route writes nothing and
- * leaves the row queued, saying so in the run — the same discipline as
- * hosting-suspend with DirectAdmin unconfigured. Clearing the queue would erase
- * the only durable record that a paid renewal still has to be filed, and the
- * customer's domain would lapse with the books saying it was renewed.
+ * `rcRenewDomain` refuses unless credentials are present AND the
+ * `DOMAIN_REGISTER_LIVE` gate is open. READ THAT SECOND HALF CAREFULLY: since
+ * 11 Sep 2026 the gate DEFAULTS TO OPEN (lib/provisioning/live-gates.ts —
+ * Pardeep: "Keep those turned on by default until admin ask otherwise"), so
+ * unset, empty or unrecognised all mean ALLOWED outside a test run. Only an
+ * explicit off value shuts it. This comment said the opposite until 16 Sep
+ * 2026 and it mattered: with credentials now installed, CREDENTIALS ARE NO
+ * LONGER THE THING STOPPING THIS — nothing does, unless somebody set the flag
+ * off deliberately.
+ *
+ * With the gate shut this route writes nothing and leaves the row queued,
+ * saying so in the run — the same discipline as hosting-suspend with
+ * DirectAdmin unconfigured. Clearing the queue would erase the only durable
+ * record that a paid renewal still has to be filed, and the customer's domain
+ * would lapse with the books saying it was renewed.
  *
  * ─── WHAT IS NOT VERIFIED, SAID PLAINLY ─────────────────────────────────────
  * A SUCCESSFUL renewal has never been observed. No domain in this database has a
- * `registrar_order_id`, because none was registered through ResellerClub yet, and
- * the money gate is off. The refusal paths, the money gate, the duplicate guard
+ * `registrar_order_id`, because none was registered through ResellerClub yet.
+ * That was true when the money gate was the thing holding it — it no longer is
+ * (see above), so the first real filing is now one paid, queued row away rather
+ * than one flag away. The refusal paths, the money gate, the duplicate guard
  * and the gate-shut behaviour are all verified; the happy path is reasoned from
  * `rcRenewDomain`'s own typed outcomes and will need one real renewal watched
  * before anybody should trust it.

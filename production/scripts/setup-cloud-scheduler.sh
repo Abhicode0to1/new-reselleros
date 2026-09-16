@@ -151,9 +151,11 @@ JOBS=(
   # a global unique index, so a second worker reaching the same name loses the
   # insert and skips. Overlapping runs cannot double-order.
   #
-  # And safe to schedule BEFORE the money gate is open: without
-  # DOMAIN_REGISTER_LIVE=1 the route refuses every order and reports why, so this
-  # job can be in place waiting rather than remembered later.
+  # This used to say it was safe to schedule before the money gate opened,
+  # because "without DOMAIN_REGISTER_LIVE=1 the route refuses every order". That
+  # stopped being true on 11 Sep 2026: the gate now DEFAULTS TO OPEN and only an
+  # explicit off value shuts it (lib/provisioning/live-gates.ts). With
+  # ResellerClub credentials on the service, this job orders for real.
   "resellersos-provision-domain|*/5 * * * *|/api/cron/provision-domain|Register paid domains at ResellerClub"
   "resellersos-provision-hosting|*/5 * * * *|/api/cron/provision-hosting|Create paid hosting accounts on DirectAdmin"
   # 08:00 IST — BEFORE the 09:00 renewal cron, and the ordering is the reason for the
@@ -193,8 +195,10 @@ JOBS=(
   # a live purchase and a read before it, so the run is not free, and a renewal
   # is never as urgent as a site that is up when the books say it is off.
   #
-  # It files nothing unless DOMAIN_REGISTER_LIVE=1 and the credentials are set —
-  # with the gate shut it writes nothing and leaves the queue intact.
+  # It files nothing unless the credentials are set AND the DOMAIN_REGISTER_LIVE
+  # gate is open — and since 11 Sep 2026 that gate is open BY DEFAULT, so
+  # credentials alone are enough. With the gate explicitly shut it writes nothing
+  # and leaves the queue intact.
   "resellersos-domain-renew|*/30 * * * *|/api/cron/domain-renew|File a PAID domain renewal at ResellerClub"
 
   # ── The rest of what was missing ───────────────────────────────────
