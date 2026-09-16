@@ -135,7 +135,17 @@ const config: Config = {
         },
         destructive: {
           DEFAULT: "hsl(var(--rose) / <alpha-value>)",
-          foreground: "hsl(0 0% 100% / <alpha-value>)",
+          /* The same shape that made `primary.foreground` wrong, found by auditing
+             every foreground key after fixing that one. --rose flips —
+             rgb(224,31,31) light, rgb(243,89,89) dark — and a frozen white on the
+             dark fill measures 3.29:1. --rose-fg gives 4.79 and 5.46.
+
+             LATENT, not live: `destructive` has ZERO uses today, and Tailwind's
+             JIT does not even emit the class (probing `bg-destructive` returns
+             transparent, which is how this was nearly mismeasured). Fixed anyway —
+             a wrong token left in the config is what let `bg-primary` go bad in 31
+             places without anybody writing a bug. */
+          foreground: "hsl(var(--rose-fg) / <alpha-value>)",
         },
         muted: {
           DEFAULT: "hsl(var(--paper-2) / <alpha-value>)",
