@@ -174,7 +174,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const { response, user, role, canViewDeals } = await updateSession(request);
+  const { response, user, role, canViewDeals, isPortalCustomer } = await updateSession(request);
   const isAuthed = !!user;
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   const isAuthPage = AUTH_PREFIXES.some((p) => pathname.startsWith(p));
@@ -195,6 +195,30 @@ export async function middleware(request: NextRequest) {
     url.search = "";
     url.pathname = "/login";
     url.searchParams.set("next", target);
+    return NextResponse.redirect(url);
+  }
+
+  /* ─── A CUSTOMER NEVER ENTERS THE STAFF APP ───────────────────────────────
+     Reported 16 Sep 2026: signing in as a customer and opening /dashboard
+     showed "This part is for staff". That screen exists for a reason — it
+     replaced a blank staff shell, which was worse — but a customer should not
+     be reading an explanation of somebody else's workspace at all. It is their
+     first impression of the product.
+
+     They got there two ways, and BOTH are closed here:
+       · typing or following a link to any staff route;
+       · simply opening /login while signed in — the line below used to send
+         them to ROLE_HOME[role ?? "owner"], and a customer's role is null, so
+         the fallback marched them into /dashboard. That is the likelier path:
+         a customer coming back to the site lands on /login.
+
+     A redirect, not a rendered page: they arrive where they meant to be and
+     never see the staff side. StaffAreaGuard stays as the backstop for any
+     (app) route that is not in PROTECTED_PREFIXES. */
+  if (isAuthed && isPortalCustomer && (isProtected || isAuthPage)) {
+    const url = request.nextUrl.clone();
+    url.search = "";
+    url.pathname = "/portal/dashboard";
     return NextResponse.redirect(url);
   }
 

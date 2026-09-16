@@ -51,6 +51,7 @@ export async function updateSession(request: NextRequest) {
   // lookup; cost ≈ 1 ms. Cached at the Supabase edge anyway.
   let role: string | null = null;
   let canViewDeals = false;
+  let isPortalCustomer = false;
   if (user) {
     const { data: me } = await supabase
       .from("users")
@@ -59,7 +60,31 @@ export async function updateSession(request: NextRequest) {
       .maybeSingle();
     role = (me?.role as string | null) ?? null;
     canViewDeals = Boolean(me?.can_view_deals);
+
+    /* ─── IS THIS A PORTAL CUSTOMER? ──────────────────────────────────────
+       Asked ONLY when there is no `users` row, so staff — every real user of
+       the staff app — pay nothing for it. A customer has a perfectly valid
+       Supabase session, so without this the middleware waves them into the
+       staff console and they land on the "This part is for staff" screen.
+
+       `auth_user_id` is UNIQUE and the RLS policy `customer_users_select_self`
+       already scopes the read to the caller; the .eq() is stated anyway so the
+       query does not depend on a policy staying that way.
+
+       NOT every strandee is a customer: a brand-new staff signup has no `users`
+       row either, for the seconds before their tenant is provisioned. Sending
+       THEM to a portal they have no account on would be a worse dead end than
+       the one this fixes, which is why the question is "are you in
+       customer_users" and not "are you missing from users". */
+    if (!me) {
+      const { data: pc } = await supabase
+        .from("customer_users")
+        .select("id")
+        .eq("auth_user_id", user.id)
+        .maybeSingle();
+      isPortalCustomer = Boolean(pc);
+    }
   }
 
-  return { response, user, role, canViewDeals };
+  return { response, user, role, canViewDeals, isPortalCustomer };
 }
