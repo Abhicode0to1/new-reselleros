@@ -29,6 +29,11 @@ import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
+/* The SAME rule the /api/portal/watch route refuses with, and it returns a
+   REASON per failure ("acme.com, not acme") rather than a boolean. The module
+   is pure — no server imports — so the client can hold the identical rule
+   instead of a second, drifting copy. */
+import { watchableDomain, canAddWatch } from "@/lib/domains/watch";
 
 export interface WatchRowView {
   id: string;
@@ -54,6 +59,15 @@ export function DomainWatches({ initial, limit }: { initial: WatchRowView[]; lim
   const [busy, setBusy] = React.useState(false);
 
   const open = rows.filter((r) => !r.notified_at).length;
+
+  /* Before this the button was gated on `!name.trim()`, so "acme" enabled it and
+     the refusal arrived from the server — the same round-trip the hosting dialog
+     had. `check` carries the reason the server would have given. */
+  const [touched, setTouched] = React.useState(false);
+  const check = watchableDomain(name);
+  const atLimit = !canAddWatch(rows.length).ok;
+  const ready = check.ok && !atLimit;
+  const normalised = check.ok && check.domain !== name.trim().toLowerCase();
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -139,14 +153,45 @@ export function DomainWatches({ initial, limit }: { initial: WatchRowView[]; lim
         <Input
           id="watch-domain"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => { setName(e.target.value); }}
+          onBlur={() => setTouched(true)}
           placeholder="e.g. theonewewanted.com"
           className="flex-1 font-mono"
           autoComplete="off"
           spellCheck={false}
+          /* A phone capitalises and autocorrects a plain text field, so a domain
+             typed on one arrived as "Theonewewanted.com" with a squiggle. */
+          inputMode="url"
+          autoCapitalize="none"
+          autoCorrect="off"
           disabled={busy}
+          wrapperClassName="flex-1"
+          /* Said in the field, not in a toast: every one of these is something to
+             FIX right here, and a toast that disappears takes the instruction
+             with it. */
+          error={touched && name.trim() && !check.ok ? check.reason : undefined}
+          helper={
+            normalised && check.ok
+              ? `We will watch ${check.domain}.`
+              : atLimit
+                ? undefined
+                : "The full name, with its ending — theonewewanted.com."
+          }
         />
-        <Button type="submit" variant="primary" icon="bell" loading={busy} disabled={!name.trim()}>
+        <Button
+          type="submit"
+          variant="primary"
+          icon="bell"
+          loading={busy}
+          disabled={!ready}
+          title={
+            atLimit
+              ? `You are already watching ${limit} names, which is the most we check daily. Remove one to add another.`
+              : check.ok
+                ? undefined
+                : "Enter the full domain name first — theonewewanted.com"
+          }
+        >
           Watch it
         </Button>
       </form>
