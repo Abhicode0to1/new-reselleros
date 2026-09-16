@@ -38,6 +38,7 @@
 import { reportCron } from "@/lib/ops/cron-report";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { platformOpsRecipient } from "@/lib/ops/ops-recipient";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { sendEmail } from "@/lib/email/send";
 import { buildDigest, digestText, type LogRow, type WalletState } from "@/lib/ops/health-digest";
@@ -171,13 +172,12 @@ async function handle(req: Request) {
 
   if (digest.clean) return NextResponse.json({ ok: true, clean: true, hours });
 
-  /* Kise bhejein: is tenant ka owner. Ek hi tenant ka digest — ye ops ka mail hai, tenant
-     ka nahi, isliye platform ke owner par jata hai. */
+  /* Kise bhejein: PLATFORM ka owner — ye ops ka mail hai, kisi tenant ka nahi, aur ab
+     isme ResellerClub ka wallet balance bhi jata hai. Pehle yahan "sabse purana owner row"
+     tha, bina tenant filter ke; har self-signup ek owner banata hai, to wo sirf ittefaq se
+     platform tha. lib/ops/ops-recipient.ts me poori wajah. */
   const admin = createAdminClient();
-  const { data: owner } = await admin
-    .from("users").select("email").eq("role", "owner")
-    .order("created_at", { ascending: true }).limit(1).maybeSingle();
-  const to = (owner as { email?: string } | null)?.email ?? null;
+  const to = await platformOpsRecipient(admin);
   if (!to) {
     return NextResponse.json({ ok: true, clean: false, emailed: false, reason: "no owner email", digest });
   }
