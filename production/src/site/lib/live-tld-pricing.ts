@@ -10,6 +10,24 @@
  * price, server-side, 10-minute revalidate — a price change in the platform's
  * admin reaches the site within ten minutes, no redeploy.
  *
+ * ─── EXCEPT IT DOES NOT, BECAUSE NOTHING CALLS IT ───────────────────────────
+ * Measured 16 Sep 2026: `fetchLiveTldPricing` and `mergeTlds` have ZERO callers
+ * in the repo. `/domains` renders `TLDS` straight out of catalog.ts
+ * (DomainLanding.tsx:36), and so does the checkout re-pricer
+ * (api/public/checkout/cart/route.ts:91). So the paragraph above describes an
+ * intention, not the running site — the placeholders this module was written to
+ * correct are still the numbers a customer is shown and charged.
+ *
+ * What that costs, measured against the live ResellerClub account the same day:
+ * every one of the 14 advertised TLDs is priced BELOW what the registrar
+ * charges us. `.store` is sold at 249 and costs 4,788; `.shop` at 299 costs
+ * 3,839; `.in` at 499 costs 863. `.ai` is advertised at 6,999 and has no RC
+ * product on this account at all, so it cannot be supplied at any price.
+ *
+ * Wiring this up is a one-line change in the /domains page and the cart route.
+ * It is left undone deliberately: it would RAISE every advertised price, which
+ * is a decision for the business, not a cleanup.
+ *
  * When the platform is unreachable, the placeholder stands and the page still
  * renders (a rate table that 500s on an API hiccup is worse than a briefly
  * stale one). It NEVER invents: a missing real price keeps the placeholder and

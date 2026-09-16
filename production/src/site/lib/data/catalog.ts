@@ -16,6 +16,33 @@ export interface Tld {
   group: "Popular" | "Business" | "Tech";
 }
 
+/**
+ * ⚠ THESE ARE THE NUMBERS A CUSTOMER IS SHOWN AND CHARGED, AND THEY ARE BELOW COST.
+ *
+ * Not decoration: /domains renders this table (DomainLanding.tsx), and the
+ * server-side re-pricer takes `reg` from here as its "OWN source of truth"
+ * (api/public/checkout/cart/route.ts:91-93) — so this is the amount Razorpay
+ * collects, with `cost: 0` recorded against it.
+ *
+ * Measured 16 Sep 2026 against the live ResellerClub account, register price,
+ * one year, in rupees — every row sells under what we pay:
+ *
+ *     .in      499 / 863      .com    899 / 1199    .co.in   599 / 779
+ *     .org    1099 / 1350     .net   1199 / 1559    .company 799 / 1595
+ *     .agency 1899 / 2663     .dev   1499 / 1535    .io     3899 / 5747
+ *     .cloud   899 / 1907     .app   1299 / 1787
+ *     .store   249 / 4788     .shop   299 / 3839    <- 4,539 and 3,540 under
+ *     .ai     6999 / NO PRODUCT ON THIS RESELLERCLUB ACCOUNT
+ *
+ * `.store` and `.shop` read like first-year promos, and a loss-leader is a real
+ * strategy — but the promo is not coming from ResellerClub, so the difference
+ * is ours to absorb on every single sale. `.ai` is worse than mispriced: there
+ * is no product key for it, so a paid .ai order cannot be filed at all.
+ *
+ * site/lib/live-tld-pricing.ts was written to replace these with the real
+ * customer price and was never wired to anything. Wiring it raises every
+ * advertised price, which is why it has not been done quietly.
+ */
 export const TLDS: readonly Tld[] = [
   { tld: ".in", reg: 499, renew: 799, transfer: 649, use: "Indian businesses", group: "Popular" },
   { tld: ".com", reg: 899, renew: 1199, transfer: 999, use: "Anything, anywhere", group: "Popular" },
