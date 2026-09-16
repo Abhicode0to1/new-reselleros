@@ -18,6 +18,12 @@ import {
 } from "@/lib/quotes/billing";
 import { quoteInstalments } from "@/lib/billing/instalments";
 import { useHandRolledModal } from "@/lib/hooks/useHandRolledModal";
+/* The app's own email rule, used wherever an address is accepted from a
+   person. The <input type="email"> here is NOT inside a <form>, so the
+   browser never validates it — measured: validity.valid was false for "asdf"
+   while Confirm stayed enabled, and the value went onto the acceptance
+   record. type="email" was only changing the phone keyboard. */
+import { cleanEmail } from "@/lib/customers/card-fields";
 
 /** Customer-SAFE quote shape — no cost/margin. Built server-side in page.tsx. */
 export type PublicQuote = {
@@ -155,6 +161,9 @@ export function QuoteAcceptView({
   const [signerName, setSignerName] = React.useState("");
   const [signerTitle, setSignerTitle] = React.useState("");
   const [signerEmail, setSignerEmail] = React.useState("");
+  /* Optional field: blank is fine. Typed-and-wrong is not — this address is the
+     record of who confirmed, and "asdf" cannot be used to reach anybody. */
+  const signerEmailBad = Boolean(signerEmail.trim()) && !cleanEmail(signerEmail);
   const [changeRequested, setChangeRequested] = React.useState(false);
 
   const choiceList = React.useMemo(
@@ -1048,11 +1057,25 @@ export function QuoteAcceptView({
                   <input
                     id="signer-email"
                     type="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
                     value={signerEmail}
                     onChange={(e) => setSignerEmail(e.target.value)}
                     placeholder="you@company.in"
-                    className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink"
+                    aria-invalid={signerEmailBad || undefined}
+                    aria-describedby={signerEmailBad ? "signer-email-error" : undefined}
+                    className={`w-full rounded-md border bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 ${
+                      signerEmailBad
+                        ? "border-rose focus:ring-rose"
+                        : "border-hairline focus:ring-ink"
+                    }`}
                   />
+                  {signerEmailBad && (
+                    <p id="signer-email-error" className="mt-1 text-2xs text-rose-ink">
+                      That does not look like an email address. Leave it blank if you would rather not give one.
+                    </p>
+                  )}
                 </div>
               </div>
               <p className="text-2xs leading-snug text-ink-3">
@@ -1075,8 +1098,14 @@ export function QuoteAcceptView({
                 variant="primary"
                 icon="check_circle"
                 loading={accepting}
-                disabled={!signerName.trim()}
-                title={!signerName.trim() ? "Type your name to confirm" : undefined}
+                disabled={!signerName.trim() || signerEmailBad}
+                title={
+                  !signerName.trim()
+                    ? "Type your name to confirm"
+                    : signerEmailBad
+                      ? "Fix the email address, or clear it — it is optional"
+                      : undefined
+                }
                 onClick={handleAccept}
                 className="sm:w-auto justify-center"
               >
