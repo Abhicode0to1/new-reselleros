@@ -2,7 +2,7 @@
  * /portal/profile — read-only company info on file with the reseller.
  *
  * For v1 customers cannot edit (would need a workflow for verification).
- * They can request changes via the WhatsApp link.
+ * They request changes by raising a ticket — there is no phone route.
  */
 import Link from "next/link";
 import { requirePortalSession } from "@/lib/portal/session";
@@ -10,7 +10,6 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { tenantWhatsAppLink } from "@/lib/portal/branding";
 import { PortalPageHeader } from "../_components/portal-page";
 
 export const dynamic = "force-dynamic";
@@ -70,28 +69,15 @@ export default async function PortalProfilePage() {
         <div className="text-sm text-ink-2 mb-3">
           Need to update GSTIN, address, primary contact, or any other detail?
         </div>
-        {(() => {
-          const reseller = session.tenantContactName ?? session.tenantName;
-          const waLink = tenantWhatsAppLink(
-            session.tenantPhone,
-            `Hi ${reseller}, please update my profile (${customer?.name ?? "customer"}): ...`,
-          );
-          return waLink ? (
-            <Button asChild variant="primary">
-              <a href={waLink} target="_blank" rel="noopener noreferrer">
-                <Icon name="whatsapp" size={14} className="mr-1.5" />
-                WhatsApp {reseller}
-              </a>
-            </Button>
-          ) : (
-            <Button asChild variant="primary">
-              <Link href="/portal/support">
-                <Icon name="ticket" size={14} className="mr-1.5" />
-                Raise a request
-              </Link>
-            </Button>
-          );
-        })()}
+        {/* One route, not two. Profile changes go through a ticket so the
+            request is written down and anyone on the team can action it
+            (Pardeep, 16 Sep 2026). */}
+        <Button asChild variant="primary">
+          <Link href="/portal/support/new">
+            <Icon name="message_square" size={14} className="mr-1.5" />
+            Request a change
+          </Link>
+        </Button>
       </Card>
 
       <div className="mt-6 text-2xs text-ink-3 text-center">

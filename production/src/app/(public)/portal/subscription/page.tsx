@@ -254,8 +254,8 @@ export default function PortalSubscriptionPage() {
         <Icon name="info" size={12} className="text-indigo inline mr-1 align-text-bottom" />
         <b className="text-ink">How renewals &amp; changes work:</b> Renewals are manual — we prepare
         your renewal quote and remind you before each cycle; you pay then (we never auto-charge a
-        card). Seat / plan changes and cancellations go through us as a ticket — we&apos;ll
-        WhatsApp / email within 4 business hours.
+        card). Seat / plan changes and cancellations go through us as a ticket — we reply on the
+        ticket within 4 business hours.
       </div>
     </div>
   );

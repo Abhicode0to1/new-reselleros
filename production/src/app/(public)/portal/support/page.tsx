@@ -16,7 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/utils";
-import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
 import { RateTicket } from "@/components/features/support/ticket-rating";
 import { EmptyState } from "@/components/shared/empty-state";
 
@@ -46,7 +45,6 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function PortalSupportPage() {
   const session  = await requirePortalSession();
   const reseller = session.tenantContactName ?? session.tenantName;
-  const waLink   = tenantWhatsAppLink(session.tenantPhone, `Hi ${reseller}, I need urgent help.`);
   const supabase = createClient();
 
   const { data: tickets } = await supabase
@@ -72,15 +70,8 @@ export default async function PortalSupportPage() {
         <div>
           <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Support</h1>
           <p className="text-sm text-ink-3 mt-1">
-            Raise issues here for a written trail.
-            {waLink && (
-              <>
-                {" "}For urgent items, WhatsApp {reseller} on{" "}
-                <a href={waLink} target="_blank" rel="noopener noreferrer" className="text-amber-ink hover:underline">
-                  {phoneDisplay(session.tenantPhone)}
-                </a>.
-              </>
-            )}
+            Raise issues here for a written trail. Everything you open is tracked,
+            and the replies stay on the ticket.
           </p>
         </div>
         <Button asChild variant="primary">

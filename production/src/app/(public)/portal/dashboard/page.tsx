@@ -42,7 +42,6 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { rupee, formatDate, daysBetween } from "@/lib/utils";
-import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
 import { SeatUsage } from "../_components/seat-usage";
 import { PortalPageHeader, PortalStats, PortalSection } from "../_components/portal-page";
 import { Button } from "@/components/ui/button";
@@ -166,12 +165,10 @@ export default async function PortalDashboardPage() {
     });
   }
 
+  /* The NAME still appears — "Anutech Digital will get in touch" reads better
+     than "we". The phone and the WhatsApp link are gone: support goes through
+     the ticket system. */
   const waName = session.tenantContactName ?? session.tenantName;
-  const waDisplay = phoneDisplay(session.tenantPhone);
-  const waLink = tenantWhatsAppLink(
-    session.tenantPhone,
-    `Hi, I have a question about my ${session.tenantName} account.`,
-  );
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
@@ -363,43 +360,35 @@ export default async function PortalDashboardPage() {
       </PortalSection>
 
       {/* ─── HELP ───────────────────────────────────────────────────────────
-          Left-aligned like everything else. It was centred, which is the one
-          thing on the page that made it read as a different product. */}
+          Pardeep, 16 Sep 2026: "We have a dedicated support panel and ticket
+          system. We don't share our phone number with customers."
+
+          So this no longer offers WhatsApp or a number. It offers the ticket
+          system, which is the route that actually gets tracked, answered and
+          measured — a WhatsApp thread is none of those. The branch that used to
+          render this was already here as the no-phone fallback; it is now the
+          only branch. */}
       <Card className="p-6">
         <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
-          Need help right now?
+          Need help?
         </div>
-        <h2 className="font-serif text-xl mb-3">{waName} picks up the phone.</h2>
-        {waLink ? (
-          <>
-            <a
-              href={waLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              /* WhatsApp's own green, deliberately: this is a third-party brand
-                 affordance and the colour is how it is recognised at a glance.
-                 It is now `--whatsapp` rather than an inline hex — same colour,
-                 same decision, but written once for the eight call sites that
-                 make it instead of eight times.
-
-                 The label was `text-paper` and measured 1.88:1 on that green.
-                 `--whatsapp-fg` is near-black, 9.0:1. Neither token flips with
-                 the theme, because the brand colour behind them does not. */
-              className="inline-flex items-center justify-center gap-2 px-6 h-11 rounded-lg font-medium bg-whatsapp text-whatsapp-fg text-sm"
-            >
-              WhatsApp {waName}
-              {waDisplay ? ` · ${waDisplay}` : ""}
-            </a>
-            <div className="mt-3 text-2xs text-ink-3">Mon–Sat · 9am–7pm IST</div>
-          </>
-        ) : (
-          <Link
-            href="/portal/support"
-            className="inline-flex items-center justify-center gap-2 px-6 h-11 rounded-lg font-medium text-paper text-sm bg-amber"
-          >
-            Raise a support ticket
+        <h2 className="font-serif text-xl mb-3">Raise a ticket and we will pick it up.</h2>
+        <p className="text-sm text-ink-2 mb-4">
+          Every ticket is tracked, so nothing gets lost in a thread. You can see the
+          replies and the whole history on your Support page.
+        </p>
+        <Link
+          href="/portal/support/new"
+          className="inline-flex items-center justify-center gap-2 px-6 h-11 rounded-lg font-medium bg-primary text-primary-foreground text-sm"
+        >
+          Raise a support ticket
+        </Link>
+        <div className="mt-3 text-2xs text-ink-3">
+          Mon–Sat · 9am–7pm IST ·{" "}
+          <Link href="/portal/support" className="underline hover:text-ink-2">
+            See your tickets
           </Link>
-        )}
+        </div>
       </Card>
     </div>
   );

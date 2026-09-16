@@ -50,7 +50,6 @@ export default async function PortalShopPage() {
       ownedPlans={ownedPlans}
       customerEmail={session.userEmail}
       resellerName={session.tenantName}
-      resellerPhone={session.tenantPhone}
     />
   );
 }

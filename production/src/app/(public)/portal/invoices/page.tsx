@@ -5,12 +5,12 @@
  * elsewhere in the app. For now just lists invoices — PDF generation
  * happens server-side via the existing /lib/pdf pipeline.
  */
+import Link from "next/link";
 import { requirePortalSession } from "@/lib/portal/session";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { rupee, formatDate } from "@/lib/utils";
-import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
 import { PayInvoiceButton } from "./_components/pay-invoice-button";
 import { PortalPageHeader, PortalStats } from "../_components/portal-page";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -191,18 +191,16 @@ export default async function PortalInvoicesPage() {
         </>
       )}
 
-      {tenantWhatsAppLink(session.tenantPhone, `Hi ${reseller}, I have a question about an invoice.`) && (
-        <div className="mt-6 text-2xs text-ink-3 text-center">
-          Questions about an invoice? WhatsApp {reseller} on{" "}
-          <a
-            href={tenantWhatsAppLink(session.tenantPhone, `Hi ${reseller}, I have a question about an invoice.`)!}
-            target="_blank" rel="noopener noreferrer"
-            className="text-amber-ink hover:underline"
-          >
-            {phoneDisplay(session.tenantPhone)}
-          </a>
-        </div>
-      )}
+      {/* Support goes through the ticket system, not a phone number
+          (Pardeep, 16 Sep 2026). An invoice question raised here keeps the
+          invoice reference with it and stays answerable by anyone on the team. */}
+      <div className="mt-6 text-2xs text-ink-3 text-center">
+        Questions about an invoice?{" "}
+        <Link href="/portal/support/new" className="text-amber-ink hover:underline">
+          Raise a ticket
+        </Link>{" "}
+        and we will look it up.
+      </div>
     </div>
   );
 }

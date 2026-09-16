@@ -5,6 +5,7 @@
  * Pricing shown is the reseller's customer MSRP (₹/user/month). On submit we
  * call portal_request_quote() which drops a lead into the reseller's pipeline.
  */
+import Link from "next/link";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,7 +23,6 @@ import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
 import { HostingSection, type HostingPlan } from "./hosting-buy";
 
 export interface ShopProduct {
@@ -53,14 +53,12 @@ export function ShopClient({
   ownedPlans,
   customerEmail,
   resellerName,
-  resellerPhone,
 }: {
   products: ShopProduct[];
   hostingPlans: HostingPlan[];
   ownedPlans: string[];
   customerEmail: string;
   resellerName: string;
-  resellerPhone: string | null;
 }) {
   const [selected, setSelected] = React.useState<ShopProduct | null>(null);
 
@@ -103,13 +101,11 @@ export function ShopClient({
 
       {products.length === 0 && hostingPlans.length === 0 ? (
         <Card className="p-8 text-center text-sm text-ink-3">
-          No products are listed right now. Please{" "}
-          {resellerPhone
-            ? <a className="text-amber-ink underline"
-                 href={tenantWhatsAppLink(resellerPhone, `Hi ${resellerName}, what products can I buy?`) ?? "#"}
-                 target="_blank" rel="noopener noreferrer">WhatsApp {resellerName}</a>
-            : <>contact {resellerName}</>}{" "}
-          for the catalogue.
+          No products are listed right now.{" "}
+          <Link href="/portal/support/new" className="text-amber-ink underline">
+            Raise a ticket
+          </Link>{" "}
+          and {resellerName} will send you the catalogue.
         </Card>
       ) : products.length === 0 ? null : (
         <div className="space-y-10">
@@ -154,19 +150,16 @@ export function ShopClient({
         </div>
       )}
 
-      {resellerPhone && (
-        <Card className="p-5 mt-10 text-center text-sm text-ink-3">
-          Not sure which plan fits? WhatsApp {resellerName} on{" "}
-          <a
-            className="text-amber-ink font-medium"
-            href={tenantWhatsAppLink(resellerPhone, `Hi ${resellerName}, I need help choosing a plan.`) ?? "#"}
-            target="_blank" rel="noopener noreferrer"
-          >
-            {phoneDisplay(resellerPhone)}
-          </a>
-          .
-        </Card>
-      )}
+      {/* Support and pre-sales questions both go through the ticket system
+          (Pardeep, 16 Sep 2026) — a ticket carries the plan they were looking
+          at, and it is answerable by anyone on the team rather than one phone. */}
+      <Card className="p-5 mt-10 text-center text-sm text-ink-3">
+        Not sure which plan fits?{" "}
+        <Link href="/portal/support/new" className="text-amber-ink font-medium hover:underline">
+          Raise a ticket
+        </Link>{" "}
+        and {resellerName} will help you choose.
+      </Card>
 
       <RequestQuoteDialog
         product={selected}

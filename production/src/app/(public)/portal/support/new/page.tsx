@@ -116,7 +116,8 @@ export default function NewTicketPage() {
         </Link>
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight mt-2">Raise a ticket</h1>
         <p className="text-sm text-ink-3 mt-1">
-          We respond within 4 business hours. For urgent items, also WhatsApp us.
+          We respond within 4 business hours, on the ticket — so the whole exchange stays
+          in one place and anyone on the team can pick it up.
         </p>
       </div>
 
