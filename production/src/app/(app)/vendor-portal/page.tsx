@@ -1,3 +1,36 @@
+/**
+ * ─── OUT OF SCOPE. NOT THE DEVELOPER'S CALL. (Pardeep, 16 Sep 2026) ──────────
+ *
+ * "Vendor portal is not my jurisdiction as developer."
+ *
+ * So: do not audit this screen, do not tokenise its colours, do not replace its
+ * data, do not remove it from the nav. It is listed here so nobody spends
+ * another afternoon rediscovering what it is and proposing the same fixes.
+ *
+ * WHAT IT IS, measured 16 Sep 2026 — stated so the next reader does not have to
+ * find out the hard way, and so nobody mistakes it for a working screen:
+ *
+ *   2,947 lines · 0 Supabase calls · 0 useQuery/useMutation · 6 localStorage
+ *
+ * Everything on it comes from four const arrays below — INITIAL_BIDS,
+ * INITIAL_RFQS, INITIAL_BILLS, VENDOR_SCORECARDS — naming REAL Indian IT
+ * distributors (Redington India Ltd, Ingram Micro Cloud, Savex Technologies)
+ * against invented rupee figures. A bid an operator places is written to
+ * localStorage under "resellersos_vendor_bids_v3": it survives a refresh on
+ * that one browser and reaches no server, no colleague and no vendor.
+ *
+ * Reachable at /vendor-portal (lib/nav.ts, "Purchases" group) and linked twice
+ * from /accounting/vendors, including a "Buy Products from {vendor}" button.
+ *
+ * NOT customer-facing. Verified 16 Sep 2026 by signing in as a portal customer
+ * and requesting this URL: the page-level staff guard answers "This part is for
+ * staff" and no distributor name renders. The invented data is visible to STAFF
+ * only.
+ *
+ * Two sweeps still report it and that is deliberate — `npm run sweep` hides
+ * nothing. Two of find-fake-data's 22 rows are lines 79 and 113 here. Expect
+ * them; they are not a regression.
+ */
 "use client";
 
 import * as React from "react";

@@ -514,6 +514,15 @@ export function LeadForm({ onSubmit }: { onSubmit: (data: FormData) => Promise<v
 
 ## 17. What NOT to do
 
+- ❌ **Don't touch `/vendor-portal`.** Out of scope by Pardeep's decision, 16 Sep 2026:
+  *"Vendor portal is not my jurisdiction as developer."* Do not audit it, tokenise its
+  colours, replace its data, or remove it from the nav. It is 2,947 lines with 0 Supabase
+  calls and 0 query hooks, showing invented figures against REAL distributor names
+  (Redington / Ingram Micro / Savex) from four const arrays; a bid an operator places goes
+  to `localStorage` and nowhere else. **Staff-only** — verified 16 Sep by signing in as a
+  portal customer and requesting the URL: the staff guard answers "This part is for staff"
+  and no distributor name renders. Two of `find-fake-data`'s 22 rows are this file; expect
+  them, they are not a regression. The full note is in the file's own header.
 - ❌ Don't use Babel-in-browser anywhere — only Next.js builds
 - ❌ Don't write inline styles — use Tailwind
 - ❌ Don't hardcode tenant_id — always derive from auth
