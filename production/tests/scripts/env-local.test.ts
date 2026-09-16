@@ -98,7 +98,11 @@ describe("scripts read .env.local through the shared parser", () => {
       const src = readFileSync(join(DIR, f), "utf8");
       // the comment in env-local.mjs quotes the bad pattern while explaining it
       const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-      return /replace\(\s*\/\^\["']?\|?\["']?\$\/g/.test(code);
+      /* Quote ORDER is not meaningful - `["']` and `['"]` are the same
+         character class, and the one script this guard missed wrote the second
+         spelling. Match either, and any flags, so the ninth copy cannot spell
+         its way out. */
+      return /replace\(\s*\/\^\[["']+\]\s*\|\s*\[["']+\]\$\/[gimsuy]*/.test(code);
     });
     expect(
       offenders,
