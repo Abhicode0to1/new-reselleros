@@ -147,6 +147,21 @@ describe("watchableDomain — refuse at the point of asking", () => {
     expect(watchableDomain("acme.com.")).toEqual({ ok: true, domain: "acme.com" });
   });
 
+  it("strips a leading www. — it is a hostname, not a registrable name", () => {
+    /* The thing a customer sees in their browser bar. Accepted as-is, it went
+       through splitDomain as name "www" under tld "acme.com", the cron asked
+       ResellerClub about that, and the watch burned ten failed checks before
+       abandoning itself — a promise that silently never fires. cleanDomain in
+       lib/customers/card-fields.ts has stripped it since the buy dialog was
+       written; this is the same rule, not a new one. */
+    expect(watchableDomain("www.acme.com")).toEqual({ ok: true, domain: "acme.com" });
+    expect(watchableDomain("https://WWW.Acme.co.in/pricing")).toEqual({ ok: true, domain: "acme.co.in" });
+    /* Only a LEADING label, and only the whole label: a name that merely starts
+       with those letters is untouched. */
+    expect(watchableDomain("wwwacme.com")).toEqual({ ok: true, domain: "wwwacme.com" });
+    expect(watchableDomain("shop.www.acme.com")).toEqual({ ok: true, domain: "shop.www.acme.com" });
+  });
+
   it("refuses a bare label, and says what is missing", () => {
     /* A watch on something we cannot check is a promise that will never be
        kept, so the refusal belongs here rather than in a sweep nobody reads. */

@@ -168,6 +168,15 @@ export function watchableDomain(raw: string): { ok: true; domain: string } | { o
     .trim()
     .toLowerCase()
     .replace(/^https?:\/\//, "")
+    /* `www.acme.com` is a hostname, not a registrable name — you register
+       acme.com and point www at it. Left in, it passed every check below and
+       then broke quietly downstream: splitDomain splits on the FIRST dot, so
+       the cron asked ResellerClub about the label "www" under the TLD
+       "acme.com", failed, and after MAX_WATCH_ERRORS abandoned the watch. The
+       customer typed what their browser bar shows and got a promise that never
+       fired. Same rule cleanDomain has applied since the buy dialog was written
+       (lib/customers/card-fields.ts) — one leading label, not a substring. */
+    .replace(/^www\./, "")
     .replace(/\/.*$/, "")
     .replace(/\.$/, "");
 
