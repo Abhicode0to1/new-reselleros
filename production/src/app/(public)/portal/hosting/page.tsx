@@ -185,28 +185,49 @@ export default async function PortalHostingPage() {
                     </div>
                   </div>
 
-                  <dl className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <dt className="text-3xs uppercase tracking-wider text-ink-3">
-                        {h.is_trial ? "Trial ends" : "Renews"}
-                      </dt>
-                      <dd className={`mt-0.5 font-medium ${r.kind === "danger" ? "text-rose-ink" : r.kind === "warning" ? "text-amber-ink" : "text-ink-2"}`}>
-                        {r.text}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-3xs uppercase tracking-wider text-ink-3">Disk</dt>
-                      <dd className="mt-0.5 text-ink-2 font-mono">{gb(h.disk_quota_mb)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-3xs uppercase tracking-wider text-ink-3">Bandwidth</dt>
-                      <dd className="mt-0.5 text-ink-2 font-mono">{gb(h.bandwidth_quota_mb)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-3xs uppercase tracking-wider text-ink-3">Username</dt>
-                      <dd className="mt-0.5 text-ink-2 font-mono break-all">{h.da_username ?? "—"}</dd>
-                    </div>
-                  </dl>
+                  {/* ─── ONLY THE FACTS WE ACTUALLY HAVE ─────────────────────
+                      Every slot used to be drawn whether or not it held anything,
+                      so an account still being set up showed four labelled
+                      metrics reading "—" — RENEWS, DISK, BANDWIDTH, USERNAME,
+                      none of which can exist before the account does. Four dashes
+                      do not read as "we do not know this yet"; they read as a
+                      broken card, directly above the line explaining that
+                      everything is fine.
+
+                      So each fact renders only when it has a value, and the grid
+                      disappears entirely when none do. That is data-driven rather
+                      than keyed to `pending`, which matters because the same
+                      emptiness turns up on legacy rows that were never swept. */}
+                  {(() => {
+                    const facts: { label: string; value: string; className: string }[] = [];
+                    if (r.days !== null) {
+                      facts.push({
+                        label: h.is_trial ? "Trial ends" : "Renews",
+                        value: r.text,
+                        className: `font-medium ${r.kind === "danger" ? "text-rose-ink" : r.kind === "warning" ? "text-amber-ink" : "text-ink-2"}`,
+                      });
+                    }
+                    if (h.disk_quota_mb != null) {
+                      facts.push({ label: "Disk", value: gb(h.disk_quota_mb), className: "text-ink-2 font-mono" });
+                    }
+                    if (h.bandwidth_quota_mb != null) {
+                      facts.push({ label: "Bandwidth", value: gb(h.bandwidth_quota_mb), className: "text-ink-2 font-mono" });
+                    }
+                    if (h.da_username) {
+                      facts.push({ label: "Username", value: h.da_username, className: "text-ink-2 font-mono break-all" });
+                    }
+                    if (facts.length === 0) return null;
+                    return (
+                      <dl className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        {facts.map((f) => (
+                          <div key={f.label}>
+                            <dt className="text-3xs uppercase tracking-wider text-ink-3">{f.label}</dt>
+                            <dd className={`mt-0.5 ${f.className}`}>{f.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    );
+                  })()}
 
                   {/* ─── "WHERE DO I LOG IN" ─────────────────────────────────
                       Two ways, and the order matters. The BUTTON mints a one-time
@@ -250,6 +271,32 @@ export default async function PortalHostingPage() {
                         <Link href="/portal/support/new" className="underline">Ask for a reset</Link>.
                       </span>
                     </div>
+                  )}
+
+                  {h.status === "pending" && (
+                    /* §24 — the one status that said nothing at all.
+                       `active`, `suspended` and both halves of `failed` each get
+                       an explanation and a way out; "Setting up" got the word and
+                       four dashes, on a card with no login, no username and no
+                       action. A customer cannot tell whether that means minutes,
+                       days, or that something has gone wrong.
+
+                       The email is real, not a comfort: provision-hosting sends
+                       the control-panel login the moment the account exists
+                       (api/cron/provision-hosting/route.ts — "Your {pkg} hosting
+                       account is set up and ready"). No time is promised, because
+                       the cron's pace depends on a queue and an upstream this copy
+                       cannot see — so the honest offer is a way to ask rather than
+                       an estimate that could be wrong. */
+                    <p className="mt-4 pt-4 border-t border-hairline text-2xs text-ink-3">
+                      {reseller} is setting this account up — there is nothing for you to do. As
+                      soon as it is ready you will get an email with the control-panel login, and
+                      this page will show it too.{" "}
+                      <Link href="/portal/support/new" className="underline hover:text-ink">
+                        Taking longer than you expected? Ask about it
+                      </Link>
+                      .
+                    </p>
                   )}
 
                   {h.status === "failed" && !h.resolved_at && (
