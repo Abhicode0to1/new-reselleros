@@ -167,6 +167,23 @@ keeps passing the day the trigger it was meant to guard is dropped.
   the caches cleared before believing the build is broken** — and if it fails twice, isolate
   it by stashing the change and building at HEAD, which is how this was first pinned down
   (HEAD crashed identically).
+- **⚠️ But `rm -rf node_modules/.cache` is NOT free — it throws away the `next/font` cache.**
+  Measured 17 Sep 2026, immediately after doing exactly what the line above says: the retry
+  failed with five errors that look like code faults —
+
+  ```
+  srcpp\layout.tsx
+  `next/font` error:
+  Failed to fetch `Plus Jakarta Sans` from Google Fonts.
+  ```
+
+  Nothing was wrong with the code. `next/font` downloads the faces at build time and caches
+  them there, so clearing it makes the next build depend on reaching
+  `fonts.googleapis.com` — and one blocked or flaky moment fails the whole build. Rebuilding
+  with only `.next` cleared succeeded, 193/193.
+  **So: clear `.next` first and alone. Add `node_modules/.cache` only if that was not enough,
+  and if fonts then fail, check reachability (`curl -o /dev/null -w "%{http_code}"
+  "https://fonts.googleapis.com/css2?family=Archivo"`) before suspecting the change.**
 - **Never pipe a command whose exit code matters.** `… | tail` hid a deploy failure and the
   session reported success. Use `${PIPESTATUS[0]}`, or do not pipe.
 - **The DB backup fails loudly now, but used to fail quietly** — see §5.
