@@ -20,6 +20,7 @@
  * Renewal is a conversation, so the page routes to one.
  */
 import Link from "next/link";
+import type { Route } from "next";
 import { requirePortalSession } from "@/lib/portal/session";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
@@ -59,6 +60,36 @@ const STATUS: Record<DomainAssetStatus, { label: string; kind: BadgeKind }> = {
  * testing, and it used to fall back to printing the same date as the column next
  * to it. This is only the paint.
  */
+/** Which urgencies deserve an action ON THE ROW rather than only in the banner. */
+const NEEDS_ACTION: ReadonlySet<ExpiryUrgency> = new Set<ExpiryUrgency>(["lapsed", "critical", "soon"]);
+
+/**
+ * The renewal ticket, carrying the row the customer is looking at.
+ *
+ * The banner above the table names a COUNT — "1 domain expires within 30 days" —
+ * and the only action lived there. On two domains that is survivable; on twenty
+ * it means reading an urgency off one row, then scrolling to a link that does not
+ * say which name it means, and typing the name in by hand. The urgency and the
+ * way to act on it now sit in the same cell.
+ *
+ * Past tense and "showed", like the register link in domain-search.tsx: this
+ * states what the panel displayed, and the team confirms the amount on the
+ * ticket. No price is quoted, because this page has none to quote.
+ */
+function renewHref(domain: string, expiresAt: string | null, phrase: string): Route {
+  const when = expiresAt ? `It expires on ${formatDate(expiresAt)} (${phrase}).` : "The panel does not show an expiry date for it.";
+  const body =
+    `I would like to renew ${domain}.` +
+    `
+
+${when}` +
+    `
+Please confirm the renewal price and let me know how to pay.`;
+  /* `as Route`: typedRoutes cannot check a string returned from a function. */
+  return (`/portal/support/new?subject=${encodeURIComponent(`Please renew ${domain}`)}` +
+    `&body=${encodeURIComponent(body)}`) as Route;
+}
+
 const URGENCY_TEXT: Record<ExpiryUrgency, string> = {
   lapsed:   "text-rose-ink",
   critical: "text-rose-ink",
@@ -207,6 +238,19 @@ export default async function PortalDomainsPage() {
                           of the duplicate-value finding. */}
                       {d.expires_at && <p className="text-2xs text-ink-3">{formatDate(d.expires_at)}</p>}
                     </div>
+                    {/* The same row-level way out as the table above. It has to be
+                        repeated because this is a SEPARATE render, not a reflow —
+                        and the phone is the surface where scrolling back up to a
+                        banner costs most. min-h-11 because §20's 44px applies
+                        here by definition: this list only exists below 768px. */}
+                    {NEEDS_ACTION.has(e.urgency) && (
+                      <Link
+                        href={renewHref(d.domain_name, d.expires_at, e.text)}
+                        className="min-h-11 mt-1 inline-flex items-center text-2xs text-ink-3 underline hover:text-ink"
+                      >
+                        Ask to renew →
+                      </Link>
+                    )}
                   </Card>
                 </li>
               );
@@ -240,8 +284,16 @@ export default async function PortalDomainsPage() {
                       <tr key={d.id} className="hover:bg-paper-2/40">
                         <td className="px-4 py-3 font-mono text-ink">{d.domain_name}</td>
                         <td className="px-4 py-3"><Badge kind={s.kind} dot>{s.label}</Badge></td>
-                        <td className={`px-4 py-3 font-medium whitespace-nowrap ${URGENCY_TEXT[e.urgency]}`}>
-                          {e.text}
+                        <td className={`px-4 py-3 font-medium ${URGENCY_TEXT[e.urgency]}`}>
+                          <span className="whitespace-nowrap">{e.text}</span>
+                          {NEEDS_ACTION.has(e.urgency) && (
+                            <Link
+                              href={renewHref(d.domain_name, d.expires_at, e.text)}
+                              className="block mt-0.5 text-2xs font-normal text-ink-3 underline hover:text-ink whitespace-nowrap"
+                            >
+                              Ask to renew →
+                            </Link>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-ink-3 whitespace-nowrap">
                           {d.expires_at ? formatDate(d.expires_at) : "—"}
