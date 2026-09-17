@@ -158,6 +158,15 @@ keeps passing the day the trigger it was meant to guard is dropped.
   failed" would send you hunting a defect that is not there. **Run `npx next lint` and record
   that.** If any other `npm run <x>` returns 139 with no output, suspect the same thing and
   re-run the underlying binary directly.
+- **`next build` itself segfaults sometimes, and it is NOT your code.** Measured 17 Sep 2026:
+  exit 139, preceded by a Rust panic from inside SWC —
+  `thread 'libuv-worker' panicked at petgraph-0.6.3\srclgo\mod.rs: range start index 7184
+  out of range for slice of length 1`. The identical tree built clean on the retry after
+  `rm -rf .next node_modules/.cache`. Seen roughly half a dozen times across a long session,
+  sometimes as exit 1 with "Cannot read properties of undefined" instead. **Retry once with
+  the caches cleared before believing the build is broken** — and if it fails twice, isolate
+  it by stashing the change and building at HEAD, which is how this was first pinned down
+  (HEAD crashed identically).
 - **Never pipe a command whose exit code matters.** `… | tail` hid a deploy failure and the
   session reported success. Use `${PIPESTATUS[0]}`, or do not pipe.
 - **The DB backup fails loudly now, but used to fail quietly** — see §5.
