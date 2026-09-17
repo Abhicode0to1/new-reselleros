@@ -32,12 +32,23 @@ export interface Tld {
  *     .agency 1899 / 2663     .dev   1499 / 1535    .io     3899 / 5747
  *     .cloud   899 / 1907     .app   1299 / 1787
  *     .store   249 / 4788     .shop   299 / 3839    <- 4,539 and 3,540 under
- *     .ai     6999 / NO PRODUCT ON THIS RESELLERCLUB ACCOUNT
+ *     .ai     6999 / 8807, AND THE TERM IS WRONG — see below
  *
  * `.store` and `.shop` read like first-year promos, and a loss-leader is a real
  * strategy — but the promo is not coming from ResellerClub, so the difference
- * is ours to absorb on every single sale. `.ai` is worse than mispriced: there
- * is no product key for it, so a paid .ai order cannot be filed at all.
+ * is ours to absorb on every single sale.
+ *
+ * `.ai` is a different mistake. This row sells "registration, 1 year" for 6,999
+ * and there is no such thing: the .ai registry has a 2-YEAR MINIMUM, so
+ * ResellerClub prices it only at two years — 8,807 to register, 9,347 to renew.
+ * The row promises a term that cannot be bought, at 1,808 under the cost of the
+ * term that can.
+ *
+ * (Corrected 17 Sep 2026. This comment first said .ai had no product on the
+ * account at all. It does — `dotai`, in both the customer and reseller price
+ * maps, and ResellerClub answers availability for it. It LOOKED absent because
+ * the price reader asked every product for its 1-year price and .ai has none,
+ * which is the defect fixed in lib/resellerclub/index.ts the same day.)
  *
  * site/lib/live-tld-pricing.ts was written to replace these with the real
  * customer price and was never wired to anything. Wiring it raises every

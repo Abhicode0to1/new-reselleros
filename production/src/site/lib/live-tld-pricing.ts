@@ -21,8 +21,9 @@
  * What that costs, measured against the live ResellerClub account the same day:
  * every one of the 14 advertised TLDs is priced BELOW what the registrar
  * charges us. `.store` is sold at 249 and costs 4,788; `.shop` at 299 costs
- * 3,839; `.in` at 499 costs 863. `.ai` is advertised at 6,999 and has no RC
- * product on this account at all, so it cannot be supplied at any price.
+ * 3,839; `.in` at 499 costs 863. `.ai` is advertised at 6,999 for a ONE-YEAR
+ * registration that does not exist — its registry sells a 2-year minimum, which
+ * ResellerClub prices at 8,807.
  *
  * Wiring this up is a one-line change in the /domains page and the cart route.
  * It is left undone deliberately: it would RAISE every advertised price, which

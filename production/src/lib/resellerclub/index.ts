@@ -74,9 +74,19 @@ export type CustomerPricingMap = Record<string, ProductPricing | undefined>;
 
 export interface RcTldPrice {
   tld: string;               // ".in"
-  register: number | null;   // 1-year, whole ₹
+  register: number | null;   // shortest available term, whole ₹
   renew: number | null;
   transfer: number | null;
+  /**
+   * The term those amounts BUY, in years.
+   *
+   * 1 for all but one product on this account — and that one matters: .ai is
+   * sold by its registry in a 2-YEAR MINIMUM, so there is no 1-year price
+   * anywhere in the payload. Quoting a price without its term is how a card
+   * ends up saying "₹8,807 for 1 year" for something that cannot be bought for
+   * one year. Falls back to 1 when there is no amount to qualify.
+   */
+  years: number;
   currency: string;
 }
 
@@ -113,11 +123,32 @@ export function productKeyFor(tld: string, pricing: CustomerPricingMap): string 
   return null;
 }
 
-/** 1-year price out of a period-keyed block; null when absent — never invented. */
-function oneYear(block: PriceBlock | undefined): number | null {
-  const v = block?.["1"];
-  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
-  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+/**
+ * The SHORTEST term a period-keyed block offers, with the term itself.
+ *
+ * This read `block["1"]` and nothing else until 17 Sep 2026. That is right for
+ * 411 of the 412 products on this account and wrong for the one that is not
+ * sold by the year: .ai's registry has a 2-year minimum, so its whole block is
+ * keyed at "2" and the 1-year read returned null — reported as "no price", the
+ * same answer as an outage, for a TLD the site advertises at 6,999.
+ *
+ * Measured, not assumed: every product with a registration price was checked,
+ * and exactly one lacks a "1" key. Null when the block has no usable amount at
+ * all — never invented.
+ */
+function shortestTerm(block: PriceBlock | undefined): { amount: number; years: number } | null {
+  if (!block) return null;
+  let best: { amount: number; years: number } | null = null;
+  for (const [key, raw] of Object.entries(block)) {
+    /* RC keys periods as year counts; anything else in the block is not one. */
+    if (!/^\d+$/.test(key)) continue;
+    const years = Number(key);
+    const n = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : NaN;
+    if (!Number.isFinite(years) || years <= 0) continue;
+    if (!Number.isFinite(n) || n <= 0) continue;
+    if (!best || years < best.years) best = { amount: Math.round(n), years };
+  }
+  return best;
 }
 
 /** Extract register/renew/transfer for one TLD from the big map. Exported for tests. */
@@ -125,11 +156,18 @@ export function extractTldPrice(tld: string, pricing: CustomerPricingMap): RcTld
   const clean = tld.replace(/^\.+/, "").toLowerCase();
   const key = productKeyFor(clean, pricing);
   const p = key ? pricing[key] : undefined;
+  const register = shortestTerm(p?.addnewdomain);
+  const renew = shortestTerm(p?.renewdomain);
+  const transfer = shortestTerm(p?.transferdomain);
   return {
     tld: `.${clean}`,
-    register: oneYear(p?.addnewdomain),
-    renew: oneYear(p?.renewdomain),
-    transfer: oneYear(p?.transferdomain),
+    register: register?.amount ?? null,
+    renew: renew?.amount ?? null,
+    transfer: transfer?.amount ?? null,
+    /* Registration is what a search quotes, so its term leads. A TLD with no
+       price at all reports 1 rather than 0 — the term only means something
+       beside an amount, and nothing should render "for 0 years". */
+    years: register?.years ?? renew?.years ?? 1,
     currency: "INR",
   };
 }
