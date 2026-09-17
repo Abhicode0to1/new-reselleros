@@ -26,7 +26,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
-import { expiryPhrase, summariseExpiries, type ExpiryUrgency } from "@/lib/domains/lifecycle";
+import { expiryPhrase, summariseExpiries, expiringDomains, type ExpiryUrgency } from "@/lib/domains/lifecycle";
 import { MAX_WATCHES_PER_CUSTOMER } from "@/lib/domains/watch";
 import { DomainTools } from "../_components/domain-tools";
 import type { DomainAssetStatus } from "@/lib/supabase/database.types";
@@ -90,6 +90,21 @@ Please confirm the renewal price and let me know how to pay.`;
     `&body=${encodeURIComponent(body)}`) as Route;
 }
 
+/** The same idea as renewHref, for a name that has already lapsed — different
+ *  ask, different urgency, and the fee is the registry's to state, not ours. */
+function recoverHref(domain: string, expiresAt: string | null): Route {
+  const when = expiresAt ? `It expired on ${formatDate(expiresAt)}.` : "The panel does not show its expiry date.";
+  const body =
+    `I would like to recover ${domain}.` +
+    `
+
+${when}` +
+    `
+Please tell me whether it can still be recovered, what it will cost, and by when.`;
+  return (`/portal/support/new?subject=${encodeURIComponent(`Please recover ${domain}`)}` +
+    `&body=${encodeURIComponent(body)}`) as Route;
+}
+
 const URGENCY_TEXT: Record<ExpiryUrgency, string> = {
   lapsed:   "text-rose-ink",
   critical: "text-rose-ink",
@@ -125,6 +140,10 @@ export default async function PortalDomainsPage() {
      banner came to tell a customer a domain "expires within 30 days" twelve
      days after it had in fact lapsed. */
   const { lapsed, expiringSoon } = summariseExpiries(rows, new Date());
+  /* The SAME classification the counts come from — see expiringDomains(). Used
+     only to name the domain when there is exactly one, which is the common case
+     and the one where a nameless ticket link is least excusable. */
+  const affected = expiringDomains(rows, new Date());
 
   /* The soonest date still ahead of us. `rows` is already sorted by expiry
      ascending with nulls last, so this is the first row that has a date and
@@ -178,8 +197,17 @@ export default async function PortalDomainsPage() {
             <b>{lapsed === 1 ? "1 domain has already expired." : `${lapsed} domains have already expired.`}</b>{" "}
             An expired name can usually still be recovered, but not for long and often for a
             fee — after that it is released and anybody can register it.{" "}
-            <Link href="/portal/support/new" className="text-rose-ink underline">
-              Ask {reseller} about recovering it →
+            <Link
+              href={
+                affected.lapsed.length === 1
+                  ? recoverHref(affected.lapsed[0].domain_name, affected.lapsed[0].expires_at)
+                  : ("/portal/support/new" as Route)
+              }
+              className="text-rose-ink underline"
+            >
+              {affected.lapsed.length === 1
+                ? `Ask ${reseller} about recovering ${affected.lapsed[0].domain_name} →`
+                : `Ask ${reseller} about recovering them →`}
             </Link>
           </p>
         </Card>
@@ -190,9 +218,23 @@ export default async function PortalDomainsPage() {
           <p className="text-sm text-ink-2">
             <b>{expiringSoon === 1 ? "1 domain expires" : `${expiringSoon} domains expire`} within 30 days.</b>{" "}
             A domain that lapses is released and someone else can register it.{" "}
-            <Link href="/portal/support/new" className="text-rose-ink underline">
-              Ask {reseller} to renew →
-            </Link>
+            {affected.expiringSoon.length === 1 ? (
+              <Link
+                href={renewHref(
+                  affected.expiringSoon[0].domain_name,
+                  affected.expiringSoon[0].expires_at,
+                  expiryPhrase(affected.expiringSoon[0].expires_at).text,
+                )}
+                className="text-rose-ink underline"
+              >
+                Ask {reseller} to renew {affected.expiringSoon[0].domain_name} →
+              </Link>
+            ) : (
+              /* More than one: the rows below each carry their own link, and a
+                 single nameless ticket for several domains is worse than saying
+                 where the named ones are. */
+              <span className="text-ink-3">Each one below has a link to ask about it.</span>
+            )}
           </p>
         </Card>
       )}

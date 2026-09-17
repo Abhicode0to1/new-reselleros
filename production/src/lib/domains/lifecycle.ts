@@ -331,18 +331,43 @@ export interface ExpirySummary {
  */
 const NOT_OUR_PROBLEM: ReadonlySet<string> = new Set(["cancelled", "transferred_out"]);
 
-export function summariseExpiries(
-  domains: ReadonlyArray<{ expires_at: string | null; status: string }>,
+/**
+ * WHICH domains the banner is talking about, not just how many.
+ *
+ * Added 17 Sep 2026, when the banner stopped being the only way to act. The
+ * rows now carry their own "Ask to renew" link, and the banner needed to name
+ * the domain in the common single-domain case rather than offering a second,
+ * nameless path to the same ticket.
+ *
+ * It is a separate function, and `summariseExpiries` is now a count over it, so
+ * there is ONE rule. Deriving the list in the page from `expiryPhrase` alone
+ * would have quietly disagreed with the count: the page has no notion of
+ * `NOT_OUR_PROBLEM`, so a transferred-away name could have appeared in a banner
+ * that the number above it did not count.
+ *
+ * Generic in the row type so the caller gets its own objects back — the names,
+ * ids and dates it needs — rather than the minimal shape this file reads.
+ */
+export function expiringDomains<T extends { expires_at: string | null; status: string }>(
+  domains: ReadonlyArray<T>,
   now: Date = new Date(),
-): ExpirySummary {
-  let lapsed = 0;
-  let expiringSoon = 0;
+): { lapsed: T[]; expiringSoon: T[] } {
+  const lapsed: T[] = [];
+  const expiringSoon: T[] = [];
   for (const d of domains) {
     if (NOT_OUR_PROBLEM.has(d.status)) continue;
     const { days } = expiryPhrase(d.expires_at, now);
     if (days === null) continue;
-    if (days < 0) lapsed += 1;
-    else if (days <= EXPIRING_SOON_DAYS) expiringSoon += 1;
+    if (days < 0) lapsed.push(d);
+    else if (days <= EXPIRING_SOON_DAYS) expiringSoon.push(d);
   }
   return { lapsed, expiringSoon };
+}
+
+export function summariseExpiries(
+  domains: ReadonlyArray<{ expires_at: string | null; status: string }>,
+  now: Date = new Date(),
+): ExpirySummary {
+  const { lapsed, expiringSoon } = expiringDomains(domains, now);
+  return { lapsed: lapsed.length, expiringSoon: expiringSoon.length };
 }

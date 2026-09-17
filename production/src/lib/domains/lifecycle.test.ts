@@ -11,6 +11,7 @@ import {
   EXPIRING_SOON_DAYS,
   expiryPhrase,
   summariseExpiries,
+  expiringDomains,
 } from "./lifecycle";
 import { formatDate } from "@/lib/utils";
 
@@ -281,6 +282,49 @@ describe("expiryPhrase — never the same string as the column next to it", () =
       expect(p.days).toBeNull();
       expect(p.text).toBe("date not confirmed");
     }
+  });
+});
+
+describe("expiringDomains — WHICH ones, and it must agree with the count", () => {
+  /* NOW is 9 Sep 2026 (top of this file). Dates chosen either side of it, and
+     clear of the 30-day boundary the tests below already pin. */
+  const rows = [
+    { domain_name: "lapsed.in",     expires_at: "2026-08-28T12:00:00Z", status: "active" },
+    { domain_name: "soon.com",      expires_at: "2026-09-25T12:00:00Z", status: "active" },
+    { domain_name: "calm.org",      expires_at: "2027-06-01T12:00:00Z", status: "active" },
+    { domain_name: "gone.net",      expires_at: "2026-08-28T12:00:00Z", status: "transferred_out" },
+    { domain_name: "undated.co.in", expires_at: null,                   status: "active" },
+  ];
+
+  it("returns the caller's own rows, not a reduced shape", () => {
+    const got = expiringDomains(rows, NOW);
+    expect(got.lapsed.map((d) => d.domain_name)).toEqual(["lapsed.in"]);
+    expect(got.expiringSoon.map((d) => d.domain_name)).toEqual(["soon.com"]);
+  });
+
+  it("excludes a name that is no longer ours, exactly as the count does", () => {
+    /* `gone.net` has the same date as `lapsed.in`. If this ever drifts from
+       summariseExpiries, a banner names a domain the number above it did not
+       count — which is the whole reason the two share one implementation. */
+    const got = expiringDomains(rows, NOW);
+    expect(got.lapsed.map((d) => d.domain_name)).not.toContain("gone.net");
+  });
+
+  it("agrees with summariseExpiries on the same input — the invariant", () => {
+    const list = expiringDomains(rows, NOW);
+    const counts = summariseExpiries(rows, NOW);
+    expect({ lapsed: list.lapsed.length, expiringSoon: list.expiringSoon.length }).toEqual(counts);
+  });
+
+  it("an undated domain is in neither list", () => {
+    const got = expiringDomains(rows, NOW);
+    for (const bucket of [got.lapsed, got.expiringSoon]) {
+      expect(bucket.map((d) => d.domain_name)).not.toContain("undated.co.in");
+    }
+  });
+
+  it("empty in, empty out", () => {
+    expect(expiringDomains([], NOW)).toEqual({ lapsed: [], expiringSoon: [] });
   });
 });
 
