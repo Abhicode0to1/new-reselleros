@@ -231,11 +231,16 @@ export default async function PortalHostingPage() {
 
                   {CONTROL_PANEL && h.da_username && (h.status === "active" || h.status === "suspended") && (
                     <div className={`flex flex-wrap items-center gap-3 ${h.status === "active" ? "mt-2" : "mt-4 pt-4 border-t border-hairline"}`}>
+                      {/* min-h-11 on phones only — §20 scopes the 44px minimum to
+                          <768px. Measured 17 Sep 2026: this rendered 17px tall at
+                          390, and it is NOT the inline-in-a-sentence case WCAG
+                          2.5.5 exempts — it is a discrete control sitting beside
+                          the explanatory span, in a flex row of its own. */}
                       <a
                         href={CONTROL_PANEL}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-2xs text-amber-ink underline"
+                        className="min-h-11 md:min-h-0 inline-flex items-center text-2xs text-amber-ink underline"
                       >
                         Or sign in yourself →
                       </a>
