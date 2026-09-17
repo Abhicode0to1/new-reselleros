@@ -63,6 +63,37 @@ karne ke liye likha gaya tha aur **kabhi wire hi nahi hua** (zero callers).
 **Kuch badla nahi gaya** — daam badalna business ka faisla hai. Teen raaste:
 live daam wire karo / chaudah number haath se set karo / abhi sirf `.ai` hatao.
 
+## 📐 Poora portal naapa (17 Sep) — contrast/overflow saaf, ek target chhota tha
+11 route × 1280 light, 1280 dark, 390. **Kisi bhi route par, kisi bhi width par, EK BHI
+AA contrast failure nahi. Kahin horizontal overflow nahi.** Har text node uske apne paint
+kiye hue background ke against compute hua, aankh se nahi dekha.
+
+Ek asli finding: `/portal/hosting` ka "Or sign in yourself →" phone par **17px** ka tha
+(apni flex row me, prose ke andar nahi — to WCAG 2.5.5 ki chhoot nahi lagti).
+`min-h-11 md:min-h-0` laga, ab saaf.
+
+**Do cheezein jo finding LAGTI hain par nahi hain** — dobara report na karna:
+- `/portal/domains` ka "Stop watching" 36px ka DABBA hai, hit area 44px ka hai
+  (`.touch-44` ka `::after` layout ke bahar — `getBoundingClientRect` use dekh nahi sakta).
+  Hit-test kiya: ±21px ke chaaron probe button par lagte hain.
+- `/portal/support/new` ke do `select` 1px ke dikhte hain — wo Radix ka chhupa shim hai
+  (`aria-hidden`, `tabIndex -1`). Asli control styled trigger hain, **theek 44px**.
+
+## 🧹 PARDEEP KE LIYE — teen file kisi ne import hi nahi ki (naapa, maana nahi)
+Domain feature ke aas-paas dead code ka ek jhund hai. **Kuch delete nahi kiya** — UI hatana
+product ka faisla hai:
+
+| file | lines | importer |
+|---|---|---|
+| `src/site/components/home/DomainSearch.tsx` | 149 | **0** |
+| `src/site/components/home/DomainSearchDock.tsx` | 200 | **0** |
+| `src/site/lib/live-tld-pricing.ts` | 122 | **0** |
+
+`live-tld-pricing.ts` wahi file hai jo rate card ko LIVE banane ke liye likhi gayi thi —
+uska apna header kehta hai ki catalog ke daam "already drifted from what the shop charges",
+aur wo kabhi wire hi nahi hui. `/domains` aaj bhi placeholder daam dikhata hai.
+(`landing-sections.tsx`, 983 lines, pehle se isi list par hai.)
+
 ## ⏳ Jo yahan se check nahi ho sakta
 `gcloud` is machine par hai hi nahi. To **Cloud Run par RC credentials hain ya nahi,
 pata nahi chal sakta.** Agar hain, aur `DOMAIN_REGISTER_LIVE` wahan set nahi hai

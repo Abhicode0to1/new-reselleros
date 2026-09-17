@@ -390,6 +390,13 @@ the ancestor's padding box, so a chip in an `overflow-x-auto` row keeps its 38px
 class sits there looking applied. For anything inside a scrolling row the BOX has to grow:
 `min-h-11 md:min-h-0`, which is what the chip rows use.
 
+**A 1px control is usually a library's hidden shim, not a control.** Radix's `Select` renders
+a real `<select>` behind the styled trigger for native form behaviour: 1px tall,
+`aria-hidden="true"`, `tabIndex -1` — unreachable by mouse, keyboard and screen reader alike.
+Measured on `/portal/support/new`, where the two things a person actually touches are the
+triggers, at exactly 44px. **Check `aria-hidden` and `tabIndex` before reporting any
+suspiciously tiny control**; if both say hidden, it is not a target.
+
 **An inline link in a sentence is exempt, and forcing it is a regression.** WCAG 2.5.5 excludes a
 target "in a sentence or block of text". On `/portal/domains`, "Ask Anutech Digital to renew"
 (38px) and "Raise a request" (30px) sit inside running prose; making them 44px tall would break

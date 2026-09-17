@@ -1010,6 +1010,30 @@ it. Confirmed against DMS's own code:
 `lib/email/smtp-transport.ts`, which names the ResellerClub variables as the trap
 it was avoiding.)
 
+### A price is never shown without its term
+
+`RcTldPrice.years` exists because not every TLD is sold by the year. On the live account
+exactly ONE of 412 products is not — `.ai`, a 2-year minimum at ₹8,807, with no 1-year price
+anywhere in the payload. Reading only `block["1"]` reported it as UNPRICED, which is the same
+answer the code gives for a registrar outage, so the search said "Price on request" forever
+and nothing said why.
+
+Three rules came out of fixing it, and all three are pinned by tests:
+
+1. **Read the SHORTEST term a block offers, and carry the term with the amount** —
+   `shortestTerm()` in `lib/resellerclub/index.ts`. A TLD with no price at all reports
+   `years: 1`, so nothing renders "for 0 years" beside a missing number.
+2. **Never put a multi-year amount in an annual column.** The rate card's
+   `prices.register/renew/transfer` are annual and cannot say otherwise, and
+   `lib/domains/renewal-pricing.ts` prices a renewal straight from `renew`. `syncableTlds()`
+   in `lib/domains/catalog-sync.ts` is the one rule that keeps such a TLD out, applied at
+   both doors — the catalogue sync route and `mergeTlds` on the marketing site — and it
+   reports what it skipped rather than dropping it silently.
+3. **Show the term wherever the price is shown.** The portal card states it always, because
+   a ticket needs it written down. The marketing lists use `termSuffix()` from
+   `site/lib/domain-search.ts`, which is SILENT at one year — the reader already assumes a
+   year, and the suffix appears exactly when that assumption would be wrong.
+
 ### Reads are not writes
 
 `rcConfigured()` (`lib/resellerclub/index.ts`) and `rcWriteConfigured()`

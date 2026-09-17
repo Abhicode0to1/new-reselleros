@@ -43,10 +43,23 @@ npm run db:stop      # stop the DB      (it keeps running otherwise)
 ### Before pushing
 
 ```bash
-npm run typecheck && npm run test && npm run lint
+npm run typecheck && npm run test && npx next lint && npm run build
 ```
 
-Lint **warnings** are fine; lint **errors** are not. Baseline: **1492 tests passing**.
+Lint **warnings** are fine; lint **errors** are not. Baseline: **7,428 tests passing**
+and **26 lint warnings** (re-measured 17 Sep 2026; this line said 1,492 for a long time).
+
+Two things about that command line, both measured rather than assumed:
+
+- **`npm run build` belongs in it.** `typedRoutes` generates the route types AT BUILD TIME,
+  so `tsc --noEmit` checks against types that do not exist yet and passes a `<Link>` the
+  build rejects. It is the slow one (~2 min) — run it before calling a branch done, not
+  after every turn.
+- **`npx next lint`, not `npm run lint`.** On this machine the npm shim segfaults: exit 139
+  with 141 bytes of output and nothing else, while the same tree lints clean through `npx`.
+  `next build` has its own unrelated segfault — retry once with `.next` and
+  `node_modules/.cache` cleared before believing either. Both are written up in the
+  `resellersos-env` skill, §4.
 
 Then open a pull request into `main`. You cannot push to `main` directly — it is
 protected, and CI must be green before anything merges. That is deliberate: on a feature
