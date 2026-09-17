@@ -7,6 +7,71 @@
 
 ---
 
+# 🟣 HANDOFF — 16–17 Sep 2026. ResellerClub ki chaabi lag gayi. Search portal me aa gaya. Rate card lagat se NEECHE bik raha hai.
+
+## 🔑 Credentials install ho gaye — aur do jagah naam BADALNE pade
+`RESELLERCLUB_ID` / `RESELLERCLUB_SECRET` ke naam se diye gaye the. **Ye app wo naam
+padhti hi nahi.** DMS ke apne code se milaya (`lib/resellerclub/client.ts:53-54`):
+
+| jo diya gaya | app jo padhti hai | dono banta hai |
+|---|---|---|
+| `RESELLERCLUB_ID` | `RESELLERCLUB_RESELLER_ID` | RC ka `auth-userid` |
+| `RESELLERCLUB_SECRET` | `RESELLERCLUB_API_KEY` | RC ka `api-key` |
+
+Jis naam se code padhta hai, usi me likhe gaye. DMS ke naam se likhte to **inert**
+reh jaate — bilkul waisa hi jaal jaisa nameservers ne pichhle hafte banaya tha.
+
+⚠️ **`DOMAIN_REGISTER_LIVE=0` usi edit me likha.** `live-gates.ts` me "unset = KHULA"
+hai (11 Sep se), to is laptop par asli, irreversible order rokne wali **ekmatr cheez
+wahi chaabi thi jo ab lag gayi**. Reading (availability/pricing) par koi asar nahi.
+Poora niyam ab `production/CLAUDE.md` §26 me hai.
+
+## ✅ Jo bana / theek hua (sab local commit, 5 unpushed)
+- **`/portal/domains` par domain search** — customer ab naam dhoondh sakta hai bina
+  kahin jaaye. TAKEN par "Watch it" wahi neeche wale watch box me naam bhej deta hai.
+  Lookup marketing site ka hi `searchDomains` hai, doosri copy nahi.
+- **"Ask to register" ab poora ticket bharke deta hai** — naam, daam AUR TERM.
+- **`.co.in` ka daam kabhi aaya hi nahi tha** — RC use `thirdleveldotin` me rakhta hai,
+  ladder me wo rung thi hi nahi. Har search me "Price on request" aata tha. ₹779 hai.
+- **`.ai` 2-saal ke minimum term par bikta hai** — `oneYear()` sirf `block["1"]` padhta
+  tha, to .ai "unpriced" dikhta tha. 412 me se **theek ek** product bina 1-saal ke hai,
+  aur wahi hai. Ab `RcTldPrice.years` term saath le jaata hai.
+- **Sentry me api-key ja rahi thi** — fetch instrumentation URL saaf karke query string
+  wapas `http.query` me daal deta hai. Paanchon `Sentry.init` par `beforeBreadcrumb`
+  laga, test se pinned.
+- **Ops mail "sabse purane owner" ko jaati thi**, bina tenant filter ke — ab platform
+  allowlist se. Digest me ab RC wallet balance bhi jaata hai.
+- **`www.acme.com` watch kabhi fire nahi kar sakta tha** — ab strip hota hai.
+- Portal se phone/WhatsApp poori tarah hata (prospect pages jaan-boojh kar exempt).
+
+## 🔴 PARDEEP KE LIYE — rate card lagat se NEECHE hai, chaudah ke chaudah
+Live account se naapa, 1 saal register, ₹:
+
+```
+.in   499/863    .com  899/1199   .co.in 599/779    .org 1099/1350
+.net 1199/1559   .company 799/1595  .agency 1899/2663  .dev 1499/1535
+.io  3899/5747   .cloud 899/1907  .app 1299/1787
+.store 249/4788  .shop  299/3839   <- 4,539 aur 3,540 neeche
+.ai   6999/8807  <- aur term bhi galat: 1 saal likha hai, milta 2 saal me hai
+```
+
+Ye sirf marketing page nahi: `api/public/checkout/cart/route.ts:91-93` isi array se
+re-price karta hai aur `cost: 0` likhta hai — yaani Razorpay yahi collect karta hai
+aur books me nuksaan dikhta bhi nahi. `site/lib/live-tld-pricing.ts` isi ko theek
+karne ke liye likha gaya tha aur **kabhi wire hi nahi hua** (zero callers).
+
+**Kuch badla nahi gaya** — daam badalna business ka faisla hai. Teen raaste:
+live daam wire karo / chaudah number haath se set karo / abhi sirf `.ai` hatao.
+
+## ⏳ Jo yahan se check nahi ho sakta
+`gcloud` is machine par hai hi nahi. To **Cloud Run par RC credentials hain ya nahi,
+pata nahi chal sakta.** Agar hain, aur `DOMAIN_REGISTER_LIVE` wahan set nahi hai
+(repo ki kisi deploy file me nahi hai), to `provision-domain` (5 min) aur
+`domain-renew` (30 min) cron **asli order kar rahe honge** — aur is DB ke kisi domain
+par aaj tak `registrar_order_id` nahi hai, yaani wo pehla order kisi ne dekha nahi.
+
+---
+
 # 🟣 HANDOFF — 11 Sep 2026. DMS PUBLIC hi rahega. "Secrets chhape hain" — naapa, GALAT nikla.
 
 Pardeep: *"fix this i need to keep the DMS public"*. To pehle ye naapa ki asli
@@ -531,7 +596,9 @@ hoga** (warna ₹900/saal ka domain ₹75/mahine ka MRR ban jata).
 - [ ] **Paid hone par RC par renew karna** — `rcRenewDomain` maujood hai aur
       sahi hai (gate + `exp-date` se duplicate rok). **Par is DB ke KISI domain
       par `registrar_order_id` nahi hai**, yaani aaj ye code ek bhi row par chal
-      hi nahi sakta. `DOMAIN_REGISTER_LIVE=1` bhi chahiye. Isliye jaan-boojh kar
+      hi nahi sakta. ~~`DOMAIN_REGISTER_LIVE=1` bhi chahiye.~~ **(17 Sep: ye ab
+      GALAT hai — gate 11 Sep se default KHULA hai, sirf credentials kaafi hain.)**
+      Isliye jaan-boojh kar
       NAHI banaya — bina verify kiye paisa kharch karne wala code likhna is
       repo ke apne §0.4 ke khilaf hai.
 
@@ -1092,8 +1159,9 @@ exception).
       = **domain do baar khareeda**. Mutation-checked (ordering todi → sirf sahi test laal).
 - [x] **`orders.ts` + 30 test** — register / renew / transfer / modify-ns / details / orderid,
       fetch par (axios nahi). Gate: `rcOrderingEnabled()` = credentials **AUR**
-      `DOMAIN_REGISTER_LIVE=1`. Sirf credentials kaafi NAHI — read side (pricing/availability)
-      wahi key use karti hai.
+      ~~`DOMAIN_REGISTER_LIVE=1`. Sirf credentials kaafi NAHI~~ — **17 Sep: ULTA.
+      Gate 11 Sep se default KHULA hai, to sirf credentials KAAFI HAIN.** Read side
+      (pricing/availability) wahi key use karti hai aur us par koi gate hai hi nahi.
 - [x] **Ek bug port hone se bacha** — DMS ka `renewDomain`/`transferDomain` HTTP 200 par RC ka
       in-body `{status:"ERROR"}` padhta hi nahi (sirf `registerDomain` padhta hai), to refuse
       hui renewal "renewed" likh jaati hai. `rcCall` har op ke liye normalise karta hai.
