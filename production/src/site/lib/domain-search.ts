@@ -35,6 +35,30 @@ export interface DomainResult {
   priceKnown: boolean;
 }
 
+/**
+ * " for 2 years" — or nothing at all when the price buys a single year.
+ *
+ * A price without its term is only safe while every term is the same. That held
+ * until 17 Sep 2026, when `rcTldPricing` started reporting the shortest term a
+ * registrar actually sells instead of silently dropping anything without a
+ * 1-year price. ResellerClub has exactly one such product on this account —
+ * `.ai`, a 2-YEAR MINIMUM at ₹8,807 — and rendering that as a bare "₹8,807"
+ * states a price for a term that cannot be bought.
+ *
+ * Silent at one year on purpose. The reader already assumes a year, and
+ * "₹863 for 1 year" on every row of a dense result list is noise that buys
+ * nothing. The suffix appears exactly when the assumption would be wrong.
+ *
+ * `.ai` is not in DEFAULT_TLDS, so today this returns "" every time. It is here
+ * so that adding one multi-year TLD to that list cannot quietly put a two-year
+ * figure in front of a customer.
+ */
+export function termSuffix(years: number | undefined | null): string {
+  const n = typeof years === "number" && Number.isFinite(years) ? Math.round(years) : 1;
+  if (n <= 1) return "";
+  return ` for ${n} years`;
+}
+
 export type SearchOutcome =
   | { ok: true; base: string; domains: DomainResult[] }
   | { ok: false; message: string };

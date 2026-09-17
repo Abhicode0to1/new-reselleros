@@ -22,7 +22,7 @@
 import { useRef, useState } from "react";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee } from "@/site/lib/money";
-import { searchDomains, normaliseName, type DomainResult } from "@/site/lib/domain-search";
+import { searchDomains, normaliseName, type DomainResult , termSuffix} from "@/site/lib/domain-search";
 
 type State =
   | { kind: "idle" }
@@ -123,7 +123,9 @@ export function DomainSearch() {
               ) : r.available ? (
                 <>
                   {r.priceKnown ? (
-                    <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>{rupee(r.price)}</span>
+                    <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {rupee(r.price)}{termSuffix(r.years)}
+                    </span>
                   ) : (
                     <span className="meta">price on request</span>
                   )}
