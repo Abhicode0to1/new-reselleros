@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { expiryPhrase, summariseExpiries, expiringDomains, type ExpiryUrgency } from "@/lib/domains/lifecycle";
 import { MAX_WATCHES_PER_CUSTOMER } from "@/lib/domains/watch";
+import { ticketHref } from "@/lib/portal/ticket-link";
 import { DomainTools } from "../_components/domain-tools";
 import type { DomainAssetStatus } from "@/lib/supabase/database.types";
 import { PortalPageHeader, PortalStats } from "../_components/portal-page";
@@ -76,7 +77,7 @@ const NEEDS_ACTION: ReadonlySet<ExpiryUrgency> = new Set<ExpiryUrgency>(["lapsed
  * states what the panel displayed, and the team confirms the amount on the
  * ticket. No price is quoted, because this page has none to quote.
  */
-function renewHref(domain: string, expiresAt: string | null, phrase: string): Route {
+function renewHref(domain: string, expiresAt: string | null, phrase: string) {
   const when = expiresAt ? `It expires on ${formatDate(expiresAt)} (${phrase}).` : "The panel does not show an expiry date for it.";
   const body =
     `I would like to renew ${domain}.` +
@@ -85,14 +86,12 @@ function renewHref(domain: string, expiresAt: string | null, phrase: string): Ro
 ${when}` +
     `
 Please confirm the renewal price and let me know how to pay.`;
-  /* `as Route`: typedRoutes cannot check a string returned from a function. */
-  return (`/portal/support/new?subject=${encodeURIComponent(`Please renew ${domain}`)}` +
-    `&body=${encodeURIComponent(body)}`) as Route;
+  return ticketHref(`Please renew ${domain}`, body);
 }
 
 /** The same idea as renewHref, for a name that has already lapsed — different
  *  ask, different urgency, and the fee is the registry's to state, not ours. */
-function recoverHref(domain: string, expiresAt: string | null): Route {
+function recoverHref(domain: string, expiresAt: string | null) {
   const when = expiresAt ? `It expired on ${formatDate(expiresAt)}.` : "The panel does not show its expiry date.";
   const body =
     `I would like to recover ${domain}.` +
@@ -101,8 +100,7 @@ function recoverHref(domain: string, expiresAt: string | null): Route {
 ${when}` +
     `
 Please tell me whether it can still be recovered, what it will cost, and by when.`;
-  return (`/portal/support/new?subject=${encodeURIComponent(`Please recover ${domain}`)}` +
-    `&body=${encodeURIComponent(body)}`) as Route;
+  return ticketHref(`Please recover ${domain}`, body);
 }
 
 const URGENCY_TEXT: Record<ExpiryUrgency, string> = {

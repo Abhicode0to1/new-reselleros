@@ -19,6 +19,7 @@
  */
 import Link from "next/link";
 import { requirePortalSession } from "@/lib/portal/session";
+import { ticketHref } from "@/lib/portal/ticket-link";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -140,9 +141,26 @@ export default async function PortalHostingPage() {
               within 14 days.
             </b>{" "}
             Sites on a suspended account stop loading.{" "}
-            <Link href="/portal/support/new" className="text-rose-ink underline">
-              Ask {reseller} to extend →
-            </Link>
+            {endingSoon.length === 1 ? (
+              <Link
+                href={ticketHref(
+                  `Please extend ${endingSoon[0].domain_name}`,
+                  `I would like to extend the hosting for ${endingSoon[0].domain_name}.` +
+                    `
+
+The panel says it ends within 14 days.` +
+                    `
+Please confirm what it costs and how to pay.`,
+                )}
+                className="text-rose-ink underline"
+              >
+                Ask {reseller} to extend {endingSoon[0].domain_name} →
+              </Link>
+            ) : (
+              /* Several: each card below carries its own named link, and one
+                 nameless ticket for all of them is worse than saying so. */
+              <span className="text-ink-3">Each account below has a link to ask about it.</span>
+            )}
           </p>
         </Card>
       )}
@@ -268,7 +286,16 @@ export default async function PortalHostingPage() {
                       <span className="text-2xs text-ink-3">
                         as <span className="font-mono">{h.da_username}</span>. Forgotten the
                         password?{" "}
-                        <Link href="/portal/support/new" className="underline">Ask for a reset</Link>.
+                        <Link
+                          href={ticketHref(
+                            `Control-panel password reset for ${h.domain_name}`,
+                            `Please reset the control-panel password for ${h.domain_name}` +
+                              `${h.da_username ? ` (username ${h.da_username})` : ""}.`,
+                          )}
+                          className="underline"
+                        >
+                          Ask for a reset
+                        </Link>.
                       </span>
                     </div>
                   )}
@@ -292,7 +319,16 @@ export default async function PortalHostingPage() {
                       {reseller} is setting this account up — there is nothing for you to do. As
                       soon as it is ready you will get an email with the control-panel login, and
                       this page will show it too.{" "}
-                      <Link href="/portal/support/new" className="underline hover:text-ink">
+                      <Link
+                        href={ticketHref(
+                          `Hosting setup for ${h.domain_name}`,
+                          `The panel still shows the hosting for ${h.domain_name} as being set up.` +
+                            `
+
+Could you tell me where it has got to?`,
+                        )}
+                        className="underline hover:text-ink"
+                      >
                         Taking longer than you expected? Ask about it
                       </Link>
                       .
@@ -305,7 +341,18 @@ export default async function PortalHostingPage() {
                     <p className="mt-4 pt-4 border-t border-hairline text-2xs text-rose-ink">
                       Setup did not complete. {reseller} has been told and is on it — you have not
                       been charged twice.{" "}
-                      <Link href="/portal/support/new" className="underline">Chase it up</Link>.
+                      <Link
+                        href={ticketHref(
+                          `Hosting setup failed for ${h.domain_name}`,
+                          `The panel says the hosting setup for ${h.domain_name} did not complete.` +
+                            `
+
+Please tell me where this stands and what happens next.`,
+                        )}
+                        className="underline"
+                      >
+                        Chase it up
+                      </Link>.
                     </p>
                   )}
 
@@ -326,7 +373,18 @@ export default async function PortalHostingPage() {
                        the activity log where it belongs. */
                     <p className="mt-4 pt-4 border-t border-hairline text-2xs text-ink-3">
                       Setup did not complete, and {reseller} has since sorted this out with you.{" "}
-                      <Link href="/portal/support/new" className="underline">Ask about it</Link> if
+                      <Link
+                        href={ticketHref(
+                          `Hosting for ${h.domain_name}`,
+                          `The panel says the setup for ${h.domain_name} failed and was then sorted out.` +
+                            `
+
+Something still does not look right to me:`,
+                        )}
+                        className="underline"
+                      >
+                        Ask about it
+                      </Link> if
                       anything still looks wrong.
                     </p>
                   )}
@@ -356,7 +414,20 @@ export default async function PortalHostingPage() {
                             first thing somebody looking at this needs. */}
                         <p className="text-2xs text-ink-2 mt-1.5">{notice.reassurance}</p>
                         <Link
-                          href={notice.actionRoute === "shop" ? "/portal/shop" : "/portal/support/new"}
+                          href={
+                            notice.actionRoute === "shop"
+                              ? "/portal/shop"
+                              : ticketHref(
+                                  `Hosting for ${h.domain_name} is paused`,
+                                  `The panel says the hosting for ${h.domain_name} is paused, so the site is offline.` +
+                                    `
+
+${notice.headline}` +
+                                    `
+
+Please tell me why, and what it takes to switch it back on.`,
+                                )
+                          }
                           className="inline-block mt-2 text-2xs text-amber-ink underline"
                         >
                           {notice.action} →

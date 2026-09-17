@@ -34,13 +34,13 @@
 
 import * as React from "react";
 import Link from "next/link";
-import type { Route } from "next";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { rupee } from "@/lib/utils";
+import { ticketHref } from "@/lib/portal/ticket-link";
 import {
   searchDomains,
   normaliseName,
@@ -65,7 +65,7 @@ const COULD_NOT_CHECK =
  * the team confirms it on the ticket. `years` matters and is not decoration:
  * .ai is sold in a 2-year minimum, so "for 1 year" would be wrong for it.
  */
-function registerHref(r: DomainResult): Route {
+function registerHref(r: DomainResult) {
   const opening = `I would like to register ${r.domain}.`;
   const body = r.priceKnown
     ? `${opening}
@@ -80,10 +80,7 @@ The search on my Domains page showed it as available, but no ` +
       `price came back for it.` +
       `
 Please confirm the price and let me know how to pay.`;
-  /* `as Route`: next.config sets experimental.typedRoutes, which can check a
-     literal template at the call site but not a string returned from here. */
-  return (`/portal/support/new?subject=${encodeURIComponent(`Please register ${r.domain}`)}` +
-    `&body=${encodeURIComponent(body)}`) as Route;
+  return ticketHref(`Please register ${r.domain}`, body);
 }
 
 export function DomainSearch({ onWatch }: { onWatch: (domain: string) => void }) {

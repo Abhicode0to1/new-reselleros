@@ -21,6 +21,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
+import { TICKET_SUBJECT_MAX, TICKET_BODY_MAX } from "@/lib/portal/ticket-link";
 
 const CATEGORIES = [
   { value: "billing",     label: "💰 Billing / invoice / payment" },
@@ -60,11 +61,11 @@ function NewTicketForm() {
      a promise the URL made and the form did not keep. Trimmed and capped
      because it arrives from a query string. */
   const params = useSearchParams();
-  const presetSubject = (params.get("subject") ?? "").trim().slice(0, 200);
+  const presetSubject = (params.get("subject") ?? "").trim().slice(0, TICKET_SUBJECT_MAX);
   /* And the body, so the ticket carries the price and term the customer was
      shown rather than making somebody look the name up again. Capped harder
      than the textarea allows, because it arrives from a query string. */
-  const presetBody = (params.get("body") ?? "").trim().slice(0, 2000);
+  const presetBody = (params.get("body") ?? "").trim().slice(0, TICKET_BODY_MAX);
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
