@@ -42,6 +42,7 @@ import { TLDS, type Tld } from "./data/catalog";
    copy of a money-facing integration. When the credentials are absent (local
    dev), everything below falls back to the engine URL exactly as before. */
 import { rcConfigured, rcTldPricing } from "@/lib/resellerclub";
+import { syncableTlds } from "@/lib/domains/catalog-sync";
 
 export interface LiveTldPrice {
   tld: string; // ".in"
@@ -49,6 +50,9 @@ export interface LiveTldPrice {
   renew: number | null;
   transfer: number | null;
   currency: string;
+  /** Term the amounts buy, in years. Absent from the engine's rows, which only
+      ever quoted annually — see lib/domains/catalog-sync.ts. */
+  years?: number;
 }
 
 export async function fetchLiveTldPricing(tlds: readonly string[]): Promise<LiveTldPrice[] | null> {
@@ -63,6 +67,7 @@ export async function fetchLiveTldPricing(tlds: readonly string[]): Promise<Live
       renew: r.renew,
       transfer: r.transfer,
       currency: r.currency,
+      years: r.years,
     })) ?? null;
   }
   try {
@@ -98,7 +103,11 @@ export interface MergedTld extends Tld {
  */
 export function mergeTlds(live: LiveTldPrice[] | null): MergedTld[] {
   if (!live) return TLDS.map((t) => ({ ...t }));
-  const byTld = new Map(live.map((r) => [r.tld.toLowerCase(), r]));
+  /* The same rule the catalogue sync applies, from the same place: this table's
+     reg/renew/transfer columns are ANNUAL and have no way to say otherwise, so a
+     TLD sold in a longer minimum term (.ai is two years) keeps its placeholder
+     rather than overlaying a two-year figure into a one-year column. */
+  const byTld = new Map(syncableTlds(live).sync.map((r) => [r.tld.toLowerCase(), r]));
   return TLDS.map((t) => {
     const r = byTld.get(t.tld.toLowerCase());
     if (!r || r.register == null) return { ...t };

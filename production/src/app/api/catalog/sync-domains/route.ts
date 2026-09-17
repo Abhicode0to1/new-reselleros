@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { rcConfigured, rcTldPricing } from "@/lib/resellerclub";
+import { syncableTlds, type TldPriceRow } from "@/lib/domains/catalog-sync";
 
 /**
  * POST /api/catalog/sync-domains — pull the domain rate card from the DMS engine
@@ -18,13 +19,9 @@ import { rcConfigured, rcTldPricing } from "@/lib/resellerclub";
 const DMS_BASE = (process.env.DOMAINS_APP_URL ?? "https://app.anutech.in").replace(/\/+$/, "");
 const TLD_PRICING_API = `${DMS_BASE}/api/public/tld-pricing`;
 
-interface TldRow {
-  tld: string;
-  register: number | null;
-  renew: number | null;
-  transfer: number | null;
-  currency: string;
-}
+/* The row shape lives with the rule that filters it — see lib/domains/catalog-sync.ts
+   for why a TLD's TERM decides whether it may enter an annual rate card. */
+type TldRow = TldPriceRow;
 
 export async function POST(_request: NextRequest) {
   const supabase = createClient();
@@ -72,9 +69,13 @@ export async function POST(_request: NextRequest) {
     }
   }
 
-  const priced = tlds.filter((t) => typeof t.register === "number" && (t.register ?? 0) > 0);
+  const { sync: priced, skipped } = syncableTlds(tlds);
   if (priced.length === 0) {
-    return NextResponse.json({ synced: 0, message: "The engine returned no priced TLDs." });
+    return NextResponse.json({
+      synced: 0,
+      message: "The engine returned no TLD this rate card can hold.",
+      skipped,
+    });
   }
 
   // 2. Hand them to the atomic, owner-only RPC.
@@ -86,5 +87,7 @@ export async function POST(_request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status });
   }
 
-  return NextResponse.json({ synced: count ?? 0 });
+  /* `skipped` is reported, never silent: an operator who adds a TLD to the list
+     above and sees only "synced 8" would conclude it worked. */
+  return NextResponse.json({ synced: count ?? 0, skipped });
 }
