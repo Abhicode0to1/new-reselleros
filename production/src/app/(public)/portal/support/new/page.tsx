@@ -128,7 +128,13 @@ function NewTicketForm() {
        it was brought back in line. */
     <div className="max-w-[680px] mx-auto px-6 py-8">
       <div className="mb-6">
-        <Link href="/portal/support" className="text-xs text-ink-3 hover:text-ink">
+        {/* min-h-11 on phones only — §20 scopes the 44px minimum to <768px.
+            Measured at 15px tall before this, on the page the domain search's
+            "Ask to register" now lands on. */}
+        <Link
+          href="/portal/support"
+          className="min-h-11 md:min-h-0 inline-flex items-center text-xs text-ink-3 hover:text-ink"
+        >
           ← Back to all tickets
         </Link>
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight mt-2">Raise a ticket</h1>
@@ -175,7 +181,13 @@ function NewTicketForm() {
           <FormField label="Details" required htmlFor="body">
             <Textarea
               id="body"
-              rows={6}
+              /* 9, not 6. The domain search sends a four-sentence body here, and
+                 six rows is 136px against the 176px that text needs once it
+                 wraps at 390 — so the customer arrived at a box whose last line
+                 ("Please confirm and let me know how to pay") was hidden until
+                 they scrolled inside it. Measured 17 Sep 2026. `resize-y` stays,
+                 so anyone writing more can still drag it. */
+              rows={9}
               placeholder="Describe the issue in detail. Include any error messages, user emails affected, screenshot URLs, etc."
               {...register("body")}
             />
