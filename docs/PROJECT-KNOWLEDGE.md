@@ -6,7 +6,8 @@
 >
 > | | This doc says | Reality (verified 2026-08-12) |
 > |---|---|---|
-> | Migrations | 27 files (`0001`–`0017`, `0040`–`0050`) | **196 files, `0001` → `0225`** |
+> | Migrations | 27 files (`0001`–`0017`, `0040`–`0050`) | **93 active + 216 archived** (re-measured 17 Sep 2026; was "196 files, `0001` → `0225`" on 12 Aug) |
+> | Where they live | — | `production/supabase/migrations/` — **timestamped now** (`20260816094848_…`), not `0001`-style. The old numbered history moved to `production/supabase/migrations-archive/`. ⚠️ A `supabase/migrations/` at the REPO ROOT holds six orphans (`0125`–`0130`, last touched 4 Aug) in a folder with no `config.toml` — not a project. The archive's numbering jumps `0124` → `0131` straight over them. They were applied before the snapshot: `employee_documents` and `reimbursements` are both in `baseline.sql`. Misplaced history, not lost work — do not re-run them. |
 > | Scope | "17 shipped modules" | ~10 further domains shipped since: payroll (PF/ESI/salary register), attendance (biometric/face/selfie/geofence), project sales, compliance calendar (GST/ROC/IT), assessments + proctoring, documents vault, referral commissions, credit/debit notes, business loans + EMI, vendors master, customer credits, backups/restore points, public `/api/v1` + API keys, vendor portal |
 >
 > **Claims in here that are now WRONG — these are the ones that will actually mislead you:**

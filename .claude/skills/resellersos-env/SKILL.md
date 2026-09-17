@@ -237,6 +237,23 @@ claimed.** After the GST repair on 24 Aug, comparing the pre-change dump's `quot
 against live showed `rows changed: 1, total delta: 8165` — which is a far stronger statement
 than "exit code 0", and it is the only thing that would have caught a second row moving.
 
+### ⚠️ And which `supabase/` FOLDER — there are two, one is not a project
+
+`production/supabase/` is the real one: it has the `config.toml`, the baseline, the seeds,
+`migrations/` (93 timestamped files, `20260816094848_…` onward) and `migrations-archive/`
+(216 older `0001`-style files).
+
+`supabase/` **at the repo root has only a `migrations/` directory and no `config.toml`**, so
+it is not a Supabase project and no CLI command reads it. It holds six files, `0125`–`0130`,
+last touched 4 Aug 2026 — and the archive's numbering jumps `0124` → `0131` straight over
+them, which looks alarming.
+
+**It is not alarming, checked 17 Sep 2026.** Every object those six create is present in the
+local DB, and `employee_documents` and `reimbursements` are both in `baseline.sql` — which is
+a snapshot of production. So they were applied before the snapshot was taken and the files
+simply ended up in the wrong folder. **Do not re-run them, and do not add new migrations
+there.**
+
 ## 6. Which Supabase project
 
 `ontpnqjoysjgrlsukecm` is the real one, and `--linked` already points there — **verified

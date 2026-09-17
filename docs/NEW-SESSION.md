@@ -67,6 +67,24 @@ Goal khatam → gate green (typecheck + test + lint) → commit → **naya sessi
 
 Do goals ek session me le gaye to doosre me Claude pehle jaisa tez nahi rahega.
 
+### 5. ⚠️ Background agent / workflow session ke saath MAR jaata hai
+
+Naapa 16–17 Sep 2026: **chaar background workflow lagatar mare**, har baar session
+restart hone par. Journal me sirf `launched` aur `started` likha reh gaya —
+**ek bhi `result` nahi**, yaani ~10 agent ka poora kaam har baar zero.
+
+Jo isse bachne ke liye karna hai:
+
+- **Lamba background fan-out mat chalao** agar session band ho sakta hai. Jo cheez
+  khud naap kar ho sakti hai, khud naapo — ek tool call poora hota hai ya nahi hota,
+  beech me nahi latakta.
+- Chalana hi ho to **pehle chhota hissa** chalao aur result aate hi commit kar do.
+  Aadha result kuch nahi hota.
+- Marne ke baad `journal.jsonl` zaroor kholo (`subagents/workflows/<runId>/`) —
+  kabhi-kabhi kuch `result` bach jaate hain. Chaaron baar 0 the, par dekhna sasta hai.
+- Yahi baat **`run_in_background` wale shell command** par bhi lagti hai. Dev server
+  chal jaata hai, lekin uska intezaar karne wala loop mar jaata hai.
+
 ---
 
 ## Kya khota hai aur kya nahi
