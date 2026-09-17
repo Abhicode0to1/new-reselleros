@@ -20,6 +20,7 @@
 import Link from "next/link";
 import { requirePortalSession } from "@/lib/portal/session";
 import { ticketHref } from "@/lib/portal/ticket-link";
+import { notLiveBreakdown } from "./not-live";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -120,6 +121,9 @@ export default async function PortalHostingPage() {
             value: rows.filter((r) => r.status !== "active").length,
             icon: "alert",
             accent: rows.some((r) => r.status !== "active") ? "rose" : "ink",
+            /* "2" told a customer nothing; "1 paused · 1 setting up" tells them
+               which half needs them. */
+            trend: notLiveBreakdown(rows.filter((r) => r.status !== "active").map((r) => r.status)),
           },
           {
             label: "Ending soon",
