@@ -89,6 +89,30 @@ Verified: on `/leads` the line grep said 30 unlabelled `truncate`; the element w
 3 labelled. Close enough to look right and wrong enough to matter.
 
 ---
+## 0c. ⚠️ `elementFromPoint` ANSWERS NULL FOR ANYTHING OFF-SCREEN
+
+Measured 17 Sep 2026, and it nearly produced a wrong commit. A 36px icon button on
+`/portal/domains` was hit-tested at ±21px from its centre to see whether `.touch-44` really
+extends the target. All four probes returned `(nothing)`, which reads as "the hit area is not
+there" — a repo-wide defect, since `.touch-44` is on every `IconButton`.
+
+The defect was not there. The button was at `y = 1642` in a 900px-tall window, and `elementFromPoint`
+answers `null` for any coordinate outside the viewport. **The tell was in the output**: the probe
+also reported `(nothing)` at the CENTRE of the button, which cannot be true of a visible element.
+Scrolled into view, all four probes land on the button and `.touch-44` is doing its job.
+
+So: **scroll first, and include the centre as a control.**
+
+```js
+el.scrollIntoView({ block: "center" });          // then wait ~500ms
+// centre must return the element itself, or the measurement is void
+```
+
+Same family as §0a. A geometric measurement that shares a call with an assumption about where the
+element is cannot fail honestly — put a control in it that you already know the answer to, and
+throw the run away when the control is wrong.
+
+---
 
 ## 1. Toggles without `aria-pressed` — the measured gap in this app
 
@@ -342,6 +366,34 @@ a drawer that leaves focus behind it, is a finding no grep will find:
 ```js
 document.activeElement.tagName + " · " + (document.activeElement.textContent||'').slice(0,30)
 ```
+
+---
+
+## 7a. Touch targets — phone only, and two things that look like findings
+
+CLAUDE.md §20 requires 44px targets **below 768px**. Measuring at 1280 produced 33 false findings
+per screen on an earlier run; measure at 390 or do not report it.
+
+**The box is not the target.** `IconButton` renders a 36px box and carries `.touch-44`
+(`globals.css`), a centred 44×44 `::after` outside layout — exactly what WCAG 2.5.8 measures.
+`getBoundingClientRect().height` sees 36 and is not the answer. Hit-test instead, after §0c:
+
+```js
+const r = el.getBoundingClientRect(), cx = r.left + r.width/2, cy = r.top + r.height/2;
+const hit = (dx, dy) => { const t = document.elementFromPoint(cx+dx, cy+dy);
+  return !!(t && (t === el || el.contains(t) || t.closest("button") === el)); };
+({ centre: hit(0,0), up: hit(0,-21), down: hit(0,21), left: hit(-21,0), right: hit(21,0) })
+```
+
+**`.touch-44` fails silently inside a scroll container.** `overflow: auto` clips the `::after` to
+the ancestor's padding box, so a chip in an `overflow-x-auto` row keeps its 38px target while the
+class sits there looking applied. For anything inside a scrolling row the BOX has to grow:
+`min-h-11 md:min-h-0`, which is what the chip rows use.
+
+**An inline link in a sentence is exempt, and forcing it is a regression.** WCAG 2.5.5 excludes a
+target "in a sentence or block of text". On `/portal/domains`, "Ask Anutech Digital to renew"
+(38px) and "Raise a request" (30px) sit inside running prose; making them 44px tall would break
+the paragraph they are set in. Report a standalone control, never a word in a sentence.
 
 ---
 

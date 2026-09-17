@@ -146,9 +146,56 @@ keeps passing the day the trigger it was meant to guard is dropped.
 
 - **`npm run build` while the dev server is up wipes `.next`** — the running page then 404s
   its own chunks and looks broken. Stop the dev server first, or do not build.
+- **And an INTERRUPTED build leaves a `.next` that `next dev` cannot use.** Measured 17 Sep
+  2026: dev started clean, said `✓ Ready in 1.5s`, and served HTTP 500 on every route with
+  `Cannot find module '../webpack-runtime.js'` in the payload. Nothing in the dev log said
+  anything was wrong. `rm -rf .next` and restart — and treat "Ready" as meaning the process
+  booted, never as meaning the app works.
+- **`npm run lint` exits 139 with NO OUTPUT AT ALL.** Measured 17 Sep 2026, twice in a row:
+  `npm run lint` → `Segmentation fault "$NODE_EXE" "$NPM_CLI_JS"`, 141 bytes of output, exit
+  139 — while `npx next lint` on the same tree exits 0 with the usual 26 warnings and 0
+  errors. It is npm's shell shim crashing, not a lint failure, and reading 139 as "lint
+  failed" would send you hunting a defect that is not there. **Run `npx next lint` and record
+  that.** If any other `npm run <x>` returns 139 with no output, suspect the same thing and
+  re-run the underlying binary directly.
 - **Never pipe a command whose exit code matters.** `… | tail` hid a deploy failure and the
   session reported success. Use `${PIPESTATUS[0]}`, or do not pipe.
 - **The DB backup fails loudly now, but used to fail quietly** — see §5.
+
+### Docker goes down between sessions, and the app does not say so
+
+Three times on 16–17 Sep 2026 the Docker engine was not running at the start of a session.
+The symptom is misleading: **`next dev` serves HTTP 200 and the pages render** — it is only
+sign-in that hangs, forever, because auth cannot reach Postgres. `docker ps` answers
+`failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine`.
+
+The fix takes about 30 seconds and needs no `supabase start` — the containers restart
+themselves once the engine is up:
+
+```powershell
+Start-Process "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe"
+```
+
+```bash
+# engine up in ~10s, auth healthy ~10s after that
+until docker ps >/dev/null 2>&1; do sleep 5; done
+until [ "$(docker inspect --format '{{.State.Health.Status}}' supabase_auth_resellerosv3)" = healthy ]; do sleep 5; done
+curl -s -o /dev/null -w "%{http_code}
+" http://localhost:14321/rest/v1/     # 200 = ready
+```
+
+**Check the API port before blaming the app.** `kong=000` means the DB is down;
+`kong=200` with a hanging sign-in means something else and is worth investigating properly.
+
+### `gcloud` is NOT on this machine
+
+Searched 17 Sep 2026: not on PATH, not in `%LOCALAPPDATA%`, not in either Program Files tree,
+and no `gcloud.cmd` within four levels of `C:\`. So **`scripts/health-prod.mjs` cannot run
+here**, and nothing about the Cloud Run service — its env vars, its secrets, whether
+`DOMAIN_REGISTER_LIVE` is set there — can be established from this machine. Say "I cannot
+check that from here" rather than inferring production config from the repo: no deploy file
+in this repo sets `DOMAIN_REGISTER_LIVE` or any `RESELLERCLUB_*`, because those live in
+Secret Manager.
 
 ## 5. Backups (free plan: no PITR, no automatic backups)
 

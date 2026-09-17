@@ -41,6 +41,15 @@ taken on `/dashboard` while the report said `/leads`.
 if (location.pathname !== "/leads") return JSON.stringify({ ABORT: location.pathname });
 ```
 
+**0b-ii. And scroll the element into view before measuring its POSITION.**
+
+`document.elementFromPoint` answers `null` for any coordinate outside the viewport, so a
+hit-test on something below the fold reports "nothing there" for every probe — including the
+element's own centre, which is the tell. Measured 17 Sep 2026 on `/portal/domains`, where it
+nearly produced a wrong finding about a target size. `accessibility-review` §0c has the recipe
+and the control to put in it. Rects from `getBoundingClientRect()` are fine off-screen; anything
+that asks "what is AT this point" is not.
+
 ---
 
 ## 0c. THREE WAYS "IT DOES NOT FIT" IS A LIE — all measured 14 Sep 2026
