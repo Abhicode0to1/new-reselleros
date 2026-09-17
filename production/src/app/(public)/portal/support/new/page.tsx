@@ -61,6 +61,10 @@ function NewTicketForm() {
      because it arrives from a query string. */
   const params = useSearchParams();
   const presetSubject = (params.get("subject") ?? "").trim().slice(0, 200);
+  /* And the body, so the ticket carries the price and term the customer was
+     shown rather than making somebody look the name up again. Capped harder
+     than the textarea allows, because it arrives from a query string. */
+  const presetBody = (params.get("body") ?? "").trim().slice(0, 2000);
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -68,6 +72,7 @@ function NewTicketForm() {
       category: "billing",
       priority: "normal",
       ...(presetSubject ? { subject: presetSubject } : {}),
+      ...(presetBody ? { body: presetBody } : {}),
     },
   });
 

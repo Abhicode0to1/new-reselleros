@@ -34,6 +34,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import type { Route } from "next";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,40 @@ import {
 /** The portal's own wording — the shared one offers WhatsApp, which we do not. */
 const COULD_NOT_CHECK =
   "We couldn't reach the registry just now. Try again in a moment, or raise a ticket and we will look it up for you.";
+
+/**
+ * The ticket link, carrying what the customer was just shown.
+ *
+ * Without the price and the term, the ticket says only "Please register
+ * acme.in" and somebody on the team has to look the name up again to answer a
+ * question the customer already had the answer to. Worse, the customer has no
+ * record of the number they saw.
+ *
+ * It states what the SEARCH SHOWED, in the past tense, rather than quoting a
+ * price — the figure comes from the registrar at the moment of the search and
+ * the team confirms it on the ticket. `years` matters and is not decoration:
+ * .ai is sold in a 2-year minimum, so "for 1 year" would be wrong for it.
+ */
+function registerHref(r: DomainResult): Route {
+  const opening = `I would like to register ${r.domain}.`;
+  const body = r.priceKnown
+    ? `${opening}
+
+The search on my Domains page showed it as available at ` +
+      `${rupee(r.price)} for ${r.years} year${r.years === 1 ? "" : "s"}.` +
+      `
+Please confirm and let me know how to pay.`
+    : `${opening}
+
+The search on my Domains page showed it as available, but no ` +
+      `price came back for it.` +
+      `
+Please confirm the price and let me know how to pay.`;
+  /* `as Route`: next.config sets experimental.typedRoutes, which can check a
+     literal template at the call site but not a string returned from here. */
+  return (`/portal/support/new?subject=${encodeURIComponent(`Please register ${r.domain}`)}` +
+    `&body=${encodeURIComponent(body)}`) as Route;
+}
 
 export function DomainSearch({ onWatch }: { onWatch: (domain: string) => void }) {
   const [term, setTerm] = React.useState("");
@@ -166,13 +201,7 @@ export function DomainSearch({ onWatch }: { onWatch: (domain: string) => void })
                     <>
                       <Badge kind="success" size="sm" dot>Available</Badge>
                       <Button asChild size="sm" variant="primary">
-                        <Link
-                          href={`/portal/support/new?subject=${encodeURIComponent(
-                            `Please register ${r.domain}`,
-                          )}`}
-                        >
-                          Ask to register
-                        </Link>
+                        <Link href={registerHref(r)}>Ask to register</Link>
                       </Button>
                     </>
                   ) : (
