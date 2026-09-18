@@ -118,10 +118,10 @@ export function VaultPinSettings() {
 
           <div className="flex gap-2 flex-wrap">
             <Button
+              variant="primary"
               size="sm"
               onClick={handleSave}
               disabled={busy || next.length !== PIN_LENGTH || (configured && current.length !== PIN_LENGTH)}
-              className="bg-primary text-white"
             >
               {configured ? "PIN badlo" : "PIN set karo"}
             </Button>

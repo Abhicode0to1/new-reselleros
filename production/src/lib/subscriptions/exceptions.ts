@@ -19,6 +19,7 @@
  */
 import { rupee, formatDate } from "@/lib/utils";
 import { renewalStateLabel, renewalStateTone, type RenewalState } from "@/lib/renewals/cadence";
+import { paymentDueState, paymentDueChipLabel, todayIST } from "./payment-due";
 
 export type ExceptionTone = "muted" | "info" | "warning" | "danger" | "success";
 
@@ -38,6 +39,8 @@ export interface SubExceptionFields {
   reminder_count?: number | null;
   last_reminder_sent_at_v2?: string | null;
   outstanding_amount?: number | null;
+  /** Postpaid credit clock (migration 20260910060000). Null = no agreed date. */
+  payment_due_date?: string | null;
   seats?: number | null;
   used?: number | null;
   suspended_at?: string | null;
@@ -84,6 +87,36 @@ export function subscriptionExceptions(s: SubExceptionFields): SubExceptionFlag[
       label: `${rupee(n(s.outstanding_amount))} due`,
       tone: "warning",
       title: "Service is active but this amount is still unpaid",
+    });
+
+    /* ── WHEN it is due, directly under WHAT is due ──────────────────────────
+       This chip started life next to the customer's name, and Abhishek moved it
+       here on 11 Sep 2026 for a concrete reason: a long company name and the chip
+       fought for the same column, and the chip lost. Under the amount owed is
+       where it belongs anyway — the two facts are one thought ("₹26,168 due · pay
+       by 15 Sept"), and putting them apart made the reader join them.
+
+       Living in this function rather than in the table means the MOBILE CARD gets
+       it too, for free, and it is tested in exceptions.test.ts alongside the other
+       branches — none of which fire against today's production data, which is
+       exactly why they are tested here and not eyeballed on screen. */
+    const state = paymentDueState(s.payment_due_date, todayIST(), n(s.outstanding_amount));
+    out.push({
+      key: "payment-due",
+      label: paymentDueChipLabel(
+        state,
+        s.payment_due_date ? formatDate(s.payment_due_date) : "",
+      ),
+      /* Red only once it is actually late. Amber inside the last three days, quiet
+         before that, and MUTED when no date was ever agreed — that last one is a
+         gap to fill, not an alarm to raise. */
+      tone: state.kind === "overdue" ? "danger"
+          : state.kind === "none"    ? "muted"
+          : state.kind === "upcoming" ? "muted"
+          : "warning",
+      title: state.kind === "none"
+        ? "No agreed payment date — set one via the row's ⋯ menu → Correct subscription, and the countdown starts"
+        : `Postpaid — ${rupee(n(s.outstanding_amount))} due on ${formatDate(s.payment_due_date!)}`,
     });
   }
 

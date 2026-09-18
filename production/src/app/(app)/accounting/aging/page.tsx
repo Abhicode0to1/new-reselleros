@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { primaryContactsFor } from "@/lib/contacts/primary";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 // ────────────────────────────────────────────────────────────────
@@ -76,17 +77,14 @@ function useAging() {
       const customerIds = Array.from(
         new Set((invoices ?? []).map((i) => i.customer_id).filter((x): x is string => !!x)),
       );
+      /* The PRIMARY CONTACT, not customers.contact_*. Those columns stopped being the
+         truth on 10 Sep 2026 — a customer's people live in `contacts`, one marked
+         primary. One batched lookup, so a report over 200 customers stays one query. */
       const contactsByCustomerId = new Map<string, { email: string | null; phone: string | null }>();
       if (customerIds.length > 0) {
-        const { data: customers } = await supabase
-          .from("customers")
-          .select("id, contact_email, contact_phone")
-          .in("id", customerIds);
-        for (const c of customers ?? []) {
-          contactsByCustomerId.set(c.id, {
-            email: c.contact_email ?? null,
-            phone: c.contact_phone ?? null,
-          });
+        const primaries = await primaryContactsFor(supabase, customerIds);
+        for (const [id, p] of primaries) {
+          contactsByCustomerId.set(id, { email: p.email, phone: p.phone });
         }
       }
 

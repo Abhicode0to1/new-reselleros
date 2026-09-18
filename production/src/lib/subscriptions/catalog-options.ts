@@ -42,6 +42,14 @@ export interface CatalogProduct {
   annualSellPerSeat: number;
   /** ₹/seat/year the vendor charges. Null when no cost is recorded. */
   annualCostPerSeat: number | null;
+  /** ₹/seat/MONTH under ANNUAL commitment — the rate a monthly-billed annual deal
+   *  charges each month. Same price tier as `annualSellPerSeat`, different unit. */
+  annualMonthlySellPerSeat: number;
+  annualMonthlyCostPerSeat: number | null;
+  /** ₹/seat/MONTH with NO commitment (`prices.monthly`) — the flex tier, which is a
+   *  genuinely HIGHER rate, not annual ÷ 12. Null when the row has no flex price. */
+  flexMonthlySellPerSeat: number | null;
+  flexMonthlyCostPerSeat: number | null;
 }
 
 /** ₹/seat/month sell. msrp is the annual-commitment monthly rate; prices.annual.msrp
@@ -84,6 +92,31 @@ function annualSell(it: Item): number {
   return monthlySell(it) * 12;
 }
 
+/**
+ * ₹/seat/month on the FLEX tier — `prices.monthly`, no commitment.
+ *
+ * A separate, genuinely higher price, not annual ÷ 12: the item type documents it as
+ * "no commitment, monthly bill (highest rate, max flexibility)". Nothing in this
+ * module read it until the billing-period dropdown was added (9 Sep 2026), because
+ * the dialog only ever sold annual-commit-billed-yearly.
+ *
+ * Returns **null** when the row has no flex price, and the caller must say so rather
+ * than substitute the annual rate. Quietly falling back would sell a
+ * cancel-any-time subscription at the committed price — giving away the flexibility
+ * premium on every such deal, invisibly. The dialog shows the annual rate as a
+ * starting point but labels it as not-a-flex-price so the operator can raise it.
+ */
+function flexMonthlySell(it: Item): number | null {
+  const p = (it.prices as { monthly?: { msrp?: number } } | null)?.monthly?.msrp;
+  return typeof p === "number" && p > 0 ? p : null;
+}
+
+/** ₹/seat/month flex cost, or null. Same rule as flexMonthlySell. */
+function flexMonthlyCost(it: Item): number | null {
+  const p = (it.prices as { monthly?: { wholesale?: number } } | null)?.monthly?.wholesale;
+  return typeof p === "number" && p > 0 ? p : null;
+}
+
 /** ₹/seat/year cost, or null. Same rule as annualSell. */
 function annualCost(it: Item): number | null {
   const total = (it.prices as { annual_total?: { wholesale?: number } } | null)?.annual_total?.wholesale;
@@ -107,6 +140,10 @@ export function subscriptionProducts(items: readonly Item[]): CatalogProduct[] {
       vendor: it.vendor,
       annualSellPerSeat: annualSell(it),
       annualCostPerSeat: annualCost(it),
+      annualMonthlySellPerSeat: monthlySell(it),
+      annualMonthlyCostPerSeat: monthlyCost(it),
+      flexMonthlySellPerSeat: flexMonthlySell(it),
+      flexMonthlyCostPerSeat: flexMonthlyCost(it),
     }))
     .sort((a, b) =>
       a.vendor === b.vendor
@@ -157,6 +194,123 @@ export function findProduct(
   products: readonly CatalogProduct[], id: string,
 ): CatalogProduct | undefined {
   return products.find((p) => p.id === id);
+}
+
+/* ─── BILLING PERIOD ────────────────────────────────────────────────────────────
+ *
+ * The dialog used to sell exactly one shape: annual commitment, one invoice for the
+ * year. `subscriptions.billing_cycle` and `term_months` existed all along and it
+ * never wrote either, so all five rows in the database are the DB defaults.
+ *
+ * There are two independent facts, and calling both of them "monthly" is what
+ * produced the 12× under-charge of 1 Sep 2026:
+ *
+ *   PRICE TIER  (line.commitment) — flex vs annual commit. DIFFERENT RATES.
+ *   FREQUENCY   (quote.billing_cycle) — how often an invoice is raised.
+ *
+ * An annual commitment billed monthly is the ANNUAL rate, twelve times. It is not
+ * the flex rate, and the flex rate is not annual ÷ 12.
+ *
+ * ─── THE STORED-AMOUNT RULE, WHICH IS NOT NEGOTIABLE ────────────────────────
+ * `quoteInstalments` (lib/billing/instalments.ts) keys off the line's commitment:
+ *   • commitment 'monthly' → the stored figures ALREADY ARE one month; it returns null
+ *   • commitment 'annual_*' → the stored figures are the WHOLE TERM; it splits them
+ * So a monthly-billed ANNUAL deal must store the YEAR. Storing one month there would
+ * have instalments divide an already-monthly number by 12 — the same 12× defect as
+ * B9, in the opposite direction. `periods` below is that rule, in one number.
+ */
+export type BillingChoice = "monthly_flex" | "annual_monthly" | "annual_yearly";
+
+export interface BillingChoiceMeta {
+  value: BillingChoice;
+  label: string;
+  /** One line for the operator, in the dropdown. */
+  hint: string;
+}
+
+export const BILLING_CHOICES: readonly BillingChoiceMeta[] = [
+  { value: "annual_yearly",  label: "Yearly — 1 invoice for the year",
+    hint: "Annual commitment, paid upfront. The default." },
+  { value: "annual_monthly", label: "Monthly — annual commitment",
+    hint: "Same annual rate, invoiced every month. Customer is committed for 12 months." },
+  { value: "monthly_flex",   label: "Monthly — no commitment (flex)",
+    hint: "Cancel any time. Higher rate — this is its own price, not the annual one ÷ 12." },
+] as const;
+
+export interface BillingTerms {
+  /** What a number typed into the price field MEANS for this choice. */
+  unit: "per_seat_month" | "per_seat_year";
+  /** Suffix for the price field's label — "₹/mo" or "₹/yr". */
+  unitLabel: string;
+  /** The catalog's suggested ₹/seat in `unit`. 0 when the catalog cannot say. */
+  suggestedSellPerSeat: number;
+  /** The vendor's ₹/seat in `unit`, or null when no cost is recorded. */
+  costPerSeat: number | null;
+  /** True when this is the flex tier but the row has no flex price, so
+   *  `suggestedSellPerSeat` is the ANNUAL rate standing in — say so on screen. */
+  flexPriceMissing: boolean;
+  /** Multiply a per-`unit` figure by this to get what the QUOTE stores. See the
+   *  stored-amount rule above: 12 for a monthly-billed annual commitment, 1 otherwise. */
+  periods: number;
+  /** What goes on the quote line. Only two values are written for new quotes. */
+  commitment: "monthly" | "annual_yearly";
+  /** quotes.billing_cycle and subscriptions.billing_cycle. */
+  billingCycle: "monthly" | "yearly";
+  /** subscriptions.term_months — 1 for flex, 12 for a commitment. */
+  termMonths: number;
+}
+
+/**
+ * Everything money-shaped that a billing choice decides, in one place.
+ *
+ * `product` may be undefined for a custom plan with no catalog row — then there is no
+ * suggestion and no cost, and the operator types the price. That is the same shape the
+ * dialog already handled; it just has a unit now.
+ */
+export function billingTerms(
+  choice: BillingChoice, product?: CatalogProduct,
+): BillingTerms {
+  if (choice === "annual_yearly") {
+    return {
+      unit: "per_seat_year", unitLabel: "₹/yr",
+      suggestedSellPerSeat: product?.annualSellPerSeat ?? 0,
+      costPerSeat: product?.annualCostPerSeat ?? null,
+      flexPriceMissing: false,
+      periods: 1,
+      commitment: "annual_yearly", billingCycle: "yearly", termMonths: 12,
+    };
+  }
+  if (choice === "annual_monthly") {
+    return {
+      unit: "per_seat_month", unitLabel: "₹/mo",
+      suggestedSellPerSeat: product?.annualMonthlySellPerSeat ?? 0,
+      costPerSeat: product?.annualMonthlyCostPerSeat ?? null,
+      flexPriceMissing: false,
+      /* 12 — the quote stores the YEAR so quoteInstalments can split it. */
+      periods: 12,
+      commitment: "annual_yearly", billingCycle: "monthly", termMonths: 12,
+    };
+  }
+  /* monthly_flex. `periods: 1` — the stored figures ARE one month, which is the
+     invariant quoteInstalments and record_payment both rely on for commitment
+     'monthly'. Never 12 here. */
+  const flexSell = product?.flexMonthlySellPerSeat ?? null;
+  const missing  = product !== undefined && flexSell === null;
+  return {
+    unit: "per_seat_month", unitLabel: "₹/mo",
+    suggestedSellPerSeat: flexSell ?? product?.annualMonthlySellPerSeat ?? 0,
+    costPerSeat: product?.flexMonthlyCostPerSeat ?? product?.annualMonthlyCostPerSeat ?? null,
+    flexPriceMissing: missing,
+    periods: 1,
+    commitment: "monthly", billingCycle: "monthly", termMonths: 1,
+  };
+}
+
+/** Annualise a per-`unit` figure, for the margin verdict — which reports "per seat per
+ *  YEAR" and would lie if fed a monthly number. Flex is × 12 for comparison only; it
+ *  does not mean the customer is committed for a year. */
+export function annualise(perSeat: number, unit: BillingTerms["unit"]): number {
+  return unit === "per_seat_month" ? perSeat * 12 : perSeat;
 }
 
 export type PriceVerdict =

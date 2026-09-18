@@ -11,11 +11,17 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { syncUserContacts } from "@/lib/google/contacts";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { reportCron } from "@/lib/ops/cron-report";
+import { CONTACT_IMPORT_RETIRED, contactImportRetired } from "@/lib/contacts/retired";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 async function handle(req: NextRequest) {
+  /* RETIRED 10 Sep 2026 — see lib/contacts/retired.ts. `contacts` is now only a
+     customer's people; anybody who is not a customer yet is a LEAD. Fails closed, so
+     no new address-book row can be written whatever still calls this. */
+  if (CONTACT_IMPORT_RETIRED) return contactImportRetired();
+
   const secret = process.env.CRON_SECRET;
   if (!secret) return NextResponse.json({ error: "cron not configured" }, { status: 503 });
   const auth = req.headers.get("authorization") ?? "";

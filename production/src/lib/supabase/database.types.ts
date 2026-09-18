@@ -1351,7 +1351,15 @@ type QuoteSignatureRow = {
 type InvoiceDunningLogRow = {
   id: string;
   tenant_id: string;
-  invoice_id: string;
+  /** NULL when this row logs a SUBSCRIPTION chase instead (migration
+   *  20260910070000). Was non-null until 10 Sep 2026. */
+  invoice_id: string | null;
+  /** Set for a postpaid SUBSCRIPTION chase — that path raises no invoice by design,
+   *  yet still has a due date and a balance. Exactly one of invoice_id /
+   *  subscription_id is non-null, enforced by invoice_dunning_log_one_subject:
+   *  a row belonging to neither would be invisible in every view while still
+   *  telling the ladder it had chased something it never chased. */
+  subscription_id: string | null;
   /** 'reminder' | 'retry' | 'grace_warning' | 'final' — see lib/invoices/dunning.ts. */
   dunning_step: string;
   days_overdue: number;
@@ -1366,7 +1374,10 @@ type InvoiceDunningLogRow = {
 type InvoiceDunningLogInsert = {
   id?: string;
   tenant_id: string;
-  invoice_id: string;
+  /** Supply EXACTLY ONE of invoice_id / subscription_id — the DB check refuses
+   *  both-set and neither-set. */
+  invoice_id?: string | null;
+  subscription_id?: string | null;
   dunning_step: string;
   days_overdue: number;
   action_taken?: string;
@@ -1762,6 +1773,13 @@ type SubscriptionRow = {
   /** Length of the committed term. 12 = annual, 36 = a three-year deal.
    *  renewal_date says when the term ENDS; this says how long it is. */
   term_months:      number;
+  /** POSTPAID only (migration 20260910060000): the date the operator agreed the
+   *  balance is due, typed in at onboarding and counted from `start_date`.
+   *  NULL = no agreed date — prepaid, or created before 10 Sep 2026 — and the
+   *  countdown shows nothing rather than inventing one. This is NOT an invoice
+   *  due date: the postpaid path deliberately raises no invoice, because a tax
+   *  invoice creates a GST liability on money that sometimes never arrives. */
+  payment_due_date: string | null;
   /** The main plan this add-on is co-termed to. A relationship, not a copied
    *  anniversary — a copied date drifts the moment the parent's renewal moves. */
   parent_subscription_id: string | null;
@@ -1811,6 +1829,8 @@ type SubscriptionInsert = {
   item_id?:          string | null;
   billing_cycle?:    BillingCycle;
   term_months?:      number;
+  /** Postpaid only — see the row type. Omit or null on every other path. */
+  payment_due_date?: string | null;
   parent_subscription_id?: string | null;
   vendor_seats?: number | null;
   vendor_cost_per_seat_month?: number | null;
@@ -3650,6 +3670,14 @@ export type ContactChannel = { value: string; label: string };
 export type ContactRow = {
   id:                  string;
   tenant_id:           string;
+  /** What this person does for the customer — migration 20260910100000.
+   *  'owner' | 'accountant' | 'it_head' | 'poc' | 'other'. NULL on rows that are
+   *  not a customer's contact. */
+  role:                string | null;
+  /** The one contact who receives invoices and payment reminders. At most one per
+   *  customer, enforced by the UNIQUE index contacts_one_primary_per_customer —
+   *  so "who gets the invoice" is never a guess. */
+  is_primary:          boolean;
   full_name:           string;
   email:               string | null;
   phone:               string | null;
@@ -3693,9 +3721,42 @@ export type ContactRow = {
   created_at:          string;
   updated_at:          string;
 };
+/**
+ * Which PEOPLE serve which CUSTOMERS — migration 20260918090000.
+ *
+ * A contact can be linked to several customers (an IT consultant looking after three of
+ * them, say), so `role` and `is_primary` live on the LINK, not on the person: the same
+ * human can be the accountant for one customer and the owner of another. The primary is
+ * who receives that customer's invoices and payment reminders.
+ *
+ * `contacts.customer_id` / `.is_primary` are the legacy single-customer columns and are
+ * NOT the source of truth any more — see the comments on those columns.
+ */
+export type CustomerContactRow = {
+  id:          string;
+  tenant_id:   string;
+  customer_id: string;
+  contact_id:  string;
+  role:        string | null;
+  is_primary:  boolean;
+  created_at:  string;
+};
+export type CustomerContactInsert = {
+  id?:         string;
+  tenant_id:   string;
+  customer_id: string;
+  contact_id:  string;
+  role?:       string | null;
+  is_primary?: boolean;
+  created_at?: string;
+};
+
 type ContactInsert = {
   id:                  string;
   tenant_id:           string;
+  /** See ContactRow — role and is_primary are a customer contact's two new fields. */
+  role?:               string | null;
+  is_primary?:         boolean;
   full_name:           string;
   email?:              string | null;
   phone?:              string | null;
@@ -4148,6 +4209,7 @@ export type Database = {
       campaign_sends:     { Row: CampaignSendRow;      Insert: CampaignSendInsert;      Update: CampaignSendUpdate;      Relationships: [] };
       campaign_templates: { Row: CampaignTemplateRow;  Insert: CampaignTemplateInsert;  Update: CampaignTemplateUpdate;  Relationships: [] };
       contacts:           { Row: ContactRow;           Insert: ContactInsert;           Update: ContactUpdate;           Relationships: [] };
+      customer_contacts:  { Row: CustomerContactRow;   Insert: CustomerContactInsert;   Update: Partial<CustomerContactInsert>; Relationships: [] };
       user_google_tokens: { Row: UserGoogleTokenRow;   Insert: UserGoogleTokenInsert;   Update: UserGoogleTokenUpdate;   Relationships: [] };
       google_contact_links: { Row: GoogleContactLinkRow; Insert: GoogleContactLinkInsert; Update: GoogleContactLinkUpdate; Relationships: [] };
       coupons:            { Row: CouponRow;            Insert: CouponInsert;            Update: CouponUpdate;            Relationships: [] };

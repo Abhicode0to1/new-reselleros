@@ -43,13 +43,34 @@ export async function GET(req: NextRequest) {
 
   // ── Single lookup by email ────────────────────────────────────────────
   if (email) {
-    const { data, error } = await admin
-      .from("customers").select("*")
+    /* ── Search the CONTACTS first, then fall back to the legacy column ──────
+       Since 10 Sep 2026 a customer's people live in `contacts`, so an address that
+       belongs to the accountant or the IT head exists ONLY there — and this endpoint
+       is how an integration finds a customer from an inbound email. Matching just
+       `customers.contact_email` would return "Customer not found" for a company that
+       is plainly on file, which is the kind of 404 that gets debugged as an auth
+       problem. `contacts` is tenant-scoped in the query, not only by RLS, because
+       this runs under the admin client. */
+    const { data: byContact } = await admin
+      .from("contacts")
+      .select("customer_id")
       .eq("tenant_id", auth.tenantId)
-      .ilike("contact_email", email)
-      .order("created_at", { ascending: false })
+      .ilike("email", email)
+      .not("customer_id", "is", null)
+      .order("is_primary", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    const lookup = admin
+      .from("customers").select("*")
+      .eq("tenant_id", auth.tenantId);
+    const { data, error } = byContact?.customer_id
+      ? await lookup.eq("id", byContact.customer_id).limit(1).maybeSingle()
+      : await lookup
+          .ilike("contact_email", email)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
     if (error || !data) return notFound("Customer not found");
 
     const customer = data as CustomerRow;

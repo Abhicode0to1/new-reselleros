@@ -35,8 +35,20 @@ COPY . .
 
 # Public env vars — designed to be exposed in the client bundle.
 # Supabase URL and anon key are PUBLIC by design (RLS protects the data).
-ENV NEXT_PUBLIC_SUPABASE_URL="https://api.anutech.in"
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9udHBucWpveXNqZ3Jsc3VrZWNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjc1NjcsImV4cCI6MjA5NDg0MzU2N30.tulYYDQSzq7IpEQCFbP7qjsSUxg4c-0ku5uO80-TKXI"
+#
+# ARG, not ENV — changed 17 Sep 2026. These were hardcoded, which meant the image
+# could only ever be built to talk to PRODUCTION: a test or preview deployment had no
+# way to point at a different data plane, because NEXT_PUBLIC_* values are compiled
+# into the browser bundle and cannot be changed by a runtime env var afterwards.
+# Found while standing up a development stack on its own VM.
+#
+# The defaults are unchanged, so a plain `docker build` still produces exactly the
+# production image it did before. A test build overrides them:
+#   --build-arg NEXT_PUBLIC_SUPABASE_URL=https://test-api.anutech.in #   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=<that stack's anon key>
+ARG NEXT_PUBLIC_SUPABASE_URL="https://api.anutech.in"
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9udHBucWpveXNqZ3Jsc3VrZWNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjc1NjcsImV4cCI6MjA5NDg0MzU2N30.tulYYDQSzq7IpEQCFbP7qjsSUxg4c-0ku5uO80-TKXI"
+ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 # App URL — must be a valid URL (Next.js metadataBase calls `new URL(...)` at build).
 # NOTE: this is baked into the bundle at build time. It defaults to the live

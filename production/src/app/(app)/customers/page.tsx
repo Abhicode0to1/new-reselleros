@@ -16,13 +16,21 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
-import { useCustomers, useOpenCreditsByCustomer } from "@/lib/queries/customers";
 import { useProjectReceivablesByCustomer } from "@/lib/queries/projects";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useOutstandingReceivables } from "@/lib/queries/payments";
 import { ImportCustomersDialog } from "@/components/features/customers/import-customers-dialog";
 import { ImportDomainsDialog } from "@/components/features/customers/import-domains-dialog";
-import { CustomerPanel } from "@/components/features/customers/customer-panel";
+import { CustomerProfile } from "@/components/features/customers/customer-profile";
+import { CustomersBulkBar } from "@/components/features/customers/customers-bulk-bar";
+import { useCustomerGroups, useSetCustomerGroup } from "@/lib/queries/customer-groups";
+import { useCustomers, useOpenCreditsByCustomer, useDeleteCustomer, useSetCustomerActive } from "@/lib/queries/customers";
+import { useContactSearchIndex } from "@/lib/queries/contacts";
+import { customerMatchesContact } from "@/lib/contacts/search-index";
+import { newestFirst } from "@/lib/sort/newest-first";
+import { bulkOutcomeMessage, type BulkFailure } from "@/lib/customers/bulk-outcome";
+import { CUSTOMERS_CSV_HEADERS, customersCsvRows } from "@/lib/export/crm-csv";
+import { downloadCSV } from "@/lib/csv";
 import { InvoiceChooserDialog } from "@/components/features/invoices/invoice-chooser-dialog";
 import { CreateProjectQuoteDialog } from "@/components/features/projects/create-project-quote-dialog";
 import { toast } from "sonner";
@@ -58,9 +66,13 @@ const VIEW_DEFS: { id: string; label: string; test: (x: ViewCtx) => boolean }[] 
 // subscription status · place of supply · what they're worth (MRR) · what they
 // owe (receivables) · credit on file · a per-row actions menu. Widths are
 // percentages so the table always fills its container — no h-scroll.
-const CUST_COL_WIDTHS = ["30%", "13%", "12%", "13%", "16%", "12%", "4%"];
+/* First column is the bulk-select checkbox. Taken out of Customer's share rather than
+   added to the total, so the table still sums to 100% and nothing reflows. */
+const CUST_COL_WIDTHS = ["3%", "27%", "13%", "12%", "13%", "16%", "12%", "4%"];
 
-type SortKey = "name" | "mrr" | "receivables" | "credits";
+/* "recent" is the DEFAULT — see lib/sort/newest-first.ts. The record you just created
+   must be the first thing you see, on every table. */
+type SortKey = "recent" | "name" | "mrr" | "receivables" | "credits";
 
 // Stable per-customer avatar colour so the list is scannable by shape/colour.
 const AVATAR_COLORS = ["amber", "indigo", "slate", "emerald", "ink", "muted"] as const;
@@ -126,16 +138,54 @@ export default function CustomersPage() {
 
   const router = useRouter();
   const goAdd = () => router.push("/customers/new" as never);
-  const [search, setSearch] = React.useState("");
+  /* `?contact=` arrives from the "Serves N customers" chip on a contact. It seeds the
+     search box rather than living as a filter of its own, so the operator lands on an
+     ordinary search they can widen, narrow or clear — and so there is one filter to
+     reason about instead of two that could disagree.
+
+     Read once, in the initialiser: as an effect it would fight the user, re-seeding the
+     box every time the URL re-rendered while they were typing.
+
+     Read from `window`, not from `useSearchParams()` — that hook opts the whole page out
+     of prerendering unless it sits inside a Suspense boundary, and `npm run build` fails
+     on it ("useSearchParams() should be wrapped in a suspense boundary at page
+     /customers"). Wrapping this entire page in Suspense to seed one text box would be a
+     large change for a small convenience. The guard is for the server pass, where there
+     is no window and the box simply starts empty. */
+  const [search, setSearch] = React.useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.search).get("contact") ?? "",
+  );
   const [importOpen, setImportOpen] = React.useState(false);
   const [domainsOpen, setDomainsOpen] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+
+  /* ── Bulk selection ────────────────────────────────────────────────────────
+     A Set of ids, held on the page rather than per row, because "select all" and the
+     floating bar both need the whole set. Desktop table only: the mobile card list has
+     no room for a checkbox column and a bulk bar over a phone screen covers the rows it
+     acts on. */
+  const [pickedIds, setPickedIds] = React.useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const { data: groups } = useCustomerGroups();
+  const setGroup = useSetCustomerGroup();
+  const setActive = useSetCustomerActive();
+  const deleteCustomer = useDeleteCustomer();
+
+  const togglePicked = (id: string) => setPickedIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const clearPicked = () => setPickedIds(new Set());
+
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [view, setView] = React.useState("all");
   // Archived (is_active=false) customers are hidden by default; this toggle
   // swaps the whole list to show ONLY archived ones (Zoho-style status filter).
   const [showArchived, setShowArchived] = React.useState(false);
-  const [sort, setSort] = React.useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "name", dir: "asc" });
+  const [sort, setSort] = React.useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "recent", dir: "desc" });
   const [visible, setVisible] = React.useState(60);
   const [kpiOpen, setKpiOpen] = React.useState(true);
   // Row action → "Create invoice": open the invoice chooser for that customer.
@@ -168,6 +218,11 @@ export default function CustomersPage() {
     return m;
   }, [customersByWorkspace, outstandingByCustomer, creditsByCustomer, subsByCustomer]);
 
+  /* Who serves which customers, so the search box below can find a customer by the
+     person rather than only by the company. One fetch, shared with Subscriptions
+     through the query cache. */
+  const { data: contactIndex } = useContactSearchIndex();
+
   // Filter — segment then free-text.
   const archivedCount = customersByWorkspace.filter((c) => c.is_active === false).length;
   const filtered = customersByWorkspace.filter((c) => {
@@ -177,13 +232,23 @@ export default function CustomersPage() {
     const ctx: ViewCtx = { amount: out?.amount ?? 0, credit: creditsByCustomer[c.id] ?? 0, hasSub: subsByCustomer.has(c.id) };
     if (!activeView.test(ctx)) return false;
     if (!search.trim()) return true;
-    const s = search.toLowerCase();
+    const s = search.toLowerCase().trim();
     return (
       c.name.toLowerCase().includes(s) ||
       (c.display_name?.toLowerCase().includes(s) ?? false) ||
       (c.domain?.toLowerCase().includes(s) ?? false) ||
       (c.contact_name?.toLowerCase().includes(s) ?? false) ||
-      (c.contact_email?.toLowerCase().includes(s) ?? false)
+      (c.contact_email?.toLowerCase().includes(s) ?? false) ||
+      /* ── SEARCH BY THE PERSON YOU DEAL WITH ──────────────────────────────
+         The two clauses above read `customers.contact_*`, which hold only the
+         customer's FIRST contact. Since 18 Sep 2026 one person can serve several
+         customers, so those columns find one of them and silently miss the rest —
+         type "anjali" and Doodh Sang appears while FF Impex does not, which reads
+         as "she is not on that customer" rather than "this box cannot see her".
+
+         This clause reads the link table, so every customer a person is actually on
+         matches, by their name, email or phone. */
+      (contactIndex ? customerMatchesContact(contactIndex, c.id, s) : false)
     );
   });
 
@@ -196,6 +261,14 @@ export default function CustomersPage() {
   }, [subsByCustomer, outstandingByCustomer, creditsByCustomer]);
 
   const sorted = React.useMemo(() => {
+    /* The default. Kept out of `sortVal` because that returns a number-or-string for a
+       generic comparator, and a timestamp squeezed through String().localeCompare()
+       sorts "2026-9-1" after "2026-10-1". One shared implementation, same as every
+       other table. */
+    if (sort.key === "recent") {
+      const byNewest = newestFirst(filtered);
+      return sort.dir === "desc" ? byNewest : byNewest.reverse();
+    }
     const arr = [...filtered];
     arr.sort((a, b) => {
       const va = sortVal(a, sort.key);
@@ -209,6 +282,106 @@ export default function CustomersPage() {
   }, [filtered, sort, sortVal]);
 
   const shown = sorted.slice(0, visible);
+
+  /* ── Bulk actions ──────────────────────────────────────────────────────────
+     Each of these is N independent writes, not one transaction, so every one reports
+     what actually happened through bulkOutcomeMessage rather than assuming success.
+     Delete is the case that makes this necessary: the server refuses any customer
+     carrying a document, so a partial run is normal. */
+  const pickedCustomers = React.useMemo(
+    () => sorted.filter((c) => pickedIds.has(c.id)),
+    [sorted, pickedIds],
+  );
+
+  /** Report an outcome on the right channel, and clear only on a clean run. */
+  const reportBulk = (done: number, failed: BulkFailure[], verbPast: string) => {
+    const m = bulkOutcomeMessage({ done, failed }, verbPast);
+    if (m.tone === "success") {
+      toast.success(m.title);
+      clearPicked();
+    } else if (m.tone === "warning") {
+      toast.warning(m.title, { description: m.description });
+    } else {
+      /* description spelled out at the call site, not passed through a variable: §24 is
+         machine-enforced by toast-error-ratchet.test.ts, which reads the SOURCE. A
+         `{...opts}` that happens to contain a description at runtime still counts as a
+         bare error toast, and rightly — the next person editing this line cannot see
+         whether a reason survives. */
+      toast.error(m.title, {
+        description: m.description ?? "Nothing was changed. Open the customers to see why.",
+      });
+    }
+    /* A partial or failed run keeps the selection: the refused rows are exactly the ones
+       the operator still has to deal with, and re-ticking them by hand is the punishment
+       for the app having done half a job. */
+  };
+
+  const bulkExport = () => {
+    if (pickedCustomers.length === 0) return;
+    downloadCSV(
+      `customers-${new Date().toISOString().slice(0, 10)}.csv`,
+      [...CUSTOMERS_CSV_HEADERS],
+      customersCsvRows(pickedCustomers),
+    );
+    toast.success(`Exported ${pickedCustomers.length} customer${pickedCustomers.length === 1 ? "" : "s"} to CSV`);
+  };
+
+  /** Archive or reactivate. One code path — the flag is the only difference. */
+  const bulkSetActive = async (isActive: boolean) => {
+    if (pickedCustomers.length === 0) return;
+    setBulkBusy(true);
+    let done = 0;
+    const failed: BulkFailure[] = [];
+    for (const c of pickedCustomers) {
+      /* Already in the target state — not a failure, and not a write either. */
+      if ((c.is_active !== false) === isActive) { done += 1; continue; }
+      try { await setActive.mutateAsync({ id: c.id, isActive }); done += 1; }
+      catch (e) { failed.push({ name: c.name, reason: (e as Error).message }); }
+    }
+    setBulkBusy(false);
+    reportBulk(done, failed, isActive ? "Reactivated" : "Archived");
+  };
+
+  const bulkSetGroup = async (groupId: string | null) => {
+    if (pickedCustomers.length === 0) return;
+    setBulkBusy(true);
+    let done = 0;
+    const failed: BulkFailure[] = [];
+    for (const c of pickedCustomers) {
+      try { await setGroup.mutateAsync({ customerId: c.id, groupId }); done += 1; }
+      catch (e) { failed.push({ name: c.name, reason: (e as Error).message }); }
+    }
+    setBulkBusy(false);
+    reportBulk(done, failed, groupId ? "Moved" : "Removed from parent account");
+  };
+
+  /**
+   * Bulk delete.
+   *
+   * No client-side pre-check. `delete_customer` (migration 0174) refuses any customer
+   * with a subscription, payment, invoice, quote or project, and IT is the authority —
+   * a twin check here would be a second rulebook to keep in step, and the list page does
+   * not even hold the counts it would need. So every id is offered and the refusals come
+   * back as real reasons, which is also what makes the report trustworthy.
+   */
+  const bulkDelete = async () => {
+    if (pickedCustomers.length === 0) return;
+    setBulkBusy(true);
+    let done = 0;
+    const failed: BulkFailure[] = [];
+    for (const c of pickedCustomers) {
+      try { await deleteCustomer.mutateAsync(c.id); done += 1; }
+      catch (e) { failed.push({ name: c.name, reason: (e as Error).message }); }
+    }
+    setBulkBusy(false);
+    /* If the pane is showing one of the deleted customers, close it — it is now a
+       profile of nothing. */
+    if (selectedId && pickedIds.has(selectedId) && !failed.some((f) => f.name === selectedId)) {
+      setSelectedId(null);
+    }
+    reportBulk(done, failed, "Deleted");
+  };
+
   const hasMore = sorted.length > shown.length;
 
   /* j / k / Enter / o over the full-width table (the same pattern as /leads,
@@ -372,7 +545,7 @@ export default function CustomersPage() {
             <div className="w-full sm:w-64 shrink-0">
               <Input
                 prefix={<Icon name="search" size={14} />}
-                placeholder="Search customer, phone or domain…"
+                placeholder="Search customer, contact, phone or domain…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -427,6 +600,19 @@ export default function CustomersPage() {
           {/* Quick Sort Bar */}
           <div className="flex items-center gap-2 pt-1 border-t border-hairline/60 text-xs text-ink-3 overflow-x-auto [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <span className="font-semibold text-ink-2 shrink-0">Sort:</span>
+            {/* First, and selected on load. The bar would otherwise claim "Name A-Z"
+                while the table is in creation order — a sort bar that misreports the
+                order it is showing is worse than none. */}
+            <button
+              type="button"
+              onClick={() => toggleSort("recent")}
+              className={cn(
+                "px-2.5 py-1 rounded border text-2xs font-medium transition-colors cursor-pointer shrink-0",
+                sort.key === "recent" ? "bg-amber-soft border-amber text-amber-ink" : "border-hairline hover:bg-paper-2 text-ink-2",
+              )}
+            >
+              🕘 Recently added {sort.key === "recent" ? (sort.dir === "desc" ? "↓" : "↑") : ""}
+            </button>
             <button
               type="button"
               onClick={() => toggleSort("mrr")}
@@ -579,6 +765,31 @@ export default function CustomersPage() {
                 </colgroup>
                 <thead className="bg-paper-2 border-b border-hairline-strong">
                   <tr>
+                    {/* Select-all covers the rows ON SCREEN, not the whole filtered set.
+                        "Show more" paginates this list, and a tick that silently selected
+                        rows the operator cannot see is how a bulk delete goes wrong. */}
+                    <th className="px-2 py-2.5">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all customers on screen"
+                        className="cursor-pointer accent-amber"
+                        checked={shown.length > 0 && shown.every((c) => pickedIds.has(c.id))}
+                        ref={(el) => {
+                          if (el) {
+                            const n = shown.filter((c) => pickedIds.has(c.id)).length;
+                            el.indeterminate = n > 0 && n < shown.length;
+                          }
+                        }}
+                        onChange={(e) => {
+                          const on = e.target.checked;
+                          setPickedIds((prev) => {
+                            const next = new Set(prev);
+                            for (const c of shown) { if (on) next.add(c.id); else next.delete(c.id); }
+                            return next;
+                          });
+                        }}
+                      />
+                    </th>
                     <SortHead label="Customer"        sortKey="name"        sort={sort} onSort={toggleSort} />
                     <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Status</th>
                     <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Place of supply</th>
@@ -617,6 +828,19 @@ export default function CustomersPage() {
                             : receivable > 0 ? "hover:bg-rose-soft/20" : "hover:bg-paper-2/50",
                         )}
                       >
+                        {/* stopPropagation: the whole row opens the profile, so without it
+                            every tick would also swap the pane — and ticking five rows
+                            would open five profiles on the way. */}
+                        <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${primaryName}`}
+                            className="cursor-pointer accent-amber"
+                            checked={pickedIds.has(c.id)}
+                            onChange={() => togglePicked(c.id)}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
+                        </td>
                         <td className={cn("px-3 py-2.5", receivable > 0 && "border-l-2 border-l-rose")}>
                           <div className="flex items-center gap-2.5 min-w-0">
                             <Avatar name={primaryName} color={avatarColor(c.id)} size="sm" className="shrink-0" />
@@ -757,10 +981,26 @@ export default function CustomersPage() {
             </div>
           </div>
           <div className="flex-1 min-w-0 min-h-0">
-            <CustomerPanel customerId={selectedId} onClose={() => setSelectedId(null)} />
+            {/* The FULL profile, not a summary (Abhishek, 14 Sep 2026). Same component
+                the /customers/[id] page renders — see customer-profile.tsx for why the
+                two surfaces must not be separate implementations. */}
+            <CustomerProfile customerId={selectedId} variant="panel" onClose={() => setSelectedId(null)} />
           </div>
         </div>
       )}
+
+      {/* Floating bulk bar — renders nothing at zero selected, so it costs no space. */}
+      <CustomersBulkBar
+        count={pickedIds.size}
+        groups={groups ?? []}
+        busy={bulkBusy}
+        onExport={bulkExport}
+        onArchive={() => void bulkSetActive(false)}
+        onReactivate={() => void bulkSetActive(true)}
+        onSetGroup={(g) => void bulkSetGroup(g)}
+        onDelete={() => void bulkDelete()}
+        onDeselectAll={clearPicked}
+      />
 
       <ImportCustomersDialog open={importOpen} onOpenChange={setImportOpen} onImportComplete={() => refetch()} />
       <ImportDomainsDialog open={domainsOpen} onOpenChange={setDomainsOpen} onComplete={() => refetch()} />

@@ -195,9 +195,18 @@ export const APP_NAV: NavSection[] = [
       // section into one list and indexes on id, so two entries sharing one id
       // silently drop to a single result.
       { id: "my-expenses-sales", href: "/my-expenses",    label: "Advances & Expenses", icon: "wallet", roles: ["owner", "manager", "sales"] },
-      { id: "customers",       href: "/customers",        label: "Customers",     icon: "users",  roles: ["owner", "manager", "billing"] },
-      { id: "customer-groups", href: "/customers/groups", label: "Parent Accounts", icon: "layout", roles: ["owner", "manager"] },
-      { id: "contacts",        href: "/contacts",         label: "Contacts",      icon: "user",   roles: ["owner", "manager", "billing"] },
+      /* Customers + Parent Accounts moved to Billing & Subscriptions (Abhishek,
+         10 Sep 2026): a customer is a company you bill, so it belongs beside the
+         quotes, invoices and payments that concern it. Sales & CRM keeps the part
+         that is still a prospect — Sales & Pipeline (leads), Enquiries, Referrals.
+
+         Contacts is GONE from the nav entirely. It was a second, disconnected
+         identity for a person — a flat address book with 0 rows, next to
+         `customers.contact_*` which the whole app actually read, next to a
+         `contact_persons` jsonb nobody filled. One fact in three places is how the
+         next person rings the wrong number. A customer's people now live ON the
+         customer (migration 20260910100000); somebody who is not a customer yet is
+         a LEAD, which already has a pipeline for exactly that. */
       { id: "referrals",       href: "/referrals",        label: "Referrals",     icon: "award",  roles: ["owner", "manager"] },
     ],
   },
@@ -227,6 +236,8 @@ export const APP_NAV: NavSection[] = [
     icon: "rupee",
     roles: ["owner", "manager", "sales", "billing", "delivery", "support"],
     items: [
+      { id: "customers",       href: "/customers",        label: "Customers",       icon: "users",   roles: ["owner", "manager", "billing"] },
+      { id: "customer-groups", href: "/customers/groups", label: "Parent Accounts", icon: "layout",  roles: ["owner", "manager"] },
       { id: "quotes",        href: "/quotes",        label: "Quotes",            icon: "file",    roles: ["owner", "manager", "sales"] },
       { id: "subscriptions", href: "/subscriptions", label: "Subscriptions",     icon: "refresh", roles: ["owner", "manager", "billing"] },
       { id: "renewals",      href: "/renewals",      label: "Renewals",          icon: "clock",   roles: ["owner", "manager", "billing", "support"] },
@@ -384,12 +395,12 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/enquiries":       ["Sales", "Enquiries"],
   "/deals":           ["Sales", "Deal Pipeline"],
   "/tasks":           ["Sales", "Tasks"],
-  "/customers":       ["Sales", "Customers"],
-  "/customers/groups":      ["Sales", "Parent Accounts"],
-  "/customers/groups/[id]": ["Sales", "Parent Accounts", "Detail"],
-  "/customers/new":   ["Sales", "Customers", "New"],
-  "/customers/[id]":  ["Sales", "Customers", "Profile"],
-  "/customers/[id]/edit": ["Sales", "Customers", "Edit"],
+  "/customers":       ["Billing", "Customers"],
+  "/customers/groups":      ["Billing", "Parent Accounts"],
+  "/customers/groups/[id]": ["Billing", "Parent Accounts", "Detail"],
+  "/customers/new":   ["Billing", "Customers", "New"],
+  "/customers/[id]":  ["Billing", "Customers", "Profile"],
+  "/customers/[id]/edit": ["Billing", "Customers", "Edit"],
   "/contacts":        ["Sales", "Contacts"],
   "/contacts/[id]":   ["Sales", "Contacts", "Profile"],
   "/referrals":       ["Sales", "Referrals"],

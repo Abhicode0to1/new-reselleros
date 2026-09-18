@@ -362,7 +362,7 @@ export default function PersonalExpensesPage() {
 
           <div className="flex justify-end gap-2 pt-3">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} loading={save.isPending} className="bg-primary text-white">
+            <Button variant="primary" onClick={handleSave} loading={save.isPending}>
               {form.id ? "Update" : "Add"}
             </Button>
           </div>

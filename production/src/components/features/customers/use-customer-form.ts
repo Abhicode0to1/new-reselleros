@@ -18,6 +18,7 @@ import * as React from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { toast } from "sonner";
 
 import { useCreateCustomer, useUpdateCustomer } from "@/lib/queries/customers";
 import { validateGstin, gstStateFromGstin } from "@/lib/utils";
@@ -222,6 +223,37 @@ export function useCustomerForm({ customer, onSaved, open = true }: UseCustomerF
     // single "contact_name" input for anyone still using it).
     const combinedName = [data.contact_first_name?.trim(), data.contact_last_name?.trim()]
       .filter(Boolean).join(" ") || (data.contact_name?.trim() || null);
+
+    /* ── A NEW CUSTOMER MUST HAVE A PERSON ON IT ────────────────────────────
+       Abhishek's rule, 18 Sep 2026: "without contact customer not created". The customer
+       is the company; the contact is the human who receives its invoices and payment
+       reminders, and a customer without one is a bill addressed to nobody.
+
+       CREATE ONLY, on purpose. Customers already on the books predate the rule — some
+       were imported, some came from the old flat columns — and refusing to save an edit
+       to one would lock the operator out of the very page where the missing contact is
+       fixed. New ones cannot get in without it; old ones get fixed, not frozen.
+
+       Enforced here rather than in the zod schema because the schema is shared by both
+       modes and cannot tell them apart. Reported through setError so it lands on the
+       field, the way every other validation message on this form does. */
+    if (!isEdit) {
+      const missing: Array<[keyof CustomerFormData, string]> = [];
+      if (!combinedName) missing.push(["contact_first_name", "A contact person's name is required"]);
+      if (!data.contact_email?.trim()) missing.push(["contact_email", "The contact's email is required — invoices and reminders go here"]);
+      if (!data.contact_phone?.trim() && !data.contact_mobile?.trim()) {
+        missing.push(["contact_phone", "A phone number is required for the contact"]);
+      }
+      if (missing.length > 0) {
+        for (const [field, message] of missing) {
+          form.setError(field, { type: "manual", message });
+        }
+        toast.error("Add a contact person before saving this customer", {
+          description: "A customer needs one named human with an email and a phone number — they are who the invoice and the payment reminder go to. Fill in the Contact Person section, then save again.",
+        });
+        return;
+      }
+    }
     // Clean the additional contact-person rows — drop fully-empty ones.
     const cleanPersons = (data.contact_persons ?? [])
       .map((p) => ({

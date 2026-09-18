@@ -22,6 +22,7 @@
 import { NextResponse } from "next/server";
 import { replyToAddress } from "@/lib/email/reply-to";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { primaryContactEmail } from "@/lib/contacts/primary";
 import {
   triggersForTerm,
   decideCadence,
@@ -186,7 +187,13 @@ export async function POST(req: Request) {
   }
 
   // ── Recipient ───────────────────────────────────────────────────
-  const recipient = customer?.contact_email;
+  /* The customer's PRIMARY CONTACT. customers.contact_email stopped being the truth on
+     10 Sep 2026 — a customer's people live in `contacts`, one marked primary. The
+     resolver keeps the old column as a floor so nobody becomes unreachable. */
+  const resolvedContact = sub?.customer_id
+    ? await primaryContactEmail(supabase, sub.customer_id)
+    : { email: null, name: null, fromLegacy: false };
+  const recipient = resolvedContact.email;
   if (!recipient) {
     await supabase.from("renewal_email_log").insert({
       tenant_id:       sub.tenant_id,
@@ -195,10 +202,10 @@ export async function POST(req: Request) {
       recipient_email: "(missing)",
       subject:         "(skipped — manual)",
       status:          "skipped",
-      error_message:   "Customer has no contact_email on file",
+      error_message:   "Customer has no contact on file (no contacts row and no legacy contact_email)",
     });
     return NextResponse.json(
-      { error: "customer has no contact_email — add one and retry" },
+      { error: "This customer has no contact — add one on the customer page, then retry." },
       { status: 400 }
     );
   }

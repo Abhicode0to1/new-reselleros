@@ -14,6 +14,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useQuotes, useDeleteQuote, quoteDeleteBlockReason } from "@/lib/queries/quotes";
+import { useSubscriptions } from "@/lib/queries/subscriptions";
+import type { Subscription } from "@/lib/supabase/database.types";
 import { useProjectSales, useDeleteProjectSale, type ProjectSaleWithTotals } from "@/lib/queries/projects";
 import { CreateProjectQuoteDialog } from "@/components/features/projects/create-project-quote-dialog";
 import { useCustomer } from "@/lib/queries/customers";
@@ -41,7 +43,7 @@ import { Icon } from "@/components/ui/icon";
 import { FAB } from "@/components/ui/fab";
 import { downloadCSV } from "@/lib/csv";
 import { QUOTES_CSV_HEADERS, quotesCsvRows } from "@/lib/export/crm-csv";
-import { rupee, daysBetween, cleanDisplayName, phoneSuffixOf } from "@/lib/utils";
+import { rupee, daysBetween, cleanDisplayName, phoneSuffixOf, formatDate } from "@/lib/utils";
 import { unifiedStatus, cashNote } from "@/lib/quotes/status-badge";
 import { awaitsMyApproval } from "@/lib/quotes/awaiting-approval";
 import { ApprovalsStrip } from "@/components/features/quotes/approvals-strip";
@@ -111,6 +113,20 @@ function estimateMarginForQuote(q: Quote): ReturnType<typeof computeMargin> & { 
 export default function QuotesPage() {
   const router = useRouter();
   const { data: quotes, isLoading, error, refetch } = useQuotes();
+  /* ── Which quotes turned into a live subscription, and what is still owed ──
+     Asked 11 Sep 2026: "I want to know which quote has an active subscription, and
+     if I gave someone a grace period, show that too." Neither was visible here —
+     a quote marked Accepted / Awaiting payment looked identical whether it had
+     produced a running service or nothing at all.
+
+     `subscriptions.quote_id` is the link. Fetched ONCE and indexed, not queried per
+     row: a 14-quote page would otherwise be 14 extra round trips, and this list grows. */
+  const { data: allSubs } = useSubscriptions();
+  const subByQuoteId = React.useMemo(() => {
+    const m = new Map<string, Subscription>();
+    for (const sub of allSubs ?? []) if (sub.quote_id) m.set(sub.quote_id, sub);
+    return m;
+  }, [allSubs]);
   const { data: projectQuotes } = useProjectSales();
   const deleteQuote = useDeleteQuote();
   const [tab, setTab] = React.useState("all");
@@ -911,6 +927,29 @@ export default function QuotesPage() {
                           return (
                             <div className="flex flex-col items-start gap-0.5">
                               <Badge kind={uStatus.kind} dot>{uStatus.label}</Badge>
+                              {/* Did this quote actually become a service? "Accepted"
+                                  alone never said.
+
+                                  Deliberately ONLY that — no payment due date here
+                                  (Abhishek, 11 Sep 2026). This cell already carries the
+                                  quote status and "Awaiting payment"; a third money line
+                                  made four stacked lines per row and pushed the table
+                                  taller than the information justified. The credit clock
+                                  lives on /subscriptions and /payments, where chasing
+                                  actually happens. */}
+                              {(() => {
+                                const sub = subByQuoteId.get(q.id);
+                                if (!sub) return null;
+                                return (
+                                  <Badge
+                                    kind={sub.status === "active" ? "success" : "muted"}
+                                    size="sm"
+                                    title={`${sub.plan} · ${sub.seats} seats · renews ${sub.renewal_date ? formatDate(sub.renewal_date) : "—"}`}
+                                  >
+                                    {sub.status === "active" ? "Subscription live" : `Subscription ${sub.status}`}
+                                  </Badge>
+                                );
+                              })()}
                               {note && (
                                 <span className={cn(
                                   "text-3xs font-medium tabular-nums",

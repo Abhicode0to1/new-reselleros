@@ -25,6 +25,12 @@ import type { Subscription } from "@/lib/supabase/database.types";
 import { checkNceLock, lockWarning } from "@/lib/subscriptions/nce-lock";
 import { Icon } from "@/components/ui/icon";
 import { toast } from "sonner";
+/* Reused rather than rewritten. termEndInclusive carries both the month clamp (31 Jan
+   + 1 month is 28 Feb, not 3 March) and the "last covered day" rule the column holds
+   since 11 Sep 2026; nextTermStart is its inverse; monthsBetween because a term is
+   calendar months, not 30-day arithmetic. */
+import { termEndInclusive, nextTermStart } from "@/lib/billing/schedule";
+import { monthsBetween } from "@/lib/accounting/saas-charts";
 
 const VENDORS: Subscription["vendor"][] = ["google", "microsoft", "zoho", "other"];
 const STATUSES: Subscription["status"][] = ["active", "paused", "expired", "cancelled"];
@@ -44,14 +50,62 @@ export function EditSubscriptionDialog({
   const [mrr, setMrr]         = React.useState(String(sub.mrr));
   const [startDate, setStart] = React.useState(sub.start_date ?? "");
   const [renewal, setRenewal] = React.useState(sub.renewal_date ?? "");
+  /** Postpaid credit clock. Editable HERE because every subscription created before
+   *  10 Sep 2026 has none — and money owed with no agreed date shows no countdown at
+   *  all, which is the exact silence the countdown was built to end. This is the one
+   *  screen that can give those rows a date. */
+  const [paymentDue, setPaymentDue] = React.useState(sub.payment_due_date ?? "");
   const [status, setStatus]   = React.useState<Subscription["status"]>(sub.status);
 
   // Re-seed when a different subscription is opened.
   React.useEffect(() => {
     setPlan(sub.plan); setVendor(sub.vendor); setSeats(String(sub.seats));
     setMrr(String(sub.mrr)); setStart(sub.start_date ?? ""); setRenewal(sub.renewal_date ?? "");
-    setStatus(sub.status);
+    setStatus(sub.status); setPaymentDue(sub.payment_due_date ?? "");
   }, [sub]);
+
+  /**
+   * How long THIS subscription's term is, in months — read off the record itself.
+   *
+   * ─── WHY NOT JUST 12 ───────────────────────────────────────────────────────
+   * Flex subscriptions have a one-month term. Hardcoding a year here would turn a
+   * corrected start date on a monthly plan into an annual commitment, silently, in the
+   * one dialog whose whole promise is "corrects the record only".
+   *
+   * The record's OWN start→renewal gap is preferred over `term_months` on purpose:
+   * this dialog wrote neither column until 9 Sep 2026, so every row created before that
+   * carries the database default of 12 regardless of what was actually sold. The dates
+   * are what the operator can see and is correcting; the column may be fiction.
+   */
+  const recordTermMonths = React.useMemo(() => {
+    if (sub.start_date && sub.renewal_date) {
+      /* Measured to the day AFTER the stored date, because the stored date is the last
+         covered day. Without the +1 a term starting on the 1st reads a month short:
+         1 Sep 2026 → 31 Aug 2027 is calendar-month 11, and correcting the start would
+         then quietly shorten an annual subscription to eleven months. */
+      const gap = monthsBetween(new Date(`${sub.start_date}T00:00:00Z`),
+                                new Date(`${nextTermStart(sub.renewal_date)}T00:00:00Z`));
+      if (gap > 0) return gap;
+    }
+    return sub.term_months && sub.term_months > 0 ? sub.term_months : 12;
+  }, [sub.start_date, sub.renewal_date, sub.term_months]);
+
+  /**
+   * Correcting the start date moves the renewal date with it, keeping the term the same
+   * length.
+   *
+   * Reported 9 Sep 2026: fixing a mis-typed start left the renewal untouched, so a
+   * subscription that began a week earlier than recorded silently gained a week of term
+   * — and the renewal cron bills from the renewal date, so nothing would have flagged it.
+   *
+   * Still editable afterwards: a correction sometimes needs both dates set independently,
+   * and this is a default rather than a rule.
+   */
+  const changeStart = (next: string) => {
+    setStart(next);
+    if (!next) return;
+    setRenewal(termEndInclusive(next, recordTermMonths));
+  };
 
   /* Microsoft NCE: seats cannot be reduced and the subscription cannot be
      cancelled more than 7 days after the term starts. Checked against the values
@@ -93,6 +147,12 @@ export function EditSubscriptionDialog({
           mrr:   Math.max(0, Math.round(Number(mrr) || 0)),
           start_date:   startDate || null,
           renewal_date: renewal || null,
+          /* Blank CLEARS it here, unlike the onboarding dialog which defaults an empty
+             box to start + 30. The difference is deliberate: onboarding is agreeing new
+             credit terms, so a date is always meant; this screen is correcting a record,
+             and an operator who empties the field means "there is no agreed date" —
+             inventing one would put a countdown against terms nobody set. */
+          payment_due_date: paymentDue || null,
           status,
         },
       });
@@ -146,12 +206,40 @@ export function EditSubscriptionDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Start date" htmlFor="sub_start">
-              <Input id="sub_start" type="date" value={startDate} onChange={(e) => setStart(e.target.value)} />
+              <Input id="sub_start" type="date" value={startDate} onChange={(e) => changeStart(e.target.value)} />
+              <p className="mt-1 text-2xs leading-snug text-ink-3">
+                Renewal follows, keeping the term{" "}
+                {recordTermMonths === 1 ? "one month" : `${recordTermMonths} months`} long.
+              </p>
             </FormField>
             <FormField label="Renewal date" htmlFor="sub_renewal">
               <Input id="sub_renewal" type="date" value={renewal} onChange={(e) => setRenewal(e.target.value)} />
+              <p className="mt-1 text-2xs leading-snug text-ink-3">
+                Override it if the real term differs.
+              </p>
             </FormField>
           </div>
+
+          {/* Postpaid credit clock. Shown only when money is actually owed — a settled
+              subscription has nothing to chase, and a date field on it would invite one
+              to be set for no reason. This is the only screen that can give a date to
+              the rows created before 10 Sep 2026, which is why the countdown on
+              /subscriptions points here. */}
+          {(sub.outstanding_amount ?? 0) > 0 && (
+            <FormField label="Payment due date" htmlFor="sub_payment_due">
+              <Input
+                id="sub_payment_due"
+                type="date"
+                value={paymentDue}
+                onChange={(e) => setPaymentDue(e.target.value)}
+              />
+              <p className="mt-1 text-2xs leading-snug text-ink-3">
+                {paymentDue
+                  ? "Drives the countdown and the overdue highlight on Subscriptions."
+                  : "No agreed date — this subscription shows no countdown. Set one to start the clock."}
+              </p>
+            </FormField>
+          )}
         </div>
 
         {/* The refusal, in full, where the decision is being made — not as a toast

@@ -1,11 +1,16 @@
 "use client";
 
 /**
- * customer-insights — the single source of truth for the "world-class customer
- * view" shared by BOTH the master-detail CustomerPanel and the full /customers/[id]
- * 360 page. Keeping the money-derivation here (not duplicated per surface) means
- * the panel and the page can never drift and show a different Outstanding / MRR /
- * Lifetime figure — a real money-correctness hazard if it were copy-pasted.
+ * customer-insights — the single source of truth for the money on the customer view.
+ * Keeping the derivation here (not duplicated per surface) means no two screens can
+ * show a different Outstanding / MRR / Lifetime figure for the same customer — a real
+ * money-correctness hazard if it were copy-pasted.
+ *
+ * It used to be shared by a separate CustomerPanel and the /customers/[id] page. That
+ * panel was DELETED on 14 Sep 2026: the page's whole profile now renders in the pane
+ * too, from one component (customer-profile.tsx), so there is no second surface left to
+ * keep in step. This module stays because the derivation is still worth owning in one
+ * place, and other screens use it.
  *
  * MONEY-HONESTY: every number comes from real rows. No fabricated data, no stub
  * activity. The Next-Best-Action is DETERMINISTIC (rules over real data, not AI)

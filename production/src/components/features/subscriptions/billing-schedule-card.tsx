@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn, rupee, formatDate } from "@/lib/utils";
 import type { Subscription } from "@/lib/supabase/database.types";
 import { subscriptionSchedule, nextTermSchedule } from "@/lib/billing/subscription-schedule";
-import { scheduleTotal } from "@/lib/billing/schedule";
+import { scheduleTotal, periodLastDay } from "@/lib/billing/schedule";
 import { cycleScheduleLabel } from "@/lib/quotes/billing";
 
 export function BillingScheduleCard({ subscription, todayISO }: {
@@ -104,7 +104,7 @@ function ScheduleTable({ rows, todayISO, label, muted }: {
                   {done && <span className="ml-2 text-3xs uppercase tracking-wider text-ink-3">billed</span>}
                 </p>
                 <p className="text-2xs text-ink-3">
-                  covers {formatDate(p.periodStart)} – {formatDate(p.periodEnd)}
+                  covers {formatDate(p.periodStart)} – {formatDate(periodLastDay(p.periodEnd))}
                 </p>
               </div>
               <span className={cn("shrink-0 text-sm tabular-nums", done ? "text-ink-3" : "font-medium text-ink")}>

@@ -30,7 +30,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { rupee, formatDate } from "@/lib/utils";
 import { subscriptionSchedule, nextTermSchedule } from "@/lib/billing/subscription-schedule";
-import { scheduleTotal } from "@/lib/billing/schedule";
+import { scheduleTotal, periodLastDay } from "@/lib/billing/schedule";
 import { cycleScheduleLabel } from "@/lib/quotes/billing";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { grossAmount } from "@/lib/quotes/amounts";
@@ -135,7 +135,7 @@ export default async function PortalBillingPage() {
                         {i === 0 && <Badge kind="warning" size="sm" className="ml-2">next</Badge>}
                       </p>
                       <p className="text-2xs text-ink-3">
-                        covers {formatDate(p.periodStart)} – {formatDate(p.periodEnd)}
+                        covers {formatDate(p.periodStart)} – {formatDate(periodLastDay(p.periodEnd))}
                       </p>
                     </div>
                     {/* GST-INCLUSIVE, because that is the number that leaves the

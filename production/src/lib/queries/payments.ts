@@ -199,6 +199,8 @@ export interface OutstandingRow {
   last_reminder_at:   string | null;
   days_outstanding:   number;
   quote_id:           string | null;
+  /** Postpaid credit clock; null when there is no agreed date. */
+  payment_due_date:   string | null;
 }
 
 export function useOutstandingReceivables() {
@@ -209,7 +211,9 @@ export function useOutstandingReceivables() {
       // 1. Fetch subscriptions with outstanding balance (excluding written-off/cancelled)
       const { data: subs, error } = await supabase
         .from("subscriptions")
-        .select("id, customer_id, customer_name, plan, outstanding_amount, status, last_reminder_at, created_at, written_off_at")
+        /* payment_due_date added 10 Sep 2026 — the postpaid credit clock, so the
+           Outstanding card can show the same countdown the subscriptions list does. */
+        .select("id, customer_id, customer_name, plan, outstanding_amount, status, last_reminder_at, created_at, written_off_at, payment_due_date")
         .gt("outstanding_amount", 0)
         .is("written_off_at", null);
       if (error) throw error;
@@ -276,6 +280,7 @@ export function useOutstandingReceivables() {
           last_reminder_at:   s.last_reminder_at,
           days_outstanding:   Math.floor((now - new Date(firstPaymentAt).getTime()) / 86400000),
           quote_id:           quoteCtx?.id ?? null,
+          payment_due_date:   s.payment_due_date ?? null,
         };
       }).sort((a, b) => b.days_outstanding - a.days_outstanding);
     },

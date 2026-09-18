@@ -111,6 +111,20 @@ interface RecordPaymentDialogProps {
   askDomain?: boolean;
   /** Pre-fill the domain field (e.g. from the customer/lead's known domain). */
   defaultDomain?: string | null;
+  /**
+   * Fired after the payment is saved and every toast has been queued, with the RPC's
+   * own result. OPTIONAL and additive — every existing caller keeps its behaviour.
+   *
+   * Added 9 Sep 2026 for subscription onboarding, which needs to raise the GST invoice
+   * once the money is actually recorded. It deliberately does NOT generate an invoice
+   * itself: this sheet is used from several places, and making it issue a GST document
+   * everywhere would change all of them at once.
+   */
+  onRecorded?: (result: {
+    isFullyPaid: boolean;
+    subscriptionCreated: boolean;
+    isFirstPayment: boolean;
+  }) => void;
 }
 
 export function RecordPaymentDialog({
@@ -126,6 +140,7 @@ export function RecordPaymentDialog({
   askDomain: _askDomain = false,
   defaultDomain = null,
   lineItems,
+  onRecorded,
 }: RecordPaymentDialogProps) {
   const qc = useQueryClient();
   /* The receipt-voucher counter, so the sheet can name the number it will consume. */
@@ -586,6 +601,13 @@ export function RecordPaymentDialog({
           );
         }, 700);
       }
+      /* After the toasts, before the sheet closes. Handed the RPC's own result so a
+         caller cannot re-derive "was this fully paid" and get a different answer. */
+      onRecorded?.({
+        isFullyPaid: res.isFullyPaid,
+        subscriptionCreated: res.subscriptionCreated,
+        isFirstPayment: res.isFirstPayment,
+      });
       onOpenChange(false);
     },
     onError: (err) => toast.error((err as Error).message),
@@ -679,7 +701,35 @@ export function RecordPaymentDialog({
           </SheetHeader>
 
         <form
-          onSubmit={handleSubmit((data) => recordPayment.mutate(data))}
+          /**
+           * The second argument is the point. This sheet is TALL and scrolls, and its
+           * first required field (the UTR / transaction reference) sits near the top
+           * while Confirm payment sits at the bottom. Submitting with it empty put a
+           * red message next to a field that was off-screen and did nothing else — so
+           * from the operator's seat the button simply did not work.
+           *
+           * Reported 9 Sep 2026: "not able to record payment", after four attempts that
+           * each left an unpaid quote behind. record_payment was never called once —
+           * verified against the database, no payment rows existed — so nothing had
+           * failed. The form was refusing, silently, above the fold.
+           *
+           * §24: say what is wrong and take them to it.
+           */
+          onSubmit={handleSubmit(
+            (data) => recordPayment.mutate(data),
+            (formErrors) => {
+              const order: Array<keyof FormData> = ["amount", "method", "reference", "receivedDate"];
+              const firstKey = order.find((k) => formErrors[k]) ?? (Object.keys(formErrors)[0] as keyof FormData | undefined);
+              if (!firstKey) return;
+              const message = String(formErrors[firstKey]?.message ?? "Check this field");
+              toast.error("Payment not saved — one field needs fixing", { description: message });
+              /* Scroll it into view and focus it, so the message is where they are looking. */
+              const el = document.getElementById(`rp_${String(firstKey)}`)
+                ?? document.querySelector<HTMLElement>(`[name="${String(firstKey)}"]`);
+              el?.scrollIntoView({ block: "center", behavior: "smooth" });
+              (el as HTMLInputElement | null)?.focus?.();
+            },
+          )}
           className="flex flex-col flex-1 min-h-0 min-w-0 w-full"
         >
           <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">

@@ -26,6 +26,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { primaryContactsFor } from "@/lib/contacts/primary";
 
 // ────────────────────────────────────────────────────────────────
 // Range helpers (Indian FY = Apr 1 → Mar 31)
@@ -134,15 +135,13 @@ function useProfitability(range: DateRange) {
       const ids = Array.from(
         new Set((quotes ?? []).map((q) => q.customer_id).filter((x): x is string => !!x)),
       );
+      /* The PRIMARY CONTACT, not customers.contact_*. Those columns stopped being the
+         truth on 10 Sep 2026 — a customer's people live in `contacts`, one marked
+         primary. One batched lookup, so a report over 200 customers stays one query. */
       const contacts = new Map<string, { email: string | null; phone: string | null }>();
       if (ids.length > 0) {
-        const { data: customers } = await supabase
-          .from("customers")
-          .select("id, contact_email, contact_phone")
-          .in("id", ids);
-        for (const c of customers ?? []) {
-          contacts.set(c.id, { email: c.contact_email ?? null, phone: c.contact_phone ?? null });
-        }
+        const primaries = await primaryContactsFor(supabase, ids);
+        for (const [id, p] of primaries) contacts.set(id, { email: p.email, phone: p.phone });
       }
 
       const grouped = new Map<string, CustomerProfitRow>();

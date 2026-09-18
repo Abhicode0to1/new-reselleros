@@ -158,7 +158,7 @@ export default function PersonalWealthPage() {
         <p className="text-sm text-ink-3">
           Mutual fund, share, property, gold/SGB, LIC, PPF — sab ek jagah.
         </p>
-        <Button onClick={openNew} className="bg-primary text-white flex-shrink-0">
+        <Button variant="primary" onClick={openNew} className="flex-shrink-0">
           <Icon name="plus" size={14} className="mr-1.5" />
           Investment add karo
         </Button>
@@ -340,7 +340,7 @@ export default function PersonalWealthPage() {
 
           <div className="flex justify-end gap-2 pt-3">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} loading={save.isPending} className="bg-primary text-white">
+            <Button variant="primary" onClick={handleSave} loading={save.isPending}>
               {form.id ? "Update" : "Add"}
             </Button>
           </div>

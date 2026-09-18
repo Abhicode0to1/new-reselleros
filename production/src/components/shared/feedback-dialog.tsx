@@ -393,7 +393,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting} className="bg-primary text-white font-bold">
+            <Button variant="primary" type="submit" disabled={submitting} className="font-bold">
               {submitting ? "Submitting Report..." : `Submit Report (${screenshots.length} Screenshots)`}
             </Button>
           </div>

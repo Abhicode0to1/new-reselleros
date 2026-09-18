@@ -28,6 +28,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { decideDunning, dunningMessage, dunningRank, type DunningStep } from "@/lib/invoices/dunning";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { dunningLogStatus, reachedNobody } from "@/lib/invoices/dunning-log-status";
+import { primaryContactEmail } from "@/lib/contacts/primary";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { rupee, formatDate } from "@/lib/utils";
 import { reportCron } from "@/lib/ops/cron-report";
@@ -116,6 +117,13 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
      One definition, in the module that owns the ladder. */
   const lastStepByInvoice = new Map<string, DunningStep>();
   for (const l of logs ?? []) {
+    /* `invoice_id` became nullable on 10 Sep 2026 (migration 20260910070000) so the
+       same log can record a POSTPAID SUBSCRIPTION chase, which has no invoice. Those
+       rows are skipped here rather than coerced: keying a subscription chase into the
+       by-invoice map would make one subject's history mask another's, and the whole
+       purpose of this map is not re-sending a step that already went out. This loop
+       still reads only invoice rows; the subscription source is a separate pass. */
+    if (!l.invoice_id) continue;
     const prev = lastStepByInvoice.get(l.invoice_id) ?? "none";
     if (dunningRank(l.dunning_step) > dunningRank(prev)) {
       lastStepByInvoice.set(l.invoice_id, l.dunning_step as DunningStep);
@@ -156,10 +164,22 @@ async function handle(req: Request): Promise<NextResponse<DunningResult | { erro
 
     try {
       // ── Customer email. Every step tells the customer something. ──────────
-      const { data: customer } = inv.customer_id
-        ? await supabase.from("customers").select("contact_email").eq("id", inv.customer_id).maybeSingle()
-        : { data: null };
-      const to = customer?.contact_email ?? null;
+      /* The PRIMARY CONTACT, not customers.contact_email. That column stopped being
+         the truth on 10 Sep 2026 — a customer's people live in `contacts` now, one of
+         them marked primary, and that is who gets chased for money. The resolver
+         keeps the old column as a floor so a customer created without contacts is
+         still reachable rather than silently emailed to nobody. */
+      const resolved = inv.customer_id
+        ? await primaryContactEmail(supabase, inv.customer_id)
+        : { email: null, name: null, fromLegacy: false };
+      const to = resolved.email;
+      if (resolved.fromLegacy) {
+        /* Visible, not swallowed: the floor is a safety net, not the design. A run
+           full of these means customers are arriving without contacts. */
+        console.warn(
+          `[invoice-dunning] ${inv.id}: no contact row for customer ${inv.customer_id} — used the legacy customers.contact_email`,
+        );
+      }
 
       const msg = dunningMessage({
         step: decision.step,

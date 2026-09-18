@@ -135,6 +135,61 @@ export function addDaysISO(dateISO: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   `subscriptions.renewal_date` IS THE LAST COVERED DAY — INCLUSIVE
+   ────────────────────────────────────────────────────────────────────────────
+   Changed 11 Sep 2026 on Abhishek's instruction. It used to hold the ANNIVERSARY:
+   a subscription starting 11 Sep 2026 stored 11 Sep 2027, the first day of term two.
+   He reads the column as an expiry date — as does the Google Admin console he
+   reconciles against — and 11 Sep 2027 for a term beginning 11 Sep 2026 reads as a
+   day too many.
+
+   The number stored moved by one day. What makes that SAFE rather than a slow leak is
+   this pair of functions: every place that turns the column into a term boundary now
+   goes through them, so the ±1 lives in one file instead of being remembered at six
+   call sites. Miss one and the term silently starts a day early, every renewal,
+   compounding — which is the failure this whole block exists to prevent.
+
+   The roll-forward is unaffected: an inclusive end plus twelve months is the next
+   inclusive end (10 Sep 2027 → 10 Sep 2028), so record_payment and the renewal cron
+   keep working on the stored value directly.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * The last day a term COVERS, given when it started and how long it runs.
+ *
+ * start 11 Sep 2026 + 12 months → **10 Sep 2027**. The subscription is live on that
+ * day and expires at the end of it; term two begins the next morning.
+ *
+ * Use this anywhere a renewal/expiry date is derived from a start date.
+ */
+export function termEndInclusive(startDateISO: string, termMonths: number): string {
+  return addDaysISO(addMonthsClamped(startDateISO, termMonths), -1);
+}
+
+/**
+ * The first day of the NEXT term, given the stored inclusive end date.
+ *
+ * The inverse of termEndInclusive, and the only correct way to use `renewal_date`
+ * as a period boundary: passing the stored date straight into a schedule would
+ * re-bill the last covered day.
+ */
+export function nextTermStart(renewalDateISO: string): string {
+  return addDaysISO(renewalDateISO.slice(0, 10), 1);
+}
+
+/**
+ * The last day a billing period COVERS, for display.
+ *
+ * `BillingPeriod.periodEnd` is EXCLUSIVE — the boundary, not a day of service. Printing
+ * it raw reads as a day too many: the billing panel said "covers 11 Sept 2026 –
+ * 11 Sept 2027" next to a row that now correctly said the term ends on the 10th, so the
+ * same screen contradicted itself. Reported by Abhishek, 11 Sep 2026.
+ */
+export function periodLastDay(periodEndExclusiveISO: string): string {
+  return addDaysISO(periodEndExclusiveISO.slice(0, 10), -1);
+}
+
 /**
  * Does the whole schedule add up to the term total?
  *

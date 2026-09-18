@@ -35,6 +35,7 @@
 import { NextResponse } from "next/server";
 import { replyToAddress } from "@/lib/email/reply-to";
 import { createAdminClient } from "@/lib/supabase/server";
+import { primaryContactEmail } from "@/lib/contacts/primary";
 import { decideCadence, CADENCE_TRIGGERS } from "@/lib/renewals/cadence";
 import { renderTemplate } from "@/lib/renewals/templates";
 import { createOrGetRenewalQuote } from "@/lib/renewals/create-renewal-quote";
@@ -296,8 +297,22 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
           renewalToken = tok?.public_token ?? null;
         }
 
-        // 2. Recipient — prefer customer.contact_email
-        const recipient = customer?.contact_email;
+        /* 2. Recipient — the customer's PRIMARY CONTACT.
+           customers.contact_email stopped being the truth on 10 Sep 2026: a
+           customer's people live in `contacts` now, one marked primary, and that is
+           who a renewal notice goes to. The resolver keeps the old column as a floor,
+           so a customer created without contacts is still reached rather than skipped
+           — this cron's own log calls that case "(missing)", and a renewal nobody was
+           told about is a renewal that lapses. */
+        const resolvedContact = sub.customer_id
+          ? await primaryContactEmail(supabase, sub.customer_id)
+          : { email: null, name: null, fromLegacy: false };
+        if (resolvedContact.fromLegacy) {
+          console.warn(
+            `[renewals] subscription ${sub.id}: no contact row for customer ${sub.customer_id} — used the legacy customers.contact_email`,
+          );
+        }
+        const recipient = resolvedContact.email;
         if (!recipient) {
           await supabase.from("renewal_email_log").insert({
             tenant_id:       sub.tenant_id,
@@ -306,7 +321,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
             recipient_email: "(missing)",
             subject:         "(skipped)",
             status:          "skipped",
-            error_message:   "Customer has no contact_email on file",
+            error_message:   "Customer has no contact on file (no contacts row and no legacy contact_email)",
           });
           result.emails_skipped += 1;
           detail.emailStatus = "skipped — no email";
@@ -316,7 +331,7 @@ async function handle(req: Request): Promise<NextResponse<CronResult | DryRunRes
 
         // 3. Render template
         const tpl = renderTemplate(decision.tone, {
-          customerName:    customer?.contact_name || customer?.name || sub.customer_name,
+          customerName:    resolvedContact.name || customer?.contact_name || customer?.name || sub.customer_name,
           customerCompany: customer?.name,
           tenantName:      tenant.name,
           tenantEmail:     tenant.email,

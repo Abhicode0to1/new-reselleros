@@ -98,6 +98,9 @@ export function useUpdateSubscription() {
         mrr?: number;
         start_date?: string | null;
         renewal_date?: string | null;
+        /** Postpaid credit clock (migration 20260910060000). Null clears it, which means
+         *  "no agreed date" and shows no countdown — see the edit dialog. */
+        payment_due_date?: string | null;
         status?: Subscription["status"];
       };
     }) => {

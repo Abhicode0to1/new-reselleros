@@ -8,11 +8,17 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { syncUserContacts } from "@/lib/google/contacts";
+import { CONTACT_IMPORT_RETIRED, contactImportRetired } from "@/lib/contacts/retired";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST() {
+  /* RETIRED 10 Sep 2026 — see lib/contacts/retired.ts. `contacts` is now only a
+     customer's people; anybody who is not a customer yet is a LEAD. Fails closed, so
+     no new address-book row can be written whatever still calls this. */
+  if (CONTACT_IMPORT_RETIRED) return contactImportRetired();
+
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });

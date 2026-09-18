@@ -37,6 +37,7 @@ import { AddExpenseDialog } from "@/components/features/accounting/add-expense-d
 import type { ExpenseRow } from "@/lib/supabase/database.types";
 import { VENDOR_BILL_CATEGORIES } from "@/lib/queries/vendor-bills";
 import { rupee, formatDate, GST_STATE_BY_CODE, gstStateFromGstin, foreignAmount, formatForeignAmount } from "@/lib/utils";
+import { newestFirst } from "@/lib/sort/newest-first";
 import GstinVerifyCard from "@/components/features/gstin/gstin-verify-card";
 
 const VENDOR_SUPPLIED_PRODUCTS = [
@@ -78,8 +79,10 @@ export default function VendorsPage() {
   const del = useDeleteVendor();
   const confirm = useConfirm();
 
-  const rows = (vendors ?? []).filter((v) =>
-    !search.trim() || v.name.toLowerCase().includes(search.toLowerCase()) || (v.gstin ?? "").toLowerCase().includes(search.toLowerCase()));
+  /* Newest first, like every other table (Abhishek, 18 Sep 2026). `useVendors` keeps
+     its A-Z fetch because the same hook fills the vendor picker on the prepaid page. */
+  const rows = newestFirst((vendors ?? []).filter((v) =>
+    !search.trim() || v.name.toLowerCase().includes(search.toLowerCase()) || (v.gstin ?? "").toLowerCase().includes(search.toLowerCase())));
   const totalOutstanding = (vendors ?? []).reduce((s, v) => s + v.outstanding, 0);
   const totalSpend = (vendors ?? []).reduce((s, v) => s + v.totalSpend, 0);
 

@@ -63,8 +63,14 @@ const nextConfig = {
       // CSP connect-src is derived from below — keep both in step.
       ...(() => {
         try {
-          const h = new URL((process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, "")).host;
-          return h && !h.endsWith(".supabase.co") ? [{ protocol: "https", hostname: h }] : [];
+          const u = new URL((process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, ""));
+          /* Scheme from the URL, same reason as the CSP below: on a local stack this
+             host is http://127.0.0.1:54321, and a hardcoded https here makes
+             next/image refuse every logo and avatar Storage serves. */
+          const protocol = u.protocol === "http:" ? "http" : "https";
+          return u.host && !u.host.endsWith(".supabase.co")
+            ? [{ protocol, hostname: u.hostname, port: u.port || undefined }]
+            : [];
         } catch {
           return [];
         }
@@ -83,8 +89,19 @@ const nextConfig = {
     let supaConnect = "https://*.supabase.co wss://*.supabase.co";
     try {
       if (supaUrl) {
-        const h = new URL(supaUrl).host;
-        supaConnect = `https://${h} wss://${h} ${supaConnect}`;
+        const u = new URL(supaUrl);
+        /* Take the SCHEME from the URL, do not assume https. This line used to read
+           `https://${h}`, and that is exactly the drift the comment above swears it
+           prevents — just in the other direction. The local stack serves
+           http://127.0.0.1:54321, so a hardcoded https:// emitted a connect-src that
+           could never match it, the browser blocked every client-side Supabase call,
+           and LOGIN FAILED SILENTLY: the form posts, nothing comes back, no error on
+           screen. Measured 8 Sep 2026 on a fresh local setup.
+           For a hosted https URL the output is byte-identical to before. */
+        const isHttp = u.protocol === "http:";
+        const scheme = isHttp ? "http" : "https";
+        const wsScheme = isHttp ? "ws" : "wss";
+        supaConnect = `${scheme}://${u.host} ${wsScheme}://${u.host} ${supaConnect}`;
       }
     } catch {
       /* malformed env → fall back to the wildcard above */

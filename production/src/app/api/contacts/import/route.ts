@@ -21,6 +21,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { ContactSource } from "@/lib/supabase/database.types";
+import { CONTACT_IMPORT_RETIRED, contactImportRetired } from "@/lib/contacts/retired";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,6 +46,11 @@ function newContactId(): string {
 }
 
 export async function POST(req: Request) {
+  /* RETIRED 10 Sep 2026 — see lib/contacts/retired.ts. `contacts` is now only a
+     customer's people; anybody who is not a customer yet is a LEAD. Fails closed, so
+     no new address-book row can be written whatever still calls this. */
+  if (CONTACT_IMPORT_RETIRED) return contactImportRetired();
+
   // Authn
   const userClient = createClient();
   const { data: authData } = await userClient.auth.getUser();
