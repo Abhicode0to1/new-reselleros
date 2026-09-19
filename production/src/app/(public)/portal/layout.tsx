@@ -44,10 +44,38 @@ export default async function PortalLayout({ children }: { children: React.React
      printed the same words twice, which looked like a templating bug. */
   const showStrapline = brandName !== "Customer Portal";
 
+  /* ─── SIGNED OUT, THIS IS AN AUTH PAGE, SO IT WEARS THE AUTH CHROME ────────
+     Signed IN, the header is app chrome: it carries the nav and the account
+     menu, so it needs the 1080px container to line its contents up with the
+     page below, and the rule + fill to separate itself from that page.
+
+     Signed OUT there is no nav, no menu, and nothing to line up with — just a
+     centred card, exactly like /login. Keeping the container there pushed the
+     logo into the middle of the screen while the staff sign-in put its logo at
+     the far left, so the two sign-in screens of one product disagreed about
+     where the brand lives. The bordered, filled bar also drew a line under a
+     header holding a single word.
+
+     So signed out it matches `(auth)/layout.tsx`: full-width `p-6`, no rule, no
+     fill. Signed in is untouched. */
+  const chrome = session
+    ? {
+        page: "min-h-screen bg-paper-2/40 flex flex-col",
+        header: "border-b border-hairline bg-paper",
+        bar: "max-w-[1080px] mx-auto px-6 py-4 flex items-center justify-between gap-4",
+        footer: "border-t border-hairline bg-paper py-6 text-center text-xs text-ink-3 px-6",
+      }
+    : {
+        page: "min-h-screen bg-paper-2/50 flex flex-col",
+        header: "",
+        bar: "p-6 flex items-center justify-between gap-4",
+        footer: "p-6 text-center text-xs text-ink-3",
+      };
+
   return (
-    <div className="min-h-screen bg-paper-2/40 flex flex-col">
-      <header className="border-b border-hairline bg-paper">
-        <div className="max-w-[1080px] mx-auto px-6 py-4 flex items-center justify-between gap-4">
+    <div className={chrome.page}>
+      <header className={chrome.header}>
+        <div className={chrome.bar}>
           <Link href={session ? "/portal/dashboard" : "/portal"} className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 bg-ink text-paper rounded-md grid place-items-center font-serif text-base flex-shrink-0">
               {mark}
@@ -90,7 +118,7 @@ export default async function PortalLayout({ children }: { children: React.React
         )}
       </header>
       <main className="flex-1">{children}</main>
-      <footer className="border-t border-hairline bg-paper py-6 text-center text-xs text-ink-3 px-6">
+      <footer className={chrome.footer}>
         {session ? (
           <>
             {brandName}
