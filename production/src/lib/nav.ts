@@ -372,7 +372,6 @@ export const CUSTOMER_NAV: NavSection[] = [
       { id: "buy-workspace",    href: "/buy/workspace",     label: "Buy · Workspace",   icon: "sparkles" },
       { id: "buy-m365",         href: "/buy/m365",          label: "Buy · Microsoft 365", icon: "package" },
       { id: "buy-zoho",         href: "/buy/zoho",          label: "Buy · Zoho",        icon: "package" },
-      { id: "portal",           href: "/portal",            label: "Customer Portal",   icon: "layout" },
       { id: "quote-accept",     href: "/quote/Q-2026-0042", label: "Quote Accept & Pay", icon: "check_circle" },
       { id: "support-customer", href: "/support-customer",  label: "Customer Support",  icon: "question" },
     ],
