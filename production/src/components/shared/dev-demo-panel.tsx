@@ -37,7 +37,11 @@ export interface DevDemoEntry {
   onClick?: () => void;
   /** Navigates. Omit when the row fills the form instead. */
   href?: string;
-  /** Appends an arrow to the label, for a row that leaves the page. */
+  /**
+   * The row leaves this app. Appends an arrow AND opens in a new tab, the same
+   * pairing `NavItem.external` uses in lib/nav.ts — the arrow is a promise about
+   * what the click does, so the two must not come apart.
+   */
   external?: boolean;
 }
 
@@ -64,7 +68,12 @@ function Entry({ entry }: { entry: DevDemoEntry }) {
 
   if (entry.href) {
     return (
-      <a href={entry.href} className={`block ${shared}`}>
+      <a
+        href={entry.href}
+        className={`block ${shared}`}
+        target={entry.external ? "_blank" : undefined}
+        rel={entry.external ? "noopener noreferrer" : undefined}
+      >
         <EntryBody entry={entry} />
       </a>
     );

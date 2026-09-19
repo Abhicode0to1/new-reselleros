@@ -26,6 +26,25 @@ type FormData = z.infer<typeof schema>;
 // Demo accounts shown only in development. Kept in sync with the actual
 // tenants in Supabase — when a tenant is added/removed or its password
 // rotated, update this list. Hidden in production builds.
+/**
+ * DMS's own sign-in, derived from the portal URL rather than a second env var
+ * so the two can never point at different deployments.
+ *
+ * `new URL("/login", …)` replaces the whole path, so the configured
+ * ".../dashboard" becomes ".../login" — the sign-in screen, not a page that
+ * bounces there. Empty when unconfigured, which hides the row: a hard-coded
+ * fallback would send staff to a host that may not be this deployment's engine.
+ */
+const DMS_LOGIN_URL = (() => {
+  const base = (process.env.NEXT_PUBLIC_DMS_PORTAL_URL ?? "").trim();
+  if (!base) return "";
+  try {
+    return new URL("/login", base).toString();
+  } catch {
+    return "";
+  }
+})();
+
 const DEMO_USERS: Array<{ label: string; email: string; password: string }> = [
   /* 26 Aug 2026: yahan teesri entry thi — `darshan@exceltechnologies.in`. DB me wo user
      MAUJOOD NAHI HAI, to wo button dabane par sirf login fail hota tha. Upar likha comment
@@ -123,26 +142,34 @@ function LoginPageInner() {
             ),
             onClick: () => fillDemo(u.email, u.password),
           }))}
-          /* A LINK, not a third autofill row. The customer demo cannot be a
-             credential here: this form is signInWithPassword against a `users`
-             row, and a customer has neither a password nor a row — so
+          /* A LINK, not a third autofill row. A hosting/domains customer cannot
+             be a credential here: this form is signInWithPassword against a
+             `users` row, and that customer has neither a password nor a row —
              autofilling one would give a button that always fails. This file
              already carries a note about exactly that (the `darshan@` entry
-             above), and the fix then was to remove it, not to lengthen the
-             list. So the panel points at the page that CAN sign a customer in. */
-          footer={[
-            {
-              label: "Customer portal",
-              href: "/portal/login",
-              external: true,
-              note: (
-                <>
-                  Demo customer lives on <span className="font-mono">/portal/login</span> —
-                  customers sign in by emailed code, not a password.
-                </>
-              ),
-            },
-          ]}
+             above), and the fix then was to remove it, not to lengthen the list.
+
+             It points at DMS rather than this app's own /portal/login because
+             hosting and domains are DMS's, and so is the account that opens
+             them. Sending someone to a ResellerOS portal they cannot use those
+             services from is a longer way round to the same dead end. */
+          footer={
+            DMS_LOGIN_URL
+              ? [
+                  {
+                    label: "Hosting & domains sign-in",
+                    href: DMS_LOGIN_URL,
+                    external: true,
+                    note: (
+                      <>
+                        Opens the DMS sign-in directly. It is a separate account from this
+                        one.
+                      </>
+                    ),
+                  },
+                ]
+              : undefined
+          }
         />
       )}
 
