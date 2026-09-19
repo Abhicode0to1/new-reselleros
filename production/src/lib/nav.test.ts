@@ -5,14 +5,18 @@ import { getCrumb, getParentListHref, getSectionPrimaryHref, APP_NAV, allowedRou
 
 describe("getCrumb", () => {
   it("returns the exact crumb for a known static route", () => {
-    expect(getCrumb("/customers")).toEqual(["Sales", "Customers"]);
+    /* "Billing", not "Sales": Customers moved to Billing & Subscriptions on
+       10 Sep 2026 — a customer is a company you bill, so it sits beside the
+       quotes, invoices and payments about it. Sales & CRM keeps the prospect
+       half (leads, enquiries, referrals). */
+    expect(getCrumb("/customers")).toEqual(["Billing", "Customers"]);
     expect(getCrumb("/quotes/new")).toEqual(["Revenue", "Quotes", "New"]);
   });
 
   it("resolves dynamic detail routes via the [id] placeholder (not 'Dashboard')", () => {
     // The bug this fixes: exact lookup missed dynamic ids → everything fell back
     // to the Dashboard crumb. A real customer id is a uuid.
-    expect(getCrumb("/customers/17e61b78-9450-4849-ad93-9834d2281647")).toEqual(["Sales", "Customers", "Profile"]);
+    expect(getCrumb("/customers/17e61b78-9450-4849-ad93-9834d2281647")).toEqual(["Billing", "Customers", "Profile"]);
     // Quote ids are prefixed text, not uuids.
     expect(getCrumb("/quotes/Q-ET-2026-27-0010")).toEqual(["Revenue", "Quotes", "Detail"]);
     expect(getCrumb("/invoices/INV-ET-2026-27-0006")).toEqual(["Revenue", "Invoices", "Detail"]);
@@ -20,7 +24,7 @@ describe("getCrumb", () => {
 
   it("resolves a mid-path id so a sub-page keeps its own crumb", () => {
     expect(getCrumb("/customers/17e61b78-9450-4849-ad93-9834d2281647/edit")).toEqual([
-      "Sales",
+      "Billing",
       "Customers",
       "Edit",
     ]);

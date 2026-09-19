@@ -16,12 +16,14 @@
  * looking up the user's tenant_id and verifying the quote belongs to it.
  *
  * Body: { to: string; cc?: string[]; subject?: string; message?: string }
- *   - `to` falls back to customer.contact_email when omitted.
+ *   - `to` falls back to the customer's PRIMARY CONTACT when omitted (was
+ *     customer.contact_email until 10 Sep 2026).
  *   - `subject` / `message` default to a sane template when omitted.
  */
 
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { primaryContactEmail } from "@/lib/contacts/primary";
 import { sendEmail, isEmailConfigured } from "@/lib/email/send";
 import { renderQuotePDF } from "@/lib/pdf";
 import { replyToAddress } from "@/lib/email/reply-to";
@@ -129,7 +131,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     : { data: null };
 
   // ── 5. Resolve recipient ─────────────────────────────────────────
-  const recipient = (body.to ?? customer?.contact_email ?? "").trim();
+  /* The customer's PRIMARY CONTACT. customers.contact_email stopped being the truth on
+     10 Sep 2026 — a customer's people live in `contacts`, one marked primary. The
+     resolver keeps the old column as a floor so nobody becomes unreachable. */
+  const resolvedContact = quote.customer_id
+    ? await primaryContactEmail(supabase, quote.customer_id)
+    : { email: null, name: null, fromLegacy: false };
+  const recipient = (body.to ?? resolvedContact.email ?? "").trim();
   if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
     return NextResponse.json(
       { error: "no valid recipient — set customer contact email or pass `to`" },

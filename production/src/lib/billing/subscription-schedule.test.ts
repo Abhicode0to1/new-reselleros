@@ -3,12 +3,20 @@ import { subscriptionSchedule, nextTermSchedule, upcomingForSubscription } from 
 import { scheduleTotal } from "./schedule";
 import type { Subscription } from "@/lib/supabase/database.types";
 
+/**
+ * `renewal_date` is the LAST COVERED DAY — 31 Mar 2027, not 1 Apr 2027.
+ *
+ * Changed 11 Sep 2026 (Abhishek). The fixture moved by one day and every expectation
+ * below stayed exactly where it was, which is the point: the term still runs
+ * 1 Apr 2026 → 31 Mar 2027 and term two still opens on 1 Apr 2027. Only the number in
+ * the column changed; the days the customer is billed for did not.
+ */
 const sub = (over: Partial<Subscription> = {}) => ({
   mrr: 10_000,
   billing_cycle: "yearly" as const,
   term_months: 12,
   start_date: "2023-04-01",
-  renewal_date: "2027-04-01",
+  renewal_date: "2027-03-31",
   ...over,
 }) as Subscription;
 
@@ -38,7 +46,7 @@ describe("the term total comes from mrr, so it cannot disagree with the dashboar
 
   it("MULTI-YEAR term = mrr × term_months, not mrr × 12 × years", () => {
     /* Any multi-year discount is already inside the agreed mrr. */
-    const s = subscriptionSchedule(sub({ term_months: 36, renewal_date: "2029-04-01" }));
+    const s = subscriptionSchedule(sub({ term_months: 36, renewal_date: "2029-03-31" }));
     expect(scheduleTotal(s)).toBe(360_000);
     expect(s[0].periodStart).toBe("2026-04-01");
   });

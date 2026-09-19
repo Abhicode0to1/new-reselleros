@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildBillingSchedule, addMonthsClamped, addDaysISO, upcomingBillings, scheduleTotal, CYCLE_MONTHS,
+  termEndInclusive, nextTermStart, periodLastDay,
 } from "./schedule";
 
 describe("addMonthsClamped — month-end must not roll over", () => {
@@ -157,5 +158,99 @@ describe("addDaysISO", () => {
 describe("CYCLE_MONTHS", () => {
   it("matches the cycles the app offers", () => {
     expect(CYCLE_MONTHS).toEqual({ monthly: 1, quarterly: 3, half_yearly: 6, yearly: 12 });
+  });
+});
+
+/**
+ * The inclusive-end convention — `subscriptions.renewal_date` is the LAST COVERED DAY.
+ *
+ * ─── WHY THIS PAIR EXISTS ───────────────────────────────────────────────────
+ * Changed 11 Sep 2026 on Abhishek's instruction. The column used to hold the
+ * anniversary — a term starting 11 Sep 2026 stored 11 Sep 2027, the first day of term
+ * two — and he reads it as an expiry date, as does the Google Admin console he
+ * reconciles the app against.
+ *
+ * Moving a stored date by one day is cheap. What is NOT cheap is every place that turns
+ * that column back into a term boundary: miss one and the next term opens on the last
+ * day of the previous one, so a day is sold twice on every renewal of every
+ * subscription, compounding for as long as nobody notices. These two functions are the
+ * only sanctioned conversion in either direction, which is what makes that auditable.
+ */
+describe("termEndInclusive / nextTermStart — the ±1 that must never be open-coded", () => {
+  it("a year from 11 Sep 2026 ends 10 Sep 2027", () => {
+    /* The case Abhishek reported, from the Doodh Sang row. */
+    expect(termEndInclusive("2026-09-11", 12)).toBe("2027-09-10");
+  });
+
+  it("gives a term its full count of days — 365 for a non-leap year", () => {
+    /* The arithmetic that justifies the whole change: inclusive of both ends, a year
+       is 365 days. Storing the anniversary made it look like 366. */
+    const start = "2026-09-11";
+    const end = termEndInclusive(start, 12);
+    const days = Math.round(
+      (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+    expect(days).toBe(365);
+  });
+
+  it("a one-month flex term ends the day before the next month's anniversary", () => {
+    expect(termEndInclusive("2026-09-11", 1)).toBe("2026-10-10");
+  });
+
+  it("nextTermStart is the exact inverse — no day is lost or repeated between terms", () => {
+    /* Term two must begin the morning after term one ends. If these two ever disagree
+       the boundary either double-bills a day or leaves an unbilled gap. */
+    for (const start of ["2026-09-11", "2026-01-31", "2026-02-28", "2026-12-01", "2027-03-01"]) {
+      for (const months of [1, 3, 6, 12, 36]) {
+        expect(nextTermStart(termEndInclusive(start, months)))
+          .toBe(addMonthsClamped(start, months));
+      }
+    }
+  });
+
+  it("ends a term that started on the 1st on the last day of the previous month", () => {
+    /* 1 Apr 2026 → 31 Mar 2027. This is the shape that breaks any month-only arithmetic
+       reading the stored column, which is why the term length is measured through
+       nextTermStart rather than off the stored date. */
+    expect(termEndInclusive("2026-04-01", 12)).toBe("2027-03-31");
+    expect(termEndInclusive("2026-12-01", 1)).toBe("2026-12-31");
+  });
+
+  it("clamps a month-end start rather than rolling into the next month", () => {
+    /* 31 Jan + 1 month is 28 Feb in a non-leap year, so the last covered day is the
+       27th. Naive Date math would say 2 March and walk the anniversary later every
+       period. */
+    expect(termEndInclusive("2026-01-31", 1)).toBe("2026-02-27");
+    /* 2028 IS a leap year, so the same start reaches a day further. */
+    expect(termEndInclusive("2028-01-31", 1)).toBe("2028-02-28");
+  });
+
+  it("crosses a year boundary without drifting", () => {
+    expect(termEndInclusive("2026-12-31", 12)).toBe("2027-12-30");
+    expect(nextTermStart("2027-12-31")).toBe("2028-01-01");
+  });
+
+  it("tolerates a timestamp, because Postgres dates arrive both ways", () => {
+    expect(nextTermStart("2027-09-10T00:00:00+05:30")).toBe("2027-09-11");
+  });
+});
+
+describe("periodLastDay — periodEnd is exclusive, the screen must not print it raw", () => {
+  it("turns a period boundary into the last day it covers", () => {
+    /* Reported 11 Sep 2026: the billing panel read "covers 11 Sept 2026 – 11 Sept 2027"
+       beside a row that said the term ends on the 10th. Same screen, two answers. */
+    const [p] = buildBillingSchedule({
+      startDate: "2026-09-11", termMonths: 12, cycle: "yearly", termAmount: 6_336,
+    });
+    expect(p.periodEnd).toBe("2027-09-11");          // the boundary, unchanged
+    expect(periodLastDay(p.periodEnd)).toBe("2027-09-10");  // what the operator reads
+  });
+
+  it("never leaves a gap between one period's last day and the next period's first", () => {
+    const periods = buildBillingSchedule({
+      startDate: "2026-01-31", termMonths: 12, cycle: "monthly", termAmount: 12_000,
+    });
+    for (let i = 0; i < periods.length - 1; i++) {
+      expect(addDaysISO(periodLastDay(periods[i].periodEnd), 1)).toBe(periods[i + 1].periodStart);
+    }
   });
 });

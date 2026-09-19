@@ -394,7 +394,13 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
           <Row
             label={isIndividual ? "Name" : "Primary contact"}
             htmlFor="contact_first_name"
-            required={isIndividual}
+            /* Required on CREATE for everyone, not just individuals. A business customer
+               needs a named human too — they are who receives its invoices and payment
+               reminders (Abhishek, 18 Sep 2026: "without contact customer not created").
+               Editing an existing customer is NOT blocked: customers already on the books
+               predate the rule, and locking the operator out of the page would lock them
+               out of the very field that fixes it. */
+            required={isIndividual || !isEdit}
             hint={isIndividual ? "This person is the customer." : "The person you deal with."}
           >
             <div className="grid grid-cols-[84px_1fr_1fr] gap-2">
@@ -437,7 +443,7 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
             )}
           </Row>
 
-          <Row label="Email" htmlFor="contact_email">
+          <Row label="Email" htmlFor="contact_email" required={!isEdit}>
             <Input
               id="contact_email" type="email" placeholder="e.g. rajesh@acme.com"
               error={errors.contact_email?.message}
@@ -447,10 +453,11 @@ export function CustomerFormPage({ customer }: CustomerFormPageProps) {
             <FieldPill check={checkEmail(watch("contact_email") ?? "")} />
           </Row>
 
-          <Row label="Phone" htmlFor="contact_phone">
+          <Row label="Phone" htmlFor="contact_phone" required={!isEdit}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Input
                 id="contact_phone" inputMode="numeric" placeholder="Work phone"
+                error={errors.contact_phone?.message}
                 {...register("contact_phone")}
                 onChange={(e) => setValue("contact_phone", livePhone(e.target.value), { shouldDirty: true })}
                 onBlur={(e) => setValue("contact_phone", commitPhone(e.target.value), { shouldDirty: true })}

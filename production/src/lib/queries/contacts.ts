@@ -11,6 +11,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import {
+  buildContactSearchIndex,
+  type ContactSearchIndex,
+  type ContactLinkRow,
+} from "@/lib/contacts/search-index";
 import type { ContactRow, ContactChannel } from "@/lib/supabase/database.types";
 
 export type Contact = ContactRow;
@@ -413,6 +418,11 @@ export function useContact(id: string | undefined) {
 /** Fields the owner edits on a contact — everything except system columns. */
 export type ContactFormValues = {
   full_name: string;
+  /** Customer-contact fields (migration 20260910100000). `role` is what the person
+   *  does for that customer; `is_primary` marks the one who receives invoices and
+   *  payment reminders — at most one per customer, enforced by a UNIQUE index. */
+  role?:       string | null;
+  is_primary?: boolean;
   company?:  string | null;
   /** Optional link to a customer company — surfaces that company's records on
    *  the contact detail page. null = free-text `company` only. */
@@ -443,7 +453,16 @@ export type ContactFormValues = {
   notes?:    string | null;
 };
 
-function newContactId(): string {
+/**
+ * The id shape every contact in this tenant carries: `C-<base36 time>-<base36 rand>`.
+ *
+ * EXPORTED (11 Sep 2026) because the subscription onboarding dialog writes a customer's
+ * first contact directly through Supabase rather than through useCreateContact — it is a
+ * plain form inside a larger transaction-ish sequence, not a mutation on its own. A
+ * second id generator over there would eventually disagree with this one about the
+ * format, and contact ids are read by eye in the database.
+ */
+export function newContactId(): string {
   return "C-" + Date.now().toString(36).toUpperCase() + "-" + Math.floor(Math.random() * 1000).toString(36).toUpperCase();
 }
 
@@ -534,5 +553,187 @@ export function useDeleteContact() {
       toast.success("Contact deleted");
     },
     onError: (err) => toast.error((err as Error).message),
+  });
+}
+
+// ============================================================
+// A CUSTOMER's contacts — the single home for "who do I ring"
+// ============================================================
+/**
+ * Three places used to hold this fact and two were dead: the flat
+ * `customers.contact_*` columns (which the app actually read), `contacts` with a
+ * `customer_id` (0 rows), and `customers.contact_persons` jsonb (0 customers).
+ *
+ * Abhishek's decision, 10 Sep 2026: ONE identity. A customer has contacts — several,
+ * with roles — and at least one is mandatory. People who are not customers belong in
+ * `leads`, which already has a pipeline for them.
+ *
+ * Migration 20260910100000 added `role` + `is_primary` and backfilled every customer's
+ * flat fields into a primary contact, so no customer arrived here without one.
+ */
+
+/** What a person does for this customer. */
+export type ContactRole = "owner" | "accountant" | "it_head" | "poc" | "other";
+
+export const CONTACT_ROLES: ReadonlyArray<{ value: ContactRole; label: string }> = [
+  { value: "poc",        label: "Point of contact" },
+  { value: "owner",      label: "Owner" },
+  { value: "accountant", label: "Accountant" },
+  { value: "it_head",    label: "IT head" },
+  { value: "other",      label: "Other" },
+] as const;
+
+export const roleLabel = (r: string | null | undefined) =>
+  CONTACT_ROLES.find((x) => x.value === r)?.label ?? "Point of contact";
+
+/** Every contact for one customer, primary first. */
+export function useCustomerContacts(customerId: string | undefined) {
+  return useQuery({
+    queryKey: ["contacts", "customer", customerId],
+    enabled: !!customerId,
+    queryFn: async (): Promise<Contact[]> => {
+      const supabase = createClient();
+      /* Reads the LINK table since 18 Sep 2026 — a person can serve several customers,
+         so "is this customer's contact" is a fact about the link, not the person. The
+         link's role and is_primary win over the legacy columns on the contact row: the
+         same human can be the accountant here and the owner elsewhere. */
+      const { data, error } = await supabase
+        .from("customer_contacts")
+        .select("role, is_primary, contacts(*)")
+        .eq("customer_id", customerId!)
+        /* Primary first, then alphabetical — the person who gets the invoice should
+           never be somewhere down a list. */
+        .order("is_primary", { ascending: false });
+      if (error) throw error;
+      type LinkRow = { role: string | null; is_primary: boolean | null; contacts: Contact | null };
+      return ((data ?? []) as unknown as LinkRow[])
+        .filter((l) => l.contacts)
+        .map((l) => ({ ...(l.contacts as Contact), role: l.role, is_primary: !!l.is_primary }))
+        .sort((a, b) =>
+          Number(b.is_primary) - Number(a.is_primary)
+          || (a.full_name ?? "").localeCompare(b.full_name ?? ""));
+    },
+  });
+}
+
+/**
+ * Make one contact the primary, and demote whoever held it.
+ *
+ * Two statements, deliberately in this order: clear the old primary FIRST, then set
+ * the new one. `contacts_one_primary_per_customer` is a UNIQUE index, so setting
+ * before clearing collides and the whole thing fails — which is the index doing its
+ * job, and the reason this cannot be one update.
+ */
+export function useSetPrimaryContact() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contactId, customerId }: { contactId: string; customerId: string }) => {
+      const supabase = createClient();
+      /* Both statements target customer_contacts. Setting is_primary on the CONTACT
+         would make that person primary for every customer they serve — which since
+         18 Sep 2026 can be several, and would redirect other customers' invoices. */
+      const { error: clearErr } = await supabase
+        .from("customer_contacts")
+        .update({ is_primary: false })
+        .eq("customer_id", customerId)
+        .eq("is_primary", true);
+      if (clearErr) throw clearErr;
+      const { error } = await supabase
+        .from("customer_contacts")
+        .update({ is_primary: true })
+        .eq("customer_id", customerId)
+        .eq("contact_id", contactId);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["contacts", "customer", v.customerId] });
+      qc.invalidateQueries({ queryKey: ["contacts", "all"] });
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      toast.success("Primary contact updated");
+    },
+    onError: (err) => toast.error((err as Error).message, {
+      description: "The primary contact was not changed. Try again, or reload the page.",
+    }),
+  });
+}
+
+/**
+ * Delete a contact — refusing to remove the last one.
+ *
+ * §24: the refusal says why and what to do instead. A customer with no contact is a
+ * customer nobody can invoice or chase, and the mandatory-one rule is the whole point
+ * of the redesign; enforcing it only in the UI would leave it enforced nowhere that
+ * matters.
+ */
+export function useDeleteCustomerContact() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contactId, customerId }: { contactId: string; customerId: string }) => {
+      const supabase = createClient();
+      const { count, error: countErr } = await supabase
+        .from("customer_contacts")
+        .select("id", { count: "exact", head: true })
+        .eq("customer_id", customerId);
+      if (countErr) throw countErr;
+      if ((count ?? 0) <= 1) {
+        throw new Error(
+          "This is the customer's only contact — add another one first, then remove this.",
+        );
+      }
+      /* UNLINKS, it does not delete the person. Since 18 Sep 2026 the same human may
+         serve other customers, and deleting the contact row would remove them from
+         those too — taking their invoices' recipient with it. The person stays in the
+         address book; only this relationship ends. */
+      const { error } = await supabase
+        .from("customer_contacts")
+        .delete()
+        .eq("customer_id", customerId)
+        .eq("contact_id", contactId);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["contacts", "customer", v.customerId] });
+      qc.invalidateQueries({ queryKey: ["contacts", "all"] });
+      toast.success("Contact removed from this customer", {
+        description: "They are still in your contacts, and on any other customer they serve.",
+      });
+    },
+    onError: (err) => toast.error((err as Error).message, {
+      description: "Every customer must keep at least one contact.",
+    }),
+  });
+}
+
+/**
+ * The contact search index — who serves which customers, for the Customers and
+ * Subscriptions filters.
+ *
+ * Abhishek, 18 Sep 2026: "what if i have to filter customer and subscription who
+ * attached with single contact". One fetch, shared by both pages through the query
+ * cache, then matched in memory on every keystroke — see lib/contacts/search-index.ts
+ * for why it is an index and not a query per search.
+ *
+ * `staleTime` is generous on purpose: links change when somebody adds or moves a
+ * contact, which is rare next to how often these two pages are opened, and every
+ * mutation that touches them already invalidates ["contacts", ...].
+ */
+export function useContactSearchIndex() {
+  return useQuery({
+    queryKey: ["contacts", "search-index"],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<ContactSearchIndex> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("customer_contacts")
+        .select("customer_id, contact_id, contacts(id, full_name, email, phone)");
+      /* Throwing would take the whole customer list down with it — the pages render
+         fine without contact matching, they just cannot search by person. Logged so the
+         gap is visible rather than mysterious. */
+      if (error) {
+        console.warn("[contacts] contact search index unavailable:", error.message);
+        return buildContactSearchIndex([]);
+      }
+      return buildContactSearchIndex((data ?? []) as unknown as ContactLinkRow[]);
+    },
   });
 }

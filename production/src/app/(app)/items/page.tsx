@@ -22,6 +22,7 @@ import { Card } from "@/components/ui/card";
 import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
+import { catalogCostCoverage } from "@/lib/catalog/cost-coverage";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -34,6 +35,7 @@ import { rupee } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type { Item, PartnerCatalogRow, TenantWithParent } from "@/lib/supabase/database.types";
+import { newestFirst } from "@/lib/sort/newest-first";
 
 const VENDOR_TABS: TabBarItem[] = [
   { id: "all",       label: "All" },
@@ -121,14 +123,19 @@ export default function ItemsPage() {
     return it.name.toLowerCase().includes(s) || it.id.toLowerCase().includes(s);
   };
 
+  /* Newest first, like every other table (Abhishek, 18 Sep 2026). `useItems` still
+     fetches by vendor then price, because the SAME hook fills the plan dropdown in the
+     Add Subscription dialog — there you are looking for a plan you already have in mind,
+     and cheapest-to-dearest within a vendor is the order that helps. Reordering the
+     query would have fixed this page and quietly damaged that picker. */
   // Filter (subscription catalog)
-  const filtered = subItems.filter((it) => {
+  const filtered = newestFirst(subItems.filter((it) => {
     if (vendor !== "all" && it.vendor !== vendor) return false;
     if (kind   !== "all" && it.kind   !== kind)   return false;
     return matchesSearch(it);
-  });
+  }));
 
-  const filteredOneTime = oneTimeItems.filter(matchesSearch);
+  const filteredOneTime = newestFirst(oneTimeItems.filter(matchesSearch));
 
   // Tab counts (subscription only)
   const counts: Record<string, number> = { all: subItems.length };
@@ -151,10 +158,20 @@ export default function ItemsPage() {
 
   // Aggregates (subscription)
   const active = subItems.filter((i) => i.is_active);
-  const avgMargin =
-    active.length > 0
-      ? Math.round(active.reduce((s, i) => s + i.margin_pct, 0) / active.length)
-      : 0;
+
+  /* ── Items with NO vendor cost recorded ────────────────────────────────────
+     A wholesale of 0 is not a free product — it is a product nobody has told the
+     app the cost of. Reported 12 Sep 2026 from the other end: /subscriptions says
+     "10 subscriptions cannot be checked — no wholesale price in the catalog", and
+     THIS page, the one you come to in order to fix that, showed a plain "₹0" with
+     nothing marking it.
+
+     It also silently corrupted the headline: margin_pct on a zero-cost row is 100%,
+     so the average below counted those rows as perfect and read healthy while the
+     margin engine was blind. They are excluded from the average now and counted
+     separately — an average over the rows we actually know is a real number; an
+     average that quietly includes invented ones is not. */
+  const { priced, unpriced, avgMarginPct: avgMargin } = catalogCostCoverage(active);
   const totalMrr =
     active.length > 0
       ? Math.round(active.reduce((s, i) => s + (i.msrp - i.wholesale), 0) / active.length)
@@ -239,10 +256,36 @@ export default function ItemsPage() {
           items={[
             { label: "Items", value: subItems.length },
             { label: "Active", value: active.length, tone: "emerald" },
-            { label: "Avg margin", value: `${avgMargin}%`, tone: avgMargin >= 18 ? "emerald" : avgMargin >= 14 ? "default" : "rose" },
+            /* Says what it is an average OF. "Avg margin 58%" over a set that silently
+               excluded a third of the catalogue would be the same lie in a new place. */
+            {
+              label: unpriced.length > 0 ? `Avg margin (${priced.length} priced)` : "Avg margin",
+              value: `${avgMargin}%`,
+              tone: avgMargin >= 18 ? "emerald" : avgMargin >= 14 ? "default" : "rose",
+            },
             { label: "Avg margin ₹/seat", value: rupee(totalMrr) },
           ]}
         />
+      )}
+
+      {/* ── No cost price = no margin, anywhere in the app ─────────────────────
+          Not a nag: this is the page that fixes the warning /subscriptions shows, and
+          until 12 Sep 2026 there was nothing here connecting the two. Named products,
+          because "some items are missing costs" sends the operator hunting. */}
+      {!isLoading && unpriced.length > 0 && (
+        <div className="rounded-xl border border-amber/40 bg-amber-soft/40 p-4">
+          <p className="text-sm font-semibold text-amber-ink flex items-center gap-1.5">
+            <Icon name="alert" size={15} />
+            {unpriced.length} {unpriced.length === 1 ? "product has" : "products have"} no cost price
+          </p>
+          <p className="mt-1 text-xs text-ink-2 leading-relaxed">
+            {unpriced.slice(0, 4).map((i) => i.name).join(", ")}
+            {unpriced.length > 4 ? ` and ${unpriced.length - 4} more` : ""}
+            {" — "}shown as ₹0 below. Their margin cannot be calculated, so the app cannot warn
+            you when one is sold below cost, and they are left out of the average above.
+            Edit each one and enter what your vendor charges you.
+          </p>
+        </div>
       )}
 
       {/* Filters — vendor + type as compact labelled chip rows (clear which is which) */}
@@ -412,7 +455,14 @@ export default function ItemsPage() {
                     </td>
                     <td className="p-3 font-mono text-xs text-ink-2">{it.hsn ?? "—"}</td>
                     <td className="p-3 text-right tabular-nums text-sm">{rupee(it.msrp)}</td>
-                    <td className="p-3 text-right tabular-nums text-sm text-ink-3">{rupee(it.wholesale)}</td>
+                    <td className="p-3 text-right tabular-nums text-sm text-ink-3">
+                      {/* "₹0" reads as a free product. It almost always means nobody has
+                          entered the vendor's price — and that is what blinds the margin
+                          check, so the cell has to say which of the two it is. */}
+                      {it.wholesale > 0
+                        ? rupee(it.wholesale)
+                        : <span className="text-amber-ink font-medium">Not set</span>}
+                    </td>
                     <td className="p-3 text-right">
                       <div className={cn(
                         "tabular-nums text-sm font-medium",
@@ -601,7 +651,14 @@ function OneTimeCatalog({
                   <td className="p-3 font-medium text-sm">{it.name}</td>
                   <td className="p-3 font-mono text-xs text-ink-2">{it.hsn ?? "—"}</td>
                   <td className="p-3 text-right tabular-nums text-sm">{rupee(it.msrp)}</td>
-                  <td className="p-3 text-right tabular-nums text-sm text-ink-3">{rupee(it.wholesale)}</td>
+                  <td className="p-3 text-right tabular-nums text-sm text-ink-3">
+                      {/* "₹0" reads as a free product. It almost always means nobody has
+                          entered the vendor's price — and that is what blinds the margin
+                          check, so the cell has to say which of the two it is. */}
+                      {it.wholesale > 0
+                        ? rupee(it.wholesale)
+                        : <span className="text-amber-ink font-medium">Not set</span>}
+                    </td>
                   <td className="p-3 text-right tabular-nums text-sm text-emerald">{rupee(margin)}</td>
                   <td className="p-3">{it.is_active ? <Badge kind="success" dot>Active</Badge> : <Badge kind="muted">Inactive</Badge>}</td>
                   <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>

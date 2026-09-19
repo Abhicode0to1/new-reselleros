@@ -18,6 +18,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { CONTACT_IMPORT_RETIRED, contactImportRetired } from "@/lib/contacts/retired";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -65,6 +66,11 @@ function normalizePerson(p: PeopleApiPerson): FetchedContact | null {
 }
 
 export async function GET() {
+  /* RETIRED 10 Sep 2026 — see lib/contacts/retired.ts. `contacts` is now only a
+     customer's people; anybody who is not a customer yet is a LEAD. Fails closed, so
+     no new address-book row can be written whatever still calls this. */
+  if (CONTACT_IMPORT_RETIRED) return contactImportRetired();
+
   const supabase = createClient();
   /* Pehchan getUser() se — wo JWT ko SERVER par verify karta hai; getSession()
      cookie par bharosa karta hai (middleware.ts:47 isi wajah se getUser hai —

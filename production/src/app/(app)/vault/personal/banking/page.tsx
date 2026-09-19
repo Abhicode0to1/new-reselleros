@@ -167,7 +167,7 @@ export default function PersonalBankingPage() {
         <p className="text-sm text-ink-3">
           Aapke apne bank account, card aur deposit. Company ke bank accounts alag hain.
         </p>
-        <Button onClick={openNew} className="bg-primary text-white flex-shrink-0">
+        <Button variant="primary" onClick={openNew} className="flex-shrink-0">
           <Icon name="plus" size={14} className="mr-1.5" />
           Account add karo
         </Button>
@@ -366,7 +366,7 @@ export default function PersonalBankingPage() {
 
           <div className="flex justify-end gap-2 pt-3">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} loading={save.isPending} className="bg-primary text-white">
+            <Button variant="primary" onClick={handleSave} loading={save.isPending}>
               {form.id ? "Update" : "Add"}
             </Button>
           </div>

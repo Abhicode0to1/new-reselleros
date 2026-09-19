@@ -6,6 +6,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+/* typedRoutes: `router.push("/leads")` is rejected at BUILD time only — tsc, vitest and
+   eslint all pass it. See CLAUDE.md §25.2. */
+import type { Route } from "next";
 import { toast } from "sonner";
 
 import { useAllContacts, contactKind, type ContactKind } from "@/lib/queries/contacts";
@@ -343,14 +346,17 @@ export default function ContactsPage() {
         </Card>
       )}
 
-      {/* Empty */}
+      {/* Empty. RETIRED 10 Sep 2026: this page left the nav when a customer's people
+          moved onto the customer itself, and CSV / Google import now fails closed (see
+          lib/contacts/retired.ts). An "Import CSV" button here would return 410 — a
+          dead end (§24) — so this points at the two places that DO take a new person. */}
       {!isLoading && !error && contacts && contacts.length === 0 && (
         <EmptyState
           icon="users"
-          title="No contacts yet"
-          body="Contacts also appear automatically as you add leads and customers — or add one directly."
-          action={<Button variant="primary" icon="plus" onClick={() => setAddOpen(true)}>Add contact</Button>}
-          secondary={<Button icon="upload" onClick={() => setImportOpen(true)}>Import CSV</Button>}
+          title="Nothing here"
+          body="This directory just reflects your leads and customers. A customer's people are managed on the customer's own page; anybody who is not a customer yet belongs in Sales & Pipeline."
+          action={<Button variant="primary" icon="users" onClick={() => router.push("/customers")}>Open Customers</Button>}
+          secondary={<Button icon="target" onClick={() => router.push("/leads" as Route)}>Open Sales &amp; Pipeline</Button>}
         />
       )}
 

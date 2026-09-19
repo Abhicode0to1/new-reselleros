@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { GroupFormDialog } from "@/components/features/customers/group-form-dialog";
 import { useCustomerGroups } from "@/lib/queries/customer-groups";
 import { useCustomers } from "@/lib/queries/customers";
+import { newestFirst } from "@/lib/sort/newest-first";
 
 export default function CustomerGroupsPage() {
   const router = useRouter();
@@ -64,7 +65,9 @@ export default function CustomerGroupsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {groups.map((g) => {
+          {/* Newest first, like every other table (Abhishek, 18 Sep 2026) — the group
+              you just created is the one you are looking for. */}
+          {newestFirst(groups).map((g) => {
             const count = countByGroup.get(g.id) ?? 0;
             return (
               <Card

@@ -37,6 +37,10 @@ import {
   type MrrPoint, type RetentionPoint, type RetentionVelocity,
 } from "@/lib/accounting/saas-charts";
 import { MrrTrendChart, RetentionVelocityChart } from "@/components/features/accounting/saas-metrics-charts";
+/* Moved here from /subscriptions, 12 Sep 2026 — it fills in the Expansion and
+   Contraction the waterfall above can only print as "Not tracked". */
+import { RetentionCard } from "@/components/features/subscriptions/retention-card";
+import { useMrrSnapshots } from "@/lib/queries/seat-requests";
 import { downloadCSV } from "@/lib/csv";
 import { printReport, reportFilename } from "@/lib/reports/print";
 import { rupee } from "@/lib/utils";
@@ -389,6 +393,11 @@ function useSaasMetrics() {
 
 export default function SaasMetricsPage() {
   const { data, isLoading } = useSaasMetrics();
+  /* The monthly snapshots the retention card compares. Written by the mrr-snapshot cron;
+     the card renders its own "not enough history yet" state when there are fewer than
+     two, which is the honest answer until that job has run twice. */
+  const { data: snapshotRows } = useMrrSnapshots();
+  const mrrSnapshots = React.useMemo(() => snapshotRows ?? [], [snapshotRows]);
 
   /**
    * CSV for the CA / board pack.
@@ -538,6 +547,20 @@ export default function SaasMetricsPage() {
           </Card>
 
           <WaterfallCard w={data.waterfall} />
+
+          {/* ── Retention, moved here from /subscriptions on 12 Sep 2026 ──────────
+              It sits directly under the waterfall because it is the SAME six-part
+              decomposition — and it is the honest version of it. The waterfall is
+              reconstructed from current `subscriptions` rows, so it can only print "Not
+              tracked" for Expansion and Contraction; this card compares two monthly
+              snapshots and therefore knows both.
+
+              It was on the Subscriptions page, which is an operating screen — a list you
+              work through. A period-over-period revenue comparison is not something you
+              act on there, and having half the decomposition on one page and half on
+              another is how two numbers about the same month end up disagreeing with
+              nobody noticing. */}
+          <RetentionCard snapshots={mrrSnapshots} />
 
           {/* The two charts. Placed after the waterfall and before the breakdowns, because
               the waterfall answers "what moved last month" and these answer "what has been

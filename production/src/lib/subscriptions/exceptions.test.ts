@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { subscriptionExceptions } from "./exceptions";
+import { subscriptionExceptions, type SubExceptionFields } from "./exceptions";
 
 /**
  * These branches do not render in production today — every one of the tenant's
@@ -158,8 +158,12 @@ describe("a subscription in real trouble", () => {
       suspended_at: "2026-08-01",
       written_off_at: null,
     });
+    /* `payment-due` sits immediately after `outstanding` on purpose: WHAT is owed
+       and WHEN it is due are one thought, and they were separated on screen until
+       11 Sep 2026 (the chip lived next to the customer name and lost the column to
+       long company names). */
     expect(flags.map((f) => f.key)).toEqual([
-      "auto_renew_off", "renewal_state", "outstanding", "low_utilisation", "suspended",
+      "auto_renew_off", "renewal_state", "outstanding", "payment-due", "low_utilisation", "suspended",
     ]);
     // The lapse warning leads, because it is the one nothing else will catch.
     expect(flags[0].key).toBe("auto_renew_off");
@@ -171,5 +175,62 @@ describe("a subscription in real trouble", () => {
       seats: 4, used: 1, suspended_at: "2026-08-01", written_off_at: "2026-08-02",
     });
     expect(new Set(flags.map((f) => f.key)).size).toBe(flags.length);
+  });
+});
+
+/**
+ * The payment-due flag — WHEN the money is due, beside WHAT is due.
+ *
+ * Moved here on 11 Sep 2026. It first shipped as a chip next to the customer's name,
+ * and Abhishek pointed out the obvious: a long company name and the chip compete for
+ * the same column, and the chip loses. Deciding it in this function instead means the
+ * table AND the mobile card both show it, and it is tested rather than eyeballed —
+ * which matters because, like every other branch here, it does not fire on most rows.
+ */
+describe("payment due date", () => {
+  const OWING = { ...HEALTHY, outstanding_amount: 26168 };
+  const keysOf = (f: SubExceptionFields) => subscriptionExceptions(f).map((x) => x.key);
+  const flag = (f: SubExceptionFields) =>
+    subscriptionExceptions(f).find((x) => x.key === "payment-due");
+
+  it("appears whenever money is owed", () => {
+    expect(keysOf(OWING)).toContain("payment-due");
+  });
+
+  it("does NOT appear when nothing is owed, even with a date on the record", () => {
+    /* The due date survives payment. A countdown against a settled balance is red
+       noise, and noise is what teaches an operator to ignore the colour. */
+    expect(keysOf({ ...HEALTHY, outstanding_amount: 0, payment_due_date: "2026-09-15" }))
+      .not.toContain("payment-due");
+  });
+
+  it("names the gap — and stays MUTED — when no date was agreed", () => {
+    /* Accesstel's case: money owed, no date, created before the column existed. A
+       missing agreement is a gap to fill, not an alarm to raise. */
+    const f = flag({ ...OWING, payment_due_date: null });
+    expect(f?.label).toBe("No payment due date");
+    expect(f?.tone).toBe("muted");
+    expect(f?.title).toMatch(/Correct subscription/);
+  });
+
+  it("turns DANGER once it is genuinely late", () => {
+    const f = flag({ ...OWING, payment_due_date: "2000-01-01" });
+    expect(f?.tone).toBe("danger");
+    expect(f?.label).toMatch(/^Payment .* overdue$/);
+  });
+
+  it("says PAY BY with the date for something due far ahead", () => {
+    const f = flag({ ...OWING, payment_due_date: "2099-12-31" });
+    expect(f?.label).toMatch(/^Pay by /);
+    expect(f?.tone).toBe("muted");   // quiet while it is not yet close
+  });
+
+  it("always names money, so it can never read as a renewal date", () => {
+    /* The reported defect: the row carries a renewal date in the next column, so a
+       bare "4 days left" beside it reads as another lifecycle date. */
+    for (const d of [null, "2000-01-01", "2099-12-31"]) {
+      expect(flag({ ...OWING, payment_due_date: d })?.label.toLowerCase())
+        .toMatch(/pay|payment/);
+    }
   });
 });

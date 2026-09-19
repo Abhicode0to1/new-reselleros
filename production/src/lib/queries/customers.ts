@@ -6,6 +6,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { attachPrimaryContact } from "@/lib/contacts/attach";
 import type { Customer, Database } from "@/lib/supabase/database.types";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
@@ -78,11 +79,57 @@ export function useCreateCustomer() {
         }
       }
 
+      /* ── A NEW CUSTOMER MUST HAVE A PERSON ON IT ──────────────────────────
+         Abhishek's rule, 18 Sep 2026: "without contact customer not created". Checked
+         before the insert, so the refusal costs nothing to undo. The form asks for this
+         too, but the form is one caller and this is the door every caller goes through. */
+      const personName = (input.contact_name ?? "").trim();
+      if (!personName) {
+        throw new Error(
+          "A contact person is required before a customer can be created. Fill in the contact's name, email and phone on the Contact Person section, then save again.",
+        );
+      }
+
       const { data, error } = await supabase
         .from("customers")
         .insert({ ...input, tenant_id: tenantId })
         .select()
         .single();
+
+      /* ── The new customer's mandatory PRIMARY CONTACT ─────────────────────
+         Since 10 Sep 2026 a customer's people live in `contacts`; since 18 Sep the
+         relationship lives in `customer_contacts`, and that is the ONLY table the
+         invoice and dunning recipient lookup reads. This used to write a `contacts` row
+         with `customer_id` set and no link — which looked right on the customer page and
+         was invisible to every path that sends money-related email.
+
+         `attachPrimaryContact` is the same writer the Add Subscription dialog uses, so
+         the two doors into "a customer exists" cannot drift apart again.
+
+         NOT best-effort any more. It used to warn and keep the customer, which is exactly
+         how a customer reaches the books with nobody to invoice. If the contact cannot be
+         written the customer is DELETED — it was created milliseconds ago by this same
+         call, nothing references it yet, so removing it leaves the books untouched. */
+      if (!error && data?.id) {
+        const outcome = await attachPrimaryContact(supabase, {
+          tenantId,
+          customerId: data.id,
+          name: personName,
+          email: input.contact_email ?? null,
+          phone: input.contact_phone ?? null,
+          role: "poc",
+          company: input.name ?? null,
+        });
+        if (outcome.kind === "failed") {
+          const { error: undoErr } = await supabase
+            .from("customers").delete().eq("id", data.id);
+          throw new Error(
+            undoErr
+              ? `${outcome.reason} The customer was created but could not be removed — open "${input.name ?? personName}" and add a contact to it.`
+              : `${outcome.reason} The customer was not created. Fix the contact details and save again.`,
+          );
+        }
+      }
 
       if (error) {
         console.warn("Dev mode customer insert warning:", error.message);

@@ -59,6 +59,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { rupee, formatDate, bankLabel, cleanDisplayName, cn } from "@/lib/utils";
+/* The postpaid countdown, shared with /subscriptions and the onboarding dialog. */
+import { paymentDueState, paymentDueChipLabel, todayIST } from "@/lib/subscriptions/payment-due";
 import { useConfirm } from "@/components/providers/confirm-provider";
 
 const STATUS_TABS: TabBarItem[] = [
@@ -359,6 +361,25 @@ function PaymentsPageInner() {
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-ink truncate">{o.customer_name}</p>
                         <p className="text-2xs text-ink-3 truncate mt-0.5">{o.plan}</p>
+                        {/* The postpaid credit clock — the SAME countdown the
+                            subscriptions list shows, from the same function, so the
+                            two screens cannot disagree about who is late.
+                            `days_outstanding` beside it answers a different question:
+                            how long the balance has existed, not when it was due. */}
+                        {(() => {
+                          const due = paymentDueState(o.payment_due_date, todayIST(), o.outstanding_amount);
+                          if (due.kind === "none") return null;
+                          return (
+                            <Badge
+                              kind={due.kind === "overdue" ? "danger" : due.kind === "upcoming" ? "muted" : "warning"}
+                              size="sm"
+                              className="mt-1"
+                              title={`Agreed due date ${formatDate(o.payment_due_date!)}`}
+                            >
+                              {paymentDueChipLabel(due, formatDate(o.payment_due_date!))}
+                            </Badge>
+                          );
+                        })()}
                       </div>
                       <div className="text-right shrink-0">
                         <p className="font-serif text-base tabular-nums text-rose">{rupee(o.outstanding_amount)}</p>

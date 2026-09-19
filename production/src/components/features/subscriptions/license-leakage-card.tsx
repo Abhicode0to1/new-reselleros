@@ -49,12 +49,54 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile }: {
   }, [subscriptions, catalog]);
 
   const totals = React.useMemo(() => leakageTotals(rows.map((r) => r.result)), [rows]);
+  const [open, setOpen] = React.useState(false);
+  /* Stable id so aria-controls points at something real — useId, not a hand-rolled
+     counter, because the card can appear more than once on a page. */
+  const bodyId = React.useId();
   const actionable = rows.filter((r) => r.result.kind === "under_billed" || r.result.kind === "over_billed");
 
   if (rows.length === 0) return null;
 
   return (
-    <Card title="License leakage" sub="Seats the vendor bills us for vs seats we bill the customer">
+    <Card
+      title="License leakage"
+      sub="Seats the vendor bills us for vs seats we bill the customer"
+      /* Collapsible, like the Revenue Analytics card above it — same words, same
+         chevrons, same open-by-default, because two collapsibles on one page that
+         behave differently is a small tax paid on every visit.
+
+         Starts CLOSED (Abhishek, 12 Sep 2026) — this page is opened to act on a
+         subscription, not to read analytics, and two tall panels pushed the list itself
+         below the fold. Safe to close ONLY because the collapsed header still states the
+         leak: see the summary line below. A panel that shut with nothing but its title
+         would hide the very number it exists to surface. */
+      actions={
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          className="flex items-center gap-1 text-xs font-semibold text-amber-ink hover:opacity-80 transition-opacity cursor-pointer"
+        >
+          <span>{open ? "Collapse" : "Expand"}</span>
+          <Icon name={open ? "chevron_up" : "chevron_down"} size={14} />
+        </button>
+      }
+    >
+      {/* Collapsed, the card still has to say whether there is anything to come back
+          for. A bare title tells the operator nothing, and "nothing to see" and "₹12,000
+          leaking, hidden" would look identical. */}
+      {!open && (
+        <p className="text-xs text-ink-2">
+          {totals.underBilledCount > 0 || totals.overBilledCount > 0
+            ? `${rupee(totals.underBilledMonthly)}/mo leaking · ${rupee(totals.overBilledMonthly)}/mo over-billed`
+            : totals.unknownCount > 0
+              ? `${totals.unknownCount} ${totals.unknownCount === 1 ? "subscription" : "subscriptions"} never checked against the vendor`
+              : "Nothing leaking"}
+        </p>
+      )}
+
+      <div id={bodyId} hidden={!open}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Figure
           label="Leaking (we pay, not billed)"
@@ -138,6 +180,7 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile }: {
           <Icon name="check_circle" size={14} /> Every active subscription matches the vendor.
         </p>
       )}
+      </div>
     </Card>
   );
 }

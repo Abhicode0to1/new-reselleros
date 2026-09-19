@@ -52,7 +52,10 @@ export function AmendmentHistory({ amendments, currentSeats }: {
 
   return (
     <div className="mt-4 border-t border-hairline pt-4">
-      <div className="flex items-baseline justify-between gap-2">
+      {/* Wraps rather than clips. On a narrow drawer these two lines do not fit side by
+          side, and a count that disappears off the edge is worse than one on its own
+          line — `flex-wrap` lets the caption drop under the label instead. */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
         <p className="text-2xs font-semibold uppercase tracking-wider text-ink-3">Contract changes</p>
         <span className="text-3xs text-ink-3">{amendments.length} recorded · cannot be edited</span>
       </div>

@@ -254,8 +254,18 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
                 <option value="Dr.">Dr.</option>
               </select>
             </FormField>
-            <FormField label="First name" htmlFor="contact_first_name">
-              <Input id="contact_first_name" placeholder="e.g. Rajesh" {...register("contact_first_name")} />
+            {/* Required on CREATE only. A customer needs one named human with an email
+                and a phone — they are who the invoice and the payment reminder go to
+                (Abhishek, 18 Sep 2026: "without contact customer not created"). Customers
+                already on the books predate the rule, so editing one is not blocked;
+                marking the field required there would be a promise the form does not
+                keep. */}
+            <FormField label="First name" htmlFor="contact_first_name" required={!isEdit}>
+              <Input
+                id="contact_first_name" placeholder="e.g. Rajesh"
+                error={errors.contact_first_name?.message}
+                {...register("contact_first_name")}
+              />
             </FormField>
             <FormField label="Last name" htmlFor="contact_last_name">
               <Input id="contact_last_name" placeholder="e.g. Kumar" {...register("contact_last_name")} />
@@ -266,7 +276,7 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
             <FormField label="Designation" htmlFor="contact_title">
               <Input id="contact_title" placeholder="e.g. CTO" {...register("contact_title")} />
             </FormField>
-            <FormField label="Email" htmlFor="contact_email">
+            <FormField label="Email" htmlFor="contact_email" required={!isEdit}>
               <Input
                 id="contact_email" type="email" placeholder="e.g. rajesh@acme.com"
                 error={errors.contact_email?.message}
@@ -278,9 +288,10 @@ export function AddCustomerForm({ open, onOpenChange, customer, onCreated }: Add
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <FormField label="Work phone" htmlFor="contact_phone">
+            <FormField label="Work phone" htmlFor="contact_phone" required={!isEdit}>
               <Input
                 id="contact_phone" inputMode="numeric" placeholder="e.g. +91 98765 43210"
+                error={errors.contact_phone?.message}
                 {...register("contact_phone")}
                 onChange={(e) => setValue("contact_phone", livePhone(e.target.value), { shouldDirty: true })}
                 onBlur={(e) => setValue("contact_phone", commitPhone(e.target.value), { shouldDirty: true })}

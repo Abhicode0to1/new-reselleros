@@ -9,19 +9,41 @@ import { useListKeys } from "@/lib/hooks/useKeyboard";
 import { KeyHintBar, ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
 import { useRouter } from "next/navigation";
 import { useSubscriptions, useSetSubscriptionDomain, useDeleteSubscription } from "@/lib/queries/subscriptions";
+import { useContactSearchIndex } from "@/lib/queries/contacts";
+import { customerMatchesContact } from "@/lib/contacts/search-index";
+import { newestFirst } from "@/lib/sort/newest-first";
 import { useActiveTrials } from "@/lib/queries/trials";
 import ExtendSubscriptionDialog from "@/components/features/subscriptions/extend-subscription-dialog";
 import AddSeatsDialog            from "@/components/features/subscriptions/add-seats-dialog";
 import { AddSubscriptionDialog } from "@/components/features/subscriptions/add-subscription-dialog";
+import { RecordPaymentDialog } from "@/components/features/quotes/record-payment-dialog";
+import type { QuoteLine } from "@/lib/subscriptions/orphan-quote";
+import type { QuoteLineItem } from "@/lib/supabase/database.types";
+import { createClient } from "@/lib/supabase/client";
+/* One countdown, shared with /payments and with the onboarding dialog's hint, so the
+   three cannot disagree about whether the same customer is late. */
+/* Only the row HIGHLIGHT is decided here — the chip itself moved into
+   subscriptionExceptions() on 11 Sep 2026 so the mobile card gets it too. */
+import { paymentDueState, todayIST } from "@/lib/subscriptions/payment-due";
+import type { Route } from "next";
+
+/** What onboarding hands over when the operator says the money has arrived. */
+interface PendingPaymentHandoff {
+  quoteId: string;
+  customerId: string;
+  customerName: string;
+  expectedAmount: number;
+  lineItems: QuoteLineItem[];
+  domain: string;
+}
 import { EditSubscriptionDialog } from "@/components/features/subscriptions/edit-subscription-dialog";
 import { BillingScheduleCard } from "@/components/features/subscriptions/billing-schedule-card";
 import { useItems } from "@/lib/queries/items";
 import { subscriptionCogs, cogsBadge, cogsTotals } from "@/lib/vendor/cogs";
 import { LicenseLeakageCard } from "@/components/features/subscriptions/license-leakage-card";
 import { SeatRequestsCard } from "@/components/features/subscriptions/seat-requests-card";
-import { useSeatRequests, useMrrSnapshots, useAmendments } from "@/lib/queries/seat-requests";
+import { useSeatRequests, useAmendments } from "@/lib/queries/seat-requests";
 import { AmendmentHistory } from "@/components/features/subscriptions/amendment-history";
-import { RetentionCard } from "@/components/features/subscriptions/retention-card";
 import { assessUtilisation } from "@/lib/subscriptions/utilisation";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { localDateISO } from "@/lib/leads/outcomes";
@@ -106,8 +128,6 @@ export default function SubscriptionsPage() {
   const catalog = React.useMemo(() => catalogItems ?? [], [catalogItems]);
   const { data: seatRequestRows, refetch: refetchRequests } = useSeatRequests({ pendingOnly: true });
   const seatRequests = React.useMemo(() => seatRequestRows ?? [], [seatRequestRows]);
-  const { data: snapshotRows } = useMrrSnapshots();
-  const mrrSnapshots = React.useMemo(() => snapshotRows ?? [], [snapshotRows]);
   const { data: trials } = useActiveTrials();
   /* ─── THE CONTRACTED ANNUAL, SO THE SCREEN STOPS INVENTING RUPEES ──────────
      `subscriptions` stores only a MONTHLY figure, so this page was rebuilding the annual
@@ -161,11 +181,107 @@ export default function SubscriptionsPage() {
   };
   const [importOpen,     setImportOpen]     = React.useState(false);
   const [addDirectOpen,  setAddDirectOpen]  = React.useState(false);
+  /** Set when onboarding chose "Payment Received" — carries what Record payment needs. */
+  const [pendingPayment, setPendingPayment] =
+    React.useState<PendingPaymentHandoff | null>(null);
+
+  /**
+   * Raise the GST invoice once the money is genuinely recorded.
+   *
+   * ─── WHY IT IS HERE AND NOT INSIDE THE PAYMENT SHEET ────────────────────────
+   * RecordPaymentDialog is opened from several screens. Making it issue a GST document
+   * on every success would change all of them at once — including the ones where an
+   * invoice already exists. This runs only on the onboarding path that asked for it.
+   *
+   * ─── ONLY WHEN FULLY PAID ───────────────────────────────────────────────────
+   * A part payment must not produce a tax invoice: the receipt voucher record_payment
+   * already issued is the correct document for an advance (CGST §31(3)(d)). Invoicing
+   * the whole amount against a partial receipt would overstate output GST for the
+   * period.
+   *
+   * ─── AND IT DOES NOT SEND ───────────────────────────────────────────────────
+   * Generated, not emailed — Abhishek's instruction, 9 Sep 2026. An invoice that leaves
+   * automatically is in the customer's inbox before anyone can notice a wrong amount,
+   * and a GST document cannot be recalled. Sending stays a deliberate click.
+   */
+  /**
+   * The payment sheet was closed WITHOUT recording anything.
+   *
+   * ─── WHY THIS HAS TO SAY SOMETHING ─────────────────────────────────────────
+   * The quote has to exist before the sheet opens — record_payment is given a quote id.
+   * So dismissing the sheet leaves an accepted quote awaiting payment with no payment
+   * and no subscription: a half-finished sale.
+   *
+   * Measured 9 Sep 2026 on real data: Q-2026-2884 (5 seats, ₹18,691) sat exactly like
+   * that for ten minutes while a second attempt was made, and NOTHING on any screen
+   * mentioned it. The quote is perfectly usable — recording the payment on it still
+   * creates the subscription — but only if the operator knows it is there.
+   *
+   * Deliberately does NOT delete it (§24 gives a way forward, not a cleanup): deleting
+   * a quote somebody may have already sent is worse than naming it.
+   */
+  /* The sheet calls onRecorded and THEN onOpenChange(false), so a successful payment
+     closes it too. Without this flag the close would be read as an abandonment and the
+     operator would get "no payment recorded" immediately after paying. A ref, not
+     state: it has to be true before the very next call in the same tick. */
+  const recordedRef = React.useRef(false);
+
+  const abandonPendingPayment = React.useCallback(() => {
+    const p = pendingPayment;
+    setPendingPayment(null);
+    if (recordedRef.current) { recordedRef.current = false; return; }
+    if (!p) return;
+    toast.warning(`No payment recorded — ${p.quoteId} is waiting, and no subscription was created yet`, {
+      description: `${p.customerName} · ${rupee(p.expectedAmount)} due. Record the payment on the quote to activate the subscription, or delete the quote if it was a mistake.`,
+      duration: 12000,
+      action: { label: "Open quote", onClick: () => router.push(`/quotes/${p.quoteId}` as Route) },
+    });
+    refetch();
+  }, [pendingPayment, refetch, router]);
+
+  const raiseInvoiceFor = React.useCallback(async (
+    quoteId: string,
+    res: { isFullyPaid: boolean },
+  ) => {
+    /* Set BEFORE anything else: the sheet closes right after this returns, and the
+       close handler must not mistake a completed payment for an abandoned one. */
+    recordedRef.current = true;
+    setPendingPayment(null);
+    if (!res.isFullyPaid) {
+      toast.info("Part payment recorded — the GST invoice is raised once the quote is fully paid.", {
+        duration: 7000,
+      });
+      refetch();
+      return;
+    }
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("generate_invoice", { p_quote_id: quoteId });
+    if (error) {
+      /* §24: say what happened, why, and where to finish it by hand. The money is
+         already safely recorded — only the document is missing, and the quote page can
+         raise it. Never a bare "failed". */
+      toast.error("Payment saved, but the GST invoice could not be raised", {
+        description: error.message,
+        action: { label: "Open quote", onClick: () => router.push(`/quotes/${quoteId}` as Route) },
+      });
+    } else {
+      toast.success(`GST invoice ${String(data ?? "")} raised · subscription is live 🎉`, {
+        description: "Not sent yet — open it to email or download the PDF.",
+        duration: 8000,
+        action: { label: "Open invoice", onClick: () => router.push("/invoices" as Route) },
+      });
+    }
+    refetch();
+  }, [refetch, router]);
   const [reconcileOpen,  setReconcileOpen]  = React.useState(false);
   const [auditOpen,      setAuditOpen]      = React.useState(false);
   const [helpOpen,       setHelpOpen]       = React.useState(false);
   const [addGoogleOpen,  setAddGoogleOpen]  = React.useState(false);
-  const [kpiOpen, setKpiOpen] = React.useState(true);
+  /* Both analytics cards start CLOSED (Abhishek, 12 Sep 2026). They are reference, not
+     the day's work: this page is opened to act on a subscription, and two tall panels
+     above the list pushed the table itself below the fold. Each collapsed header still
+     carries its own headline numbers, so nothing is hidden — only unstacked. */
+  const [kpiOpen, setKpiOpen] = React.useState(false);
   const [visible, setVisible] = React.useState(60);  // render cap — paginates large lists
   const today = new Date();
   /* One "today" for every folder decision on this page, in IST — a date derived per call
@@ -185,16 +301,30 @@ export default function SubscriptionsPage() {
 
      SUB_FOLDERS is a partition now: active | expiring | suspended | ended, every row in
      exactly one, summing to the total. See lib/subscriptions/folders.ts. */
+  /* Who serves which customers — lets the search box find a subscription by the person
+     you deal with. Shared with the Customers page through the query cache. */
+  const { data: contactIndex } = useContactSearchIndex();
+
   const filtered = subsByWorkspace.filter((s) => {
     if (tab === "trials") return false;  // trials handled in separate table below
     if (tab !== "all" && folderOf(s, todayISO) !== tab) return false;
     if (vendor !== "all" && s.vendor !== vendor) return false;
     if (search.trim()) {
-      const q = search.toLowerCase();
+      const q = search.toLowerCase().trim();
       if (
         !s.customer_name.toLowerCase().includes(q) &&
         !(s.domain?.toLowerCase().includes(q) ?? false) &&
-        !s.plan.toLowerCase().includes(q)
+        !s.plan.toLowerCase().includes(q) &&
+        /* ── SEARCH BY THE PERSON, NOT ONLY THE COMPANY ────────────────────
+           Abhishek, 18 Sep 2026: "filter customer and subscription who attached with
+           single contact". This page knew nothing about contacts at all, so the only
+           way to see everything one person looks after was to remember every company
+           they are on — which is exactly the thing a person cannot do, and the reason
+           a contact may now serve several customers in the first place.
+
+           Matched through the customer, because a subscription belongs to a company
+           and the person is attached to the company, not to the plan. */
+        !(contactIndex && s.customer_id ? customerMatchesContact(contactIndex, s.customer_id, q) : false)
       ) {
         return false;
       }
@@ -202,9 +332,23 @@ export default function SubscriptionsPage() {
     return true;
   });
 
+  /* ── Newest first, except in Expiring ─────────────────────────────────────
+     `useSubscriptions` fetches in renewal-date order, which is right for the dashboard
+     and for anything asking "what is coming up". On this table the question is usually
+     "where is the one I just created", so the default is creation order — Abhishek,
+     18 Sep 2026, for every table in the app.
+
+     The Expiring folder keeps renewal order, because that folder IS the deadline view:
+     its whole reason to exist is what runs out soonest, and burying next week's renewal
+     under a subscription created this morning would defeat it. */
+  const ordered = React.useMemo(
+    () => (tab === "expiring" ? filtered : newestFirst(filtered)),
+    [filtered, tab],
+  );
+
   // Render only the first `visible` rows — avoids hanging on 800+ subscriptions.
-  const shown = filtered.slice(0, visible);
-  const hasMore = filtered.length > shown.length;
+  const shown = ordered.slice(0, visible);
+  const hasMore = ordered.length > shown.length;
   React.useEffect(() => { setVisible(60); }, [tab, vendor, search]);
 
   // Trial-specific filter (for the Trials tab)
@@ -308,7 +452,7 @@ export default function SubscriptionsPage() {
             onClick={() => setAddDirectOpen(true)}
             title="1-Click Onboard Subscription: Auto-syncs Customer CRM, Quote/Invoice & Active Subscription"
           >
-            ➕ Add Subscription
+            Add Subscription
           </Button>
           <Button icon="refresh" onClick={() => setReconcileOpen(true)}>Reconcile Google</Button>
           {/* The vendor-console audit. Distinct from "Reconcile Google", which pulls seats
@@ -423,9 +567,11 @@ export default function SubscriptionsPage() {
         />
       )}
 
-      {/* How much of last month's revenue survived. Says so honestly until the
-          monthly snapshot has run twice. */}
-      {!isLoading && <RetentionCard snapshots={mrrSnapshots} />}
+      {/* Revenue retention MOVED to Accounting → SaaS Metrics on 12 Sep 2026. That page
+          already carries the same six-part decomposition in its MRR waterfall and can only
+          print "Not tracked" for Expansion and Contraction; this card supplies both, so the
+          two belong together. Subscriptions is an operating list — a period-over-period
+          revenue comparison is not something anybody acts on here. */}
 
       {/* Seats the vendor bills us for vs seats we bill the customer. */}
       {!isLoading && subsByWorkspace.length > 0 && (
@@ -491,6 +637,11 @@ export default function SubscriptionsPage() {
         <div className="sticky top-[56px] z-20 bg-paper/95 backdrop-blur-md py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 mb-4 border-b border-hairline transition-all space-y-3">
           <TabBar className="overflow-y-hidden" value={tab} onChange={setTab} items={tabs} />
           <div className="flex justify-between items-center gap-3 flex-wrap">
+            {/* Vendor pills and search sit TOGETHER on the left — they are one act
+                ("narrow the list"), and `justify-between` across three children used to
+                strand the search box alone in the middle of the bar. Export stays right:
+                it acts on the result, not on the filtering. */}
+            <div className="flex items-center gap-3 flex-wrap flex-1 min-w-0">
             <div className="inline-flex gap-1 bg-paper-2 rounded-md p-0.5">
               {[
                 { value: "all", label: "All Vendors" },
@@ -513,10 +664,11 @@ export default function SubscriptionsPage() {
             <div className="w-full sm:w-64">
               <Input
                 prefix={<Icon name="search" size={14} />}
-                placeholder="Customer, plan, domain…"
+                placeholder="Customer, contact, plan, domain…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+            </div>
             </div>
             {/* Data-portability (audit B7). */}
             <Button
@@ -686,6 +838,9 @@ export default function SubscriptionsPage() {
                   const dl = daysUntil(s.renewal_date);
                   const t  = term(s.start_date, s.renewal_date);
                   const isUrgent = dl !== null && dl >= 0 && dl <= 30;
+                  /* Postpaid credit clock. `none` for everything else, so prepaid rows
+                     and pre-10-Sep-2026 rows look exactly as they did. */
+                  const due = paymentDueState(s.payment_due_date, todayIST(), s.outstanding_amount ?? 0);
                   const kbSelected = rowIndex === subKeys.index;
                   return (
                     <tr
@@ -698,7 +853,13 @@ export default function SubscriptionsPage() {
                         "group border-b border-hairline last:border-0 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset",
                         kbSelected
                           ? "bg-amber-soft/60 ring-1 ring-inset ring-amber/40"
-                          : "hover:bg-paper-2/50",
+                          /* Overdue postpaid stays lit for as long as the balance is
+                             owed. A row that fades back into the list is the exact
+                             problem this feature exists to fix. Keyboard selection
+                             still wins, so the operator never loses their place. */
+                          : due.highlight
+                            ? "bg-rose-soft/40 hover:bg-rose-soft/60"
+                            : "hover:bg-paper-2/50",
                       )}
                       role="button"
                       tabIndex={0}
@@ -706,13 +867,21 @@ export default function SubscriptionsPage() {
                       onClick={() => s.customer_id && router.push(`/customers/${s.customer_id}` as never)}
                       onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && s.customer_id) { e.preventDefault(); router.push(`/customers/${s.customer_id}` as never); } }}
                     >
-                      <td className="px-3 py-2.5 align-top" onClick={(e) => e.stopPropagation()}>
+                      {/* align-middle on EVERY cell in this row, not align-top.
+                          A postpaid subscription stacks three badges in the Status
+                          column — Active · ₹ due · Pay by — which makes the row taller
+                          than its neighbours. With align-top the customer name, plan,
+                          seats, MRR and dates all clung to the top of that taller row
+                          and left a band of empty space beneath them (reported 11 Sep
+                          2026). Centring them vertically makes a tall row read as one
+                          line of information rather than a half-filled box. */}
+                      <td className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
                         <div className="font-medium text-sm text-ink break-words leading-snug flex items-center gap-2 flex-wrap">
                           <span>{cleanDisplayName(s.customer_name)}</span>
                         </div>
                         <DomainCell sub={s} />
                       </td>
-                      <td className="px-3 py-2.5 text-sm text-ink-2 align-top">
+                      <td className="px-3 py-2.5 text-sm text-ink-2 align-middle">
                         <div className="break-words leading-snug">{s.plan}</div>
                         {t && (
                           <Badge kind="muted" size="sm" className="mt-1"
@@ -721,7 +890,7 @@ export default function SubscriptionsPage() {
                           </Badge>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 align-top">
+                      <td className="px-3 py-2.5 align-middle">
                         {(() => { const vm = vendorMeta(s.vendor); return <Badge kind={vm.kind} dot>{vm.label}</Badge>; })()}
                       </td>
                       {/* Seats — used / licensed; flag low utilisation (unused
@@ -731,7 +900,7 @@ export default function SubscriptionsPage() {
                           licences that are almost certainly in use. assessUtilisation()
                           treats an unsynced zero as UNKNOWN and says so in the tooltip
                           — see lib/subscriptions/utilisation.ts. */}
-                      <td className="px-3 py-2.5 text-right tabular-nums text-sm align-top" title={util.message}>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-sm align-middle" title={util.message}>
                         <span className={cn(
                           util.level === "idle" ? "text-rose font-medium"
                             : util.level === "low" ? "text-amber-ink font-medium"
@@ -746,11 +915,11 @@ export default function SubscriptionsPage() {
                         )}
                       </td>
                       {/* MRR — the money, given weight. */}
-                      <td className="px-3 py-2.5 text-right tabular-nums align-top">
+                      <td className="px-3 py-2.5 text-right tabular-nums align-middle">
                         <span className="font-serif text-[15px] font-semibold text-ink">{rupee(s.mrr)}</span>
                       </td>
                       {/* Margin — colour-coded badge. */}
-                      <td className="px-3 py-2.5 text-right align-top">
+                      <td className="px-3 py-2.5 text-right align-middle">
                         <div className="flex flex-col items-end gap-0.5">
                           {/* The tooltip carries the SOURCE. A catalogue estimate and a
                               vendor-billed figure look identical on screen and are not
@@ -764,8 +933,8 @@ export default function SubscriptionsPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-sm text-ink-2 align-top whitespace-nowrap">{s.start_date ? formatDate(s.start_date) : "—"}</td>
-                      <td className="px-3 py-2.5 text-sm align-top whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-sm text-ink-2 align-middle whitespace-nowrap">{s.start_date ? formatDate(s.start_date) : "—"}</td>
+                      <td className="px-3 py-2.5 text-sm align-middle whitespace-nowrap">
                         <div className="text-ink-2">{s.renewal_date ? formatDate(s.renewal_date) : "—"}</div>
                         {dl !== null && s.status !== "expired" && dl >= 0 && dl <= 30 ? (
                           <div className="mt-0.5"><Badge kind={dl <= 7 ? "danger" : "warning"} dot>{dl === 0 ? "Due today" : `In ${dl}d`}</Badge></div>
@@ -775,7 +944,7 @@ export default function SubscriptionsPage() {
                           <div className="mt-0.5 text-2xs text-ink-3 tabular-nums">{renewalDistance(dl)}</div>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2.5 align-top">
+                      <td className="px-3 py-2.5 align-middle">
                         {s.status === "expired" && dl !== null ? (
                           <Badge kind="danger" dot>Expired {Math.abs(dl)}d</Badge>
                         ) : s.status === "active" ? (
@@ -790,7 +959,7 @@ export default function SubscriptionsPage() {
                           <SubExceptions sub={s} size="md" />
                         </div>
                       </td>
-                      <td className="px-2 py-2.5 text-right align-top" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-2 py-2.5 text-right align-middle" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           {(s.status === "expired" || isUrgent) && (
                             <Button size="sm" variant={s.status === "expired" ? "danger" : "primary"} icon="refresh" title="Send the renewal quote" onClick={() => router.push("/renewals" as never)}>Renew</Button>
@@ -1038,11 +1207,21 @@ export default function SubscriptionsPage() {
                 {scheduleSub.plan}{scheduleSub.domain ? ` · ${scheduleSub.domain}` : ""}
               </SheetDescription>
             </SheetHeader>
-            <BillingScheduleCard subscription={scheduleSub} todayISO={localDateISO(new Date())} />
-            {/* The contract's own history, next to its schedule — the two questions a
-                rep opens this drawer with are "what will they be billed?" and "what
-                changed?". */}
-            <AmendmentHistorySection subscription={scheduleSub} />
+            {/* ── The body carries its own padding ──────────────────────────────
+                SheetContent has NO horizontal padding — SheetHeader brings its own p-6
+                and BillingScheduleCard is a Card, so both looked fine while the
+                amendment list, which is neither, ran flush into the right edge and
+                clipped "1 recorded · cannot be edited". Reported 11 Sep 2026.
+                Padded here rather than on the shared primitive: other sheets lay out
+                their own edge-to-edge content and would gain an indent nobody asked
+                for. */}
+            <div className="px-6 pb-6">
+              <BillingScheduleCard subscription={scheduleSub} todayISO={localDateISO(new Date())} />
+              {/* The contract's own history, next to its schedule — the two questions a
+                  rep opens this drawer with are "what will they be billed?" and "what
+                  changed?". */}
+              <AmendmentHistorySection subscription={scheduleSub} />
+            </div>
           </SheetContent>
         </Sheet>
       )}
@@ -1101,43 +1280,42 @@ export default function SubscriptionsPage() {
       <KeyHintBar visible={subKeys.index >= 0} onShowHelp={() => setHelpOpen(true)} />
       <ShortcutsSheet open={helpOpen} onOpenChange={setHelpOpen} />
 
-      {/* Real analytics card — MRR by plan. (The "Vendor Reconciliation ·
-          Not configured · Phase 2" placeholder that used to sit beside this was
-          removed — a dead card the owner can't act on.) */}
-      {!isLoading && subs && subs.length > 0 && (
-        <div className="mt-6 max-w-xl">
-          <Card title="Subscriptions by Plan">
-            {(() => {
-              const byPlan = new Map<string, { count: number; mrr: number }>();
-              for (const s of activeSubs) {
-                const prev = byPlan.get(s.plan) ?? { count: 0, mrr: 0 };
-                byPlan.set(s.plan, { count: prev.count + 1, mrr: prev.mrr + s.mrr });
-              }
-              const rows = Array.from(byPlan.entries()).sort(([, a], [, b]) => b.mrr - a.mrr);
-              if (rows.length === 0) return <p className="text-xs italic text-ink-3 p-2">No active subscriptions.</p>;
-              return (
-                <div className="space-y-2">
-                  {rows.map(([plan, info]) => (
-                    <div key={plan} className="flex justify-between items-center text-sm">
-                      <span className="truncate">{plan}</span>
-                      <span className="tabular-nums text-ink-2">
-                        {info.count} · {rupee(info.mrr, { compact: true })}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </Card>
-        </div>
-      )}
+      {/* "Subscriptions by Plan" was REMOVED here on 12 Sep 2026 — not moved.
+          Accounting → SaaS Metrics already carries "MRR by tier", which is the same
+          breakdown done properly: it normalises the plan text through tierFromPlan, so
+          Workspace Starter is ONE row. This card grouped on the raw `plan` string, and
+          because the seat count is baked into that string it split a single product four
+          ways — "Google Workspace Starter", "… (1 seats)", "… (2 seats)", "… (5 seats)" —
+          making the catalogue look like seven products when it is about four, and hiding
+          that Starter is the biggest line by customer count. A breakdown that
+          miscounts is worse than no breakdown. */}
 
       {/* 1-Click Onboard Subscription Modal */}
       <AddSubscriptionDialog
         open={addDirectOpen}
         onOpenChange={setAddDirectOpen}
         onSuccess={refetch}
+        /* "Payment Received" hands off here instead of creating the subscription
+           itself — record_payment does that, atomically, along with the receipt
+           voucher and the ledger entries. See Step 3a in the dialog. */
+        onNeedsPayment={setPendingPayment}
       />
+
+      {/* Record payment — opened by the onboarding dialog's "Payment Received" path. */}
+      {pendingPayment && (
+        <RecordPaymentDialog
+          open
+          onOpenChange={(o) => { if (!o) abandonPendingPayment(); }}
+          quoteId={pendingPayment.quoteId}
+          customerId={pendingPayment.customerId}
+          customerName={pendingPayment.customerName}
+          expectedAmount={pendingPayment.expectedAmount}
+          lineItems={pendingPayment.lineItems as unknown as QuoteLine[]}
+          askDomain
+          defaultDomain={pendingPayment.domain}
+          onRecorded={(res) => raiseInvoiceFor(pendingPayment.quoteId, res)}
+        />
+      )}
 
       {/* Mobile primary FAB */}
       <FAB icon="plus" label="Add Subscription" onClick={() => setAddDirectOpen(true)} />

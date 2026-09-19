@@ -17,7 +17,7 @@
  * Any multi-year discount is already inside the agreed mrr.
  */
 import type { Subscription } from "@/lib/supabase/database.types";
-import { buildBillingSchedule, upcomingBillings, type BillingPeriod } from "./schedule";
+import { buildBillingSchedule, upcomingBillings, nextTermStart, type BillingPeriod } from "./schedule";
 
 /** How far ahead the renewal cron shows what is coming. Matches the T-30 heads-up. */
 export const BILLING_LOOKAHEAD_DAYS = 30;
@@ -35,6 +35,11 @@ type ScheduleFields = Pick<Subscription, "mrr" | "billing_cycle" | "term_months"
  * schedule from there would bill a term that ended in 2023. Falls back to start_date
  * only when there is no renewal date at all, and returns an empty schedule rather
  * than guessing when there is neither.
+ *
+ * `renewal_date` is the INCLUSIVE last covered day since 11 Sep 2026, so the term's
+ * start is measured from the day AFTER it — see the block above nextTermStart in
+ * schedule.ts. Subtracting the months from the stored date directly would start the
+ * term one day early and bill a day the customer never had.
  */
 export function subscriptionSchedule(sub: ScheduleFields): BillingPeriod[] {
   const termMonths = Math.max(1, sub.term_months ?? 12);
@@ -43,7 +48,7 @@ export function subscriptionSchedule(sub: ScheduleFields): BillingPeriod[] {
 
   let start: string | null = null;
   if (sub.renewal_date) {
-    start = addMonths(sub.renewal_date.slice(0, 10), -termMonths);
+    start = addMonths(nextTermStart(sub.renewal_date), -termMonths);
   } else if (sub.start_date) {
     start = sub.start_date.slice(0, 10);
   }
@@ -52,14 +57,20 @@ export function subscriptionSchedule(sub: ScheduleFields): BillingPeriod[] {
   return buildBillingSchedule({ startDate: start, termMonths, cycle, termAmount });
 }
 
-/** The NEXT term — what the customer is being asked to renew into. */
+/**
+ * The NEXT term — what the customer is being asked to renew into.
+ *
+ * Begins the day AFTER the stored date. Passing `renewal_date` in as the start would
+ * make term two open on the last day of term one — one day sold twice, on every
+ * renewal of every subscription.
+ */
 export function nextTermSchedule(sub: ScheduleFields): BillingPeriod[] {
   if (!sub.renewal_date) return [];
   const termMonths = Math.max(1, sub.term_months ?? 12);
   const termAmount = Math.max(0, Math.round((sub.mrr ?? 0) * termMonths));
   if (termAmount <= 0) return [];
   return buildBillingSchedule({
-    startDate: sub.renewal_date.slice(0, 10),
+    startDate: nextTermStart(sub.renewal_date),
     termMonths,
     cycle: sub.billing_cycle ?? "yearly",
     termAmount,
