@@ -38,12 +38,25 @@
 import { reportCron } from "@/lib/ops/cron-report";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { platformOpsRecipient } from "@/lib/ops/ops-recipient";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { sendEmail } from "@/lib/email/send";
-import { buildDigest, digestText, type LogRow } from "@/lib/ops/health-digest";
+import { buildDigest, digestText, type LogRow, type WalletState } from "@/lib/ops/health-digest";
+import { rcResellerAccount } from "@/lib/resellerclub/reseller";
+import { rcWriteConfigured } from "@/lib/resellerclub/call";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/**
+ * Wallet is se neeche ho to khabar bhejo.
+ *
+ * YE NAAPA HUA NAHI HAI — shuruaati anumaan hai: ek .com reseller cost par
+ * takreeban ₹1000 hai, to ₹5000 matlab "abhi bhi paanch registration ki
+ * gunjaish". Pehli baar email aane ke baad Pardeep ke hisaab se badal lena —
+ * `RESELLERCLUB_LOW_BALANCE_INR` se bina deploy badalta hai.
+ */
+const LOW_BALANCE_FLOOR_INR = Number(process.env.RESELLERCLUB_LOW_BALANCE_INR ?? "5000") || 5000;
 
 const PROJECT = "resellsubsos-prod";
 const SERVICE = "resellersos";
@@ -143,17 +156,28 @@ async function handle(req: Request) {
     }, { status: 403 });
   }
 
-  const digest = buildDigest(hours, { http: toRows(http), stderr: toRows(stderr) });
+  /* RC wallet — roz ek baar, isi digest ke saath. Alag cron nahi banaya: sawaal
+     wahi hai ("kuch bigda hai?"), aur ye digest chup rehna jaanta hai. Credential
+     na ho (har local machine) to jaancha hi nahi jaata — null, aur us par chup. */
+  const wallet: WalletState | null = rcWriteConfigured()
+    ? await (async () => {
+        const out = await rcResellerAccount();
+        return out.kind === "read"
+          ? { available: out.account.availableBalance, floor: LOW_BALANCE_FLOOR_INR }
+          : { available: null, floor: LOW_BALANCE_FLOOR_INR, reason: out.reason };
+      })()
+    : null;
+
+  const digest = buildDigest(hours, { http: toRows(http), stderr: toRows(stderr) }, wallet);
 
   if (digest.clean) return NextResponse.json({ ok: true, clean: true, hours });
 
-  /* Kise bhejein: is tenant ka owner. Ek hi tenant ka digest — ye ops ka mail hai, tenant
-     ka nahi, isliye platform ke owner par jata hai. */
+  /* Kise bhejein: PLATFORM ka owner — ye ops ka mail hai, kisi tenant ka nahi, aur ab
+     isme ResellerClub ka wallet balance bhi jata hai. Pehle yahan "sabse purana owner row"
+     tha, bina tenant filter ke; har self-signup ek owner banata hai, to wo sirf ittefaq se
+     platform tha. lib/ops/ops-recipient.ts me poori wajah. */
   const admin = createAdminClient();
-  const { data: owner } = await admin
-    .from("users").select("email").eq("role", "owner")
-    .order("created_at", { ascending: true }).limit(1).maybeSingle();
-  const to = (owner as { email?: string } | null)?.email ?? null;
+  const to = await platformOpsRecipient(admin);
   if (!to) {
     return NextResponse.json({ ok: true, clean: false, emailed: false, reason: "no owner email", digest });
   }

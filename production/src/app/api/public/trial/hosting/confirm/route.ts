@@ -9,11 +9,14 @@
  * it redirects to a friendly page; it never shows a raw error or a token.
  *
  * ─── The live-provisioning gate ─────────────────────────────────────────────
- * Creating a real account is irreversible, so it fires ONLY when
- * HOSTING_TRIAL_LIVE=1 is set on the server (the ALLOW_*-style switch). Until
- * that flag is flipped — after a controlled test account is created and deleted
- * by hand, on Pardeep's go — every confirmation falls through to the
- * notify-owner path, so the whole flow can ship and be exercised safely first.
+ * Creating a real account is irreversible, so it fires only when the
+ * `HOSTING_TRIAL_LIVE` gate is open AND DirectAdmin credentials are present.
+ * This paragraph used to say the flag had to be set to 1; that was inverted on
+ * 11 Sep 2026 (lib/provisioning/live-gates.ts) and the flag now DEFAULTS TO
+ * OPEN — unset, empty or unrecognised all mean allowed outside a test run.
+ * Credentials are what is left holding it, and on this machine the flag is
+ * additionally set off by hand. With the gate shut every confirmation falls
+ * through to the notify-owner path.
  *
  * Idempotency: daCreateAccount refuses if the account already exists, so a link
  * clicked twice cannot create two accounts.
@@ -23,7 +26,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { verifyTrialToken } from "@/lib/hosting/trial-token";
-import { daCreateAccount, daWriteConfigured, genUsername, genPassword } from "@/lib/directadmin/provision";
+import { daCreateAccount, genUsername, genPassword } from "@/lib/directadmin/provision";
+import { hostingProvisioningEnabled } from "@/lib/directadmin/provision";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -62,7 +66,7 @@ export async function GET(req: NextRequest) {
   const email = lead.contact_email || "";
   const firstName = (lead.contact_name || "there").split(" ")[0];
 
-  const canProvision = process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured() && domain.length >= 3;
+  const canProvision = hostingProvisioningEnabled() && domain.length >= 3;
 
   // Re-anchor the trial clock to confirmation time (the 15 days start now).
   const startedAt = new Date();

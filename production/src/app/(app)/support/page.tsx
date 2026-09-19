@@ -67,6 +67,7 @@ function SlaBadge({ tier, dueAt, respondedAt }: {
   );
 }
 import type { SupportTicketRow, SupportTicketStatus } from "@/lib/supabase/database.types";
+import { useHandRolledModal } from "@/lib/hooks/useHandRolledModal";
 
 export type ViewScope = "all" | "tenant_feedback" | "team_testing";
 
@@ -120,6 +121,13 @@ export default function SupportPage() {
   const [scope, setScope] = React.useState<ViewScope>("tenant_feedback");
   const [statusFilter, setStatusFilter] = React.useState<"all" | SupportTicketStatus>("all");
   const [selected, setSelected] = React.useState<SupportTicketRow | null>(null);
+
+  /* Hand-written overlay rather than <Dialog>: Escape, the isDialogOpen()
+     guard and focus placement all come from the hook. */
+  const ticketModalRef = useHandRolledModal<HTMLDivElement>(
+    () => setSelected(null),
+    Boolean(selected),
+  );
 
   /* ── Request a live 1-on-1 call ────────────────────────────────────────────
      The plan check lives in /api/support/call-request, not here. This only asks
@@ -256,7 +264,7 @@ export default function SupportPage() {
             <Icon name="bug" size={15} />
             <span>🐛 Bug Reports &amp; Testing</span>
             {scopeCounts.team_testing > 0 && (
-              <span className="text-3xs px-1.5 py-0.5 rounded-full bg-rose text-white font-bold">
+              <span className="text-3xs px-1.5 py-0.5 rounded-full bg-rose text-rose-fg font-bold">
                 {scopeCounts.team_testing}
               </span>
             )}
@@ -420,7 +428,10 @@ export default function SupportPage() {
       {/* Ticket Detail Modal — opens when any bug/ticket card is clicked */}
       {selected && (
         <div
-          className="fixed inset-0 z-50 bg-ink/50 flex items-center justify-center p-4 backdrop-blur-xs overflow-y-auto"
+          ref={ticketModalRef}
+          tabIndex={-1}
+          data-state="open"
+          className="fixed inset-0 z-50 bg-ink/50 flex items-center justify-center p-4 backdrop-blur-xs overflow-y-auto outline-none"
           onClick={() => setSelected(null)}
           role="dialog"
           aria-modal="true"
@@ -539,7 +550,18 @@ export default function SupportPage() {
                       <div
                         key={idx}
                         onClick={() => setPreviewImage({ name: att.name, url: att.url || "" })}
-                        className="rounded-lg border border-hairline bg-paper-2/60 p-2.5 flex items-center gap-3 group hover:border-primary hover:bg-paper-2 cursor-pointer transition-all shadow-xs"
+                        /* Mouse-only before this: cursor-pointer and an onClick, with
+                           no role, no tab stop and no key handler (WCAG 2.1.1, Level A). */
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Preview ${att.name}`}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setPreviewImage({ name: att.name, url: att.url || "" });
+                          }
+                        }}
+                        className="rounded-lg border border-hairline bg-paper-2/60 p-2.5 flex items-center gap-3 group hover:border-primary hover:bg-paper-2 cursor-pointer transition-all shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset"
                       >
                         {att.url ? (
                           <div className="relative w-16 h-16 rounded bg-ink/10 overflow-hidden shrink-0 border border-hairline">

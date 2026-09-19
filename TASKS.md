@@ -7,6 +7,1244 @@
 
 ---
 
+# 🟣 HANDOFF — 16–17 Sep 2026. ResellerClub ki chaabi lag gayi. Search portal me aa gaya. Rate card lagat se NEECHE bik raha hai.
+
+## 🔑 Credentials install ho gaye — aur do jagah naam BADALNE pade
+`RESELLERCLUB_ID` / `RESELLERCLUB_SECRET` ke naam se diye gaye the. **Ye app wo naam
+padhti hi nahi.** DMS ke apne code se milaya (`lib/resellerclub/client.ts:53-54`):
+
+| jo diya gaya | app jo padhti hai | dono banta hai |
+|---|---|---|
+| `RESELLERCLUB_ID` | `RESELLERCLUB_RESELLER_ID` | RC ka `auth-userid` |
+| `RESELLERCLUB_SECRET` | `RESELLERCLUB_API_KEY` | RC ka `api-key` |
+
+Jis naam se code padhta hai, usi me likhe gaye. DMS ke naam se likhte to **inert**
+reh jaate — bilkul waisa hi jaal jaisa nameservers ne pichhle hafte banaya tha.
+
+⚠️ **`DOMAIN_REGISTER_LIVE=0` usi edit me likha.** `live-gates.ts` me "unset = KHULA"
+hai (11 Sep se), to is laptop par asli, irreversible order rokne wali **ekmatr cheez
+wahi chaabi thi jo ab lag gayi**. Reading (availability/pricing) par koi asar nahi.
+Poora niyam ab `production/CLAUDE.md` §26 me hai.
+
+## ✅ Jo bana / theek hua (sab local commit, 5 unpushed)
+- **`/portal/domains` par domain search** — customer ab naam dhoondh sakta hai bina
+  kahin jaaye. TAKEN par "Watch it" wahi neeche wale watch box me naam bhej deta hai.
+  Lookup marketing site ka hi `searchDomains` hai, doosri copy nahi.
+- **"Ask to register" ab poora ticket bharke deta hai** — naam, daam AUR TERM.
+- **`.co.in` ka daam kabhi aaya hi nahi tha** — RC use `thirdleveldotin` me rakhta hai,
+  ladder me wo rung thi hi nahi. Har search me "Price on request" aata tha. ₹779 hai.
+- **`.ai` 2-saal ke minimum term par bikta hai** — `oneYear()` sirf `block["1"]` padhta
+  tha, to .ai "unpriced" dikhta tha. 412 me se **theek ek** product bina 1-saal ke hai,
+  aur wahi hai. Ab `RcTldPrice.years` term saath le jaata hai.
+- **Sentry me api-key ja rahi thi** — fetch instrumentation URL saaf karke query string
+  wapas `http.query` me daal deta hai. Paanchon `Sentry.init` par `beforeBreadcrumb`
+  laga, test se pinned.
+- **Ops mail "sabse purane owner" ko jaati thi**, bina tenant filter ke — ab platform
+  allowlist se. Digest me ab RC wallet balance bhi jaata hai.
+- **`www.acme.com` watch kabhi fire nahi kar sakta tha** — ab strip hota hai.
+- Portal se phone/WhatsApp poori tarah hata (prospect pages jaan-boojh kar exempt).
+
+## 🔴 PARDEEP KE LIYE — rate card lagat se NEECHE hai, chaudah ke chaudah
+Live account se naapa, 1 saal register, ₹:
+
+```
+.in   499/863    .com  899/1199   .co.in 599/779    .org 1099/1350
+.net 1199/1559   .company 799/1595  .agency 1899/2663  .dev 1499/1535
+.io  3899/5747   .cloud 899/1907  .app 1299/1787
+.store 249/4788  .shop  299/3839   <- 4,539 aur 3,540 neeche
+.ai   6999/8807  <- aur term bhi galat: 1 saal likha hai, milta 2 saal me hai
+```
+
+Ye sirf marketing page nahi: `api/public/checkout/cart/route.ts:91-93` isi array se
+re-price karta hai aur `cost: 0` likhta hai — yaani Razorpay yahi collect karta hai
+aur books me nuksaan dikhta bhi nahi. `site/lib/live-tld-pricing.ts` isi ko theek
+karne ke liye likha gaya tha aur **kabhi wire hi nahi hua** (zero callers).
+
+**Kuch badla nahi gaya** — daam badalna business ka faisla hai. Teen raaste:
+live daam wire karo / chaudah number haath se set karo / abhi sirf `.ai` hatao.
+
+## 📐 Poora portal naapa (17 Sep) — contrast/overflow saaf, ek target chhota tha
+11 route × 1280 light, 1280 dark, 390. **Kisi bhi route par, kisi bhi width par, EK BHI
+AA contrast failure nahi. Kahin horizontal overflow nahi.** Har text node uske apne paint
+kiye hue background ke against compute hua, aankh se nahi dekha.
+
+Ek asli finding: `/portal/hosting` ka "Or sign in yourself →" phone par **17px** ka tha
+(apni flex row me, prose ke andar nahi — to WCAG 2.5.5 ki chhoot nahi lagti).
+`min-h-11 md:min-h-0` laga, ab saaf.
+
+**Do cheezein jo finding LAGTI hain par nahi hain** — dobara report na karna:
+- `/portal/domains` ka "Stop watching" 36px ka DABBA hai, hit area 44px ka hai
+  (`.touch-44` ka `::after` layout ke bahar — `getBoundingClientRect` use dekh nahi sakta).
+  Hit-test kiya: ±21px ke chaaron probe button par lagte hain.
+- `/portal/support/new` ke do `select` 1px ke dikhte hain — wo Radix ka chhupa shim hai
+  (`aria-hidden`, `tabIndex -1`). Asli control styled trigger hain, **theek 44px**.
+
+## 🧹 PARDEEP KE LIYE — teen file kisi ne import hi nahi ki (naapa, maana nahi)
+Domain feature ke aas-paas dead code ka ek jhund hai. **Kuch delete nahi kiya** — UI hatana
+product ka faisla hai:
+
+| file | lines | importer |
+|---|---|---|
+| `src/site/components/home/DomainSearch.tsx` | 149 | **0** |
+| `src/site/components/home/DomainSearchDock.tsx` | 200 | **0** |
+| `src/site/lib/live-tld-pricing.ts` | 122 | **0** |
+
+`live-tld-pricing.ts` wahi file hai jo rate card ko LIVE banane ke liye likhi gayi thi —
+uska apna header kehta hai ki catalog ke daam "already drifted from what the shop charges",
+aur wo kabhi wire hi nahi hui. `/domains` aaj bhi placeholder daam dikhata hai.
+(`landing-sections.tsx`, 983 lines, pehle se isi list par hai.)
+
+## ⏳ Jo yahan se check nahi ho sakta
+`gcloud` is machine par hai hi nahi. To **Cloud Run par RC credentials hain ya nahi,
+pata nahi chal sakta.** Agar hain, aur `DOMAIN_REGISTER_LIVE` wahan set nahi hai
+(repo ki kisi deploy file me nahi hai), to `provision-domain` (5 min) aur
+`domain-renew` (30 min) cron **asli order kar rahe honge** — aur is DB ke kisi domain
+par aaj tak `registrar_order_id` nahi hai, yaani wo pehla order kisi ne dekha nahi.
+
+---
+
+# 🟣 HANDOFF — 11 Sep 2026. DMS PUBLIC hi rahega. "Secrets chhape hain" — naapa, GALAT nikla.
+
+Pardeep: *"fix this i need to keep the DMS public"*. To pehle ye naapa ki asli
+me kya khula pada hai. **Jo is file me likha tha, wo do jagah jhooth tha.**
+
+## 🔴 Is file ka apna dava GALAT tha
+Line ~1101 par likha hai: *"M0. DMS Phase-0 suraksha ✅ 1 Sep — PR #1 + PR #2
+DONO merge to main"*.
+
+**GitHub API se poocha: us repo me aaj tak EK BHI pull request nahi bana.**
+`origin/main` ka aakhri commit **17 Aug 2026** ka hai. 8 Sep ka fetch bhi wahi
+dikhata hai. Yaani IDOR / AES-encrypt / backup-redact / XFF / constant-time /
+role-leak wala kaam **is repo me kabhi utra hi nahi**.
+
+Ye sabse khatarnaak cheez hai jo mili — kyunki hamara apna tracker keh raha tha
+"ho gaya". Theek kar diya, neeche.
+
+## ✅ Secrets: repo me KUCH BHI khula nahi hai (naapa)
+2,048 commit, **704,264 diff line** — poori history scan ki (JWT, mongo URI
+with password, rzp_live secret, AIza, PEM private key, gh token, AWS key,
+`*_SECRET=`/`*_PASSWORD=` shape):
+
+- **Ek bhi asli credential commit me nahi.** Jo mila, sab **test fixture**
+  (`rzp_test_1234`, `mongodb://localhost`, naqli `AIza…`) ya Cloud Run ka
+  `--set-secrets` mapping (`ADMIN_PASSWORD=ADMIN_PASSWORD:latest` — naam hai,
+  value nahi).
+- `.gitignore` shuru se `.env` + `.env.*` rokta hai, aur `.husky/pre-commit` me
+  `check-staged-for-secrets.sh` chalta hai (maine commit karke dekha — chala).
+- **Razorpay `rzp_live_…` Key ID TASKS.md me hai — wo secret NAHI hai.** Wo
+  `NEXT_PUBLIC_*` hai aur customer ke JS bundle me jaata hai, by design. Khatra
+  sirf Key **Secret** me hota, aur wo kahin likha nahi gaya (stdin se Secret
+  Manager me gaya).
+- **Fork: 0.** Kisi ne copy nahi kiya.
+
+### Ek asli leak HUA tha — aur wo sahi tarah band hua
+`check-staged-for-secrets.sh` ke header me darj hai: **MongoDB Atlas ka
+connection string, password ke saath, pehle hi commit me** (`test-full-app.js`).
+29 Jun 2026 ko: history rewrite + force-push + **Atlas ka password ROTATE** +
+Secret Manager v2 + redeploy.
+
+Maine tasdeeq ki: wo commit ab **kisi branch me nahi** hai —
+`git branch -a --contains` khaali, sirf `refs/original/*` (filter-branch ka
+local backup) se pahunchta hai, **jise git kabhi push nahi karta**. Yaani
+GitHub par nahi hai. Aur password badal chuka hai, to matlab bhi nahi.
+
+⚠️ `refs/original/*` sirf is machine par hai. **Use push mat karna.** Mitana ho
+to: `git for-each-ref --format='%(refname)' refs/original | xargs -n1 git update-ref -d`
+phir `git reflog expire --expire=now --all && git gc --prune=now`. Maine
+JAAN-BOOJH KAR nahi kiya — wo pre-rewrite history ki aakhri local copy hai, aur
+mitana wapas nahi hota.
+
+## 🔧 Jo theek kiya (DMS commit `70043ba`, LOCAL, push NAHI)
+**Teen jagah webhook ka HMAC compare hota hai, teen alag tarike se:**
+
+    app/api/webhooks/whatsapp/route.ts      crypto.timingSafeEqual   ✓
+    app/razorpay/webhook/route.ts           generated !== signature  ✗
+    lib/razorpay.ts verifyWebhookSignature  expected === signature   ✗
+
+Ab `lib/timing-safe.ts` — ek hi `safeEqual`, teeno import karte hain.
+
+**Saaf-saaf: ye practical break NAHI tha.** `===` pehle farq par ruk jata hai,
+par network par wo farq nanosecond bhaar hai aur jitter millisecond. Koi is
+tarah signature forge nahi kar raha tha. Theek isliye kiya ki (a) chaar line ka
+kaam hai, (b) dono Razorpay route **paise ka chokepoint** hain — jhoota
+signature nikal gaya to wo pending order claim karke provision kar dega, aur
+(c) **repo public hai**, to ye compare dhoondhna nahi padta, padh liya jata hai.
+
+**9 test, 3 mutation — aur ek mutation ne MERA dava jhooth sabit kiya:** maine
+comment me likha tha ki length-check hi 500 rokta hai. Length-check hataya —
+saare test hare rahe, kyunki try/catch wahi false lauta deta hai. Dava galat
+tha; comment theek kiya, aur test ab `timingSafeEqual` par spy karke pinn karta
+hai ki mismatched length us call tak pahunchti hi nahi.
+
+## ⚠️ Ek ASLI bug mila — PAISE wala — par ek naap chahiye pehle
+`lib/trial-abuse.ts` me:
+
+    export function getClientIp(request) {
+      return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || ...
+    }
+
+**`[0]` = pehla entry = jo CLIENT ne khud bheja.** Poori tarah forge-able.
+Aur ye guard karta hai:
+
+    app/api/user/hosting/trial-eligibility
+    app/api/payments/guest/create-order
+    app/api/payments/create-order
+
+Yaani `X-Forwarded-For: 1.2.3.4` bhej do → 30-din wala trial-abuse limit har
+baar naya IP dekhta hai → **muft hosting trial unlimited.** Wo asli kharcha hai.
+Aur public repo me ye bypass padha ja sakta hai, dhoondhna nahi padta.
+
+**Maine JAAN-BOOJH KAR khud fix nahi kiya**, kyunki dono galtiyan mehngi hain:
+- `[0]` rakha → forge-able rehta hai (aaj ki haalat)
+- aakhri entry le li → forge-proof hai, **par** agar Cloud Run ke aage ek aur
+  proxy hai to wo entry har request me EK HI constant hoti hai → saare customer
+  ek hi rate-limit key par → sabka lockout
+
+Faisla ek naap par tika hai: **is deployment par Cloud Run asli me XFF me kya
+bhejta hai.** Ek request se pata chal jata hai (`app/api/admin/check-ip` already
+`forwarded` lautata hai). Wo number mile, main 10 minute me fix kar dunga.
+
+## 👉 DMS public rakhne ke liye asli list
+- [ ] **`getClientIp` ka XFF fix** — upar wala naap chahiye (paisa: muft trial)
+- [ ] **`70043ba` deploy karna** — constant-time fix local pada hai
+- [ ] **GitHub par (public repo par ye MUFT hai)**: Settings → Code security →
+      **Secret scanning** + **Push protection** ON, aur Dependabot alerts ON.
+      Push protection agli baar commit hone se PEHLE rok dega — `.husky` wala
+      guard `--no-verify` se bypass ho jata hai, ye nahi hota.
+- [ ] **`main` par branch protection** — aaj `main` 17 Aug par khada hai aur
+      asli kaam `primary-billing-integration` (37 commit aage) par hai.
+- [ ] ~~Repo private karna~~ — **zaroorat nahi.** Koi secret khula nahi hai.
+
+---
+
+# 🟣 HANDOFF — 11 Sep 2026. Email ka raasta ban gaya: SMTP relay. DMS ke credentials jaise hain waise chalte hain.
+
+Pichhle handoff me "Email ka koi raasta nahi hai" pehla blocker tha. Wo band ho
+gaya — commit `bf587e10`.
+
+    pehle:  Resend  ya  per-tenant Gmail   ← DMS ke paas dono nahi
+    ab:     Resend  ya  Gmail  ya  SMTP relay
+
+## 🔑 Env ke naam DMS ke naam hain — JAAN-BOOJH kar
+`SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_SECURE` —
+bilkul wahi naam jo DMS me hain, to credentials **bina rename** girte hain.
+ResellerClub ke ulta, jahan DMS ka `RESELLERCLUB_ID` hamara
+`RESELLERCLUB_RESELLER_ID` hai (upar wala JAAL dekho).
+
+`SMTP_FROM` optional hai — tab kaam aata hai jab relay login se alag (achha
+dikhne wala) address bhejne deta hai.
+
+## 📬 SMTP, Gmail ki shreni me hai — Resend ki nahi
+`provider.ts` ka poora design EK farq par khada hai: **Resend bounce batata
+hai** aur suppression list rakhta hai; **Gmail kuch nahi batata** — mara hua
+address bhi success lautata hai aur bounce ghanton baad bhejne wale ke inbox me
+aata hai.
+
+Plain relay bilkul Gmail jaisa hai. `250 OK` ka matlab relay ne **le liya**, na
+ki kisi ko **mila**. To bounce-sensitive mail par relay wahi chetavni uthata hai
+jo Gmail uthata hai, aur dono configured hon to **Resend hi jeetta hai**. Relay
+farsh hai, pasand nahi.
+
+## ✉️ From relay ki pehchaan hai, caller ki nahi
+DMS ka relay `smtp.gmail.com:587` as `noreply@anutech.in` (app password) hai,
+aur Gmail aisa From **nahi** bhejta jo us account ke liye verified na ho.
+Idhar lagbhag har caller `RESEND_FROM_DEFAULT` bhejta hai — unset hone par
+`onboarding@resend.dev`, jo Gmail ke liye kuch bhi nahi.
+
+To `SMTP_FROM ?? SMTP_USER` jeetta hai. Par caller ka address phenka nahi jata —
+wo **Reply-To** ban jata hai (jab asli address ho aur caller ne khud Reply-To na
+diya ho), to customer reply kare to reseller tak pahunche, no-reply box me nahi.
+Warna "email chal gaya" seedha "har message 5.7.0 par reject" ban jata — aur wo
+error certificate ki dikkat jaisa padhta hai.
+
+## 🔴 Do CHECK constraint the — doosra CHUPCHAP mar raha tha
+1. `tenants_email_provider_check` sirf `resend|gmail` deta tha — transport bana
+   hone ke baad bhi tenant ko `smtp` par **set hi nahi kar sakte the**.
+2. `email_log_provider_check` sirf `resend|gmail|stub` deta tha. Aur
+   `recordEmail` jaan-boojh kar apni galti nigal jata hai (toota log, bhejna na
+   rok de). Natija: **message chala gaya, cron ne `sent: 2` bola, aur audit row
+   chupchap gir gaya.** Audit trail me chhed theek wahan, jis transport par ab
+   saari dak jaati hai — is chhed ka matlab "koi mail nahi gaya" padhta hai, jo
+   jhooth hai. Migration `20260911170000_email_provider_smtp.sql`.
+
+## ⚠️ Tenant ko KHUD maangna padta hai — fallback kaafi nahi
+Resolver relay par fallback karta hai jab Resend configured na ho. **Par is
+deployment me `RESEND_API_KEY` HAI — galat wala.** To `resendConfigured` true,
+Resend chuna jata hai, har message 401, aur chalta hua relay bekaar pada rehta
+hai. Maujood aur galat key, chalti key se alag nahi dikhti — jab tak bhejna
+fail na ho.
+
+Isliye prod par: `SMTP_*` env me daalo **aur** tenant ka
+`email_provider = 'smtp'` karo.
+
+Jaan-boojh kar bhejte waqt fallback NAHI kiya: Resend message le sakta hai aur
+phir timeout report kar sakta hai, to "doosre transport se dobara bhejo"
+customer ke inbox me **do renewal notice** daal dega.
+
+## ✅ Asli relay par naapa
+    verify()  — jodta hai, auth karta hai, kuch BHEJTA nahi:
+               OK -> smtp.gmail.com:587 as noreply@anutech.in (STARTTLS)
+               (isse port-587-means-STARTTLS wala andaza bhi sahi sabit hua)
+
+    domain-expiry cron, tenant smtp par:
+               sent 2, aur email_log me TEEN `smtp|sent` row — relay ke asli
+               Message-ID ke saath (do customer warning, ek owner alert)
+
+**Ye asli sends the.** Do demo address `rajesh@acmecorp.com` par gaye (bounce
+`noreply@anutech.in` par wapas aayega). **Ek owner alert sach me
+`pardeep@exceltechnologies.in` par pahunch gaya** — demo domain
+`acme-legacy.net` ke baare me; `loadOwnerAlert` tenant ka apna email nikalta hai,
+isliye. Iske alawa kuch bahar nahi gaya.
+
+**45 naye test, 5 mutation:** relay "blocked" se aage nahi → 5 red; relay Resend
+se aage → 2 red; bounce chetavni hatai → 3 red; `rejected` recipient ignore → 1
+red; har failure retryable → 1 red.
+
+Nayi dependency: **nodemailer 6.10.1** — zero runtime deps, server-only, browser
+bundle me nahi jata. SMTP ek TCP wire protocol hai; fetch se bolne ka koi raasta
+nahi. Sasta option (Resend key, zero code) pehle rakha gaya tha.
+
+## 🔌 Switch bhi chahiye tha — transport akela kaafi nahi (commit `d1cb3b50`)
+Transport ban gaya tha par **use ON karne ka koi raasta nahi tha.** PATCH
+`resend|gmail` ke alawa kuch maanta hi nahi tha, to tenant maine HAATH se SQL
+se badla tha. Aur `smtpVerify()` / `smtpDescription()` likhe, export kiye, aur
+koi bulata hi nahi tha. SQL prompt se hi khulne wali cheez = dead end (§24).
+
+**Ab: Settings → Integrations → Email sending me teesra tile.**
+
+### Chunne se PEHLE relay try hota hai
+Gmail ke scope-check ka wahi niyam, par wajah zyada mazboot: Gmail me scope
+dekhne ko hota hai, relay me sirf "maujood hai ya nahi" — aur yahi wo cheez hai
+jisne galat `RESEND_API_KEY` ko "configured" dikhaya tha. To SMTP chunte hi
+`smtpVerify()` chalta hai: judta hai, auth karta hai, **kuch bhejta NAHI**.
+
+Naapa (mare hue port par): tile dabao → **409** — "The SMTP relay refused these
+credentials, so nothing was changed. connect ECONNREFUSED ::1:1025" — aur
+`tenants.email_provider` `resend` hi raha. **Mana kiya, kuch store nahi hua.**
+
+### 🔴 Card JHOOTH bolne wala tha — sawaal router ke paas chala gaya
+Badge har provider ke liye apna ternary tha. Relay configured + Resend key nahi
+→ `sendEmail` mail **BHEJ** raha tha aur card laal box me keh raha tha:
+
+> "No mail is going out. Resend is selected but no API key is set, so emails are
+> recorded as sent and silently discarded."
+
+Har baat jhooth, aur padhne wale ko chalte hue system ko "theek" karne bhej
+raha tha. **Yahi kharaabi Gmail wali branch me relay se pehle se thi**: toota
+Gmail grant + sahi Resend key → "No mail is going out", jabki har message Resend
+se ja raha tha.
+
+Ab `describeSendCapability` `resolveEmailProvider` se poochta hai "tu kya
+karta" aur uska faisla padhta hai. **Ek faisla, ek jagah** — card aur cron ab
+alag baat nahi kah sakte, dhyaan rakhne se nahi, banawat se.
+
+### Teen haalat, do nahi
+Chupchap fallback par hara badge wahi aaram-dayak jhooth hai jise rokne ke liye
+ye card bana tha. `usingFallback` jaan-boojh kar `ProviderDecision.fellBack` se
+**CHAUDA** hai — wo flag sabse zaroori case me FALSE hai (Resend default hai,
+koi "maangta" nahi), to key-rahit + relay-wale workspace me koi fallback dikhta
+hi nahi jabki relay hi bhej raha hai.
+
+### Do bug — karke mile, padh kar nahi
+1. `resolveEmailProvider` relay ko message deta tha aur reason likhta tha
+   "Tenant sends through Resend." Wo line **send ke saath darj hoti hai**, to
+   hafton baad "kis transport ne le jaya?" ka jawab GALAT deti.
+2. Banner par "…relay instead**..** Bounces are not reported" — kuch reason
+   poore-viram par khatam hote hain, Gmail wale adhoore vaakya hain. **Browser
+   me mila; koi unit test nahi pakadta.** Isse ye bhi tay hua ki reason WAJAH
+   batayega, raasta nahi — raasta `via` aur `email_log.provider` dono me pehle
+   se hai.
+
+### ✅ Browser me naapa (local stack, e2e owner fixture)
+    env me relay nahi   badge "Sending" · relay tile DISABLED, subtitle me chaar
+                        env var ke naam · koi banner nahi
+    relay + key nahi    badge "Falling back" · amber banner relay ka naam aur
+                        bounce ka natija bolta hai · tile par host:port aur
+                        login — password KABHI nahi · click → 409, kuch store
+                        nahi
+    phone 390px         card scrollWidth 356 = clientWidth, body 390 = 390,
+                        tile ek-ek line me, 78px unche
+
+Bina-configure wala tile **DIKHTA hai, dabta nahi** — chhupa dene se "is
+deployment par relay nahi hai" aur "ye app relay use hi nahi kar sakta" ek hi
+screen ban jate hain, aur doosra insaan ko pehle se maujood code dhoondhne
+bhejta hai.
+
+**17 naye test, 4 mutation.**
+
+## 🐞 Aur raaste me: `.env.local` parser 12 script me toota hai (commit `14abe0ea`)
+Browser check ke liye local owner fixture banani thi, aur
+`scripts/setup-e2e-tenants.mjs` chala hi nahi:
+
+    TypeError: Cannot convert argument to a ByteString because the character
+    at index 191 has a value of 8212
+
+**8212 = em dash.** `.env.local` me hai
+`SUPABASE_SERVICE_ROLE_KEY="ey…"  # LOCAL demo key — same on every local supabase`
+aur parser `.replace(/^"|"$/g, "")` tha — jo LINE ke dono siron se ek quote
+hatata hai, to comment value ke ANDAR reh gaya.
+
+**Khatra ye hai ki error kahan bhejta hai:** message character-offset batata hai,
+file nahi; aur `supabase.auth.admin` isko `AuthRetryableFetchError status: 0`
+bana deta hai. Yaani padhne me lagta hai "service-role key kharab hai" ya "local
+stack band hai" — dono ke mehnge galat ilaaj hain: sahi key rotate karna, ya
+theek Docker stack restart karna.
+
+Theek kiya: quoted value apne **band hone wale quote** par khatam. Unquoted ko
+dotenv jaisa: comment space+`#` se shuru.
+
+- [ ] **Baaki GYARAH script me wahi block hai** — `backup-tenant-data`,
+      `create-user`, `delete-tenants`, `import-dms-users`,
+      `set-cloudrun-master-key`, `set-doc-code`, `set-tenant-hierarchy`,
+      `setup`, `webhook-selftest`, `check-embed-ambiguity`,
+      `delete-stranded-auth-users`. Jaise hi koi parsed value header me daalega,
+      wahi error. Ek shared helper hi sahi hai — email ke commit me 12 file ka
+      refactor nahi ghusaya, aur inme se ek **backup** ko chhoota hai.
+
+## ⏳ Isme ab bhi kya baaki hai
+- [ ] Prod par `SMTP_*` daalna aur tenant ka `email_provider = 'smtp'` karna.
+- [ ] Migration `20260911170000` prod par lagana — prod abhi ~38 table peechhe
+      hai, aur `npx supabase login` interactive chahiye.
+- [ ] Relay ka bounce mailbox koi nahi dekhta. `noreply@anutech.in` par bounce
+      aate hain aur wahan koi nahi jhankta — Gmail transport ke saath bhi yahi
+      chhed hai, naya nahi.
+
+---
+
+# 🟣 HANDOFF — 11 Sep 2026. DMS ka env chala kar dekha. Dono credentials CHALTE hain; hamara code teen jagah nahi chalta tha.
+
+## ✅ Credentials dono kaam karte hain
+- **ResellerClub** — rate card sync hua: **7 TLD**. Account me **5 asli domain** hain
+  (anutechpvtltd.co.in, theexcelhosting.{net,info,com,online}).
+- **DirectAdmin** — `server1.anutech.in:2222` se 5 account pade. Aur uske package
+  bilkul wahi teen hain jo `lib/hosting/plan-change.ts` maanta hai:
+  **Starter / Standard / Plus**.
+
+## 🗺 ENV KA NAAM ALAG HAI — copy karne se pehle padho
+| hamara naam | DMS ka naam |
+|---|---|
+| `RESELLERCLUB_RESELLER_ID` | **`RESELLERCLUB_ID`** (auth-userid) |
+| `RESELLERCLUB_API_KEY` | **`RESELLERCLUB_SECRET`** |
+| `RESELLERCLUB_API_URL` | wahi |
+| `DIRECTADMIN_*` (URL/ADMIN_USER/API_KEY/IP) | wahi |
+
+**JAAL:** DMS me apna ek `RESELLERCLUB_RESELLER_ID` bhi hai, jo doosri cheez ke
+liye hai. Use hamare `RESELLERCLUB_RESELLER_ID` me daal dene se auth TOOT jayega.
+
+## 🔴 Teen bug — sirf asli credentials se dikhe (commit ee7d1544)
+1. **`rcDomainDetails` kabhi chala hi nahi tha.** RC ka `details.json`
+   domain-name leta hi NAHI — `500 "Required parameter missing: order-id"`.
+   Do call chahiye: `orderid.json` (naam se, **bare number** lautata hai) phir
+   `details.json` (order-id se). Teen cheezein alag-alag tooti hui thi, aur
+   `rcOrderIdFor` bhi `value` key nahi padh raha tha — yaani
+   `provision-domain` ka recovery path bhi kabhi nahi chala.
+2. **"hamara nahi" ko "RC kharab hai" bataya ja raha tha.** RC kehta hai
+   "Website **doesn't** exist" — fragment list me sirf "does not exist" tha.
+3. **DirectAdmin ka bulk usage endpoint is server par NAHI hai** —
+   `CMD_API_SHOW_ALL_USER_USAGE` 200 ke saath **HTML page** deta hai. Ab bulk
+   pehle try hota hai, phir per-user (sequential, 200 tak capped).
+
+**Teeno ek jaisa dikhte the**: "upstream padh nahi paaye" — yaani bug aur outage
+ka ek hi sandesh. Isliye kisi ne kabhi dekha nahi.
+
+Fix ke baad: `anutechpvtltd.co.in` **reconciled**, expiry `2026-10-09`, order
+`122709027` — RC ke apne data se bilkul same. Naqli naam `unclaimed_upstream`.
+DA: "read 5 accounts from the server".
+
+## ⏳ AB KYA CHAHIYE (naapa hua)
+- [x] ~~**Email ka koi raasta nahi hai.**~~ **BAN GAYA** — SMTP transport,
+      commit `bf587e10`, upar wala handoff. DMS ke `SMTP_*` jaise hain waise
+      chalte hain; asli relay se teen mail gaye. Baaki: prod par `SMTP_*` daalna
+      aur tenant ka `email_provider = 'smtp'` karna — kyunki maujood-par-galat
+      `RESEND_API_KEY` bhi "configured" gina jata hai, to khud-ba-khud fallback
+      is case ko nahi bachata.
+- [ ] **Rate card BECHNE ka daam hai, LAAGAT nahi.** Sync
+      `/api/products/customer-price.json` se hota hai. `wholesale` pehli baar
+      register price par set hota hai, to **domain ka margin report jhootha
+      hoga**. Chahiye: `reseller-price.json` bhi sync karein, ya haath se cost
+      daalein. (Naapa: renew HAR TLD par register se MEHNGA hai — .net par
+      ₹1559 vs ₹2015. Isliye renewal `prices.renew` se hi lagna chahiye.)
+- [ ] **RC ke 5 asli domain hamare DB me nahi hain** (DMS ke MongoDB me hain).
+      Renewal unpar tabhi lagega jab data aayega. Achhi khabar: sweep ab
+      `registrar_order_id` khud bhar deta hai.
+- [x] ~~**`DOMAIN_REGISTER_LIVE=1` aur `HOSTING_TRIAL_LIVE=1`** — jaan-boojh kar
+      band hain.~~ **ULTA KAR DIYA — 11 Sep, Pardeep: "keep those turned on by
+      default until admin ask otherwise"** (commit `47365e74`). Ab dono gate
+      **default me KHULE** hain: prod par kuch set karne ki zaroorat NAHI.
+      Band karne ke liye flag ko `0`/`false`/`off`/`disabled` set karo.
+      ⚠️ Ye ek fail-safe ULTA hua hai: pehle khaali env = "kuch na khareedo",
+      ab khaali env = "khareedo". Bacha hua brake sirf **credentials** hai
+      (`RESELLERCLUB_*` / `DIRECTADMIN_*` ke bina kuch order nahi hota) aur
+      **test run** (wahan purana opt-in niyam chalta hai — unit test kabhi
+      domain nahi khareed sakta). Is machine ke `.env.local` me dono
+      credentials NAHI hain, to local dev abhi bhi kuch order nahi karega.
+- [ ] **`CRON_SECRET`** — DMS ke paas hai; Cloud Scheduler ke liye chahiye.
+
+**Credentials sirf PADHNE ke liye use kiye** — koi `*_LIVE` flag kabhi set nahi
+kiya, to koi kharidari mumkin hi nahi thi. `.env.local` backup se wapas, probe
+script mita diye, demo row jaisi thi waisi kar di.
+
+
+---
+
+# 🟣 HANDOFF — 11 Sep 2026. Domain renewal ka poora raasta bana — aur `rcRenewDomain` ko pehla caller mila.
+
+    /api/cron/domain-expiry          chetavni, bina daam ke
+    /api/domains/:id/renewal-quote   reseller daam ke saath quote uthata hai
+    customer paisa deta hai          (aam quote flow, badla nahi)
+    /api/cron/domain-renew           ResellerClub par file karta hai
+
+Staff uthata hai, customer nahi — chetavni wali email kehti hai "hume reply
+karo", to khud-daam wala button us email ka ulta bolta.
+
+## 💰 Daam: ANUMAAN nahi, INKAAR
+`priceRenewal` discriminated result deta hai, to "is extension ka rate nahi hai"
+ek CASE hai jise caller ko sambhalna padta hai — number galti se mil hi nahi
+sakta. Aur yahi is DB ki asli haalat hai: **zero `DOMAIN-%` item**, kyunki rate
+card RC credentials ke bina sync nahi hota. Browser me naapa: inkaar padhta hai
+"There is no rate card entry… Run Sync domains… **Do not quote a figure by
+hand**".
+
+`renew: 0` bhi utna hi sakht inkaar hai — wo feed ka khaali number hai, muft
+renewal nahi. ₹0 ka quote accept hota, paid hota, aur phir asli daam par file
+hota.
+
+**35 test, 5 mutation.** Sabse zaroori: sabse LAMBA suffix jeetta hai —
+`acme.co.in` `.co.in` aur `.in` dono par khatam hota hai, chhota match `.co.in`
+ko `.in` ke daam par bech deta, har aise domain par, hamesha.
+
+## 🛑 Paisa kharch karne wala faisla alag file me, tested
+`decideRenewalFiling` — **28 test, 6 mutation**. Teen mehngi galtiyan:
+- bina paise file karna (reseller customer ko saal khareed ke de raha hai)
+- DO BAAR file karna (renewal ho chuka par darj nahi — poore daam par dobara)
+- aise term par file karna jispar registrar razi nahi
+
+Doosre ke liye `from_expires_at` hai. RC ka `exp-date` duplicate tabhi pakadta
+hai jab hum wahi bhejein jo registrar ke paas HAI — to cron har baar pehle
+`rcDomainDetails` padhta hai. Jo domain pehle hi aage badh chuka: **renewed darj,
+doosri call NAHI**. Jiska RC wala expiry hamare quote se PEECHHE hai: insaan ke
+paas — record registrar se aage tha, term aur raqam dono shak me hain.
+
+**Adhoora bhugtan kaafi NAHI** — alag se assert kiya, kyunki yahi wo cheez hai
+jise koi chhoot dena chahega.
+
+## ✅ Naapa gaya, LIVE gate khula rakh ke
+RC ko `127.0.0.1:9` par point karke, `DOMAIN_REGISTER_LIVE=1`:
+
+    quote UNPAID → gate "ordering is on", filed 0, waiting 1
+    quote PAID   → filed 0, refused: "no order id … nothing to renew there"
+
+Yaani paisa aa jane aur gate khule hone par BHI, order confirm na ho to file
+nahi karta. Row `quoted` hi rahi, attempt_count 1, wajah darj, backoff laga.
+Gate band par: kuch nahi likha, kuch nahi hataya, queue salaamat.
+
+Quote khud bhi naapa: 2 × ₹1150 = ₹2300 + 18% = **₹2714**, `is_one_off` (warna
+payment par doosri subscription ban jati). Duplicate guard bhi — aur wo **jo
+quote number jala use naam se batata hai**, kyunki GST series ka rollback nahi
+hota.
+
+## ⚠️ Jo naapa NAHI gaya, saaf-saaf
+**Ek bhi KAMYAB renewal nahi dekha gaya.** Is DB ke kisi domain par
+`registrar_order_id` nahi hai aur money gate band hai. Inkaar ke raaste, money
+gate, duplicate guard aur gate-band wala vyavhaar — sab chalte hue system par
+naapa. Kamyab raasta sirf `rcRenewDomain` ke typed outcome se tarka hai.
+**Asli RC credentials milne ke baad ek asli renewal dekhna zaroori hai** ispar
+bharosa karne se pehle. Route ke header me bhi yahi likha hai.
+
+## Ek cheez jo browser ne pakdi
+Renewal card ka badge har `quoted` row par "Waiting on payment" kehta tha.
+Customer ke paisa dene aur cron ke inkaar karne ke BAAD bhi wahi likha rehta.
+Ab asli rukawat dikhata hai: error ho to "Needs attention".
+
+
+---
+
+# 🟣 HANDOFF — 11 Sep 2026 (raat, dusra hissa). Hosting wapas chalu ho sakti hai; domain lapse hone se pehle khabar jati hai.
+
+## ✅ 1. `daUnsuspendAccount` ka caller — jo chhed maine khud khola tha
+Subah `refund_payment` ko hosting suspend karne ki taakat mili, aur app me use
+wapas chalu karne ka koi raasta nahi tha. `daUnsuspendAccount` 9 Sep ke port se
+bina caller pada tha (uska apna comment kehta tha "trial convert hone par use
+hota hai" — wo caller bhi nahi tha).
+
+- `/assets/hosting/[id]` par **Restore** button (sirf suspended par). Wajah ka
+  field optional hai, par actor + waqt hamesha audit me.
+- `/api/hosting/[id]/restore` — row ko active karta hai aur `next_action_at`
+  stamp karta hai; **server ko cron batata hai**, ye route DA ko chhoota nahi.
+  Jawab me saaf likha hai ki site 15 min me wapas aayegi, "ho gaya" nahi.
+- **`/api/cron/hosting-suspend` ab DONO taraf kaam karta hai** (naam purana hai,
+  scheduler entry bachane ke liye — header me likha hai). Ek queue, ek job.
+- **Direction ka faisla `lib/hosting/suspension-intent.ts` me hai, test ke saath**
+  — kyunki ulta ho jaye to job har CHALU account suspend kar degi. 13 test,
+  4 mutation (donon direction swap → 4 laal; ternary → 5; due comparison → 1;
+  deleted check → 1).
+- **Asli system par naapa** (DA ko `127.0.0.1:9` par point karke): suspended →
+  `action: "suspend"`, active+queued → `action: "restore"`, terminated+queued →
+  skipped wajah ke saath. Failure par attempt_count 1, `last_error_kind
+  server_unreachable`, aur theek **15 min** ka backoff.
+
+## ✅ 2. Domain lapse hone se pehle khabar — pehle KOI nahi thi
+Naapa: `asset-sweep` tareekh sahi rakhta tha aur kisi ko batata nahi tha. Is DB
+me `acme-legacy.net` 9 din pehle lapse ho chuka tha, kisi ko pata nahi.
+
+- Cadence 30/14/7/1 din + lapse ke baad ek. Customer ko countdown; **owner ko
+  sirf lapse par** (har step par alert wo shor hai jise reseller filter karna
+  seekh jata hai).
+- **Email me daam NAHI hai** — renewal quote ke waqt rate card se banta hai.
+  Aur `rcRenewDomain` import bhi nahi hai: paisa kharch karne wala kaam wahan
+  hai jahan customer ne pehle se de diya ho.
+- Unique key `(domain_id, step, term_expires_at)` — **term** isliye ki renewal
+  par cadence khud reset ho jaye. Sirf `(domain_id, step)` hota to customer ko
+  zindagi me ek baar khabar milti aur doosra lapse bhi chup-chaap hota.
+- 29 test, 5 mutation. Sabse zaroori: "kaun sa step" aur "bheja gaya kya" ko ek
+  loop me MILANA — mera pehla version wahi karta tha, to 11 din bache hone par
+  (14-din ka bhej chuke the) wo "30 din bache hain" bhej deta tha.
+
+## 🔴 3. Ek PURANA bug jo chalane se mila (sirf padhne se nahi)
+`sendEmail` HAR raaste par ek OBJECT lautata hai — `{status:
+"sent"|"stubbed"|"failed"}` — aur sirf anpekshit throw par reject karta hai. To
+ye, jo dekhne me sambhla hua lagta hai, jaanch NAHI hai:
+
+    const sent = await sendEmail({…}).catch(() => null);
+    if (!sent) { rollBack(); return; }
+
+Resend key ke bina teeno send `failed` aaye, `email_log` me failed darj hua, aur
+mere notice row par `sent_at` lag gaya — table dawa kar rahi thi ki customer ko
+bata diya. **`domain-watch` me wahi line thi** (maine wahin se copy ki thi),
+yaani uska claim-rollback ek baar bhi nahi chala tha jab se wo file bani.
+
+Dono theek. 48 call site ka audit kiya, koi aur nahi mila.
+`send-result-checked.test.ts` pehra hai — jaal abhi bhi maujood hai, kyunki
+function failure par bhi truthy object lautata hai.
+
+## ⏳ Domain renewal ka BAAKI hissa — do me se do
+Pardeep ka faisla (11 Sep): **domain subscription NAHI banega, apna raasta
+hoga** (warna ₹900/saal ka domain ₹75/mahine ka MRR ban jata).
+
+- [ ] **Domain ke liye renewal QUOTE ka raasta** — `lib/renewals/` poora
+      subscription par tika hai (`createRenewalQuote` subscription id leta hai),
+      aur kisi domain par subscription nahi hai. Naya raasta banega.
+- [ ] **Paid hone par RC par renew karna** — `rcRenewDomain` maujood hai aur
+      sahi hai (gate + `exp-date` se duplicate rok). **Par is DB ke KISI domain
+      par `registrar_order_id` nahi hai**, yaani aaj ye code ek bhi row par chal
+      hi nahi sakta. ~~`DOMAIN_REGISTER_LIVE=1` bhi chahiye.~~ **(17 Sep: ye ab
+      GALAT hai — gate 11 Sep se default KHULA hai, sirf credentials kaafi hain.)**
+      Isliye jaan-boojh kar
+      NAHI banaya — bina verify kiye paisa kharch karne wala code likhna is
+      repo ke apne §0.4 ke khilaf hai.
+
+
+---
+
+# 🟣 HANDOFF — 11 Sep 2026 (raat). Customer khud hosting plan bada kar sakta hai.
+
+Pardeep: "Implement this functionality fully." `daChangePackage` 9 Sep se
+bina kisi caller ke pada tha; ab uska ek caller hai.
+
+**Raasta** — `seat_requests` ka JUDWAA, jaan-boojh kar (dono ek hi samasya hain):
+customer `/portal/hosting` par plan chunta hai → `hosting_plan_changes` row
+(bina price) → rep `/assets/hosting` par verdict ke saath dekhta hai → Approve
+DirectAdmin ka package badalta hai, hamara record, subscription ka `mrr`, aur
+pro-rata quote banata hai.
+
+- **Price APPROVAL par, request par NAHI** — pro-rata roz girta hai, to request
+  par likha number wo hota jo charge nahi hota. Dono screen sirf MAHEENE ka
+  farq dikhati hain. Naapa: Standard → Plus = "₹62 more a month" (187.20−125).
+- **Order: server pehle, paisa baad me.** Quote pehle karke package fail ho, to
+  na-mili storage ka invoice — wahi shakl jiske liye provisioning-readiness
+  bana tha. Naapa (DA unconfigured): approve = 400, aur KUCH bhi nahi likha —
+  request pending, quote_id null, applied_at null, account Standard/25600 par.
+- **Quote `is_one_off`** — bina iske `record_payment` payment par DOOSRI
+  recurring subscription bana deta, jise renewal cron hamesha bill karta.
+  `is_add_seats` bhi nahi: wo `refund_payment` me "seats ghataiye" wali galat
+  salah deta.
+
+## 🔴 Do chhed jo NAAPNE par mile (soch kar nahi)
+1. **TRIAL upgrade ho sakta tha.** Portal chooser chhupata tha, bas — wahi ek
+   rok thi. Route ko seedha bulaya trial par (asli plan code ke saath): HTTP
+   200, request ban gayi. `provision-hosting` trial par bhi wahi
+   Starter/Standard/Plus likhta hai, to ye asli case hai. Trial ka koi paid
+   term nahi, `expires_at` null → poora saal ka farq bill hota. **Teen jagah
+   band kiya**: domain rule (purani request bhi approve na ho), request route,
+   decide route.
+2. **Staff card aur server ka verdict ALAG tha.** Card `plan_name` padhta tha,
+   route `plan_code ?? da_package ?? plan_name`. Browser me pakda: "Starter
+   Trial" naam wale trial par card kehta tha "kaun sa plan hai pata nahi",
+   jabki server kehta "ye trial hai". Ek hi function, alag input. Theek kiya.
+
+## ✅ Jaan-boojh kar jo NAHI hota
+- **Anjaan plan par KUCH nahi** offer hota (poori ladder nahi) — ho sakta hai
+  wo pehle se sabse bade plan par ho. Naapa: `biz-10` wali demo row par koi
+  chooser nahi, route 409.
+- **Downgrade is raaste se kabhi nahi** — chhota package = chhota disk quota,
+  DA turant lagata hai, live site tooot sakti hai; aur paisa credit note ka
+  maamla hai. Insaan ke paas jata hai, wajah ke saath.
+
+## Test
+66 unit test (4 mutation: naya rate charge → 3 laal; anjaan plan → 5;
+downgrade guard → 2; moved-underneath → 3). `hosting_plan_changes_rls.test.sql`
+(5 mutation, paanchon pakde). **Case 3 pehle GALAT wajah se laal ho raha tha** —
+insert ko unique index rok raha tha, RLS nahi; ab customer ke apne account par
+insert karta hai jahan sirf policy ka na hona rok sakta hai.
+
+Do purane guardrail ne ye kaam KHUD pakda (dono theek kiye, chupaye nahi):
+quote-sent stage rule, aur §24 toast ratchet.
+
+## ⚠️ Dhyan do
+- Ek local demo row (`acmecorp.in`) `biz-10` naam ke banaye hue plan code par
+  thi; ab `standard` par hai, taaki demo me ye feature dikhe.
+- **Plan ladder teen tier par hai** (`starter/standard/plus`, price
+  `site/lib/data/hosting-landing.ts` se — ek hi source). DMS ka catalogue sync
+  apne planId laata hai; agar wahan koi chautha tier aaya, to `plan-change.ts`
+  ki ladder me bhi jodna padega, warna wo plan "anjaan" rahega aur us par
+  upgrade offer nahi hoga (jo surakshit haalat hai, par adhoora).
+
+
+---
+
+# 🟣 HANDOFF — 11 Sep 2026 (shaam). Refund par hosting SUSPEND hoti hai, delete kabhi nahi.
+
+## Faisla (Pardeep, 11 Sep)
+> "Suspend the hosting but don't delete it. Admin will decide to delete it."
+
+Isliye `refund_payment` (migration `20260911130000`) ab, jab refund quote par
+**aakhri paisa** bhi wapas kar de, us quote ka **`active`** hosting `suspended`
+karta hai — `suspended_at`, `auto_renew=false`, aur `next_action_at=now()`.
+`terminated` KABHI nahi likhta, aur test wo poori table par jaanchta hai.
+
+- **Adhoora refund → site chalu.** ₹500 wapas karna ₹5,000 ki hosting band karne
+  ki wajah nahi hai.
+- **`pending` ko chhoda jata hai** — wo provision hua hi nahi, aur
+  paid-but-undelivered wale screen usi status par chhaante hain.
+- **DA ko batane wala aadha hissa**: `/api/cron/hosting-suspend` (har 15 min —
+  scheduler me sabse chhota interval, wajah wahin likhi hai). Beech ka waqt
+  khatarnak hai: paisa wapas, kitab me suspended, site CHALU.
+- **DA configure nahi hai to kuch clear nahi hota** — queue apni tareekh ke saath
+  bachi rehti hai. Browser se naapa: `due 1 · left_queued 1 · still_waiting
+  ["suspend-probe.in"]`, row ka `next_action_at` bacha, `attempt_count 0`.
+- Backoff `lib/hosting/suspend-backoff.ts` me (tested) — 15m/1h/4h/roz, koi
+  attempt-limit nahi.
+- `refund_suspends_hosting.test.sql` — **5 mutation, paanchon pakde gaye.**
+
+## 🔴 FAISLA CHAHIYE — admin ke paas delete ka koi raasta NAHI hai
+Naapa: `assets/hosting/[id]/page.tsx` ka apna header kehta hai ki
+`daSuspendAccount`/`daDeleteAccount` maujood hain aur **jaan-boojh kar kisi button
+se nahi jude** — kyunki terminate karna customer ki site aur mailbox mita deta
+hai, aur usko confirmation flow chahiye.
+
+To "admin decide karega" abhi **ho hi nahi sakta** app ke andar. Do raaste:
+
+- [ ] **(a) App me delete button** — owner-only, sirf `suspended` row par,
+      domain ka naam type karke confirm, poora audit, row `terminated` rehti hai
+      (mitayi nahi jati — GST/itihaas ke liye). Ye sabse zyada vinashkari action
+      hoga is app me, isliye CLAUDE.md §0.4 ke hisaab se pehle manzoori.
+- [ ] **(b) DirectAdmin me haath se delete karo**, app sirf darj kare. Iska bhi
+      ek chhed hai: `asset-sweep` DA se "ye username nahi milta" pakadta hai par
+      **status jaan-boojh kar nahi badalta** (`unknown_to_server` me darj karta
+      hai) — to koi cheez usse `terminated` nahi karegi.
+
+Jab tak faisla nahi, hosting `suspended` par rukti hai — jo surakshit haalat hai.
+
+
+---
+
+# 🟣 HANDOFF — 11 Sep 2026. SQL suite 53/53 pehli baar, aur ek ASLI portal bug mila.
+
+## 🔴 Portal customer KUCH BHI likh nahi sakta tha — theek ho gaya
+
+`log_row_change()` (13 table par audit trigger) `auth.uid()` ko
+`activity_log.user_id` me daalta hai, aur wo column `public.users` (STAFF) par FK
+hai. Portal customer sirf `customer_users` me hota hai, `users` me NAHI. To uska
+har write 23503 se marta tha. Naapa gaya, anumaan nahi:
+
+    insert into public.leads (…)   → 23503 activity_log_user_id_fkey
+    set_subscription_auto_renew(…) → 23503 activity_log_user_id_fkey
+
+Yaani `/portal/shop` ka **"Request a quote"** (`portal_request_quote` → `leads`)
+aur `/portal/subscription` ka **auto-renew toggle** — dono asli customer ke liye
+tootey hue the. service_role/anon par asar nahi tha (trigger `auth.uid() is null`
+par pehle hi lautta hai), isliye kabhi dikha nahi.
+
+**Kyun kabhi pakda nahi gaya:** `portal_set_auto_renew` test apna auth user
+`from auth.users limit 1` se UDHAAR leta tha — aur wo hamesha kisi STAFF ka nikla.
+To test portal RPC ko staff ban kar chala raha tha aur pass ho raha tha. Wo us din
+laal hua jis din ek asli customer portal me login kiya.
+
+Fix (`20260911120000`): staff ka row bilkul pehle jaisa; portal customer ka row
+`user_id = null` ke saath likha jata hai aur customer ka email label me SABSE
+AAGE (label 120 par kata hai). Read path pehle se null-safe tha — naapa:
+`activity.ts` ka embed LEFT join hai, `activity/page.tsx` me `actor?.full_name ??
+"Someone"`, `performance.ts:163` me `if (a.user_id)`, aur RLS policy sirf
+`tenant_id` dekhti hai.
+
+## ✅ SQL suite 53/53 (pehle 50/53)
+
+- **`backup` schema drift capture** (`20260911110000`) — 7 public function
+  `backup.snapshots` padhte the, aur use koi migration BANATI nahi thi (baseline
+  `public`-only dump tha; DDL `migrations-archive/0210`+`0211` me chhoot gaya).
+  Taaza DB par saaton tootey hue the. Function body `cloudsql/07-sync-…` se
+  verbatim liye gaye — wo khud live DB ke `pg_get_functiondef` se bana hai. Prod
+  par no-op (sab `if not exists` / `create or replace`).
+- **`offsite_export_service_role_only`** — case 3 ASLI data par tika tha ("ek saal
+  me koi snapshot mila?"), to taaza DB par hamesha laal. Ab fixture khud banata
+  hai, aur DO row per tenant — ek se `distinct on` ki jaanch nakli thi. Naya
+  assertion: PURANA snapshot na jaye. Mutation-tested (order flip → laal,
+  `distinct on` hataya → laal).
+- **`portal_set_auto_renew`** — apna auth user banata hai, udhaar nahi leta.
+
+## ⏳ Isme se jo BACHA hai
+- [ ] **Nightly backup sweep ki sehat kahin monitor NAHI hoti.** Wo sawaal pehle
+      `offsite_export…` test me chhupa hua tha aur maine wahan se jaan-boojh kar
+      hataya (rollback wale test se cron ki sehat naapna galat jagah hai).
+      `lib/ops/health-digest.ts` uska ghar hai — abhi wahan backup ka koi zikr
+      nahi hai.
+- [ ] **`supabase db reset` se poora verify nahi hua** — dono nayi migration
+      haath se (idempotent) lagayi gayi hain aur suite 53/53 hai, par saaf reset
+      is machine par nahi chalaya gaya.
+
+
+---
+
+# 🟣 DMS PARITY — the inventory, 9 Sep 2026. Kya aa gaya, kya bacha, aur kya PORT NAHI hoga.
+
+> Pawan ne saaf kiya (9 Sep): **"our current is way big than DMS, so DMS functionality
+> is a small part of this new app"** aur **"this new app UI will be used"**. To lakshya
+> hai: DMS ki CAPABILITIES + DATA yahan aa jayen. DMS chalta rahega, par kaam ka ghar
+> yahi app hai.
+>
+> Naapa: DMS `lib/` = 170 file / 33,395 line. Ye app `src/` = 1,381 file / 298,881 line.
+> Yaani DMS ka poora integration layer is app ka ~11% hai. **DMS ka `app/` (233 file),
+> `components/`, `hooks/` PORT NAHI HO RAHE** — UI is app ki hai. Ek feature "ported"
+> tab hai jab wo IS app ke UI se chalta hai, file copy ho jane se nahi.
+
+## ✅ Capabilities jo aa gayi (lib layer)
+
+| DMS module | line | yahan |
+|---|---|---|
+| `resellerclub/client.ts` | 85 | `lib/resellerclub/call.ts` |
+| `resellerclub/registration.ts` | 424 | `lib/resellerclub/orders.ts` |
+| `resellerclub/renewal-transfer.ts` | 125 | `lib/resellerclub/orders.ts` |
+| `resellerclub/customers.ts` | 664 | `lib/resellerclub/customers.ts` (+21 test) |
+| `resellerclub/dns.ts` | 418 | `lib/resellerclub/dns.ts` (+23 test) |
+| `directadmin/packages.ts` | 150 | `lib/directadmin/index.ts` |
+| `directadmin/users.ts` — write half | ~200 | `lib/directadmin/provision.ts` |
+| `directadmin/users.ts` — usage half | ~60 | `lib/directadmin/index.ts` (+11 test) |
+| `directadmin/users.ts` — SSO | ~100 | `lib/directadmin/sso.ts` (+12 test) |
+| `directadmin/dns.ts` | 193 | `lib/directadmin/dns.ts` (+22 test) |
+| `directadmin/users.ts` — read half | ~200 | `lib/directadmin/accounts.ts` (+32 test) |
+| `directadmin/users.ts` — changePackage | ~40 | `lib/directadmin/provision.ts` |
+| `integrations/directadmin/classify.ts` | 221 | `lib/directadmin/classify.ts` (+20 test) |
+| `directadmin/server.ts` | 82 | `lib/directadmin/server.ts` (+8 test) |
+| `resellerclub/search.ts` — multi-TLD | ~250 | `lib/resellerclub/index.ts` (+14 test) |
+| `resellerclub/search.ts` — wallet | ~90 | `lib/resellerclub/reseller.ts` (+12 test) |
+
+Har port me DMS ke defect theek kiye gaye (error-as-absence, logged password,
+invented registrant data, scalar body, SRV/MX defaults, partial-read deletes,
+hardcoded TTL, unencoded delete selector, string-only `.startsWith`,
+`domainExists` ka false-on-failure, `suspended` string, price-less domain drop,
+logged wallet balance) — detail commit message me hai.
+
+## ✅ lib layer POORA ho gaya — 10 Sep 2026
+
+DirectAdmin aur ResellerClub, dono ka capability port khatam. Jo jaan-boojh kar
+NAHI aaya, aur kyun:
+
+- **`updateDNSNameservers`** — DMS me khud dead hai (body sirf throw karta hai).
+  Aisa function port karne se wo available dikhne lagta, bas.
+- **DA par MX/SRV likhna** — REFUSE karta hai, reason ke saath. DMS ke signature me
+  priority hi nahi thi, to uske through bani MX bina priority ki thi = mail outage.
+  DA ka parameter shape version se badalta hai aur yahan koi DA server nahi hai
+  jispar naapa ja sake; anumaan bhejne se wo record banta jo resolve hota hai par
+  galat jagah point karta.
+- **DMS ke `searchDomainWithTlds` ka baaki 250 line** — usme ek badtar defect tha:
+  `if (price > 0)` — yaani AVAILABLE domain jiski pricing lookup fail ho gayi,
+  result se GAYAB. Hamara route wo pehle se theek karta hai (`priceKnown: false` →
+  "price on request"). Sirf concatenated-key handling aayi.
+- **`client.ts` ka circuit breaker / rate limiter (419 line)** — yahan har module
+  apna timeout aur typed failure deta hai; ek global breaker jodne se do jagah
+  faisla hone lagta. Zaroorat padi to alag kaam.
+
+### Ek discrepancy jo ANJAANA chhoda gaya, chupaya nahi
+Hamara `daSuspendAccount` `suspend=Suspend` bhejta hai, DMS `dosuspend=Suspend`
+(aur ulta `dounsuspend`). Dono shakl asli DA installation me milti hain. Yahan se
+koi DirectAdmin server pahunch me nahi hai, aur live suspend path par anumaan
+lagana theek nahi — asli server par confirm karke hi kisi ek par bharosa karna.
+
+## 📊 Data models — 21 me se 14 ka ghar pehle se hai
+
+`Domain`→`domains` · `Hosting`→`hosting_accounts` · `HostingPlan`→`items` ·
+`Order`→`provisioning_requests` · `Payment`→`payments` · `SupportTicket`→`support_tickets` ·
+`User`→`customers` · `Settings`→`tenants` · `Counter`→`document_series` ·
+`CustomerActivity`/`SystemLog`→`activity_log` · `RenewalPayment`→`subscriptions` ·
+`WhatsAppMessageLog`→`email_log` · `TrialClaim`→`leads`
+
+**`PendingHosting` bhi cover hai** — naapa: uske saare field (`daUsername`, `error`,
+`status`) `hosting_accounts` ke `da_username` / `last_error` / `last_error_kind` /
+`status` me 1:1 baithte hain. Nayi table ki zaroorat nahi.
+
+## ✅ 5 models — Pawan ne 10 Sep ko kaha "Yes we need them". Paanchon ho gaye.
+
+Do ko JAISA-KA-TAISA port nahi kiya — verify karne par pata chala ki DMS ka model
+is app par lagta hi nahi, aur donon jagah is file ka apna andaza GALAT tha:
+
+- [x] **`Reseller` (103)** → `tenants` par `slug`, `reseller_status`, `markup_bps`,
+      `display_name`, `support_email`, `approved_at/by` + **`reseller_wallet_entries`
+      ledger** + `lib/resellers/economics.ts` (38 test).
+      **Nayi table nahi**: reseller pehle se ek tenant hai (`tier` + `parent_tenant_id`),
+      do identity dene se wo aapas me ulat-pher karti.
+      **Wallet ek LEDGER hai, column nahi** — DMS me `walletBalance: Number` tha, jo
+      accounting ka sabse purana bug hai: running total aur uske movement alag ho jaate
+      hain aur phir koi nahi bata sakta ki kaun galat hai. Balance ab `sum(entries)` hai
+      aur kabhi store nahi hota. `bps` (percent nahi) — `approved_margin_bps` jaisa.
+      ❌ **Markup HATA diya gaya (11 Sep, migration 20260910150000).** Lagane baithe to
+      naapa: `items` tenant-scoped hai aur usme `wholesale` (lagat) + `msrp` (bikri) +
+      `margin_pct` (GENERATED) pehle se hain. Asli row: Google Workspace Enterprise —
+      wholesale ₹2,050, msrp ₹2,400, margin 14%. Yaani reseller ka margin **per item
+      pehle se maujood hai**, aur ek tenant-wide percentage se zyada barik hai.
+      Quote/invoice `msrp` se daam lete hain jo PEHLE SE retail hai — to us par 2.5%
+      lagane se customer se ₹2,460 liya jaata jabki intended ₹350 already ₹2,400 ke
+      andar tha. **Double count, har line par, chupchaap.**
+      Public storefront bhi use nahi kar sakta tha: wo ek hi tenant par pinned hai
+      (`BUY_PAGE_TENANT_ID`), to public request me reseller ka context hi nahi hai.
+      DMS ko percentage ki zaroorat thi kyunki wahan EK shared catalogue tha aur reseller
+      apna daam set hi nahi kar sakta tha. Is app ne har tenant ko apna catalogue diya,
+      isliye percentage bekaar ho gaya. Column bina ye jaanche port hua tha ki jo samasya
+      wo hal karta tha wo ab bachi hai ya nahi — wahi step chhoot gaya tha.
+      Inert chhodne se behtar hataana: bina istemal ka aisa column jo price control jaisa
+      dikhe, na hone se bura hai (`compliance.send` ko AI_ACTIONS se isi wajah se hataya
+      gaya tha). Flat-percentage model kabhi chahiye to usse pehle per-reseller storefront
+      chahiye (`tenants.slug` usi ke liye hai) — wo feature ka faisla hai, pada hua column nahi.
+- [x] **`DomainWatch` (30)** → `domain_watches` + `lib/domains/watch.ts` (25 test).
+      Poora risk EK email hai: "available!" jo available na ho, chup rehne se bura hai.
+      Isliye email ke liye **POSITIVE `available` reading chahiye**, `taken` ki
+      gairmaujoodgi kaafi NAHI. One-shot: `notified_at` ek baar, phir row retire.
+      Domain area ki ekmatra customer-writable table — aur surakshit hai, kyunki watch
+      na kuch kharchta hai na provision karta.
+- [x] **`PendingDomain` (182)** → `domains` par `attempt_count`, `last_attempt_at`,
+      `resolved_at/by`, `resolution(_note)` + `lib/domains/retry.ts` (17 test).
+      **Is file ka andaza galat tha**: ye "payment se PEHLE ka hold" nahi hai. DMS ka
+      apna default reason bolta hai — "Domain registration failed - likely due to
+      insufficient funds". Yaani **customer ne PAISE DE DIYE aur domain nahi mila**.
+      5 attempt, 1h/4h/12h/24h backoff (ghante, minute nahi — intezaar aadmi ke wallet
+      top-up ka hai), phir RUK jaata hai aur operator queue me baith jaata hai. Wo
+      hand-off hi feature hai.
+- [x] **`RecurringChargeAttempt` (128)** → `recurring_charge_attempts` +
+      `lib/payments/charge-attempts.ts` (20 test). **Is file ka sawaal sahi tha aur
+      jawab "Subscriptions flow" nikla**, to retry ENGINE port nahi hua (Razorpay khud
+      retry karta hai; `next_attempt_at` column jaan-boojh kar nahi hai — doosre ke
+      scheduler ke baare me anumaan screen par blank se bura hai).
+      Jo asal me missing tha: **har attempt ka RECORD**. `subscription.pending` aur
+      `subscription.halted` dono mandate ko `paused` karte the, to "paused" ek baar ka
+      bank decline aur mahine bhar fail hota card alag nahi bata sakta tha.
+      ⚠️ **Aur webhook ka header JHOOTH bol raha tha**: "payment.failed — log so
+      Pardeep can follow up", jabki code `ignored` return karta tha. Ab hota hai.
+- [x] **`IPCheck` (67)** → `egress_ip_checks` + `lib/ops/egress-ip.ts` (21 test) +
+      `GET /api/admin/egress-ip`. **"Sabse kam value" bhi galat tha**: RC aur DA DONO
+      egress IP par gate karte hain aur DONO refuse karte waqt uska naam nahi lete (RC
+      ka error text bad-key jaisa, DA ka HTML login page galat-password jaisa). To koi
+      bhi upstream band ho to pehla sawaal yahi hai.
+      DMS se do sudhaar: (1) IP ka MATCH batata hai, sirf IP nahi; (2) **consensus** —
+      DMS pehla jawab le leta tha, yahan do probe alag bole to wo khud finding hai
+      (`disagree`), kyunki allowlist par ek hi address ho sakta hai.
+      Aur **jawab na aana MISMATCH nahi hai** — warna aadmi wo allowlist theek karne
+      jaata jo kabhi kharab hi nahi thi.
+
+Paanchon me: migration real DB par chalayi aur constraint HAATH SE TODKAR dekhe,
+aur har module par mutation (kul 22) — sab pakde gaye. Ek weak test bhi isi tarah
+mila: reseller margin ko alag se compute karne wala mutation 42 hand-picked daam
+par ZINDA bacha; `100 * 1.025` floating point me 102.49999999999999 hai, to ₹100
+par 2.5% ka margin ₹2 hai par alag compute karne par ₹3 — aur ₹100+₹3 wo daam nahi
+jo kisi ko dikhaya gaya. Ab loop ₹5,000 tak har rupee par chalta hai.
+
+## 🔴 DATA MIGRATION — NAAPA GAYA, AUR SIFARISH HAI: transactional data NA laayein
+
+Atlas se seedha padha (read-only, 9 Sep 2026), `domain-management` DB — **1,005
+document, 26 collection**. Ginti ye hai:
+
+| collection | docs | |
+|---|---|---|
+| customeractivities | 905 | activity log |
+| systemlogs / ipchecks / settings | 34 / 15 / 17 | diagnostics + config |
+| hostingplans | 11 | catalogue |
+| users | 8 | 2 @exceltechnologies.in, 1 @srigangatechnologies.com, 3 @gmail.com, 2 guest |
+| orders | 2 | |
+| hostings / payments / supporttickets / trialclaims / counters | 1 each | |
+| **domains** | **0** | ek bhi domain record nahi |
+| resellers / domainwatches / pendingdomains / pendinghostings / recurringchargeattempts / renewalpayments | 0 | **feature use hi nahi hua** |
+
+**Ye TEST data hai, aur isliye import karna nuksaan hai:**
+
+1. **Ek hi hosting account hai: `tt.com`** — placeholder domain, plan Starter,
+   expiry 2027. Ise live asset banakar import karna galat hoga.
+2. **Orders test charge hain** — `hosting_trial` **₹2**, aur `renewal` **₹599.88**,
+   invoice number **INV-000031 / INV-000033**. Ye number GST-relevant
+   `document_series` me paraaye number ghusayenge (Rule 46 wali baat).
+3. **Price integer nahi hain** — 49.99 / 187.2 / 599.88, currency INR likha hai.
+   Hamare `items.msrp` / `wholesale` **integer rupee** hain (AGENTS.md), to
+   49.99 ko store karne ka matlab hai use badalna. ₹49.99/month me 10GB hosting
+   asli Indian price nahi hai — ye USD list se copy hua lagta hai.
+4. **`items.wholesale` NOT NULL hai aur DMS me cost price hai hi nahi.** Wo column
+   P&L, money-inbox aur waterfall me jaata hai, to koi bhi banaya hua cost seedha
+   accounting kharab karega.
+5. **Catalogue ki zaroorat hi nahi** — `POST /api/catalog/sync-hosting` pehle se
+   DirectAdmin se live specs kheenchta hai, jo DMS ki copy se behtar source hai.
+6. **Handoff ka payment id match nahi karta** — 8 Sep ka note kehta hai "₹1500,
+   `pay_TZ1iZJxZAZw2Gv`"; payments collection me jo ek row hai wo
+   **`pay_TXrc4NyzAXMGuw`** (₹1500) hai. Do me se ek galat hai — import se pehle
+   iska jawab chahiye, kyunki ye paise ka record hai.
+
+**Sifarish:** transactional data (orders / payments / hostings / invoices /
+counters) **import na karein**. Zyada se zyada **8 users → `customers`** laa sakte
+hain (sirf contact detail, koi paisa nahi), aur wo bhi optional hai. Baaki
+905 activity + 34 systemlog + 15 ipcheck diagnostic hain, business record nahi.
+
+Pawan ne 9 Sep ko khud kaha: *"that app was in testing mode anyway"* — naap us
+baat se poori tarah mel khaati hai. To DMS parity ka asli kaam **capability port
+karna** hai, data dhona nahi.
+
+**Jo 6 model "faisla chahiye" me the, unme se 5 ke paas 0 row hain** — matlab wo
+DMS me kabhi use hue hi nahi. To sawaal "migrate kaise karein" nahi, "ye feature
+chahiye ya nahi" hai:
+- `Reseller` 0 row — white-label sub-reseller kabhi chala hi nahi
+- `DomainWatch` 0 row · `PendingDomain` 0 · `PendingHosting` 0 ·
+  `RecurringChargeAttempt` 0 · `RenewalPayment` 0
+
+---
+
+# 🟣 HANDOFF — 8 Sep 2026 (shaam). LOCAL DB chalu ho gaya bina cloud login ke; aur PROD ~38 table PEECHHE hai.
+
+> Pawan ne bola: upstream `main` merge karo, app verify karo, test chalao. Merge karne ko
+> kuch tha hi nahi — `newrepo/main` (`c81a9067`) already `pawan` (`facbd6b2`) ka ANCESTOR
+> hai (1 aage, 0 peechhe; `git ls-remote` se live check kiya). Phir Pawan ne bola: "schema
+> to likha hua hai, local DB bana lo" — wahi hua, aur usme do asli kharabi mili.
+
+## ✅ Local DB — cloud login ki ZAROORAT NAHI
+
+`npx supabase login` ab bhi gayab hai (`LegacyPlatformAuthRequiredError`, CLI 2.117.0), par
+local ke liye wo chahiye hi nahi. Docker Desktop khud start karke poora stack uthaya:
+DB 54322 · API 54321 · Studio 54323. **125 table**, 78 migration exit 0.
+
+## ⚠️ `npm run setup` TOOTA HUA THA — do jagah, dono theek ki
+
+Naapa 8 Sep: kisi bhi naye developer ke liye setup pehle hi step par marta tha.
+
+1. **`supabase start` migration ko KHALI database par chalata hai.** `[db.migrations]`
+   enabled hone se sabse PURANI file (`20260816094848`) chalti hai aur
+   `relation "public.leads" does not exist` par mar jaati hai, CLI container band kar deta
+   hai. Fix: `scripts/setup.mjs` start ke waqt flag OFF karta hai aur `finally` me WAAPAS
+   ON kar deta hai (crash/Ctrl-C par bhi) — `db push` wahi flag padhta hai, isliye
+   permanently off nahi chhoda.
+2. **Baseline ke baad 78 migration kabhi lagti hi nahi thi.** `rebuild-db.mjs --local`
+   sirf baseline (87 table) load karta tha, yaani developer **HEAD se ~38 table peechhe**
+   bethta tha aur `supabase/tests/` ki **53 me se 29 file** missing column par fail hoti
+   thi (`subscriptions.term_months`, `personal_accounts`, `txn_category_rules`). Ab
+   `--local` baseline ke UPAR saari 78 migration kram se lagata hai → **47/53 pass**.
+   - 9 file apna `begin;`/`commit;` khud kholti hain — unhe `--single-transaction` me
+     lapetna galat hai (psql "already a transaction in progress" warn karke aadhi file
+     lagata hai aur phir bhi success bolta hai). Code ye check karta hai.
+   - **SUBSET nahi chalta**: Aug 24–25 ka batch hi `quotes` par `unique (tenant_id, id)`
+     deta hai aur `provisioning_requests` banata hai; baad ki migration unme composite FK
+     daalti hain. Sirf naye 5 lagane par `no unique constraint matching given keys` aata hai.
+   - Failure path CANARY se naapa: ek toota migration daala → exit 1, file ka naam, aur
+     "database is INCOMPLETE". Chup-chaap pass nahi hota.
+3. `config.toml` ka `[db.seed]` comment kehta tha migrations folder "deliberately empty of
+   the old history" hai — **78 file hain**. Comment theek kiya.
+
+## ✅ Brick #5 ka pehla kaam — HO GAYA (local par)
+
+- [x] **Migration lagi** (local): `domains` / `hosting_accounts` / `dns_records`, teeno par
+      RLS on + 4-4 policy.
+- [x] **`domain_hosting_assets_rls.test.sql` PEHLI BAAR CHALA** — aur usme asli bug tha: wo
+      `users.name` insert karta tha, column ka naam `full_name` hai. Test kabhi chal hi
+      nahi sakta tha. Theek kiya.
+- [x] **Green ka matlab banaya** (§25 ka niyam): canary RED (exit 3) · policy
+      `domains_select_own_customer` girai → `FAIL(2)` RED · constraint
+      `dns_records_priority_required` girai → `FAIL(6)` RED · bina mutation GREEN · 4 policy
+      salamat · 0 row peechhe chhooti.
+
+## ⚠️ PROD ~38 TABLE PEECHHE HAI — sabse bada finding
+
+2 Sep ka `baseline.sql` (prod ka dump) me 87 table hain; 78 migration lagane par 125 ho
+jaate hain. Yaani ye migration prod par **kabhi lagi hi nahi**. Baseline me GAYAB:
+
+- `public.provisioning_requests` (`20260825220000`) — brick #1–#4 ka poora provisioning
+  spine isi table ko maan kar chalta hai.
+- `quotes` par `unique (tenant_id, id)` — baseline me sirf `PRIMARY KEY (id)` hai, aur poore
+  baseline me `UNIQUE (tenant_id, id)` **ek bhi nahi**, jabki multi-tenant composite-FK
+  convention isi par khadi hai.
+- `public.personal_accounts` (`20260819170000`), `public.txn_category_rules` (`20260822090000`).
+- `subscriptions.term_months` (`20260816130000`) — par baseline ke **FUNCTION isi column ko
+  padhte hain**, to snapshot khud apne andar se ulta hai: `record_payment` ka raasta ek aisa
+  column padhta hai jo uski table me nahi hai.
+
+**Isliye `db push` ab ek BAHUT bada batch le kar jayega.** `resellersos-env` skill ki line
+"drift 0 hai" (24 Aug) is naap se **stale** hai. Pehle
+`npx supabase migration list --linked` padho, phir kuch socho.
+
+## ⚠️ `next build` is machine par TOOT raha hai — code ki galti NAHI
+
+8 koshish, har baar ALAG jagah aur ALAG error: `Check failed: index < size()`,
+`unreachable code`, `0xC0000005`, SIGSEGV. Ye V8 ke andar ke assertion hain. Saaf `.next`,
+4 GB heap, `npm ci`, dono shell — kisi se farq nahi pada. **Local Node v24.19.0 hai, jabki
+`ci.yml` aur `Dockerfile` dono Node 20 pin karte hain** — build wahin karo. Node 20 par bhi
+toote to machine ki RAM shak ke daayre me hai.
+Tree theek hai: `typecheck 0 · 6462 test pass · lint 0`, aur app `next dev` par chalti hai
+(`/` 200, `/login` 200, `/portal/domains` + `/portal/hosting` → 307 `/portal/login`, zero
+exception).
+
+## ⏳ Ab bhi bacha hua
+
+- [ ] **Migration PROD par lagani hai** — `npx supabase login` chahiye (interactive), aur
+      pehle upar wali drift padho: push akela chalana khatarnaak hai.
+- [x] **Design gate** ✅ 9–10 Sep — teeno chale, asli row par: 4 screen par pehli baar
+      (staff domains/hosting + portal), phir 10 Sep ko `/portal/domains` par dobara.
+      Asli regression mile aur theek hue — 613px table 309px me, `RENEWS`/`LAST ERROR`
+      screen se bahar, aur do reported-not-fixed finding.
+- [x] **Badge `color=` ka murda prop** ✅ 10 Sep — saari 16 jagah theek, `color` ab
+      **type error** hai. Naapa: 118 din purani invoice grey se laal.
+- [x] **DNS management** · **RC customer/contact** ✅ — dono ho gaye (upar dekho).
+- [x] **Renewal sweep** ✅ — `api/cron/asset-sweep` `next_action_at`/`processing_until`
+      dono padhta hai aur `processing_until` se row claim karta hai.
+      ⚠️ **Route hai, par PROD me use koi bulata nahi** — Cloud Scheduler job banana baki
+      hai. Ye ab bhi khula hai, neeche darj.
+- [ ] **🔑 `origin` remote URL me GitHub PAT plaintext pada hai** (`.git/config`). Rotate
+      karo aur credential helper use karo.
+
+---
+
+# 🟣 HANDOFF — 8 Sep 2026. Domain + hosting ka SYSTEM OF RECORD ban gaya; migration LAGNI BAAKI hai.
+
+> Pawan ne bola: domain/hosting service theek se chalao aur customer panel jodo, DMS
+> (`C:\xampp\htdocs\Domain-Management-Project`) se. Do faisle liye gaye:
+> **(1) DMS ko IS app me absorb karo** (bridge nahi) — kyunki DMS me abhi sirf **ek** asli
+> purchase hai (₹1500, 7 Sep, `pay_TZ1iZJxZAZw2Gv`), to data-migration aaj sabse sasta hai;
+> aur DMS ki `primary-billing-integration` branch (36 commit, aaj tak ka kaam) apna GST engine
+> bana rahi hai — do GST series = Rule 46 ki compliance dikkat, isliye ek ghar.
+> **(2) Domain registration ka darwaza KHOLA** — verified LIVE payment par.
+
+## ⚠️ PEHLA KAAM — bina iske do naye portal page CHALENGE NAHI
+
+- [x] **Migration LOCAL par lag gayi** ✅ 9 Sep — local Supabase stack khada hua aur
+      saari 78 migration lagi (127 table). `npx supabase login` ki zaroorat nahi padi.
+      ⚠️ **PROD par ab bhi nahi lagi** — wo neeche khula item hai (interactive login chahiye).
+      ⚠️ `resellersos-env` skill ki line "Pardeep already logged in hai" **galat** hai.
+- [x] **SQL test CHAL GAYE** ✅ 9 Sep — local par **47/53 pass**. Isi me ek asli bug mila:
+      test `users.name` padh raha tha jabki column `full_name` hai — yaani wo test kabhi
+      chala hi nahi tha.
+      ✅ **11 Sep: `npm run test:sql:local` ban gaya** — poori suite **4 second** me.
+      CLI ka `--local` kaam nahi karta (`cannot insert multiple commands into a prepared
+      statement`, kyunki har test `begin; … rollback;` hai; `--db-url` bhi wahi deta hai),
+      isliye local ke liye seedha container ke andar `psql`. Sabse zaroori line
+      `ON_ERROR_STOP=1` hai — uske bina psql exception par bhi exit 0 deta hai, yaani
+      script 53/53 "PASS" chhaap deti aur ek bhi test chalta hi nahi. **Canary ne yahi
+      pakda** (pehli local koshish par wo HARA ho gaya tha).
+      `npm run test:sql` waisa hi hai (production). Unlinked machine par ab wo ek second
+      me rukta hai aur dono raaste batata hai.
+
+      **Chhe failure ka nidan ho gaya — koi bhi CODE ka bug nahi:**
+      · *Schema drift (2)* — `backup` schema aur `backup.snapshots` PROD me hain par
+        kisi committed migration me nahi, to migrations se bani DB me nahi hote.
+        Wahi parivaar jo bug #34 (coupon/promo) ka hai. → `offsite_export_service_role_only`,
+        `pre_reset_shield`
+      · *Local fixture ka mel nahi (4)* — demo seed aur test fixture ek hi hardcoded UUID
+        use karte hain, ya test ko wo data chahiye jo seed banata hi nahi:
+        `quote_accepted_on_first_payment` (tenant 1111… seed me pehle se),
+        `txn_category_rules` (tenant 2222… wahi baat),
+        `sandbox_tenant_isolation` (tenant 7e57e57e… chahiye, seed me nahi),
+        `subscriptions_item_id` (tenant fbb976f1… — buy-page tenant — ka catalog padhta
+        hai, jo local par khaali hai; hamare saare item 1111… ke neeche hain).
+      ✅ **11 Sep: Pardeep ne doosra raasta chuna — test apne namespace me. 51/53 ho gaye.**
+      Reserved prefix `7e57e57e-` (hex-leet "TESTEST", pehle se is repo ka rivaaj).
+      Naapa pehle: poori suite me 213 UUID hain par jo ASLI takkar kar sakte hain
+      (tests ∩ seed.sql) wo sirf **2** the — to 213 badalne ka matlab 211 bekaar edit tha.
+      Namespace wahan lagaya jahan takkar hai, aur **enforce har jagah**.
+      · Takkar wale 2: `quote_accepted_on_first_payment` (1111…), `txn_category_rules`
+        (2222…) — dono apna throwaway tenant banate the, bas id wahi chun li thi jo seed
+        baad me le gaya.
+      · Udhaar wale 2: `sandbox_tenant_isolation` aur `subscriptions_item_id` ek ASLI
+        karmchari ke account (`3caa0f07…`) aur asli buy-page tenant (`fbb976f1…`) par
+        baithe the. Ab dono apna tenant/owner/item khud banate hain. Note: sandbox file ne
+        ye sabak 29 Aug ko EK BAAR seekh liya tha ("fixes that at the root") — par sirf
+        sandbox side par; live side khada reh gaya tha.
+      · **Guard ne ek paanchvi file pakdi jo maine dekhi hi nahi thi**:
+        `offsite_export_service_role_only` me bhi wahi karmchari id thi (drift ki wajah se
+        wo file pehle hi mar jaati thi, to dikhi nahi). Usse asli user ki zaroorat hi nahi
+        thi — case ko bas `auth.uid()` non-null chahiye.
+      **Enforcement (`src/lib/testing/sql-fixture-namespace.test.ts`), teen disha me:**
+      test seed ki id na le · seed reserved namespace na le · koi test production id
+      (karmchari/live tenant) na naame. Teen mutation, teeno pakde gaye.
+      ⏳ **Bache hue 2 = ASLI DRIFT**, jaan-boojh kar laal: `offsite_export_service_role_only`
+      aur `pre_reset_shield` ko `backup` schema aur `backup.snapshots` chahiye, jo PROD me
+      hain par kisi committed migration me nahi (bug #34 ka parivaar). Iska ilaaj migration
+      hai, dheela test nahi.
+
+## ✅ Ho gaya (typecheck 0 · 6462 test pass · lint 0 · build 0, teeno naye route build me)
+
+- [x] **Asset schema** — `domains` / `hosting_accounts` / `dns_records`. Renewal engine
+      DUPLICATE **nahi** kiya: `subscriptions.vendor` me 'domain'/'hosting' pehle se hain aur
+      poora dunning ladder wahin hai. Batwara source-of-truth se: paisa `subscriptions` par,
+      registrar/server ka sach in tables par. `expires_at` (registrar) vs `renewal_date`
+      (billing) alag rakhe — inka na milna asli signal hai.
+- [x] **`classify.ts` + 42 test** — RC ke "error" jo asal me error nahi hain
+      (balance-pending / processing-lock / already-in-progress). Ye ek jagah hai jahan galti
+      = **domain do baar khareeda**. Mutation-checked (ordering todi → sirf sahi test laal).
+- [x] **`orders.ts` + 30 test** — register / renew / transfer / modify-ns / details / orderid,
+      fetch par (axios nahi). Gate: `rcOrderingEnabled()` = credentials **AUR**
+      ~~`DOMAIN_REGISTER_LIVE=1`. Sirf credentials kaafi NAHI~~ — **17 Sep: ULTA.
+      Gate 11 Sep se default KHULA hai, to sirf credentials KAAFI HAIN.** Read side
+      (pricing/availability) wahi key use karti hai aur us par koi gate hai hi nahi.
+- [x] **Ek bug port hone se bacha** — DMS ka `renewDomain`/`transferDomain` HTTP 200 par RC ka
+      in-body `{status:"ERROR"}` padhta hi nahi (sirf `registerDomain` padhta hai), to refuse
+      hui renewal "renewed" likh jaati hai. `rcCall` har op ke liye normalise karta hai.
+- [x] **Domain gate KHULA** — `razorpay/route.ts` me `engineConnected` ab domain ke liye
+      `rcOrderingEnabled()`. Baaki guard jaise the: signature-verified, LIVE mode, rupee-exact
+      amount, autonomy dial.
+- [x] **`/api/cron/provision-domain`** — register → asset row → activated. Teen niyam file ke
+      header me: pending kabhi retry nahi; insert hi claim hai (global unique index); order-id
+      na mile to `pending` + naam se lookup.
+- [x] **provision-hosting ab `hosting_accounts` likhta hai** — warna /portal/hosting khaali.
+- [x] **Customer panel**: `/portal/domains` + `/portal/hosting` (nav me Subscription ke baad,
+      Shop se PEHLE — jo cheez lapse ho sakti hai wo history se aage). Expiry din me, urgency
+      ke saath. Auto-renew toggle **jaan-boojh kar nahi** — migration 0063 ka faisla.
+- [x] **Badge `color=` ka murda prop** — `Badge` `kind` leta hai; 10 file `color=` bhej rahi
+      thi jo HTMLAttributes ki wajah se chup-chaap DOM attribute ban ke gir jaata tha, yaani
+      **har status pill grey**. Teen customer-facing portal page theek kiye.
+      ✅ **10 Sep: baaki 7 internal file bhi theek** (accounting/aging, bills,
+      profitability, saas-metrics, tds-receivable ×2, tds-detail-dialog) + ek aathvi
+      (customer-insights) jo dono prop bhej rahi thi. Ab `color` **type error** hai
+      (`color?: never`), to ye galti build tod degi — bug ki poori tabiyat hi yahi
+      thi ki wo COMPILE ho jaata tha. `toneToKind()` colour-naam se `kind` banata hai,
+      kyunki wahi STATUS_COLOR map kuch page par `tone=` ko bhi jaata hai.
+      Naapa (/accounting/aging, 3 asli overdue invoice): pehle bg 243,241,236 +
+      text 112,105,97 (grey) aur `color="rose"` DOM par pada hua; ab bg 254,236,236 +
+      text 164,25,25 (6.8:1, WCAG AA paas). 118 din purani invoice grey se laal hui.
+
+## ⏳ Bacha hua (is kaam ka scope, poora nahi hua)
+
+- [x] **DNS management** — `lib/resellerclub/dns.ts` (+23 test) aur
+      `lib/directadmin/dns.ts` (+22 test) dono aa gaye, saath me `api/domains/[id]/dns/*`
+      aur staff DNS editor. `planDnsSync` adhoore read par delete se MANA karta hai.
+- [x] **RC customer/contact banana** — `lib/resellerclub/customers.ts` (+21 test):
+      `rcEnsureRegistrant` env ke bharose ke bina customer/contact bana leta hai.
+      Fail hui lookup ko "koi customer nahi" padhna — DMS ka defect — test me pinned.
+- [ ] **Renewal sweep** — `next_action_at` / `processing_until` column hain, cron nahi.
+- [ ] **DMS ka data** — MongoDB → Supabase. Abhi 1 purchase, isliye ab sasta.
+- [ ] **Design gate** — `design-critique` / `accessibility-review` / `layout-audit` **nahi
+      chalaye**. CLAUDE.md §0.9 kehta hai "design done" = teeno pass. `layout-audit` §0 khaali
+      state par shuru hi nahi hota, aur DB access na hone se asli row hain hi nahi.
+      **Migration lagne + 1-2 asli row aane ke BAAD teeno chalane hain.**
+
+## ⚠️ Do dawe jo naapne par GALAT nikle
+
+1. **DMS "mara hua" nahi hai.** `resellerclub/index.ts:5-8` kehta hai iske public API 404 dete
+   hain kyunki GCP owner account kho gaya. Naapa: `app.anutech.in/api/health` → **200**, aaj
+   bhi deploy ho raha hai. Comment stale hai.
+2. **Jo folder bataya gaya wo purana hai.** `Domain-Management-Project-01-09-2026` ka aakhri
+   commit **18 Aug** ka hai. Zinda copy `C:\xampp\htdocs\Domain-Management-Project` hai
+   (branch `primary-billing-integration`, aaj 10:27 ka commit). Port ZINDA wale se hua.
+
+---
+
 # 🟠 HANDOFF — 7 Sep 2026. Subdomain cutover ADHA hai — pehle ise pura karo.
 
 > App ka naya ghar: **reselleros.anutech.in** (live, cert bana, deploy ho chuka — commit 23eecf1).
@@ -82,14 +1320,31 @@ Chaaron faisle Pardeep ne mujhe saunpe (1 Sep shaam) — liye gaye:
 - [x] **F4. ₹1 offer website se UTAR gaya** ✅ — engine+tests fixture par salamat; wapas = DMS promo-engine (Phase 3) ke baad ek line. Live map ka khaali rehna ab TEST se pinned.
 
 Aage (kram se):
-- [x] **M0. DMS Phase-0 suraksha** ✅ 1 Sep — PR #1 (IDOR ownership-scoped, secrets AES-encrypt, backup redact, XFF last-entry, webhook constant-time, role-leak) + PR #2 (2 public read-API) DONO merge to main. ⏳ Baaki sirf: DMS DEPLOY (Pardeep ka pipeline) + Razorpay key/webhook ROTATE (dashboard).
+- [ ] **M0. DMS Phase-0 suraksha — ⛔ YE DAVA GALAT THA (11 Sep par naapa).**
+      ~~✅ 1 Sep — PR #1 (IDOR ownership-scoped, secrets AES-encrypt, backup
+      redact, XFF last-entry, webhook constant-time, role-leak) + PR #2 (2
+      public read-API) DONO merge to main.~~
+      **GitHub API: us repo me aaj tak EK BHI pull request nahi bana**, aur
+      `origin/main` 17 Aug 2026 par khada hai. Ye kaam kabhi merge nahi hua.
+      Naap ka poora hisaab upar wale 11 Sep ke handoff me.
+      Jo ASLI me ho chuka hai: ownership-from-DB ke do fix (`6da4a7f` 9 Jul,
+      `6e17a3d` 10 Jul — dono main par), `lib/field-encryption.ts` (User model
+      me use hota hai), aur webhook constant-time (`70043ba`, 11 Sep, local).
+      Baaki khula: XFF (upar), aur Razorpay key/webhook ROTATE (dashboard).
 - [~] **M1. Jod (chal raha)** — DMS ke 2 public read-API bane (PR #2, availability+tld-pricing, 9 test); website ka hero-search ab ASLI (nakli hash gaya) aur /domains + /pricing rate-card live-merge par (live-tld-pricing.ts). Bacha: (a) website www par deploy, (b) DMS marketing 301. **Buy→cart handoff JAAN-BOOJH KAR Phase-2 me** — cross-origin cart-bridge Phase-2 ke shared-cart me delete ho jata, isliye throwaway nahi banaya. Zinda hone ki shart: DMS PR #1+#2 merge+deploy.
 - [ ] **M2. Ek ghar**: website → DMS (marketing) route-group; SEO greenfield; ek cart; cross-repo test-path theek.
 - [ ] **M3. Promo-engine DMS me** (₹1 wapas) + inner reskin + webhook-consolidation.
 
 ## 👉 sirf Pardeep (audit se)
 
-- [ ] **DMS repo → PRIVATE karna (F1)**: github.com/exceltechnologies-india/domain-management-system → Settings → neeche “Danger Zone” → “Change visibility” → Private. (IDOR+secrets chhape hain — sabse pehla click.)
+- [x] ~~**DMS repo → PRIVATE karna (F1)**~~ — **RADD. Pardeep ka faisla 11 Sep:
+      public hi rahega.** Aur jo wajah likhi thi ("IDOR+secrets chhape hain")
+      wo naapne par khadi nahi hui: 2,048 commit / 704k diff line scan me **ek
+      bhi asli credential commit me nahi** hai, fork 0 hain, aur jo ek leak
+      2026-05 me hua tha (Atlas URI) wo 29 Jun ko purge + force-push + password
+      ROTATE ho chuka hai. Uski jagah asli list upar wale 11 Sep ke handoff me —
+      sabse zaroori: **GitHub par Secret scanning + Push protection ON karo**
+      (public repo par muft), aur `getClientIp` ka XFF fix (muft-trial bypass).
 - [ ] GitHub-secrets me DB creds (SQL-tests-in-CI + Cloud Build migration-gate dono isi par atke hain) — repo ka apna note: "decision, not a cleanup"
 - [ ] Razorpay LIVE keys + Resend domain verify (purane, ab bhi khade)
 

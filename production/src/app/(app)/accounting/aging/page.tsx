@@ -250,7 +250,7 @@ export default function AgingPage() {
                       <div className="font-semibold text-ink font-mono">{rupee(r.total)}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge color={r.oldestDays > 90 ? "rose" : r.oldestDays > 30 ? "amber" : "slate"}>
+                      <Badge kind={r.oldestDays > 90 ? "danger" : r.oldestDays > 30 ? "warning" : "muted"}>
                         {r.oldestDays} days
                       </Badge>
                     </td>
@@ -308,7 +308,7 @@ export default function AgingPage() {
                     <Mini label="90+"     value={r.buckets.over90} tone={r.buckets.over90 > 0 ? "rose" : undefined} />
                   </div>
                   <div className="flex items-center justify-between">
-                    <Badge color={r.oldestDays > 90 ? "rose" : r.oldestDays > 30 ? "amber" : "slate"}>
+                    <Badge kind={r.oldestDays > 90 ? "danger" : r.oldestDays > 30 ? "warning" : "muted"}>
                       {r.oldestDays} days old
                     </Badge>
                     <div className="flex gap-2">
@@ -318,8 +318,8 @@ export default function AgingPage() {
                             `Hi from ${bizName} — ${rupee(r.total)} is pending on your account. When can we expect the payment?`)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-paper"
-                          style={{ background: "#25D366" }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-whatsapp text-whatsapp-fg"
+                         
                         >
                           <Icon name="whatsapp" size={12} /> WhatsApp
                         </a>

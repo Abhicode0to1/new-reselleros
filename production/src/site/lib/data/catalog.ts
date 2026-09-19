@@ -16,6 +16,44 @@ export interface Tld {
   group: "Popular" | "Business" | "Tech";
 }
 
+/**
+ * ⚠ THESE ARE THE NUMBERS A CUSTOMER IS SHOWN AND CHARGED, AND THEY ARE BELOW COST.
+ *
+ * Not decoration: /domains renders this table (DomainLanding.tsx), and the
+ * server-side re-pricer takes `reg` from here as its "OWN source of truth"
+ * (api/public/checkout/cart/route.ts:91-93) — so this is the amount Razorpay
+ * collects, with `cost: 0` recorded against it.
+ *
+ * Measured 16 Sep 2026 against the live ResellerClub account, register price,
+ * one year, in rupees — every row sells under what we pay:
+ *
+ *     .in      499 / 863      .com    899 / 1199    .co.in   599 / 779
+ *     .org    1099 / 1350     .net   1199 / 1559    .company 799 / 1595
+ *     .agency 1899 / 2663     .dev   1499 / 1535    .io     3899 / 5747
+ *     .cloud   899 / 1907     .app   1299 / 1787
+ *     .store   249 / 4788     .shop   299 / 3839    <- 4,539 and 3,540 under
+ *     .ai     6999 / 8807, AND THE TERM IS WRONG — see below
+ *
+ * `.store` and `.shop` read like first-year promos, and a loss-leader is a real
+ * strategy — but the promo is not coming from ResellerClub, so the difference
+ * is ours to absorb on every single sale.
+ *
+ * `.ai` is a different mistake. This row sells "registration, 1 year" for 6,999
+ * and there is no such thing: the .ai registry has a 2-YEAR MINIMUM, so
+ * ResellerClub prices it only at two years — 8,807 to register, 9,347 to renew.
+ * The row promises a term that cannot be bought, at 1,808 under the cost of the
+ * term that can.
+ *
+ * (Corrected 17 Sep 2026. This comment first said .ai had no product on the
+ * account at all. It does — `dotai`, in both the customer and reseller price
+ * maps, and ResellerClub answers availability for it. It LOOKED absent because
+ * the price reader asked every product for its 1-year price and .ai has none,
+ * which is the defect fixed in lib/resellerclub/index.ts the same day.)
+ *
+ * site/lib/live-tld-pricing.ts was written to replace these with the real
+ * customer price and was never wired to anything. Wiring it raises every
+ * advertised price, which is why it has not been done quietly.
+ */
 export const TLDS: readonly Tld[] = [
   { tld: ".in", reg: 499, renew: 799, transfer: 649, use: "Indian businesses", group: "Popular" },
   { tld: ".com", reg: 899, renew: 1199, transfer: 999, use: "Anything, anywhere", group: "Popular" },

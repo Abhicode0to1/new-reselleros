@@ -15,6 +15,7 @@ import { WorkspaceTabBar } from "@/components/layout/workspace-tab-bar";
 import { GlobalBugReporter } from "@/components/shared/global-bug-reporter";
 import { AttendanceReminder } from "@/components/features/attendance/attendance-reminder";
 import { ShortcutsSheet } from "@/components/shared/shortcuts-sheet";
+import { StaffAreaGuard } from "@/components/layout/staff-area-guard";
 import { useGlobalKeys } from "@/lib/hooks/useKeyboard";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useGlobalKeys(() => setHelpOpen(true));
 
   return (
+    /* ─── ONE PLACE, BECAUSE THE PROBLEM WAS EVERY PLACE ──────────────────────
+       A signed-in PORTAL CUSTOMER passes the middleware (it checks for a session,
+       and theirs is a real one) and then renders this whole shell around an empty
+       page, because the staff RLS policies resolve their tenant through `users`
+       and find nothing. Guarding it here covers every route in the group at once
+       — there are more than thirty, and a per-page check would be missing from
+       the next one somebody adds. It is inert for staff: see the component. */
+    <StaffAreaGuard>
     <div className="flex min-h-screen bg-paper-2/50">
       {/* Desktop sidebar (sticky 240px) */}
       <Sidebar />
@@ -65,5 +74,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           list a shortcut nobody implemented — or omit one that works. */}
       <ShortcutsSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
+    </StaffAreaGuard>
   );
 }

@@ -10,6 +10,25 @@
  * price, server-side, 10-minute revalidate — a price change in the platform's
  * admin reaches the site within ten minutes, no redeploy.
  *
+ * ─── EXCEPT IT DOES NOT, BECAUSE NOTHING CALLS IT ───────────────────────────
+ * Measured 16 Sep 2026: `fetchLiveTldPricing` and `mergeTlds` have ZERO callers
+ * in the repo. `/domains` renders `TLDS` straight out of catalog.ts
+ * (DomainLanding.tsx:36), and so does the checkout re-pricer
+ * (api/public/checkout/cart/route.ts:91). So the paragraph above describes an
+ * intention, not the running site — the placeholders this module was written to
+ * correct are still the numbers a customer is shown and charged.
+ *
+ * What that costs, measured against the live ResellerClub account the same day:
+ * every one of the 14 advertised TLDs is priced BELOW what the registrar
+ * charges us. `.store` is sold at 249 and costs 4,788; `.shop` at 299 costs
+ * 3,839; `.in` at 499 costs 863. `.ai` is advertised at 6,999 for a ONE-YEAR
+ * registration that does not exist — its registry sells a 2-year minimum, which
+ * ResellerClub prices at 8,807.
+ *
+ * Wiring this up is a one-line change in the /domains page and the cart route.
+ * It is left undone deliberately: it would RAISE every advertised price, which
+ * is a decision for the business, not a cleanup.
+ *
  * When the platform is unreachable, the placeholder stands and the page still
  * renders (a rate table that 500s on an API hiccup is worse than a briefly
  * stale one). It NEVER invents: a missing real price keeps the placeholder and
@@ -23,6 +42,7 @@ import { TLDS, type Tld } from "./data/catalog";
    copy of a money-facing integration. When the credentials are absent (local
    dev), everything below falls back to the engine URL exactly as before. */
 import { rcConfigured, rcTldPricing } from "@/lib/resellerclub";
+import { syncableTlds } from "@/lib/domains/catalog-sync";
 
 export interface LiveTldPrice {
   tld: string; // ".in"
@@ -30,6 +50,9 @@ export interface LiveTldPrice {
   renew: number | null;
   transfer: number | null;
   currency: string;
+  /** Term the amounts buy, in years. Absent from the engine's rows, which only
+      ever quoted annually — see lib/domains/catalog-sync.ts. */
+  years?: number;
 }
 
 export async function fetchLiveTldPricing(tlds: readonly string[]): Promise<LiveTldPrice[] | null> {
@@ -44,6 +67,7 @@ export async function fetchLiveTldPricing(tlds: readonly string[]): Promise<Live
       renew: r.renew,
       transfer: r.transfer,
       currency: r.currency,
+      years: r.years,
     })) ?? null;
   }
   try {
@@ -79,7 +103,11 @@ export interface MergedTld extends Tld {
  */
 export function mergeTlds(live: LiveTldPrice[] | null): MergedTld[] {
   if (!live) return TLDS.map((t) => ({ ...t }));
-  const byTld = new Map(live.map((r) => [r.tld.toLowerCase(), r]));
+  /* The same rule the catalogue sync applies, from the same place: this table's
+     reg/renew/transfer columns are ANNUAL and have no way to say otherwise, so a
+     TLD sold in a longer minimum term (.ai is two years) keeps its placeholder
+     rather than overlaying a two-year figure into a one-year column. */
+  const byTld = new Map(syncableTlds(live).sync.map((r) => [r.tld.toLowerCase(), r]));
   return TLDS.map((t) => {
     const r = byTld.get(t.tld.toLowerCase());
     if (!r || r.register == null) return { ...t };

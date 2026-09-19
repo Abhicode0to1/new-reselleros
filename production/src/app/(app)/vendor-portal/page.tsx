@@ -1,3 +1,36 @@
+/**
+ * ─── OUT OF SCOPE. NOT THE DEVELOPER'S CALL. (Pardeep, 16 Sep 2026) ──────────
+ *
+ * "Vendor portal is not my jurisdiction as developer."
+ *
+ * So: do not audit this screen, do not tokenise its colours, do not replace its
+ * data, do not remove it from the nav. It is listed here so nobody spends
+ * another afternoon rediscovering what it is and proposing the same fixes.
+ *
+ * WHAT IT IS, measured 16 Sep 2026 — stated so the next reader does not have to
+ * find out the hard way, and so nobody mistakes it for a working screen:
+ *
+ *   2,947 lines · 0 Supabase calls · 0 useQuery/useMutation · 6 localStorage
+ *
+ * Everything on it comes from four const arrays below — INITIAL_BIDS,
+ * INITIAL_RFQS, INITIAL_BILLS, VENDOR_SCORECARDS — naming REAL Indian IT
+ * distributors (Redington India Ltd, Ingram Micro Cloud, Savex Technologies)
+ * against invented rupee figures. A bid an operator places is written to
+ * localStorage under "resellersos_vendor_bids_v3": it survives a refresh on
+ * that one browser and reaches no server, no colleague and no vendor.
+ *
+ * Reachable at /vendor-portal (lib/nav.ts, "Purchases" group) and linked twice
+ * from /accounting/vendors, including a "Buy Products from {vendor}" button.
+ *
+ * NOT customer-facing. Verified 16 Sep 2026 by signing in as a portal customer
+ * and requesting this URL: the page-level staff guard answers "This part is for
+ * staff" and no distributor name renders. The invented data is visible to STAFF
+ * only.
+ *
+ * Two sweeps still report it and that is deliberate — `npm run sweep` hides
+ * nothing. Two of find-fake-data's 22 rows are lines 79 and 113 here. Expect
+ * them; they are not a regression.
+ */
 "use client";
 
 import * as React from "react";
@@ -834,7 +867,7 @@ function CompareVendorsModal({
                         onPlacePo(b);
                         onClose();
                       }}
-                      className="bg-primary text-white font-bold text-xs"
+                      className="bg-primary text-primary-foreground font-bold text-xs"
                     >
                       🛒 Issue PO
                     </Button>
@@ -1012,7 +1045,7 @@ function EditVendorCardModal({
                     }}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                       isSel
-                        ? "bg-primary text-white border-primary font-bold shadow-2xs"
+                        ? "bg-primary text-primary-foreground border-primary font-bold shadow-2xs"
                         : "bg-paper border-hairline text-ink hover:border-primary/40"
                     }`}
                   >
@@ -1900,7 +1933,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("comparison")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "comparison"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1912,7 +1945,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("calculator")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "calculator"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1924,7 +1957,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("rfqs")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "rfqs"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1936,7 +1969,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("scorecards")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "scorecards"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1948,7 +1981,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("addBid")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "addBid"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1960,7 +1993,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("bills")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "bills"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1972,7 +2005,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("keys")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "keys"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -1984,7 +2017,7 @@ export default function VendorPortalPage() {
           onClick={() => setActiveTab("agreements")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
             activeTab === "agreements"
-              ? "bg-primary text-white shadow-xs"
+              ? "bg-primary text-primary-foreground shadow-xs"
               : "bg-paper-2/70 text-ink-3 hover:text-ink"
           }`}
         >
@@ -2017,7 +2050,7 @@ export default function VendorPortalPage() {
                   onClick={() => setVendorSourceFilter("dbOnly")}
                   className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     vendorSourceFilter === "dbOnly"
-                      ? "bg-primary text-white shadow-2xs font-extrabold"
+                      ? "bg-primary text-primary-foreground shadow-2xs font-extrabold"
                       : "text-ink-3 hover:text-ink"
                   }`}
                 >
@@ -2130,7 +2163,7 @@ export default function VendorPortalPage() {
               >
                 {/* Best Value Ribbon */}
                 {bid.isBestValue && (
-                  <div className="absolute -top-3 right-4 bg-amber-500 text-white font-bold text-3xs uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs flex items-center gap-1">
+                  <div className="absolute -top-3 right-4 bg-amber text-amber-fg font-bold text-3xs uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs flex items-center gap-1">
                     <Icon name="award" size={12} />
                     <span>Best Price & Margin Deal</span>
                   </div>
@@ -2904,7 +2937,7 @@ export default function VendorPortalPage() {
             <Button
               size="sm"
               onClick={() => setIsCompareModalOpen(true)}
-              className="bg-primary text-white font-bold text-xs hover:bg-primary/90"
+              className="bg-amber text-amber-fg font-bold text-xs hover:bg-amber-hover"
             >
               ⚔️ Compare Matrix ({comparedBidIds.length})
             </Button>

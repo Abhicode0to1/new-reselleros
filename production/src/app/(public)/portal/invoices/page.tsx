@@ -5,22 +5,29 @@
  * elsewhere in the app. For now just lists invoices — PDF generation
  * happens server-side via the existing /lib/pdf pipeline.
  */
+import Link from "next/link";
 import { requirePortalSession } from "@/lib/portal/session";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { rupee, formatDate } from "@/lib/utils";
-import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
 import { PayInvoiceButton } from "./_components/pay-invoice-button";
+import { PortalPageHeader, PortalStats } from "../_components/portal-page";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_COLOR: Record<string, "emerald" | "amber" | "rose" | "slate"> = {
-  paid:    "emerald",
-  pending: "amber",
-  overdue: "rose",
-  void:    "slate",
-  draft:   "slate",
+/* Badge takes `kind`, not `color`. Every one of these pills was passing
+   `color=` — which BadgeProps accepts only because it extends
+   HTMLAttributes, so it landed on the <span> as a dead DOM attribute and
+   the badge rendered muted grey whatever the status was: paid, overdue and
+   draft all looked identical. Fixed 8 Sep 2026. */
+const STATUS_KIND: Record<string, "success" | "warning" | "danger" | "muted"> = {
+  paid:    "success",
+  pending: "warning",
+  overdue: "danger",
+  void:    "muted",
+  draft:   "muted",
 };
 
 export default async function PortalInvoicesPage() {
@@ -34,6 +41,12 @@ export default async function PortalInvoicesPage() {
     .order("invoice_date", { ascending: false });
 
   const rows = invoices ?? [];
+  /* `net_payable` is what the customer actually owes after any TDS; `amount` is
+     the pre-deduction figure. Falling back to `amount` would overstate the
+     total on every invoice where tax was deducted at source. */
+  const unpaid = rows.filter((r) => r.status === "pending" || r.status === "overdue");
+  const unpaidCount = unpaid.length;
+  const amountDue = unpaid.reduce((s, r) => s + (r.net_payable ?? r.amount ?? 0), 0);
 
   const totalOutstanding = rows
     .filter((i) => i.status === "pending" || i.status === "overdue")
@@ -41,12 +54,31 @@ export default async function PortalInvoicesPage() {
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Tax Invoices</h1>
-        <p className="text-sm text-ink-3 mt-1">
-          GST tax invoices issued to your account · HSN 998313 · 18% GST.
-        </p>
-      </div>
+      <PortalPageHeader
+        title="Tax Invoices"
+        sub="GST tax invoices issued to your account · HSN 998313 · 18% GST."
+      />
+
+      {/* What is owed comes first: it is the only number on this page that asks
+          the reader to do something. */}
+      <PortalStats
+        items={[
+          { label: "Invoices", value: rows.length, icon: "receipt" },
+          {
+            label: "Unpaid",
+            value: unpaidCount,
+            icon: "alert",
+            accent: unpaidCount > 0 ? "rose" : "emerald",
+          },
+          {
+            label: "Amount due",
+            value: amountDue,
+            asCurrency: true,
+            icon: "rupee",
+            accent: amountDue > 0 ? "rose" : "emerald",
+          },
+        ]}
+      />
 
       {totalOutstanding > 0 && (
         <Card className="p-4 mb-6 border-rose/40 bg-rose-soft/30">
@@ -58,9 +90,13 @@ export default async function PortalInvoicesPage() {
       )}
 
       {rows.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-ink-3">
-          No invoices issued yet. They appear here once {reseller} raises a tax
-          invoice against your paid order.
+        <Card className="p-6">
+          <EmptyState
+            icon="receipt"
+            title="No invoices yet"
+            body={`They appear here once ${reseller} raises a tax invoice against your paid order.`}
+            compact
+          />
         </Card>
       ) : (
         <>
@@ -75,7 +111,7 @@ export default async function PortalInvoicesPage() {
                     <p className="font-mono text-sm text-ink">{inv.id}</p>
                     <p className="mt-0.5 text-2xs text-ink-3">{formatDate(inv.invoice_date)}</p>
                   </div>
-                  <Badge color={STATUS_COLOR[inv.status] ?? "slate"}>{inv.status}</Badge>
+                  <Badge kind={STATUS_KIND[inv.status] ?? "muted"}>{inv.status}</Badge>
                 </div>
                 <div className="mt-3 flex items-end justify-between gap-3">
                   <div>
@@ -130,7 +166,7 @@ export default async function PortalInvoicesPage() {
                     {inv.gst_irn ?? "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge color={STATUS_COLOR[inv.status] ?? "slate"}>{inv.status}</Badge>
+                    <Badge kind={STATUS_KIND[inv.status] ?? "muted"}>{inv.status}</Badge>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-3">
@@ -155,18 +191,16 @@ export default async function PortalInvoicesPage() {
         </>
       )}
 
-      {tenantWhatsAppLink(session.tenantPhone, `Hi ${reseller}, I have a question about an invoice.`) && (
-        <div className="mt-6 text-2xs text-ink-3 text-center">
-          Questions about an invoice? WhatsApp {reseller} on{" "}
-          <a
-            href={tenantWhatsAppLink(session.tenantPhone, `Hi ${reseller}, I have a question about an invoice.`)!}
-            target="_blank" rel="noopener noreferrer"
-            className="text-amber-ink hover:underline"
-          >
-            {phoneDisplay(session.tenantPhone)}
-          </a>
-        </div>
-      )}
+      {/* Support goes through the ticket system, not a phone number
+          (Pardeep, 16 Sep 2026). An invoice question raised here keeps the
+          invoice reference with it and stays answerable by anyone on the team. */}
+      <div className="mt-6 text-2xs text-ink-3 text-center">
+        Questions about an invoice?{" "}
+        <Link href="/portal/support/new" className="text-amber-ink hover:underline">
+          Raise a ticket
+        </Link>{" "}
+        and we will look it up.
+      </div>
     </div>
   );
 }

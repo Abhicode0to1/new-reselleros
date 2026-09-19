@@ -281,6 +281,7 @@ export function BulkDomainsDialog({ open, onOpenChange, catalog, customerId, onA
 function TabBtn({ active, onClick, disabled, children }: { active: boolean; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled}
+      aria-pressed={active}
       className={cn(
         "px-3 py-2 text-xs font-medium -mb-px border-b-2 transition-colors",
         active ? "border-amber text-ink" : "border-transparent text-ink-3 hover:text-ink",

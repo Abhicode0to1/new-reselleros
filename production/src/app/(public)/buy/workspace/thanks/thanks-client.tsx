@@ -74,8 +74,8 @@ export function ThanksClient({
               href={whatsappLink("Hi Pardeep, I just paid for Google Workspace but the confirmation page can't find my order.")}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-5 h-11 rounded-lg font-medium text-paper"
-              style={{ background: "#25D366" }}
+              className="inline-flex items-center justify-center gap-2 px-5 h-11 rounded-lg font-medium bg-whatsapp text-whatsapp-fg"
+             
             >
               <Icon name="whatsapp" size={18} />
               WhatsApp Pardeep
@@ -146,7 +146,13 @@ export function ThanksClient({
         style={{
           background:
             "radial-gradient(circle at 50% 0%, rgba(16,185,129,0.10) 0%, transparent 60%)," +
-            "linear-gradient(180deg, rgba(250,248,242,1) 0%, rgba(250,248,242,0.96) 100%)",
+            /* hsl(var(--paper)), not a frozen rgba: this literal was #FAF8F2 —
+               exactly --paper in the LIGHT theme — so the hero kept a near-white
+               ground while the text on it uses theme tokens and turns cream in
+               dark mode. Measured on this page with the stored theme dark:
+               "Indian SMEs" and the headline scored 1.01:1 against their own
+               hero. The page that asks for the money rendered nearly blank. */
+            "linear-gradient(180deg, hsl(var(--paper)) 0%, hsl(var(--paper) / 0.96) 100%)",
         }}
       >
         <div className="max-w-[1080px] mx-auto px-6 py-10 md:py-14 text-center">
@@ -305,8 +311,8 @@ export function ThanksClient({
             href={whatsappLink(waSupportMsg)}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-lg font-medium text-paper transition-transform hover:scale-[1.02] text-base mb-4"
-            style={{ background: "#25D366", boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
+            className="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-lg font-medium bg-whatsapp text-whatsapp-fg transition-transform hover:scale-[1.02] text-base mb-4"
+            style={{ boxShadow: "0 8px 20px rgba(37,211,102,0.30)" }}
           >
             <Icon name="whatsapp" size={20} className="text-paper" />
             WhatsApp Pardeep — {PARDEEP_PHONE_DISPLAY}

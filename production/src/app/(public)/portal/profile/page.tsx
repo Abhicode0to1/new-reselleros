@@ -2,7 +2,7 @@
  * /portal/profile — read-only company info on file with the reseller.
  *
  * For v1 customers cannot edit (would need a workflow for verification).
- * They can request changes via the WhatsApp link.
+ * They request changes by raising a ticket — there is no phone route.
  */
 import Link from "next/link";
 import { requirePortalSession } from "@/lib/portal/session";
@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { tenantWhatsAppLink } from "@/lib/portal/branding";
+import { PortalPageHeader } from "../_components/portal-page";
 
 export const dynamic = "force-dynamic";
 
@@ -25,13 +25,16 @@ export default async function PortalProfilePage() {
     .maybeSingle();
 
   return (
-    <div className="max-w-[800px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Profile</h1>
-        <p className="text-sm text-ink-3 mt-1">
-          What we have on file. Changes? Message {session.tenantContactName ?? session.tenantName} — we&apos;ll update + acknowledge.
-        </p>
-      </div>
+    /* 1080px, like every other content page in the portal. It was 800 with no
+       reason recorded, which reads as drift rather than a decision — and next
+       to the other pages it made the header start in a different place. The
+       narrow measure that IS deliberate is on `support/new`, a form, where it
+       is now written down. */
+    <div className="max-w-[1080px] mx-auto px-6 py-8">
+      <PortalPageHeader
+        title="Profile"
+        sub={`What we have on file. Changes? Message ${session.tenantContactName ?? session.tenantName} — we'll update and acknowledge.`}
+      />
 
       <Card className="p-6 mb-4">
         <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
@@ -61,32 +64,20 @@ export default async function PortalProfilePage() {
         </dl>
       </Card>
 
-      <Card className="p-6 text-center">
+      {/* Left-aligned, like the rest of the portal. */}
+      <Card className="p-6">
         <div className="text-sm text-ink-2 mb-3">
           Need to update GSTIN, address, primary contact, or any other detail?
         </div>
-        {(() => {
-          const reseller = session.tenantContactName ?? session.tenantName;
-          const waLink = tenantWhatsAppLink(
-            session.tenantPhone,
-            `Hi ${reseller}, please update my profile (${customer?.name ?? "customer"}): ...`,
-          );
-          return waLink ? (
-            <Button asChild variant="primary">
-              <a href={waLink} target="_blank" rel="noopener noreferrer">
-                <Icon name="whatsapp" size={14} className="mr-1.5" />
-                WhatsApp {reseller}
-              </a>
-            </Button>
-          ) : (
-            <Button asChild variant="primary">
-              <Link href="/portal/support">
-                <Icon name="ticket" size={14} className="mr-1.5" />
-                Raise a request
-              </Link>
-            </Button>
-          );
-        })()}
+        {/* One route, not two. Profile changes go through a ticket so the
+            request is written down and anyone on the team can action it
+            (Pardeep, 16 Sep 2026). */}
+        <Button asChild variant="primary">
+          <Link href="/portal/support/new">
+            <Icon name="message_square" size={14} className="mr-1.5" />
+            Request a change
+          </Link>
+        </Button>
       </Card>
 
       <div className="mt-6 text-2xs text-ink-3 text-center">

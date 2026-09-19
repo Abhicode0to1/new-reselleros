@@ -94,3 +94,102 @@ insert into public.subscriptions (tenant_id, customer_name, domain, plan, vendor
 ('11111111-1111-1111-1111-111111111111', 'Delta Pvt Ltd',      'deltapl.com',   'Workspace Plus', 'google',    50, 48, 69000,  '2024-06-22', '2026-06-22', 'active', false),
 ('11111111-1111-1111-1111-111111111111', 'Echo Pharma',        'echopharma.in', 'Enterprise',     'google',    80, 78, 115200, '2024-01-10', '2027-01-10', 'active', false),
 ('11111111-1111-1111-1111-111111111111', 'Hotel Royal Group',  'hrgroup.com',   'Workspace Std',  'google',    8,  8,  5888,   '2025-05-24', '2026-05-24', 'active', true);
+
+-- ============================================================
+-- DEMO SIGN-INS — the two accounts the login page advertises
+-- ============================================================
+-- Added 9 Sep 2026, because the login page and this file contradicted each other.
+--
+-- src/app/(auth)/login/page.tsx:38-39 prints a "Dev mode - demo accounts" panel
+-- naming pardeep@anutech.in / ResellerOS@2026 and
+-- pardeep@exceltechnologies.in / ExcelTech@2026, and offers to autofill them.
+-- Neither existed on a local stack: `baseline.sql` is `db dump --schema public`,
+-- so it carries no `auth` schema at all, and the header of this file said the
+-- auth user was a manual step to do "via the Supabase dashboard or the signup
+-- flow". So a developer following `npm run setup` got a login screen advertising
+-- credentials that could not work, and an "Invalid login credentials" toast with
+-- nothing wrong anywhere. Measured: both failed against a freshly built database.
+--
+-- Passwords are hashed with bcrypt via pgcrypto because that is what GoTrue
+-- reads - an existing GoTrue-created row on this stack stores `$2a$10$...`, and
+-- `gen_salt('bf', 10)` produces the same form. LOCAL ONLY: these are the
+-- passwords already printed on the page, so they are not a secret being leaked
+-- here, and a hosted project never runs this file.
+
+-- Tenant 2: the distributor. Two tenants rather than one is also the only way to
+-- exercise tenant isolation locally, and RLS is the thing most likely to be got
+-- wrong without a second tenant to get it wrong against.
+insert into public.tenants (id, name, gstin, state, state_code, address, email, phone, tier) values
+('22222222-2222-2222-2222-222222222222',
+ 'Anutech Digital Pvt Ltd',
+ '06AABCA1234A1Z5',
+ 'Haryana',
+ '06',
+ 'Gurugram, Haryana 122001',
+ 'pardeep@anutech.in',
+ '+91 98100 00000',
+ 'distributor')
+on conflict (id) do nothing;
+
+do $$
+declare
+  v_users jsonb := jsonb_build_array(
+    jsonb_build_object(
+      'id',    'aaaaaaaa-0000-4000-8000-00000000a001',
+      'email', 'pardeep@anutech.in',
+      'pass',  'ResellerOS@2026',
+      'name',  'Pardeep (Anutech Digital)',
+      'tenant','22222222-2222-2222-2222-222222222222'
+    ),
+    jsonb_build_object(
+      'id',    'aaaaaaaa-0000-4000-8000-00000000a002',
+      'email', 'pardeep@exceltechnologies.in',
+      'pass',  'ExcelTech@2026',
+      'name',  'Pardeep (Excel Technologies)',
+      'tenant','11111111-1111-1111-1111-111111111111'
+    )
+  );
+  u jsonb;
+begin
+  for u in select * from jsonb_array_elements(v_users) loop
+    insert into auth.users (
+      id, instance_id, aud, role, email, encrypted_password,
+      email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+      created_at, updated_at,
+      /* EMPTY STRINGS, NOT NULL, and this is the whole reason the first attempt
+         failed with "Database error querying schema". GoTrue scans these into
+         non-nullable Go strings, so a NULL makes every sign-in for the row error
+         out - the row looks perfectly fine in psql. Copied from the shape of a
+         row GoTrue created itself on this stack rather than guessed. */
+      confirmation_token, recovery_token, email_change, email_change_token_new,
+      email_change_token_current, phone_change, phone_change_token, reauthentication_token
+    ) values (
+      (u->>'id')::uuid,
+      '00000000-0000-0000-0000-000000000000',
+      'authenticated', 'authenticated',
+      u->>'email',
+      extensions.crypt(u->>'pass', extensions.gen_salt('bf', 10)),
+      now(),
+      '{"provider":"email","providers":["email"]}'::jsonb,
+      jsonb_build_object('full_name', u->>'name'),
+      now(), now(),
+      '', '', '', '', '', '', '', ''
+    )
+    on conflict (id) do nothing;
+
+    /* GoTrue will not sign a user in without the matching identity row. */
+    insert into auth.identities (provider_id, user_id, identity_data, provider, created_at, updated_at)
+    values (
+      u->>'email', (u->>'id')::uuid,
+      jsonb_build_object('sub', u->>'id', 'email', u->>'email', 'email_verified', true),
+      'email', now(), now()
+    )
+    on conflict do nothing;
+
+    /* The staff row the app actually reads. Without it a signed-in user has no
+       tenant and every screen is empty - see lib/domains/authz.ts. */
+    insert into public.users (id, tenant_id, email, full_name, role)
+    values ((u->>'id')::uuid, (u->>'tenant')::uuid, u->>'email', u->>'name', 'owner')
+    on conflict (id) do nothing;
+  end loop;
+end $$;

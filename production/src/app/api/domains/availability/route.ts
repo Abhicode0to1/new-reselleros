@@ -49,16 +49,26 @@ export async function GET(req: NextRequest) {
       .map((tld) => {
         const a = byDomain.get(`${name}.${tld}`);
         if (!a) return null;
-        const register = priceByTld.get(tld)?.register ?? null;
+        const priced = priceByTld.get(tld);
+        const register = priced?.register ?? null;
+        /* `available: null` means ResellerClub answered the batch but not
+           usefully for this name, and the individual re-ask failed too (see
+           lib/resellerclub/index.ts on RC's concatenated key). It must NOT
+           collapse to `false`: TAKEN is the one answer that stops a customer
+           trying to buy a name that may be free. */
+        const checked = a.available !== null;
         return {
           domain: a.domain,
-          available: a.available,
+          available: a.available === true,
+          checked,
           /* Pricing can fail while availability succeeds; priceKnown=false shows
              "price on request" rather than a made-up number. */
           price: register ?? 0,
           currency: "INR",
-          years: 1,
-          priceKnown: a.available && register !== null,
+          /* Not always 1. .ai is sold in a 2-year minimum term, and quoting its
+             price against the wrong term is a wrong price. */
+          years: priced?.years ?? 1,
+          priceKnown: a.available === true && register !== null,
         };
       })
       .filter((d): d is NonNullable<typeof d> => d !== null);

@@ -420,7 +420,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
                     type="button"
                     onClick={() => setLang("en")}
                     className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
-                      lang === "en" ? "bg-primary text-white shadow-2xs" : "text-ink-3 hover:text-ink"
+                      lang === "en" ? "bg-primary text-primary-foreground shadow-2xs" : "text-ink-3 hover:text-ink"
                     }`}
                   >
                     🌐 English
@@ -456,6 +456,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
 
                             return (
                               <button
+                                aria-pressed={isSelected}
                                 key={oIdx}
                                 type="button"
                                 onClick={() => setAnswers({ ...answers, [idx]: optText })}
@@ -519,7 +520,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
                     onClick={() => setActiveTab("proposal")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       activeTab === "proposal"
-                        ? "bg-primary text-white shadow-xs"
+                        ? "bg-primary text-primary-foreground shadow-xs"
                         : "bg-paper-2 text-ink-3 hover:text-ink"
                     }`}
                   >
@@ -530,7 +531,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
                     onClick={() => setActiveTab("tasks")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       activeTab === "tasks"
-                        ? "bg-primary text-white shadow-xs"
+                        ? "bg-primary text-primary-foreground shadow-xs"
                         : "bg-paper-2 text-ink-3 hover:text-ink"
                     }`}
                   >
@@ -630,7 +631,7 @@ function AiPlanDialog({ projectId, team, project, startSeq, onClose }: {
               loading={bulk.isPending}
               disabled={rows.length === 0}
               onClick={createAll}
-              className="font-bold px-5 bg-primary text-white"
+              className="font-bold px-5 bg-primary text-primary-foreground"
             >
               ⚡ Add {rows.length} Phase Tasks to Project Roadmap
             </Button>

@@ -35,6 +35,41 @@ export interface Finding {
   what: string;
 }
 
+/**
+ * ResellerClub ka wallet — jisme se HAR domain registration ka paisa jaata hai.
+ *
+ * 10 Sep 2026 ko joda gaya. Wallet khali ho to registration fail hoti hai — par
+ * customer ka paisa hum pehle hi le chuke hote hain. Poore domain path ki sabse
+ * buri shakl yahi hai: order paid, domain nahi, aur pata customer ko chalta hai,
+ * hume nahi.
+ *
+ * `available: null` ka matlab "padh hi nahi paye" hai, "khali hai" nahi — aur ye
+ * farq isi file ke banne ki wajah hai: 28 Aug ko teen bug hafton chhupe rahe the
+ * kyunki "kuch nahi mila" aur "padh hi nahi paya" ek jaise dikhte the. Isliye
+ * na-padh-pana bhi report hota hai, chupchaap nahi jaata.
+ */
+export interface WalletState {
+  /** Kharch karne layak rupaye, ya null jab RC se padha hi na gaya. */
+  available: number | null;
+  /** Is se neeche ho to email bhejne layak hai. */
+  floor: number;
+  /** `available` null ho to kyun. */
+  reason?: string;
+}
+
+/**
+ * Wallet ke baare me kuch kehna hai ya nahi.
+ *
+ * `null` matlab jaancha hi nahi gaya (RC configured nahi) — us par chup rehna
+ * sahi hai. Baaki do haalat bolne layak hain: padha nahi ja saka, ya floor se
+ * neeche hai.
+ */
+export function walletWorthReporting(w: WalletState | null | undefined): boolean {
+  if (!w) return false;
+  if (w.available === null) return true;
+  return w.available < w.floor;
+}
+
 export interface Digest {
   hours: number;
   serverErrors: Finding[];
@@ -44,6 +79,8 @@ export interface Digest {
   secretInUrl: number;
   /** Kitni line stack/JSON dump thi — chhupayi nahi, gini gayi. */
   noise: number;
+  /** RC wallet ka haal, ya null jab jaancha hi nahi gaya. */
+  wallet: WalletState | null;
   /** true jab kuch bhi kehne layak nahi mila. */
   clean: boolean;
 }
@@ -103,7 +140,7 @@ const QUERY_SECRET_MARK = "INBOUND_REQUIRE_HEADER";
 export function buildDigest(hours: number, rows: {
   http: LogRow[];
   stderr: LogRow[];
-}): Digest {
+}, wallet: WalletState | null = null): Digest {
   const serverErrors = tally(rows.http
     .filter((r) => (r.status ?? 0) >= 500)
     .map((r) => ({ ts: r.timestamp, key: `${r.status} ${scrub(r.url ?? "")}`.trim() })));
@@ -132,8 +169,10 @@ export function buildDigest(hours: number, rows: {
     appErrors,
     secretInUrl,
     noise,
+    wallet,
     clean: serverErrors.length === 0 && refused.length === 0
-        && appErrors.length === 0 && secretInUrl === 0,
+        && appErrors.length === 0 && secretInUrl === 0
+        && !walletWorthReporting(wallet),
   };
 }
 
@@ -164,6 +203,13 @@ export function digestText(d: Digest, appUrl: string): string {
     d.noise > 0 ? `(+ ${d.noise} aur line — stack/JSON dump ke tukde, gini gayi par dikhayi nahi)\n\n` : "",
     d.secretInUrl > 0
       ? `⚠ Secret abhi bhi URL me aa raha hai — ${d.secretInUrl} baar. Bhejne wali script header par nahi aayi.\n\n`
+      : "",
+    walletWorthReporting(d.wallet)
+      ? (d.wallet!.available === null
+          /* Padha nahi ja saka. Ye bhi khabar hai — balance check khud toota
+             hua hai, aur us par chup rehna is file ke maqsad ke khilaf hai. */
+          ? `⚠ ResellerClub wallet ka balance padha nahi ja saka${d.wallet!.reason ? ` — ${d.wallet!.reason}` : ""}. Iska matlab khali NAHI hai; matlab pata nahi.\n\n`
+          : `⚠ ResellerClub wallet kam hai — ₹${d.wallet!.available} bacha hai (floor ₹${d.wallet!.floor}). Wallet khatam hone par registration FAIL hoti hai, aur customer ka paisa hum pehle le lete hain. Top-up karo.\n\n`)
       : "",
     `Ginti "kitna" batati hai; "aakhri baar kab" batata hai ki abhi bhi ho raha hai ya nipat gaya.\n`,
     `App: ${appUrl}\n`,

@@ -20,7 +20,7 @@
  *     fires, and the client snaps to the true breakpoint.
  *   - To avoid layout flash on mobile, components that critically depend
  *     on this hook should accept a `loading` fallback that's safe for
- *     either device class. Or wrap with `<ClientOnly>` if the difference
+ *     either device class. Or render nothing until `mounted` is true, if the difference
  *     is too jarring.
  *
  * @example

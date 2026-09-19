@@ -17,6 +17,7 @@
  * be deleted and replaced with the canonical instrumentation.ts approach.
  */
 import * as Sentry from "@sentry/nextjs";
+import { redactBreadcrumb } from "./sentry-redact";
 
 const DSN = process.env.SENTRY_DSN;
 
@@ -25,6 +26,10 @@ if (DSN && !Sentry.getClient()) {
     dsn:              DSN,
     environment:      process.env.NODE_ENV,
     tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+    /* ResellerClub authenticates by query string — the fetch instrumentation
+       records it, and nothing above this line was filtering it. See
+       lib/sentry-redact.ts for the measurement. */
+    beforeBreadcrumb: redactBreadcrumb,
     beforeSend(event) {
       // Strip credentials that may have leaked into request context.
       if (event.request?.headers) {

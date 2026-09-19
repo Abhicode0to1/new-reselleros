@@ -38,14 +38,14 @@ begin;
 select set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
 
 insert into public.tenants (id, name, email, doc_code, tier)
-values ('11111111-1111-1111-1111-111111111111', 'ZZ RPC TEST TENANT', 'zz-rpc-test@example.invalid', 'ZZRPC', 'reseller');
+values ('7e57e57e-0001-4000-8000-000000000001', 'ZZ RPC TEST TENANT', 'zz-rpc-test@example.invalid', 'ZZRPC', 'reseller');
 
 -- Two quotes in the same synthetic tenant: one to part-pay, one to reject then pay.
 insert into public.quotes (id, tenant_id, customer_name, amount, subtotal, status, payment_status, discount_pct, line_items)
 values
-  ('ZZ-RPC-PARTIAL', '11111111-1111-1111-1111-111111111111', 'ZZ Test Buyer', 50027, 42396, 'sent',     'none', 0, '[]'::jsonb),
-  ('ZZ-RPC-FULL',    '11111111-1111-1111-1111-111111111111', 'ZZ Test Buyer', 10000, 10000, 'sent',     'none', 0, '[]'::jsonb),
-  ('ZZ-RPC-REJECTED','11111111-1111-1111-1111-111111111111', 'ZZ Test Buyer', 10000, 10000, 'rejected', 'none', 0, '[]'::jsonb);
+  ('ZZ-RPC-PARTIAL', '7e57e57e-0001-4000-8000-000000000001', 'ZZ Test Buyer', 50027, 42396, 'sent',     'none', 0, '[]'::jsonb),
+  ('ZZ-RPC-FULL',    '7e57e57e-0001-4000-8000-000000000001', 'ZZ Test Buyer', 10000, 10000, 'sent',     'none', 0, '[]'::jsonb),
+  ('ZZ-RPC-REJECTED','7e57e57e-0001-4000-8000-000000000001', 'ZZ Test Buyer', 10000, 10000, 'rejected', 'none', 0, '[]'::jsonb);
 
 do $$
 declare
@@ -77,7 +77,7 @@ begin
   -- created the customer. If this ever stops being true, "accepted" would start running
   -- ahead of the conversion instead of catching up with it.
   select count(*) into v_customers
-    from public.customers where tenant_id = '11111111-1111-1111-1111-111111111111';
+    from public.customers where tenant_id = '7e57e57e-0001-4000-8000-000000000001';
   if v_customers < 1 then
     raise exception 'CASE 3 FAIL: no customer row was created by the first payment (found %)', v_customers;
   end if;

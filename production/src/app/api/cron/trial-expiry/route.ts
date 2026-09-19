@@ -23,7 +23,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { resolveOwnerAlert, type TenantContact } from "@/lib/email/owner-alert";
-import { daSuspendAccount, daWriteConfigured, genUsername } from "@/lib/directadmin/provision";
+import { daSuspendAccount, genUsername } from "@/lib/directadmin/provision";
+import { hostingProvisioningEnabled } from "@/lib/directadmin/provision";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -153,7 +154,7 @@ async function handle(req: Request) {
         // Suspend the auto-provisioned account (deterministic username from the
         // domain). Only when live provisioning is on — manual-era trials are
         // suspended by the owner. Best-effort; never fails the cron.
-        if (process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured() && lead.domain) {
+        if (hostingProvisioningEnabled() && lead.domain) {
           try {
             const r = await daSuspendAccount(genUsername(lead.domain));
             if (r.ok) result.hosting_suspended++;

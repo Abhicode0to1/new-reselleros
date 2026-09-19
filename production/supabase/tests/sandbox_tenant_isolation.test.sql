@@ -25,9 +25,41 @@
 --   passing after the wall came down. Case 2 is the control: the same session, the
 --   same role, reading rows it SHOULD see. Without it this file proves nothing.
 --
--- SAFETY: synthetic identity in the existing sandbox tenant, one transaction, ends in
--- ROLLBACK. No live row is read into an assertion or written.
+-- SAFETY: every row this file touches is synthetic and created here, in one transaction
+-- that ends in ROLLBACK. No live row is read into an assertion or written.
+--
+-- HERMETIC AS OF 11 SEP 2026, AND IT WAS NOT BEFORE. This header used to say "synthetic
+-- identity in the EXISTING sandbox tenant", and case 4 authenticated as a real employee's
+-- account inside the real buy-page tenant. Both are now created in the reserved
+-- `7e57e57e-` fixture namespace (hex-leet for TESTEST), because a test that only runs
+-- where somebody once created a row by hand is a test nobody can be sure has run — and
+-- against a database built from `supabase/migrations` this one died on a foreign key
+-- before asserting anything at all.
 begin;
+
+/* The sandbox tenant this file works in.
+ *
+ * This USED to say "synthetic identity in the existing sandbox tenant" and
+ * insert nothing — it relied on a ZZ TESTING SANDBOX row that happens to exist
+ * in production. Against a database built from `supabase/migrations` that row is
+ * absent, so the file died on a foreign key before asserting anything:
+ *
+ *     Key (tenant_id)=(7e57e57e-0000-4000-8000-000000000001)
+ *     is not present in table "tenants"
+ *
+ * A test that only runs where somebody once created a row by hand is a test that
+ * cannot be trusted to have run. `7e57e57e-` is the reserved fixture namespace
+ * (hex-leet for TESTEST) and this file owns the -0000- block, so it creates what
+ * it needs and the ROLLBACK below takes it away again.
+ *
+ * ON CONFLICT because on production the row is already there and this must not
+ * fight it. Nothing below asserts anything about the tenant's own columns — it is
+ * a container for the user and the catalog row this file creates — so adopting an
+ * existing row cannot make an assertion pass for the wrong reason. */
+insert into public.tenants (id, name, email, doc_code, tier) values
+  ('7e57e57e-0000-4000-8000-000000000001', 'ZZ TESTING SANDBOX',
+   'zz-sandbox@example.invalid', 'ZZSBX', 'reseller')
+on conflict (id) do nothing;
 
 insert into auth.users (id, email) values
   ('5a5a5a5a-0000-4000-8000-00000000000b', 'sandbox-tester@example.test');
@@ -55,6 +87,44 @@ insert into public.items (id, tenant_id, name, vendor, msrp, wholesale) values
   ('5a5a5a5a-sandbox-control-item', '7e57e57e-0000-4000-8000-000000000001',
    'Sandbox Control Item', 'google', 100, 50);
 
+/* THE LIVE SIDE OF THE WALL, created here for the same reason — and this is the
+   half the 29 Aug fix missed.
+   
+   Case 4 ("the wall is two-way") used to authenticate as a REAL PERSON'S account,
+   `3caa0f07-…` — Pardeep's own user — inside the real buy-page tenant
+   `fbb976f1-…`, and assert that they could still see their own catalogue. Two
+   things wrong with that, and only one of them shows up as a failure:
+
+     · on any database built from `supabase/migrations` neither row exists, so
+       the session resolved to nobody and the control went red — "the live owner
+       sees no items at all";
+     · and where it DID pass, it passed because of one particular employee's
+       account and one tenant's catalogue, neither of which the file created or
+       anyone promised to keep. That is the exact fragility the comment above
+       says it fixed "at the root" — fixed for the sandbox side, left standing on
+       the live side.
+
+   So the live side is synthetic too now: its own reserved tenant, its own owner,
+   its own single item. Case 4 asserts the same thing it always did — a
+   non-sandbox owner sees no sandbox rows and still sees their own — without
+   depending on who happens to work here. */
+insert into public.tenants (id, name, email, doc_code, tier) values
+  ('7e57e57e-0000-4000-8000-000000000002', 'ZZ TESTING LIVE-SIDE',
+   'zz-liveside@example.invalid', 'ZZLIV', 'reseller')
+on conflict (id) do nothing;
+
+insert into auth.users (id, email) values
+  ('5a5a5a5a-0000-4000-8000-00000000000c', 'liveside-owner@example.test');
+
+insert into public.users (id, tenant_id, email, full_name, role, is_active) values
+  ('5a5a5a5a-0000-4000-8000-00000000000c',
+   '7e57e57e-0000-4000-8000-000000000002',
+   'liveside-owner@example.test', 'Live-side Owner', 'owner', true);
+
+insert into public.items (id, tenant_id, name, vendor, msrp, wholesale) values
+  ('5a5a5a5a-liveside-ctrl-item', '7e57e57e-0000-4000-8000-000000000002',
+   'Live-side Control Item', 'google', 200, 100);
+
 -- `authenticated` is the role a real browser token arrives as, so RLS is genuinely
 -- enforced from here on. A superuser connection bypasses RLS and would prove nothing.
 set local role authenticated;
@@ -62,8 +132,10 @@ set local role authenticated;
 do $$
 declare
   v_tester  uuid := '5a5a5a5a-0000-4000-8000-00000000000b';
-  v_pardeep uuid := '3caa0f07-44d1-42ee-91b3-2123e04853b1';
-  v_live    uuid := 'fbb976f1-9090-4f10-9726-0901bd144e42';
+  /* Synthetic, in the reserved 7e57e57e- fixture namespace — NOT a real employee
+     and not the real buy-page tenant. See the fixture block above. */
+  v_liveowner uuid := '5a5a5a5a-0000-4000-8000-00000000000c';
+  v_live      uuid := '7e57e57e-0000-4000-8000-000000000002';
   v_sandbox uuid := '7e57e57e-0000-4000-8000-000000000001';
   n         integer;
   v_blocked boolean;
@@ -166,7 +238,7 @@ begin
 
   ------------------------------------- 4. the wall is two-way
   perform set_config('request.jwt.claims',
-    json_build_object('sub', v_pardeep::text, 'role', 'authenticated')::text, true);
+    json_build_object('sub', v_liveowner::text, 'role', 'authenticated')::text, true);
 
   select count(*) into n from public.items where tenant_id = v_sandbox;
   if n <> 0 then raise exception 'FAIL 4: the live owner can see % sandbox item(s) — test data would pollute real reports', n; end if;

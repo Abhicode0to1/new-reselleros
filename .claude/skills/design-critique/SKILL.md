@@ -1,6 +1,6 @@
 ---
 name: design-critique
-description: Review a screen or component against THIS app's design system — the tokens in globals.css, the 28 primitives in components/ui, and CLAUDE.md §5/§6/§8/§20 — and report countable findings rather than opinions. Load before calling any UI work done, and whenever CLAUDE.md §0.9's "design done" gate is invoked. Every check names a number, so two runs on one screen agree. Not a generic design review: the checks encode failures measured in this repo, and the false positives it has already produced.
+description: Review a screen or component against THIS app's design system — the tokens in globals.css, the 27 primitives in components/ui, and CLAUDE.md §5/§6/§8/§20 — and report countable findings rather than opinions. Load before calling any UI work done, and whenever CLAUDE.md §0.9's "design done" gate is invoked. Every check names a number, so two runs on one screen agree. Not a generic design review: the checks encode failures measured in this repo, and the false positives it has already produced.
 ---
 
 # design-critique
@@ -73,12 +73,12 @@ therefore no type scale, that 2,305 elements use `text-[Npx]` with 2,010 of them
 
 **Every one of those is now wrong.** The work was done and this file was never updated:
 
-| | Skill said | Measured 29 Aug 2026 |
-|---|---|---|
-| `fontSize` in tailwind.config.ts | absent | **present** — `3xs` 10px, `2xs` 11px |
-| `text-[Npx]` app-wide | 2,305 | **291** |
-| …of those, below 12px | 2,010 | **0** |
-| Files affected | 273 of 370 | **91 of 371** |
+| | Skill said | 29 Aug 2026 | Measured 14 Sep 2026 |
+|---|---|---|---|
+| `fontSize` in tailwind.config.ts | absent | **present** — `3xs` 10px, `2xs` 11px | unchanged |
+| `text-[Npx]` app-wide | 2,305 | 291 | **294** |
+| …of those, below 12px | 2,010 | 0 | **0** |
+| Files affected | 273 of 370 | 91 of 371 | **91 of 427** |
 
 The scale exists, carries its own reasoning in `tailwind.config.ts:22-41`, and ~1,963 call sites
 were renamed onto it. The proposal doc describes finished work.
@@ -112,9 +112,19 @@ before reporting any number in this file.** Every command needed is right here.
 > "Never hardcode colors in components. Use Tailwind tokens: `bg-paper` not `bg-white`,
 > `text-ink` not `text-black`, `border-hairline` not `border-gray-200`."
 
-**52** tokens exist in `globals.css` (was 48). App-wide there are still **247** raw palette values
-and **98** bare `bg-white` / `text-black` / `bg-black` / `text-white` — re-measured 29 Aug 2026, and
-these two barely moved while §1's numbers collapsed. Re-run the grep anyway; that is the point of §1.
+**74** tokens exist in `globals.css` (48 → 52 → 74; the newest are the `fg` rungs for emerald,
+indigo and slate, and `--whatsapp`). App-wide: **104** raw palette values and **63** bare
+`bg-white` / `text-black` / `bg-black` / `text-white` — re-measured 14 Sep 2026, down from 247 and
+98. **43 of the 104 are in `/vendor-portal`**, which is parked, so the live figure is nearer 61.
+
+⚠️ **THIS GREP CANNOT SEE THE WORST VERSION OF THIS BUG.** It matches Tailwind CLASS names. An
+inline `style={{ background: "#FAF8F2" }}` is invisible to it — and #FAF8F2 IS `--paper`'s light
+value, frozen so it cannot flip. The public purchase page rendered nearly blank in dark mode for
+exactly that reason (hero ground stayed near-white under text that had turned cream, measured
+1.01:1) and every colour check in this repo called that page clean. App-wide there are **527 hex
+and 70 `rgb()` literals** that no class grep looks at. Run `python scripts/find-frozen-tokens.py`,
+which matches literals against the tokens' computed light values, and read §5 of that script for
+why exact matching finds nothing.
 
 ```bash
 grep -hoE '\b(bg|text|border|ring)-(white|black|gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900|950)\b|\b(bg-white|text-black|bg-black|text-white)\b' $F | sort | uniq -c | sort -rn
@@ -130,8 +140,8 @@ the token form; `bg-black text-white` is not, and the difference shows in dark m
 
 ## 3. Raw `<button>` against the shared primitive
 
-`components/ui/button.tsx` is used **1,044** times app-wide (29 Aug 2026). There are also **414**
-raw `<button>` elements. The "83 distinct class combinations, 74 used exactly once" figures were
+`components/ui/button.tsx` is used **1,067** times app-wide (14 Sep 2026; was 1,044). There are
+also **522** raw `<button>` elements (was 414). The "83 distinct class combinations, 74 used exactly once" figures were
 not re-measured that day — treat them as the shape of the problem, not a current count, and run the
 grep below before quoting either.
 
@@ -194,7 +204,30 @@ Also from §20, each worth one line:
   ```bash
   grep -rn "FAB" $F | grep -iE "no fab|deliberate|removed|on purpose"
   ```
-- touch targets ≥ 44px on anything tappable
+- touch targets ≥ 44px on anything tappable — **and CLAUDE.md:605 scopes that to phones**
+  (< 768px). Measuring it at 1440 reports the desktop sidebar's 32px nav rows as broken; that is
+  33 fabricated findings per screen, and it happened on the first run of this check.
+
+  **Measure the HIT AREA, not the rect.** `globals.css` has `.touch-44`, which grows the target
+  with a centred `::after` and leaves the 36px box alone — so `getBoundingClientRect()` reports
+  36 and the finger gets 44. Ask the document instead:
+
+  ```js
+  // does a 44x44 box centred on the control actually belong to it?
+  const r = el.getBoundingClientRect(), cx = r.left + r.width/2, cy = r.top + r.height/2;
+  [[-21,-21],[21,-21],[-21,21],[21,21]].every(([dx,dy]) => {
+    const t = document.elementFromPoint(cx+dx, cy+dy); return t && (t === el || el.contains(t)); });
+  ```
+
+  ⚠️ **`.touch-44` DOES NOTHING INSIDE A SCROLL CONTAINER, AND FAILS SILENTLY.** `overflow: auto`
+  clips the `::after` to the ancestor's padding box, so on a 38px chip in an `overflow-x-auto` row
+  the hit area stays 38px while the class sits there looking applied. Measured on /quotes: a point
+  21px above a TabBar chip returned the page container, not the button. For anything in a scrolling
+  row, grow the BOX on phones instead — `min-h-11 md:min-h-0` is what the chip rows use.
+
+  And a control measured at scroll-0 may be sitting under the FAB or the mobile bottom nav, which
+  reports it as tiny when it is merely covered. Scroll it into the middle of the viewport first —
+  which is also where a person would be tapping it.
 - sticky elements → `pb-[env(safe-area-inset-bottom)]`. **A count of zero is not a finding until you
   have checked the hazard exists.** On /leads the safe-area count is 0 and the screen is correct:
   every sticky in scope is `sticky top-*`, and the notch rule is about BOTTOM-anchored elements.

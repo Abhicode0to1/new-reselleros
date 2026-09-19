@@ -176,7 +176,7 @@ export function BulkBarConfirmButton({
       aria-live="polite"
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-        armed ? "bg-rose text-paper hover:bg-rose/90" : "hover:bg-paper/10",
+        armed ? "bg-rose text-paper hover:bg-rose-hover" : "hover:bg-paper/10",
       )}
     >
       {icon && <Icon name={icon} size={13} />}

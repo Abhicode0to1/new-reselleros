@@ -754,9 +754,11 @@ export default function SubscriptionsPage() {
                 {/* Vendor, and the term with what renewal actually bills —
                     both desktop-only until now.
 
-                    NO MARGIN BADGE HERE, deliberately. `estimateMargin()` is
-                    `mrr * 0.83`, a hardcoded heuristic, so it returns 17% for
-                    every subscription that has ever existed. Putting it on the
+                    NO MARGIN BADGE HERE, deliberately. The heuristic this
+                    rules out was `cost = mrr × 0.83` — a flat 17% for every
+                    subscription that has ever existed — and it has since been
+                    removed from this file (see the note at the top). The rule
+                    outlives it: do not add one back. Putting it on the
                     card would place a fabricated constant next to real numbers
                     and imply cost data is tracked. Same rule as the seat-
                     utilisation gate: don't assert what isn't measured. */}
@@ -847,7 +849,16 @@ export default function SubscriptionsPage() {
                       key={s.id}
                       ref={kbSelected ? selectedSubRef : undefined}
                       /* aria-selected as well as the tint: a screen reader has to know
-                         which row Enter will open. */
+                         which row Enter will open.
+
+                         This row used to also carry role="button", which is what
+                         stopped that working. `aria-selected` is valid on a row
+                         and NOT on a button, so it was being dropped — the very
+                         announcement this line exists to make. Overriding the
+                         role also took the row out of the table, so its cells
+                         lost their column headers. The row keeps its native role
+                         now; tabIndex and onKeyDown still make it operable.
+                         Same change at seven other tables. */
                       aria-selected={kbSelected}
                       className={cn(
                         "group border-b border-hairline last:border-0 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset",
@@ -861,7 +872,6 @@ export default function SubscriptionsPage() {
                             ? "bg-rose-soft/40 hover:bg-rose-soft/60"
                             : "hover:bg-paper-2/50",
                       )}
-                      role="button"
                       tabIndex={0}
                       aria-label={`Open ${cleanDisplayName(s.customer_name)}`}
                       onClick={() => s.customer_id && router.push(`/customers/${s.customer_id}` as never)}

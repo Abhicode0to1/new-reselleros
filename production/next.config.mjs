@@ -64,13 +64,15 @@ const nextConfig = {
       ...(() => {
         try {
           const u = new URL((process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/+$/, ""));
-          /* Scheme from the URL, same reason as the CSP below: on a local stack this
-             host is http://127.0.0.1:54321, and a hardcoded https here makes
-             next/image refuse every logo and avatar Storage serves. */
-          const protocol = u.protocol === "http:" ? "http" : "https";
-          return u.host && !u.host.endsWith(".supabase.co")
-            ? [{ protocol, hostname: u.hostname, port: u.port || undefined }]
-            : [];
+          if (!u.hostname || u.hostname.endsWith(".supabase.co")) return [];
+          /* hostname, NOT host: a remotePattern hostname carrying ":54321" matches
+             nothing, because the port is a separate field. And the protocol follows the
+             URL for the same reason the CSP does — see headers() below. */
+          return [{
+            protocol: u.protocol === "http:" ? "http" : "https",
+            hostname: u.hostname,
+            ...(u.port ? { port: u.port } : {}),
+          }];
         } catch {
           return [];
         }
@@ -90,18 +92,19 @@ const nextConfig = {
     try {
       if (supaUrl) {
         const u = new URL(supaUrl);
-        /* Take the SCHEME from the URL, do not assume https. This line used to read
-           `https://${h}`, and that is exactly the drift the comment above swears it
-           prevents — just in the other direction. The local stack serves
-           http://127.0.0.1:54321, so a hardcoded https:// emitted a connect-src that
-           could never match it, the browser blocked every client-side Supabase call,
-           and LOGIN FAILED SILENTLY: the form posts, nothing comes back, no error on
-           screen. Measured 8 Sep 2026 on a fresh local setup.
-           For a hosted https URL the output is byte-identical to before. */
-        const isHttp = u.protocol === "http:";
-        const scheme = isHttp ? "http" : "https";
-        const wsScheme = isHttp ? "ws" : "wss";
-        supaConnect = `${scheme}://${u.host} ${wsScheme}://${u.host} ${supaConnect}`;
+        /* Take the SCHEME from the URL, do not assume https. This line used to hardcode
+           https://+wss://, which is correct for every deployed environment and wrong for
+           every local one: a local stack is http://127.0.0.1:14321, the CSP then allowed
+           only the https:// form of that host, and the browser refused every client-side
+           Supabase call with "Refused to connect because it violates the document's
+           Content Security Policy". Measured 9 Sep 2026: it made /portal/login
+           unusable locally — portal_customer_exists never left the page — and because
+           this CSP is applied in dev too (deliberately, see below) there was no
+           environment in which the portal could be signed into by hand.
+           Deployed output is unchanged: an https:// URL still yields https://+wss://. */
+        const web = u.protocol === "http:" ? "http"  : "https";
+        const ws  = u.protocol === "http:" ? "ws"    : "wss";
+        supaConnect = `${web}://${u.host} ${ws}://${u.host} ${supaConnect}`;
       }
     } catch {
       /* malformed env → fall back to the wildcard above */

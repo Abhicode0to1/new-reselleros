@@ -610,6 +610,7 @@ export default function GstReportPage() {
               const active = range.from === target.from && range.to === target.to;
               return (
                 <button
+                  aria-pressed={active}
                   key={target.label}
                   type="button"
                   onClick={() => setRange(target)}

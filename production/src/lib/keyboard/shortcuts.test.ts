@@ -5,19 +5,25 @@ import { fileURLToPath } from "node:url";
 import {
   SHORTCUTS, shortcutGroups, isTypingTarget, shouldIgnore,
   chordStep, CHORD_IDLE, CHORD_WINDOW_MS, GO_TO,
-  moveIndex, listAction,
+  moveIndex, listAction, isActivationTarget,
   findShortcut, matchesShortcut, shortcutText, actionRoute, type ShortcutId,
 } from "./shortcuts";
 
 /** A DOM-ish stand-in, so these rules are testable without a browser. */
 function el(tag: string, opts: {
   role?: string; editable?: boolean; insideEditable?: boolean;
+  href?: boolean; insideButton?: boolean;
 } = {}): EventTarget {
   return {
     tagName: tag,
     isContentEditable: opts.editable ?? false,
     getAttribute: (k: string) => (k === "role" ? opts.role ?? null : null),
-    closest: (sel: string) => (opts.insideEditable && /input|textarea/.test(sel) ? {} : null),
+    hasAttribute: (k: string) => (k === "href" ? opts.href ?? false : false),
+    closest: (sel: string) => {
+      if (opts.insideEditable && /input|textarea/.test(sel)) return {};
+      if (opts.insideButton && /button/.test(sel)) return {};
+      return null;
+    },
   } as unknown as EventTarget;
 }
 
@@ -467,5 +473,45 @@ describe("actionRoute", () => {
     /* A label reading just "New invoice" sends somebody hunting for a form that does not
        exist in this app. */
     expect(findShortcut("new-invoice").label).toContain("paid quote");
+  });
+});
+
+/**
+ * ─── ENTER BELONGS TO WHATEVER IS FOCUSED ───────────────────────────────────
+ * `useListKeys` listens on WINDOW and preventDefault()s Enter to open the
+ * highlighted row. On all six list screens that meant tabbing to any button and
+ * pressing Enter did nothing — measured on /customers, where clicking a sort
+ * header sorted the column and Enter on the same focused button did not.
+ * (Space worked, purely because Space is not in `listAction`.)
+ */
+describe("Enter defers to the control that already owns it", () => {
+  it("recognises the elements that activate on Enter themselves", () => {
+    expect(isActivationTarget(el("BUTTON")), "button").toBe(true);
+    expect(isActivationTarget(el("SUMMARY")), "summary").toBe(true);
+    expect(isActivationTarget(el("A", { href: true })), "link with href").toBe(true);
+    for (const role of ["button", "link", "tab", "option", "menuitem", "checkbox", "switch"]) {
+      expect(isActivationTarget(el("DIV", { role })), role).toBe(true);
+    }
+  });
+
+  it("walks up, because a keydown inside a button targets the span", () => {
+    expect(isActivationTarget(el("SPAN", { insideButton: true }))).toBe(true);
+  });
+
+  it("leaves plain content alone, or the list would never open anything", () => {
+    expect(isActivationTarget(el("DIV"))).toBe(false);
+    expect(isActivationTarget(el("TD"))).toBe(false);
+    expect(isActivationTarget(el("A"))).toBe(false);   // an anchor with no href is not a link
+    expect(isActivationTarget(null)).toBe(false);
+  });
+
+  it("only Enter is affected — j, k and Escape stay the list's own", () => {
+    /* The guard in useListKeys is scoped to the "open" action. If listAction ever
+       mapped j or Escape to open, that scoping would silently stop working. */
+    expect(listAction("Enter")).toBe("open");
+    expect(listAction("o")).toBe("open");
+    expect(listAction("j")).toBe("next");
+    expect(listAction("k")).toBe("prev");
+    expect(listAction("Escape")).toBe("clear");
   });
 });

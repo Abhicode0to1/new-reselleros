@@ -8,13 +8,14 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { clientIp } from "@/lib/security/rate-limit";
 import { newPresenceSecret } from "@/lib/attendance/presence";
 
-function clientIp(req: NextRequest): string {
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip")?.trim() ?? "";
-}
+/* The shared reader — see lib/security/rate-limit.ts. This file used to carry
+   its own `x-forwarded-for.split(",")[0]`, which returns whatever the CALLER
+   put in the header; the infrastructure appends after it rather than replacing
+   it. This endpoint tells an owner which IP their office is on, so a forged
+   value here would be saved into the allowlist as the office. */
 
 async function me(supabase: ReturnType<typeof createClient>) {
   const { data: authData } = await supabase.auth.getUser();
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   const { data } = await supabase.from("attendance_settings").select("allowed_ips, require_selfie, require_presence, selfie_retention_days, require_face_match").maybeSingle();
   const allowedIps: string[] = data?.allowed_ips ?? [];
-  const currentIp = clientIp(request);
+  const currentIp = clientIp(request.headers);
   return NextResponse.json({
     allowedIps,
     currentIp,
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null);
   const action = body?.action as string | undefined;
-  const currentIp = clientIp(request);
+  const currentIp = clientIp(request.headers);
 
   const { data: existing } = await supabase.from("attendance_settings").select("allowed_ips, require_selfie, require_presence, presence_secret, selfie_retention_days, require_face_match").maybeSingle();
   let allowed: string[] = existing?.allowed_ips ?? [];

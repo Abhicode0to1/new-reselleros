@@ -25,7 +25,29 @@ type FormData = z.infer<typeof schema>;
 // Demo accounts shown only in development. Kept in sync with the actual
 // tenants in Supabase — when a tenant is added/removed or its password
 // rotated, update this list. Hidden in production builds.
-const DEMO_USERS: Array<{ label: string; email: string; password: string }> = [
+/**
+ * `portal: true` means this account signs in at the CUSTOMER door, not here.
+ *
+ * Added 11 Sep 2026 — Pardeep: "beside these add a seperate account just for
+ * testing with Hosting and Domain Customer panel / those two have admin level
+ * and tenant level access".
+ *
+ * It cannot be an autofill row like the other two, and the reason is the
+ * product's design rather than an omission: the customer portal has NO PASSWORD.
+ * It signs in with a 6-digit emailed code, and this form signs into the STAFF
+ * area, which `staff-area-guard` would bounce a customer out of anyway.
+ *
+ * So the row POSTs to `/api/dev/portal-signin`, which mints and verifies the
+ * same one-time token the email would have carried and drops you on the
+ * customer dashboard — one click, matching the two staff rows. It is dev-only
+ * and refuses any address that is not `.invalid`, so it cannot sign anybody in
+ * as a real customer.
+ */
+type DemoAccount =
+  | { label: string; email: string; password: string; portal?: false; note?: string }
+  | { label: string; email: string; portal: true; note: string };
+
+const DEMO_USERS: DemoAccount[] = [
   /* 26 Aug 2026: yahan teesri entry thi — `darshan@exceltechnologies.in`. DB me wo user
      MAUJOOD NAHI HAI, to wo button dabane par sirf login fail hota tha. Upar likha comment
      ("kept in sync with the actual tenants in Supabase") sach nahi nikla, jo aisi list ke
@@ -37,6 +59,20 @@ const DEMO_USERS: Array<{ label: string; email: string; password: string }> = [
      bata raha tha, jo wo nahi hai. Ek hi shabd, do bilkul alag matlab. */
   { label: "Anutech Digital",            email: "pardeep@anutech.in",           password: "ResellerOS@2026" },
   { label: "Excel Technologies · Owner", email: "pardeep@exceltechnologies.in", password: "ExcelTech@2026"  },
+  /* ─── THE CUSTOMER SIDE ───────────────────────────────────────────────────
+     Seeded by `scripts/seed-portal-test-customer.sql`, which asserts against
+     `portal_customer_exists()` before it finishes — because the entry that
+     used to sit here named a user who was NOT in the database, so the button
+     only ever failed. A demo row that cannot be verified rots the same way.
+
+     Carries 2 hosting accounts (one suspended, for the restore control) and
+     2 domains (one 9 days from expiry, for the renewal path). */
+  {
+    label: "Portal Test Customer · Hosting + Domains",
+    email: "portal-test@anutech.invalid",
+    portal: true,
+    note: "customer panel · one click, no password",
+  },
 ];
 
 function LoginPageInner() {
@@ -120,20 +156,51 @@ function LoginPageInner() {
             </div>
           </div>
           <ul className="space-y-1.5">
-            {DEMO_USERS.map((u) => (
-              <li key={u.email}>
-                <button
-                  type="button"
-                  onClick={() => fillDemo(u.email, u.password)}
-                  className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
-                >
-                  <div className="font-medium text-ink">{u.label}</div>
-                  <div className="text-2xs text-ink-3 font-mono">
-                    {u.email} · <span className="text-amber-ink">{u.password}</span>
-                  </div>
-                </button>
-              </li>
-            ))}
+            {DEMO_USERS.map((u) =>
+              u.portal ? (
+                /* ─── ONE CLICK, LIKE THE OTHER TWO ─────────────────────────
+                   This used to link to /portal/login with the address
+                   prefilled, which left three more steps: press send, open the
+                   Docker mail catcher, copy six digits. Pardeep, 11 Sep 2026:
+                   "why do i need to confirm email id anyway / shouldn't i be
+                   logged in directly like others login of owner and tenet".
+
+                   A FORM POST, not a link: the route it hits establishes a
+                   session, and a GET that does that is one prefetch or pasted
+                   URL away from firing by itself. The route is dev-only and
+                   refuses any address that is not `.invalid`. */
+                <li key={u.email}>
+                  <form action="/api/dev/portal-signin" method="post">
+                    <input type="hidden" name="email" value={u.email} />
+                    <button
+                      type="submit"
+                      className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
+                    >
+                      <div className="font-medium text-ink">
+                        {u.label}
+                        <span className="ml-1.5 text-2xs font-normal text-indigo">→ sign in</span>
+                      </div>
+                      <div className="text-2xs text-ink-3 font-mono">
+                        {u.email} · <span className="text-indigo">{u.note}</span>
+                      </div>
+                    </button>
+                  </form>
+                </li>
+              ) : (
+                <li key={u.email}>
+                  <button
+                    type="button"
+                    onClick={() => fillDemo(u.email, u.password)}
+                    className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
+                  >
+                    <div className="font-medium text-ink">{u.label}</div>
+                    <div className="text-2xs text-ink-3 font-mono">
+                      {u.email} · <span className="text-amber-ink">{u.password}</span>
+                    </div>
+                  </button>
+                </li>
+              ),
+            )}
           </ul>
         </div>
       )}

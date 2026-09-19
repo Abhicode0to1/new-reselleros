@@ -18,8 +18,9 @@
  *   node scripts/delete-stranded-auth-users.mjs --out "<file.json>" --apply
  */
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
 const APPLY = process.argv.includes("--apply");
 const oIdx  = process.argv.indexOf("--out");
@@ -35,11 +36,10 @@ if (resolve(OUT).startsWith(repoRoot)) {
   process.exit(2);
 }
 
-const env = {};
-for (const line of readFileSync(".env.local", "utf8").split(/\r?\n/)) {
-  const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-  if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
-}
+/* Shared parser — this was six copies of a regex that stripped a quote off each
+   END OF THE LINE, so a quoted value followed by a comment kept the comment.
+   See scripts/lib/env-local.mjs for the error it produced. */
+const env = loadEnvLocal();
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });

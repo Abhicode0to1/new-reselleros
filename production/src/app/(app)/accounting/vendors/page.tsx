@@ -163,7 +163,6 @@ export default function VendorsPage() {
                     <tr
                       key={v.id}
                       className="group hover:bg-paper-2/50 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset"
-                      role="button"
                       tabIndex={0}
                       aria-label={`Open ${v.name}`}
                       onClick={() => setDetailVendor(v)}
@@ -404,7 +403,7 @@ function AddEditVendorDialog({ vendor, onClose }: { vendor: Vendor | null; onClo
                     }}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                       isSel
-                        ? "bg-primary text-white border-primary font-bold shadow-2xs"
+                        ? "bg-primary text-primary-foreground border-primary font-bold shadow-2xs"
                         : "bg-paper border-hairline text-ink hover:border-primary/40"
                     }`}
                   >

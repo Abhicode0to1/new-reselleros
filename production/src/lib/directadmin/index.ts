@@ -131,3 +131,152 @@ export async function daAllPackages(): Promise<DaPackage[] | null> {
   }
   return out;
 }
+
+/* ── Usage: what the server says an account is actually consuming ─────────────
+ *
+ * Ported from the DMS engine's lib/directadmin/users.ts (getUserUsage,
+ * getAllUserUsage) on 9 Sep 2026.
+ *
+ * ─── USAGE IS NOT QUOTA, AND THE COLUMN NAMES MAKE THAT EASY TO GET WRONG ────
+ * `CMD_API_SHOW_USER_USAGE` returns what an account has CONSUMED. Our
+ * `hosting_accounts.disk_quota_mb` / `bandwidth_quota_mb` are the LIMITS the plan
+ * grants, written at provisioning. Writing usage into either would replace a
+ * 10 GB allowance with "412 MB used" and nobody would notice until a customer
+ * was told their plan had shrunk. So these values are read and reported; the
+ * limits are reconciled from the PACKAGE (`daPackageDetails`), which is where a
+ * limit actually lives.
+ */
+
+export interface DaUsage {
+  /** MB consumed, not granted. -1 for unlimited, null when DA did not say. */
+  diskUsedMB: number | null;
+  bandwidthUsedMB: number | null;
+  domains: number | null;
+  emails: number | null;
+  databases: number | null;
+  /** DA reports this as "yes"/"no" on the usage record. */
+  suspended: boolean | null;
+}
+
+function toCount(v: string | string[] | undefined): number | null {
+  const s = Array.isArray(v) ? v[0] : v;
+  if (s === undefined) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * One account's usage out of DA's key/value record.
+ *
+ * Exported and pure because it is the half worth testing — the transport around
+ * it is a `daGet` away, and this is where DA's field names stop leaking.
+ */
+export function parseUserUsage(data: Record<string, string | string[]>): DaUsage {
+  const flag = (v: string | string[] | undefined): boolean | null => {
+    const s = Array.isArray(v) ? v[0] : v;
+    if (s === undefined) return null;
+    return /^(yes|true|1|on)$/i.test(s.trim());
+  };
+  return {
+    diskUsedMB: toMB(data.quota),
+    bandwidthUsedMB: toMB(data.bandwidth),
+    domains: toCount(data.vdomains ?? data.domains),
+    emails: toCount(data.nemails),
+    databases: toCount(data.mysql),
+    suspended: flag(data.suspended),
+  };
+}
+
+/**
+ * DA's bulk usage answer nests one query string inside another: the outer keys
+ * are usernames and each VALUE is itself URL-encoded
+ * (`user1=quota%3D412%26bandwidth%3D900`). Parsing only the outer layer yields a
+ * string where a record was expected, which is the kind of thing that reads as
+ * "no usage data" rather than as a bug.
+ */
+export function parseAllUserUsage(data: Record<string, string | string[]>): Record<string, DaUsage> {
+  const out: Record<string, DaUsage> = {};
+  for (const [user, raw] of Object.entries(data)) {
+    if (user === "error" || user === "text" || user === "details") continue;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (typeof value !== "string" || value === "") continue;
+    const inner = parseDA(value);
+    if (!inner) continue;
+    out[user] = parseUserUsage(inner);
+  }
+  return out;
+}
+
+/** One account's usage. null when DA could not be read; see parseUserUsage. */
+export async function daUserUsage(username: string): Promise<DaUsage | null> {
+  const data = await daGet("/CMD_API_SHOW_USER_USAGE", { user: username });
+  if (!data) return null;
+  return parseUserUsage(data);
+}
+
+/**
+ * Every account's usage. One call where the server supports it, else one each.
+ *
+ * ─── THE BULK ENDPOINT DOES NOT EXIST ON THIS SERVER ────────────────────────
+ * `CMD_API_SHOW_ALL_USER_USAGE` was the only implementation until 11 Sep 2026,
+ * the first day this app had real DirectAdmin credentials. Measured against
+ * server1.anutech.in:
+ *
+ *   /CMD_API_SHOW_ALL_USER_USAGE        → 200, and an HTML PAGE (the web UI)
+ *   /CMD_API_SHOW_ALL_USERS             → 200, list[]=… (5 accounts)
+ *   /CMD_API_SHOW_USER_USAGE?user=X     → 200, bandwidth=…&quota=…
+ *
+ * A 200 carrying HTML is not an API answer, so `daGet` returned null and
+ * `asset-sweep` reported "DirectAdmin could not be read — no account was stamped
+ * or flagged" for every run. Identical in symptom to the server being down, which
+ * is why nothing noticed. (DMS's `getAllUserUsage` calls the same endpoint and has
+ * the same bug; it was not the source of the fix.)
+ *
+ * ─── THE FALLBACK IS SEQUENTIAL AND CAPPED, ON PURPOSE ──────────────────────
+ * The original comment here argued for one call over N, citing this machine
+ * producing `exited 3221225794` from ~120 processes in a loop. That was about
+ * PROCESSES and does not apply to HTTP requests — but the instinct is right, so
+ * the fallback awaits one at a time rather than flooding somebody's control panel,
+ * and stops at MAX. A reseller past that cap gets partial usage, which the caller
+ * already handles: `asset-sweep` treats an absent account as "not stamped", not
+ * as "gone".
+ *
+ * The bulk call is still tried first, because a newer DirectAdmin may well answer
+ * it and one call is better than fifty.
+ */
+const MAX_USAGE_FALLBACK = 200;
+
+export async function daAllUserUsage(): Promise<Record<string, DaUsage> | null> {
+  const bulk = await daGet("/CMD_API_SHOW_ALL_USER_USAGE");
+  if (bulk) {
+    const parsed = parseAllUserUsage(bulk);
+    /* An empty object from a server that HAS accounts means the endpoint
+       answered with something that is not usage — the HTML case. Fall through
+       rather than reporting "no accounts have usage". */
+    if (Object.keys(parsed).length > 0) return parsed;
+  }
+
+  const users = await daGet("/CMD_API_SHOW_ALL_USERS");
+  if (!users) return null;
+
+  /* `list[]` comes back as an array, or as a single string when there is one
+     account. Both shapes, because a one-account server is a real deployment. */
+  const raw = users["list[]"] ?? users.list;
+  const names = (Array.isArray(raw) ? raw : raw ? [String(raw)] : [])
+    .map((n) => String(n).trim())
+    .filter(Boolean)
+    .slice(0, MAX_USAGE_FALLBACK);
+
+  if (names.length === 0) return null;
+
+  const out: Record<string, DaUsage> = {};
+  for (const name of names) {
+    const one = await daUserUsage(name);
+    /* A single unreadable account is not an unreadable server. Skip it and keep
+       going — the caller's job is to notice an account it expected and did not
+       get, which it can only do if the others are present. */
+    if (one) out[name] = one;
+  }
+  return out;
+}
+

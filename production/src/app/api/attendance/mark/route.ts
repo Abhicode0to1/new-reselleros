@@ -2,19 +2,27 @@
  * POST /api/attendance/mark  { employeeId, pin }
  *
  * Server-side attendance mark. The office-network gate lives HERE, not on the
- * client: we read the REAL client IP from the Cloud Run x-forwarded-for header
- * (the browser can't forge it) and, if the tenant has locked an allowlist of
- * office IPs, reject anything from outside it. Then we call mark_attendance,
- * logging the source IP.
+ * client: we read the client IP from `x-forwarded-for` and, if the tenant has
+ * locked an allowlist of office IPs, reject anything from outside it. Then we
+ * call mark_attendance, logging the source IP.
+ *
+ * ─── "THE BROWSER CAN'T FORGE IT" WAS NOT TRUE ───────────────────────
+ * That is what this header said, above a local `clientIp` that took
+ * `x-forwarded-for.split(",")[0]`. Google's own documentation says the
+ * infrastructure APPENDS to a header the caller already set —
+ * `<existing-value>,<client-ip>,<load-balancer-ip>` — and "does not verify any
+ * IP addresses that precede the client-ip". So `[0]` is whatever the caller
+ * typed, and one `curl -H "x-forwarded-for: <an office IP>"` walked straight
+ * through the office-network gate from anywhere.
+ *
+ * It now uses the shared `clientIp` from lib/security/rate-limit.ts, which
+ * counts from the RIGHT — the end only our own infrastructure writes. That is
+ * one implementation for the whole app instead of four copies of the same
+ * mistake, and it is the one with tests.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-
-function clientIp(req: NextRequest): string {
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip")?.trim() ?? "";
-}
+import { clientIp } from "@/lib/security/rate-limit";
 
 export async function POST(request: NextRequest) {
   const supabase = createClient();
@@ -27,7 +35,7 @@ export async function POST(request: NextRequest) {
   const photo = body?.photo as string | undefined; // optional data:image/jpeg;base64,...
   if (!employeeId || !pin) return NextResponse.json({ error: "Missing employee or PIN" }, { status: 400 });
 
-  const ip = clientIp(request);
+  const ip = clientIp(request.headers);
 
   // Office-network gate (opt-in) + selfie requirement (anti buddy-punching).
   const { data: settings } = await supabase

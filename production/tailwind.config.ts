@@ -72,6 +72,13 @@ const config: Config = {
           DEFAULT: "hsl(var(--amber) / <alpha-value>)",
           soft: "hsl(var(--amber-soft) / <alpha-value>)",
           ink: "hsl(var(--amber-ink) / <alpha-value>)",
+          /* `fg` is text ON an amber fill — white in light, near-black in dark.
+             `text-white` cannot do that job, which is why filled buttons read
+             2.99:1 in dark mode until 12 Sep 2026. hover/active darken in
+             light and lighten in dark: always away from the text. */
+          fg: "hsl(var(--amber-fg) / <alpha-value>)",
+          hover: "hsl(var(--amber-hover) / <alpha-value>)",
+          active: "hsl(var(--amber-active) / <alpha-value>)",
         },
         // Status colors
         /* `ink` is the readable text colour on the matching `soft` fill. Amber and indigo had
@@ -82,20 +89,31 @@ const config: Config = {
           DEFAULT: "hsl(var(--emerald) / <alpha-value>)",
           soft: "hsl(var(--emerald-soft) / <alpha-value>)",
           ink: "hsl(var(--emerald-ink) / <alpha-value>)",
+          fg: "hsl(var(--emerald-fg) / <alpha-value>)",          /* see amber.fg */
         },
         rose: {
           DEFAULT: "hsl(var(--rose) / <alpha-value>)",
           soft: "hsl(var(--rose-soft) / <alpha-value>)",
           ink: "hsl(var(--rose-ink) / <alpha-value>)",
+          fg: "hsl(var(--rose-fg) / <alpha-value>)",          /* see amber.fg */
+          hover: "hsl(var(--rose-hover) / <alpha-value>)",
+          active: "hsl(var(--rose-active) / <alpha-value>)",
         },
         indigo: {
           DEFAULT: "hsl(var(--indigo) / <alpha-value>)",
           soft: "hsl(var(--indigo-soft) / <alpha-value>)",
           ink: "hsl(var(--indigo-ink) / <alpha-value>)",
+          fg: "hsl(var(--indigo-fg) / <alpha-value>)",          /* see amber.fg */
+        },
+        /* The one brand colour. Same in both themes — see globals.css. */
+        whatsapp: {
+          DEFAULT: "hsl(var(--whatsapp) / <alpha-value>)",
+          fg: "hsl(var(--whatsapp-fg) / <alpha-value>)",
         },
         slate: {
           DEFAULT: "hsl(var(--slate) / <alpha-value>)",
           soft: "hsl(var(--slate-soft) / <alpha-value>)",
+          fg: "hsl(var(--slate-fg) / <alpha-value>)",          /* see amber.fg */
         },
         // shadcn/ui compatibility
         border: "hsl(var(--hairline) / <alpha-value>)",
@@ -103,7 +121,13 @@ const config: Config = {
         ring: "hsl(var(--amber) / <alpha-value>)",
         primary: {
           DEFAULT: "hsl(var(--amber) / <alpha-value>)",
-          foreground: "hsl(0 0% 100% / <alpha-value>)",
+          /* --amber-fg, not a frozen white. `primary` IS `--amber` (line above),
+             and --amber flips: rgb(200,73,9) light, rgb(249,104,31) dark. White
+             on the dark fill measures 2.99:1 — the same failure amber.fg was
+             added to fix, missed here because the grep that found it looked for
+             `bg-amber` and these 32 call sites say `bg-primary`. --amber-fg is
+             white in light and near-black in dark: 4.76:1 and 6.01:1. */
+          foreground: "hsl(var(--amber-fg) / <alpha-value>)",
         },
         secondary: {
           DEFAULT: "hsl(var(--paper-2) / <alpha-value>)",
@@ -111,7 +135,17 @@ const config: Config = {
         },
         destructive: {
           DEFAULT: "hsl(var(--rose) / <alpha-value>)",
-          foreground: "hsl(0 0% 100% / <alpha-value>)",
+          /* The same shape that made `primary.foreground` wrong, found by auditing
+             every foreground key after fixing that one. --rose flips —
+             rgb(224,31,31) light, rgb(243,89,89) dark — and a frozen white on the
+             dark fill measures 3.29:1. --rose-fg gives 4.79 and 5.46.
+
+             LATENT, not live: `destructive` has ZERO uses today, and Tailwind's
+             JIT does not even emit the class (probing `bg-destructive` returns
+             transparent, which is how this was nearly mismeasured). Fixed anyway —
+             a wrong token left in the config is what let `bg-primary` go bad in 31
+             places without anybody writing a bug. */
+          foreground: "hsl(var(--rose-fg) / <alpha-value>)",
         },
         muted: {
           DEFAULT: "hsl(var(--paper-2) / <alpha-value>)",

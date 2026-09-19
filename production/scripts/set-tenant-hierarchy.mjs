@@ -16,16 +16,15 @@
  *   node scripts/set-tenant-hierarchy.mjs --apply   # writes
  */
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
 const APPLY = process.argv.includes("--apply");
 const ROOT_ID = "fbb976f1-9090-4f10-9726-0901bd144e42"; // ANUTECH DIGITAL PVT LTD
 
-const env = {};
-for (const line of readFileSync(".env.local", "utf8").split(/\r?\n/)) {
-  const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-  if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
-}
+/* Shared parser — this was six copies of a regex that stripped a quote off each
+   END OF THE LINE, so a quoted value followed by a comment kept the comment.
+   See scripts/lib/env-local.mjs for the error it produced. */
+const env = loadEnvLocal();
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });

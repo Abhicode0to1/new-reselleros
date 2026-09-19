@@ -116,7 +116,7 @@ export function GettingStartedCard({
             >
               <span
                 className={`grid place-items-center h-6 w-6 rounded-full shrink-0 ${
-                  s.done ? "bg-emerald text-white" : "border-2 border-hairline-strong text-transparent"
+                  s.done ? "bg-emerald text-emerald-fg" : "border-2 border-hairline-strong text-transparent"
                 }`}
               >
                 {s.done && <Icon name="check" size={13} />}
@@ -129,7 +129,7 @@ export function GettingStartedCard({
                 <Link
                   href={s.href as Route}
                   className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
-                    isNext ? "bg-amber text-white hover:bg-amber-ink" : "border border-hairline text-ink-2 hover:bg-paper-2"
+                    isNext ? "bg-amber text-amber-fg hover:bg-amber-ink" : "border border-hairline text-ink-2 hover:bg-paper-2"
                   }`}
                 >
                   {s.cta}

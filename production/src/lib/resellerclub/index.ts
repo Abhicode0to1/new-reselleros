@@ -2,12 +2,22 @@
  * ResellerClub — direct integration (merge Plan B, 2 Sep 2026).
  *
  * ─── WHY THIS EXISTS ─────────────────────────────────────────────────────────
- * The engine (app.anutech.in) that used to answer domain availability and
- * pricing cannot be redeployed: its GCP project's owner account is lost, so its
- * public APIs still 404 and every search on the site dead-ends. Pardeep chose
- * the direct route — "wo api to me tumhe bhi de dunga … tum static ip wale kaam
- * ko complete karo" — so this app now asks ResellerClub itself, with the same
- * credentials the engine uses.
+ * Pardeep chose the direct route — "wo api to me tumhe bhi de dunga … tum static
+ * ip wale kaam ko complete karo" — so this app asks ResellerClub itself, with the
+ * same credentials the engine uses, rather than proxying through the engine.
+ *
+ * ⚠️ CORRECTED 8 Sep 2026. This paragraph used to say the engine
+ * "cannot be redeployed: its GCP project's owner account is lost, so its public
+ * APIs still 404 and every search on the site dead-ends". Measured:
+ * `app.anutech.in/api/health` returns **200**, and its repo
+ * (C:\xampp\htdocs\Domain-Management-Project, branch
+ * `primary-billing-integration`) was deployed the same morning. The engine is
+ * alive and under active development.
+ *
+ * The direct route is still the right one — it is fewer hops, and the decision
+ * to absorb that engine into this app was taken on 8 Sep — but "the engine is
+ * dead" was load-bearing in the wrong way: it was the stated reason domain
+ * ordering stayed switched off, and it was not true.
  *
  * The endpoints, auth params, product-key mapping and price-block shapes are
  * ported faithfully from the engine's own wrapper
@@ -64,9 +74,19 @@ export type CustomerPricingMap = Record<string, ProductPricing | undefined>;
 
 export interface RcTldPrice {
   tld: string;               // ".in"
-  register: number | null;   // 1-year, whole ₹
+  register: number | null;   // shortest available term, whole ₹
   renew: number | null;
   transfer: number | null;
+  /**
+   * The term those amounts BUY, in years.
+   *
+   * 1 for all but one product on this account — and that one matters: .ai is
+   * sold by its registry in a 2-YEAR MINIMUM, so there is no 1-year price
+   * anywhere in the payload. Quoting a price without its term is how a card
+   * ends up saying "₹8,807 for 1 year" for something that cannot be bought for
+   * one year. Falls back to 1 when there is no amount to qualify.
+   */
+  years: number;
   currency: string;
 }
 
@@ -83,6 +103,19 @@ export function productKeyFor(tld: string, pricing: CustomerPricingMap): string 
     clean.toUpperCase(),
     `dot${clean}`,
     `dom${clean}`,
+    /* A multi-level TLD is one RC product per registry, filed under the LAST
+       label: ".co.in" is sold as "thirdleveldotin", alongside .net.in, .org.in
+       and the rest of the third-level .in family. Ported from the engine
+       (domain-management-system: lib/pricing-service.ts:193), which has billed
+       this same reseller account with it for years.
+
+       This is not a nicety. ".co.in" is one of the FIVE TLDs every search on
+       this site asks for — DEFAULT_TLDS, in both api/domains/availability and
+       site/lib/domain-search — and no rung above spells its key, so the card
+       said "Price on request" every single time. Measured against the live
+       account, 16 Sep 2026: .in 863, .com 1199, .org 1350, .net 1559, and
+       .co.in nothing at all. It is 779. */
+    clean.includes(".") ? `thirdleveldot${clean.split(".").pop()}` : "",
     `centralnicza${clean}`,
     `centralnicus${clean}`,
   ].filter(Boolean) as string[];
@@ -90,11 +123,32 @@ export function productKeyFor(tld: string, pricing: CustomerPricingMap): string 
   return null;
 }
 
-/** 1-year price out of a period-keyed block; null when absent — never invented. */
-function oneYear(block: PriceBlock | undefined): number | null {
-  const v = block?.["1"];
-  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
-  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+/**
+ * The SHORTEST term a period-keyed block offers, with the term itself.
+ *
+ * This read `block["1"]` and nothing else until 17 Sep 2026. That is right for
+ * 411 of the 412 products on this account and wrong for the one that is not
+ * sold by the year: .ai's registry has a 2-year minimum, so its whole block is
+ * keyed at "2" and the 1-year read returned null — reported as "no price", the
+ * same answer as an outage, for a TLD the site advertises at 6,999.
+ *
+ * Measured, not assumed: every product with a registration price was checked,
+ * and exactly one lacks a "1" key. Null when the block has no usable amount at
+ * all — never invented.
+ */
+function shortestTerm(block: PriceBlock | undefined): { amount: number; years: number } | null {
+  if (!block) return null;
+  let best: { amount: number; years: number } | null = null;
+  for (const [key, raw] of Object.entries(block)) {
+    /* RC keys periods as year counts; anything else in the block is not one. */
+    if (!/^\d+$/.test(key)) continue;
+    const years = Number(key);
+    const n = typeof raw === "string" ? Number(raw) : typeof raw === "number" ? raw : NaN;
+    if (!Number.isFinite(years) || years <= 0) continue;
+    if (!Number.isFinite(n) || n <= 0) continue;
+    if (!best || years < best.years) best = { amount: Math.round(n), years };
+  }
+  return best;
 }
 
 /** Extract register/renew/transfer for one TLD from the big map. Exported for tests. */
@@ -102,11 +156,18 @@ export function extractTldPrice(tld: string, pricing: CustomerPricingMap): RcTld
   const clean = tld.replace(/^\.+/, "").toLowerCase();
   const key = productKeyFor(clean, pricing);
   const p = key ? pricing[key] : undefined;
+  const register = shortestTerm(p?.addnewdomain);
+  const renew = shortestTerm(p?.renewdomain);
+  const transfer = shortestTerm(p?.transferdomain);
   return {
     tld: `.${clean}`,
-    register: oneYear(p?.addnewdomain),
-    renew: oneYear(p?.renewdomain),
-    transfer: oneYear(p?.transferdomain),
+    register: register?.amount ?? null,
+    renew: renew?.amount ?? null,
+    transfer: transfer?.amount ?? null,
+    /* Registration is what a search quotes, so its term leads. A TLD with no
+       price at all reports 1 rather than 0 — the term only means something
+       beside an amount, and nothing should render "for 0 years". */
+    years: register?.years ?? renew?.years ?? 1,
     currency: "INR",
   };
 }
@@ -156,17 +217,85 @@ export async function rcTldPricing(tlds: readonly string[]): Promise<RcTldPrice[
 
 export interface RcAvailability {
   domain: string;      // "name.in"
-  available: boolean;  // strictly status === "available", as the engine decides it
+  /**
+   * Strictly `status === "available"`, as the engine decides it — or NULL when
+   * this particular name could not be determined. Null exists because of the
+   * malformed-key case below: the alternative is a row silently missing from the
+   * results, which reads as "we don't offer that" for a name that may be free.
+   */
+  available: boolean | null;
 }
 
 /**
- * Availability for one name across TLDs. Null = upstream unreachable/errored —
- * the caller must say "couldn't check", never guess.
+ * ResellerClub sometimes answers a multi-TLD query with ONE CONCATENATED KEY.
+ *
+ * Ported from the DMS engine's `searchDomainWithTlds` on 10 Sep 2026 — the one
+ * thing that function knew which this app did not. Asked for `acme` across
+ * `com,net,org`, RC occasionally returns
+ *
+ *     { "acme.com,net,org": { "status": "available" } }
+ *
+ * instead of three keys. Our reader mapped that to a single entry named
+ * `acme.com,net,org`, so the route's per-TLD lookups all missed and the search
+ * returned `{ domains: [] }` with HTTP 200 — an empty result page for a name
+ * that might be entirely free, with no error anywhere to explain it.
+ *
+ * The single status CANNOT be split across the three names: it is one answer to
+ * a question about three domains, and guessing which one it describes would be
+ * inventing availability. So the affected TLDs are re-asked one at a time, which
+ * is what DMS did and the only correct move.
  */
-export async function rcAvailability(
+export function looksConcatenated(key: string): boolean {
+  return key.includes(",");
+}
+
+/** Which TLDs a concatenated key was trying to answer for. */
+export function tldsInConcatenatedKey(key: string, name: string): string[] {
+  const out: string[] = [];
+  const parts = key.split(",").map((x) => x.trim()).filter(Boolean);
+  parts.forEach((part, i) => {
+    if (i === 0) {
+      /* The first part is a whole domain: "acme.com" -> "com". */
+      const stripped = part.toLowerCase().startsWith(`${name.toLowerCase()}.`)
+        ? part.slice(name.length + 1)
+        : part.split(".").slice(1).join(".");
+      if (stripped) out.push(stripped.toLowerCase());
+    } else {
+      /* The rest are bare TLDs: "net", "org". */
+      out.push(part.toLowerCase());
+    }
+  });
+  return out;
+}
+
+/**
+ * Read RC's availability JSON into entries, saying which TLDs still need asking.
+ *
+ * Pure, so the concatenated-key case can be tested without a network — it is
+ * rare enough in the wild that a test is the only thing keeping it handled.
+ */
+export function parseAvailability(
+  data: Record<string, { status?: string } | undefined>,
+  name: string,
+): { entries: RcAvailability[]; needsRetry: string[] } {
+  const entries: RcAvailability[] = [];
+  const needsRetry: string[] = [];
+
+  for (const [key, d] of Object.entries(data)) {
+    if (!d || typeof d !== "object") continue;
+    if (looksConcatenated(key)) {
+      needsRetry.push(...tldsInConcatenatedKey(key, name));
+      continue;
+    }
+    entries.push({ domain: key.toLowerCase(), available: d.status === "available" });
+  }
+  return { entries, needsRetry };
+}
+
+async function fetchAvailability(
   name: string,
   tlds: readonly string[],
-): Promise<RcAvailability[] | null> {
+): Promise<Record<string, { status?: string } | undefined> | null> {
   try {
     const res = await fetch(
       authedUrl("/api/domains/available.json", {
@@ -188,11 +317,50 @@ export async function rcAvailability(
       console.error(`[resellerclub] available returned error entry: ${JSON.stringify(data).slice(0, 200)}`);
       return null;
     }
-    return Object.entries(data)
-      .filter(([, d]) => d && typeof d === "object")
-      .map(([domain, d]) => ({ domain: domain.toLowerCase(), available: d!.status === "available" }));
+    return data;
   } catch (err) {
     console.error("[resellerclub] available unreachable:", (err as Error).message);
     return null;
   }
+}
+
+/**
+ * Availability for one name across TLDs. Null = upstream unreachable/errored —
+ * the caller must say "couldn't check", never guess.
+ *
+ * An entry with `available: null` means RC answered for the batch but not
+ * usefully for that name, and the re-ask failed too.
+ */
+export async function rcAvailability(
+  name: string,
+  tlds: readonly string[],
+): Promise<RcAvailability[] | null> {
+  const data = await fetchAvailability(name, tlds);
+  if (!data) return null;
+
+  const { entries, needsRetry } = parseAvailability(data, name);
+  if (needsRetry.length === 0) return entries;
+
+  console.warn(
+    `[resellerclub] available returned a concatenated key; re-asking ${needsRetry.length} TLD(s) individually`,
+  );
+
+  /* One request per affected TLD. Sequential rather than parallel: this is the
+     rare path, and a burst of single-TLD calls is the shape a rate limiter
+     objects to. The caller caps how many TLDs can be asked for. */
+  for (const tld of needsRetry) {
+    const one = await fetchAvailability(name, [tld]);
+    const hit = one
+      ? parseAvailability(one, name).entries.find((e) => e.domain === `${name.toLowerCase()}.${tld}`)
+      : undefined;
+    entries.push(
+      hit ?? {
+        /* Still no usable answer. Reported as unknown, never as taken — a name
+           shown as taken is one the customer will not try to buy. */
+        domain: `${name.toLowerCase()}.${tld}`,
+        available: null,
+      },
+    );
+  }
+  return entries;
 }

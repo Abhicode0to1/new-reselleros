@@ -252,7 +252,7 @@ function ChoiceRow({
       >
         <span
           className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${
-            selected ? "bg-amber text-white" : "bg-paper-2 text-ink-3"
+            selected ? "bg-amber text-amber-fg" : "bg-paper-2 text-ink-3"
           }`}
         >
           <Icon name={icon} size={17} />

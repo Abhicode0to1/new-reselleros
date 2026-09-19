@@ -27,8 +27,9 @@
  * A table that dumped 0 rows when you expected data is the signal to STOP.
  */
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
 const OUT_DIR = process.argv[2];
 const ONLY_TENANT = process.argv[3] ?? null;
@@ -46,11 +47,10 @@ if (resolve(OUT_DIR).startsWith(repoRoot)) {
   process.exit(2);
 }
 
-const env = {};
-for (const line of readFileSync(".env.local", "utf8").split(/\r?\n/)) {
-  const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-  if (m) env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
-}
+/* Shared parser — this was six copies of a regex that stripped a quote off each
+   END OF THE LINE, so a quoted value followed by a comment kept the comment.
+   See scripts/lib/env-local.mjs for the error it produced. */
+const env = loadEnvLocal();
 const URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !KEY) {

@@ -262,7 +262,7 @@ export function AddLineItemDialog({ open, onOpenChange, onAdd, currency, exchang
                             {it.margin_pct}% margin
                           </div>
                         </div>
-                        <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber text-white text-xs font-semibold px-2.5 py-1.5">
+                        <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-amber text-amber-fg text-xs font-semibold px-2.5 py-1.5">
                           <Icon name="plus" size={13} /> Add
                         </span>
                       </button>

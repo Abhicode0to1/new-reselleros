@@ -17,6 +17,7 @@ import { quoteAmountDue } from "@/lib/payments/amount-due";
 import { QuoteAcceptView, type PublicQuote, type PublicLine } from "./quote-accept-view";
 import { isBotUserAgent } from "@/lib/quotes/quote-intent";
 import { maybeAlertHotLead, recordQuoteView } from "@/lib/quotes/quote-views.server";
+import { clientIpOrNull } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic"; // never cache — quotes change state
 
@@ -93,9 +94,11 @@ export default async function QuoteAcceptPage({ params, searchParams }: Props) {
     tenantId: quote.tenant_id,
     quoteId: quote.id,
     userAgent: ua,
-    /* First hop of X-Forwarded-For — Cloud Run puts the client there. Hashed with a salt
-       before storage; the address itself is never written. */
-    ip: (headers().get("x-forwarded-for") ?? "").split(",")[0].trim() || null,
+    /* Hashed with a salt before storage; the address itself is never written.
+       Read from the END of X-Forwarded-For, not the first hop: Cloud Run
+       APPENDS to a header the caller already set, so `[0]` is the caller's own
+       text. A hash of a forged address is a hash of nothing. */
+    ip: clientIpOrNull(headers()),
   });
 
   /* And then, only if this is a person reading it repeatedly, tell the desk. Once.

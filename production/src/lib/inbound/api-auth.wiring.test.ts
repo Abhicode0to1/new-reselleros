@@ -45,7 +45,27 @@ const CHECKS_USER = /auth\.getUser\s*\(/;
    Ise regex dheela karke chhoot NAHI di gayi. Dheela regex agli baar chup-chaap kisi
    aur ko bhi chhoot de deta — aur wo agla shayad asli chhed ho. Naam se chhoot dikhti
    hai, aur is list me kuch jodne ke liye wajah likhni padti hai. */
-const MACHINE_DOORS = new Set(["attendance/punch/route.ts"]);
+/* ── DOOSRI CHHOOT: `dev/portal-signin` ──────────────────────────────────────
+   11 Sep 2026. Ye route demo portal customer ko EK CLICK me andar karta hai —
+   Pardeep: "shouldn't i be logged in directly like others login of owner and
+   tenet". Wo SESSION BANATA hai, to us se `auth.getUser()` maangna ulta hai:
+   call karne wale ke paas identity hoti hi nahi, wahi to ye de raha hai.
+
+   Uski apni chaabi DO hai, aur dono alag-alag:
+     1. `NODE_ENV === "production"` par 404 — 403 nahi, warna probe ko pata chal
+        jata hai ki route hai.
+     2. Email `.invalid` par khatam hona ZAROORI hai (RFC 2606). Yahi wo pehra
+        hai jo akela bhi khada rehta hai: `.invalid` kisi asli insaan ka pata ho
+        hi nahi sakta, to ye route KISI ASLI customer ko andar nahi kar sakta.
+        "mushkil hai" nahi — aisa pata maujood hi nahi hai.
+     3. Sirf POST. GET jo session banata ho, wo ek prefetch ki doori par hai.
+
+   Regex dheela karke chhoot NAHI li — upar wali wajah wahi hai. Naam se, wajah
+   ke saath. */
+const MACHINE_DOORS = new Set([
+  "attendance/punch/route.ts",
+  "dev/portal-signin/route.ts",
+]);
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const d of readdirSync(dir, { withFileTypes: true })) {
@@ -87,6 +107,23 @@ describe("in-app API routes jo service_role use karte hain, wo login maangte hai
     expect(/x-ingest-key/.test(punch.src)).toBe(true);
     expect(/attendance_ingest_key/.test(punch.src)).toBe(true);
     expect(/401/.test(punch.src)).toBe(true);
+  });
+
+  /* Doosri chhoot ke dono pehre, naap kar. Chhoot dene ka matlab "jaanch nahi"
+     nahi hai — matlab "jaanch doosri shakl me hai", aur wo shakl maujood rehni
+     chahiye. Ye hat gaya to dev route asli customer ko andar kar sakta hai. */
+  it("dev/portal-signin sirf dev me chalta hai aur sirf .invalid pata maanta hai", () => {
+    const dev = inApp.find((r) => r.name === "dev/portal-signin/route.ts")!;
+    /* Pehra 1 — production me 404. */
+    expect(/NODE_ENV\s*===\s*"production"/.test(dev.src)).toBe(true);
+    expect(/404/.test(dev.src)).toBe(true);
+    /* Pehra 2 — asli pata kabhi nahi. Yahi akela bhi kaafi hai. */
+    expect(/endsWith\(\s*"\.invalid"\s*\)/.test(dev.src)).toBe(true);
+    /* Pehra 3 — GET nahi. */
+    expect(/export\s+async\s+function\s+POST/.test(dev.src)).toBe(true);
+    expect(/export\s+async\s+function\s+GET/.test(dev.src)).toBe(false);
+    /* Aur session asli hai — hand-rolled cookie nahi. */
+    expect(/verifyOtp/.test(dev.src)).toBe(true);
   });
 
   it("service_role wale route bhi mile", () => {

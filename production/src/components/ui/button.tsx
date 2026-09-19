@@ -32,12 +32,21 @@ const buttonVariants = cva(
         // Quiet / default — white with hairline border (most common)
         default:
           "bg-paper text-ink border border-hairline hover:bg-paper-2 active:bg-paper-2/80",
+        /* ─── text-amber-fg, NOT text-white ──────────────────────────
+           Measured 12 Sep 2026 on a real dark-mode render: white on the
+           dark-theme amber fill is 2.99:1, against AA's 4.5. --amber is light
+           in dark mode because it also has to work as `text-amber` on a dark
+           ground (736 uses, 6.15:1 there) — so the foreground moves, not the
+           fill. `bg-amber-hover` / `-active` replace `/90` and `/80`, which
+           blended toward the PAGE and cost contrast on hover: primary went
+           4.76 → 4.11 → 3.53 across rest/hover/active. Now every state gains.
+           383 `variant="primary"` uses across 172 files ride on this line. */
         // Primary — brand amber
         primary:
-          "bg-amber text-white hover:bg-amber/90 active:bg-amber/80 shadow-sm",
+          "bg-amber text-amber-fg hover:bg-amber-hover active:bg-amber-active shadow-sm",
         // Destructive — for delete, cancel-subscription, etc.
         danger:
-          "bg-rose text-white hover:bg-rose/90 active:bg-rose/80 shadow-sm",
+          "bg-rose text-rose-fg hover:bg-rose-hover active:bg-rose-active shadow-sm",
         // Ghost — minimal, for icon-heavy toolbars
         ghost:
           "bg-transparent text-ink hover:bg-paper-2 active:bg-paper-2/80",
@@ -48,11 +57,31 @@ const buttonVariants = cva(
         link:
           "bg-transparent text-amber underline-offset-4 hover:underline p-0 h-auto",
       },
+      /* ─── MOBILE-FIRST HEIGHTS, AND THIS WAS A REAL §20 VIOLATION ───────────
+       * CLAUDE.md §20 requires every touch target on a phone to be at least 44px.
+       * These were `h-8` (32px) and `h-9` (36px) at EVERY width, and `md` is the
+       * default — so on a phone essentially every button in the app was under the
+       * floor, including the primary action on /portal/shop and "Open control
+       * panel" on /portal/hosting, on a surface the portal's own code calls "a
+       * phone-first surface".
+       *
+       * Measured at 390px before this change: 18 targets under 44px on
+       * /portal/shop, 3 on /portal/domains, 3 on /portal/hosting (32px), 2 on
+       * /portal/support.
+       *
+       * Unlike the icon-only fix, the BOX grows here rather than just the hit
+       * area. A 44px-tall text button on a phone is what every mobile interface
+       * does and what §20 is asking for; the invisible-hit-area trick was only
+       * needed for icon buttons, where growing the box would have moved a
+       * thousand desktop layouts. Above `md` the original density is restored
+       * exactly, so no desktop screen changes.
+       */
       size: {
-        sm: "h-8 px-3 text-xs",
-        md: "h-9 px-4 text-sm",
+        sm: "h-11 md:h-8 px-3 text-xs",
+        md: "h-11 md:h-9 px-4 text-sm",
         lg: "h-11 px-6 text-base",
-        icon: "h-9 w-9 p-0",
+        /* 36px box, 44px hit area on a phone — see .touch-44 in globals.css. */
+        icon: "h-9 w-9 p-0 touch-44",
       },
     },
     defaultVariants: {
@@ -157,7 +186,11 @@ export interface IconButtonProps
 const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   ({ icon, size = "md", className, ...props }, ref) => {
     const iconSize = size === "lg" ? 20 : size === "sm" ? 14 : 16;
-    const sizeClass = size === "lg" ? "h-11 w-11" : size === "sm" ? "h-7 w-7" : "h-9 w-9";
+    /* `lg` is already 44px. The smaller two get the hit area without the box,
+       so a phone tap lands where it was aimed and no desktop layout shifts —
+       see .touch-44 in globals.css. */
+    const sizeClass =
+      size === "lg" ? "h-11 w-11" : size === "sm" ? "h-7 w-7 touch-44" : "h-9 w-9 touch-44";
 
     return (
       <Button

@@ -238,7 +238,7 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
                 <button key={b.id} type="button" onClick={() => setBucket(b.id)}
                   className={cn(
                     "text-xs px-2.5 py-1 rounded-md border transition-colors",
-                    bucket === b.id ? "bg-amber text-white border-amber/0" : "bg-paper border-hairline text-ink-2 hover:bg-paper-2",
+                    bucket === b.id ? "bg-amber text-amber-fg border-amber/0" : "bg-paper border-hairline text-ink-2 hover:bg-paper-2",
                   )}>
                   {b.label} <span className="tabular-nums opacity-80">{report.buckets[b.id].length}</span>
                 </button>

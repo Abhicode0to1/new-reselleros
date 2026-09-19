@@ -85,6 +85,7 @@ function ConversationList({
         return (
           <li key={c.contact_phone}>
             <button
+              aria-pressed={active}
               type="button"
               onClick={() => onSelect(c.contact_phone)}
               className={cn(

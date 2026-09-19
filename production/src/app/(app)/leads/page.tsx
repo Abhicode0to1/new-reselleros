@@ -28,7 +28,6 @@ import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead, useLeadQuotes, type LeadQuoteRef } from "@/lib/queries/leads";
-import { StatusPill } from "@/components/ui/status-pill";
 import Link from "next/link";
 import { useChangeLeadStage } from "@/lib/leads/use-change-stage";
 import { InlineCell } from "@/components/features/leads/inline-cell";
@@ -104,6 +103,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button, IconButton } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { unifiedStatus } from "@/lib/quotes/status-badge";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -901,7 +901,7 @@ function LeadsPageInner() {
                 onClick={() => setView("kanban")}
                 aria-pressed={effectiveView === "kanban"}
                 className={cn(
-                  "px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors cursor-pointer",
+                  "min-h-11 md:min-h-0 px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors cursor-pointer",
                   effectiveView === "kanban" ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-paper-2"
                 )}
                 title="Kanban view — best for stage flow"
@@ -913,7 +913,7 @@ function LeadsPageInner() {
                 onClick={() => setView("list")}
                 aria-pressed={effectiveView === "list"}
                 className={cn(
-                  "px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-hairline cursor-pointer",
+                  "min-h-11 md:min-h-0 px-2.5 py-1 text-xs font-medium inline-flex items-center gap-1 transition-colors border-l border-hairline cursor-pointer",
                   effectiveView === "list" ? "bg-ink text-paper" : "bg-paper text-ink-2 hover:bg-paper-2"
                 )}
                 title="List view — best for scanning many leads"
@@ -2230,10 +2230,10 @@ function LeadDetailSheet({
               onClick={nextAction.onClick}
               className={cn(
                 "w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-semibold transition-colors",
-                nextAction.tone === "amber"   && "bg-amber text-white hover:bg-amber/90",
-                nextAction.tone === "rose"    && "bg-rose text-white hover:bg-rose/90",
-                nextAction.tone === "emerald" && "bg-emerald text-white hover:bg-emerald/90",
-                nextAction.tone === "indigo"  && "bg-indigo text-white hover:bg-indigo/90",
+                nextAction.tone === "amber"   && "bg-amber text-amber-fg hover:bg-amber-hover",
+                nextAction.tone === "rose"    && "bg-rose text-rose-fg hover:bg-rose-hover",
+                nextAction.tone === "emerald" && "bg-emerald text-emerald-fg hover:bg-emerald/90",
+                nextAction.tone === "indigo"  && "bg-indigo text-indigo-fg hover:bg-indigo/90",
               )}
             >
               <Icon name={nextAction.icon} size={14} />
@@ -4175,19 +4175,33 @@ function LeadListView({
 
   const SortHeader = ({ col, label, align = "left", sticky = false }: { col: SortCol; label: string; align?: "left" | "right"; sticky?: boolean }) => (
     <th
-      onClick={() => onSort(col)}
+      /* The click used to sit on the <th> itself, with no tab stop, no key
+         handler and no name — so sorting the app's busiest table was mouse-only
+         (WCAG 2.1.1, Level A). It moves to a real <button>, which cannot wrap
+         the whole cell because <ResizeGrip> lives here too and a control inside
+         a control is invalid.
+
+         aria-sort stays on the CELL, which is where a reader moving through the
+         table reads it. "none" on the others is required: leaving it off says
+         "not sortable", which is a different claim. */
+      aria-sort={sortBy === col ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
       className={cn(
-        GRID_TH, "relative cursor-pointer select-none hover:text-ink",
+        GRID_TH, "relative select-none",
         align === "right" && "text-right",
         sticky && cn("bg-paper-2", STICK_L_IDENTITY, STICK_HEAD),
       )}
     >
-      <span className="inline-flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        aria-label={`Sort by ${label}${sortBy === col ? (sortDir === "asc" ? " (ascending)" : " (descending)") : ""}`}
+        className="inline-flex items-center gap-1 cursor-pointer hover:text-ink rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+      >
         {label}
         {sortBy === col && (
           <Icon name={sortDir === "asc" ? "chevron_up" : "chevron_down"} size={11} />
         )}
-      </span>
+      </button>
       <ResizeGrip col={col} />
     </th>
   );
@@ -4759,7 +4773,12 @@ function LeadListView({
                       hai — rang-andha padhne wala bhi Draft/Sent padh sake. */}
                   {leadQuotes?.[lead.id] && (() => {
                     const q: LeadQuoteRef = leadQuotes[lead.id];
-                    const word = (q.status ?? "draft").charAt(0).toUpperCase() + (q.status ?? "draft").slice(1);
+                    /* `unifiedStatus` — the SAME function /quotes calls, which is what
+                       "wahi rang jo /quotes par hain" above actually asks for. The old
+                       status pill carried a palette of its own, so the two screens
+                       showed different colours for one row — and once a quote was paid,
+                       different words too. The word still travels with the colour. */
+                    const u = unifiedStatus(q);
                     return (
                       <Link
                         href={`/quotes/${q.id}` as never}
@@ -4767,7 +4786,7 @@ function LeadListView({
                         title={`Open ${q.id}`}
                         className="mt-0.5 inline-flex"
                       >
-                        <StatusPill status={q.status ?? "draft"} size="sm" label={`…${q.id.slice(-4)} · ${word}`} />
+                        <Badge kind={u.kind} size="sm" dot>{`…${q.id.slice(-4)} · ${u.label}`}</Badge>
                       </Link>
                     );
                   })()}

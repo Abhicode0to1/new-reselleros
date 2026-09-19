@@ -4,7 +4,7 @@
  * /portal/support/new — raise a new support ticket.
  */
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,6 +21,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
+import { TICKET_SUBJECT_MAX, TICKET_BODY_MAX } from "@/lib/portal/ticket-link";
 
 const CATEGORIES = [
   { value: "billing",     label: "💰 Billing / invoice / payment" },
@@ -51,12 +52,29 @@ function newTicketId(): string {
   return `TKT-${stamp}-${rand}`;
 }
 
-export default function NewTicketPage() {
+function NewTicketForm() {
   const router = useRouter();
+
+  /* The domain search on /portal/domains links here with the name already in
+     hand ("Please register acme.in"). Without this the link would land on an
+     empty box and the customer would retype what they had just searched for —
+     a promise the URL made and the form did not keep. Trimmed and capped
+     because it arrives from a query string. */
+  const params = useSearchParams();
+  const presetSubject = (params.get("subject") ?? "").trim().slice(0, TICKET_SUBJECT_MAX);
+  /* And the body, so the ticket carries the price and term the customer was
+     shown rather than making somebody look the name up again. Capped harder
+     than the textarea allows, because it arrives from a query string. */
+  const presetBody = (params.get("body") ?? "").trim().slice(0, TICKET_BODY_MAX);
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { category: "billing", priority: "normal" },
+    defaultValues: {
+      category: "billing",
+      priority: "normal",
+      ...(presetSubject ? { subject: presetSubject } : {}),
+      ...(presetBody ? { body: presetBody } : {}),
+    },
   });
 
   async function onSubmit(values: FormData) {
@@ -104,14 +122,26 @@ export default function NewTicketPage() {
   }
 
   return (
+    /* 680px rather than the portal's usual 1080: this is a FORM, and a text
+       field stretched to 1080px is a line nobody wants to read back or proof.
+       Recorded 11 Sep 2026 because an undocumented odd width is indistinguishable
+       from drift — `profile` was 800 for no reason anybody had written down, and
+       it was brought back in line. */
     <div className="max-w-[680px] mx-auto px-6 py-8">
       <div className="mb-6">
-        <Link href="/portal/support" className="text-xs text-ink-3 hover:text-ink">
+        {/* min-h-11 on phones only — §20 scopes the 44px minimum to <768px.
+            Measured at 15px tall before this, on the page the domain search's
+            "Ask to register" now lands on. */}
+        <Link
+          href="/portal/support"
+          className="min-h-11 md:min-h-0 inline-flex items-center text-xs text-ink-3 hover:text-ink"
+        >
           ← Back to all tickets
         </Link>
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight mt-2">Raise a ticket</h1>
         <p className="text-sm text-ink-3 mt-1">
-          We respond within 4 business hours. For urgent items, also WhatsApp us.
+          We respond within 4 business hours, on the ticket — so the whole exchange stays
+          in one place and anyone on the team can pick it up.
         </p>
       </div>
 
@@ -152,7 +182,13 @@ export default function NewTicketPage() {
           <FormField label="Details" required htmlFor="body">
             <Textarea
               id="body"
-              rows={6}
+              /* 9, not 6. The domain search sends a four-sentence body here, and
+                 six rows is 136px against the 176px that text needs once it
+                 wraps at 390 — so the customer arrived at a box whose last line
+                 ("Please confirm and let me know how to pay") was hidden until
+                 they scrolled inside it. Measured 17 Sep 2026. `resize-y` stays,
+                 so anyone writing more can still drag it. */
+              rows={9}
               placeholder="Describe the issue in detail. Include any error messages, user emails affected, screenshot URLs, etc."
               {...register("body")}
             />
@@ -173,5 +209,16 @@ export default function NewTicketPage() {
         </form>
       </Card>
     </div>
+  );
+}
+
+/* NewTicketForm reads useSearchParams(), which Next requires to sit under a
+   Suspense boundary so the static prerender can bail out instead of failing
+   the build — same shape as /invoices and /portal/login. */
+export default function NewTicketPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <NewTicketForm />
+    </React.Suspense>
   );
 }

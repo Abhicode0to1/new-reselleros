@@ -146,9 +146,82 @@ keeps passing the day the trigger it was meant to guard is dropped.
 
 - **`npm run build` while the dev server is up wipes `.next`** — the running page then 404s
   its own chunks and looks broken. Stop the dev server first, or do not build.
+- **And an INTERRUPTED build leaves a `.next` that `next dev` cannot use.** Measured 17 Sep
+  2026: dev started clean, said `✓ Ready in 1.5s`, and served HTTP 500 on every route with
+  `Cannot find module '../webpack-runtime.js'` in the payload. Nothing in the dev log said
+  anything was wrong. `rm -rf .next` and restart — and treat "Ready" as meaning the process
+  booted, never as meaning the app works.
+- **`npm run lint` exits 139 with NO OUTPUT AT ALL.** Measured 17 Sep 2026, twice in a row:
+  `npm run lint` → `Segmentation fault "$NODE_EXE" "$NPM_CLI_JS"`, 141 bytes of output, exit
+  139 — while `npx next lint` on the same tree exits 0 with the usual 26 warnings and 0
+  errors. It is npm's shell shim crashing, not a lint failure, and reading 139 as "lint
+  failed" would send you hunting a defect that is not there. **Run `npx next lint` and record
+  that.** If any other `npm run <x>` returns 139 with no output, suspect the same thing and
+  re-run the underlying binary directly.
+- **`next build` itself segfaults sometimes, and it is NOT your code.** Measured 17 Sep 2026:
+  exit 139, preceded by a Rust panic from inside SWC —
+  `thread 'libuv-worker' panicked at petgraph-0.6.3\srclgo\mod.rs: range start index 7184
+  out of range for slice of length 1`. The identical tree built clean on the retry after
+  `rm -rf .next node_modules/.cache`. Seen roughly half a dozen times across a long session,
+  sometimes as exit 1 with "Cannot read properties of undefined" instead. **Retry once with
+  the caches cleared before believing the build is broken** — and if it fails twice, isolate
+  it by stashing the change and building at HEAD, which is how this was first pinned down
+  (HEAD crashed identically).
+- **⚠️ But `rm -rf node_modules/.cache` is NOT free — it throws away the `next/font` cache.**
+  Measured 17 Sep 2026, immediately after doing exactly what the line above says: the retry
+  failed with five errors that look like code faults —
+
+  ```
+  srcpp\layout.tsx
+  `next/font` error:
+  Failed to fetch `Plus Jakarta Sans` from Google Fonts.
+  ```
+
+  Nothing was wrong with the code. `next/font` downloads the faces at build time and caches
+  them there, so clearing it makes the next build depend on reaching
+  `fonts.googleapis.com` — and one blocked or flaky moment fails the whole build. Rebuilding
+  with only `.next` cleared succeeded, 193/193.
+  **So: clear `.next` first and alone. Add `node_modules/.cache` only if that was not enough,
+  and if fonts then fail, check reachability (`curl -o /dev/null -w "%{http_code}"
+  "https://fonts.googleapis.com/css2?family=Archivo"`) before suspecting the change.**
 - **Never pipe a command whose exit code matters.** `… | tail` hid a deploy failure and the
   session reported success. Use `${PIPESTATUS[0]}`, or do not pipe.
 - **The DB backup fails loudly now, but used to fail quietly** — see §5.
+
+### Docker goes down between sessions, and the app does not say so
+
+Three times on 16–17 Sep 2026 the Docker engine was not running at the start of a session.
+The symptom is misleading: **`next dev` serves HTTP 200 and the pages render** — it is only
+sign-in that hangs, forever, because auth cannot reach Postgres. `docker ps` answers
+`failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine`.
+
+The fix takes about 30 seconds and needs no `supabase start` — the containers restart
+themselves once the engine is up:
+
+```powershell
+Start-Process "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe"
+```
+
+```bash
+# engine up in ~10s, auth healthy ~10s after that
+until docker ps >/dev/null 2>&1; do sleep 5; done
+until [ "$(docker inspect --format '{{.State.Health.Status}}' supabase_auth_resellerosv3)" = healthy ]; do sleep 5; done
+curl -s -o /dev/null -w "%{http_code}
+" http://localhost:14321/rest/v1/     # 200 = ready
+```
+
+**Check the API port before blaming the app.** `kong=000` means the DB is down;
+`kong=200` with a hanging sign-in means something else and is worth investigating properly.
+
+### `gcloud` is NOT on this machine
+
+Searched 17 Sep 2026: not on PATH, not in `%LOCALAPPDATA%`, not in either Program Files tree,
+and no `gcloud.cmd` within four levels of `C:\`. So **`scripts/health-prod.mjs` cannot run
+here**, and nothing about the Cloud Run service — its env vars, its secrets, whether
+`DOMAIN_REGISTER_LIVE` is set there — can be established from this machine. Say "I cannot
+check that from here" rather than inferring production config from the repo: no deploy file
+in this repo sets `DOMAIN_REGISTER_LIVE` or any `RESELLERCLUB_*`, because those live in
+Secret Manager.
 
 ## 5. Backups (free plan: no PITR, no automatic backups)
 
@@ -189,6 +262,23 @@ non-existent bug. On 24 Aug all 9 key tables matched live exactly.
 claimed.** After the GST repair on 24 Aug, comparing the pre-change dump's `quotes` amounts
 against live showed `rows changed: 1, total delta: 8165` — which is a far stronger statement
 than "exit code 0", and it is the only thing that would have caught a second row moving.
+
+### ⚠️ And which `supabase/` FOLDER — there are two, one is not a project
+
+`production/supabase/` is the real one: it has the `config.toml`, the baseline, the seeds,
+`migrations/` (93 timestamped files, `20260816094848_…` onward) and `migrations-archive/`
+(216 older `0001`-style files).
+
+`supabase/` **at the repo root has only a `migrations/` directory and no `config.toml`**, so
+it is not a Supabase project and no CLI command reads it. It holds six files, `0125`–`0130`,
+last touched 4 Aug 2026 — and the archive's numbering jumps `0124` → `0131` straight over
+them, which looks alarming.
+
+**It is not alarming, checked 17 Sep 2026.** Every object those six create is present in the
+local DB, and `employee_documents` and `reimbursements` are both in `baseline.sql` — which is
+a snapshot of production. So they were applied before the snapshot was taken and the files
+simply ended up in the wrong folder. **Do not re-run them, and do not add new migrations
+there.**
 
 ## 6. Which Supabase project
 

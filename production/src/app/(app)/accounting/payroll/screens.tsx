@@ -229,7 +229,6 @@ export function EmployeesTab() {
                     <tr
                       key={e.id}
                       className="group cursor-pointer hover:bg-paper-2/40 transition-colors"
-                      role="button"
                       tabIndex={0}
                       aria-label={`Open ${toTitleCase(e.name)}'s profile`}
                       onClick={() => setViewEmp(e)}
@@ -484,7 +483,7 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
             type="button"
             onClick={() => setEmpTab("ctc")}
             className={`flex-1 py-2 px-3 rounded-lg text-center transition-all cursor-pointer ${
-              empTab === "ctc" ? "bg-primary text-white shadow-2xs font-extrabold" : "text-ink-3 hover:text-ink"
+              empTab === "ctc" ? "bg-primary text-primary-foreground shadow-2xs font-extrabold" : "text-ink-3 hover:text-ink"
             }`}
           >
             💼 CTC &amp; Salary Breakdown

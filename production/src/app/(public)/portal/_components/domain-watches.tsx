@@ -1,0 +1,258 @@
+"use client";
+
+/**
+ * "Tell me when this name frees up" — the customer's side of `domain_watches`.
+ *
+ * A client island on an otherwise server-rendered page, for the same reason
+ * `portal-nav.tsx` is one: adding and removing a watch is the only interactive
+ * thing here, so it is the only part that needs to ship JavaScript.
+ *
+ * ─── WHAT IT PROMISES, AND WHAT IT CAREFULLY DOES NOT ───────────────────────
+ * It promises ONE email, once, if the name comes free. It does not promise the
+ * name — the sweep checks daily and a name released at 3am can be gone by the
+ * time anybody reads their mail, and saying otherwise would set the customer up
+ * to be disappointed by physics. The copy says "as soon as we see it free",
+ * which is the true claim.
+ *
+ * ─── EVERY REFUSAL SHOWN IS THE SERVER'S OWN WORDS ──────────────────────────
+ * `watchableDomain` and `canAddWatch` write sentences meant for this customer
+ * (§24), so they are rendered verbatim rather than replaced with "invalid
+ * input". The one exception is a network failure, which the server never got to
+ * describe.
+ */
+
+import * as React from "react";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button, IconButton } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { formatDate } from "@/lib/utils";
+import { toast } from "sonner";
+import { toastError } from "@/lib/errors/toast-error";
+/* The SAME rule the /api/portal/watch route refuses with, and it returns a
+   REASON per failure ("acme.com, not acme") rather than a boolean. The module
+   is pure — no server imports — so the client can hold the identical rule
+   instead of a second, drifting copy. */
+import { watchableDomain, canAddWatch } from "@/lib/domains/watch";
+
+export interface WatchRowView {
+  id: string;
+  domain_name: string;
+  last_status: string;
+  last_checked_at: string | null;
+  notified_at: string | null;
+}
+
+/** How the last check reads to somebody who is waiting. */
+function statusLabel(row: WatchRowView): { text: string; kind: "success" | "muted" | "warning" } {
+  if (row.notified_at) return { text: "We emailed you", kind: "success" };
+  if (row.last_status === "taken") return { text: "Still taken", kind: "muted" };
+  if (row.last_status === "available") return { text: "Available", kind: "success" };
+  /* `unknown` covers "not checked yet" and "the registrar would not answer", and
+     the customer does not need those told apart — both mean "no news". */
+  return { text: row.last_checked_at ? "No answer yet" : "Not checked yet", kind: "warning" };
+}
+
+export function DomainWatches({
+  initial,
+  limit,
+  prefill,
+}: {
+  initial: WatchRowView[];
+  limit: number;
+  /* Sent by the search above when a name comes back TAKEN. The nonce is what
+     makes a second click on the SAME domain refill the box — keying on the
+     value alone would make it a no-op. */
+  prefill?: { value: string; nonce: number };
+}) {
+  const [rows, setRows] = React.useState(initial);
+  const [name, setName] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!prefill?.value) return;
+    setName(prefill.value);
+    /* Not "touched" yet: the customer did not type this, so showing them a
+       validation verdict on it would be answering a question nobody asked. */
+    setTouched(false);
+    document.getElementById("watch-domain")?.scrollIntoView({ block: "center", behavior: "smooth" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.nonce]);
+
+  const open = rows.filter((r) => !r.notified_at).length;
+
+  /* Before this the button was gated on `!name.trim()`, so "acme" enabled it and
+     the refusal arrived from the server — the same round-trip the hosting dialog
+     had. `check` carries the reason the server would have given. */
+  const [touched, setTouched] = React.useState(false);
+  const check = watchableDomain(name);
+  const atLimit = !canAddWatch(rows.length).ok;
+  const ready = check.ok && !atLimit;
+  const normalised = check.ok && check.domain !== name.trim().toLowerCase();
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || !name.trim()) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/portal/watch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: name }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toastError(body.error ?? "Could not add that watch.");
+        return;
+      }
+      if (body.already) {
+        /* Not an error: they already watch it, so the thing they wanted is true.
+           Said plainly rather than as a duplicate-key complaint. */
+        toast.success(`You are already watching ${body.domain}.`);
+        setName("");
+        return;
+      }
+      setRows((prev) => [
+        { id: body.id, domain_name: body.domain, last_status: "unknown", last_checked_at: null, notified_at: null },
+        ...prev,
+      ]);
+      setName("");
+      toast.success(`Watching ${body.domain}. We will email you once, as soon as we see it free.`);
+    } catch {
+      toastError("Could not reach us just now. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string, domain: string) {
+    if (busy) return;
+    setBusy(true);
+    /* Optimistic, with the row put back on failure. Removing a watch is not
+       money and not irreversible — re-adding it costs one line — so the fast
+       path is worth more here than a confirmation dialog would be. */
+    const before = rows;
+    setRows((prev) => prev.filter((r) => r.id !== id));
+    try {
+      const res = await fetch("/api/portal/watch", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setRows(before);
+        toastError(body.error ?? "Could not remove that watch.");
+        return;
+      }
+      toast.success(`Stopped watching ${domain}.`);
+    } catch {
+      setRows(before);
+      toastError("Could not reach us just now. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="p-4 md:p-5 mt-6">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h2 className="font-serif text-lg text-ink">Watching a name</h2>
+        <p className="text-2xs text-ink-3">
+          {open} of {limit} watches
+        </p>
+      </div>
+      <p className="text-sm text-ink-3 mt-1">
+        Wanted a name that was already taken? We will check it once a day and email you
+        once, as soon as we see it free.
+      </p>
+
+      <form onSubmit={add} className="mt-4 flex flex-col sm:flex-row gap-2">
+        <label htmlFor="watch-domain" className="sr-only">
+          Domain name to watch
+        </label>
+        <Input
+          id="watch-domain"
+          value={name}
+          onChange={(e) => { setName(e.target.value); }}
+          onBlur={() => setTouched(true)}
+          placeholder="e.g. theonewewanted.com"
+          className="flex-1 font-mono"
+          autoComplete="off"
+          spellCheck={false}
+          /* A phone capitalises and autocorrects a plain text field, so a domain
+             typed on one arrived as "Theonewewanted.com" with a squiggle. */
+          inputMode="url"
+          autoCapitalize="none"
+          autoCorrect="off"
+          disabled={busy}
+          wrapperClassName="flex-1"
+          /* Said in the field, not in a toast: every one of these is something to
+             FIX right here, and a toast that disappears takes the instruction
+             with it. */
+          error={touched && name.trim() && !check.ok ? check.reason : undefined}
+          helper={
+            normalised && check.ok
+              ? `We will watch ${check.domain}.`
+              : atLimit
+                ? undefined
+                : "The full name, with its ending — theonewewanted.com."
+          }
+        />
+        <Button
+          type="submit"
+          variant="primary"
+          icon="bell"
+          loading={busy}
+          disabled={!ready}
+          title={
+            atLimit
+              ? `You are already watching ${limit} names, which is the most we check daily. Remove one to add another.`
+              : check.ok
+                ? undefined
+                : "Enter the full domain name first — theonewewanted.com"
+          }
+        >
+          Watch it
+        </Button>
+      </form>
+
+      {rows.length === 0 ? (
+        <p className="text-2xs text-ink-3 mt-4">
+          Nothing on watch yet.
+        </p>
+      ) : (
+        <ul className="mt-4 divide-y divide-hairline">
+          {rows.map((r) => {
+            const s = statusLabel(r);
+            return (
+              <li key={r.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="font-mono text-sm text-ink break-all">{r.domain_name}</p>
+                  <p className="text-2xs text-ink-3 mt-0.5">
+                    {r.notified_at
+                      ? `Told you on ${formatDate(r.notified_at)}`
+                      : r.last_checked_at
+                        ? `Last checked ${formatDate(r.last_checked_at)}`
+                        : "We will check it within a day"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Badge kind={s.kind} size="sm" dot>
+                    {s.text}
+                  </Badge>
+                  <IconButton
+                    icon="trash"
+                    aria-label={`Stop watching ${r.domain_name}`}
+                    onClick={() => remove(r.id, r.domain_name)}
+                    disabled={busy}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}

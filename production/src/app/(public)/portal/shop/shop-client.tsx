@@ -5,6 +5,7 @@
  * Pricing shown is the reseller's customer MSRP (₹/user/month). On submit we
  * call portal_request_quote() which drops a lead into the reseller's pipeline.
  */
+import Link from "next/link";
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,8 +22,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormField } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { rupee } from "@/lib/utils";
+import { ticketHref } from "@/lib/portal/ticket-link";
 import { createClient } from "@/lib/supabase/client";
-import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
+import { HostingSection, type HostingPlan } from "./hosting-buy";
 
 export interface ShopProduct {
   id: string;
@@ -48,14 +50,16 @@ type FormData = z.infer<typeof schema>;
 
 export function ShopClient({
   products,
+  hostingPlans,
   ownedPlans,
+  customerEmail,
   resellerName,
-  resellerPhone,
 }: {
   products: ShopProduct[];
+  hostingPlans: HostingPlan[];
   ownedPlans: string[];
+  customerEmail: string;
   resellerName: string;
-  resellerPhone: string | null;
 }) {
   const [selected, setSelected] = React.useState<ShopProduct | null>(null);
 
@@ -77,25 +81,63 @@ export function ShopClient({
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 py-8">
+      {/* The subtitle no longer promises "no payment now" for everything on the
+          page — hosting is bought here, and only the licences are quoted. */}
       <header className="mb-8">
         <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Add more to your workspace</h1>
         <p className="text-sm text-ink-3 mt-1">
-          Browse products from {resellerName}. Request a quote and we&apos;ll send you a
-          GST invoice-ready price — no payment now.
+          Browse products from {resellerName}. Buy hosting online, or request a quote for
+          licences and we&apos;ll send you a GST invoice-ready price.
         </p>
       </header>
 
-      {products.length === 0 ? (
+      {/* Hosting first: it is the only thing on this page that can be bought
+          outright, so burying it under the quote-only grid would hide the one
+          action that completes here. */}
+      {hostingPlans.length > 0 && (
+        <div className="mb-10">
+          <HostingSection plans={hostingPlans} email={customerEmail} resellerName={resellerName} />
+        </div>
+      )}
+
+      {/* ─── THE OTHER HALF OF WHAT THIS BUSINESS SELLS ────────────────────
+          This page is called Products and listed hosting only — not one word
+          about domains, on a portal whose Domains page searches the registrar
+          live and whose rate card carries fourteen endings. A customer who came
+          here to buy a name found three hosting cards and a ticket link.
+
+          It is a SIGNPOST, not a second search box: the search already exists,
+          it is two clicks away, and a duplicate would be the second copy this
+          codebase keeps warning about. */}
+      <Card className="p-5 mb-10 flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="font-serif text-lg text-ink">Need a domain name?</h2>
+          <p className="text-sm text-ink-3 mt-0.5">
+            Check whether a name is free — we look it up with the registrar as you ask.
+          </p>
+        </div>
+        <Button asChild variant="default" className="shrink-0">
+          <Link href="/portal/domains">Find a name</Link>
+        </Button>
+      </Card>
+
+      {products.length === 0 && hostingPlans.length === 0 ? (
         <Card className="p-8 text-center text-sm text-ink-3">
-          No products are listed right now. Please{" "}
-          {resellerPhone
-            ? <a className="text-amber-ink underline"
-                 href={tenantWhatsAppLink(resellerPhone, `Hi ${resellerName}, what products can I buy?`) ?? "#"}
-                 target="_blank" rel="noopener noreferrer">WhatsApp {resellerName}</a>
-            : <>contact {resellerName}</>}{" "}
-          for the catalogue.
+          No products are listed right now.{" "}
+          <Link
+            href={ticketHref(
+              "Please send me the catalogue",
+              `There is nothing listed on my Products page at the moment.
+
+Could you send me what is available?`,
+            )}
+            className="text-amber-ink underline"
+          >
+            Raise a ticket
+          </Link>{" "}
+          and {resellerName} will send you the catalogue.
         </Card>
-      ) : (
+      ) : products.length === 0 ? null : (
         <div className="space-y-10">
           {grouped.map(({ vendor, items }) => (
             <section key={vendor}>
@@ -138,19 +180,41 @@ export function ShopClient({
         </div>
       )}
 
-      {resellerPhone && (
-        <Card className="p-5 mt-10 text-center text-sm text-ink-3">
-          Not sure which plan fits? WhatsApp {resellerName} on{" "}
-          <a
-            className="text-amber-ink font-medium"
-            href={tenantWhatsAppLink(resellerPhone, `Hi ${resellerName}, I need help choosing a plan.`) ?? "#"}
-            target="_blank" rel="noopener noreferrer"
-          >
-            {phoneDisplay(resellerPhone)}
-          </a>
-          .
-        </Card>
-      )}
+      {/* Support and pre-sales questions both go through the ticket system
+          (Pardeep, 16 Sep 2026) — a ticket carries the plan they were looking
+          at, and it is answerable by anyone on the team rather than one phone.
+
+          "Carries the plan they were looking at" was a claim this link did not
+          keep until 18 Sep: it opened an empty form, so the customer retyped
+          what was on screen and the team guessed which plans they meant. It now
+          lists exactly what the page showed them, prices included. */}
+      <Card className="p-5 mt-10 text-center text-sm text-ink-3">
+        Not sure which plan fits?{" "}
+        <Link
+          href={ticketHref(
+            "Help choosing a hosting plan",
+            `I am looking at the hosting plans on my Products page and am not sure which one fits.` +
+              (hostingPlans.length
+                ? `
+
+What the page shows me:${hostingPlans
+                    /* The newline lives INSIDE the template literal: a
+                       real one cannot sit in a "..." string, and a list
+                       joined on an escape is harder to read than this. */
+                    .map((h) => `
+· ${h.name} — ${rupee(h.price_month)}/mo`)
+                    .join("")}`
+                : "") +
+              `
+
+Here is what I need it for:`,
+          )}
+          className="text-amber-ink font-medium hover:underline"
+        >
+          Raise a ticket
+        </Link>{" "}
+        and {resellerName} will help you choose.
+      </Card>
 
       <RequestQuoteDialog
         product={selected}

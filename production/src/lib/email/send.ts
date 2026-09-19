@@ -28,6 +28,7 @@
 import type { NotificationClass } from "@/lib/mastery/quiet-hours";
 import { resolveEmailProvider } from "./provider";
 import { sendViaGmail } from "./gmail-transport";
+import { sendViaSmtp, smtpConfigured } from "./smtp-transport";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export interface EmailAttachment {
@@ -139,7 +140,8 @@ export interface EmailSendResult {
    * moves that from "somebody must remember" to "it does not compile" — the same
    * reasoning that put the log write inside sendEmail() in the first place.
    */
-  provider:     "resend" | "gmail" | "stub";
+  /** Which transport this result is about. `smtp` added 11 Sep 2026. */
+  provider:     "resend" | "gmail" | "smtp" | "stub";
 }
 
 /**
@@ -268,7 +270,7 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
   // behaviour is byte-for-byte what it was, which is what keeps twenty-odd
   // existing call sites safe.
   if (msg.route?.tenantId) {
-    const decision = await routeForTenant(msg.route, Boolean(apiKey));
+    const decision = await routeForTenant(msg.route, Boolean(apiKey), smtpConfigured());
 
     if (decision.blocked) {
       // `decision.requested`, NOT `decision.provider`. Blocked means no transport
@@ -286,10 +288,35 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
     // A fallback is never silent: the tenant asked for Gmail and did not get it,
     // and the only way anyone finds out otherwise is by noticing the From address.
     if (decision.fellBack) {
-      console.warn(`[email/send] tenant ${msg.route.tenantId}: ${decision.reason} — sent via Resend instead.`);
+      /* Names `decision.provider`, not "Resend". Since 11 Sep 2026 a fallback
+         can land on the SMTP relay, and a log line claiming Resend for a
+         message the relay carried is the kind of wrong that costs an hour when
+         somebody is chasing where mail went. */
+      console.warn(
+        `[email/send] tenant ${msg.route.tenantId}: ${decision.reason} — sent via ${decision.provider} instead.`,
+      );
     }
     if (decision.caution) {
       console.warn(`[email/send] tenant ${msg.route.tenantId}: ${decision.caution}`);
+    }
+
+    if (decision.provider === "smtp") {
+      const r = await sendViaSmtp({
+        to: msg.to,
+        /* The relay's own authenticated identity is usually the only From it
+           will accept, so an override is honoured and otherwise the platform
+           default stands. `fromOverride` still wins — it exists to stop a
+           staging deployment mailing real customers. */
+        from: fromOverride || msg.from || fromDefault,
+        subject: msg.subject,
+        text: msg.text,
+        html: msg.html,
+        replyTo: msg.replyTo,
+        attachments: msg.attachments,
+      });
+      return r.ok
+        ? { status: "sent", providerId: r.messageId || null, errorMessage: null, provider: "smtp" }
+        : { status: "failed", providerId: null, errorMessage: r.detail, provider: "smtp" };
     }
 
     if (decision.provider === "gmail" && decision.gmail) {
@@ -317,6 +344,27 @@ async function sendEmailInner(msg: EmailMessage): Promise<EmailSendResult> {
       };
     }
     // Anything else falls through to the Resend path below.
+  }
+
+  /* ─── THE RELAY, FOR EVERY MESSAGE WITHOUT A ROUTE ──────────────────────
+     Most call sites pass no `route`, so they never reach the resolver above. On
+     a deployment with relay credentials and no Resend key — which is exactly
+     what the DMS environment is — those messages would all fall into stub mode
+     below and silently go nowhere. Checked BEFORE the stub, because "configured
+     and working" must beat "pretend". */
+  if (!apiKey && smtpConfigured()) {
+    const r = await sendViaSmtp({
+      to: msg.to,
+      from: fromOverride || msg.from || fromDefault,
+      subject: msg.subject,
+      text: msg.text,
+      html: msg.html,
+      replyTo: msg.replyTo,
+      attachments: msg.attachments,
+    });
+    return r.ok
+      ? { status: "sent", providerId: r.messageId || null, errorMessage: null, provider: "smtp" }
+      : { status: "failed", providerId: null, errorMessage: r.detail, provider: "smtp" };
   }
 
   // ── Stub mode ─────────────────────────────────────────────────────
@@ -421,6 +469,7 @@ interface SenderToken {
 async function routeForTenant(
   route: EmailRoute,
   resendConfigured: boolean,
+  hasSmtp: boolean,
 ): Promise<ReturnType<typeof resolveEmailProvider> & {
   gmail?: { accessToken: string | null; refreshToken: string | null; senderEmail: string | null };
 }> {
@@ -458,6 +507,7 @@ async function routeForTenant(
       senderRefreshToken: tok?.refresh_token,
       senderScopes: tok?.scopes,
       resendConfigured,
+      smtpConfigured: hasSmtp,
       messageClass: route.messageClass,
     });
 

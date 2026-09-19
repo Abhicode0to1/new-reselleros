@@ -248,10 +248,23 @@ Use serif for **moments that matter** (page titles, big numbers, customer-facing
 
 ## 8. Component rules
 
-### Naming
-- PascalCase for components: `LeadCard.tsx`
-- camelCase for utilities: `formatDate.ts`
-- kebab-case for routes: `(app)/online-orders/page.tsx`
+### Naming — CORRECTED 2026-09-14, these two rules were backwards
+
+This section said "PascalCase for components: `LeadCard.tsx`" and "camelCase for utilities:
+`formatDate.ts`". **Neither file exists, and the codebase does the opposite of both.** Counted:
+
+| | rule said | actually |
+|---|---|---|
+| `src/components/**/*.tsx` | PascalCase | **kebab-case 205**, PascalCase 2 |
+| `src/lib/**/*.ts` | camelCase | **kebab-case 429**, camelCase 9 |
+
+- **kebab-case for components**: `lead-card.tsx`, `record-payment-dialog.tsx`
+- **kebab-case for utilities**: `format-date-ist.ts`, `status-badge.ts`
+- **kebab-case for routes**: `(app)/online-orders/page.tsx`
+
+PascalCase survives in 31 files — the PDF templates (`InvoicePDF.tsx`), a few layout components
+(`Sidebar.tsx`, `MobileBottomNav.tsx`) and most of `src/site`. Follow the file you are next to;
+do not rename anything to match this table.
 
 ### Structure
 - One component per file, default export
@@ -305,8 +318,13 @@ Never use `fetch()` directly in components. Always go through Supabase or a type
 ## 11. Error handling
 
 - Every Supabase call wrapped: check `error` before using `data`
-- Every page has `error.tsx` boundary
-- Every async client component has `loading.tsx`
+- Every page has `error.tsx` boundary — **aspirational: there is 1 in the whole app** (counted
+  2026-09-14). Worth knowing before you trust it as a description.
+- ~~Every async client component has `loading.tsx`~~ — **there are ZERO `loading.tsx` files.**
+  This rule has never been followed by anything. Loading state is done with `<Skeleton>` inside the
+  component instead (`components/ui/skeleton.tsx`), which is a real pattern with real call sites.
+  Left here struck through rather than deleted, because "we decided not to" and "nobody got round
+  to it" are different facts and the next person should be told which this is: nobody has said.
 - Never throw raw errors to the user. Map to friendly messages.
 - Always log errors to Sentry: `Sentry.captureException(error)`
 
@@ -397,6 +415,7 @@ npm run lint                   # ESLint
 npm run test                   # Vitest unit tests
 npm run test:e2e               # Playwright E2E
 npm run build                  # production build (locally test)
+npm run sweep                  # 4 advisory audits — see below
 
 # Before pushing
 npm run lint && npm run typecheck && npm run test
@@ -406,6 +425,27 @@ git push origin feat/branch-name
 # → Vercel auto-deploys preview
 # → after merge: production deploys
 ```
+
+### `npm run sweep` — four advisory audits (added 2026-09-14)
+
+Each is a `scripts/find-*.py` and each prints CANDIDATES, not verdicts. None gates CI: a non-zero
+exit would turn an advisory into a gate by the back door and start failing builds over a comment
+somebody wrote correctly. **The COUNT moving is the signal.**
+
+| sweep | baseline | what it catches |
+|---|---|---|
+| `fake-actions` | 1 | a handler that only toasts — a button that looks like it did something |
+| `fake-data` | 22 | fabricated figures. Noisy by design: a CSV template and an invented metric look alike |
+| `stale-claims` | 0 + 0 | a comment naming a file or identifier that does not exist |
+| `frozen-tokens` | 36 + 60 | a colour literal equal to a theme token's LIGHT value |
+
+`frozen-tokens` exists because the §5 checks grep Tailwind **class names**, and the worst colour
+bug this app has had was an inline `style={{}}` literal: the public purchase page hardcoded
+`rgba(250,248,242)`, which IS `--paper` in light, so its hero stayed near-white while the text on
+it turned cream — 28 AA failures in dark mode, the worst at 1.01:1, and every colour check called
+that page clean. Most of its baseline is legitimate (email HTML has no dark mode, the PWA manifest
+colour is static, `src/site` is scoped to its own CSS); a brand mark and a frozen `--paper` are the
+same bytes and only a person can tell them apart.
 
 ---
 
@@ -474,6 +514,32 @@ export function LeadForm({ onSubmit }: { onSubmit: (data: FormData) => Promise<v
 
 ## 17. What NOT to do
 
+- ❌ **Don't touch `/vendor-portal`.** Out of scope by Pardeep's decision, 16 Sep 2026:
+  *"Vendor portal is not my jurisdiction as developer."* Do not audit it, tokenise its
+  colours, replace its data, or remove it from the nav. It is 2,947 lines with 0 Supabase
+  calls and 0 query hooks, showing invented figures against REAL distributor names
+  (Redington / Ingram Micro / Savex) from four const arrays; a bid an operator places goes
+  to `localStorage` and nowhere else. **Staff-only** — verified 16 Sep by signing in as a
+  portal customer and requesting the URL: the staff guard answers "This part is for staff"
+  and no distributor name renders. Two of `find-fake-data`'s 22 rows are this file; expect
+  them, they are not a regression. The full note is in the file's own header.
+- ❌ **Don't show the tenant's phone number or a WhatsApp link anywhere under
+  `src/app/(public)/portal`.** Pardeep, 16 Sep 2026: *"We have a dedicated support
+  panel and ticket system. We don't share our phone number with customers."* A
+  ticket is tracked, answerable by anyone on the team, and keeps its history; a
+  WhatsApp thread is none of those. The help affordance on every portal screen is
+  `/portal/support/new`. Watch the subtler form too: passing `session.tenantPhone`
+  into a **client** component serialises it into the page payload, so the number
+  ships to the browser even when nothing draws it — that is how `shop/page.tsx`
+  was leaking it. `tenantWhatsAppLink` and `phoneDisplay` in `lib/portal/branding.ts`
+  now have no portal callers; keep it that way.
+  **Prospect-facing pages are deliberately exempt** — `/quote/[id]/accept`,
+  `/enquiry` and `/buy/workspace` keep their contact details on purpose, because
+  that reader has no portal login and no ticket access. Asked and answered:
+  *"Portal only — stop here."*
+- ❌ **Don't install an upstream credential without setting its `_LIVE` gate** —
+  see §26. The gates default to OPEN, so credentials are the only thing standing
+  between a fresh environment and a real charge.
 - ❌ Don't use Babel-in-browser anywhere — only Next.js builds
 - ❌ Don't write inline styles — use Tailwind
 - ❌ Don't hardcode tenant_id — always derive from auth
@@ -706,6 +772,33 @@ canonical `instrumentation.ts` → `sentry.server.config.ts` flow.
 `ALLOW_SENTRY_TEST=1`). Throws a tagged error, expect HTTP 500 and a
 new event in Sentry within ~10 seconds.
 
+### ⚠️ Every `Sentry.init` must pass `beforeBreadcrumb` (added 17 Sep 2026)
+
+Sentry's Node SDK instruments outgoing `fetch` BELOW the application, at the
+undici diagnostics-channel level. `getBreadcrumbData` sanitises the URL — and
+then puts the query string back, verbatim, in a separate `http.query` field.
+ResellerClub has no header auth, so `authedUrl()` must put `api-key` in the
+query string. Measured with the app's own init:
+
+```
+"http.query":"?auth-userid=1299294&api-key=<the live key>"
+```
+
+`lib/resellerclub/index.ts` and `call.ts` both refuse to log the URL and say
+why — this went around them, and any exception captured after a registrar call
+shipped the live key to Sentry in plaintext. The two `beforeSend` hooks did not
+help: they delete only the `authorization` and `cookie` request headers.
+
+**The rule: every `Sentry.init` in this repo passes
+`beforeBreadcrumb: redactBreadcrumb`** from `src/lib/sentry-redact.ts`. There
+are five — `lib/sentry.ts`, `lib/sentry-client.ts`, and the three
+`sentry.*.config.ts` — and `src/lib/sentry-redact.test.ts` pins that ALL of
+them do, so a sixth init added without it fails the suite.
+
+It redacts by DEFAULT and names only the safe keys (`domain-name`, `tlds`,
+`page`…), so an upstream that invents a new credential parameter is covered
+without anybody remembering to add it.
+
 ---
 
 ## 24. Actionable errors — no dead ends (CRITICAL for non-technical users)
@@ -772,6 +865,13 @@ The cost of leaving it out is not a red tick, it is a deploy that cannot happen:
 production could not be released at all, and nothing in the gate said so. `build`
 is slow (~2 min) — run it before a deploy and before calling a branch done, not
 after every turn.
+⚠️ **On this machine `npm run lint` can exit 139 with NO OUTPUT AT ALL.** Measured
+17 Sep 2026, twice in a row: a segmentation fault in npm's own shell shim, 141 bytes
+of output, while `npx next lint` on the same tree exited 0 with the usual 26 warnings
+and 0 errors. Reading 139 as "lint failed" sends you hunting a defect that is not
+there — **run `npx next lint` and record that**. If any other `npm run <x>` returns
+139 with no output, suspect the same and call the underlying binary directly.
+
 ⚠️ **CI does not gate feature branches.** `.github/workflows/ci.yml` triggers only on
 pushes to `master` / `v3-dev` and on PRs — so on a long-lived session branch **the
 local gate is the only gate.** This is exactly how 4 unit tests sat broken for months:
@@ -856,9 +956,116 @@ to query prod. Given this repo's own history of git-vs-prod drift (`0003` consol
 access — or just running the SQL and pasting the output — converts careful guesses into
 facts.
 
+## 26. The two switches that spend real money (added 17 Sep 2026)
+
+`src/lib/provisioning/live-gates.ts`. Read this before installing any upstream
+credential, and before believing a comment that says ordering is impossible.
+
+| Gate | Permits | Credentials it pairs with |
+|---|---|---|
+| `DOMAIN_REGISTER_LIVE` | real ResellerClub orders — register, renew, transfer, nameserver and DNS writes | `RESELLERCLUB_RESELLER_ID` + `RESELLERCLUB_API_KEY` |
+| `HOSTING_TRIAL_LIVE` | real DirectAdmin account creation | `DIRECTADMIN_*` |
+
+**Both DEFAULT TO OPEN.** Pardeep, 11 Sep 2026: *"Keep those turned on by default
+until admin ask otherwise."* Unset, empty, or an unrecognised value all mean
+**allowed**, in development and in production. Only an explicit off value
+(`0`, `false`, `no`, `off`, `disabled`, `disable`, `none`) closes one. The single
+exception is a test run, where absence means OFF — a unit test must never be able
+to buy a domain.
+
+That inverted a fail-safe deliberately, and the file's own header says so. What
+matters for anyone adding a credential:
+
+> **The absence of credentials is the only thing standing between a fresh
+> environment and a real charge.** `rcOrderingEnabled()` is
+> `rcWriteConfigured() && domainOrderingAllowed()` — install the key and the
+> second half is already true.
+
+So: **write the credential and its `_LIVE=0` in the same edit**, with a comment
+saying why, unless a real order is actually intended. That is what
+`production/.env.local` does for both on this machine.
+
+⚠️ **Any comment claiming ordering needs `DOMAIN_REGISTER_LIVE=1` predates
+11 Sep and is wrong.** Five were found and corrected on 17 Sep 2026 (in
+`cron/domain-renew`, `public/trial/hosting/confirm`, and twice in
+`scripts/setup-cloud-scheduler.sh`). The runtime refusal strings that say
+"DOMAIN_REGISTER_LIVE is not 1" are fine — they are emitted only when the gate is
+already shut, where they are accurate.
+
+### The env var names are NOT the names you are handed
+
+Credentials arrive copied from the DMS deployment, under DMS's names. Written
+verbatim they are **inert** — the app reads a variable that does not exist and
+behaves exactly as if nothing was installed. Grep for the key name before writing
+it. Confirmed against DMS's own code:
+
+| handed over as | this app reads | both become |
+|---|---|---|
+| `RESELLERCLUB_ID` | `RESELLERCLUB_RESELLER_ID` | RC's `auth-userid` |
+| `RESELLERCLUB_SECRET` | `RESELLERCLUB_API_KEY` | RC's `api-key` |
+| `DEFAULT_NAMESERVER_1..4` | `RESELLERCLUB_NS_1..4` | `defaultNameservers()` |
+| `RESELLERCLUB_API_URL`, `SMTP_*`, `DIRECTADMIN_*` | same name | — |
+
+(The SMTP names were kept identical to DMS's **on purpose** — see the header of
+`lib/email/smtp-transport.ts`, which names the ResellerClub variables as the trap
+it was avoiding.)
+
+### A price is never shown without its term
+
+`RcTldPrice.years` exists because not every TLD is sold by the year. On the live account
+exactly ONE of 412 products is not — `.ai`, a 2-year minimum at ₹8,807, with no 1-year price
+anywhere in the payload. Reading only `block["1"]` reported it as UNPRICED, which is the same
+answer the code gives for a registrar outage, so the search said "Price on request" forever
+and nothing said why.
+
+Three rules came out of fixing it, and all three are pinned by tests:
+
+1. **Read the SHORTEST term a block offers, and carry the term with the amount** —
+   `shortestTerm()` in `lib/resellerclub/index.ts`. A TLD with no price at all reports
+   `years: 1`, so nothing renders "for 0 years" beside a missing number.
+2. **Never put a multi-year amount in an annual column.** The rate card's
+   `prices.register/renew/transfer` are annual and cannot say otherwise, and
+   `lib/domains/renewal-pricing.ts` prices a renewal straight from `renew`. `syncableTlds()`
+   in `lib/domains/catalog-sync.ts` is the one rule that keeps such a TLD out, applied at
+   both doors — the catalogue sync route and `mergeTlds` on the marketing site — and it
+   reports what it skipped rather than dropping it silently.
+3. **Show the term wherever the price is shown.** The portal card states it always, because
+   a ticket needs it written down. The marketing lists use `termSuffix()` from
+   `site/lib/domain-search.ts`, which is SILENT at one year — the reader already assumes a
+   year, and the suffix appears exactly when that assumption would be wrong.
+
+### Reads are not writes
+
+`rcConfigured()` (`lib/resellerclub/index.ts`) and `rcWriteConfigured()`
+(`lib/resellerclub/call.ts`) read the SAME two variables. Availability and
+pricing come alive the moment the key exists, and no gate applies to them —
+`index.ts` is read-only by contract. The gate is checked at the entry of every
+write function instead, deliberately outside the shared transport, because
+`rcCall` carries reads too and gating it would break them whenever ordering was
+switched off.
+
+---
+
 ## 23. Updates
 
-This file is updated whenever a new convention is established. Last updated: **2026-08-12**.
+This file is updated whenever a new convention is established. Last updated: **2026-09-17**.
+
+**Added 2026-09-17** — all from work on the customer portal's domain flow and the
+ResellerClub credentials arriving:
+- **§26 — The two switches that spend real money.** New. `DOMAIN_REGISTER_LIVE` and
+  `HOSTING_TRIAL_LIVE` both default OPEN, so credentials are the only remaining guard;
+  the env var names differ from the DMS names they are handed over under; and reads
+  are deliberately ungated. Five comments in the codebase claiming otherwise were
+  corrected the same day.
+- **§22 — `beforeBreadcrumb` on every `Sentry.init`.** Sentry's fetch instrumentation
+  restored the query string in an `http.query` field after sanitising the URL, so the
+  live ResellerClub api-key was shipping to Sentry. One shared redactor, pinned by a
+  test across all five init sites.
+- **§17 — two new entries.** No phone or WhatsApp anywhere in the customer portal
+  (prospect-facing pages exempt, deliberately); and no credential installed without
+  its `_LIVE` gate.
+- **§25 — `npm run lint` can segfault in npm's shim** on this machine and report 139
+  with no output at all. Use `npx next lint`.
 
 **Added 2026-08-12:**
 - **§25 — Session hygiene.** From a full-codebase audit: docs-are-stale discipline, what "green" means (and that **CI does not gate feature branches** — the local gate is the only gate), the test-verified / browser-verified / reasoned-only distinction, dev-server slowness, cost-before-build, and why read-only prod DB access is the highest-leverage thing to provide.

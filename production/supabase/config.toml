@@ -7,7 +7,7 @@ project_id = "resellerosv3"
 [api]
 enabled = true
 # Port to use for the API URL.
-port = 54321
+port = 14321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` and `graphql_public` schemas are included by default.
 schemas = ["public", "graphql_public"]
@@ -32,9 +32,9 @@ enabled = false
 
 [db]
 # Port to use for the local database URL.
-port = 54322
+port = 14322
 # Port used by db diff command to initialize the shadow database.
-shadow_port = 54320
+shadow_port = 14320
 # Maximum amount of time to wait for health check when starting the local database.
 health_timeout = "2m"
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
@@ -44,7 +44,7 @@ major_version = 17
 [db.pooler]
 enabled = false
 # Port to use for the local connection pooler.
-port = 54329
+port = 14329
 # Specifies when a server connection can be reused by other clients.
 # Configure one of the supported pooler modes: `transaction`, `session`.
 pool_mode = "transaction"
@@ -65,11 +65,19 @@ schema_paths = []
 
 [db.seed]
 # DISABLED on purpose. `supabase start` seeds immediately after running
-# supabase/migrations/, and that folder is deliberately empty of the old history — the
-# schema comes from supabase/baseline.sql instead (see supabase/migrations-archive/README.md).
-# With seeding on, `supabase start` fails with `relation "public.tenants" does not exist`,
-# because it tries to insert rows into a database that has no tables yet.
-# `npm run setup` loads the baseline and THEN the seed, in that order.
+# supabase/migrations/, and seeding a database that has no tables yet fails with
+# `relation "public.tenants" does not exist`.
+#
+# Corrected 8 Sep 2026. This comment used to say the migrations folder "is deliberately
+# empty of the old history". It is not empty -- it holds 78 files, and every one of them
+# assumes the baseline already exists, so `supabase start` cannot run them either: it dies
+# on the OLDEST file (20260816094848, `relation "public.leads" does not exist`). That is
+# why [db.migrations] is switched off for the duration of the start by scripts/setup.mjs
+# and restored afterwards.
+#
+# The real order, which only `npm run setup` gets right:
+#   baseline.sql -> baseline-storage.sql -> seed.sql -> all 78 migrations, in order.
+# The archived 218 files live in supabase/migrations-archive/ (see its README).
 enabled = false
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
@@ -99,7 +107,7 @@ enabled = true
 [studio]
 enabled = true
 # Port to use for Supabase Studio.
-port = 54323
+port = 14323
 # External URL of the API server that frontend connects to.
 api_url = "http://127.0.0.1"
 # OpenAI API Key to use for Supabase AI in the Supabase Studio.
@@ -110,10 +118,10 @@ openai_api_key = "env(OPENAI_API_KEY)"
 [local_smtp]
 enabled = true
 # Port to use for the email testing server web interface.
-port = 54324
+port = 14324
 # Uncomment to expose additional ports for testing user applications that send emails.
-# smtp_port = 54325
-# pop3_port = 54326
+# smtp_port = 14325
+# pop3_port = 14326
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
@@ -235,6 +243,17 @@ secure_password_change = false
 max_frequency = "1s"
 # Number of characters used in the email OTP.
 otp_length = 6
+
+# LOCAL ONLY, and it fixes a real dead end rather than styling an email.
+# GoTrue's DEFAULT magic-link template sends a LINK; /portal/login asks the customer
+# to type a CODE. So the email that arrived locally contained nothing the form would
+# accept, and the customer portal could not be signed into by hand in any local
+# environment. Measured 9 Sep 2026 - the token in auth.users is a PKCE token, so
+# there was nothing to read out of the database either.
+# The hosted project keeps its own template; this only affects `supabase start`.
+[auth.email.template.magic_link]
+subject = "Your sign-in code"
+content_path = "./supabase/templates/magic_link.html"
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
@@ -392,7 +411,7 @@ deno_version = 2
 
 [analytics]
 enabled = true
-port = 54327
+port = 14327
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"
 

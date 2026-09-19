@@ -5,20 +5,11 @@
  * Run: node scripts/create-user.mjs
  */
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
-// Read .env.local manually (no dotenv dep)
-const env = Object.fromEntries(
-  readFileSync(".env.local", "utf-8")
-    .split("\n")
-    .filter((l) => l && !l.startsWith("#") && l.includes("="))
-    .map((l) => {
-      const idx = l.indexOf("=");
-      const k = l.slice(0, idx).trim();
-      const v = l.slice(idx + 1).trim().replace(/^"|"$/g, "");
-      return [k, v];
-    })
-);
+/* Was a hand-rolled parser that stripped a quote from each end of the line,
+   keeping any trailing comment inside the value. */
+const env = loadEnvLocal();
 
 const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;

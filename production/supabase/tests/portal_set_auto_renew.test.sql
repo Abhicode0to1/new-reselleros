@@ -7,8 +7,21 @@
 --   2. The same customer cannot toggle ANOTHER customer's sub → RPC raises and
 --      that sub is unchanged (no cross-customer write).
 --
--- NOTE: customer_users.auth_user_id FKs to auth.users, so the test borrows a
--- real auth user id (rolled back). Replace the literal below if that row is gone.
+-- NOTE: customer_users.auth_user_id FKs to auth.users, so this test needs an auth
+-- user. It used to BORROW one — `select id from auth.users limit 1` — and that broke
+-- on 11 Sep 2026 with:
+--
+--   duplicate key value violates unique constraint "customer_users_auth_user_id_key"
+--
+-- `customer_users.auth_user_id` is UNIQUE, and `limit 1` with no `order by` and no
+-- filter will happily pick an auth user who is ALREADY a portal customer. That is not
+-- a rare edge: it happened as soon as somebody signed into the portal on this
+-- database, because that sign-in creates exactly such a row. So the test's own
+-- fixture was in a race with real usage, and which row `limit 1` returns is not even
+-- defined.
+--
+-- It now creates its own auth user, the way `portal_customer_users_no_self_update`
+-- already did. Rolled back with everything else, and it cannot collide with anybody.
 
 begin;
 -- ── setup (service_role) ──
@@ -18,10 +31,11 @@ insert into public.tenants (id, name, email, state_code, doc_code)
 insert into public.customers (id, tenant_id, name, contact_email)
   values ('cccccccc-0000-0000-0000-0000000000f1','ffffffff-0000-0000-0000-0000000000f1','Cust A','a@portal.in'),
          ('cccccccc-0000-0000-0000-0000000000f2','ffffffff-0000-0000-0000-0000000000f1','Cust B','b@portal.in');
--- borrow any real auth user for the FK; this row is rolled back
+-- This test's OWN auth user — not somebody else's. Both rows roll back.
+insert into auth.users (id, email)
+  values ('ffffffff-0000-0000-0000-0000000000f9', 'portal-auto-renew@example.test');
 insert into public.customer_users (auth_user_id, customer_id, tenant_id, email, role)
-  select id, 'cccccccc-0000-0000-0000-0000000000f1','ffffffff-0000-0000-0000-0000000000f1','a@portal.in','admin'
-  from auth.users limit 1;
+  values ('ffffffff-0000-0000-0000-0000000000f9','cccccccc-0000-0000-0000-0000000000f1','ffffffff-0000-0000-0000-0000000000f1','a@portal.in','admin');
 insert into public.subscriptions (id, tenant_id, customer_id, customer_name, plan, vendor, seats, mrr, status, start_date, renewal_date, auto_renew)
   values ('aaaaaaaa-0000-0000-0000-0000000000f1','ffffffff-0000-0000-0000-0000000000f1','cccccccc-0000-0000-0000-0000000000f1','Cust A','Google Workspace Standard','google',10,8640,'active',current_date,current_date+365,true),
          ('aaaaaaaa-0000-0000-0000-0000000000f2','ffffffff-0000-0000-0000-0000000000f1','cccccccc-0000-0000-0000-0000000000f2','Cust B','Google Workspace Standard','google',5,4320,'active',current_date,current_date+365,true);

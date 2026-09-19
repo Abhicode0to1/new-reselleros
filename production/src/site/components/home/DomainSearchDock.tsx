@@ -165,10 +165,15 @@ export function DomainSearchDock() {
                 <span className="mono" style={{ fontSize: 15, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.domain}>
                   {r.domain}
                 </span>
-                <span className="mono-label" style={{ color: r.available ? "var(--success)" : "var(--danger)" }}>
-                  {r.available ? "AVAILABLE" : "TAKEN"}
+                <span
+                  className="mono-label"
+                  style={{ color: r.checked === false ? "var(--text-muted)" : r.available ? "var(--success)" : "var(--danger)" }}
+                >
+                  {r.checked === false ? "NOT CHECKED" : r.available ? "AVAILABLE" : "TAKEN"}
                 </span>
-                {r.available ? (
+                {r.checked === false ? (
+                  <span className="meta">couldn&apos;t check — try again</span>
+                ) : r.available ? (
                   <>
                     {r.priceKnown
                       ? <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>{rupee(r.price)}</span>

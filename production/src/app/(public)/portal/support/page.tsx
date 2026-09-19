@@ -16,17 +16,22 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/utils";
-import { tenantWhatsAppLink, phoneDisplay } from "@/lib/portal/branding";
 import { RateTicket } from "@/components/features/support/ticket-rating";
+import { EmptyState } from "@/components/shared/empty-state";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_COLOR: Record<string, "emerald" | "amber" | "rose" | "slate" | "indigo"> = {
-  open:              "rose",
-  in_progress:       "amber",
-  awaiting_customer: "indigo",
-  resolved:          "emerald",
-  closed:            "slate",
+/* Badge takes `kind`, not `color`. Every one of these pills was passing
+   `color=` — which BadgeProps accepts only because it extends
+   HTMLAttributes, so it landed on the <span> as a dead DOM attribute and
+   the badge rendered muted grey whatever the status was: paid, overdue and
+   draft all looked identical. Fixed 8 Sep 2026. */
+const STATUS_KIND: Record<string, "success" | "warning" | "danger" | "muted" | "info"> = {
+  open:              "danger",
+  in_progress:       "warning",
+  awaiting_customer: "info",
+  resolved:          "success",
+  closed:            "muted",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -40,7 +45,6 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function PortalSupportPage() {
   const session  = await requirePortalSession();
   const reseller = session.tenantContactName ?? session.tenantName;
-  const waLink   = tenantWhatsAppLink(session.tenantPhone, `Hi ${reseller}, I need urgent help.`);
   const supabase = createClient();
 
   const { data: tickets } = await supabase
@@ -66,15 +70,8 @@ export default async function PortalSupportPage() {
         <div>
           <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Support</h1>
           <p className="text-sm text-ink-3 mt-1">
-            Raise issues here for a written trail.
-            {waLink && (
-              <>
-                {" "}For urgent items, WhatsApp {reseller} on{" "}
-                <a href={waLink} target="_blank" rel="noopener noreferrer" className="text-amber-ink hover:underline">
-                  {phoneDisplay(session.tenantPhone)}
-                </a>.
-              </>
-            )}
+            Raise issues here for a written trail. Everything you open is tracked,
+            and the replies stay on the ticket.
           </p>
         </div>
         <Button asChild variant="primary">
@@ -86,15 +83,17 @@ export default async function PortalSupportPage() {
       </div>
 
       {rows.length === 0 ? (
-        <Card className="p-8 text-center">
-          <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-paper-2 grid place-items-center">
-            <Icon name="ticket" size={26} className="text-ink-3" />
-          </div>
-          <h2 className="font-serif text-xl mb-2">No tickets yet</h2>
-          <p className="text-sm text-ink-3 mb-5 max-w-md mx-auto">
-            Have a billing question, technical issue, or want to change your plan?
-            Raise a ticket — {reseller} responds within 4 business hours.
-          </p>
+        /* This was EmptyState re-implemented by hand — its own circle, its own
+           icon size, its own serif heading — which is how the portal ended up
+           with four slightly different empty states. Same content, the shared
+           primitive. */
+        <Card className="p-6">
+          <EmptyState
+            icon="ticket"
+            title="No tickets yet"
+            body={`Have a billing question, a technical issue, or want to change your plan? Raise a ticket — ${reseller} responds within 4 business hours.`}
+            compact
+          />
           <Button asChild variant="primary">
             <Link href="/portal/support/new">
               <Icon name="plus" size={14} className="mr-1.5" />
@@ -136,7 +135,7 @@ export default async function PortalSupportPage() {
                       )}
                     </div>
                   </div>
-                  <Badge color={STATUS_COLOR[t.status] ?? "slate"}>
+                  <Badge kind={STATUS_KIND[t.status] ?? "muted"}>
                     {STATUS_LABEL[t.status] ?? t.status}
                   </Badge>
                 </div>

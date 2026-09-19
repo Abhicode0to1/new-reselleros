@@ -7,7 +7,7 @@
  *
  *   node scripts/setup-e2e-tenants.mjs
  *
- * Outputs the tenant IDs + credentials that e2e/fixtures/tenants.ts
+ * Outputs the tenant IDs + credentials that e2e/fixtures/seed-auth.ts
  * consumes. Credentials are intentionally hardcoded (these are test
  * accounts in test data, not production secrets).
  *
@@ -18,30 +18,25 @@
  *   - Idempotent so CI can run it before every test suite.
  */
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
-const env = Object.fromEntries(
-  readFileSync(".env.local", "utf-8")
-    .split("\n")
-    .filter((l) => l && !l.startsWith("#") && l.includes("="))
-    .map((l) => {
-      const idx = l.indexOf("=");
-      return [l.slice(0, idx).trim(), l.slice(idx + 1).trim().replace(/^"|"$/g, "")];
-    })
-);
+/* ─── THE PARSER THAT USED TO LIVE HERE ────────────────────────────
+   Fixed here on 11 Sep 2026 and moved to scripts/lib/env-local.mjs on 12 Sep,
+   with the whole story of the em-dash ByteString error it caused.
+
+   The note left behind here said "Eleven other scripts in this directory carry
+   the same block verbatim". Counted: it was EIGHT, and all eight now import the
+   shared one — which is also what stops a ninth being written. */
+const env = loadEnvLocal({ require: ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"] });
 
 const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("❌ Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local");
-  process.exit(1);
-}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// Test fixture definitions — kept in sync with e2e/fixtures/tenants.ts
+// Test fixture definitions — kept in sync with e2e/fixtures/seed-auth.ts
 const FIXTURES = [
   {
     email:    "e2e-tenant-a@resellersos.test",
@@ -168,7 +163,7 @@ async function main() {
   }
 
   console.log("\n✅ DONE — fixtures ready");
-  console.log("\nCopy these into e2e/fixtures/tenants.ts if the values drift:");
+  console.log("\nCopy these into e2e/fixtures/seed-auth.ts if the values drift:");
   for (const r of results) {
     console.log(`  ${r.email.padEnd(38)} tenant=${r.tenantId} user=${r.authUserId}`);
   }

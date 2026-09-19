@@ -18,7 +18,7 @@ import * as React from "react";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Badge, toneToKind } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -219,7 +219,7 @@ export default function VendorBillsPage() {
                         <div className="font-medium text-ink flex items-center gap-2 flex-wrap">
                           <span className="truncate">{b.vendor_name}</span>
                           {b.source_tenant_invoice_id && (
-                            <Badge color="indigo" title="Auto-imported from your distributor — created when they invoiced you">From distributor</Badge>
+                            <Badge kind="info" title="Auto-imported from your distributor — created when they invoiced you">From distributor</Badge>
                           )}
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 flex-wrap text-2xs text-ink-3">
@@ -254,7 +254,7 @@ export default function VendorBillsPage() {
                         )}
                       </td>
                       {/* Status */}
-                      <td className="px-3 py-3 align-top"><Badge color={STATUS_COLOR[b.status] ?? "slate"}>{b.status}</Badge></td>
+                      <td className="px-3 py-3 align-top"><Badge kind={toneToKind(STATUS_COLOR[b.status])}>{b.status}</Badge></td>
                       {/* Actions */}
                       <td className="px-2 py-3 text-right align-top" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-end">
@@ -284,7 +284,7 @@ export default function VendorBillsPage() {
                         {b.vendor_name}
                         {(b.line_items?.length ?? 0) > 0 && <span className="ml-1 text-2xs font-normal text-ink-3">· {b.line_items.length} items</span>}
                       </div>
-                      <Badge color={STATUS_COLOR[b.status] ?? "slate"}>{b.status}</Badge>
+                      <Badge kind={toneToKind(STATUS_COLOR[b.status])}>{b.status}</Badge>
                     </div>
                     <div className="text-2xs text-ink-3 font-mono mb-2">
                       {b.bill_no || "—"} · {formatDate(b.bill_date)}

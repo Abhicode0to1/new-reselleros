@@ -15,6 +15,7 @@ import { buildSalesAcknowledgementHtml } from "@/lib/email/quote-template";
 import { configureQuote, describeChanges, type LineChoice } from "@/lib/quotes/configure";
 import { grossAmount } from "@/lib/quotes/amounts";
 import type { QuoteLineItem, Item } from "@/lib/supabase/database.types";
+import { clientIpOrNull } from "@/lib/security/rate-limit";
 
 /** Accepts only the three fields a choice may carry — anything else is dropped. */
 function parseChoices(raw: unknown): LineChoice[] {
@@ -34,19 +35,21 @@ function parseChoices(raw: unknown): LineChoice[] {
 }
 
 /**
- * The address the request came from.
+ * The address the request came from — `signer_ip` on a quote acceptance.
  *
- * Read from x-forwarded-for because Vercel terminates TLS upstream. The FIRST entry is
- * the client; the rest are proxies. It is trivially spoofable by the client and that is
- * fine — it is recorded as evidence of what arrived, not asserted as proof of origin,
- * which is why the migration's comment says the same thing.
+ * Two things in the old version of this comment were wrong. It said "Vercel
+ * terminates TLS upstream" (deploy.sh runs `gcloud run deploy` — this is Cloud
+ * Run), and it said "The FIRST entry is the client". Google's documentation is
+ * the opposite: the infrastructure APPENDS to a header the caller already sent,
+ * `<existing-value>,<client-ip>,<load-balancer-ip>`, and does not verify what
+ * precedes its own entries. So `[0]` was the signer's own typing.
+ *
+ * The rest of that comment stays true and is worth keeping: this is evidence of
+ * what arrived, not proof of origin. It is simply better evidence now — the
+ * address an acceptance actually came from rather than one the signer could
+ * choose, on a record that exists to answer "who accepted this quote".
  */
-function clientIp(request: NextRequest): string | null {
-  const fwd = request.headers.get("x-forwarded-for");
-  const first = fwd?.split(",")[0]?.trim();
-  if (first) return first;
-  return request.headers.get("x-real-ip");
-}
+const clientIp = (request: NextRequest): string | null => clientIpOrNull(request.headers);
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createAdminClient();

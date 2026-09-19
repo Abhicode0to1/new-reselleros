@@ -16,6 +16,7 @@
 import Link from "@/site/components/ui/SiteLink";
 import { useEffect, useRef, useState } from "react";
 import { WHATSAPP_URL } from "@/site/lib/config";
+import { useHandRolledModal } from "@/lib/hooks/useHandRolledModal";
 
 interface Msg {
   role: "user" | "assistant";
@@ -58,6 +59,9 @@ function loadStored(): Stored | null {
 
 export function AgentChat() {
   const [open, setOpen] = useState(false);
+  /* Escape closes the panel and focus lands inside it. Before this it
+     opened with focus left on the launcher behind it. */
+  const chatRef = useHandRolledModal<HTMLDivElement>(() => setOpen(false), open);
   const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -143,6 +147,9 @@ export function AgentChat() {
 
       {open && (
         <div
+          ref={chatRef}
+          tabIndex={-1}
+          data-state="open"
           role="dialog"
           aria-label="AI sales agent chat"
           style={{

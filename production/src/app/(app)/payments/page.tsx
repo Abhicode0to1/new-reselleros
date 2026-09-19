@@ -982,7 +982,6 @@ function PaymentRowView({
         "group border-b border-hairline last:border-0 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-inset",
         selected ? "bg-amber-soft/60 ring-1 ring-inset ring-amber/40" : "hover:bg-paper-2/50",
       )}
-      role="button"
       tabIndex={0}
       aria-label={`Open quote ${p.quote_id}`}
       aria-selected={selected}

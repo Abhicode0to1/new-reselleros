@@ -204,10 +204,10 @@ function RenewalBucket({
 
   const dotCls =
     kind === "rose"
-      ? "bg-rose-500"
+      ? "bg-rose"
       : kind === "amber"
-        ? "bg-amber-500"
-        : "bg-emerald-500";
+        ? "bg-amber"
+        : "bg-emerald";
 
   return (
     <Card className="overflow-hidden">
@@ -354,31 +354,31 @@ function RenewalBucket({
             <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-hairline bg-muted/30">
-                    <th className="px-5 py-2.5 text-left text-xs font-medium text-ink-3">
+                    <th className="px-4 py-2.5 text-left text-xs font-medium text-ink-3">
                       Customer
                     </th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-ink-3">
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-ink-3">
                       Plan
                     </th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-ink-3">
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-ink-3">
                       Vendor
                     </th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-ink-3">
+                    <th className="px-3 py-2.5 text-right text-xs font-medium text-ink-3">
                       Seats
                     </th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-ink-3">
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-ink-3">
                       Renewal date
                     </th>
-                    <th className="px-4 py-2.5 text-right text-xs font-medium text-ink-3">
+                    <th className="px-3 py-2.5 text-right text-xs font-medium text-ink-3">
                       Monthly
                     </th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-ink-3">
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-ink-3">
                       Reminders
                     </th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-ink-3">
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-ink-3">
                       Renewal risk
                     </th>
-                    <th className="px-4 py-2.5 text-left text-xs font-medium text-ink-3">
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-ink-3">
                       Action
                     </th>
                   </tr>
@@ -392,7 +392,7 @@ function RenewalBucket({
                         className="border-b border-hairline last:border-0 hover:bg-muted/20"
                       >
                         {/* Customer + Domain */}
-                        <td className="px-5 py-3">
+                        <td className="px-4 py-3">
                           <p className="font-semibold text-ink leading-tight">
                             {sub.customer_name}
                           </p>
@@ -404,20 +404,20 @@ function RenewalBucket({
                         </td>
 
                         {/* Plan */}
-                        <td className="px-4 py-3 text-ink">{sub.plan}</td>
+                        <td className="px-3 py-3 text-ink">{sub.plan}</td>
 
                         {/* Vendor */}
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           <VendorPill vendor={sub.vendor} />
                         </td>
 
                         {/* Seats */}
-                        <td className="px-4 py-3 text-right tabular-nums text-ink">
+                        <td className="px-3 py-3 text-right tabular-nums text-ink">
                           {sub.seats}
                         </td>
 
                         {/* Renewal date + urgency badge + last reminder */}
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           <p className="text-ink">
                             {sub.renewal_date ? formatDate(sub.renewal_date) : "—"}
                           </p>
@@ -448,12 +448,12 @@ function RenewalBucket({
                         </td>
 
                         {/* MRR */}
-                        <td className="px-4 py-3 text-right tabular-nums font-medium text-ink">
+                        <td className="px-3 py-3 text-right tabular-nums font-medium text-ink">
                           {rupee(sub.mrr)}
                         </td>
 
                         {/* Cadence (renewal_state from automation) */}
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           <Badge kind={renewalStateTone(sub.renewal_state)} dot>
                             {renewalStateLabel(sub.renewal_state)}
                           </Badge>
@@ -463,14 +463,14 @@ function RenewalBucket({
                             </p>
                           )}
                           {days < 0 && sub.renewal_state !== "suspended" && (
-                            <p className="mt-1 text-2xs font-medium text-rose-600">
+                            <p className="mt-1 text-2xs font-medium text-rose-ink">
                               Suspends in {Math.max(0, graceDays - Math.abs(days))}d
                             </p>
                           )}
                         </td>
 
                         {/* Churn risk */}
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           <Badge kind={risk.badgeKind} dot>
                             {risk.label}
                           </Badge>
@@ -482,8 +482,8 @@ function RenewalBucket({
                                   className={cn(
                                     "ml-1",
                                     risk.level === "high"
-                                      ? "text-rose-600"
-                                      : "text-amber-600",
+                                      ? "text-rose-ink"
+                                      : "text-amber-ink",
                                   )}
                                 >
                                   · +{risk.reasons.length - 1} more
@@ -494,7 +494,7 @@ function RenewalBucket({
                         </td>
 
                         {/* Action */}
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           <div className="flex flex-col items-start gap-1.5">
                             <div className="flex items-center gap-1.5">
                               {sub.renewal_quote_id ? (
@@ -751,7 +751,7 @@ export default function RenewalsPage() {
             {arrAtRisk > 0 && (
               <>
                 {" · "}
-                <span className="font-medium text-rose-600">
+                <span className="font-medium text-rose-ink">
                   {rupee(arrAtRisk, { compact: true })} yearly value at risk
                 </span>
               </>
@@ -792,11 +792,11 @@ export default function RenewalsPage() {
             <Icon name="bar_chart" size={15} className="text-amber-ink" />
             <span className="font-semibold text-ink">Renewals Churn &amp; Revenue Risk</span>
             <span className="text-ink-3">·</span>
-            <span className="text-ink-2 font-mono font-medium">Urgent (≤7d): <b className="text-rose-600">{urgent.length} ({rupee(urgentMrr, { compact: true })})</b></span>
+            <span className="text-ink-2 font-mono font-medium">Urgent (≤7d): <b className="text-rose-ink">{urgent.length} ({rupee(urgentMrr, { compact: true })})</b></span>
             <span className="text-ink-3 font-mono">·</span>
             <span className="text-ink-2 font-mono font-medium">Upcoming (30d): <b className="text-amber-ink">{upcoming.length} ({rupee(upcomingMrr, { compact: true })})</b></span>
             <span className="text-ink-3 font-mono">·</span>
-            <span className="text-ink-2 font-mono font-medium">High Risk ARR: <b className="text-rose-600">{rupee(highRiskArr, { compact: true })}</b> ({highRiskSubs.length})</span>
+            <span className="text-ink-2 font-mono font-medium">High Risk ARR: <b className="text-rose-ink">{rupee(highRiskArr, { compact: true })}</b> ({highRiskSubs.length})</span>
           </div>
           <div className="flex items-center gap-1 text-xs font-semibold text-amber-ink shrink-0 ml-2">
             <span>{kpiOpen ? "Collapse" : "Expand"}</span>
@@ -809,7 +809,7 @@ export default function RenewalsPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                 <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Urgent (≤7d)</p>
-                <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{urgent.length} <span className="text-xs text-ink-3 font-normal">({rupee(urgentMrr, { compact: true })} MRR)</span></p>
+                <p className="font-serif text-lg font-bold text-rose-ink tabular-nums mt-0.5">{urgent.length} <span className="text-xs text-ink-3 font-normal">({rupee(urgentMrr, { compact: true })} MRR)</span></p>
               </div>
               <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                 <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Upcoming (30d)</p>
@@ -821,7 +821,7 @@ export default function RenewalsPage() {
               </div>
               <div className="bg-paper-2/40 border border-hairline rounded-lg p-3 text-left">
                 <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">High Risk ARR</p>
-                <p className="font-serif text-lg font-bold text-rose-600 tabular-nums mt-0.5">{rupee(highRiskArr, { compact: true })} <span className="text-xs text-ink-3 font-normal">({highRiskSubs.length} subs)</span></p>
+                <p className="font-serif text-lg font-bold text-rose-ink tabular-nums mt-0.5">{rupee(highRiskArr, { compact: true })} <span className="text-xs text-ink-3 font-normal">({highRiskSubs.length} subs)</span></p>
               </div>
             </div>
 

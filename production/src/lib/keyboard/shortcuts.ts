@@ -226,6 +226,38 @@ export function isTypingTarget(el: EventTarget | null): boolean {
  * one; hijacking them makes the app feel broken in a way the user blames on us. Only a
  * bare keypress drives the single-letter shortcuts.
  */
+/**
+ * Does the focused element already own Enter and Space?
+ *
+ * A `<button>` activates on Enter. `useListKeys` listens on WINDOW and maps Enter
+ * to "open the highlighted row", then calls `preventDefault()` — so on all six
+ * list screens, tabbing to ANY button and pressing Enter did nothing at all. The
+ * button never saw the key. Measured on /customers: click sorted the column,
+ * Space sorted it, Enter did not (Space is not in `listAction`, which is the only
+ * reason that one worked).
+ *
+ * `isTypingTarget` does not cover this — a button is not a typing target, which
+ * is correct for the `g`-chord shortcuts and wrong for Enter.
+ *
+ * Only activation keys should defer. `j`, `k` and Escape are the list's own and
+ * mean nothing to a button, so they keep working wherever focus is.
+ */
+export function isActivationTarget(el: EventTarget | null): boolean {
+  if (!el || typeof el !== "object" || !("tagName" in el)) return false;
+  const node = el as HTMLElement;
+
+  const tag = (node.tagName ?? "").toUpperCase();
+  if (tag === "BUTTON" || tag === "SUMMARY") return true;
+  if (tag === "A" && node.hasAttribute?.("href")) return true;
+
+  const role = node.getAttribute?.("role");
+  if (role && ["button", "link", "menuitem", "menuitemcheckbox", "menuitemradio",
+               "tab", "option", "checkbox", "radio", "switch"].includes(role)) return true;
+
+  /* Walk up: a keydown on the <span> inside a button targets the span. */
+  return Boolean(node.closest?.('button, summary, a[href], [role="button"], [role="link"], [role="tab"], [role="option"], [role="menuitem"]'));
+}
+
 export function shouldIgnore(e: Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altKey" | "target">): boolean {
   if (e.metaKey || e.ctrlKey || e.altKey) return true;
   return isTypingTarget(e.target);

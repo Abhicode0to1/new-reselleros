@@ -368,6 +368,7 @@ function StepImport({
           const active = data.importMode === opt.id;
           return (
             <button
+              aria-pressed={active}
               key={opt.id}
               type="button"
               onClick={() => {
@@ -385,7 +386,7 @@ function StepImport({
               <div
                 className={cn(
                   "mb-2.5 flex h-9 w-9 items-center justify-center rounded-lg",
-                  active ? "bg-amber text-white" : "bg-paper-2 text-ink-3",
+                  active ? "bg-amber text-amber-fg" : "bg-paper-2 text-ink-3",
                 )}
               >
                 <Icon name={opt.icon} size={16} />
@@ -770,7 +771,7 @@ export default function SetupPage() {
                     i < step
                       ? "border-emerald-500 bg-emerald-500 text-white"
                       : i === step
-                        ? "border-amber bg-amber text-white"
+                        ? "border-amber bg-amber text-amber-fg"
                         : "border-hairline bg-paper text-ink-3",
                   )}
                   style={{ borderWidth: "1.5px" }}

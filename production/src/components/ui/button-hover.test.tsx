@@ -102,10 +102,20 @@ describe("the variant that replaces className=\"bg-primary text-white\"", () => 
 
     /* bg-primary and bg-amber are the same token — tailwind.config maps
        primary.DEFAULT to hsl(var(--amber)). So nothing about the button LOOKS
-       different; only the hover is now correct. */
+       different; only the hover is now correct.
+
+       The hover assertion is deliberately a PREFIX. It first read "hover:bg-amber/90",
+       the literal class the variant carried on 18 Sep, and Pawan's a11y work replaced
+       that with a dedicated `bg-amber-hover` token the same week — `/90` blends the fill
+       toward the PAGE, which cost contrast on hover (4.76 → 4.11). Pinning the exact
+       string made this test fail on a change that improved the very thing it exists to
+       protect. What matters is that hovering keeps an AMBER fill; which amber is the
+       design system's business, not this test's. */
     expect(cls).toContain("bg-amber");
-    expect(cls).toContain("hover:bg-amber/90");
+    expect(cls).toMatch(/hover:bg-amber/);
     expect(cls).not.toContain("hover:bg-paper-2");
+    /* Pawan's fix, riding along: white on the dark-theme amber fill is 2.99:1. */
+    expect(cls).toContain("text-amber-fg");
   });
 
   it("shows what the default variant would have done instead", () => {

@@ -22,7 +22,7 @@
 import { useRef, useState } from "react";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee } from "@/site/lib/money";
-import { searchDomains, normaliseName, type DomainResult } from "@/site/lib/domain-search";
+import { searchDomains, normaliseName, type DomainResult , termSuffix} from "@/site/lib/domain-search";
 
 type State =
   | { kind: "idle" }
@@ -110,13 +110,22 @@ export function DomainSearch() {
               <span className="mono" style={{ fontSize: 15, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.domain}>
                 {r.domain}
               </span>
-              <span className="mono-label" style={{ color: r.available ? "var(--success)" : "var(--danger)" }}>
-                {r.available ? "AVAILABLE" : "TAKEN"}
+              <span
+                className="mono-label"
+                style={{ color: r.checked === false ? "var(--text-muted)" : r.available ? "var(--success)" : "var(--danger)" }}
+              >
+                {r.checked === false ? "NOT CHECKED" : r.available ? "AVAILABLE" : "TAKEN"}
               </span>
-              {r.available ? (
+              {r.checked === false ? (
+                /* The registrar would not answer for this one. Saying TAKEN here
+                   would quietly cost a sale. */
+                <span className="meta">couldn&apos;t check — try again</span>
+              ) : r.available ? (
                 <>
                   {r.priceKnown ? (
-                    <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>{rupee(r.price)}</span>
+                    <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {rupee(r.price)}{termSuffix(r.years)}
+                    </span>
                   ) : (
                     <span className="meta">price on request</span>
                   )}

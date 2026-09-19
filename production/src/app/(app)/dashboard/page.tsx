@@ -420,7 +420,7 @@ export default function DashboardPage() {
           {leaderboard.map((p) => (
             <div key={p.rank} className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
               <div className={cn("w-7 h-7 rounded-full grid place-items-center font-serif text-sm",
-                p.rank === 1 ? "bg-amber text-white" : "bg-paper-2 text-ink-2")}>{p.rank}</div>
+                p.rank === 1 ? "bg-amber text-amber-fg" : "bg-paper-2 text-ink-2")}>{p.rank}</div>
               <div className="min-w-0">
                 <div className="text-sm font-medium truncate">{p.name}</div>
                 <div className="text-2xs text-ink-3">{p.deals} deal{p.deals === 1 ? "" : "s"} closed</div>

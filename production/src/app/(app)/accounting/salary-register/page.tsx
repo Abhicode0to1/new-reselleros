@@ -228,7 +228,7 @@ function MonthRegister() {
           type="button"
           onClick={() => setRegisterTab("ctc")}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-            registerTab === "ctc" ? "bg-primary text-white shadow-2xs font-extrabold" : "text-ink-3 hover:text-ink"
+            registerTab === "ctc" ? "bg-primary text-primary-foreground shadow-2xs font-extrabold" : "text-ink-3 hover:text-ink"
           }`}
         >
           💼 CTC (Cost to Company) Master Register ({empQ.data?.length ?? 0})
@@ -329,7 +329,7 @@ function MonthRegister() {
                   <tr
                     key={p.id}
                     className="cursor-pointer hover:bg-paper-2/40 transition-colors"
-                    role="button" tabIndex={0}
+ tabIndex={0}
                     onClick={() => router.push(`/accounting/salary-register?employee=${p.employee_id}` as never)}
                     onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); router.push(`/accounting/salary-register?employee=${p.employee_id}` as never); } }}
                   >

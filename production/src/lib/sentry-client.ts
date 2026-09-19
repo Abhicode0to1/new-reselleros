@@ -31,6 +31,7 @@
  * tool is not a place to accumulate a copy of the customer list.
  */
 import * as Sentry from "@sentry/nextjs";
+import { redactBreadcrumb } from "./sentry-redact";
 
 /**
  * Idempotent, same as the server one: `getClient()` is undefined until an init runs, so a
@@ -69,6 +70,10 @@ export function initClientSentry(dsn: string | null | undefined): void {
     /* Off. Sentry's "default PII" means IP address and user agent, and this app has no
        need of either to identify a bug. */
     sendDefaultPii: false,
+    /* Same rule as the server. The browser never calls ResellerClub, but a
+       credential in a query string is not a ResellerClub-only shape, and one
+       rule in one file cannot drift between five copies. */
+    beforeBreadcrumb: redactBreadcrumb,
 
     beforeSend(event) {
       /* A browser event's request URL is the page the operator was on, and this app puts

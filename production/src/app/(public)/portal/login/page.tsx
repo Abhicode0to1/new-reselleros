@@ -53,7 +53,30 @@ function PortalLoginInner() {
   const [preNoCustomer, setPreNoCustomer] = React.useState(false);
   const [resending, setResending] = React.useState(false);
 
-  const emailForm = useForm<EmailForm>({ resolver: zodResolver(emailSchema) });
+  /* ─── NO DEV BANNER ON THIS PAGE ──────────────────────────────────────────
+     A dev-only box used to sit under the submit button explaining that mail is
+     caught locally and giving the inbox URL. Removed 11 Sep 2026 on Pardeep's
+     instruction — "Why do we need that screen anyway. Remove it completely for
+     dev too."
+
+     It was scaffolding on a customer-facing screen, and the right place for it
+     is where somebody sets the test account up rather than where a customer
+     signs in: `scripts/seed-portal-test-customer.sql` carries the inbox URL in
+     its header. Please do not put it back here.
+
+     ─── `?email=` PREFILL ────────────────────────────────────────────────────
+     Filled by the dev box on the staff login page, which links here rather than
+     autofilling a password this door does not have.
+
+     Prefill ONLY — arriving with the parameter does not send a code. Sending on
+     page load would turn any link into a way to fire one-time codes at a real
+     customer's inbox, which is a nuisance somebody else pays for. The visitor
+     presses the button. */
+  const prefillEmail = params.get("email") ?? "";
+  const emailForm = useForm<EmailForm>({
+    resolver: zodResolver(emailSchema),
+    defaultValues: { email: prefillEmail },
+  });
   const codeForm = useForm<CodeForm>({ resolver: zodResolver(codeSchema) });
 
   /** Check the email is a customer, then send a 6-digit code. Returns success. */

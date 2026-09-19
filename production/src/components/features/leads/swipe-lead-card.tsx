@@ -38,9 +38,11 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { StatusPill } from "@/components/ui/status-pill";
 import { motion, useMotionValue, useTransform, type PanInfo } from "framer-motion";
 import { Icon } from "@/components/ui/icon";
+import { Badge } from "@/components/ui/badge";
+import { unifiedStatus } from "@/lib/quotes/status-badge";
+import type { LeadQuoteRef } from "@/lib/queries/leads";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -92,12 +94,15 @@ interface SwipeLeadCardProps {
    * jis caller ke paas map nahi, card waise hi chalta hai. Pardeep, 31 Aug 2026:
    * "lead se pata lage ki quote bheja gaya ya nahi, aur wahin se khule."
    */
-  quoteRef?: { id: string; status: string | null };
+  /* The shared shape, not a local echo of it — a narrower copy here is what
+     stopped this card calling the same `unifiedStatus` as /quotes. */
+  quoteRef?: LeadQuoteRef;
   /** Earliest open follow-up task on this lead, if any (shows a chip). */
   task?: { due: string; overdue: boolean; count: number };
 }
 
 export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutcome, task, quoteRef }: SwipeLeadCardProps) {
+  const quoteBadge = quoteRef ? unifiedStatus(quoteRef) : null;
   // Derived here rather than passed in, so the card is the single place that
   // decides how a lead looks on mobile — callers can't hand it a stale rule
   // that disagrees with the desktop table.
@@ -329,18 +334,18 @@ export function SwipeLeadCard({ lead, onTap, onChangeStage, onSendQuote, onOutco
               {/* Quote ka sach mobile par bhi — wahi pill jo desktop ke PLAN cell me
                   hai (Pardeep, 31 Aug 2026). Tap quote kholta hai; stopPropagation
                   warna card ka onTap drawer khol deta. Rang ke saath SHABD bhi. */}
-              {quoteRef && (
+              {quoteRef && quoteBadge && (
                 <Link
                   href={`/quotes/${quoteRef.id}` as never}
                   onClick={(e) => e.stopPropagation()}
                   title={`Open ${quoteRef.id}`}
                   className="mt-1 inline-flex"
                 >
-                  <StatusPill
-                    status={quoteRef.status ?? "draft"}
-                    size="sm"
-                    label={`…${quoteRef.id.slice(-4)} · ${(quoteRef.status ?? "draft").charAt(0).toUpperCase() + (quoteRef.status ?? "draft").slice(1)}`}
-                  />
+                  {/* Same `unifiedStatus` as /quotes and the /leads table, so the
+                      phone card cannot disagree with either about one row. */}
+                  <Badge kind={quoteBadge.kind} size="sm" dot>
+                    {`…${quoteRef.id.slice(-4)} · ${quoteBadge.label}`}
+                  </Badge>
                 </Link>
               )}
             </div>

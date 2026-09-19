@@ -668,6 +668,241 @@ export type NotificationRow = {
 };
 type NotificationInsert = Omit<NotificationRow, "id" | "created_at" | "read_at"> & { id?: string; read_at?: string | null };
 
+/* ── Domain / hosting assets (migration 20260908100000) ──────────────────────
+   The system of record for what a customer OWNS at the registrar and on the
+   server, as distinct from what they are BILLED for — that stays on
+   `subscriptions`, and `subscription_id` links the two. `expires_at` here is
+   the provider's date; `subscriptions.renewal_date` is ours. They are supposed
+   to agree, and a disagreement is a real signal rather than a bug in one of
+   them, which is the whole reason they are stored separately.               */
+
+/** Registrar lifecycle — ICANN states, not our billing status. */
+export type DomainAssetStatus =
+  | "pending" | "active" | "expiring_soon" | "grace" | "redemption"
+  | "suspended" | "transferred_out" | "failed" | "cancelled";
+
+export type DomainRow = {
+  id:          string;
+  tenant_id:   string;
+  customer_id: string;
+  domain_name: string;
+  tld:         string;
+  status:      DomainAssetStatus;
+  registrar:             string;
+  registrar_order_id:    string | null;
+  registrar_customer_id: string | null;
+  registrar_contact_id:  string | null;
+  registered_at:      string | null;
+  /** The REGISTRAR's expiry, not the billing date. */
+  expires_at:         string | null;
+  registration_years: number | null;
+  auto_renew:         boolean;
+  privacy_protection: boolean;
+  transfer_lock:      boolean;
+  nameservers:        string[];
+  subscription_id:         string | null;
+  provisioning_request_id: string | null;
+  quote_id:                string | null;
+  /** ₹ whole rupees (§13). */
+  amount_paid:             number | null;
+  next_action_at:   string | null;
+  /** Distributed lock: null = free, a future timestamp = claimed by a worker. */
+  processing_until: string | null;
+  last_error:     string | null;
+  last_error_at:  string | null;
+  last_synced_at: string | null;
+  /* ── Paid, but not delivered (20260910100000) ───────────────────────────────
+     A failed registration is a domain the customer HAS PAID FOR AND DOES NOT
+     HAVE. These carry the bounded retry budget and the trail of who dealt with
+     it — see lib/domains/retry.ts. */
+  /** Upstream attempts made, including the first. 0 = never tried. */
+  attempt_count:    number;
+  last_attempt_at:  string | null;
+  /** Set when a person dealt with it. NULL = still open (the operator queue). */
+  resolved_at:      string | null;
+  /** Staff `users.id`, never a customer. */
+  resolved_by:      string | null;
+  /** 'refunded' | 're_registered' | 'alternative_offered' | 'written_off'. */
+  resolution:       string | null;
+  resolution_note:  string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+/* Required on insert = the four things the table cannot default or infer: whose
+   it is, and which name. Everything else is either DB-defaulted or genuinely
+   unknown at the moment a registration is claimed — the order id and the expiry
+   only exist after ResellerClub answers, and forcing the caller to spell out
+   `registrar_order_id: null` for each of them is noise that hides the four that
+   matter. */
+type DomainInsert =
+  Pick<DomainRow, "tenant_id" | "customer_id" | "domain_name" | "tld">
+  & Partial<Omit<DomainRow, "tenant_id" | "customer_id" | "domain_name" | "tld" | "created_at" | "updated_at">>;
+
+export type HostingAccountStatus =
+  | "pending" | "active" | "suspended" | "expired" | "terminated" | "failed";
+
+export type HostingAccountRow = {
+  id:          string;
+  tenant_id:   string;
+  customer_id: string;
+  domain_name: string;
+  status:      HostingAccountStatus;
+  server:      string;
+  da_username: string | null;
+  da_package:  string | null;
+  ip_address:  string | null;
+  nameservers: string[];
+  disk_quota_mb:      number | null;
+  bandwidth_quota_mb: number | null;
+  plan_code:    string | null;
+  plan_name:    string | null;
+  is_trial:      boolean;
+  trial_ends_at: string | null;
+  started_at:   string | null;
+  expires_at:   string | null;
+  suspended_at: string | null;
+  auto_renew:   boolean;
+  subscription_id:         string | null;
+  provisioning_request_id: string | null;
+  quote_id:                string | null;
+  amount_paid:             number | null;
+  next_action_at:   string | null;
+  processing_until: string | null;
+  last_error:      string | null;
+  last_error_at:   string | null;
+  /** Triage: retryable outage vs. something needing a human. */
+  last_error_kind: "hard_failure" | "collision_exhausted" | "server_unreachable" | null;
+  last_synced_at:  string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  /* ── Paid, but not delivered (20260911100000) ─────────────────────────
+     The same names as on `domains`, so lib/domains/retry.ts governs both. */
+  attempt_count:   number;
+  last_attempt_at: string | null;
+  resolved_at:     string | null;
+  resolved_by:     string | null;
+  resolution:      string | null;
+  resolution_note: string | null;
+};
+/** Same reasoning as DomainInsert: owner + name are required, the rest arrives later. */
+type HostingAccountInsert =
+  Pick<HostingAccountRow, "tenant_id" | "customer_id" | "domain_name">
+  & Partial<Omit<HostingAccountRow, "tenant_id" | "customer_id" | "domain_name" | "created_at" | "updated_at">>;
+
+/* ── Customer-raised hosting plan upgrades (20260911140000) ──────────────────
+   The twin of `seat_requests`. Note what is NOT here: an amount. An upgrade is
+   priced pro-rata AT APPROVAL because the figure falls every day the request
+   waits, so the only recorded amount is on the quote `quote_id` points at. */
+export type HostingPlanChangeStatus =
+  | "pending" | "approved" | "rejected" | "withdrawn" | "failed";
+
+export type HostingPlanChangeRow = {
+  id:                 string;
+  tenant_id:          string;
+  hosting_account_id: string;
+  customer_id:        string | null;
+  /** Denormalised, like seat_requests.customer_name — the audit trail has to be
+   *  readable after the account row is renamed or closed. */
+  domain_name:        string;
+  /** The plan as it was when they asked. The ONLY way to detect that somebody
+   *  changed the plan by hand in between — see lib/hosting/plan-change.ts. */
+  from_plan_code:      string | null;
+  requested_plan_code: string;
+  note:                string | null;
+  requested_by_email:  string | null;
+  status:              HostingPlanChangeStatus;
+  quote_id:            string | null;
+  decided_by:          string | null;
+  decided_at:          string | null;
+  decision_note:       string | null;
+  /** Null on an `approved` row means the quote exists and DirectAdmin has NOT
+   *  been moved yet — our records and the server disagree. */
+  applied_at:          string | null;
+  da_result:           string | null;
+  created_at:          string;
+  updated_at:          string;
+};
+type HostingPlanChangeInsert =
+  Pick<HostingPlanChangeRow, "tenant_id" | "hosting_account_id" | "domain_name" | "requested_plan_code">
+  & Partial<Omit<HostingPlanChangeRow, "tenant_id" | "hosting_account_id" | "domain_name" | "requested_plan_code" | "created_at" | "updated_at">>;
+
+/* ── Domain expiry warnings (20260911150000) ─────────────────────────────────
+   One row per notice sent. `term_expires_at` is part of the unique key, so a
+   renewal makes the whole cadence available again — see the migration. */
+export type RenewalNoticeStepDb = "d30" | "d14" | "d7" | "d1" | "lapsed";
+
+export type DomainRenewalNoticeRow = {
+  id:               string;
+  tenant_id:        string;
+  domain_id:        string;
+  step:             RenewalNoticeStepDb;
+  /** The expiry this notice was about. A DATE — the cadence counts calendar days. */
+  term_expires_at:  string;
+  recipient_email:  string | null;
+  subject:          string | null;
+  /** Null with a non-null `error` means the send failed and was recorded. */
+  sent_at:          string | null;
+  error:            string | null;
+  created_at:       string;
+};
+type DomainRenewalNoticeInsert =
+  Pick<DomainRenewalNoticeRow, "tenant_id" | "domain_id" | "step" | "term_expires_at">
+  & Partial<Omit<DomainRenewalNoticeRow, "tenant_id" | "domain_id" | "step" | "term_expires_at" | "created_at">>;
+
+/* ── Domain renewals (20260911160000) ────────────────────────────────────────
+   One attempt to renew one term. The only link from a paid renewal quote to
+   rcRenewDomain — see the migration for why this is NOT provisioning_requests. */
+export type DomainRenewalStatus = "quoted" | "renewed" | "failed" | "cancelled";
+
+export type DomainRenewalRow = {
+  id:          string;
+  tenant_id:   string;
+  domain_id:   string;
+  domain_name: string;
+  customer_id: string | null;
+  years:       number;
+  /** The expiry this renewal was quoted against — the duplicate guard. */
+  from_expires_at: string;
+  quote_id:    string;
+  status:      DomainRenewalStatus;
+  registrar_order_id: string | null;
+  renewed_at:  string | null;
+  /** From ResellerClub's own answer, never computed. */
+  new_expires_at: string | null;
+  attempt_count: number;
+  next_action_at: string | null;
+  last_error:    string | null;
+  last_error_at: string | null;
+  created_at:  string;
+  updated_at:  string;
+};
+type DomainRenewalInsert =
+  Pick<DomainRenewalRow, "tenant_id" | "domain_id" | "domain_name" | "from_expires_at" | "quote_id">
+  & Partial<Omit<DomainRenewalRow, "tenant_id" | "domain_id" | "domain_name" | "from_expires_at" | "quote_id" | "created_at" | "updated_at">>;
+
+export type DnsRecordType = "A" | "AAAA" | "CNAME" | "MX" | "TXT" | "NS" | "SRV" | "CAA";
+
+/** A CACHE of the provider's zone, never the authority. See the migration header. */
+export type DnsRecordRow = {
+  id:        string;
+  tenant_id: string;
+  domain_id: string;
+  record_type: DnsRecordType;
+  host:        string;
+  value:       string;
+  ttl:         number;
+  /** Required for MX and SRV, forbidden otherwise — enforced by a check constraint. */
+  priority:    number | null;
+  provider_record_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type DnsRecordInsert =
+  Pick<DnsRecordRow, "tenant_id" | "domain_id" | "record_type" | "value">
+  & Partial<Omit<DnsRecordRow, "tenant_id" | "domain_id" | "record_type" | "value" | "created_at" | "updated_at">>;
+
 type CustomerRow = {
   id: string;
   tenant_id: string;
@@ -1489,6 +1724,119 @@ type ContractAmendmentRow = {
  *  is written ONLY by the signature-verified Razorpay webhook.
  * See migration 20260817090000 for why the app has no path to it.
  */
+/* ── domain_watches (20260910130000) ─────────────────────────────────
+   One-shot "tell me when this name is free" alerts. See lib/domains/watch.ts —
+   an email requires a POSITIVE availability reading, never the absence of a
+   taken one. */
+export type WatchStatusT = "available" | "taken" | "unknown";
+type DomainWatchRow = {
+  id: string;
+  tenant_id: string;
+  customer_id: string;
+  domain_name: string;
+  last_checked_at: string | null;
+  /** `unknown` is real and is the default — a failed check must never notify. */
+  last_status: WatchStatusT;
+  /** Set ONCE. A non-null value retires the row from the sweep. */
+  notified_at: string | null;
+  consecutive_errors: number;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type DomainWatchInsert = {
+  id?: string;
+  tenant_id: string;
+  customer_id: string;
+  domain_name: string;
+  last_checked_at?: string | null;
+  last_status?: WatchStatusT;
+  notified_at?: string | null;
+  consecutive_errors?: number;
+  last_error?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+/* ── egress_ip_checks (20260910140000) ───────────────────────────────
+   History of the outbound IP this deployment calls upstreams from. Both
+   ResellerClub and DirectAdmin gate on it and neither names it when refusing.
+   See lib/ops/egress-ip.ts. */
+export type EgressVerdictT = "match" | "mismatch" | "disagree" | "unknown" | "unverified";
+type EgressIpCheckRow = {
+  id: string;
+  tenant_id: string | null;
+  /** The agreed address. NULL when probes disagreed or none answered. */
+  observed_ip: string | null;
+  /** Every distinct address seen. More than one entry IS the finding. */
+  observed_ips: string[];
+  expected_ip: string | null;
+  /** `unknown` is NOT a mismatch — an unreachable probe says nothing. */
+  verdict: EgressVerdictT;
+  probes: unknown;
+  checked_by: string | null;
+  checked_at: string;
+};
+type EgressIpCheckInsert = {
+  id?: string;
+  tenant_id?: string | null;
+  observed_ip?: string | null;
+  observed_ips?: string[];
+  expected_ip?: string | null;
+  verdict: EgressVerdictT;
+  probes?: unknown;
+  checked_by?: string | null;
+  checked_at?: string;
+};
+
+/* ── recurring_charge_attempts (20260910110000) ─────────────────────────────
+   One row per recurring-debit attempt the gateway REPORTED, successes and
+   failures alike. Razorpay owns the retry schedule on the Subscriptions flow, so
+   this is the record and not a scheduler — there is deliberately no
+   `next_attempt_at`. See lib/payments/charge-attempts.ts. */
+export type ChargeOutcomeT = "succeeded" | "failed" | "pending_retry" | "halted";
+type RecurringChargeAttemptRow = {
+  id: string;
+  tenant_id: string;
+  /** All three nullable: an attempt outlives the rows it points at. */
+  customer_id: string | null;
+  subscription_id: string | null;
+  mandate_id: string | null;
+  gateway: string;
+  gateway_subscription_id: string | null;
+  gateway_payment_id: string | null;
+  gateway_order_id: string | null;
+  /** ₹ whole rupees (§13). Null when the event carried no amount. */
+  amount: number | null;
+  /** `halted` = the gateway GAVE UP; nothing collects until re-authorisation. */
+  outcome: ChargeOutcomeT;
+  error_code: string | null;
+  /** Razorpay's own wording, which is what an operator reads. */
+  error_description: string | null;
+  test_mode: boolean;
+  /** The GATEWAY's timestamp, not our receipt time — webhooks arrive late. */
+  occurred_at: string;
+  created_at: string;
+};
+type RecurringChargeAttemptInsert = {
+  id?: string;
+  tenant_id: string;
+  customer_id?: string | null;
+  subscription_id?: string | null;
+  mandate_id?: string | null;
+  gateway?: string;
+  gateway_subscription_id?: string | null;
+  gateway_payment_id?: string | null;
+  gateway_order_id?: string | null;
+  amount?: number | null;
+  outcome: ChargeOutcomeT;
+  error_code?: string | null;
+  error_description?: string | null;
+  test_mode?: boolean;
+  occurred_at?: string;
+  created_at?: string;
+};
+
 type PaymentMandateRow = {
   id: string;
   tenant_id: string;
@@ -4134,6 +4482,13 @@ export type Database = {
       customers:     { Row: CustomerRow;     Insert: CustomerInsert;     Update: CustomerUpdate;     Relationships: [] };
       /** Migration 20260901130000 (audit B4) — in-app khabar, row per recipient; read_at DB me (localStorage nahi). */
       notifications: { Row: NotificationRow; Insert: NotificationInsert; Update: Partial<NotificationRow>; Relationships: [] };
+      /** Migration 20260908100000 (merge brick #5) — what the customer OWNS at the registrar / on the server. Billing stays on `subscriptions`. */
+      domains:          { Row: DomainRow;         Insert: DomainInsert;         Update: Partial<DomainRow>;         Relationships: [] };
+      hosting_accounts: { Row: HostingAccountRow; Insert: HostingAccountInsert; Update: Partial<HostingAccountRow>; Relationships: [] };
+      hosting_plan_changes: { Row: HostingPlanChangeRow; Insert: HostingPlanChangeInsert; Update: Partial<HostingPlanChangeRow>; Relationships: [] };
+      domain_renewal_notices: { Row: DomainRenewalNoticeRow; Insert: DomainRenewalNoticeInsert; Update: Partial<DomainRenewalNoticeRow>; Relationships: [] };
+      domain_renewals: { Row: DomainRenewalRow; Insert: DomainRenewalInsert; Update: Partial<DomainRenewalRow>; Relationships: [] };
+      dns_records:      { Row: DnsRecordRow;      Insert: DnsRecordInsert;      Update: Partial<DnsRecordRow>;      Relationships: [] };
       customer_groups: { Row: CustomerGroupRow; Insert: CustomerGroupInsert; Update: CustomerGroupUpdate; Relationships: [] };
       items:         { Row: ItemRow;         Insert: ItemInsert;         Update: ItemUpdate;         Relationships: [] };
       leads:         { Row: LeadRow;         Insert: LeadInsert;         Update: LeadUpdate;         Relationships: [] };
@@ -4145,6 +4500,9 @@ export type Database = {
       mrr_snapshots: { Row: MrrSnapshotRow; Insert: MrrSnapshotInsert; Update: Partial<MrrSnapshotInsert>; Relationships: [] };
       contract_amendments: { Row: ContractAmendmentRow; Insert: never; Update: never; Relationships: [] };
       payment_mandates: { Row: PaymentMandateRow; Insert: PaymentMandateInsert; Update: Partial<PaymentMandateInsert>; Relationships: [] };
+      recurring_charge_attempts: { Row: RecurringChargeAttemptRow; Insert: RecurringChargeAttemptInsert; Update: Partial<RecurringChargeAttemptInsert>; Relationships: [] };
+      egress_ip_checks: { Row: EgressIpCheckRow; Insert: EgressIpCheckInsert; Update: Partial<EgressIpCheckInsert>; Relationships: [] };
+      domain_watches: { Row: DomainWatchRow; Insert: DomainWatchInsert; Update: Partial<DomainWatchInsert>; Relationships: [] };
       subscription_billings: { Row: SubscriptionBillingRow; Insert: SubscriptionBillingInsert; Update: Partial<SubscriptionBillingInsert>; Relationships: [] };
       invoices:      { Row: InvoiceRow;      Insert: InvoiceInsert;      Update: InvoiceUpdate;      Relationships: [] };
       subscriptions: { Row: SubscriptionRow; Insert: SubscriptionInsert; Update: SubscriptionUpdate; Relationships: [] };
@@ -4638,6 +4996,30 @@ export type Database = {
           vendor: string;
           price_per_seat_month: number;
           hsn: string | null;
+        }[];
+      };
+      /**
+       * The hosting plans a portal customer may browse and buy
+       * (migration 20260912100000). Priced per ACCOUNT per month, not per seat,
+       * which is why it is a separate function rather than more columns on
+       * portal_list_products. Customer-safe fields only — no wholesale/margin.
+       *
+       * `features` is jsonb: an array of strings on rows written by
+       * sync_hosting_catalog, and coalesced to `[]` for any row without it, so
+       * a caller still has to narrow it before rendering.
+       */
+      portal_list_hosting_plans: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          name: string;
+          price_month: number;
+          period: string | null;
+          hsn: string | null;
+          quota_mb: number | null;
+          bandwidth_mb: number | null;
+          features: Json;
+          popular: boolean;
         }[];
       };
       /**
@@ -5271,6 +5653,9 @@ export type SeatRequest = SeatRequestRow;
 export type MrrSnapshot = MrrSnapshotRow;
 export type ContractAmendment = ContractAmendmentRow;
 export type PaymentMandate = PaymentMandateRow;
+export type RecurringChargeAttempt = RecurringChargeAttemptRow;
+export type EgressIpCheck = EgressIpCheckRow;
+export type DomainWatch = DomainWatchRow;
 export type PaymentMandateInsertT = PaymentMandateInsert;
 export type SubscriptionBilling = SubscriptionBillingRow;
 export type SubscriptionBillingInsertT = SubscriptionBillingInsert;

@@ -30,6 +30,7 @@ import { reflect, type ReflectionInput } from "@/lib/ai/reflection";
 import { reflectionEmail, type ReflectionReport } from "@/lib/ai/reflection-digest";
 import { sendEmail } from "@/lib/email/send";
 import { createAdminClient } from "@/lib/supabase/server";
+import { platformOpsRecipient } from "@/lib/ops/ops-recipient";
 import "@/lib/sentry";
 
 export const dynamic = "force-dynamic";
@@ -192,12 +193,11 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  /* Same recipient rule as health-digest: the platform owner, oldest first. This is an ops
-     note about the app's own behaviour, not a tenant-facing report. */
-  const { data: owner } = await createAdminClient()
-    .from("users").select("email").eq("role", "owner")
-    .order("created_at", { ascending: true }).limit(1).maybeSingle();
-  const to = (owner as { email?: string } | null)?.email ?? null;
+  /* Same recipient rule as health-digest, and the same fix: the PLATFORM owner, chosen
+     from the founder allowlist rather than by age. This report is cross-tenant — it is an
+     ops note about the app's own behaviour, not a tenant-facing report — so the oldest
+     `owner` row in the table was never the right answer. See lib/ops/ops-recipient.ts. */
+  const to = await platformOpsRecipient(createAdminClient());
   if (!to) {
     return NextResponse.json({
       ok: true, windowHours: WINDOW_HOURS, tenants: reports.length, emailed: false,

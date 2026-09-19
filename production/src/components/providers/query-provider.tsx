@@ -61,16 +61,28 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
           outrank an app control.
 
           THE COST: no devtools on a narrow window. Widen the window to get them back. */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="hidden md:block">
-          {/* `bottom-left`, `top-left` NAHI. 26 Aug 2026: is button ka palm-tree logo
-              theek sidebar/header ke brand mark par baithta tha, aur Pardeep ne use apni
-              company ka logo samajh kar do baar "logo show nahi kar raha" bataya. Wo
-              dev-only hai aur production me jata bhi nahi — par jo cheez dev me galat
-              sawaal khadi karti hai, uski keemat asli hai. */}
-          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
-        </div>
-      )}
+      {/* ─── OFF BY DEFAULT SINCE 11 Sep 2026 ────────────────────────────────
+          Pardeep: "remove this icon for me."
+
+          THIRD TIME. The comment this replaces already recorded the first two:
+          the devtools' palm-tree button sat on the brand mark and he read it as
+          his own company logo, reporting "logo show nahi kar raha" twice. Moving
+          it corner to corner was the fix both times, and every corner of this
+          app has something real in it — hamburger, bell, bottom nav, FAB, the
+          sidebar user chip. There is no free corner, so the third fix is to
+          stop rendering it.
+
+          NOT DELETED, because it is a genuinely useful tool for looking at query
+          cache state — just no longer something you have to look at every day to
+          ignore. Set `NEXT_PUBLIC_RQ_DEVTOOLS=1` in .env.local to get it back;
+          it is still dev-only on top of that, so the flag cannot turn it on in
+          production. */}
+      {process.env.NODE_ENV === "development" &&
+        process.env.NEXT_PUBLIC_RQ_DEVTOOLS === "1" && (
+          <div className="hidden md:block">
+            <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
+          </div>
+        )}
     </QueryClientProvider>
   );
 }

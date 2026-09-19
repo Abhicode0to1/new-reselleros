@@ -14,7 +14,8 @@
  * aur bina uske har baar chaar env var haath se dene padte.
  */
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { loadEnvLocal } from "./lib/env-local.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -36,17 +37,17 @@ Kya likhna hai, wo dijiye:
   process.exit(2);
 }
 
-/* .env.local — vitest ise khud nahi padhta. Sirf padha jata hai, likha nahi. */
-const env = { ...process.env };
-try {
-  for (const line of readFileSync(new URL("../.env.local", import.meta.url), "utf8").split(/\r?\n/)) {
-    const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
-    if (m) env[m[1]] = m[2].trim().replace(/^['"]|['"]$/g, "");
-  }
-} catch {
-  console.error("`.env.local` nahi mila — uske bina Supabase aur Gemini tak nahi pahuncha ja sakta.");
-  process.exit(1);
-}
+/* .env.local - vitest ise khud nahi padhta. Sirf padha jata hai, likha nahi.
+   Saajha parser se, apne haath ke regex se nahi: wo har line ke SIRE se quote
+   hatata tha, to quote waali value ke baad ka comment andar hi reh jata. Yahan
+   wo sirf EK chaabi par lagta tha, aur theek sabse buri chaabi par --
+   SUPABASE_SERVICE_ROLE_KEY 164 ki jagah 214 akshar ka ban jata (JWT + comment),
+   jise Supabase ByteString kehkar thukra deta. 16 Sep 2026 ko naapa gaya.
+   Path script ke hisaab se, cwd ke hisaab se nahi - ye kahin se bhi chalta hai. */
+const env = {
+  ...process.env,
+  ...loadEnvLocal({ path: fileURLToPath(new URL("../.env.local", import.meta.url)) }),
+};
 
 env.DRY_RUN = "1";
 env.DRY_SUBJECT = subject;

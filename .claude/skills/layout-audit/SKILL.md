@@ -41,6 +41,41 @@ taken on `/dashboard` while the report said `/leads`.
 if (location.pathname !== "/leads") return JSON.stringify({ ABORT: location.pathname });
 ```
 
+**0b-ii. And scroll the element into view before measuring its POSITION.**
+
+`document.elementFromPoint` answers `null` for any coordinate outside the viewport, so a
+hit-test on something below the fold reports "nothing there" for every probe — including the
+element's own centre, which is the tell. Measured 17 Sep 2026 on `/portal/domains`, where it
+nearly produced a wrong finding about a target size. `accessibility-review` §0c has the recipe
+and the control to put in it. Rects from `getBoundingClientRect()` are fine off-screen; anything
+that asks "what is AT this point" is not.
+
+---
+
+## 0c. THREE WAYS "IT DOES NOT FIT" IS A LIE — all measured 14 Sep 2026
+
+Added after a dialog audit reported four findings of which three were the harness. Overflow is the
+easiest thing in this file to measure wrongly, because plenty of overflow is correct.
+
+1. **`.sr-only` is a 1px clipped box BY DESIGN.** Its `scrollWidth` always exceeds its
+   `clientWidth`, so it reports ~44px of "overflow" on every dialog, forever. Skip it by class.
+
+2. **An element that ASKED to scroll is not broken, and neither are its children.** Skip anything
+   whose `overflow-x` computes to `auto`/`scroll` — and walk UP, because a grid row inside a
+   scroller legitimately exceeds its parent. Counting the children reported a defect I had just
+   FIXED as still broken.
+
+3. **`offsetParent` IS NULL FOR `position: fixed`.** A dialog is always fixed, so a visibility
+   filter built on `offsetParent` skips every open modal — the check runs and finds nothing, which
+   reads exactly like a pass. Use the rect plus `visibility`/`display`.
+
+And one about WHERE you measure: a control read at scroll-0 may be under the FAB or the mobile
+bottom nav, which reports it as tiny when it is merely covered. Scroll it to the middle first.
+
+The real finding that survived all four corrections: Add Item's pricing matrix is
+`grid-cols-[minmax(220px,1fr)_170px_170px_100px]` — 712px of columns in a 348px dialog, inside
+`overflow-hidden`. 364px clipped, no scrollbar, and what was clipped was Cost ₹ and Margin.
+
 ---
 
 ## 1. Does it FIT? — the check nothing else makes
