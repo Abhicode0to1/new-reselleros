@@ -135,6 +135,32 @@ function LoginPageInner() {
               </li>
             ))}
           </ul>
+
+          {/* A LINK, not a third autofill row.
+              The customer demo cannot be a credential here: this form is
+              signInWithPassword against a `users` row, and a customer has
+              neither a password nor a row — so autofilling one would give a
+              button that always fails. This file already carries a note about
+              exactly that (the `darshan@` entry above), and the fix then was to
+              remove it, not to make the list longer.
+
+              So the panel points at the page that CAN sign a customer in, where
+              the demo customer and its emailed-code flow live. */}
+          <div className="mt-2 pt-2 border-t border-indigo/20">
+            <a
+              href="/portal/login"
+              className="block rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
+            >
+              <div className="font-medium text-ink">
+                Customer portal
+                <Icon name="external" size={11} className="inline ml-1 mb-0.5 text-ink-3" />
+              </div>
+              <div className="text-2xs text-ink-3">
+                Demo customer lives on <span className="font-mono">/portal/login</span> — customers
+                sign in by emailed code, not a password.
+              </div>
+            </a>
+          </div>
         </div>
       )}
 
