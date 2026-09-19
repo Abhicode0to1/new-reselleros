@@ -38,6 +38,41 @@ import { createClient } from "@/lib/supabase/client";
  *  `process.env[name]` is NOT replaced and would be undefined in the browser. */
 const DMS_PORTAL_URL = (process.env.NEXT_PUBLIC_DMS_PORTAL_URL ?? "").trim();
 
+/**
+ * Dev-only demo customer, mirroring the staff login page's panel.
+ *
+ * ─── WHY THIS IS NOT ON THE STAFF PAGE ───────────────────────────────────────
+ * The obvious place for a "customer demo login" is beside the two tenant logins
+ * at /login. It cannot go there: /login is `signInWithPassword` against a `users`
+ * row, and a customer has neither. The button would autofill a credential that
+ * can never succeed.
+ *
+ * That is not hypothetical. The staff page carries a comment about a third entry
+ * (`darshan@exceltechnologies.in`) that pointed at a user who did not exist, so
+ * pressing it only ever failed — under a heading claiming the list was "kept in
+ * sync with the actual tenants". A demo credential that does not work is worse
+ * than none, because it sends whoever tries it hunting for a bug in the auth.
+ *
+ * So the customer demo lives here, on the page that can actually sign a customer
+ * in, and it fills the EMAIL only — the second factor is a real emailed code.
+ *
+ * ─── THIS ADDRESS MUST STAY UNROUTABLE ───────────────────────────────────────
+ * `.invalid` is reserved by RFC 2606. Autofilling a real customer's address
+ * would mean every developer pressing this button sends that person a sign-in
+ * code. Pick a different demo customer only if its address is equally fake.
+ *
+ * Requires the matching row: `customers.contact_email = portal-test@anutech.invalid`
+ * (the portal_customer_exists RPC matches on that column, not on auth.users).
+ */
+const DEMO_CUSTOMER = {
+  label: "Portal Test Customer",
+  sub: "Anutech Digital",
+  email: "portal-test@anutech.invalid",
+};
+
+/** Where the emailed code lands on a local `supabase start` stack. */
+const LOCAL_MAIL_URL = "http://localhost:14324";
+
 const emailSchema = z.object({ email: z.string().email("Valid email required") });
 type EmailForm = z.infer<typeof emailSchema>;
 
@@ -234,6 +269,47 @@ function PortalLoginInner() {
         {error === "auth_failed" && step === "email" && (
           <div className="mb-4 p-3 bg-rose-soft border border-rose/30 rounded-md text-xs text-rose-ink">
             Your sign-in session expired. Please request a new code below.
+          </div>
+        )}
+
+        {/* Dev-only demo customer — same gate as the staff login page, so it
+            cannot reach a production build. Fills the email; the code itself
+            still has to be fetched, which is the point of linking the local
+            mail catcher beside it. */}
+        {process.env.NODE_ENV !== "production" && step === "email" && (
+          <div className="mb-4 p-3 bg-indigo-50 border border-indigo/30 rounded-md text-xs">
+            <div className="flex items-start gap-2 mb-2">
+              <Icon name="info" size={14} className="text-indigo flex-shrink-0 mt-0.5" />
+              <div className="text-indigo flex-1">
+                <b>Dev mode — demo customer</b>
+                <span className="text-ink-3 ml-1">· click to autofill</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                emailForm.setValue("email", DEMO_CUSTOMER.email, { shouldValidate: true })
+              }
+              className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
+            >
+              <div className="font-medium text-ink">
+                {DEMO_CUSTOMER.label}
+                <span className="text-ink-3 font-normal"> · {DEMO_CUSTOMER.sub}</span>
+              </div>
+              <div className="text-2xs text-ink-3 font-mono">{DEMO_CUSTOMER.email}</div>
+            </button>
+            <p className="mt-2 pt-2 border-t border-indigo/20 text-2xs text-ink-3">
+              There is no demo password — the portal signs in by emailed code. Read it at{" "}
+              <a
+                href={LOCAL_MAIL_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo underline underline-offset-2"
+              >
+                the local inbox
+              </a>
+              .
+            </p>
           </div>
         )}
 
