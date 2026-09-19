@@ -32,8 +32,17 @@ const NAV: Array<{ href: string; label: string }> = [
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const session   = await getPortalSession();
   const brandName = session?.tenantName ?? "Customer Portal";
-  const mark      = session ? initials(session.tenantName) : "•";
+  /* Initials of whatever is being shown, in both states. The signed-out case used
+     to be a literal "•", which in a dark rounded square reads as an image that
+     failed to load rather than as a deliberate neutral mark. `initials()` gives
+     "CP" here, which uses the same visual language as a tenant's own initials. */
+  const mark      = initials(brandName);
   const gstin     = session?.tenantGstin ?? null;
+  /* The strapline exists to say WHOSE portal this is — "Acme Ltd" above,
+     "Customer Portal" below. Signed out there is no reseller to name, so the
+     brand line already says "Customer Portal" and repeating it underneath
+     printed the same words twice, which looked like a templating bug. */
+  const showStrapline = brandName !== "Customer Portal";
 
   return (
     <div className="min-h-screen bg-paper-2/40 flex flex-col">
@@ -45,7 +54,9 @@ export default async function PortalLayout({ children }: { children: React.React
             </div>
             <div className="min-w-0">
               <div className="font-serif text-base leading-none truncate">{brandName}</div>
-              <div className="text-3xs text-ink-3 mt-1">Customer Portal</div>
+              {showStrapline && (
+                <div className="text-3xs text-ink-3 mt-1">Customer Portal</div>
+              )}
             </div>
           </Link>
           <div className="flex items-center gap-5">
