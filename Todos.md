@@ -1,10 +1,15 @@
 # Todos — ResellerOS ↔ DMS integration
 
-Recorded 2026-09-19. Working branches: `dms-engine-link` (ResellerOS, this repo) and
-`engine-api` (DMS, `C:\xampp\htdocs\Domain-Management-Project`). **Nothing is committed yet.**
+Recorded 2026-09-19, updated after the merge and push.
+
+Both repos now carry a branch named **`pawan-api-system`**, both pushed:
+- ResellerOS — `Abhicode0to1/new-reselleros` (this repo), merged with `abhishek-pre-merge`
+- DMS — `exceltechnologies-india/domain-management-system`
+  (`C:\xampp\htdocs\Domain-Management-Project`)
 
 Local stack: DMS on **4310** (`docker compose up -d` in the DMS repo), ResellerOS on **4320**
-(`npm run dev -- -p 4320`), local Supabase on 14321/14322.
+(`npm run dev -- -p 4320`), local Supabase on 14321/14322, local inbox on 14324.
+Sign in with `dev-local@anutech.invalid` / `local-dev-password-1234` (owner, Anutech Digital).
 
 Verification key: **[verified]** = read end-to-end in the code and confirmed here ·
 **[reported]** = raised by review, not independently confirmed.
@@ -65,22 +70,42 @@ new design's guards assume they are fixed.
 
 ---
 
-## B. Done and verified
+## B. Done
 
+### The integration (reads + identity)
 - [x] **Engine read API** (DMS) — `GET /api/integrations/engine/health` and `.../services`,
       three-key auth by blast radius, all fail closed, constant-time compare. 11 unit tests.
 - [x] **ResellerOS engine client** — server-only, never throws, fail-closed on missing config.
       14 tests including 3 live round-trips.
-- [x] **Staff page + nav** — `/hosting-domains`, plus a DMS portal link on `/portal/login`.
+- [x] **Staff page + nav** — `/hosting-domains` under Operations.
 - [x] **SSO hand-off** — ResellerOS → DMS, 60s TTL, single-use `jti` in Redis, own secret.
       15/15 adversarial checks: no impersonation, no auto-provisioning, no role escalation,
-      replay refused, disabled account refused.
+      replay refused, expired refused, wrong-secret refused, disabled account refused.
 - [x] **Local Docker stack** — DMS + Mongo + Redis, all paid upstreams pointed at `.invalid`.
-- [x] **Fixed while building:** a latent `GOOGLE_CLIENT_ID!.trim()` that took down *all* DMS
-      authentication when the var was unset; a test mock that made 16 password-login tests
-      assert against the wrong provider; Redis being dragged into the auth import path.
 
-Baseline: DMS 6365 tests green, ResellerOS 6401 green.
+### Dev ergonomics
+- [x] **Demo customer** on `/portal/login` (`portal-test@anutech.invalid`), with a link to the
+      local inbox where the emailed code lands. Verified: RPC true → OTP 200 → mail delivered.
+- [x] **Pointer to it** from the staff panel on `/login` — a link, not an autofill row, because
+      a customer credential cannot authenticate against `signInWithPassword`.
+- [x] **One shared `DevDemoPanel`** so the two panels cannot drift apart again.
+
+### Fixed along the way
+- [x] `GOOGLE_CLIENT_ID!.trim()` — the `!` compiles to nothing, so an unset var threw at module
+      load and took down **all** DMS authentication, not just Google.
+- [x] A test mock that hardcoded `id:"credentials"`, so 16 password-login tests silently
+      asserted against the wrong provider once a second Credentials provider existed.
+- [x] Redis being dragged into the DMS auth import path (now imported lazily).
+- [x] `/hosting-domains` registered in `route-map.ts`, which a test enforces.
+
+### Repo work
+- [x] Branches created, committed and pushed on both repos as `pawan-api-system`.
+- [x] Merged `abhishek-pre-merge` (contacts, subscriptions, dunning, billing — 90 files,
+      5 migrations). No conflicts; `nav.ts` auto-merged.
+- [x] Applied those 5 migrations to **local** Supabase, plus a PostgREST schema reload.
+- [x] Commits re-attributed to `Excel Technologies <pawan@exceltechnologies.in>`.
+
+Baseline after the merge: **DMS 6365** tests green · **ResellerOS 6610** green.
 
 ---
 
@@ -167,13 +192,24 @@ Phases are ordered so each guard ships **before** the capability it guards.
 
 ---
 
-## F. Housekeeping
+## F. Housekeeping and known gaps
 
-- [ ] Commit the two branches (nothing committed yet).
-- [ ] The local stack's safety rests **entirely** on `.invalid` values in `.env.docker` — the
-      container has working internet and resolves ResellerClub's real host fine. Once write
-      commands exist, consider a code-level gate so a stray real credential is not sufficient on
-      its own.
-- [ ] `anutechbilling-new` was cloned from `new-reselleros@main` and is 151 commits behind the
-      abandoned `anutechbilling` tree. Pushing the current approach to a new branch is still
-      outstanding.
+- [ ] **The domain/hosting UI still does not exist in ResellerOS.** No `/portal/domains`, no
+      `/portal/hosting`, no `(app)/assets` console, no `src/lib/domains`. `abhishek-pre-merge`
+      did **not** bring it — that branch is contacts / subscriptions / billing. So the
+      port-vs-rewrite decision against the abandoned `anutechbilling` tree (which has all of it
+      working) is still open, and it gates any plan to retire DMS's own panels.
+- [ ] **The local stack's safety is configuration, not isolation.** The DMS container has working
+      internet and resolves ResellerClub's real host fine; only the `.invalid` values in
+      `.env.docker` stop it reaching them. Once write commands exist, add a code-level gate so a
+      stray real credential is not sufficient on its own.
+- [ ] **The portal demo customer depends on a local seed row** —
+      `customers.contact_email = portal-test@anutech.invalid`. It exists in this machine's
+      Supabase but may not on a fresh checkout, where the button will simply look broken.
+      Worth adding to the seed.
+- [ ] **Commit-email linkage unverified.** Commits use `pawan@exceltechnologies.in`; they will
+      only link to the GitHub account if that address is verified under Settings → Emails.
+- [ ] **Neither branch has a PR open.** ResellerOS:
+      `github.com/Abhicode0to1/new-reselleros/pull/new/pawan-api-system`.
+- [ ] **Abhishek's merged screens are untested by me.** The suite passes and the migrations are
+      applied, but I did not click through the new contacts / subscriptions pages.
