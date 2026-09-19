@@ -241,6 +241,7 @@ export const APP_NAV: NavSection[] = [
     roles: ["owner", "manager", "billing", "support", "delivery"],
     items: [
       { id: "items",     href: "/items",           label: "Catalog & Products", icon: "package", roles: ["owner", "manager"] },
+      { id: "hosting-domains", href: "/hosting-domains", label: "Hosting & Domains", icon: "globe", roles: ["owner", "manager", "support"], hint: "Status of the DMS engine, and the way into its admin panel." },
       { id: "documents", href: "/documents",       label: "Company Documents",  icon: "file",    roles: ["owner", "manager"] },
       { id: "support",   href: "/support",         label: "Support Desk",        icon: "ticket" },
       { id: "whatsapp",  href: "/whatsapp",        label: "WhatsApp Inbox",      icon: "whatsapp" },
@@ -374,6 +375,7 @@ export const CUSTOMER_NAV: NavSection[] = [
 //     re-exports from /leads). The titles still need separate entries here.
 export const SCREEN_TITLES: Record<string, string[]> = {
   "/dashboard":       ["Home", "Dashboard"],
+  "/hosting-domains": ["Operations", "Hosting & Domains"],
   "/leads":           ["Sales", "Leads"],
   "/my-expenses":     ["Me", "Advances & Expenses"],
   "/automation":      ["Admin", "Automation"],

@@ -33,6 +33,11 @@ import { Icon } from "@/components/ui/icon";
 import { FormField } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 
+/** Where a customer goes for hosting and domains — a separate app, separate login.
+ *  Must be written out in full for Next to inline it at build time; a computed
+ *  `process.env[name]` is NOT replaced and would be undefined in the browser. */
+const DMS_PORTAL_URL = (process.env.NEXT_PUBLIC_DMS_PORTAL_URL ?? "").trim();
+
 const emailSchema = z.object({ email: z.string().email("Valid email required") });
 type EmailForm = z.infer<typeof emailSchema>;
 
@@ -308,6 +313,33 @@ function PortalLoginInner() {
               </button>
             </div>
           </form>
+        )}
+
+        {/* Hosting and domains live in a separate application with its own
+            login. A customer who bought hosting arrives here expecting to find
+            it, does not, and contacts support — so the signpost belongs on the
+            page where that wrong turn happens, not behind a successful sign-in
+            they may never complete.
+
+            Rendered only when NEXT_PUBLIC_DMS_PORTAL_URL is set: a hard-coded
+            fallback would send customers to a host that may not be this
+            deployment's engine. Absent config means no link, not a guess. */}
+        {DMS_PORTAL_URL && (
+          <div className="mt-6 pt-5 border-t border-hairline text-center">
+            <p className="text-xs text-ink-3">Looking for your hosting or domains?</p>
+            <a
+              href={DMS_PORTAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-amber-ink underline underline-offset-4"
+            >
+              Sign in to the hosting &amp; domains portal
+              <Icon name="external" size={11} />
+            </a>
+            <p className="mt-1.5 text-2xs text-ink-3">
+              It uses a separate account from this one.
+            </p>
+          </div>
         )}
 
         <div className="mt-6 pt-5 border-t border-hairline text-center text-xs text-ink-3">

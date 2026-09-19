@@ -104,6 +104,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/expense-claim", file: "src/app/(public)/expense-claim/page.tsx" },
   { route: "/forgot-password", file: "src/app/(auth)/forgot-password/page.tsx" },
   { route: "/help", file: "src/app/(app)/help/page.tsx" },
+  { route: "/hosting-domains", file: "src/app/(app)/hosting-domains/page.tsx" },
   { route: "/invoices", file: "src/app/(app)/invoices/page.tsx" },
   { route: "/items", file: "src/app/(app)/items/page.tsx" },
   { route: "/lead-gen", file: "src/app/(app)/lead-gen/page.tsx" },
