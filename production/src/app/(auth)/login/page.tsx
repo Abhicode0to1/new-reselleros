@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { DevDemoPanel } from "@/components/shared/dev-demo-panel";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -111,57 +112,38 @@ function LoginPageInner() {
 
       {/* Dev-only demo credentials — hidden in production builds */}
       {showDemoHint && configured && (
-        <div className="mb-4 p-3 bg-indigo-50 border border-indigo/30 rounded-md text-xs">
-          <div className="flex items-start gap-2 mb-2">
-            <Icon name="info" size={14} className="text-indigo flex-shrink-0 mt-0.5" />
-            <div className="text-indigo flex-1">
-              <b>Dev mode — demo accounts</b>
-              <span className="text-ink-3 ml-1">· click to autofill</span>
-            </div>
-          </div>
-          <ul className="space-y-1.5">
-            {DEMO_USERS.map((u) => (
-              <li key={u.email}>
-                <button
-                  type="button"
-                  onClick={() => fillDemo(u.email, u.password)}
-                  className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
-                >
-                  <div className="font-medium text-ink">{u.label}</div>
-                  <div className="text-2xs text-ink-3 font-mono">
-                    {u.email} · <span className="text-amber-ink">{u.password}</span>
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          {/* A LINK, not a third autofill row.
-              The customer demo cannot be a credential here: this form is
-              signInWithPassword against a `users` row, and a customer has
-              neither a password nor a row — so autofilling one would give a
-              button that always fails. This file already carries a note about
-              exactly that (the `darshan@` entry above), and the fix then was to
-              remove it, not to make the list longer.
-
-              So the panel points at the page that CAN sign a customer in, where
-              the demo customer and its emailed-code flow live. */}
-          <div className="mt-2 pt-2 border-t border-indigo/20">
-            <a
-              href="/portal/login"
-              className="block rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
-            >
-              <div className="font-medium text-ink">
-                Customer portal
-                <Icon name="external" size={11} className="inline ml-1 mb-0.5 text-ink-3" />
-              </div>
-              <div className="text-2xs text-ink-3">
-                Demo customer lives on <span className="font-mono">/portal/login</span> — customers
-                sign in by emailed code, not a password.
-              </div>
-            </a>
-          </div>
-        </div>
+        <DevDemoPanel
+          title="demo accounts"
+          entries={DEMO_USERS.map((u) => ({
+            label: u.label,
+            mono: (
+              <>
+                {u.email} · <span className="text-amber-ink">{u.password}</span>
+              </>
+            ),
+            onClick: () => fillDemo(u.email, u.password),
+          }))}
+          /* A LINK, not a third autofill row. The customer demo cannot be a
+             credential here: this form is signInWithPassword against a `users`
+             row, and a customer has neither a password nor a row — so
+             autofilling one would give a button that always fails. This file
+             already carries a note about exactly that (the `darshan@` entry
+             above), and the fix then was to remove it, not to lengthen the
+             list. So the panel points at the page that CAN sign a customer in. */
+          footer={[
+            {
+              label: "Customer portal",
+              href: "/portal/login",
+              external: true,
+              note: (
+                <>
+                  Demo customer lives on <span className="font-mono">/portal/login</span> —
+                  customers sign in by emailed code, not a password.
+                </>
+              ),
+            },
+          ]}
+        />
       )}
 
       {/* Google OAuth */}

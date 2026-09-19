@@ -30,6 +30,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { DevDemoPanel } from "@/components/shared/dev-demo-panel";
 import { FormField } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 
@@ -277,40 +278,33 @@ function PortalLoginInner() {
             still has to be fetched, which is the point of linking the local
             mail catcher beside it. */}
         {process.env.NODE_ENV !== "production" && step === "email" && (
-          <div className="mb-4 p-3 bg-indigo-50 border border-indigo/30 rounded-md text-xs">
-            <div className="flex items-start gap-2 mb-2">
-              <Icon name="info" size={14} className="text-indigo flex-shrink-0 mt-0.5" />
-              <div className="text-indigo flex-1">
-                <b>Dev mode — demo customer</b>
-                <span className="text-ink-3 ml-1">· click to autofill</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                emailForm.setValue("email", DEMO_CUSTOMER.email, { shouldValidate: true })
-              }
-              className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
-            >
-              <div className="font-medium text-ink">
-                {DEMO_CUSTOMER.label}
-                <span className="text-ink-3 font-normal"> · {DEMO_CUSTOMER.sub}</span>
-              </div>
-              <div className="text-2xs text-ink-3 font-mono">{DEMO_CUSTOMER.email}</div>
-            </button>
-            <p className="mt-2 pt-2 border-t border-indigo/20 text-2xs text-ink-3">
-              There is no demo password — the portal signs in by emailed code. Read it at{" "}
-              <a
-                href={LOCAL_MAIL_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-indigo underline underline-offset-2"
-              >
-                the local inbox
-              </a>
-              .
-            </p>
-          </div>
+          <DevDemoPanel
+            title="demo customer"
+            entries={[
+              {
+                /* One label, same weight throughout — matching "Excel
+                   Technologies · Owner" on the staff page. */
+                label: `${DEMO_CUSTOMER.label} · ${DEMO_CUSTOMER.sub}`,
+                mono: DEMO_CUSTOMER.email,
+                onClick: () =>
+                  emailForm.setValue("email", DEMO_CUSTOMER.email, { shouldValidate: true }),
+              },
+            ]}
+            footnote={
+              <>
+                There is no demo password — the portal signs in by emailed code. Read it at{" "}
+                <a
+                  href={LOCAL_MAIL_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo underline underline-offset-2"
+                >
+                  the local inbox
+                </a>
+                .
+              </>
+            }
+          />
         )}
 
         {step === "email" ? (
