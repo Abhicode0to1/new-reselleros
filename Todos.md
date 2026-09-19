@@ -203,10 +203,16 @@ Phases are ordered so each guard ships **before** the capability it guards.
       internet and resolves ResellerClub's real host fine; only the `.invalid` values in
       `.env.docker` stop it reaching them. Once write commands exist, add a code-level gate so a
       stray real credential is not sufficient on its own.
+- [ ] **Customers cannot set a password.** `/portal/login` now offers email + password, but
+      portal accounts are created by the OTP flow (`shouldCreateUser: true`), which sets none,
+      and there is no set-password or forgot-password screen anywhere under `/portal`. So today
+      the password field works only for an account someone set a password on by hand. The
+      emailed code is kept as the way through, and must stay until this exists. Needed: an
+      invite/set-password flow, plus a real reset.
 - [ ] **The portal demo customer depends on a local seed row** —
-      `customers.contact_email = portal-test@anutech.invalid`. It exists in this machine's
-      Supabase but may not on a fresh checkout, where the button will simply look broken.
-      Worth adding to the seed.
+      `customers.contact_email = portal-test@anutech.invalid`, AND a password set on that auth
+      user (`PortalDemo@2026`, set by hand locally). Both exist on this machine and may not on a
+      fresh checkout, where the demo button will simply look broken. Worth adding to the seed.
 - [ ] **Commit-email linkage unverified.** Commits use `pawan@exceltechnologies.in`; they will
       only link to the GitHub account if that address is verified under Settings → Emails.
 - [ ] **Neither branch has a PR open.** ResellerOS:

@@ -69,6 +69,10 @@ const DEMO_CUSTOMER = {
   label: "Portal Test Customer",
   sub: "Anutech Digital",
   email: "portal-test@anutech.invalid",
+  /* Local only, and it has to be SET on the local Supabase for this to work —
+     a portal account created through the OTP flow has no password at all. See
+     Todos.md; on a fresh machine this button fails until someone sets it. */
+  password: "PortalDemo@2026",
 };
 
 /** Where the emailed code lands on a local `supabase start` stack. */
@@ -85,6 +89,12 @@ const codeSchema = z.object({
 });
 type CodeForm = z.infer<typeof codeSchema>;
 
+const passwordSchema = z.object({
+  email: z.string().email("Valid email required"),
+  password: z.string().min(1, "Enter your password"),
+});
+type PasswordForm = z.infer<typeof passwordSchema>;
+
 function PortalLoginInner() {
   const params = useSearchParams();
   const error = params.get("error");
@@ -96,6 +106,24 @@ function PortalLoginInner() {
 
   const emailForm = useForm<EmailForm>({ resolver: zodResolver(emailSchema) });
   const codeForm = useForm<CodeForm>({ resolver: zodResolver(codeSchema) });
+  const pwForm = useForm<PasswordForm>({ resolver: zodResolver(passwordSchema) });
+
+  /**
+   * Which method is on screen. Password first, matching the reseller sign-in.
+   *
+   * ─── THE CODE PATH STAYS, AND IS NOT OPTIONAL ────────────────────────────
+   * Portal accounts are created by the OTP flow (`shouldCreateUser: true`),
+   * which sets no password, and there is no set-password or forgot-password
+   * screen anywhere under /portal. So for an existing customer "sign in with a
+   * password" describes a password nobody has ever been given a way to choose.
+   * Making this page password-ONLY would lock out every customer at once.
+   *
+   * Password is therefore the headline method and the emailed code is the way
+   * through for everyone who has no password yet. The missing piece — letting a
+   * customer set one — is recorded in Todos.md.
+   */
+  const [method, setMethod] = React.useState<"password" | "code">("password");
+  const [showPassword, setShowPassword] = React.useState(false);
 
   /** Check the email is a customer, then send a 6-digit code. Returns success. */
   async function sendCode(addr: string): Promise<boolean> {
@@ -123,6 +151,54 @@ function PortalLoginInner() {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Password sign-in. Same shape as the reseller page, with one addition: the
+   * customer check runs FIRST.
+   *
+   * Without it, a staff member typing their own address here would sign in
+   * successfully — Supabase auth is one pool — and then land on a portal with
+   * no customer row behind it. The check keeps the two audiences apart at the
+   * door rather than after the session exists.
+   */
+  async function onPasswordSubmit({ email: addr, password }: PasswordForm) {
+    setPreNoCustomer(false);
+    const supabase = createClient();
+
+    const { data: exists, error: chkErr } = await supabase.rpc("portal_customer_exists", {
+      p_email: addr,
+    });
+    if (chkErr) {
+      /* §24: say what to do next. This is our lookup failing, not anything the
+         customer typed, so the answer is "try again" — not "check your email". */
+      toast.error("We could not check your account just now.", {
+        description: "That is a problem on our side, not with what you typed. Try again in a moment.",
+        duration: 8000,
+      });
+      return;
+    }
+    if (!exists) {
+      setPreNoCustomer(true);
+      return;
+    }
+
+    const { error: pwErr } = await supabase.auth.signInWithPassword({ email: addr, password });
+    if (pwErr) {
+      /* One message for "wrong password" and for "this account has no password
+         yet", because they are the same dead end from the customer's side and
+         the fix is the same: use the code. Naming which one it is would also
+         tell an attacker which addresses have passwords set. */
+      toast.error("That email and password did not match.", {
+        description:
+          "If you have never set a password, use the emailed sign-in code instead.",
+        duration: 8000,
+      });
+      return;
+    }
+
+    setEmail(addr);
+    await finishLink(supabase);
   }
 
   async function onEmailSubmit({ email: addr }: EmailForm) {
@@ -285,29 +361,108 @@ function PortalLoginInner() {
                 /* One label, same weight throughout — matching "Excel
                    Technologies · Owner" on the staff page. */
                 label: `${DEMO_CUSTOMER.label} · ${DEMO_CUSTOMER.sub}`,
-                mono: DEMO_CUSTOMER.email,
-                onClick: () =>
-                  emailForm.setValue("email", DEMO_CUSTOMER.email, { shouldValidate: true }),
+                mono:
+                  method === "password" ? (
+                    <>
+                      {DEMO_CUSTOMER.email} ·{" "}
+                      <span className="text-amber-ink">{DEMO_CUSTOMER.password}</span>
+                    </>
+                  ) : (
+                    DEMO_CUSTOMER.email
+                  ),
+                onClick: () => {
+                  if (method === "password") {
+                    pwForm.setValue("email", DEMO_CUSTOMER.email, { shouldValidate: true });
+                    pwForm.setValue("password", DEMO_CUSTOMER.password, { shouldValidate: true });
+                    setShowPassword(true);
+                  } else {
+                    emailForm.setValue("email", DEMO_CUSTOMER.email, { shouldValidate: true });
+                  }
+                },
               },
             ]}
             footnote={
-              <>
-                There is no demo password — the portal signs in by emailed code. Read it at{" "}
-                <a
-                  href={LOCAL_MAIL_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-indigo underline underline-offset-2"
-                >
-                  the local inbox
-                </a>
-                .
-              </>
+              method === "code" ? (
+                <>
+                  The code is emailed. Read it at{" "}
+                  <a
+                    href={LOCAL_MAIL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo underline underline-offset-2"
+                  >
+                    the local inbox
+                  </a>
+                  .
+                </>
+              ) : undefined
             }
           />
         )}
 
-        {step === "email" ? (
+        {step === "email" && method === "password" ? (
+          <form onSubmit={pwForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
+            <FormField label="Your work email" required htmlFor="email">
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="e.g. you@yourcompany.in"
+                error={pwForm.formState.errors.email?.message}
+                {...pwForm.register("email")}
+              />
+            </FormField>
+
+            <FormField label="Password" required htmlFor="password">
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  error={pwForm.formState.errors.password?.message}
+                  {...pwForm.register("password")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  <Icon name={showPassword ? "eye_off" : "eye"} size={16} />
+                </button>
+              </div>
+            </FormField>
+
+            <Button
+              type="submit"
+              variant="primary"
+              className="w-full justify-center"
+              loading={pwForm.formState.isSubmitting}
+            >
+              <Icon name="lock" size={14} className="mr-1.5" />
+              Sign in
+            </Button>
+
+            {/* Not "forgot your password" — for most customers there is no
+                password to forget yet, and offering a reset for something that
+                was never set sends them to an email that never arrives. */}
+            <p className="text-2xs text-ink-3 text-center leading-relaxed">
+              No password yet, or forgotten it?{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  const typed = pwForm.getValues("email");
+                  if (typed) emailForm.setValue("email", typed, { shouldValidate: true });
+                  setMethod("code");
+                }}
+                className="text-amber-ink underline underline-offset-2"
+              >
+                Email me a sign-in code
+              </button>
+            </p>
+          </form>
+        ) : step === "email" ? (
           <form onSubmit={emailForm.handleSubmit(onEmailSubmit)} className="space-y-4">
             <FormField label="Your work email" required htmlFor="email">
               <Input
@@ -331,7 +486,18 @@ function PortalLoginInner() {
             </Button>
 
             <p className="text-2xs text-ink-3 text-center leading-relaxed">
-              No passwords. We email you a one-time code that signs you in.
+              We email you a one-time code that signs you in.{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  const typed = emailForm.getValues("email");
+                  if (typed) pwForm.setValue("email", typed, { shouldValidate: true });
+                  setMethod("password");
+                }}
+                className="text-amber-ink underline underline-offset-2"
+              >
+                Use a password instead
+              </button>
             </p>
           </form>
         ) : (
