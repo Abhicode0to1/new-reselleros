@@ -208,7 +208,13 @@ Baselines, measured 2026-09-21: **DMS 6,408** tests across 431 files ·
 Full design in the workflow output (`w4j8nmjxo`). 17 agents, 106 problems raised, 28 blockers.
 Phases are ordered so each guard ships **before** the capability it guards.
 
-- [ ] **Phase 0** — fix the four bugs in section A above.
+- [x] **Phase 0** — fix the four bugs in section A above. **DONE 2026-09-21.** All four
+      shipped and red-checked: the renewal security hole, the vanishing domain, the
+      discarded repeat hosting order, and the admin retry that marked queued
+      registrations failed. §A's two remaining items are not bugs to fix — they are
+      decisions (renewal pricing; where a user's domain list is canonically read from).
+      **Caveat: migration 008 is applied LOCALLY only.** Phase 0 is not truly closed on
+      production until it runs there.
 - [ ] **Phase 1** — make failure legible. Add a structural `transport` flag to the ResellerClub
       register/renew response and a `code` discriminator to `DirectAdminError`. Today a
       param-build throw and a post-POST socket reset produce the *identical* string, so no
