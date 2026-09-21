@@ -274,7 +274,12 @@ Rules:
 3. **The database is SHARED.** A worktree separates files, not data. A migration applied
    from one folder hits the other immediately. **Only one agent runs a migration or a data
    reset at a time**, and says so first.
-4. Ship through a PR: push your branch, open a PR into `main`, let CI go green, merge.
+4. Push your branch when work is done, and **stop there**. Do **not** open a pull request
+   unless you are explicitly asked to in that message — opening one is the owner's call
+   about when work is proposed for `main`, not a tidy-up step. When you are asked, the flow
+   is: PR into `main`, let CI go green, merge.
+   Worth saying once rather than offering a PR: CI does not run on feature branches, so on a
+   long-lived branch the local gate in §9 is the only gate.
 
 ---
 
