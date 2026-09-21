@@ -315,8 +315,44 @@ Phases are ordered so each guard ships **before** the capability it guards.
       Noted from the run: a new command on a locked subject returns **501, not 409** — the
       handler gate runs before the mutex. Gate order, not a bug.
 
-- [ ] **Phase 6** — first real commands, free and reversible: DNS records, hosting
-      suspend/unsuspend.
+- [x] **Phase 6** — first real commands, free and reversible: DNS records, hosting
+      suspend/unsuspend. **DONE 2026-09-21.**
+      `lib/integrations/engine-handlers-hosting.ts` and `engine-handlers-dns.ts`, registered in
+      BOTH maps — `HANDLERS` (performable) and `RECONCILERS` (settleable).
+      **These two first because they are free and reversible.** A suspend can be unsuspended
+      and a DNS record set back; the worst case is a site down or pointing at the wrong place
+      until somebody notices. They also both have an OBSERVABLE effect, which is what lets
+      them be the first commands with reconcilers — "is this account suspended", "does this
+      record hold this value" are pure reads with definite answers.
+      **Test mode is "no writes", not "offline".** It reads the current state and reports what
+      a live run would change. Said plainly in both headers, because "test mode does not
+      contact the provider" would be a comforting sentence and a false one.
+      **Already-in-the-asked-for-state is a SUCCESS.** A retry is the commonest reason to send
+      the same command twice; failing there makes a correct state look like a fault and leaves
+      the operator unsure which run was real.
+      **A failure before any write THROWS**, so the route records `transport: "not_sent"` and
+      the claim is released — nothing can have half-happened. And `not_found` reconciles to
+      `unknown`, never `not_done`: a missing account means the username is wrong or it was
+      deleted, neither of which says whether the suspend landed.
+      **DNS upserts read first.** A blind add leaves two A records for one host, which resolve
+      round-robin — an outage that presents as "it works for me". An existing record with no id
+      is refused rather than duplicated. NS and SOA are not settable (changing nameservers moves
+      the whole domain's DNS, which is not a small reversible edit), and a TTL under
+      ResellerClub's 7200 floor is refused rather than silently raised.
+      **Two things found while building it.** `updateDNSRecord`'s second argument is the RECORD
+      id, not the customer id — an `as never` cast made customerId compile there and was
+      removed (AGENTS.md L5). And ResellerClub is imported LAZILY: `lib/resellerclub/client.ts`
+      throws at module load without env, so a static import made the whole registry
+      un-importable — `hosting.suspend`, which only talks to DirectAdmin, would have 500'd
+      because of a registrar's credentials.
+      46 new tests, **red-checked** by reintroducing all three defects at once (customerId in
+      the recordId slot, already-suspended acted on, `not_found` → `not_done`): 6 assertions
+      went red, then green on restore. Full suite 444 files / 6,670 tests, typecheck clean.
+      `hosting.provision`, `hosting.change_plan`, `domain.renew` and `domain.register` still
+      have NO handler, with a test that fails the day one of them gets one.
+      **Verified how:** test-verified and reasoned-only. **No call has been made to
+      DirectAdmin or ResellerClub** — live is still hard-disabled at 503 from Phase 4, so the
+      provider response shapes are read from this repo's existing wrappers, not observed.
 - [ ] **Phase 7** — hosting provision and plan change (reversible spend).
 - [ ] **Phase 8** — domain renew (first unrecoverable rupee, on a domain we already own).
 - [ ] **Phase 9** — domain register, last, behind two fail-closed env gates and a per-row human
