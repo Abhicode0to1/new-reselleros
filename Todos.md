@@ -84,7 +84,7 @@ new design's guards assume they are fixed.
       before either is worth fixing. Left in place with a comment rather than deleted, so the
       symptom does not get tidied away while the gap stays.
 
-- [ ] **A paid, registered domain can vanish from the database** — `models/Domain.ts:81-85`,
+- [x] **A paid, registered domain can vanish from the database** — `models/Domain.ts:81-85`,
       `lib/services/payment/provisioner.ts:150`, `provisioner-domain.ts` **[verified]**
       `Domain.orderId` is declared `unique: true, sparse: true`, but `provisionCartItems` fans a
       single `orderId` across every domain in the cart. On a two-domain order the second
@@ -94,20 +94,29 @@ new design's guards assume they are fixed.
       every guard the new design relies on.
       Fix: drop the unique constraint (it is a one-to-many relation) or key on
       `(orderId, domainName)`; either way stop swallowing the insert failure.
-      **Run `getIndexes()` against the real cluster first** — the live blast radius depends on
-      whether the index was actually built.
+      **FIXED 2026-09-21.** `getIndexes()` run against the LOCAL cluster: the index was real
+      (`unique: true, sparse: true`). Reproduced the loss — two inserts on one orderId, second
+      E11000, one row of two stored — then migration `008_drop_domain_orderid_unique.ts`, after
+      which three of three store. `resellerClubOrderId` keeps its unique index and still refuses
+      a duplicate, checked in the same run. The swallowed error now writes a SystemLog naming the
+      domain; it still does not rethrow, because the customer has paid and the registrar has
+      registered.
+      **STILL TO DO: migration 008 has only been applied LOCALLY.** Running it against production
+      is yours — it drops and recreates an index on a live collection.
 
-- [ ] **Repeat customers' second hosting order is silently discarded** —
+- [x] **Repeat customers' second hosting order is silently discarded** —
       `lib/services/pending-hostings.ts:208-215` **[verified]**
       `provisionPendingHosting` deletes the row when `user.directAdminUsername` is set and
       returns `{ ok: true, dropped: true }`. That field is set for anyone with any prior
       account, so every returning customer's second paid hosting order is dropped, and the
       `check-unprovisioned` cron counts it as a success.
-      Fix: make the guard per-domain via `listUserHostingsByDomain`.
-      While there: the same function calls `updateDNSNameservers` (hard-disabled, always
-      throws), hardcodes a 365-day term, and fabricates an `orderId`.
+      **FIXED 2026-09-21** — guard is now per `(user, domain)` via `listUserHostingsByDomain`.
+      Still open in the same function: `updateDNSNameservers` (hard-disabled, always throws), a
+      hardcoded 365-day term, and a fabricated `orderId`. And the account-model question stands:
+      a repeat customer now gets a SECOND DirectAdmin user rather than an addon domain on the
+      existing one — see §D, "which side owns DirectAdmin".
 
-- [ ] **Admin pending-domain retry destroys in-flight records** —
+- [x] **Admin pending-domain retry destroys in-flight records** —
       `app/api/admin/pending-domains/[id]/register/route.ts` **[reported]**
       Calls `ResellerClubWrapper.registerDomain` directly and branches on
       `result.status === "success"`, so a `balance_pending` (returned as `status: "pending"`)
