@@ -287,14 +287,25 @@ Consequences accepted with the decision:
       did **not** bring it — that branch is contacts / subscriptions / billing. So the
       port-vs-rewrite decision against the abandoned `anutechbilling` tree (which has all of it
       working) is still open, and it gates any plan to retire DMS's own panels.
-- [ ] **Only DMS's `/` was turned off — the rest of its public site is still live**, and
-      deliberately so. `/hosting`, `/domains/*`, `/cart` and `/checkout` are the **only
-      working purchase funnel for hosting and domains**; ResellerOS has no UI for either yet
-      (see the entry below), so switching them off would leave no way to sell. `/privacy`,
-      `/terms-and-conditions`, `/cancellation-refund` and `/contact` stay because Razorpay
-      requires publicly reachable policy pages for a merchant account — turning those off is
-      a payments-account risk, not a cosmetic one. Decide these together with the
-      port-vs-rewrite question below, not before it.
+- [x] **DMS's legal + marketing pages now redirect to ResellerOS** (2026-09-21, operator's
+      call after the Razorpay risk was raised). `/privacy`, `/terms-and-conditions`,
+      `/cancellation-refund`, `/contact` and `/about` 307 to their ResellerOS equivalents
+      for non-admins, under the same `NEXT_PUBLIC_RESELLEROS_URL` switch.
+      **Redirected, never 404ed** — Razorpay needs a merchant's policy pages publicly
+      reachable, so the content moved rather than vanished, and every target is a real
+      ResellerOS page (`/terms`, `/refund`, `/enquiry`, and two 1:1). Admins still get DMS's
+      copy so the pages stay checkable. Verified with real sessions against the container.
+      **One thing to check before this reaches production**: Razorpay's dashboard holds the
+      registered policy URLs for the merchant account, and those likely point at
+      `app.anutech.in`. This switch is off in production (`deploy-cloud-run.sh` passes no
+      such var), so nothing is live yet — but turning it on there means updating those URLs
+      to the ResellerOS origin first, or the account's policy links 307 off-domain.
+- [ ] **The purchase funnel is deliberately NOT taken over.** `/hosting`, `/domains/*`,
+      `/cart` and `/checkout` are the **only working way to buy hosting or a domain**;
+      ResellerOS has marketing pages for both but no management UI (see below). Tests in
+      both `lib/reseller-os.test.ts` and `middleware.test.ts` pin that these are untouched,
+      so widening the map fails rather than quietly removing the way to sell. Decide this
+      together with the port-vs-rewrite question below, not before it.
 - [ ] **DMS's public nav still links "Home" to DMS's `/`**, which now redirects — so it costs
       a hop rather than being wrong. Left alone because that link carries `isActive('/')`
       styling and rewiring it means swapping `<Link>` for `<a>`. Worth doing if the marketing
