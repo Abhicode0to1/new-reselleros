@@ -163,6 +163,27 @@ new design's guards assume they are fixed.
       `app/page.tsx` (the guarantee), both reading `lib/reseller-os.ts`.
       Browser-verified, and red-checked in both places.
 
+### UI parity + polish (2026-09-21, second batch)
+- [x] **React Query devtools removed** — its palm-tree button had been mistaken for part of
+      the app three times (once by me, twice by the operator). Dev-only, never shipped.
+- [x] **DMS sign-in link opens in the same tab** — dropped `external: true`, which the shared
+      panel couples to both the new tab and the ↗ arrow.
+- [x] **ActionMenu on the tokens** — one shared component, so all four admin pages that use
+      it (users, domains, hosting, orders). Also fixed its off-screen guard, which measured
+      mid-animation through `scale: 0.95` and let the menu hang past the viewport edge.
+- [x] **Shared Modal + its contents on the tokens** — five surfaces. Found a test that had
+      gone VACUOUS: it selected the overlay by `.bg-gray-500.bg-opacity-75`, so after the
+      restyle it clicked `null` and its "not called" assertion passed for the wrong reason.
+- [x] **Page transitions actually run** — `tailwindcss-animate` was never installed and
+      `plugins: []`, so `animate-in` / `fade-in` / `zoom-in-95` / `slide-in-from-right` were
+      inert strings in ~10 places. Installed, plus `key={pathname}` on both shells so the
+      entrance replays per route instead of once per page load.
+- [x] **The admin shell mounts once** — there was no `app/admin/layout.tsx`, so all 25 pages
+      rendered `<AdminLayout>` themselves and every navigation destroyed and rebuilt the
+      sidebar, flashing `AdminLayoutSkeleton`'s pre-restyle `bg-blue-900` sidebar in between.
+      Measured: sidebar node replaced, absent at some frames, nav links hitting 0 — all three
+      now false.
+
 ### Security (2026-09-21)
 - [x] **Domain renewal required no owner and no payment** — see §A, which has the detail.
       Ownership gate on GET and POST, real Razorpay verification, replay check, and the
@@ -310,13 +331,23 @@ Consequences accepted with the decision:
       a hop rather than being wrong. Left alone because that link carries `isActive('/')`
       styling and rewiring it means swapping `<Link>` for `<a>`. Worth doing if the marketing
       pages are kept long-term.
+- [ ] **The 25 admin pages still wrap themselves in `<AdminLayout>`.** The shell is now
+      mounted once by `app/admin/layout.tsx`, and those wrappers render as passthroughs via
+      a context flag rather than being deleted — deliberately, because the flicker had to
+      stop that day and rewriting 25 pages with no per-page tests is the larger risk. They
+      can be removed one at a time; a page with the wrapper and one without render the same
+      tree, so there is no midpoint that breaks. Same for the 19 pages rendering
+      `<AdminLayoutSkeleton>`. Until then `components/skeletons/AdminLayout.tsx` still
+      carries a `bg-blue-900` sidebar for its standalone use outside /admin — worth
+      converting whenever that path is next touched.
 - [ ] **The DMS palette conversion was narrower than I reported.** I said "~2,900 legacy classes
       → 7". The 7 was real but measured only over `app/admin`; `app/dashboard` is genuinely 0.
       The conversion ran over the panel *page* directories and `components/admin` (53 left) /
       `components/user` (16 left), and never covered `components/` root — where shared
       components rendered *inside* the panels live. Measured 2026-09-21 across
-      `app/` + `components/` .tsx: **1,302 legacy `bg-/text-/border-gray-*` and `bg-blue-*`
-      instances remain.** Much of that is the public marketing site and checkout, which were
+      `app/` + `components/` .tsx: **1,272 remain** (was 1,302 before the 21 Sep modal/menu
+      batch; re-measured, not carried forward). Panel-scoped: `components/admin` 48,
+      `components/user` 16, `app/admin` 8, `app/dashboard` 0. Much of that is the public marketing site and checkout, which were
       never in scope — but `components/DomainRenewalModal.tsx` (30 instances) renders inside
       the customer panel at `/dashboard/domains`, so the panels are not uniformly converted.
       Worth a pass keyed on *what the panels render*, not on directory names.
@@ -326,7 +357,11 @@ Consequences accepted with the decision:
       stray real credential is not sufficient on its own.
 - [ ] **Commit-email linkage unverified.** Commits use `pawan@exceltechnologies.in`; they will
       only link to the GitHub account if that address is verified under Settings → Emails.
-- [ ] **Neither branch has a PR open.** ResellerOS:
-      `github.com/Abhicode0to1/new-reselleros/pull/new/pawan-api-system`.
+- [ ] **No PR opened from here.** `gh` is not installed on this machine, so whether one
+      exists was NOT verified — only that neither was opened by me. Links:
+      `github.com/Abhicode0to1/new-reselleros/pull/new/pawan-api-system` and
+      `github.com/exceltechnologies-india/domain-management-system/pull/new/pawan-api-system`.
+      Worth doing soon: AGENTS.md §9 notes CI runs on PRs and pushes to `main` but NOT on
+      feature branches, so the local gate is currently the only gate on both.
 - [ ] **Abhishek's merged screens are untested by me.** The suite passes and the migrations are
       applied, but I did not click through the new contacts / subscriptions pages.
