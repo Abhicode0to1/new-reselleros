@@ -1,15 +1,22 @@
 # Todos — ResellerOS ↔ DMS integration
 
-Recorded 2026-09-19, updated after the merge and push.
+Recorded 2026-09-19. Last updated **2026-09-21**, after the renewal security fix and the
+front-door change.
 
 Both repos now carry a branch named **`pawan-api-system`**, both pushed:
 - ResellerOS — `Abhicode0to1/new-reselleros` (this repo), merged with `abhishek-pre-merge`
 - DMS — `exceltechnologies-india/domain-management-system`
   (`C:\xampp\htdocs\Domain-Management-Project`)
 
-Local stack: DMS on **4310** (`docker compose up -d` in the DMS repo), ResellerOS on **4320**
-(`npm run dev -- -p 4320`), local Supabase on 14321/14322, local inbox on 14324.
+Local stack: DMS on **4310** (`docker compose up -d --build` in the DMS repo), ResellerOS on
+**4320** (`npm run dev -- -p 4320`), local Supabase on 14321/14322, local inbox on 14324.
 Sign in with `dev-local@anutech.invalid` / `local-dev-password-1234` (owner, Anutech Digital).
+
+**ResellerOS is DMS's front door.** `NEXT_PUBLIC_RESELLEROS_URL` is set as a docker-compose
+**build arg**, so DMS's `/` 307s to `localhost:4320` and its logo points there. Changing it
+needs `docker compose up -d --build`, not a restart — `NEXT_PUBLIC_*` is inlined by
+`next build`. With ResellerOS not running, DMS's `/` will look broken; that is the redirect
+working.
 
 Verification key: **[verified]** = read end-to-end in the code and confirmed here ·
 **[reported]** = raised by review, not independently confirmed.
@@ -125,11 +132,12 @@ new design's guards assume they are fixed.
 - [x] **Local Docker stack** — DMS + Mongo + Redis, all paid upstreams pointed at `.invalid`.
 
 ### Dev ergonomics
-- [x] **Demo customer** on `/portal/login` (`portal-test@anutech.invalid`), with a link to the
-      local inbox where the emailed code lands. Verified: RPC true → OTP 200 → mail delivered.
-- [x] **Pointer to it** from the staff panel on `/login` — a link, not an autofill row, because
-      a customer credential cannot authenticate against `signInWithPassword`.
-- [x] **One shared `DevDemoPanel`** so the two panels cannot drift apart again.
+- [x] **One shared `DevDemoPanel`** so the staff and DMS panels cannot drift apart.
+- [x] **Demo accounts on DMS's `/login`** — admin + customer, dev-only via the
+      `NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS` build arg. They go through the real credentials
+      provider; a wrong password and a disabled account are both still refused.
+- ~~Demo customer on `/portal/login`~~ — **superseded**: the ResellerOS customer portal was
+      deleted on 2026-09-19 (§F). The `/login` row now links straight to DMS's sign-in.
 
 ### Fixed along the way
 - [x] `GOOGLE_CLIENT_ID!.trim()` — the `!` compiles to nothing, so an unset var threw at module
@@ -146,7 +154,22 @@ new design's guards assume they are fixed.
 - [x] Applied those 5 migrations to **local** Supabase, plus a PostgREST schema reload.
 - [x] Commits re-attributed to `Excel Technologies <pawan@exceltechnologies.in>`.
 
-Baseline after the merge: **DMS 6365** tests green · **ResellerOS 6610** green.
+### Front door + UI (2026-09-21)
+- [x] **DMS wears the ResellerOS design** — sign-in shell, admin + customer chrome, and the
+      page interiors converted to the ResellerOS palette. Not uniform yet: see §F.
+- [x] **ResellerOS is DMS's front door** — one build arg, `NEXT_PUBLIC_RESELLEROS_URL`.
+      DMS's `/` 307s to ResellerOS and every brand/home link points there; unset, DMS is
+      standalone and unchanged. Enforced in `middleware.ts` (for the status) and
+      `app/page.tsx` (the guarantee), both reading `lib/reseller-os.ts`.
+      Browser-verified, and red-checked in both places.
+
+### Security (2026-09-21)
+- [x] **Domain renewal required no owner and no payment** — see §A, which has the detail.
+      Ownership gate on GET and POST, real Razorpay verification, replay check, and the
+      `createOrder` call that had been throwing on every run since the initial commit.
+
+Baselines, measured 2026-09-21: **DMS 6,408** tests across 431 files ·
+**ResellerOS 6,609** across 356 files (+1 file / 4 tests skipped). Both typecheck clean.
 
 ---
 
@@ -264,6 +287,18 @@ Consequences accepted with the decision:
       did **not** bring it — that branch is contacts / subscriptions / billing. So the
       port-vs-rewrite decision against the abandoned `anutechbilling` tree (which has all of it
       working) is still open, and it gates any plan to retire DMS's own panels.
+- [ ] **Only DMS's `/` was turned off — the rest of its public site is still live**, and
+      deliberately so. `/hosting`, `/domains/*`, `/cart` and `/checkout` are the **only
+      working purchase funnel for hosting and domains**; ResellerOS has no UI for either yet
+      (see the entry below), so switching them off would leave no way to sell. `/privacy`,
+      `/terms-and-conditions`, `/cancellation-refund` and `/contact` stay because Razorpay
+      requires publicly reachable policy pages for a merchant account — turning those off is
+      a payments-account risk, not a cosmetic one. Decide these together with the
+      port-vs-rewrite question below, not before it.
+- [ ] **DMS's public nav still links "Home" to DMS's `/`**, which now redirects — so it costs
+      a hop rather than being wrong. Left alone because that link carries `isActive('/')`
+      styling and rewiring it means swapping `<Link>` for `<a>`. Worth doing if the marketing
+      pages are kept long-term.
 - [ ] **The DMS palette conversion was narrower than I reported.** I said "~2,900 legacy classes
       → 7". The 7 was real but measured only over `app/admin`; `app/dashboard` is genuinely 0.
       The conversion ran over the panel *page* directories and `components/admin` (53 left) /

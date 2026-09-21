@@ -24,6 +24,23 @@ customers. Prefer being slow and right.
 - Migrations: `production/supabase/migrations/`
 - SQL regression tests: `production/supabase/tests/` (not in CI — run by hand)
 
+**Hosting and domains are NOT in this repo.** They live in DMS
+(`C:/xampp/htdocs/Domain-Management-Project`, `exceltechnologies-india/domain-management-system`) —
+Next.js 15 + MongoDB + Redis, with its own admin panel and its own customer panel. The two
+apps are **federated, not merged**: DMS keeps its own database and its own UI, and
+ResellerOS reaches it over a read-only HTTP API plus a signed SSO hand-off
+(`src/lib/dms-engine/`). Two consequences an agent gets wrong otherwise:
+
+- **ResellerOS has no customer portal, deliberately.** `(public)/portal`, `api/portal` and
+  `lib/portal` were deleted on 2026-09-19; DMS owns the customer experience and staff reach
+  it from the demo panel on `/login`. Do not rebuild one without being asked. The `portal_*`
+  DB functions and their SQL tests were left in place on purpose, so their presence is not
+  evidence the feature exists.
+- **ResellerOS is the front door.** With `NEXT_PUBLIC_RESELLEROS_URL` set on DMS, DMS's `/`
+  redirects here and it serves no marketing homepage of its own.
+
+Open items for the integration are tracked in `Todos.md`, not here.
+
 ---
 
 ## 1. ⚠️ MONEY IS STORED IN WHOLE RUPEES, NOT PAISE
@@ -193,10 +210,18 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **4,371 tests
-passing across 233 files**, typecheck clean, lint clean, `npm run build` exit 0 (measured
-24 Aug 2026 — this line said 3,404/182 until then, and 1,492 before that, which is §12
-happening to this very file twice). If your change drops that, it is not done.
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,609 tests
+passing across 356 files** (plus 1 file / 4 tests skipped), typecheck clean (measured
+21 Sep 2026 — this line said 4,371/233 until then, 3,404/182 before that, and 1,492 before
+that, which is §12 happening to this very file three times). Lint and `npm run build` were
+NOT re-measured on that date — the previous line claimed both, and repeating an unverified
+claim is how this number went wrong three times. If your change drops the test count, it is
+not done.
+
+DMS has its own, separate gate — `npx vitest run` in
+`C:/xampp/htdocs/Domain-Management-Project`, currently **6,408 tests across 431 files**,
+typecheck clean (21 Sep 2026). A change that spans both repos has to be green in both, and
+neither suite knows about the other.
 
 - CI runs on **pull requests** and on pushes to `main`. It does **not** run on feature
   branches — on a long-lived branch the local gate is the only gate. This is exactly how
@@ -218,14 +243,23 @@ happening to this very file twice). If your change drops that, it is not done.
 
 On 14 Aug both agents worked in the same folder on the same branch. One commit stripped
 140 lines from files the other was mid-edit on, because to the second agent that
-half-finished work looked like broken code. Setup now:
+half-finished work looked like broken code. The fix was two git worktrees under `C:/dev/`,
+one per agent.
 
-| | Claude Code | Antigravity |
-|---|---|---|
-| Folder | `C:/dev/ResellerOSv3 - Copy` | `C:/dev/ResellerOS-antigravity` |
-| Branch | `session/money-spine-hardening-jun1` | `antigravity/work` |
-| Dev server | port 3000 | port 3001 |
-| Commit author | `testing` | `antigravity` |
+**Neither of those folders exists any more**
+(checked 2026-09-21), so the table that used to sit here described a layout nobody was
+working in. What is true today:
+
+| | |
+|---|---|
+| Folder | `C:/xampp/htdocs/anutechbilling-new` |
+| Branch | `pawan-api-system` |
+| Dev server | port 4320 (`npm run dev -- -p 4320`) — DMS holds 4310 |
+| Commit author | `Excel Technologies <pawan@exceltechnologies.in>` |
+
+If a second agent starts working here again, give it its own worktree and its own port
+before it writes anything, and re-read the rules below — they are what the 14 Aug incident
+cost, and they do not depend on which folders are in use:
 
 Rules:
 
