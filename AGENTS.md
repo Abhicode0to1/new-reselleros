@@ -219,9 +219,13 @@ claim is how this number went wrong three times. If your change drops the test c
 not done.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, currently **6,408 tests across 431 files**,
+`C:/xampp/htdocs/Domain-Management-Project`, currently **6,451 tests across 432 files**,
 typecheck clean (21 Sep 2026). A change that spans both repos has to be green in both, and
 neither suite knows about the other.
+
+**A targeted run is not the gate.** One function there had coverage in two test files;
+the targeted run was green while the full suite caught the second one. Run the whole suite
+before calling anything done.
 
 - CI runs on **pull requests** and on pushes to `main`. It does **not** run on feature
   branches — on a long-lived branch the local gate is the only gate. This is exactly how

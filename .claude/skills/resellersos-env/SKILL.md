@@ -1,6 +1,6 @@
 ---
 name: resellersos-env
-description: How to actually reach this project's database, deploy, and prove a change on THIS machine — the access paths that work, the ones that look like they work and do not, and the commands that have silently lied here before. Load this before running any Supabase command (`supabase db query`, `db push`, `migration repair`), before running a build or dev server, before deploying to Cloud Run, and before concluding "there is no data" or "I have no DB access" from a failed call. Not about code patterns — for multi-tenant/pricing/RLS conventions read production/CLAUDE.md, which loads on its own.
+description: How to actually reach this project's database, deploy, and prove a change on THIS machine — the access paths that work, the ones that look like they work and do not, and the commands that have silently lied here before. Load this before running any Supabase command (`supabase db query`, `db push`, `migration repair`), before running a build or dev server, before deploying to Cloud Run, and before concluding "there is no data" or "I have no DB access" from a failed call. Also covers the OTHER half of this stack — DMS, the hosting/domain app in a separate repo, which serves the local site on 4310 and whose `/` redirects here, so read this before concluding DMS is broken or that hosting/domain code lives in this repo. Not about code patterns — for multi-tenant/pricing/RLS conventions read production/CLAUDE.md, which loads on its own.
 ---
 
 # ResellerOS — working environment
@@ -11,6 +11,40 @@ already got it wrong once. Full write-up: [docs/WORKING-ENVIRONMENT.md](../../..
 **This file is about ACCESS, not about code.** Multi-tenant rules, the 2-tier pricing model,
 commitments, RLS conventions, Indian-market formatting → `production/CLAUDE.md` (42KB, loads
 automatically). Do not duplicate them here; a second copy is a second thing to go stale.
+
+---
+
+## 0. The stack has TWO halves — the other one is a different repo
+
+Hosting and domains are not in this repo. They live in **DMS**
+(`C:/xampp/htdocs/Domain-Management-Project`) — Next.js 15 + MongoDB + Redis, with its own
+admin panel, its own customer panel and **its own test suite**. The two are federated:
+ResellerOS reads DMS over an HTTP API and hands users over with a signed SSO token.
+
+| | where | how |
+|---|---|---|
+| ResellerOS | `localhost:4320` | `npm run dev -- -p 4320` in `production/` |
+| DMS | `localhost:4310` | `docker compose up -d --build` in the DMS repo |
+| Supabase | 14321 / 14322 | ResellerOS only |
+| Local inbox | 14324 | ResellerOS only |
+
+Three things that will otherwise cost a session:
+
+- **ResellerOS is DMS's front door.** With `NEXT_PUBLIC_RESELLEROS_URL` set (it is, as a
+  docker-compose build arg), DMS's `/` 307s to `localhost:4320`, as do `/privacy`,
+  `/terms-and-conditions`, `/cancellation-refund`, `/contact` and `/about` for non-admins.
+  **So if ResellerOS is not running, DMS looks like a dead site.** That is the redirect
+  working, not a fault — start ResellerOS before concluding anything about DMS.
+- **`NEXT_PUBLIC_*` in DMS is a BUILD arg, not runtime.** Changing one needs
+  `docker compose up -d --build`; setting it on the running container does nothing. It is
+  declared in both Dockerfile stages, because the builder copy feeds the client bundle and
+  the runner copy feeds the server components.
+- **DMS has a separate gate.** `npx vitest run` + `npx tsc --noEmit` in the DMS repo. A
+  change spanning both repos must be green in both, and neither suite knows about the
+  other. A targeted run is not the gate there — one function had coverage in two test
+  files and only the full suite caught the second.
+
+Open items for the integration live in `Todos.md` at this repo's root, not here.
 
 ---
 
