@@ -233,10 +233,26 @@ Phases are ordered so each guard ships **before** the capability it guards.
       decision no longer needs it — it reads the transport — so it is only worth adding
       when a caller has to branch on WHY a DA call failed rather than whether to retry.
 
-- [ ] **Phase 2** — idempotency store and subject mutex, with no route reachable yet.
-      `EngineCommand` + `EngineSubjectClaim` (unique on `{command, subject}`, **not** on
-      `commandId` — a request-keyed index does not stop two legitimate commands registering the
-      same name).
+- [x] **Phase 2** — idempotency store and subject mutex. **DONE 2026-09-21.**
+      `EngineCommand` (unique `commandId` — "have I been asked this exact thing?") and
+      `EngineSubjectClaim` (unique `{command, subject}` — "is something already happening
+      to this thing?"), plus `lib/services/engine-commands.ts`. Nothing under `app/`
+      imports any of it; verified, since that is half the phase.
+      The distinction was demonstrated against the real database, not asserted: two
+      `domain.register` claims on one domain → second blocked (11000); `dns.edit` on the
+      same domain → acquired; delete by a non-holder → 0; and **the same claim keyed on
+      `commandId` instead → both allowed, collision invisible** — the design this phase
+      exists to avoid, run as an experiment.
+      **The expensive line:** `needs_reconciliation` does NOT release the claim. It means
+      the provider came back `sent_unknown` (Phase 1), so the work may have happened, and
+      freeing the subject would let the next attempt register the same domain twice.
+      `releaseAfterReconciliation` is separate on purpose — the code that could not tell
+      what happened must not also be the code that frees the lock. Red-checked.
+      Two things a future reader should not "tidy": the claim TTL is a safety net rather
+      than the release path (if it is doing the releasing, something died holding a lock),
+      and there is deliberately no TTL on `EngineCommand` — an expired row would let the
+      same commandId spend again.
+
 - [ ] **Phase 3** — the operator's screen, and a DB-level guard making `payment_mode` unwritable
       by a tenant member, so the test-mode gate is genuinely independent layers.
 - [ ] **Phase 4** — every route and the whole caller path exercised with `mode: "live"` hard
