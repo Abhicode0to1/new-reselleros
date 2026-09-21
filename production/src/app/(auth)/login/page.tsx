@@ -157,9 +157,15 @@ function LoginPageInner() {
             DMS_LOGIN_URL
               ? [
                   {
+                    /* Deliberately NOT `external: true`. That flag opens a new tab and
+                       appends the ↗ arrow together — the component couples them because
+                       the arrow is a promise about what the click does. Signing in to
+                       hosting and domains is the task, not a side trip, so it navigates
+                       in place; a second tab left the half-finished ResellerOS login
+                       sitting behind it. Re-adding the flag has to mean re-adding the
+                       new tab, not just the arrow. */
                     label: "Hosting & domains sign-in",
                     href: DMS_LOGIN_URL,
-                    external: true,
                     note: (
                       <>
                         Opens the DMS sign-in directly. It is a separate account from this
