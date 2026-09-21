@@ -270,8 +270,25 @@ Phases are ordered so each guard ships **before** the capability it guards.
       settled, but nobody could have known that either.
       ⚠️ **Applied to LOCAL Supabase only.** Production needs the migration run.
 
-- [ ] **Phase 4** — every route and the whole caller path exercised with `mode: "live"` hard
-      disabled. `mode` is a required enum with no default.
+- [x] **Phase 4** — the command route, live hard-disabled. **DONE 2026-09-21.**
+      `POST /api/integrations/engine/commands` + `lib/integrations/engine-mode.ts` and
+      `engine-command-registry.ts`. The whole caller path runs; nothing in it can spend.
+      `mode` is required with NO default — defaulting to live lets a forgotten field spend
+      real money, defaulting to test silently answers for the caller and changes every one
+      of them the day it flips. `live` is refused in CODE (`LIVE_COMMANDS_ENABLED = false`),
+      not by config: a flag would make "is live on?" a question about a running system.
+      **503, not 403** — the caller's key is fine, so a 403 sends someone to rotate a good
+      credential. Known-but-unimplemented is 501, unknown is 400.
+      Exercised against the running engine, not only unit-tested: read key → 401, missing
+      mode → 400, live → 503, unknown → 400, `domain.register` → 501, selftest → 200, the
+      **same commandId with a CHANGED payload returned the ORIGINAL result** (a replay, not
+      a re-run), and a claimed subject → 409 without freeing the existing claim. Afterwards:
+      one command row, zero claims, and the indexes Mongoose built are the designed ones.
+      Found while wiring it: `BILLING_COMMAND_API_KEY` was declared EMPTY in `.env.docker`,
+      so the route was unreachable — fail-closed working as designed. Given a local dev
+      value; production still has no value, which is correct until Phase 9.
+      Red-checked by flipping `LIVE_COMMANDS_ENABLED` to true: four tests fail, all about money.
+
 - [ ] **Phase 5** — recovery before the thing that needs recovering: command read endpoint,
       read-and-settle reconciliation, operator resolve/requeue actions.
 - [ ] **Phase 6** — first real commands, free and reversible: DNS records, hosting
