@@ -253,8 +253,23 @@ Phases are ordered so each guard ships **before** the capability it guards.
       and there is deliberately no TTL on `EngineCommand` — an expired row would let the
       same commandId spend again.
 
-- [ ] **Phase 3** — the operator's screen, and a DB-level guard making `payment_mode` unwritable
-      by a tenant member, so the test-mode gate is genuinely independent layers.
+- [x] **Phase 3** — operator's screen + DB guard on the provisioning facts. **DONE 2026-09-21.**
+      Migration `20260921100000_provisioning_facts_are_immutable.sql` + a BEFORE UPDATE
+      trigger, plus `/provisioning` and `GET /api/provisioning/queue`.
+      **The hole:** `provisioning_requests_update` checked only `tenant_id`, so a tenant
+      member could edit every column — including the two `listReadyHostingRequests` reads
+      (`payment_mode = 'live'`, `blocker is null`). A `test` row settles ZERO rupees and
+      looks identical to a real one, so flipping it meant real hosting provisioned free.
+      **Wider than payment_mode on purpose:** `blocker` is the other half of the same WHERE
+      clause; `seats`/`amount_paid`/`vendor`/`quote_id` are the record of what was paid for.
+      `status`/`activated_at`/`vendor_ref`/`note` stay writable — that is the whole
+      complete-a-request workflow. It enumerates the FORBIDDEN columns, so a column added
+      later is locked by omission rather than writable by omission.
+      **The screen found a real row on its first run** — a hosting activation queued 7 days
+      earlier, invisible because nothing had ever opened this table. Test-mode, so no money
+      settled, but nobody could have known that either.
+      ⚠️ **Applied to LOCAL Supabase only.** Production needs the migration run.
+
 - [ ] **Phase 4** — every route and the whole caller path exercised with `mode: "live"` hard
       disabled. `mode` is a required enum with no default.
 - [ ] **Phase 5** — recovery before the thing that needs recovering: command read endpoint,
