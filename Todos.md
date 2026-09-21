@@ -215,12 +215,24 @@ Phases are ordered so each guard ships **before** the capability it guards.
       decisions (renewal pricing; where a user's domain list is canonically read from).
       **Caveat: migration 008 is applied LOCALLY only.** Phase 0 is not truly closed on
       production until it runs there.
-- [ ] **Phase 1** — make failure legible. Add a structural `transport` flag to the ResellerClub
-      register/renew response and a `code` discriminator to `DirectAdminError`. Today a
-      param-build throw and a post-POST socket reset produce the *identical* string, so no
-      message-matching can separate "nothing was sent" from "it may have landed". Stop
-      `DirectAdminService.createUser` blind-retrying a non-idempotent create (it defaults to
-      `maxRetries: 2`).
+- [x] **Phase 1** — make failure legible. **DONE 2026-09-21.**
+      `lib/integrations/transport.ts` records not_sent / sent_unknown / responded at the
+      only place that knows — the function doing the sending — and `isSafeToRetry` is true
+      for exactly one of them. Wired into registerDomain and renewDomain; the failure
+      message now leads with what we know about delivery.
+      **The load-bearing call:** ECONNRESET and ETIMEDOUT are NOT safe. A reset can arrive
+      after the bytes were acted on, a timeout only means we stopped waiting. Only
+      ENOTFOUND / ECONNREFUSED / EAI_AGAIN prove nothing was sent; anything unrecognised
+      falls to sent_unknown.
+      DirectAdmin's `executeRequest` retried on `!status || status >= 500` — and `!status`
+      lumped a refused connection together with a reset after send, so `createUser` (the
+      default maxRetries: 2) would fire again and create a second account. Now it retries
+      on >= 500 or a proven not-sent, which fixed all 21 callers without touching a call
+      site. Red-checked: restoring `!status` fails exactly the five possibly-landed cases.
+      **Not done here:** the `code` discriminator on `DirectAdminError` itself. The retry
+      decision no longer needs it — it reads the transport — so it is only worth adding
+      when a caller has to branch on WHY a DA call failed rather than whether to retry.
+
 - [ ] **Phase 2** — idempotency store and subject mutex, with no route reachable yet.
       `EngineCommand` + `EngineSubjectClaim` (unique on `{command, subject}`, **not** on
       `commandId` — a request-keyed index does not stop two legitimate commands registering the
