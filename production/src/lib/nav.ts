@@ -253,6 +253,7 @@ export const APP_NAV: NavSection[] = [
     items: [
       { id: "items",     href: "/items",           label: "Catalog & Products", icon: "package", roles: ["owner", "manager"] },
       { id: "hosting-domains", href: "/hosting-domains", label: "Hosting & Domains", icon: "globe", roles: ["owner", "manager", "support"], hint: "Status of the DMS engine, and the way into its admin panel." },
+      { id: "provisioning", href: "/provisioning", label: "Activation Queue", icon: "package", roles: ["owner", "manager", "support", "delivery"], hint: "Seats a customer has paid for that nobody has turned on yet." },
       { id: "documents", href: "/documents",       label: "Company Documents",  icon: "file",    roles: ["owner", "manager"] },
       { id: "support",   href: "/support",         label: "Support Desk",        icon: "ticket" },
       { id: "whatsapp",  href: "/whatsapp",        label: "WhatsApp Inbox",      icon: "whatsapp" },
@@ -386,6 +387,7 @@ export const CUSTOMER_NAV: NavSection[] = [
 export const SCREEN_TITLES: Record<string, string[]> = {
   "/dashboard":       ["Home", "Dashboard"],
   "/hosting-domains": ["Operations", "Hosting & Domains"],
+  "/provisioning": ["Operations", "Activation Queue"],
   "/leads":           ["Sales", "Leads"],
   "/my-expenses":     ["Me", "Advances & Expenses"],
   "/automation":      ["Admin", "Automation"],

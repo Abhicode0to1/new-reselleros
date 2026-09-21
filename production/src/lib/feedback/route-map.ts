@@ -124,6 +124,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/project-quote/[id]", file: "src/app/(public)/project-quote/[id]/page.tsx" },
   { route: "/projects", file: "src/app/(app)/projects/page.tsx" },
   { route: "/projects/[id]", file: "src/app/(app)/projects/[id]/page.tsx" },
+  { route: "/provisioning", file: "src/app/(app)/provisioning/page.tsx" },
   { route: "/purchase-orders", file: "src/app/(app)/purchase-orders/page.tsx" },
   { route: "/purchases/inbox", file: "src/app/(app)/purchases/inbox/page.tsx" },
   { route: "/quote/[id]/accept", file: "src/app/(public)/quote/[id]/accept/page.tsx" },
