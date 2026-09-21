@@ -219,8 +219,9 @@ claim is how this number went wrong three times. If your change drops the test c
 not done.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, currently **6,451 tests across 432 files**,
-typecheck clean (21 Sep 2026). A change that spans both repos has to be green in both, and
+`C:/xampp/htdocs/Domain-Management-Project`, currently **6,724 tests across 447 files**,
+typecheck clean (re-measured 21 Sep 2026; this line said 6,451/432 earlier the same day).
+Lint and build were NOT re-measured, and are not claimed here. A change that spans both repos has to be green in both, and
 neither suite knows about the other.
 
 **A targeted run is not the gate.** One function there had coverage in two test files;

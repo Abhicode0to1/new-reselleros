@@ -353,7 +353,54 @@ Phases are ordered so each guard ships **before** the capability it guards.
       **Verified how:** test-verified and reasoned-only. **No call has been made to
       DirectAdmin or ResellerClub** — live is still hard-disabled at 503 from Phase 4, so the
       provider response shapes are read from this repo's existing wrappers, not observed.
-- [ ] **Phase 7** — hosting provision and plan change (reversible spend).
+- [x] **Phase 7** — plan change (reversible spend). **PARTIAL, 2026-09-21.** `change_plan`
+      is built; **`hosting.provision` is NOT, and that is the finding** — see below.
+      `lib/integrations/engine-handlers-plan.ts`, registered in both maps.
+      **The plan comes from the catalogue, not the caller.** The payload names a `planId` and
+      the DirectAdmin package is read from that plan's row. A caller-supplied package name
+      would be a second source for something the catalogue owns — the L104/L106 family, where
+      a copied figure went wrong and the guard checking it had been fed the same copy. A test
+      sends `newPackage: "Ultimate"` in the payload and asserts DirectAdmin is still told
+      `"Plus"`.
+      **Both halves are the effect.** DMS stores the plan on the `Hosting` row (`planId`,
+      `name`, `serverPackage`) and its own upgrade path writes all three after the DA call. A
+      command that changed only DirectAdmin would leave the customer panel showing the old
+      plan with no error anywhere, so the record is written too — and the reconciler returns
+      `done` only when BOTH agree. Checking DA alone would settle a half-done command.
+      **Ambiguity is refused before DirectAdmin is touched.** `Hosting` is unique on
+      `(userId, domainName)`, **not** on the DA username, so one account can own several rows.
+      Two matches, or none, is a refusal with the domains listed — picking one would be a guess
+      about whose plan changed.
+      Case is compared insensitively, because `changePackage` normalises what it sends and an
+      exact compare would report a successful change as `not_done`. An inactive plan is
+      allowed and flagged rather than refused (L103: a guard that fires on a right answer gets
+      deleted; a downgrade to a retired tier is legitimate).
+
+- [ ] **`hosting.provision` — blocked, and not on effort.** DMS's `createUser` mints the
+      username itself and sets `passwd: Math.random().toString(36).slice(-10) + 'A1!'`, which
+      it never stores and never returns. That is deliberate: the comment beside it says "user
+      will use SSO", and DMS customers reach DirectAdmin by passwordless SSO from the DMS
+      portal. So an engine-provisioned account for somebody with **no DMS portal user has no
+      way in at all**, and provisioning reports success. The decision needed is not "which
+      password" — it is whether an engine-provisioned account gets a portal user, and who owns
+      the username. Supersedes the "hosting password" item in §D.
+
+- [x] **Transport was never wired to the route — found while building Phase 7, fixed.**
+      Phase 4's catch recorded `transport: "not_sent"` unconditionally, with a comment saying
+      "no handler here contacts anything yet". True when written; **Phase 6 made it false** and
+      nothing forced the comment to change. So a DNS write that died mid-flight was recorded as
+      never sent, its subject claim was released, and the caller was told "Nothing was changed"
+      about a request ResellerClub may have applied — the exact failure `classifyTransport` was
+      built for in Phase 1, arriving through the one door nobody had wired it to.
+      `lib/integrations/engine-attempt.ts` brands a thrown error with how far it got, and the
+      route reads it: `sent_unknown` → `needs_reconciliation`, which HOLDS the claim.
+      **Three outcomes, not two.** A provider that ANSWERS "no" is `responded`, not
+      `sent_unknown` — collapsing them would park a subject for a human with nothing to decide,
+      and that is how a guard becomes a nuisance and gets deleted.
+      Reads are deliberately not wrapped: a read that fails changed nothing.
+      `engine-transport-wiring.test.ts` is a SOURCE SCAN, because every existing engine test
+      asks whether a decision is right and this was wiring (L85). It asserts the route reads
+      the brand and that every provider write in a handler is wrapped.
 - [ ] **Phase 8** — domain renew (first unrecoverable rupee, on a domain we already own).
 - [ ] **Phase 9** — domain register, last, behind two fail-closed env gates and a per-row human
       release.
@@ -387,8 +434,11 @@ Phases are ordered so each guard ships **before** the capability it guards.
       a private helper inside DMS's payment pipeline.
 - [ ] **Which side owns DirectAdmin?** Keeping both writers means two username derivations and
       two definitions of `vendor_ref`. Blocks Phase 7.
-- [ ] **The hosting password.** DMS's `createUser` generates a throwaway and never returns it;
-      ResellerOS generates its own and emails it. After retirement the failure mode is silent.
+- [x] **The hosting password — measured, and it is not a password question.** DMS's
+      `createUser` sets a `Math.random()` throwaway it never returns *on purpose*: its comment
+      says "user will use SSO" and DMS customers reach DirectAdmin by passwordless SSO from the
+      DMS portal. So the real question is whether an engine-provisioned account gets a DMS
+      portal user — without one there is no way in at all. Still blocks `hosting.provision`.
 - [ ] **Make `ENGINE_COMMANDS_ENABLED` per-command** (`dns.record,hosting.suspend`) rather than
       one global switch — four phases want live traffic while register stays dark.
 - [ ] **Run `getIndexes()` against the real databases** before the `Domain.orderId` fix and the
