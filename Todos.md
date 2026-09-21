@@ -289,8 +289,32 @@ Phases are ordered so each guard ships **before** the capability it guards.
       value; production still has no value, which is correct until Phase 9.
       Red-checked by flipping `LIVE_COMMANDS_ENABLED` to true: four tests fail, all about money.
 
-- [ ] **Phase 5** — recovery before the thing that needs recovering: command read endpoint,
-      read-and-settle reconciliation, operator resolve/requeue actions.
+- [x] **Phase 5** — recovery, built before the things that need it. **DONE 2026-09-21.**
+      `GET /api/integrations/engine/commands/:commandId` (read endpoint),
+      `lib/integrations/engine-reconcile.ts` (read-and-settle), and
+      `POST /api/admin/engine-commands` (operator settle / resolve / requeue).
+      **The read endpoint is on the READ key, not the command key** — otherwise anything
+      that polls a command's status holds the key that can register domains, and polling is
+      the most widely deployed part of any integration.
+      **A reconciler reads and never writes.** The command it is settling may already have
+      taken effect, so a write risks being the second one — recovery would become the most
+      dangerous operation in the system. `unknown` never settles: guessing "not_done" re-runs
+      work that may have happened, guessing "done" leaves a customer who paid for nothing
+      with nobody looking. A throwing reconciler is `unknown` too.
+      **The reconciler registry is EMPTY on purpose** — one written against an API nobody
+      calls is a guess about a response shape, and a wrong guess settles commands incorrectly
+      while looking authoritative. Each arrives with its command in Phase 6+.
+      **Operator actions are admin-only and NOT on the engine contract.** ResellerOS cannot
+      know whether the work happened — it is the side that asked and got no answer. `who` and
+      `why` are required: a row saying a claim was freed without either is worse than none.
+      **Requeue does not retry** — it frees the subject and stops.
+      Exercised end to end on a planted stuck command: read → safeToRetry:false; unknown id →
+      404 "safe to send again"; settle with no reconciler → claim STAYS held; resolve without
+      evidence → 400; with evidence → claim released; resolve again → 409; requeue → released
+      with "send a NEW commandId". Both engine collections left empty.
+      Noted from the run: a new command on a locked subject returns **501, not 409** — the
+      handler gate runs before the mutex. Gate order, not a bug.
+
 - [ ] **Phase 6** — first real commands, free and reversible: DNS records, hosting
       suspend/unsuspend.
 - [ ] **Phase 7** — hosting provision and plan change (reversible spend).
