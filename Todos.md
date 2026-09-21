@@ -22,19 +22,60 @@ These were found while designing the write commands. None of them are caused by 
 integration work; all of them are reachable in DMS as it stands. They come first because the
 new design's guards assume they are fixed.
 
-- [ ] **Any logged-in customer can spend money on renewals** — `app/api/domains/renew/route.ts`
-      **[verified]**
-      The POST handler authenticates (`AuthService.getUserFromRequest`) and then calls
-      `rcRenewDomain({ domainName, years })` with `domainName` taken straight from the request
-      body. There is **no ownership check** between the two, so any authenticated customer can
-      renew any domain at our expense. `paymentId` also comes from the body and is never
-      verified against Razorpay — and `components/DomainRenewalModal.tsx:76` mints one
-      client-side under the comment *"Create a mock payment ID for testing"*. The handler then
-      books an order with `status: "completed"`.
-      Fix: bind the domain to the caller (`Domain.findOne({ domainName, userId, deletedAt: null })`),
-      require a verified payment the way `/api/payments/verify` does, add idempotency. Its
-      `hard_failure` branch also returns HTTP 500 — the status callers retry — on exactly the
-      transport-ambiguous cases.
+- [x] **Any logged-in customer can spend money on renewals** — `app/api/domains/renew/route.ts`
+      **[verified]** — **FIXED 2026-09-21** (DMS `pawan-api-system`)
+      The POST handler authenticated and then called `rcRenewDomain({ domainName, years })`
+      with `domainName` straight from the body — no ownership check — and took an unverified
+      `paymentId`, which `components/DomainRenewalModal.tsx:76` minted client-side under the
+      comment *"Create a mock payment ID for testing"*. So no payment was ever taken.
+
+      **It was worse than recorded here.** `razorpayOrderId`/`razorpayPaymentId` are
+      `required: true` on the Order schema (since the initial commit) and the route never
+      passed them, so `createOrder` threw a ValidationError into the catch on **every** run —
+      *after* `rcRenewDomain` had already charged the registrar. Proved by `validateSync()`
+      against the real schema, not inferred. Live behaviour was therefore: the domain really
+      renewed, the reseller really paid, no row was written, and the customer saw
+      "Failed to renew domain" — so a second click spent it again.
+
+      **The fix recorded here was also wrong**: it proposed
+      `Domain.findOne({ domainName, userId })`. No route in DMS does ownership that way; the
+      repo-wide idiom is `findOrderByDomainForUser` + `findOrderDomain` against `Order`
+      (`lib/services/orders.ts:1183`), used by domains/dns, domains/verify-status and others.
+      That is what was built. Shipped: ownership gate on GET **and** POST; Razorpay ids
+      replacing the free-text `paymentId`, run through the canonical `verifyRazorpayPayment`;
+      a replay check on `getOrderByRazorpayPaymentId`; both required ids now passed to
+      `createOrder`. All four gates red-checked by removing them one at a time.
+
+      Still open, deliberately: the `hard_failure` branch returns HTTP 500 — the status
+      callers retry — on transport-ambiguous cases. Not touched, because a retry on this
+      route is exactly the L3 shape (a second run is not idempotent) and it needs its own
+      thinking.
+
+- [ ] **Domain renewal has no checkout, so the Renew button cannot work** —
+      `app/api/domains/renew/route.ts`, `components/DomainRenewalModal.tsx` **[verified]**
+      Consequence of the fix above, and the reason it is safe: the route now demands a
+      verified payment, and **nothing in the app can produce one for a domain renewal.**
+      There is no retail renewal price anywhere in DMS — `renewalPrice` is a `HostingPlan`
+      field, and `getRenewalPricing` returns the *registrar's cost*, not what a customer pays.
+      Inventing a markup would put a made-up figure on a real charge, so it was not invented.
+      The modal now says renewal is not self-service yet and routes to `/dashboard/support`.
+      To finish it: decide the markup, then mirror `app/api/user/hosting/renew/route.ts` —
+      server-price it, `RazorpayService.createOrder`, persist a pending Order, and let
+      `/api/payments/verify` drive the registrar call. **Needs an operator pricing decision
+      first.**
+
+- [ ] **`appendUserDomain` writes nothing at all** — `lib/services/users.ts:466`,
+      `models/User.ts` **[verified]**
+      It does `$push: { domains: … }` on `User`, and `models/User.ts` declares no `domains`
+      path — Mongoose strict mode (on by default; the options block sets no `strict:false`)
+      silently drops it. `models/User.ts:93` and `:416` already document this exact hazard for
+      other fields. Two callers: the renew and transfer routes.
+      The real gap behind it: **nothing updates `expiresAt` on the user's existing order after
+      a renewal**, so a renewed domain keeps showing its old expiry. Needs a decision about
+      where a user's domain list is canonically read from (`Order.domains[]` vs the `Domain`
+      collection — both exist, and `lib/services/domains.ts` is used by neither ownership gate)
+      before either is worth fixing. Left in place with a comment rather than deleted, so the
+      symptom does not get tidied away while the gap stays.
 
 - [ ] **A paid, registered domain can vanish from the database** — `models/Domain.ts:81-85`,
       `lib/services/payment/provisioner.ts:150`, `provisioner-domain.ts` **[verified]**
@@ -223,6 +264,16 @@ Consequences accepted with the decision:
       did **not** bring it — that branch is contacts / subscriptions / billing. So the
       port-vs-rewrite decision against the abandoned `anutechbilling` tree (which has all of it
       working) is still open, and it gates any plan to retire DMS's own panels.
+- [ ] **The DMS palette conversion was narrower than I reported.** I said "~2,900 legacy classes
+      → 7". The 7 was real but measured only over `app/admin`; `app/dashboard` is genuinely 0.
+      The conversion ran over the panel *page* directories and `components/admin` (53 left) /
+      `components/user` (16 left), and never covered `components/` root — where shared
+      components rendered *inside* the panels live. Measured 2026-09-21 across
+      `app/` + `components/` .tsx: **1,302 legacy `bg-/text-/border-gray-*` and `bg-blue-*`
+      instances remain.** Much of that is the public marketing site and checkout, which were
+      never in scope — but `components/DomainRenewalModal.tsx` (30 instances) renders inside
+      the customer panel at `/dashboard/domains`, so the panels are not uniformly converted.
+      Worth a pass keyed on *what the panels render*, not on directory names.
 - [ ] **The local stack's safety is configuration, not isolation.** The DMS container has working
       internet and resolves ResellerClub's real host fine; only the `.invalid` values in
       `.env.docker` stop it reaching them. Once write commands exist, add a code-level gate so a
