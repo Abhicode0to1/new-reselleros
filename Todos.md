@@ -128,41 +128,52 @@ live is still hard-disabled in code):
       Scheduler command as a *recommendation*, which is not evidence a job exists. If nothing
       runs it, the visibility added today is also theoretical (AGENTS.md L1).
 
-- [ ] **⚠️ FIVE OF SIX DMS CRONS HAVE NO SETUP SCRIPT — verify before trusting any of them.**
-      Measured 2026-09-23 from the repo; **not yet confirmed against GCP**, because gcloud is
-      not installed on this machine (no binary, no config dir).
-      `scripts/` contains `setup-cloud-scheduler-billing.sh` and `-tokens.sh`, and between them
-      they create a job for exactly one route: **`renewal-payment-dunning`**. No script creates
-      one for `check-hosting-expiry`, `check-unprovisioned`, `da-health`, **`daily-scheduler`**
-      or **`pending-sweeper`**. `deploy-cloud-run.sh` creates no scheduler jobs at all (0 hits).
-      **`daily-scheduler` is the one that matters.** It is the renewal reminder engine — the
-      thing that reads `next_action_at` and sends the ladder. If no job invokes it, then
-      everything found today about missing expiries is downstream of a bigger problem: the
-      reminders would not go out even for a domain whose data is perfect.
-      **"Deployed" is not "invoked".** `docs/AUDIT-TECHNICAL.md` marks both crons ✅ live with a
-      Cloud Run revision (`dms-00127-bmb`, `dms-00128-xht`) — that is the CODE being live, not a
-      Scheduler job calling it. AGENTS.md L41 is this exact shape: a doc describing a protection
-      is not the protection.
-      **Absence of a script is not proof of absence of a job** — somebody may have created them
-      by hand in the console. That is why this is recorded as "verify", not as a defect.
-      To settle it (Cloud Shell needs no local install — project `speedy-unison-453807-e9`,
-      Cloud Run service `dms` in `europe-west1`, and the one known Scheduler job is in
-      `asia-south1`, so check both locations):
+- [x] **Cron scheduling — CHECKED against GCP 2026-09-23, and my prediction was WRONG.**
+      I predicted `daily-scheduler` and `pending-sweeper` would have no Scheduler job, reasoning
+      from the fact that five of six cron routes have no setup script in `scripts/`. **Both jobs
+      exist, are ENABLED, and ran within the last day.** The setup scripts are an incomplete
+      record of what was created, not a record of what exists — which is the same lesson as
+      L41 pointing the other way: absence of a script proves nothing either.
+      Eight jobs, all ENABLED, all with a recent `lastAttemptTime` (project
+      `speedy-unison-453807-e9`):
 
-      ```
-      gcloud scheduler jobs list --project=speedy-unison-453807-e9 --location=asia-south1
-      gcloud scheduler jobs list --project=speedy-unison-453807-e9 --location=europe-west1
-      ```
+      | Region | Job | Schedule |
+      |---|---|---|
+      | asia-south1 | `tokens-provision-pending` | `*/10 * * * *` |
+      | asia-south1 | `tokens-charge-recurring` | `0 22 * * *` |
+      | europe-west1 | `daily-scheduler` | `0 4 * * *` |
+      | europe-west1 | `check-hosting-expiry` | `0 6 * * *` |
+      | europe-west1 | `check-unprovisioned` | `5,35 * * * *` |
+      | europe-west1 | `pending-sweeper` | `0 3 * * *` |
+      | us-central1 | `daily-expiry-check` | `0 19 * * *` |
+      | us-central1 | `hosting-expiry-check` | `30 19 * * *` |
 
-      And per AGENTS.md L1, a job existing is still not the whole answer — check `lastAttemptTime`
-      and whether anything is told when one fails. A `retryConfig` without `retryCount` means
-      zero retries.
-- [ ] **Phase 9 — `domain.register`.** Blocked on three of §0.1: seller of record, the
-      ResellerClub customer, and the spend control. Not started.
-- [ ] **The two fail-closed env gates and the per-row human release** that Phase 9 carries. The
-      code-level eligibility list is built; the env half is deliberately still absent, because
-      `engine-mode.ts` and its test both warn that a convenience flag would look like those gates
-      and be much weaker.
+      So the visibility added to `pending-sweeper` today IS reachable — it runs at 03:00 IST
+      daily. Good.
+
+- [ ] **⚠️ ZERO RETRIES ON ALL EIGHT DMS CRONS.** `retryConfig.retryCount` is blank on every
+      one. Cloud Scheduler treats unset/0 as **no retry**, so one transient failure loses that
+      run entirely — and with no alerting, nobody is told. This is **AGENTS.md L1 repeating in
+      DMS**: the sibling project lost a night of backups exactly this way and it was found two
+      days later by reading logs.
+      Not a blind `--max-retry-attempts` on all of them, though — L3 applies. Before adding a
+      retry to any of these, ask what the endpoint does when it HALF succeeds. `daily-scheduler`
+      dispatches per-row Cloud Tasks and takes locks; `check-unprovisioned` and `pending-sweeper`
+      are reporters and are the safe ones to retry first.
+
+- [ ] **Two us-central1 jobs are not in this repo's cron list.** `daily-expiry-check` and
+      `hosting-expiry-check` do not match any route under `app/api/cron/` (the nearest is
+      `check-hosting-expiry`, a different name in a different region on a different schedule).
+      Either they target an older deployment — in which case they may have been failing nightly
+      since it went away, silently, because nothing retries or alerts — or they belong to
+      another service entirely. **Get their `httpTarget.uri` before assuming either.**
+
+- [ ] **Timezone inconsistency, unconfirmed.** The europe-west1 jobs are consistent with
+      Asia/Kolkata (`0 4` firing at 22:30Z = 04:00 IST; `0 3` at 21:30Z = 03:00 IST). But
+      `tokens-charge-recurring` is scheduled `0 22` and last fired at **22:00Z**, which is
+      consistent with UTC, i.e. **03:30 IST** rather than the 22:00 IST an author would likely
+      have meant. That job CHARGES CUSTOMER CARDS, so the hour matters — both for support cover
+      and for what a customer sees. Confirm with `timeZone` before treating it as a defect.
 
 ### 0.3 Corrections to this file's own numbers (all re-measured today)
 
