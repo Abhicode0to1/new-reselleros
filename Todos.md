@@ -858,10 +858,35 @@ Consequences accepted with the decision:
       both `lib/reseller-os.test.ts` and `middleware.test.ts` pin that these are untouched,
       so widening the map fails rather than quietly removing the way to sell. Decide this
       together with the port-vs-rewrite question below, not before it.
-- [ ] **DMS's public nav still links "Home" to DMS's `/`**, which now redirects — so it costs
-      a hop rather than being wrong. Left alone because that link carries `isActive('/')`
-      styling and rewiring it means swapping `<Link>` for `<a>`. Worth doing if the marketing
-      pages are kept long-term.
+- [x] **DMS's public nav — DONE 2026-09-23 (DMS `b245baf`), and BOTH reasons this entry gave
+      for leaving it alone were false.** It said the Home link "costs a hop rather than being
+      wrong", left alone because rewiring "means swapping `<Link>` for `<a>`".
+      · **A `<Link>` with an absolute href is fine** — browser-verified: it renders a plain
+        anchor, is not prefetched, and navigates correctly. No swap was needed.
+      · **`isActive('/')` was never the obstacle.** It is `pathname === '/'`, and with a front
+        door DMS never *serves* `/`, so that branch cannot fire there anyway. Left keyed on
+        `'/'` so standalone DMS is untouched.
+      · **And two nav items were BROKEN, not slow.** `/#domain-search` and `/#pricing` redirect
+        to ResellerOS's home, which carries **neither anchor** — the only match in its HTML is
+        the image `/domain-search.jpg`. So the two items whose job is to start a purchase
+        landed at the top of a page with no search and no prices. `homeAnchorHref()` re-points
+        them to `/domains-home` and `/hosting#pricing`, both checked to serve 200, to be
+        outside the redirect map, and to carry the content named.
+      · Kept **inside DMS** deliberately: DMS is still the only side with a checkout, so
+        pointing these at the front door would send a buyer to an app that cannot take money.
+      · Nine `href="/"` links across eight more files got `homeUrl()` for the same reason.
+      **Browser-verified across seven public pages: 3 → 0 CSP violations, 0 cross-origin
+      requests.** The earlier "0 console errors" was measured on `/login` alone and was never a
+      statement about the app — `/cart` was logging three the whole time.
+
+- [ ] **`/hosting` and `/` are set to DRAFT in DMS — worth your decision, not a bug.**
+      Found while checking where to point "Pricing". `settings.page_visibility` reads
+      `{ hosting: 'draft', home: 'draft' }`, updated **2026-07-21** — two months before any of
+      the federation work, so it is your content decision and nothing here changed it. The
+      effect today: DMS's `/hosting` renders a server `redirect('/')`, which arrives inside a
+      200 and is followed client-side, so a visitor ends up on ResellerOS's homepage. That
+      makes "Pricing" correct in code and inert in practice until `/hosting` is published in
+      Admin → Pages. Measured on the LOCAL database only — production was not read.
 - [ ] **The 20 admin pages still wrap themselves in `<AdminLayout>`** (re-counted 23 Sep; this said 25). The shell is now
       mounted once by `app/admin/layout.tsx`, and those wrappers render as passthroughs via
       a context flag rather than being deleted — deliberately, because the flicker had to

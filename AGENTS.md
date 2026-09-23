@@ -218,9 +218,15 @@ which is §12 happening to this very file four times. `npm run build` was NOT ru
 claimed. If your change drops the test count, it is not done.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, currently **6,773 tests across 448 files**,
-typecheck clean (measured 23 Sep 2026 after Phase 8 and the transfer clean-up; 6,748/447 and
-6,724/447 earlier the same day, 6,451/432 on 21 Sep).
+`C:/xampp/htdocs/Domain-Management-Project`, currently **6,845 tests across 452 files**,
+typecheck clean (measured 23 Sep 2026 after the public-page link fixes; 6,773/448 earlier the
+same day after Phase 8 and the transfer clean-up, then 6,748/447 and 6,724/447, and 6,451/432
+on 21 Sep).
+
+That run also reports **16 "Errors"** alongside the passing count. They are unhandled
+rejections inside `tests/unit/lib/directadmin/retry-transport.test.ts`, which itself passes;
+they are not failures and not new. Said here because a reader who meets them for the first
+time will otherwise treat a green suite as red.
 Lint and build were NOT re-measured, and are not claimed here. A change that spans both repos
 has to be green in both, and neither suite knows about the other.
 
