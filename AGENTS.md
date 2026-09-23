@@ -245,14 +245,25 @@ before calling anything done.
   means running them by hand, or it is not verified. (This line said 28 and L7 said 38;
   both were stale — counted 23 Sep 2026.)
 
-  Measured that day against the LOCAL Supabase: **52 pass / 2 fail**. Two things about
+  Measured that day against the LOCAL Supabase: **53 pass / 1 not-applicable**. The one is
+  `sandbox_tenant_isolation`, which measures the REAL sandbox tenant against the REAL live
+  tenant — that IS the question it exists to answer — and now says
+  `NOT APPLICABLE HERE` rather than dying on a foreign key, which read as a broken schema. Two things about
   running them that cost time otherwise. **Prove the detector first** (L23): the folder holds
   two conventions, and the report-style files that end `raise exception 'TESTRESULT >> …'`
   exit **non-zero when they PASS**, so a naive runner reports them as failures. And use
   `psql -v ON_ERROR_STOP=1`, or psql exits 0 with errors on screen. The two still red are
   `offsite_export_service_role_only` (asserts a backup snapshot exists; `backup.snapshots` is
-  empty locally) and `sandbox_tenant_isolation` (assumes production's sandbox tenant exists
-  rather than creating it) — both environment, neither a defect.
+  empty locally) and `sandbox_tenant_isolation` — both environment, neither a defect. Both
+  have since been fixed; the second is production-only by design and now says so.
+
+  **A zero-based assertion needs a precondition that something could have leaked.** Every
+  case-1 assertion in `sandbox_tenant_isolation` is "the tester sees ZERO rows of another
+  tenant", and zero is also what an EMPTY other tenant returns. The file guarded the session
+  being dead and not this — so on 22 Aug 2026, when the live tenant's transactional tables
+  were all cleared (L11), its headline would have passed with nothing to find. It now counts
+  what could leak first, as the connection role, before switching to `authenticated`:
+  afterwards RLS hides the very rows being counted.
 
 **Say which kind of verified**, and never blur them:
 
