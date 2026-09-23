@@ -889,8 +889,22 @@ Consequences accepted with the decision:
         applied in `ActionMenu.tsx`/`Modal.tsx` rather than a new one. Typecheck and the full
         suite green; **not browser-verified**, because reaching that modal needs a customer
         session, a domain and a click.
-      Next most valuable by the same test: `HostingRenewalModal` (49) and `DomainSetup` (36),
-      both genuinely rendered.
+      · **`HostingRenewalModal` (49) and `DomainSetup` (36) are DONE** (DMS `db6be24`). All
+        three panel modals now agree on `bg-primary-600/700` for the primary action.
+      · **THE MEASURING PATTERN IS WRONG TOO — and this is the part to read before trusting any
+        number in this entry.** `(bg|text|border)-(gray|blue|…)-[0-9]{2,3}` does not match
+        `border-t-blue-600` (directional), `bg-white` (no numeric suffix), `ring-indigo-500`
+        (`ring-` was never in the alternation) or `from-indigo-50` (gradient stops). So the
+        headline is inflated by ~114 dead-code classes AND understated by every variant above.
+        **The two errors do not cancel, and neither is small.** Any future count should use
+        `(bg|text|border|ring|from|to)(-[a-z])?-(…)(-[0-9]{2,3})?` — and beware that the wider
+        pattern also matches TOKEN names like `text-indigo-ink`, so it over-reports unless the
+        token families are excluded.
+      · One thing deliberately not converted, with the reason recorded in the file: a decorative
+        `from-indigo-50 to-purple-50` gradient. There is no gradient token pair and `purple` is
+        off-palette entirely, so flattening it is a design decision rather than a substitution.
+      Next by the same test, all genuinely rendered: `HostingUpgradeModal` (26), `LoginForm`
+      (25), `DomainCrossSell` (21).
 - [ ] **Commit-email linkage unverified.** Commits use `pawan@exceltechnologies.in`; they will
       only link to the GitHub account if that address is verified under Settings → Emails.
 - [ ] **No PR opened from here, and that is now the standing rule** — do not open one unless
