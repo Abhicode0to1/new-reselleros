@@ -1,10 +1,16 @@
 # Todos — ResellerOS ↔ DMS integration
 
-Recorded 2026-09-19. Last updated **2026-09-23**, after engine Phases 6-7 and a re-measure
-of §F's counts (three of which were wrong — see §0).
+Recorded 2026-09-19. Last updated **2026-09-23**, after engine Phases 6-8, the production
+apply of DMS migration 008, and merging `abhishek-pre-merge`.
 
 Both repos now carry a branch named **`pawan-api-system`**, both pushed:
-- ResellerOS — `Abhicode0to1/new-reselleros` (this repo), merged with `abhishek-pre-merge`
+- ResellerOS — `Abhicode0to1/new-reselleros` (this repo). **`abhishek-pre-merge` merged in on
+  2026-09-23** (`c300b335`): subscription drawer, bulk actions, sortable headers, licence
+  leakage on rows, and a refactor replacing `licence-audit.ts` with `facts.ts` + `sort.ts`.
+  No conflicts — he had already merged this branch into his, so the only overlap was docs.
+  Gate on the merged tree: 6,629 tests / 357 files, typecheck clean, lint exit 0 (warnings).
+  **This line previously claimed the merge had already happened and it had not** —
+  `git merge-base --is-ancestor` said no. It describes a real merge now.
 - DMS — `exceltechnologies-india/domain-management-system`
   (`C:\xampp\htdocs\Domain-Management-Project`)
 
@@ -686,5 +692,11 @@ Consequences accepted with the decision:
       `github.com/exceltechnologies-india/domain-management-system/pull/new/pawan-api-system`.
       Worth doing soon: AGENTS.md §9 notes CI runs on PRs and pushes to `main` but NOT on
       feature branches, so the local gate is currently the only gate on both.
-- [ ] **Abhishek's merged screens are untested by me.** The suite passes and the migrations are
-      applied, but I did not click through the new contacts / subscriptions pages.
+- [ ] **Abhishek's merged screens are untested by me, and there are now more of them.** The
+      suite passes, typecheck and lint are clean and the migrations are applied, but I have not
+      clicked through the contacts / subscriptions pages — and the 2026-09-23 merge added a
+      subscription drawer, bulk actions, sortable headers and licence leakage on rows, plus a
+      refactor that deleted `licence-audit.ts` (~490 lines with its test) in favour of
+      `facts.ts` + `sort.ts`. **Test-verified only; not browser-verified.** Worth a pass through
+      /subscriptions specifically, because bulk actions are the kind of control where a green
+      unit test and a wrong screen coexist happily.
