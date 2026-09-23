@@ -23,10 +23,19 @@ import type { Item, Subscription } from "@/lib/supabase/database.types";
 import { assessLeakage, leakageTotals, leakageSortKey, type LeakageResult } from "@/lib/vendor/leakage";
 import { subscriptionCogs } from "@/lib/vendor/cogs";
 
-export function LicenseLeakageCard({ subscriptions, catalog, onReconcile }: {
+export function LicenseLeakageCard({ subscriptions, catalog, onReconcile, onBillGap }: {
   subscriptions: Subscription[];
   catalog: Item[];
   onReconcile?: () => void;
+  /**
+   * Bill the missing seats on a LEAKING subscription — opens Manage seats with the gap
+   * already filled in.
+   *
+   * Only offered for under-billed. Over-billing is usually deliberate (a customer buying
+   * ahead of new staff), so a button here would push the operator toward undoing
+   * something they meant to do.
+   */
+  onBillGap?: (sub: Subscription, seats: number) => void;
 }) {
   const rows = React.useMemo(() => {
     return subscriptions
@@ -106,7 +115,10 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile }: {
           tone={totals.underBilledCount > 0 ? "bad" : undefined}
         />
         <Figure
-          label="Over-billed (refund risk)"
+          /* Not "refund risk" any more — see the over_billed branch in lib/vendor/leakage.ts.
+             Buying seats ahead of new staff is normal, and a tile that calls every such
+             customer a refund is a tile the owner learns to ignore. */
+          label="Billed ahead of vendor"
           value={rupee(totals.overBilledMonthly)}
           suffix="/mo"
           count={totals.overBilledCount}
@@ -134,7 +146,7 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile }: {
             been checked against the vendor, so we cannot say whether they are leaking.
           </p>
           <Button size="sm" variant="default" className="mt-2" onClick={onReconcile}>
-            Reconcile against Google export
+            Match Google&apos;s bill
           </Button>
         </div>
       )}
@@ -167,6 +179,20 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile }: {
                     )}>
                       {rupee(result.monthlyImpact)}<span className="text-3xs font-normal text-ink-3">/mo</span>
                     </p>
+                  )}
+                  {/* §24: a finding with no way to act on it is a nag. The seat count is
+                      known exactly, so the button carries it rather than asking for it
+                      again. */}
+                  {result.kind === "under_billed" && result.seatGap != null && onBillGap && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon="plus"
+                      className="mt-1.5"
+                      onClick={() => onBillGap(sub, result.seatGap!)}
+                    >
+                      Bill {result.seatGap} seat{result.seatGap === 1 ? "" : "s"}
+                    </Button>
                   )}
                 </div>
               </div>

@@ -16,6 +16,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -26,6 +27,7 @@ import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useItems } from "@/lib/queries/items";
 import { createClient } from "@/lib/supabase/client";
 import { rupee, cn } from "@/lib/utils";
+import { PORTALS } from "@/components/shared/portal-dock";
 
 type Bucket = "only_google" | "matched" | "only_app" | "suspended";
 
@@ -66,7 +68,10 @@ const BUCKET_META: { id: Bucket; label: string; tone: "danger" | "success" | "wa
   { id: "only_app",    label: "Only in app",    tone: "muted" },
 ];
 
+const RESELLER_CONSOLE_URL = PORTALS.find((p) => p.id === "google-reseller")!.url;
+
 export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Props) {
+  const qc = useQueryClient();
   const { data: subs } = useSubscriptions();
   const { data: items } = useItems();
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -152,6 +157,22 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
       const failed = results.filter((x) => x.error);
       if (failed.length > 0) throw new Error(failed[0].error!.message);
 
+      /* ── TELL THE PAGE ITS DATA CHANGED ───────────────────────────────────
+         These updates go through the Supabase client directly rather than through a
+         mutation hook, so nothing invalidated the cache and the page behind this dialog
+         kept rendering the rows it had loaded. The toast said "License leakage will now
+         show a real figure", the dialog closed, and the card still read "10 never
+         reconciled" — reported 21 Sep 2026 as "license leakage showing nothing here".
+
+         Nothing was wrong with the write or with the card. The card had simply never
+         been told, and only a hard refresh revealed it. That is the worst shape for this
+         particular bug: the operator concludes the reconcile did not work and does it
+         again.
+
+         Invalidated BEFORE the toast, so the number behind the dialog is already right
+         when the dialog closes. */
+      await qc.invalidateQueries({ queryKey: ["subscriptions"] });
+
       const skipped = (report?.buckets.matched ?? []).length - savableRows.length;
       toast.success(`Saved vendor seat counts for ${savableRows.length} subscription${savableRows.length === 1 ? "" : "s"}.`, {
         description: skipped > 0
@@ -172,11 +193,33 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
       <DialogContent className="md:!max-w-4xl overflow-x-hidden">
         <DialogHeader className="min-w-0">
           <DialogTitle className="inline-flex items-center gap-2">
-            <Icon name="refresh" size={18} className="text-amber" /> Reconcile with Google
+            <Icon name="refresh" size={18} className="text-amber" /> Match Google&apos;s bill
           </DialogTitle>
           <DialogDescription className="break-words">
-            Upload the Google reseller-panel export (Partner Sales Console → <b>Download customers</b>).
-            We match by <b>domain</b> and show what's out of sync. Read-only — nothing is changed.
+            Compares <b>what Google invoices you</b> against what you bill the customer.
+            We match by <b>domain</b>. Read-only until you choose to save.
+            {/* ── THE LINK, WHERE THE FILE IS ASKED FOR ──────────────────────
+                Both console links already existed — on the DASHBOARD, in the portal
+                dock. Which is no use here: this is the moment somebody needs the
+                console, and being told to "upload the reseller export" without being
+                told where it lives is the dead end §24 exists to stop. Asked directly on
+                21 Sep 2026: "is this link somewhere?"
+
+                Taken from the PORTALS constant rather than typed again, so there is one
+                reviewed list of external URLs — see the note on that constant about why
+                it is a source literal and not a database row. */}
+            <span className="mt-1.5 block">
+              Get it from{" "}
+              <a
+                href={RESELLER_CONSOLE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-amber-ink underline underline-offset-2 hover:opacity-80"
+              >
+                Partner Sales Console
+              </a>{" "}
+              → <b>Download customers</b>. One file covers every customer.
+            </span>
           </DialogDescription>
         </DialogHeader>
 

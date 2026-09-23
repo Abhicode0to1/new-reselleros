@@ -475,7 +475,7 @@ export function RecordPaymentDialog({
         tdsAmount:              tdsActive ? tdsAmount : 0,
       };
     },
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       // Invalidate everything that this touches
       qc.invalidateQueries({ queryKey: ["quotes"] });
       qc.invalidateQueries({ queryKey: ["quotes", quoteId] });
@@ -541,7 +541,34 @@ export function RecordPaymentDialog({
          yet), and an annual one that produced nothing is a genuine fault. Saying the same
          thing for all three is what left a tester unable to tell a correct outcome from a
          broken one. */
+      /* ── AN ADD-SEATS QUOTE HAS NO SUBSCRIPTION TO CREATE ──────────────────
+         Reported 21 Sep 2026. Abhishek fixed a licence leak the way the app told him to:
+         "Bill the 1 extra seat" → pro-rata quote → accept → record payment. The seats had
+         ALREADY been added to the existing subscription by /api/subscriptions/[id]/add-seats
+         before the quote even existed, so record_payment correctly created nothing — and
+         this warning then told him to "open the quote and add it".
+
+         Following that instruction would have created a SECOND subscription for
+         B.S.ENVI-Tech, splitting one customer's renewal date, seat count and MRR across
+         two rows. The warning was steering him into the exact failure it exists to
+         prevent.
+
+         `lib/subscriptions/orphan-quote.ts` already knew: it takes `isAddSeats` and
+         reports "not due". The quote page passes it; this toast never did, so the page
+         and the toast disagreed about one quote — which the comment below claims is the
+         whole reason they share a rule.
+
+         Read here rather than added as a prop: four screens open this dialog and only two
+         of them hold the quote row, so a prop would be silently absent on the other two.
+         One select, on the only path that can show the warning. */
+      let quoteIsAddSeats = false;
       if (res.isFirstPayment && !res.subscriptionCreated && !res.isRenewalQuote) {
+        const { data: q } = await createClient()
+          .from("quotes").select("is_add_seats").eq("id", quoteId).maybeSingle();
+        quoteIsAddSeats = q?.is_add_seats === true;
+      }
+
+      if (res.isFirstPayment && !res.subscriptionCreated && !res.isRenewalQuote && !quoteIsAddSeats) {
         /* subscriptionExpectation is the SAME function the quote page's orphan warning
            uses. One rule, read the way record_payment reads it — a second copy here
            would be the toast and the page disagreeing about one quote, which is worse

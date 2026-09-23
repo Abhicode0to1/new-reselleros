@@ -156,3 +156,59 @@ export function parseLine(line: string): string[] {
   out.push(cur);
   return out;
 }
+
+/**
+ * Turn matched export rows into `subscriptions` INSERT payloads.
+ *
+ * ─── WHY THIS IS A FUNCTION AND NOT A `.map()` IN THE DIALOG ────────────────
+ * It was a `.map()` in the dialog, and it quietly dropped the one field that made the
+ * import worth doing. Reported 21 Sep 2026: four subscriptions imported STRAIGHT FROM
+ * the Google export immediately showed "— / 2 · NOT CHECKED" in the licence-leakage
+ * column. The app had just been told Google's seat count by Google, written it into
+ * `seats`, and then reported that it had never asked.
+ *
+ * `vendor_seats` is what that column reads, and nothing set it. So the row said "we do
+ * not know what the vendor charges" about a row whose every field came from the vendor.
+ *
+ * Extracted so the payload can be asserted. The defect was invisible in review precisely
+ * because a missing key in an object literal looks like nothing at all.
+ */
+export interface SubscriptionRowInput {
+  tenantId: string;
+  /** Resolved customer for this row — link target, or a customer just created. */
+  customerId: string | undefined;
+  /** When the vendor figures were read. Stamped on every row of one import. */
+  syncedAt: string;
+}
+
+export function buildSubscriptionRow(r: GRow, input: SubscriptionRowInput) {
+  if (!input.customerId) return null;
+  return {
+    tenant_id: input.tenantId,
+    customer_id: input.customerId,
+    customer_name: r.customer_name ?? r.domain,
+    plan: r.plan,
+    vendor: "google" as const,
+    seats: r.seats,
+    used: 0,
+    mrr: r.estMrr,
+    start_date: r.start_date ?? null,
+    renewal_date: r.renewal_date ?? null,
+    status: r.status,
+    domain: r.domain,
+    outstanding_amount: 0,
+    auto_renew: true,
+    /* ── THE VENDOR'S OWN COUNT, RECORDED AS SUCH ───────────────────────────
+       Same number as `seats`, and that is the point rather than a duplication: `seats`
+       is what WE bill and an operator may change it tomorrow, while `vendor_seats` is
+       what GOOGLE said at this moment. They start equal because the row was born from
+       Google's own export; they drift the moment somebody edits one of them, and that
+       drift is exactly what the licence-leakage column exists to catch.
+
+       Without this the import created rows that could never leak and could never match
+       — they simply read "not checked" forever, until somebody re-uploaded the same
+       file through the reconcile dialog to tell the app what it already knew. */
+    vendor_seats: r.seats,
+    vendor_synced_at: input.syncedAt,
+  };
+}

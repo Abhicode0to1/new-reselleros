@@ -54,7 +54,7 @@ describe("under-billed — margin bleeding out", () => {
   });
 });
 
-describe("over-billed — a refund waiting to happen", () => {
+describe("over-billed — seats charged for but not provisioned", () => {
   const r = assessLeakage({ ...base, vendorSeats: 6, billedSeats: 10 });
 
   it("finds the gap and does not treat it as profit", () => {
@@ -62,12 +62,24 @@ describe("over-billed — a refund waiting to happen", () => {
     expect(r.seatGap).toBe(-4);
   });
 
-  it("costs it at what the CUSTOMER pays — that is what would be refunded", () => {
+  it("costs it at what the CUSTOMER pays — that is the amount in question", () => {
     expect(r.monthlyImpact).toBe(1_080);    // 4 × ₹270
   });
 
-  it("warns rather than congratulates", () => {
-    expect(r.message).toMatch(/they may ask back/);
+  it("names BOTH readings instead of asserting a refund is owed", () => {
+    /* Corrected 21 Sep 2026. The message used to say "they may ask back", which treats
+       every over-billed row as a mistake. Abhishek's correction, from how the sales
+       actually works: customers routinely buy two or four seats ahead of staff who have
+       not joined, and the reseller provisions them as people arrive — so the common case
+       here is a customer getting exactly what they agreed to.
+
+       The finding still has to appear; what must not survive is the accusation. */
+    expect(r.message).toMatch(/bought ahead for new staff/);
+    expect(r.message).toMatch(/otherwise provision/);
+    expect(r.message).not.toMatch(/they may ask back/);
+  });
+
+  it("still refuses to read as a win", () => {
     expect(r.message).not.toMatch(/gain|profit|extra revenue/i);
   });
 });
