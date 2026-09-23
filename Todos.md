@@ -168,10 +168,37 @@ live is still hard-disabled in code):
       **Run it from Cloud Shell** (gcloud is not installed on this machine):
       `bash scripts/setup-cloud-scheduler-retries.sh --dry-run` first, then without the flag.
 
-- [ ] **The other half of L1 is still open: nothing is TOLD when a cron fails.** A retry
-      shortens the odds; it does not answer "who is told when it fails, and how would you
-      notice a week later". After the retries are in, the next question is where a failed run
-      surfaces — Cloud Run logs nobody reads is a silent failure with extra steps.
+- [x] **"Who is told when a cron fails?" — ANSWERED 2026-09-23: nobody, and the mechanism has
+      NEVER worked in production.** DMS `b1ef26c`.
+      **Measured:** `systemlogs` holds 34 rows, **all** with source `"Client Boundary"` (browser
+      error boundaries POSTing directly), newest **2026-08-13** — six weeks old. **Not one
+      server-side `serverLogger.error()` has ever reached the collection.** Every cron failure,
+      provisioning error and payment exception went to stdout only, while the admin
+      integration-health "recent errors" panel sat empty and read as *nothing is wrong*. L38 and
+      L40's shape exactly.
+      **Cause:** `remoteLog()` returned in silence when neither `NEXTAUTH_URL` nor `APP_URL` was
+      set. The likely reason they are unset is `deploy-cloud-run.sh` passing
+      `NEXTAUTH_URL=${NEXTAUTH_URL:-}` — an empty default, so a deployer whose shell lacks it
+      ships an empty one (L91).
+      **Not fixed by writing to Mongo directly**, which was the obvious move and is wrong:
+      `middleware.ts` imports that module and runs in the **Edge runtime**, where mongoose
+      cannot load. The HTTP hop is why one logger serves both. The no-op now warns once per
+      process instead, naming both variables and what is lost.
+
+- [ ] **Confirm whether `NEXTAUTH_URL` / `APP_URL` are actually empty on the service.** Yours —
+      one Cloud Shell command. If they are set, the transport is failing for a different reason
+      and the 34-row measurement still says it is failing:
+      ```
+      gcloud run services describe dms --project=speedy-unison-453807-e9 --region=europe-west1         --format="value(spec.template.spec.containers[0].env)" | tr ',' '
+' | grep -iE "NEXTAUTH_URL|APP_URL"
+      ```
+
+- [ ] **And the "notice it a week later" half is still open.** Recording failures is not the
+      same as noticing a cron that stopped running altogether — a deleted job, or a service
+      that 404s, produces no error to log. That needs a heartbeat (each run stamps a row; a
+      watchdog reports crons with no successful run inside their window), which is its own
+      piece of work. L39's warning applies to building it: "inside the window and never ran"
+      needs three conditions, not two, or it cries wolf on day one.
 
 - [ ] **`renewal-payment-dunning` and `da-health` have NO Scheduler job at all.** Found
       2026-09-23 by comparing the route list against the live jobs — and the irony is that
