@@ -906,15 +906,36 @@ Consequences accepted with the decision:
         at exactly 1, and a per-frame watcher counted **0 frames showing `bg-blue-900`** and 0
         with no nav. 0 console errors.
 
-- [ ] **Still open: the 21 pages that wrap themselves in `<AdminLayout>`** (re-counted 23 Sep;
-      this entry said 20, and said 25 before that). The shell is mounted once by
-      `app/admin/layout.tsx` and those wrappers are passthroughs via the context flag.
-      **This is the genuinely riskier half and the reason is now specific:** each one takes
-      `user` and `onLogout` props the page computes for it, so unwinding can orphan variables
-      — unlike the skeleton, which took only children. `AdminLayout`'s own chrome branch must
-      STAY either way: `app/admin/layout.tsx` renders it outside the provider, so that branch
-      is live, not dead like the skeleton's was. Removable one at a time; a page with the
-      wrapper and one without render the same tree, so there is no midpoint that breaks.
+- [x] **A dead logout that never cleared the session — FIXED 2026-09-23** (DMS `2570425`).
+      Found while checking whether the self-wrapping `<AdminLayout>` pages were worth
+      unwinding. Five of them passed `onLogout={() => { window.location.href = "/login" }}`,
+      which navigates and nothing else; `performLogout` — used by the other 19 and by the
+      shell — calls `signOut({redirect:false})` and clears local and session storage. Had it
+      run, the operator would have landed on /login **still authenticated**.
+      It never ran: inside the shell `AdminLayout` returns only its children, so a page's own
+      `onLogout` is dead and the shell passes the real one. **Wrong AND unreachable is what let
+      it survive** — the same shape as the dark-blue skeleton chrome. All five now pass
+      `performLogout`, guarded by a scan (dead props cannot be covered by a component test,
+      because nothing renders them). Red-checked.
+
+- [ ] **The 25 pages that wrap themselves in `<AdminLayout>` — leave them, and do it per page.**
+      **The count is 25.** This entry said 25 originally, I "re-counted" it to 20 and then 21,
+      and the original was right: my pattern required `<AdminLayout` followed by a space or `>`
+      and missed the five that open the tag across lines. A correction that makes a number worse
+      is still a stale number (§12).
+      **Measured reasons not to do it as a dedicated pass**, replacing the earlier "no per-page
+      tests" hand-wave:
+      · It changes no behaviour and removes **no dead code**. Unlike the skeleton's chrome,
+        `AdminLayout`'s chrome is LIVE — `app/admin/layout.tsx` renders it outside the provider.
+      · The earlier claim that unwinding "can orphan variables" is wrong about `user`: every
+        one of the 25 uses it 6-62 times beyond the wrapper. It is the logout handler that would
+        orphan, in 17 of them — and that is compile-visible, so it was never the real risk.
+      · **The real risk is mechanical.** Two pages put arrow functions inside the tag and five
+        open it across multiple lines, so a naive match is unsafe; and **14 of the 25 contain
+        multi-line template literals (52 in all)**, so the body cannot be safely re-indented
+        afterwards — de-indenting would alter string CONTENTS (L49).
+      Best done one page at a time, when that page is being edited anyway. The one thing the
+      redundancy actually cost has now been paid: see the dead-logout entry above.
 
 - [ ] **The DMS palette conversion — and the headline number counts DEAD CODE (2026-09-23).**
       The panel-scoped figures stand (`app/admin` 563, `app/dashboard` 200), but two things
