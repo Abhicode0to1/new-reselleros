@@ -31,12 +31,20 @@ corrected in place. Grouped by who can move it, because most of what remains is 
 
 ### 0.1 Yours — nothing else can proceed past these
 
-- [ ] **Two migrations are applied LOCALLY ONLY.** Both drop or alter live objects, so
-      running them is an operator act, not mine.
-      · DMS `scripts/db/migrations/008_drop_domain_orderid_unique.ts` — drops and recreates an
-      index on a live collection. Until it runs in production, a multi-domain order still
-      loses every domain after the first (§A).
-      · ResellerOS `production/supabase/migrations/20260921100000_provisioning_facts_are_immutable.sql`.
+- [x] **DMS migration 008 — APPLIED TO PRODUCTION 2026-09-23** at Pardeep's direction, on the
+      `domain-management` Atlas database. Verified in a separate run (§5): `_migrations` holds
+      8, `orderId_1` is now `unique=false sparse=true`, and **`resellerClubOrderId_1` is still
+      unique** — that is the index which actually prevents a double registration, and it was
+      the thing to check. `domains` held 0 rows, so the recreate was instant and no data was
+      at risk.
+      **It failed on the first attempt and that was a runner bug, not the database.** `await
+      import()` was handed an absolute Windows path and threw `Received protocol 'c:'` before
+      `up()` ran, so nothing was applied and no ledger row was written — confirmed against
+      production before retrying. Fixed with `pathToFileURL` (DMS `b90140a`); 001-007 predate
+      the Node version that enforces this, which is why it surfaced on 008.
+
+- [ ] **ResellerOS migration still applied LOCALLY ONLY** —
+      `production/supabase/migrations/20260921100000_provisioning_facts_are_immutable.sql`.
 - [ ] **Domain renewal retail pricing.** Blocks the renewal checkout. There is no retail
       renewal price anywhere in DMS — `getRenewalPricing` returns the *registrar's cost*.
       Inventing a markup would put a made-up figure on a real charge, so nothing was invented
