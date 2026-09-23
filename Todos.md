@@ -83,9 +83,25 @@ corrected in place. Grouped by who can move it, because most of what remains is 
       Proved by flipping the constant to `true` against the real harness: the three dangerous
       commands stayed refused, the three eligible ones armed.
       **Still open for Phase 9:** the two fail-closed env gates and the per-row human release.
-- [ ] **The renewal route's `hard_failure` branch returns HTTP 500** — the status callers
-      retry — on transport-ambiguous cases. Deliberately untouched: a retry there is the L3
-      shape, and it needs the same transport treatment Phase 7 gave the engine route.
+- [x] **The renewal route's `hard_failure` 500 — FIXED 2026-09-23.** `RenewDomainOutcome`'s
+      failure now carries a `transport`, and the route picks its status by how far the request
+      got rather than by whose fault it is: `not_sent`/`responded` → **502** "nothing was
+      renewed, safe to try again"; `sent_unknown` → **409** "do NOT try again, a second attempt
+      could buy an extra year", with an error log naming the domain, the payment and the reason.
+      409 because nothing retries it by itself, and because that is this repo's existing code
+      for "your state conflicts with this request".
+      Stated rather than hidden: the wrapper does an order-id/expiry PRE-FLIGHT inside the same
+      call, so an ambiguous throw from that lookup also reads `sent_unknown`. That errs toward
+      "a human checks", the safe direction for a spend that cannot be taken back.
+
+- [x] **A bookkeeping failure was reported as a failed RENEWAL — found while fixing the above,
+      fixed 2026-09-23.** `createOrder` and `appendUserDomain` ran inside the same `try` as the
+      registrar call, so a throw returned 500 and "Failed to renew domain" about a renewal that
+      had just succeeded — the customer reads a failure, presses renew again, and buys a second
+      year. This route's own history is a ValidationError thrown in exactly that spot on every
+      run, after the registrar had been charged. Bookkeeping now has its own `try`; on failure
+      the response says the renewal worked, flags `recorded:false`, says there is no need to
+      renew again, and logs loudly.
 - [ ] **`appendUserDomain` still writes nothing** (`lib/services/users.ts`). Re-checked today:
       `models/User.ts` declares no `domains` path, so Mongoose strict mode drops the `$push`
       silently. The real gap behind it is that nothing updates `expiresAt` after a renewal.
