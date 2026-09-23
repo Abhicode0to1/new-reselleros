@@ -241,8 +241,18 @@ before calling anything done.
 - CI runs on **pull requests** and on pushes to `main`. It does **not** run on feature
   branches — on a long-lived branch the local gate is the only gate. This is exactly how
   4 unit tests sat broken for months.
-- The 28 SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change means
-  running them by hand, or it is not verified.
+- The **54** SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change
+  means running them by hand, or it is not verified. (This line said 28 and L7 said 38;
+  both were stale — counted 23 Sep 2026.)
+
+  Measured that day against the LOCAL Supabase: **52 pass / 2 fail**. Two things about
+  running them that cost time otherwise. **Prove the detector first** (L23): the folder holds
+  two conventions, and the report-style files that end `raise exception 'TESTRESULT >> …'`
+  exit **non-zero when they PASS**, so a naive runner reports them as failures. And use
+  `psql -v ON_ERROR_STOP=1`, or psql exits 0 with errors on screen. The two still red are
+  `offsite_export_service_role_only` (asserts a backup snapshot exists; `backup.snapshots` is
+  empty locally) and `sandbox_tenant_isolation` (assumes production's sandbox tenant exists
+  rather than creating it) — both environment, neither a defect.
 
 **Say which kind of verified**, and never blur them:
 
@@ -480,7 +490,9 @@ legitimately acquires something.
 - **A security test that cries wolf is worse than no test.** The next reader learns to discount
   it, and the day it means something nobody believes it.
 - **Run `supabase/tests/` before trusting any sentence of the form "the wall is proven".** Those
-  38 files are not in CI and not in the Stop hook, so their claims age silently. Measured today:
+  files are not in CI and not in the Stop hook, so their claims age silently. **There are 54 of
+  them as of 23 Sep 2026** — this said 38, and §9 said 28; see §9 for the current state and for
+  how to run them without mis-reporting the report-style convention. Measured in Aug 2026:
   **6 of the 31 runnable files are red**, and none of the six is a live defect —
   one false positive (above), one assertion made stale by a deliberate change the same day
   (`renewal_and_subscription_creation` documents "monthly-flex creates NO subscription", which
