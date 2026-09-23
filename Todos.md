@@ -106,14 +106,27 @@ live is still hard-disabled in code):
       into the route at the line it occupied. The route's test pins the absence of `expiresAt`
       so whoever builds completion sees what to fill in.
 
-- [ ] **Transfer completion — the piece that is actually missing.** Poll ResellerClub for a
-      transfer's status, then set `status` and `expiresAt` together (the `orders.endtime`
-      parsing already exists in `app/api/domains/sync`). NOT built here on purpose: the expiry
-      is unknowable at initiation — it comes from the losing registrar days later — and writing
-      a guess into the canonical source is worse than leaving it null. Needs a decision on
-      cadence (extend `pending-sweeper` to watch `Domain`, or a new job) before it is worth
-      building. **Nobody has transferred a domain in yet, so this is an exposure, not an
-      incident** — but the first one in will silently expire.
+- [x] **Made VISIBLE 2026-09-23, and it is bigger than transfer.** `pending-sweeper` now
+      watches the `Domain` collection (DMS `b53ac9a`).
+      **The finding:** BOTH creation paths write `status: "pending"` with no `expiresAt` —
+      `provisioner-domain.ts` for a registration and `api/domains/transfer` for a transfer — and
+      nothing automatic advances them. `DomainVerificationService` does it properly (status AND
+      expiry from RC), but only admin sync buttons and the customer's own sync button call it.
+      So until somebody presses one, a domain has no expiry → no `next_action_at` →
+      `daily-scheduler` can never select it → **no renewal reminder, ever**. That is every
+      domain, not just transferred ones.
+      A missing expiry is CRITICAL regardless of age (it is the half that costs the renewal); a
+      stuck status WITH an expiry is a WARN. The digest row says to run the admin domain sync.
+      Production holds 0 domains, so this is an exposure, not an incident.
+
+- [ ] **Still to build: something that completes a domain automatically.** The sweeper reports
+      the gap; it does not close it. `DomainVerificationService` already does the work and is
+      already called by three admin routes — the missing piece is a scheduled caller, not new
+      logic. Left undone deliberately: it needs a cadence decision and it calls ResellerClub,
+      which is unreachable from here, so it cannot be proven locally.
+      **Check `pending-sweeper` is actually scheduled first** — its header gives a Cloud
+      Scheduler command as a *recommendation*, which is not evidence a job exists. If nothing
+      runs it, the visibility added today is also theoretical (AGENTS.md L1).
 - [ ] **Phase 9 — `domain.register`.** Blocked on three of §0.1: seller of record, the
       ResellerClub customer, and the spend control. Not started.
 - [ ] **The two fail-closed env gates and the per-row human release** that Phase 9 carries. The
