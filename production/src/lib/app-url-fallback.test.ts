@@ -55,11 +55,35 @@ const SRC = join(ROOT, "src");
 /**
  * Files that still carry the dead host as a fallback, as of 23 Sep 2026.
  *
- * The remaining uses build INTERNAL alert links ("Open the lead: …") sent to
- * staff — but that was said once already about a site that turned out to email a
- * customer their tax invoice, so treat it as a description of what was checked,
- * not a guarantee. Removing an entry is progress; adding one is the bug this
- * file exists to stop.
+ * AUDITED BY RECIPIENT, 23 Sep 2026 — not by eye, because by eye was wrong once.
+ *
+ * The first pass called these "internal staff links" after reading where the
+ * constant was DECLARED. One of them emailed a customer their GST tax invoice,
+ * 350 lines below the declaration. So every remaining use was then traced to the
+ * `to:` it lands in:
+ *
+ *   ai-support-sla            `${APP_URL}/support`          -> alert.to (owner)
+ *   compliance-reminders      renderReminder(plan, APP_URL) -> users with role
+ *                                                              owner / accountant
+ *   provision-hosting x2      owner alert body              -> owner.to
+ *   trial-expiry              "Open the lead: …"           -> staff
+ *   enquiry/general, enquiry/workspace, trial/hosting, trial/workspace,
+ *   inbound/ingest            "Open the lead: …"           -> staff
+ *   trial/hosting/confirm x3  owner alerts                  -> owner.to
+ *   support-email-inbound, support-whatsapp-inbound
+ *                             -> support-dispatcher `${appUrl}/support`
+ *                             -> alert.to, in a mail whose body ends
+ *                                "Nothing has been sent to the customer."
+ *   razorpay                  "Open in app / Open quote"    -> staff
+ *
+ * All eleven are staff-facing, so a dead link there is an annoyance and not a
+ * customer seeing a 503. They are left alone deliberately: none of those route
+ * files has a test (L58), and the correct shape already exists in this codebase
+ * four times over — `(auth)/callback` and `api/auth/signup` pass `origin`,
+ * `join-request` and `expense-claim/link` prefer the forwarded host. Convert one
+ * when you are next in that file for another reason.
+ *
+ * Removing an entry is progress; adding one is the bug this file exists to stop.
  */
 const KNOWN = [
   "app/api/cron/ai-support-sla/route.ts",
