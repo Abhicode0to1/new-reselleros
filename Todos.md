@@ -809,9 +809,31 @@ Consequences accepted with the decision:
       Dropping live DB objects is a separate and riskier act than deleting code, and applied
       migrations are history rather than something to delete. Decide whether to drop the
       functions in a new migration, or leave them dormant.
-- [ ] **`customers.contact_email` and the portal auth users are now orphaned** for their portal
-      purpose. Nothing reads them, but `portal-test@anutech.invalid` and any real portal
-      sign-ins remain in `auth.users`.
+- [ ] **Orphaned portal auth users — MEASURED 2026-09-23, and the good half is as clear as the
+      bad half.** `customers.contact_email` and the portal auth users are orphaned for their
+      portal purpose. Locally, `portal-test@anutech.invalid` and `rajesh@acmecorp.com` are both
+      in `auth.users`, **neither banned**, both with real last-sign-in timestamps.
+      **NO DATA LEAK — verified in the browser, not reasoned.** I created a throwaway auth user
+      with no `public.users` row (exactly an orphan's shape), signed in and walked
+      `/dashboard`, `/leads`, `/payments`, `/customers`, `/settings`. Every page **rendered**,
+      and every one was **empty**: ₹0 closed, ₹0 pipeline, "All Invoices Settled", sidebar
+      reading "No workspace". RLS holds — `current_tenant_id()` is null without a users row, so
+      tenant-scoped queries return nothing. The throwaway user was deleted afterwards.
+      **What IS wrong:** they reach the full staff SHELL, and are offered the onboarding flow —
+      "Add your organisation", "Add your GSTIN", "Load your price list". So a retired portal
+      credential can still sign in and **self-provision a workspace**.
+      **The mechanism** is that middleware's role guard is written
+      `if (isAuthed && isProtected && role && role !== "owner" …)` — a null `role` **skips** the
+      guard rather than failing it. That is deliberate and documented for `/welcome` (the
+      onboarding fork for someone with no workspace yet), but the skip applies to every
+      protected route, and nothing routes a null-role session TO `/welcome`.
+      **Two fixes, and I have deliberately made neither** — auth routing is the highest
+      blast-radius code in the app and this is not leaking data:
+      · ban or delete the orphaned auth users (**check production first — this was measured on
+        LOCAL**, and production's list may differ);
+      · or route a null-role session to `/welcome` and nowhere else. Careful: a legitimate
+        brand-new signup is also null-role for a moment, so this must not bounce them.
+      Neither is urgent. Both are cheap. The first is yours; the second I can do on your word.
 
 
 - [ ] **The domain/hosting UI still does not exist in ResellerOS.** No `/portal/domains`, no
