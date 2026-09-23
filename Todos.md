@@ -109,11 +109,30 @@ corrected in place. Grouped by who can move it, because most of what remains is 
 
 ### 0.2 Mine — buildable now, in this order
 
-- [ ] **Phase 8 — `domain.renew`. UNBLOCKED 2026-09-23.** The idempotency question is
-      answered: a retry buys a second year as we call it today (see §0.1). The design that
-      falls out is a reconciler on the expiry date — record it before the call, re-read it on
-      ambiguity, moved means done — which is a pure read with a definite answer and needs no
-      human release. Ready to build.
+- [x] **Phase 8 — `domain.renew`. DONE 2026-09-23.** `lib/integrations/engine-handlers-domain.ts`,
+      registered in both maps. **`expiryBefore` is required in the payload** — the expiry the
+      CALLER observed — and the command refuses to look it up, because looking it up is the
+      defect: a fresh read always matches, so RC's own staleness check always passes. Equal →
+      proceed; greater → already renewed since they looked, refuse and say how to ask for a
+      second year deliberately; lesser → refuse rather than guess.
+      **The same baseline is the reconciler** (moved → done, unchanged → not_done), so this
+      needed no per-row human release. The pessimistic design the plan assumed was more
+      expensive AND less safe.
+      Registered as performable and **deliberately NOT live-eligible** — and its ineligibility
+      reason was rewritten rather than left, because the old one ("nobody has established the
+      double-renewal risk") is now false. It stays off because the engine has **no spend
+      control at all**: what is missing is a limit, not a guard.
+      27 tests. A red-check found one of them vacuous — "sends the caller's expiry, not the one
+      it just read" could not fail, because the equality guard makes the two values identical by
+      the time of the send. The protection is the guard; the test now says so.
+      Full suite 448 files / 6,774 tests, typecheck clean. **Test-verified and reasoned-only —
+      no call has been made to ResellerClub.**
+
+- [ ] **The engine has no spend control.** Found while classifying `domain.renew` for live:
+      nothing anywhere caps how many money-spending commands a caller can trigger. It did not
+      matter while every command was free or reversible. It is now the reason `domain.renew`
+      cannot be armed, and it will be the same blocker for Phase 9. Needs a decision on the
+      shape — per tenant, per day, per rupee total — before either can go live.
 - [ ] **Phase 9 — `domain.register`.** Last, behind two fail-closed env gates and a per-row
       human release. Blocked on both §0.1 decisions above it.
 - [x] **Per-command live control — the CODE half is built (2026-09-23).** The env-var half is
