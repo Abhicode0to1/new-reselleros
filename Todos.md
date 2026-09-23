@@ -278,10 +278,24 @@ pattern matters more than the numbers — **a count in a doc is a hypothesis** (
       unless asked. Recorded so the next reader does not treat its absence as an oversight —
       AGENTS.md §10 rule 4 now says the same. The consequence to keep in mind: CI runs on PRs
       and pushes to `main` only, so on these branches the local gate is the only gate.
-- [ ] **The local stack's safety is configuration, not isolation.** The DMS container has
-      working internet and resolves ResellerClub's real host; only the `.invalid` values in
-      `.env.docker` stop it reaching them. Now that write commands exist, this wants a
-      code-level gate so a stray real credential is not sufficient on its own.
+- [x] **The local stack's safety is configuration, not isolation — CODE GATE ADDED 2026-09-23.**
+      DMS `f5cb018`. `checkProviderSafety` extends `lib/ops/stack-inertness.ts` from a one-time
+      pre-restore question into a runtime one, and the engine route refuses with 503 before
+      dispatch.
+      **The exposure was sharper than this note said, and it is not about live mode.** Engine
+      commands contact providers in TEST mode too — every handler READS before deciding (the
+      DirectAdmin account, the DNS zone, the registrar order and its expiry), which each header
+      states as "no writes", not "offline". So on a dev box holding restored production data,
+      one real credential in `.env.docker` was enough for a *dry run* to read a live customer's
+      DNS. `LIVE_COMMANDS_ENABLED` never covered that: it gates live mode, and this is test mode
+      working as designed.
+      · production → allowed unconditionally (a guard that refuses the environment it was built
+        for gets deleted — L103, and there is a test saying so)
+      · dev + `.invalid` → allowed; it cannot resolve anyway, and keeping the local path usable
+        is what stops someone reaching for a real credential to make the feature work
+      · dev + real host → refused, naming the variable, what it reaches, and how to work locally
+      An absent variable counts as LIVE, and an unset `NODE_ENV` as non-production — unknown is
+      not safe.
 - [ ] **`gh` is not installed on this machine**, re-checked today. Anything needing the GitHub
       API has to happen in a browser.
 
@@ -852,10 +866,7 @@ Consequences accepted with the decision:
       never in scope — but `components/DomainRenewalModal.tsx` (30 instances) renders inside
       the customer panel at `/dashboard/domains`, so the panels are not uniformly converted.
       Worth a pass keyed on *what the panels render*, not on directory names.
-- [ ] **The local stack's safety is configuration, not isolation.** The DMS container has working
-      internet and resolves ResellerClub's real host fine; only the `.invalid` values in
-      `.env.docker` stop it reaching them. Once write commands exist, add a code-level gate so a
-      stray real credential is not sufficient on its own.
+- [x] **The local stack's safety — code gate added 2026-09-23**, see §0.4. DMS `f5cb018`.
 - [ ] **Commit-email linkage unverified.** Commits use `pawan@exceltechnologies.in`; they will
       only link to the GitHub account if that address is verified under Settings → Emails.
 - [ ] **No PR opened from here, and that is now the standing rule** — do not open one unless
