@@ -127,6 +127,36 @@ live is still hard-disabled in code):
       **Check `pending-sweeper` is actually scheduled first** — its header gives a Cloud
       Scheduler command as a *recommendation*, which is not evidence a job exists. If nothing
       runs it, the visibility added today is also theoretical (AGENTS.md L1).
+
+- [ ] **⚠️ FIVE OF SIX DMS CRONS HAVE NO SETUP SCRIPT — verify before trusting any of them.**
+      Measured 2026-09-23 from the repo; **not yet confirmed against GCP**, because gcloud is
+      not installed on this machine (no binary, no config dir).
+      `scripts/` contains `setup-cloud-scheduler-billing.sh` and `-tokens.sh`, and between them
+      they create a job for exactly one route: **`renewal-payment-dunning`**. No script creates
+      one for `check-hosting-expiry`, `check-unprovisioned`, `da-health`, **`daily-scheduler`**
+      or **`pending-sweeper`**. `deploy-cloud-run.sh` creates no scheduler jobs at all (0 hits).
+      **`daily-scheduler` is the one that matters.** It is the renewal reminder engine — the
+      thing that reads `next_action_at` and sends the ladder. If no job invokes it, then
+      everything found today about missing expiries is downstream of a bigger problem: the
+      reminders would not go out even for a domain whose data is perfect.
+      **"Deployed" is not "invoked".** `docs/AUDIT-TECHNICAL.md` marks both crons ✅ live with a
+      Cloud Run revision (`dms-00127-bmb`, `dms-00128-xht`) — that is the CODE being live, not a
+      Scheduler job calling it. AGENTS.md L41 is this exact shape: a doc describing a protection
+      is not the protection.
+      **Absence of a script is not proof of absence of a job** — somebody may have created them
+      by hand in the console. That is why this is recorded as "verify", not as a defect.
+      To settle it (Cloud Shell needs no local install — project `speedy-unison-453807-e9`,
+      Cloud Run service `dms` in `europe-west1`, and the one known Scheduler job is in
+      `asia-south1`, so check both locations):
+
+      ```
+      gcloud scheduler jobs list --project=speedy-unison-453807-e9 --location=asia-south1
+      gcloud scheduler jobs list --project=speedy-unison-453807-e9 --location=europe-west1
+      ```
+
+      And per AGENTS.md L1, a job existing is still not the whole answer — check `lastAttemptTime`
+      and whether anything is told when one fails. A `retryConfig` without `retryCount` means
+      zero retries.
 - [ ] **Phase 9 — `domain.register`.** Blocked on three of §0.1: seller of record, the
       ResellerClub customer, and the spend control. Not started.
 - [ ] **The two fail-closed env gates and the per-row human release** that Phase 9 carries. The
