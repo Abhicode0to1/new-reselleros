@@ -876,11 +876,21 @@ Consequences accepted with the decision:
       `github.com/exceltechnologies-india/domain-management-system/pull/new/pawan-api-system`.
       Worth doing soon: AGENTS.md §9 notes CI runs on PRs and pushes to `main` but NOT on
       feature branches, so the local gate is currently the only gate on both.
-- [ ] **Abhishek's merged screens are untested by me, and there are now more of them.** The
-      suite passes, typecheck and lint are clean and the migrations are applied, but I have not
-      clicked through the contacts / subscriptions pages — and the 2026-09-23 merge added a
-      subscription drawer, bulk actions, sortable headers and licence leakage on rows, plus a
-      refactor that deleted `licence-audit.ts` (~490 lines with its test) in favour of
-      `facts.ts` + `sort.ts`. **Test-verified only; not browser-verified.** Worth a pass through
-      /subscriptions specifically, because bulk actions are the kind of control where a green
-      unit test and a wrong screen coexist happily.
+- [x] **Abhishek's merged screens — BROWSER-VERIFIED 2026-09-23.** Signed in as the local dev
+      user and drove `/subscriptions` with Playwright against the running app, not the test
+      suite. All four merged controls work:
+      · **sorting** — clicking `CUSTOMER · DOMAIN` reorders the rows
+      · **bulk actions** — the bar tracks the selection exactly (1 ticked → "1 selected",
+        2 → "2 selected") and offers Export / Send renewal quotes / Delete / Clear
+      · **drawer** — opens for the row clicked, showing that subscription's plan, seats, MRR
+        and its actions
+      · **licence leakage on rows** — "— / 25 NOT CHECKED" per row plus the summary card
+      **Zero console errors, no error boundary.**
+      **The first run proved nothing and I nearly reported it as a pass.** Local held ONE
+      subscription, so sorting was "not attempted" and multi-select was impossible — the two
+      things most worth checking were exactly the two the data could not exercise. Seeded four
+      rows, re-ran, and removed them afterwards (local is back to 1). **If you repeat this,
+      seed first**; a green run against one row is a statement about rendering, nothing more.
+      Worth noting from the screen: the margin card says the margin is *"unknown, not healthy"*
+      rather than inventing a figure, and the drawer says *"no start or renewal date, so there
+      is no term to lay a schedule against"*. That is §2 showing up in the UI.
