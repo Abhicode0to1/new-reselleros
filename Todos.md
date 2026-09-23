@@ -887,15 +887,35 @@ Consequences accepted with the decision:
       200 and is followed client-side, so a visitor ends up on ResellerOS's homepage. That
       makes "Pricing" correct in code and inert in practice until `/hosting` is published in
       Admin → Pages. Measured on the LOCAL database only — production was not read.
-- [ ] **The 20 admin pages still wrap themselves in `<AdminLayout>`** (re-counted 23 Sep; this said 25). The shell is now
-      mounted once by `app/admin/layout.tsx`, and those wrappers render as passthroughs via
-      a context flag rather than being deleted — deliberately, because the flicker had to
-      stop that day and rewriting 25 pages with no per-page tests is the larger risk. They
-      can be removed one at a time; a page with the wrapper and one without render the same
-      tree, so there is no midpoint that breaks. Same for the 20 files rendering
-      `<AdminLayoutSkeleton>` (re-counted 23 Sep; this said 19). Until then `components/skeletons/AdminLayout.tsx` still
-      carries a `bg-blue-900` sidebar for its standalone use outside /admin — worth
-      converting whenever that path is next touched.
+- [x] **The `<AdminLayoutSkeleton>` half is DONE 2026-09-23** (DMS `b953b62`) — and **this entry
+      was wrong to treat the two wrappers as the same job.**
+      · **The skeleton's chrome could never render.** Its own comment said it was kept
+        "because this component is also used outside the /admin subtree". Measured: all 19
+        importers are admin pages, every one under the shell `app/admin/layout.tsx` mounts, so
+        the guard always fired. The unreachable branch was `bg-blue-900` — the pre-restyle
+        sidebar this whole fix exists to stop — so the day it HAD rendered it would have been
+        wrong. Component and all 19 wrappers deleted.
+      · **A test was what kept it alive.** Two rendered it with no `AdminShellContext`
+        provider and asserted the dark chrome appeared — green, proving a configuration no
+        caller can produce (AGENTS.md L111). Replaced, as L111 says, by the invariant that made
+        them pointless: a scan that no page under `app/admin` renders a shell skeleton, plus an
+        assertion that the provider is given `value={true}` (`false` compiles, passes every
+        component test, and puts a second sidebar on every admin page). Red-checked.
+      · **BROWSER-VERIFIED against the original bug, not a proxy.** Five client-side
+        navigations with the sidebar node tagged first: it survived every one, `<nav>` stayed
+        at exactly 1, and a per-frame watcher counted **0 frames showing `bg-blue-900`** and 0
+        with no nav. 0 console errors.
+
+- [ ] **Still open: the 21 pages that wrap themselves in `<AdminLayout>`** (re-counted 23 Sep;
+      this entry said 20, and said 25 before that). The shell is mounted once by
+      `app/admin/layout.tsx` and those wrappers are passthroughs via the context flag.
+      **This is the genuinely riskier half and the reason is now specific:** each one takes
+      `user` and `onLogout` props the page computes for it, so unwinding can orphan variables
+      — unlike the skeleton, which took only children. `AdminLayout`'s own chrome branch must
+      STAY either way: `app/admin/layout.tsx` renders it outside the provider, so that branch
+      is live, not dead like the skeleton's was. Removable one at a time; a page with the
+      wrapper and one without render the same tree, so there is no midpoint that breaks.
+
 - [ ] **The DMS palette conversion — and the headline number counts DEAD CODE (2026-09-23).**
       The panel-scoped figures stand (`app/admin` 563, `app/dashboard` 200), but two things
       found while starting the work change how to approach it:
@@ -923,9 +943,9 @@ Consequences accepted with the decision:
 
         | | classes | files |
         |---|---|---|
-        | total | 3,750 | 161 |
-        | reachable by import | 3,506 | 135 |
-        | **served by DMS today** | **3,066** | **124** |
+        | total | 3,746 | 161 |
+        | reachable by import | 3,502 | 135 |
+        | **served by DMS today** | **3,062** | **124** |
         | only via a route that 307s to ResellerOS | 440 | 11 |
         | unreachable (dead) | 244 | 26 |
 
