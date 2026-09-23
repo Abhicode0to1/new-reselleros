@@ -35,11 +35,26 @@ interface Props {
   sub:          Subscription;
   open:         boolean;
   onOpenChange: (v: boolean) => void;
+  /**
+   * How many seats to start the box at. Defaults to 1.
+   *
+   * Set by the "Bill the N extra seats" button on a LEAKING subscription, where the
+   * number is not a guess — it is exactly the gap between what the vendor charges and
+   * what the customer is billed. Typing it again by hand is a chance to get it wrong on
+   * the one screen where the right answer is already known.
+   */
+  initialSeats?: number;
 }
 
-export default function AddSeatsDialog({ sub, open, onOpenChange }: Props) {
+export default function AddSeatsDialog({ sub, open, onOpenChange, initialSeats }: Props) {
   const router = useRouter();
-  const [seatsStr,   setSeatsStr]   = React.useState("1");
+  const [seatsStr,   setSeatsStr]   = React.useState(String(initialSeats ?? 1));
+  /* Re-seed when the dialog is REOPENED for a different subscription. Without this the
+     box keeps whatever was typed the last time it was open, which on a prefilled dialog
+     means the second customer silently inherits the first one's gap. */
+  React.useEffect(() => {
+    if (open) setSeatsStr(String(initialSeats ?? 1));
+  }, [open, initialSeats, sub.id]);
   const [submitting, setSubmitting] = React.useState(false);
 
   const additionalSeats = Math.max(0, Math.min(5000, Math.round(Number(seatsStr) || 0)));

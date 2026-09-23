@@ -12,6 +12,9 @@ import { useSubscriptions, useSetSubscriptionDomain, useDeleteSubscription } fro
 import { useContactSearchIndex } from "@/lib/queries/contacts";
 import { customerMatchesContact } from "@/lib/contacts/search-index";
 import { newestFirst } from "@/lib/sort/newest-first";
+import { subscriptionFacts } from "@/lib/subscriptions/facts";
+import { sortSubscriptions, defaultDirFor, type SubSort, type SubSortKey } from "@/lib/subscriptions/sort";
+import { assessLeakage } from "@/lib/vendor/leakage";
 import { useActiveTrials } from "@/lib/queries/trials";
 import ExtendSubscriptionDialog from "@/components/features/subscriptions/extend-subscription-dialog";
 import AddSeatsDialog            from "@/components/features/subscriptions/add-seats-dialog";
@@ -44,12 +47,10 @@ import { LicenseLeakageCard } from "@/components/features/subscriptions/license-
 import { SeatRequestsCard } from "@/components/features/subscriptions/seat-requests-card";
 import { useSeatRequests, useAmendments } from "@/lib/queries/seat-requests";
 import { AmendmentHistory } from "@/components/features/subscriptions/amendment-history";
-import { assessUtilisation } from "@/lib/subscriptions/utilisation";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { ImportSubscriptionsDialog } from "@/components/features/subscriptions/import-subscriptions-dialog";
 import { ReconcileGoogleDialog } from "@/components/features/subscriptions/reconcile-google-dialog";
-import { LicenceAuditDialog } from "@/components/features/subscriptions/licence-audit-dialog";
 import { ImportGoogleSubsDialog } from "@/components/features/subscriptions/import-google-subs-dialog";
 import { MarginAlertsCard } from "@/components/features/subscriptions/margin-alerts-card";
 import Link from "next/link";
@@ -65,10 +66,9 @@ import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { downloadCSV } from "@/lib/csv";
+import { bulkOutcomeMessage, type BulkFailure } from "@/lib/customers/bulk-outcome";
+import { SubscriptionsBulkBar } from "@/components/features/subscriptions/subscriptions-bulk-bar";
 import { SUBSCRIPTIONS_CSV_HEADERS, subscriptionsCsvRows } from "@/lib/export/crm-csv";
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
 import { subscriptionExceptions } from "@/lib/subscriptions/exceptions";
 import { term, renewalDistance, termValue, termValueLabel } from "@/lib/subscriptions/renewal-display";
@@ -118,6 +118,60 @@ function SubExceptions({ sub, size = "sm" }: { sub: Subscription; size?: "sm" | 
   );
 }
 
+/**
+ * A clickable column header.
+ *
+ * A `<button>` inside the `<th>`, not a click handler on the `<th>` itself: a th is not
+ * focusable and does not respond to Enter, so a header-as-div is a sort the keyboard
+ * cannot reach. `aria-sort` on the th is what a screen reader reads out, and it has to
+ * live on the cell rather than the button.
+ */
+function SortHeader({
+  label, col, sort, onSort, align = "left", title, hint,
+}: {
+  label: string;
+  col: SubSortKey;
+  sort: SubSort | null;
+  onSort: (key: SubSortKey) => void;
+  align?: "left" | "right";
+  title?: string;
+  /** Second line under the label, e.g. what the two seat numbers mean. */
+  hint?: string;
+}) {
+  const active = sort?.key === col;
+  return (
+    <th
+      className={cn(
+        "px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider",
+        align === "right" ? "text-right" : "text-left",
+        active ? "text-ink" : "text-ink-3",
+      )}
+      aria-sort={active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        title={title ?? `Sort by ${label.toLowerCase()}`}
+        className={cn(
+          "inline-flex items-center gap-1 uppercase tracking-wider hover:text-ink transition-colors cursor-pointer",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded-sm",
+          align === "right" ? "flex-row-reverse" : "",
+        )}
+      >
+        <span>
+          {label}
+          {hint && <span className="block normal-case font-normal tracking-normal text-3xs">{hint}</span>}
+        </span>
+        {/* The arrow only appears on the sorted column. An arrow on every header is a
+            row of arrows, and none of them says which one is in force. */}
+        <span className={cn("text-3xs", active ? "opacity-100" : "opacity-0")} aria-hidden="true">
+          {active && sort!.dir === "asc" ? "↑" : "↓"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 export default function SubscriptionsPage() {
   const router = useRouter();
   const { data: subs, isLoading, error, refetch } = useSubscriptions();
@@ -164,7 +218,28 @@ export default function SubscriptionsPage() {
   const [search, setSearch] = React.useState("");
   const [extendSub,   setExtendSub]   = React.useState<Subscription | null>(null);
   const [scheduleSub, setScheduleSub] = React.useState<Subscription | null>(null);
+  /** Null = the newest-first default. Set when a column header is clicked. */
+  const [sort, setSort] = React.useState<SubSort | null>(null);
+  /* First click opens the column the way it is usually asked about; clicking the SAME
+     column again flips it. Clicking a third time does not clear — a sort that vanishes
+     on a click the operator did not intend as "reset" is worse than one they re-click. */
+  const toggleSort = (key: SubSortKey) =>
+    setSort((prev) => (prev?.key === key
+      ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+      : { key, dir: defaultDirFor(key) }));
+  /** Ticked rows, by subscription id. Held here, not per row, so select-all and Clear
+   *  are one state change rather than N. */
+  const [pickedIds, setPickedIds] = React.useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+  const clearPicked = () => setPickedIds(new Set());
   const [addSeatsSub, setAddSeatsSub] = React.useState<Subscription | null>(null);
+  /** Seats to prefill "Manage seats" with — the leak gap, when opened from a fix button. */
+  const [addSeatsPrefill, setAddSeatsPrefill] = React.useState<number | undefined>(undefined);
+  /** Open Manage seats for a subscription, optionally with the seat count already right. */
+  const openAddSeats = (sub: Subscription, prefill?: number) => {
+    setAddSeatsPrefill(prefill);
+    setAddSeatsSub(sub);
+  };
   const [editSub,     setEditSub]     = React.useState<Subscription | null>(null);
   const delSub = useDeleteSubscription();
   const confirm = useConfirm();
@@ -274,7 +349,6 @@ export default function SubscriptionsPage() {
     refetch();
   }, [refetch, router]);
   const [reconcileOpen,  setReconcileOpen]  = React.useState(false);
-  const [auditOpen,      setAuditOpen]      = React.useState(false);
   const [helpOpen,       setHelpOpen]       = React.useState(false);
   const [addGoogleOpen,  setAddGoogleOpen]  = React.useState(false);
   /* Both analytics cards start CLOSED (Abhishek, 12 Sep 2026). They are reference, not
@@ -342,12 +416,126 @@ export default function SubscriptionsPage() {
      its whole reason to exist is what runs out soonest, and burying next week's renewal
      under a subscription created this morning would defeat it. */
   const ordered = React.useMemo(
-    () => (tab === "expiring" ? filtered : newestFirst(filtered)),
-    [filtered, tab],
+    () => {
+      /* A clicked column wins over every default, including the Expiring folder's
+         renewal order — the operator asked a specific question and the table should
+         answer THAT one. Applied over `filtered`, so the tab, vendor pills and search
+         still decide WHICH rows; this only decides their order. */
+      if (sort) {
+        return sortSubscriptions(filtered, sort, (sub) =>
+          subscriptionCogs(sub, catalog).marginMonthly);
+      }
+      return tab === "expiring" ? filtered : newestFirst(filtered);
+    },
+    [filtered, tab, sort, catalog],
   );
 
   // Render only the first `visible` rows — avoids hanging on 800+ subscriptions.
   const shown = ordered.slice(0, visible);
+
+  /* ── Bulk actions ──────────────────────────────────────────────────────────
+     Each is N independent operations, not one transaction, so every one reports what
+     ACTUALLY happened through bulkOutcomeMessage instead of assuming success. Delete is
+     the case that makes this necessary: the server refuses any subscription that came
+     from a paid quote, so a partial run is the normal outcome, not an edge case.
+
+     Scoped to `shown`, the rendered slice — the same rule the select-all checkbox
+     follows. Acting on rows the operator cannot see is how a bulk delete goes wrong. */
+  const pickedSubs = React.useMemo(
+    () => shown.filter((sub) => pickedIds.has(sub.id)),
+    [shown, pickedIds],
+  );
+
+  /** Report an outcome on the right channel, and clear only on a clean run. */
+  const reportBulk = (done: number, failed: BulkFailure[], verbPast: string) => {
+    const m = bulkOutcomeMessage({ done, failed }, verbPast);
+    if (m.tone === "success") {
+      toast.success(m.title);
+      clearPicked();
+    } else if (m.tone === "warning") {
+      toast.warning(m.title, { description: m.description });
+    } else {
+      /* description spelled out here, not passed through a variable: §24 is enforced by
+         toast-error-ratchet.test.ts, which reads the SOURCE. */
+      toast.error(m.title, {
+        description: m.description ?? "Nothing was changed. Open the subscriptions to see why.",
+      });
+    }
+    /* A partial or failed run KEEPS the selection: the refused rows are exactly the ones
+       still needing attention, and re-ticking them by hand is a punishment for the app
+       having done half a job. */
+  };
+
+  const bulkExport = () => {
+    if (pickedSubs.length === 0) return;
+    downloadCSV(
+      `subscriptions-${new Date().toISOString().slice(0, 10)}.csv`,
+      [...SUBSCRIPTIONS_CSV_HEADERS],
+      subscriptionsCsvRows(pickedSubs),
+    );
+    toast.success(`Exported ${pickedSubs.length} subscription${pickedSubs.length === 1 ? "" : "s"} to CSV`);
+  };
+
+  /**
+   * Create-or-reuse each renewal quote and email it.
+   *
+   * The same endpoint the Renewals page's own bulk button uses, and the same one the
+   * per-row "Send now" uses — so a renewal sent from here is byte-identical to one sent
+   * from there, and `createOrGetRenewalQuote` keeps it idempotent: pressing this twice
+   * re-sends the SAME quote rather than minting a second one at a second price.
+   */
+  const bulkSendRenewals = async () => {
+    if (pickedSubs.length === 0) return;
+    setBulkBusy(true);
+    let done = 0;
+    let stub = false;
+    const failed: BulkFailure[] = [];
+    for (const sub of pickedSubs) {
+      try {
+        const res = await fetch("/api/renewals/send-now", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscription_id: sub.id }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          failed.push({ name: cleanDisplayName(sub.customer_name), reason: json?.error ?? `The server refused it (${res.status}).` });
+          continue;
+        }
+        done += 1;
+        if (json?.email_mode === "stub") stub = true;
+      } catch (e) {
+        failed.push({ name: cleanDisplayName(sub.customer_name), reason: (e as Error).message });
+      }
+    }
+    setBulkBusy(false);
+    refetch();
+    reportBulk(done, failed, "Sent a renewal quote to");
+    /* Said separately and only when true. A run that "succeeded" while the mailer is in
+       stub mode has logged everything and delivered nothing, and an operator who thinks
+       fifteen customers were emailed will not chase them. */
+    if (stub && done > 0) {
+      toast.warning("Email is in stub mode — nothing actually left the building", {
+        description: "The quotes were created and the sends were logged, but no mail was delivered. Set the Resend key under Admin & Control to send for real.",
+      });
+    }
+  };
+
+  const bulkDelete = async () => {
+    if (pickedSubs.length === 0) return;
+    setBulkBusy(true);
+    let done = 0;
+    const failed: BulkFailure[] = [];
+    for (const sub of pickedSubs) {
+      try { await delSub.mutateAsync(sub.id); done += 1; }
+      catch (e) { failed.push({ name: cleanDisplayName(sub.customer_name), reason: (e as Error).message }); }
+    }
+    setBulkBusy(false);
+    /* The drawer may be showing one of the deleted rows — it is now a drawer about
+       nothing. */
+    if (scheduleSub && pickedIds.has(scheduleSub.id)) setScheduleSub(null);
+    reportBulk(done, failed, "Deleted");
+  };
   const hasMore = ordered.length > shown.length;
   React.useEffect(() => { setVisible(60); }, [tab, vendor, search]);
 
@@ -380,9 +568,11 @@ export default function SubscriptionsPage() {
      saw highlighted. */
   const subKeys = useListKeys({
     count: shown.length,
+    /* Opens THIS SUBSCRIPTION, not its customer — same as clicking the row.
+       See the row's onClick for why. */
     onOpen: (i) => {
       const s = shown[i];
-      if (s?.customer_id) router.push(`/customers/${s.customer_id}` as never);
+      if (s) setScheduleSub(s);
     },
   });
   const selectedSubRef = React.useRef<HTMLTableRowElement | null>(null);
@@ -454,17 +644,37 @@ export default function SubscriptionsPage() {
           >
             Add Subscription
           </Button>
-          <Button icon="refresh" onClick={() => setReconcileOpen(true)}>Reconcile Google</Button>
-          {/* The vendor-console audit. Distinct from "Reconcile Google", which pulls seats
-              from the CSP API for the accounts it can reach — this reads an export of the
-              WHOLE console, so it also finds domains the app has never heard of, which is
-              where the unbilled seats hide. */}
+          {/* ── "MATCH REAL MAILBOXES" WAS REMOVED HERE — 21 Sep 2026 ─────────
+              There used to be a second button beside this one, reading a customer's
+              Google Admin USER EXPORT and comparing the mailboxes that exist against
+              what we bill. Abhishek removed it, and was right to:
+
+              A user export is a list of every employee's name and address at a
+              customer's company. Delegated admin rights make it POSSIBLE; they do not
+              make it ours to take. Under DPDP that is the customer's staff's personal
+              data being pulled into the reseller's own tooling, and no customer agreed
+              to that when they bought mailboxes. The dialog read the file in the browser
+              and saved nothing, which helped — but the export itself happens before the
+              app ever sees it, so no code change could make it appropriate.
+
+              Nothing about MONEY was lost. Both money questions — are we paying for
+              seats we do not bill, is a customer paying for seats they do not have — are
+              answered by the button below, from a file containing only domains and
+              counts. What went is the churn signal ("bought 50, only 30 in use"), which
+              is genuinely useful and is not worth handling staff PII for.
+
+              If that signal is wanted later, the Google Admin SDK reports licence
+              ASSIGNMENT COUNTS per domain — numbers, no names, no addresses. Same
+              insight, none of the exposure. Do it that way; do not restore this.
+
+              Deleted with it: licence-audit-dialog.tsx, lib/subscriptions/licence-audit.ts
+              and its tests. They are in git history if the parsing is ever wanted. */}
           <Button
-            icon="alert"
-            onClick={() => setAuditOpen(true)}
-            title="Compare a Google or Microsoft user export against what you bill — finds seats you pay for and do not charge."
+            icon="refresh"
+            onClick={() => setReconcileOpen(true)}
+            title="Upload the reseller-console export — compares what Google invoices you against what you bill the customer."
           >
-            Check licences vs books
+            Match Google&apos;s bill
           </Button>
           <Button icon="upload" onClick={() => setImportOpen(true)}>Import CSV</Button>
         </div>
@@ -579,6 +789,7 @@ export default function SubscriptionsPage() {
           subscriptions={subsByWorkspace}
           catalog={catalog}
           onReconcile={() => setReconcileOpen(true)}
+          onBillGap={(sub, seats) => openAddSeats(sub, seats)}
         />
       )}
 
@@ -733,8 +944,29 @@ export default function SubscriptionsPage() {
             const dl = daysUntil(s.renewal_date);
             const t  = term(s.start_date, s.renewal_date);
             const vm = vendorMeta(s.vendor);
+            /* Seat gap only — the money needs the catalogue, and this card deliberately
+               shows no margin figure (see the note further down about estimateMargin). */
+            const cardLeak = assessLeakage({
+              vendorSeats: s.vendor_seats,
+              billedSeats: s.seats,
+              assignedSeats: s.used,
+              costPerSeatMonth: null,
+              pricePerSeatMonth: null,
+            });
             return (
-              <li key={s.id} className="bg-paper border border-hairline rounded-lg p-3">
+              /* Tappable, same as the desktop row. The card carried no action at all,
+                 so on a phone a subscription could be read and never opened — every
+                 detail lived behind a menu the card does not have. 44px is met by the
+                 card's own height. */
+              <li
+                key={s.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${s.plan} for ${cleanDisplayName(s.customer_name)}`}
+                onClick={() => setScheduleSub(s)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setScheduleSub(s); } }}
+                className="bg-paper border border-hairline rounded-lg p-3 cursor-pointer hover:bg-paper-2/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+              >
                 {/* Who they are, and what they pay */}
                 <div className="flex items-start justify-between gap-3 mb-1.5">
                   <div className="min-w-0 flex-1">
@@ -743,7 +975,24 @@ export default function SubscriptionsPage() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-serif text-base tabular-nums text-ink">{rupee(s.mrr)}</p>
+                    {/* Same shape as the table: vendor / billed, with the problem named
+                        underneath. §20 — a number that exists only on the desktop table
+                        is a number half the users never see. */}
+                    {/* Same single comparison as the table: Google / you. */}
                     <p className="text-3xs text-ink-3">/mo · {s.seats} seats</p>
+                    {cardLeak.kind !== "unknown" && (
+                      <p className={cn(
+                        "text-3xs font-semibold uppercase tracking-wider",
+                        cardLeak.kind === "under_billed" ? "text-rose"
+                          : cardLeak.kind === "over_billed" ? "text-amber-ink"
+                          : "text-emerald",
+                      )}>
+                        {s.vendor_seats} / {s.seats} ·{" "}
+                        {cardLeak.kind === "under_billed" ? "leaking"
+                          : cardLeak.kind === "over_billed" ? "over-billed"
+                          : "matches"}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -818,15 +1067,59 @@ export default function SubscriptionsPage() {
             <table className="w-full">
               <thead className="bg-paper-2 border-b border-hairline-strong">
                 <tr>
-                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Customer · Domain</th>
-                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Plan</th>
-                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Vendor</th>
-                  <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider" title="Seats in use / licensed">Seats</th>
-                  <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">MRR</th>
-                  <th className="text-right px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider" title="Monthly margin">Margin</th>
-                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Started</th>
-                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Renewal</th>
-                  <th className="text-left px-3 py-2.5 text-2xs font-semibold text-ink-3 uppercase tracking-wider">Status</th>
+                  {/* ── Select-all covers the rows ON SCREEN, not the whole filtered set ──
+                      This list paginates at 60. A checkbox that silently selected 800 rows
+                      and then deleted them is the failure this narrower promise avoids —
+                      the operator can see everything the tick applies to. Indeterminate
+                      when only some are picked, so "all" never lies. */}
+                  <th className="px-2 py-2.5 w-9">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all subscriptions on screen"
+                      className="cursor-pointer accent-amber"
+                      checked={shown.length > 0 && shown.every((sub) => pickedIds.has(sub.id))}
+                      ref={(el) => {
+                        if (el) {
+                          const n = shown.filter((sub) => pickedIds.has(sub.id)).length;
+                          el.indeterminate = n > 0 && n < shown.length;
+                        }
+                      }}
+                      onChange={(e) => {
+                        const on = e.target.checked;
+                        setPickedIds((prev) => {
+                          const next = new Set(prev);
+                          for (const sub of shown) { if (on) next.add(sub.id); else next.delete(sub.id); }
+                          return next;
+                        });
+                      }}
+                    />
+                  </th>
+                  {/* ── CLICK A HEADER TO SORT BY IT ─────────────────────────────
+                      Asked for on 21 Sep 2026. The page had a fixed order and no way to
+                      ask it a different question — "who is worth most", "what renews
+                      first", "where is margin worst" all meant exporting to Excel.
+
+                      Clicking an already-sorted column flips its direction, so the
+                      second click is never a surprise. Each column opens the way it is
+                      usually asked about — see defaultDirFor: money and seats
+                      biggest-first, margin WORST-first, text and dates naturally.
+
+                      Sorting does not disturb the tab, vendor filter or search; it
+                      reorders what those already selected. Clearing it returns to the
+                      newest-first default. */}
+                  <SortHeader label="Customer · Domain" col="customer" sort={sort} onSort={toggleSort} />
+                  <SortHeader label="Plan" col="plan" sort={sort} onSort={toggleSort} />
+                  <SortHeader label="Vendor" col="vendor" sort={sort} onSort={toggleSort} />
+                  <SortHeader
+                    label="Seats" col="seats" align="right" sort={sort} onSort={toggleSort}
+                    title="What Google bills us for / what we bill the customer"
+                    hint="Google / you"
+                  />
+                  <SortHeader label="MRR" col="mrr" align="right" sort={sort} onSort={toggleSort} />
+                  <SortHeader label="Margin" col="margin" align="right" sort={sort} onSort={toggleSort} title="Monthly margin" />
+                  <SortHeader label="Started" col="started" sort={sort} onSort={toggleSort} />
+                  <SortHeader label="Renewal" col="renewal" sort={sort} onSort={toggleSort} />
+                  <SortHeader label="Status" col="status" sort={sort} onSort={toggleSort} />
                   <th className="px-2 py-2.5 text-right w-28"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -834,7 +1127,15 @@ export default function SubscriptionsPage() {
                 {shown.map((s, rowIndex) => {
                   const cogs = subscriptionCogs(s, catalog);
                   const mb = cogsBadge(cogs);
-                  const util = assessUtilisation({ seats: s.seats, used: s.used, usedSyncedAt: s.used_synced_at });
+                  /* The SAME call the License leakage card makes, so the row and the card
+                     can never disagree about whether a subscription is leaking. */
+                  const leak = assessLeakage({
+                    vendorSeats: s.vendor_seats,
+                    billedSeats: s.seats,
+                    assignedSeats: s.used,
+                    costPerSeatMonth: cogs.perSeatMonth,
+                    pricePerSeatMonth: s.seats > 0 ? Math.round(s.mrr / s.seats) : null,
+                  });
                   const dl = daysUntil(s.renewal_date);
                   const t  = term(s.start_date, s.renewal_date);
                   const isUrgent = dl !== null && dl >= 0 && dl <= 30;
@@ -863,9 +1164,26 @@ export default function SubscriptionsPage() {
                       )}
                       role="button"
                       tabIndex={0}
-                      aria-label={`Open ${cleanDisplayName(s.customer_name)}`}
-                      onClick={() => s.customer_id && router.push(`/customers/${s.customer_id}` as never)}
-                      onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && s.customer_id) { e.preventDefault(); router.push(`/customers/${s.customer_id}` as never); } }}
+                      /* ── A SUBSCRIPTION ROW OPENS THAT SUBSCRIPTION ──────────
+                         It used to push to `/customers/{id}`, which is a different
+                         object: that page lists ALL of a customer's subscriptions,
+                         invoices and payments, and nothing on it says which row you
+                         clicked. With one subscription per customer it passed unnoticed;
+                         with four it answers a question you did not ask. Reported by
+                         Abhishek, 19 Sep 2026.
+
+                         The tell was already in the menu — `⋯ → Open customer` goes to
+                         exactly the same place, so the row click was duplicating a menu
+                         item instead of doing the obvious thing.
+
+                         A drawer rather than a page, deliberately: the list keeps its
+                         tab, vendor filter, search and scroll position, so a rep can
+                         open five subscriptions in a row while comparing them. A
+                         /subscriptions/[id] page would lose that on every click, and
+                         would mostly re-render what the customer page already shows. */
+                      aria-label={`Open ${s.plan} for ${cleanDisplayName(s.customer_name)}`}
+                      onClick={() => setScheduleSub(s)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setScheduleSub(s); } }}
                     >
                       {/* align-middle on EVERY cell in this row, not align-top.
                           A postpaid subscription stacks three badges in the Status
@@ -875,11 +1193,40 @@ export default function SubscriptionsPage() {
                           and left a band of empty space beneath them (reported 11 Sep
                           2026). Centring them vertically makes a tall row read as one
                           line of information rather than a half-filled box. */}
-                      <td className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
+                      {/* ── The guard sits on the DOMAIN, not the whole cell ──────
+                          It used to be on this <td>, which made the leftmost column —
+                          the customer name, the most natural thing in the row to click —
+                          do nothing at all. Asked directly, 19 Sep 2026: "is whole card
+                          is clickable or not". It was not, and the one dead spot was the
+                          spot people aim for.
+
+                          Only DomainCell needs the guard: it is click-to-edit, so a
+                          click meant for the domain input would otherwise also open the
+                          drawer over the top of it. */}
+                      {/* stopPropagation, or ticking a row would also open its drawer. */}
+                      <td className="px-2 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${cleanDisplayName(s.customer_name)} — ${s.plan}`}
+                          className="cursor-pointer accent-amber"
+                          checked={pickedIds.has(s.id)}
+                          onChange={(e) => {
+                            const on = e.target.checked;
+                            setPickedIds((prev) => {
+                              const next = new Set(prev);
+                              if (on) next.add(s.id); else next.delete(s.id);
+                              return next;
+                            });
+                          }}
+                        />
+                      </td>
+                      <td className="px-3 py-2.5 align-middle">
                         <div className="font-medium text-sm text-ink break-words leading-snug flex items-center gap-2 flex-wrap">
                           <span>{cleanDisplayName(s.customer_name)}</span>
                         </div>
-                        <DomainCell sub={s} />
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <DomainCell sub={s} />
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 text-sm text-ink-2 align-middle">
                         <div className="break-words leading-snug">{s.plan}</div>
@@ -900,19 +1247,56 @@ export default function SubscriptionsPage() {
                           licences that are almost certainly in use. assessUtilisation()
                           treats an unsynced zero as UNKNOWN and says so in the tooltip
                           — see lib/subscriptions/utilisation.ts. */}
-                      <td className="px-3 py-2.5 text-right tabular-nums text-sm align-middle" title={util.message}>
+                      {/* ── ONE COMPARISON: WHAT GOOGLE CHARGES vs WHAT YOU BILL ──
+                          This column used to carry TWO different pairs of numbers with
+                          only a small label to tell them apart — vendor/billed when a
+                          row had been reconciled, used/billed when it had not. Abhishek,
+                          21 Sep 2026: "its bit confusing here having two much meaning
+                          for different things". He was right, and the usage half had no
+                          business being here at all:
+
+                          NOTHING in this app fetches seat usage. Every insert path writes
+                          `used: 0` and nothing updates it (see lib/subscriptions/
+                          utilisation.ts). The only rows that showed a usage figure were
+                          four DEMO rows seeded on 8 Sep 2026 — their `used_synced_at` is
+                          null, so those numbers came from nowhere. A column whose only
+                          real values are fabricated is worse than an empty one.
+
+                          So the column is now one question with one answer: what the
+                          vendor bills us against what we bill the customer. That is the
+                          comparison tied to money, it is the one the reconcile flow
+                          actually populates, and it is the one with a fix attached.
+
+                          Usage still exists on the subscription and still appears in the
+                          drawer, where there is room to say what it means. */}
+                      <td
+                        className="px-3 py-2.5 text-right tabular-nums text-sm align-middle"
+                        title={leak.kind === "unknown"
+                          ? `Never reconciled against Google, so we do not know how many seats they bill us for. You bill this customer for ${s.seats}.`
+                          : leak.message}
+                      >
                         <span className={cn(
-                          util.level === "idle" ? "text-rose font-medium"
-                            : util.level === "low" ? "text-amber-ink font-medium"
-                            : util.level === "unknown" ? "text-ink-3"
-                            : "text-ink",
+                          "font-semibold",
+                          leak.kind === "under_billed" ? "text-rose"
+                            : leak.kind === "over_billed" ? "text-amber-ink"
+                            : leak.kind === "aligned" ? "text-ink"
+                            : "text-ink-3",
                         )}>
-                          {util.level === "unknown" ? "—" : s.used}
+                          {leak.kind === "unknown" ? "—" : s.vendor_seats}
                         </span>
                         <span className="text-ink-3"> / {s.seats}</span>
-                        {util.level === "unknown" && (
-                          <span className="block text-3xs uppercase tracking-wider text-ink-3">not tracked</span>
-                        )}
+                        <span className={cn(
+                          "block text-3xs font-semibold uppercase tracking-wider",
+                          leak.kind === "under_billed" ? "text-rose"
+                            : leak.kind === "over_billed" ? "text-amber-ink"
+                            : leak.kind === "aligned" ? "text-emerald"
+                            : "text-ink-3",
+                        )}>
+                          {leak.kind === "under_billed" ? "leaking"
+                            : leak.kind === "over_billed" ? "over-billed"
+                            : leak.kind === "aligned" ? "matches"
+                            : "not checked"}
+                        </span>
                       </td>
                       {/* MRR — the money, given weight. */}
                       <td className="px-3 py-2.5 text-right tabular-nums align-middle">
@@ -959,60 +1343,27 @@ export default function SubscriptionsPage() {
                           <SubExceptions sub={s} size="md" />
                         </div>
                       </td>
+                      {/* ── ONE ACTION ON THE ROW, THE REST IN THE DRAWER ────────
+                          This cell used to carry a ⋯ menu of seven items. They now live
+                          in the drawer the row opens, where they sit beside the
+                          subscription they act on — Abhishek, 19 Sep 2026.
+
+                          Renew stays because it is the one thing done WHILE SCANNING:
+                          you run down the list looking for what expires soon and send
+                          the quote, and it already appears only on expired or urgent
+                          rows, so it is not clutter on the other thirteen.
+
+                          Delete was NOT promoted to a row icon, which was the other half
+                          of the proposal. It is the most destructive action here — a
+                          subscription carries invoices and payments — and it is
+                          currently the hardest thing to reach. A one-click trash on
+                          every row would make it the easiest thing on the page. It stays
+                          two deliberate clicks away, at the bottom of the drawer. */}
                       <td className="px-2 py-2.5 text-right align-middle" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           {(s.status === "expired" || isUrgent) && (
                             <Button size="sm" variant={s.status === "expired" ? "danger" : "primary"} icon="refresh" title="Send the renewal quote" onClick={() => router.push("/renewals" as never)}>Renew</Button>
                           )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                aria-label="Subscription actions"
-                                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-3 transition-colors hover:bg-paper-2 hover:text-ink data-[state=open]:bg-paper-2 data-[state=open]:text-ink"
-                              >
-                                <Icon name="more_h" size={20} />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="min-w-[13rem]">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setAddSeatsSub(s)}>
-                                <Icon name="plus" size={16} /> Manage seats
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setExtendSub(s)}>
-                                <Icon name="clock" size={16} /> Extend term
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setScheduleSub(s)}>
-                                <Icon name="calendar" size={16} /> Billing schedule
-                              </DropdownMenuItem>
-                              {s.customer_id && (
-                                <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => router.push(`/customers/${s.customer_id}` as never)}>
-                                  <Icon name="receipt" size={16} /> View invoices
-                                </DropdownMenuItem>
-                              )}
-                              {/* The statement, one click from here. A renewal conversation
-                                  is exactly when somebody asks "and what do they actually
-                                  owe us?", and the answer used to be four clicks away
-                                  through Accounting with the customer picked by hand.
-                                  ?customer= seeds the picker; the Tally XML and CSV exports
-                                  on that page are the ones a CA imports. */}
-                              {s.customer_id && (
-                                <DropdownMenuItem
-                                  className="gap-2.5 py-2 cursor-pointer"
-                                  onClick={() => router.push(`/accounting/ledger?customer=${s.customer_id}` as never)}
-                                >
-                                  <Icon name="book" size={16} /> Statement / Tally ledger
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer" onClick={() => setEditSub(s)}>
-                                <Icon name="edit" size={16} /> Correct details
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="gap-2.5 py-2 cursor-pointer text-rose" onClick={() => handleDeleteSub(s)}>
-                                <Icon name="trash" size={16} /> Cancel / delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
                         </div>
                       </td>
                     </tr>
@@ -1192,17 +1543,24 @@ export default function SubscriptionsPage() {
       {addSeatsSub && (
         <AddSeatsDialog
           sub={addSeatsSub}
+          initialSeats={addSeatsPrefill}
           open={!!addSeatsSub}
           onOpenChange={(v) => { if (!v) setAddSeatsSub(null); }}
         />
       )}
 
-      {/* Billing schedule — a forecast, not documents. See the card's header. */}
+      {/* ── The subscription drawer ───────────────────────────────────────────
+          Since 19 Sep 2026 this is what a ROW opens, not just a menu item. That changed
+          what it has to contain: reached from the menu you had just read the row, so
+          seats, revenue, status and what is owed were all fresh in your head. Reached by
+          clicking the row itself, leaving them out reads as "this subscription has no
+          seats". The facts strip below restates them; the schedule and the amendments
+          are what the drawer was already for. */}
       {scheduleSub && (
         <Sheet open={!!scheduleSub} onOpenChange={(v) => { if (!v) setScheduleSub(null); }}>
           <SheetContent side="right" className="w-full sm:w-[30rem] sm:max-w-[95vw] overflow-y-auto">
             <SheetHeader className="mb-4">
-              <SheetTitle>{scheduleSub.customer_name}</SheetTitle>
+              <SheetTitle>{cleanDisplayName(scheduleSub.customer_name)}</SheetTitle>
               <SheetDescription>
                 {scheduleSub.plan}{scheduleSub.domain ? ` · ${scheduleSub.domain}` : ""}
               </SheetDescription>
@@ -1216,11 +1574,157 @@ export default function SubscriptionsPage() {
                 their own edge-to-edge content and would gain an indent nobody asked
                 for. */}
             <div className="px-6 pb-6">
+              {/* ── WHAT TO DO ABOUT THE LEAK, NOT JUST THAT THERE IS ONE ────────
+                  The row and the card both learned to SHOW leakage on 21 Sep 2026, and
+                  Abhishek's next words were the right ones: "user dont know what action
+                  he have to take". A red tag that names a problem and stops is a nag.
+
+                  So this panel does three things in order: states the gap in one
+                  sentence, says what it costs, and puts the fix one click away with the
+                  number already filled in — the gap is known exactly, so making somebody
+                  retype it is just an opportunity to get it wrong.
+
+                  Only for LEAKING. Over-billed is deliberately not given a fix button:
+                  it is usually intentional (a customer buying seats ahead of new staff),
+                  so a button offering to "correct" it would be pushing the operator
+                  toward undoing something they meant to do. */}
+              {(() => {
+                const leak = assessLeakage({
+                  vendorSeats: scheduleSub.vendor_seats,
+                  billedSeats: scheduleSub.seats,
+                  assignedSeats: scheduleSub.used,
+                  costPerSeatMonth: subscriptionCogs(scheduleSub, catalog).perSeatMonth,
+                  pricePerSeatMonth: scheduleSub.seats > 0 ? Math.round(scheduleSub.mrr / scheduleSub.seats) : null,
+                });
+                if (leak.kind !== "under_billed" || leak.seatGap == null) return null;
+                const gap = leak.seatGap;
+                const sub = scheduleSub;
+                return (
+                  <div className="mb-4 rounded-lg border border-rose/40 bg-rose-soft/40 p-3">
+                    <p className="text-xs font-semibold text-rose mb-1">
+                      Leaking {gap} seat{gap === 1 ? "" : "s"}
+                    </p>
+                    <p className="text-2xs leading-snug text-ink-2">
+                      Google bills you for {sub.vendor_seats} seats. This customer is billed for {sub.seats}.
+                      {leak.monthlyImpact == null
+                        ? " This plan has no catalogue cost, so the rupee amount is unknown — add it under Catalog & Products."
+                        : ` That is ${rupee(leak.monthlyImpact)}/month of margin going out.`}
+                    </p>
+                    <p className="text-2xs leading-snug text-ink-3 mt-1.5">
+                      Fix it either way: bill the extra seat{gap === 1 ? "" : "s"} below, or remove
+                      {gap === 1 ? " it" : " them"} in the Google admin console if nobody is using
+                      {gap === 1 ? " it" : " them"}.
+                    </p>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon="plus"
+                      className="mt-2.5"
+                      onClick={() => { setScheduleSub(null); openAddSeats(sub, gap); }}
+                    >
+                      Bill the {gap} extra seat{gap === 1 ? "" : "s"}
+                    </Button>
+                  </div>
+                );
+              })()}
+
+              {/* Four facts, before the forecast. Two columns so each stays on one line
+                  at the 30rem the sheet is; `rupee()` output is the widest of them. */}
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 mb-4 pb-4 border-b border-hairline">
+                {subscriptionFacts(scheduleSub).map((f) => (
+                  <div key={f.label}>
+                    <dt className="text-2xs uppercase tracking-wider text-ink-3 mb-0.5">{f.label}</dt>
+                    <dd className={cn(
+                      "text-sm tabular-nums",
+                      f.tone === "owed" ? "text-rose font-semibold" : "text-ink",
+                    )}>
+                      {f.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
               <BillingScheduleCard subscription={scheduleSub} todayISO={localDateISO(new Date())} />
               {/* The contract's own history, next to its schedule — the two questions a
                   rep opens this drawer with are "what will they be billed?" and "what
                   changed?". */}
               <AmendmentHistorySection subscription={scheduleSub} />
+
+              {/* ── The actions, where the subscription is ────────────────────
+                  Moved off the row's ⋯ menu on 19 Sep 2026. They act on this
+                  subscription, so they belong beside it rather than behind a menu on a
+                  list — and a seven-item menu on every row was most of that row's
+                  clutter for something few people opened.
+
+                  "Billing schedule" is not among them: this drawer IS the billing
+                  schedule, so the item would have reopened the thing it was clicked in.
+
+                  Each one CLOSES the drawer first. Every action below either navigates
+                  away or opens its own dialog, and a dialog stacked on an open sheet
+                  leaves two dismissable layers over the page — close the wrong one and
+                  the form is still there, behind. */}
+              <div className="mt-6 pt-4 border-t border-hairline">
+                <p className="text-2xs uppercase tracking-wider text-ink-3 mb-2">Actions</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    icon="plus"
+                    onClick={() => { const sub = scheduleSub; setScheduleSub(null); openAddSeats(sub); }}
+                  >
+                    Manage seats
+                  </Button>
+                  <Button
+                    icon="clock"
+                    onClick={() => { const sub = scheduleSub; setScheduleSub(null); setExtendSub(sub); }}
+                  >
+                    Extend term
+                  </Button>
+                  {scheduleSub.customer_id && (
+                    <Button
+                      icon="users"
+                      onClick={() => { const id = scheduleSub.customer_id; setScheduleSub(null); router.push(`/customers/${id}` as never); }}
+                    >
+                      Open customer
+                    </Button>
+                  )}
+                  {/* The statement, one click from here. A renewal conversation is
+                      exactly when somebody asks "and what do they actually owe us?", and
+                      the answer used to be four clicks away through Accounting with the
+                      customer picked by hand. ?customer= seeds the picker; the Tally XML
+                      and CSV exports on that page are the ones a CA imports. */}
+                  {scheduleSub.customer_id && (
+                    <Button
+                      icon="book"
+                      onClick={() => { const id = scheduleSub.customer_id; setScheduleSub(null); router.push(`/accounting/ledger?customer=${id}` as never); }}
+                    >
+                      Statement
+                    </Button>
+                  )}
+                  <Button
+                    icon="edit"
+                    className="col-span-2"
+                    onClick={() => { const sub = scheduleSub; setScheduleSub(null); setEditSub(sub); }}
+                  >
+                    Correct details
+                  </Button>
+                </div>
+
+                {/* ── Kept at arm's length, on purpose ──────────────────────────
+                    The other half of the 19 Sep proposal was to promote this to a trash
+                    icon on every row. It was declined: a subscription carries invoices
+                    and payments, and the design that makes the most destructive action
+                    the easiest one to reach is the wrong way round. It sits last, below
+                    a rule, visually apart from the five above, and still asks for
+                    confirmation naming the customer and the plan. */}
+                <div className="mt-4 pt-3 border-t border-hairline">
+                  <Button
+                    variant="danger"
+                    icon="trash"
+                    className="w-full"
+                    onClick={() => { const sub = scheduleSub; setScheduleSub(null); handleDeleteSub(sub); }}
+                  >
+                    Cancel / delete subscription
+                  </Button>
+                </div>
+              </div>
             </div>
           </SheetContent>
         </Sheet>
@@ -1240,26 +1744,6 @@ export default function SubscriptionsPage() {
         open={importOpen}
         onOpenChange={setImportOpen}
         onImportComplete={() => refetch()}
-      />
-
-      {/* The vendor-console licence audit. Reads the CSV in the browser and sends nothing —
-          a user export is a list of every employee's address at a customer's company, and
-          there is no reason for it to leave this machine. */}
-      <LicenceAuditDialog
-        open={auditOpen}
-        onOpenChange={setAuditOpen}
-        subs={subsByWorkspace.map((s) => ({
-          id: s.id,
-          customerName: s.customer_name,
-          plan: s.plan,
-          domain: s.domain,
-          seats: s.seats ?? 0,
-          mrr: s.mrr ?? 0,
-          status: s.status,
-        }))}
-        /* The vendor comes off the row, so the scope filter needs no string matching on a
-           plan name — the thing that makes a licence comparison go quietly wrong. */
-        vendorOf={(s) => subsByWorkspace.find((x) => x.id === s.id)?.vendor ?? "other"}
       />
 
       {/* Reconcile vs Google reseller panel (read-only report) → Phase 2 matcher */}
@@ -1318,6 +1802,16 @@ export default function SubscriptionsPage() {
       )}
 
       {/* Mobile primary FAB */}
+      {/* Renders nothing at zero selected, so it costs the normal page nothing. */}
+      <SubscriptionsBulkBar
+        count={pickedIds.size}
+        onExport={bulkExport}
+        onSendRenewals={bulkSendRenewals}
+        onDelete={bulkDelete}
+        onDeselectAll={clearPicked}
+        busy={bulkBusy}
+      />
+
       <FAB icon="plus" label="Add Subscription" onClick={() => setAddDirectOpen(true)} />
     </div>
   );

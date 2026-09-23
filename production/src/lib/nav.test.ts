@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { getCrumb, getParentListHref, getSectionPrimaryHref, APP_NAV, allowedRoutesForRole, filterNavForRole } from "./nav";
+import { getCrumb, getParentListHref, getSectionPrimaryHref, APP_NAV, allowedRoutesForRole, filterNavForRole, SCREEN_TITLES, sectionCrumb } from "./nav";
 
 describe("getCrumb", () => {
   it("returns the exact crumb for a known static route", () => {
@@ -10,7 +10,7 @@ describe("getCrumb", () => {
        quotes, invoices and payments about it. Sales & CRM keeps the prospect
        half (leads, enquiries, referrals). */
     expect(getCrumb("/customers")).toEqual(["Billing", "Customers"]);
-    expect(getCrumb("/quotes/new")).toEqual(["Revenue", "Quotes", "New"]);
+    expect(getCrumb("/quotes/new")).toEqual(["Billing", "Quotes", "New"]);
   });
 
   it("resolves dynamic detail routes via the [id] placeholder (not 'Dashboard')", () => {
@@ -18,8 +18,8 @@ describe("getCrumb", () => {
     // to the Dashboard crumb. A real customer id is a uuid.
     expect(getCrumb("/customers/17e61b78-9450-4849-ad93-9834d2281647")).toEqual(["Billing", "Customers", "Profile"]);
     // Quote ids are prefixed text, not uuids.
-    expect(getCrumb("/quotes/Q-ET-2026-27-0010")).toEqual(["Revenue", "Quotes", "Detail"]);
-    expect(getCrumb("/invoices/INV-ET-2026-27-0006")).toEqual(["Revenue", "Invoices", "Detail"]);
+    expect(getCrumb("/quotes/Q-ET-2026-27-0010")).toEqual(["Billing", "Quotes", "Detail"]);
+    expect(getCrumb("/invoices/INV-ET-2026-27-0006")).toEqual(["Billing", "Invoices", "Detail"]);
   });
 
   it("resolves a mid-path id so a sub-page keeps its own crumb", () => {
@@ -37,7 +37,7 @@ describe("getCrumb", () => {
   it("falls back to the bare section path when no [id] entry exists", () => {
     // /payments has a list crumb but no /payments/[id] entry, so a detail route
     // must still land in the right section rather than on Dashboard.
-    expect(getCrumb("/payments/abc123")).toEqual(["Revenue", "Payments Received"]);
+    expect(getCrumb("/payments/abc123")).toEqual(["Billing", "Payments Received"]);
   });
 
   it("falls back to Dashboard for a completely unknown route", () => {
@@ -239,5 +239,86 @@ describe("a page in the wrong nav section is unreachable, not just hidden", () =
     const declared = APP_NAV.flatMap((s) => s.items.map((i) => i.href))
       .filter((h) => h.startsWith("/accounting"));
     for (const href of new Set(declared)) expect(reachable).toContain(href);
+  });
+});
+
+/**
+ * ─── ONE SIDEBAR SECTION, ONE BREADCRUMB NAME ───────────────────────────────
+ *
+ * `SCREEN_TITLES` describes a structure `APP_NAV` already describes, and on 21 Sep 2026
+ * the two had drifted far enough to be visibly wrong. Abhishek, on the subscriptions
+ * page: "why it breadcrumb showing wrong". The sidebar said Billing & Subscriptions; the
+ * breadcrumb said "Revenue > Subscriptions". Both were defensible names — the defect was
+ * that its EIGHT pages used two of them, so Customers said "Billing" and Subscriptions
+ * said "Revenue" from inside the same sidebar group.
+ *
+ * ─── WHY THIS DOES NOT DEMAND crumb === section ─────────────────────────────
+ * The obvious test — first crumb must equal the sidebar heading — fails 61 pages, and
+ * almost all of them are fine. "Sales" is a better breadcrumb than "Sales & CRM", and
+ * Admin & Control deliberately splits into Settings / Admin / Help, which is genuinely
+ * useful on a section that large.
+ *
+ * What is never right is a section disagreeing with ITSELF by accident. So the rule is:
+ * one section, one crumb — unless the split is declared below, where somebody had to
+ * decide it on purpose.
+ */
+const DELIBERATE_CRUMB_SPLITS: Record<string, string[]> = {
+  /* Large sections whose sub-groups are more useful to an operator than the section
+     heading would be. Each one is a decision, not a drift. */
+  "Home": ["Home", "Me", "My Attendance"],
+  /* /my-expenses is listed under Sales & CRM for reps, but it is about the rep's OWN
+     money — "Me" is right there and "Sales" would be misleading. */
+  "Sales & CRM": ["Sales", "Me"],
+  "Operations": ["Catalog", "Company Documents", "Engage", "Operations"],
+  "Accounting & Finance": ["Accounting", "Reports", "Compliance"],
+  "Admin & Control": ["Settings", "Admin", "Help"],
+  "Filing": ["Accounting", "Payroll"],
+};
+
+describe("breadcrumbs — one sidebar section, one name", () => {
+  const sections = APP_NAV.map((sec) => ({
+    name: sec.section,
+    crumb: sectionCrumb(sec),
+    crumbsInUse: [...new Set(
+      sec.items.map((i) => SCREEN_TITLES[i.href]?.[0]).filter((c): c is string => !!c),
+    )],
+  }));
+
+  it("has sections to check", () => {
+    // A lookup that silently matched nothing would make everything below pass forever.
+    expect(sections.length).toBeGreaterThan(5);
+    expect(sections.some((s) => s.crumbsInUse.length > 0)).toBe(true);
+  });
+
+  it("never lets one section use two breadcrumb names by accident", () => {
+    const split = sections
+      .filter((s) => s.crumbsInUse.length > 1)
+      .filter((s) => {
+        const allowed = DELIBERATE_CRUMB_SPLITS[s.name];
+        return !allowed || s.crumbsInUse.some((c) => !allowed.includes(c));
+      })
+      .map((s) => s.name + ": pages disagree — " + s.crumbsInUse.join(" vs "));
+
+    expect(
+      split,
+      "These sidebar sections use more than one breadcrumb name, and the split is not "
+      + "declared in DELIBERATE_CRUMB_SPLITS. Either give the section one crumb, or add "
+      + "it there with a reason: " + split.join(" | "),
+    ).toEqual([]);
+  });
+
+  it("keeps Billing & Subscriptions on a single crumb — the reported bug", () => {
+    const billing = sections.find((s) => s.name === "Billing & Subscriptions")!;
+    expect(billing.crumbsInUse).toEqual(["Billing"]);
+    expect(billing.crumb).toBe("Billing");
+  });
+
+  it("gives every sidebar page a breadcrumb", () => {
+    // A page reachable from the sidebar with no entry falls back to a generic crumb and
+    // tells the operator nothing about where they are.
+    const missing = APP_NAV.flatMap((sec) => sec.items)
+      .filter((i) => !SCREEN_TITLES[i.href])
+      .map((i) => i.href);
+    expect(missing, "These sidebar pages have no breadcrumb: " + missing.join(", ")).toEqual([]);
   });
 });

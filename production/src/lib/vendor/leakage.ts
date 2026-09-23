@@ -125,6 +125,17 @@ export function assessLeakage(input: LeakageInput): LeakageResult {
     };
   }
 
+  /* ── OVER-BILLED IS USUALLY DELIBERATE ────────────────────────────────────
+     This used to read "a refund waiting to happen" and "check before they do". Abhishek
+     corrected it on 21 Sep 2026 from the actual sales motion: customers routinely buy
+     two or four seats ahead of staff who have not joined yet, and the reseller
+     provisions them as people arrive. So the common case for this branch is a customer
+     getting exactly what they agreed to.
+
+     It is still worth SHOWING — seats paid for and never provisioned is a real way to
+     lose a customer's trust, and only the operator knows which of the two it is. What
+     changed is the accusation: it now states the fact and names both readings, instead
+     of asserting a refund is owed. The number is unchanged. */
   const over = Math.abs(seatGap);
   return {
     kind: "over_billed",
@@ -133,8 +144,8 @@ export function assessLeakage(input: LeakageInput): LeakageResult {
     annualImpact: monthlyImpact == null ? null : monthlyImpact * 12,
     idleSeats,
     message: monthlyImpact == null
-      ? `Billing the customer for ${over} more ${seatUnit(over)} than the vendor has provisioned. Check before they do.`
-      : `Billing the customer for ${over} more ${seatUnit(over)} than the vendor has provisioned — ₹${monthlyImpact.toLocaleString("en-IN")}/month they may ask back.`,
+      ? `Billing for ${over} more ${seatUnit(over)} than the vendor has provisioned. Normal if they bought ahead for new staff — otherwise provision ${over === 1 ? "it" : "them"}.`
+      : `Billing for ${over} more ${seatUnit(over)} than the vendor has provisioned — ₹${monthlyImpact.toLocaleString("en-IN")}/month. Normal if they bought ahead for new staff — otherwise provision ${over === 1 ? "it" : "them"}.`,
   };
 }
 

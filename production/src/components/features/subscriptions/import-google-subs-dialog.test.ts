@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseGoogle, classifyRows, type RawSub } from "./google-subs-parse";
+import { parseGoogle, classifyRows, buildSubscriptionRow, type RawSub, type GRow } from "./google-subs-parse";
 
 /**
  * The Google→app subscription matcher writes money rows, so its classification
@@ -103,5 +103,76 @@ describe("classifyRows — shared by the live Reseller-API sync", () => {
     expect(byDomain["fresh.io"].status).toBe("paused");
     // Sorted: actionable (link, new) before already-in-app.
     expect(rows[rows.length - 1].category).toBe("in_app");
+  });
+});
+
+/**
+ * ─── A ROW IMPORTED FROM GOOGLE HAS BEEN CHECKED AGAINST GOOGLE ─────────────
+ *
+ * Reported 21 Sep 2026. Four subscriptions were imported straight from the Google
+ * export and every one of them immediately read "— / 2 · NOT CHECKED" in the
+ * licence-leakage column: the app had been handed Google's seat count by Google, and
+ * then reported that it had never asked.
+ *
+ * The cause was a missing key in an object literal, which is the kind of defect that
+ * survives review because it looks like nothing. These tests assert the payload, which
+ * is why the builder was pulled out of the dialog.
+ */
+describe("buildSubscriptionRow — what an imported subscription knows", () => {
+  const row: GRow = {
+    rowNum: 2,
+    domain: "accesstel.in",
+    customer_number: "",
+    plan: "Google Workspace Business Starter",
+    seats: 2,
+    estMrr: 540,
+    status: "active",
+    start_date: "2026-08-29",
+    renewal_date: "2027-08-29",
+    category: "link",
+    customer_id: "cust-1",
+    customer_name: "Accesstel",
+  };
+  const input = { tenantId: "t1", customerId: "cust-1", syncedAt: "2026-09-21T10:00:00.000Z" };
+
+  it("records the VENDOR seat count, not only what we bill", () => {
+    const out = buildSubscriptionRow(row, input)!;
+    expect(out.seats).toBe(2);
+    expect(out.vendor_seats).toBe(2);
+  });
+
+  it("stamps when the vendor figure was read, so it is not 'never checked'", () => {
+    // vendor_synced_at is what the leakage card reads to decide "never reconciled".
+    // Without it the row is unknown forever, however many times it was imported.
+    expect(buildSubscriptionRow(row, input)!.vendor_synced_at).toBe("2026-09-21T10:00:00.000Z");
+  });
+
+  it("starts matched — the two counts came from the same file", () => {
+    const out = buildSubscriptionRow(row, input)!;
+    expect(out.vendor_seats).toBe(out.seats);
+  });
+
+  it("carries the rest of the row through unchanged", () => {
+    expect(buildSubscriptionRow(row, input)).toMatchObject({
+      tenant_id: "t1",
+      customer_id: "cust-1",
+      customer_name: "Accesstel",
+      vendor: "google",
+      domain: "accesstel.in",
+      status: "active",
+      start_date: "2026-08-29",
+      renewal_date: "2027-08-29",
+      outstanding_amount: 0,
+      used: 0,
+    });
+  });
+
+  it("returns null when no customer could be resolved, rather than an orphan row", () => {
+    expect(buildSubscriptionRow(row, { ...input, customerId: undefined })).toBeNull();
+  });
+
+  it("falls back to the domain when Google gave no customer name", () => {
+    const out = buildSubscriptionRow({ ...row, customer_name: undefined }, input)!;
+    expect(out.customer_name).toBe("accesstel.in");
   });
 });

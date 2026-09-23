@@ -33,7 +33,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useItems } from "@/lib/queries/items";
 import { cn, rupee, formatDate } from "@/lib/utils";
-import { parseGoogle, classifyRows, normDomain, type GRow, type Parsed, type RawSub } from "./google-subs-parse";
+import { parseGoogle, classifyRows, normDomain, buildSubscriptionRow, type GRow, type Parsed, type RawSub } from "./google-subs-parse";
 
 interface Props {
   open: boolean;
@@ -200,25 +200,17 @@ export function ImportGoogleSubsDialog({ open, onOpenChange, onComplete }: Props
 
       // 2. Build subscription rows (link rows + new rows that now have a customer).
       const source = createNew ? [...link, ...neu] : link;
+      /* One timestamp for the whole import, not one per row: every row in it was read
+         from the same file at the same moment, and per-row `new Date()` would scatter
+         them across the milliseconds the loop happened to take. */
+      const syncedAt = new Date().toISOString();
       const subPayload = source.flatMap((r) => {
-        const customer_id = r.category === "link" ? r.customer_id : domainToId.get(r.domain);
-        if (!customer_id) return [];
-        return [{
-          tenant_id: me.tenantId,
-          customer_id,
-          customer_name: r.customer_name ?? r.domain,
-          plan: r.plan,
-          vendor: "google" as const,
-          seats: r.seats,
-          used: 0,
-          mrr: r.estMrr,
-          start_date: r.start_date ?? null,
-          renewal_date: r.renewal_date ?? null,
-          status: r.status,
-          domain: r.domain,
-          outstanding_amount: 0,
-          auto_renew: true,
-        }];
+        const row = buildSubscriptionRow(r, {
+          tenantId: me.tenantId,
+          customerId: r.category === "link" ? r.customer_id : domainToId.get(r.domain),
+          syncedAt,
+        });
+        return row ? [row] : [];
       });
 
       let inserted = 0;

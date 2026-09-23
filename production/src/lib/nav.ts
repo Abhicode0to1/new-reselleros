@@ -41,6 +41,27 @@ export interface NavSection {
   items: NavItem[];
   /** Roles that can see this section. Omit = visible to everyone. */
   roles?: UserRole[];
+  /**
+   * Short name for the breadcrumb, when the sidebar heading is too long for it.
+   * Defaults to `section`.
+   *
+   * Added 21 Sep 2026. SCREEN_TITLES was a hand-kept SECOND copy of this structure and
+   * it had drifted badly: the sidebar filed Subscriptions under "Billing &
+   * Subscriptions" while the breadcrumb said "Revenue > Subscriptions", and seven more
+   * pages in that section disagreed the same way. Abhishek spotted it on the
+   * subscriptions page — "why it breadcrumb showing wrong".
+   *
+   * The names were not arbitrary; "Revenue" is a perfectly good crumb for Subscriptions.
+   * The bug was that it lived somewhere the sidebar could not see. Now the crumb belongs
+   * to the section, one place, and nav.test.ts fails if a SCREEN_TITLES entry ever
+   * contradicts it again.
+   */
+  crumb?: string;
+}
+
+/** The breadcrumb name for a section — its short `crumb`, or the heading itself. */
+export function sectionCrumb(section: NavSection): string {
+  return section.crumb ?? section.section;
 }
 
 /**
@@ -233,6 +254,11 @@ export const APP_NAV: NavSection[] = [
   },
   {
     section: "Billing & Subscriptions",
+    /* "Billing & Subscriptions" is right in the sidebar and too long for a breadcrumb.
+       Its eight pages used to be split between "Billing" and "Revenue" — two crumbs for
+       one sidebar group, which is what made "Revenue > Subscriptions" look wrong beside
+       a sidebar that clearly said Billing & Subscriptions. */
+    crumb: "Billing",
     icon: "rupee",
     roles: ["owner", "manager", "sales", "billing", "delivery", "support"],
     items: [
@@ -404,17 +430,17 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/contacts":        ["Sales", "Contacts"],
   "/contacts/[id]":   ["Sales", "Contacts", "Profile"],
   "/referrals":       ["Sales", "Referrals"],
-  "/online-orders":   ["Revenue", "Online Orders"],
-  "/quotes":          ["Revenue", "Quotes"],
-  "/quotes/new":      ["Revenue", "Quotes", "New"],
-  "/quotes/[id]":     ["Revenue", "Quotes", "Detail"],
-  "/projects":        ["Revenue", "Project Sales"],
-  "/projects/[id]":   ["Revenue", "Project Sales", "Detail"],
-  "/payments":        ["Revenue", "Payments Received"],
-  "/invoices":        ["Revenue", "Invoices"],
-  "/invoices/[id]":   ["Revenue", "Invoices", "Detail"],
-  "/subscriptions":   ["Revenue", "Subscriptions"],
-  "/renewals":        ["Revenue", "Renewals"],
+  "/online-orders":   ["Billing", "Online Orders"],
+  "/quotes":          ["Billing", "Quotes"],
+  "/quotes/new":      ["Billing", "Quotes", "New"],
+  "/quotes/[id]":     ["Billing", "Quotes", "Detail"],
+  "/projects":        ["Billing", "Project Sales"],
+  "/projects/[id]":   ["Billing", "Project Sales", "Detail"],
+  "/payments":        ["Billing", "Payments Received"],
+  "/invoices":        ["Billing", "Invoices"],
+  "/invoices/[id]":   ["Billing", "Invoices", "Detail"],
+  "/subscriptions":   ["Billing", "Subscriptions"],
+  "/renewals":        ["Billing", "Renewals"],
   "/vendor-portal":   ["Purchases", "Vendor Portal & Bids"],
   "/purchase-orders": ["Purchases", "Purchase Orders"],
   "/accounting/vendors":       ["Purchases", "Vendors"],
