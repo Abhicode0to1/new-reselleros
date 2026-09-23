@@ -62,15 +62,41 @@ corrected in place. Grouped by who can move it, because most of what remains is 
 - [ ] **Which side owns DirectAdmin?** Two writers means two username derivations. It does
       NOT block `hosting.change_plan`, which shipped — that command works with the existing
       `(userId, domainName)` uniqueness rather than changing it.
-- [ ] **Is a ResellerClub domain renewal idempotent, or does a second call add a year?**
-      Gates Phase 8, and is not determinable from either codebase. If it adds a year, renewals
-      need the same per-row human release that registrations get.
+- [x] **Is a renewal idempotent? ANSWERED 2026-09-23 — as we call it today, NO.** And the
+      answer came from our own code, not the vendor docs.
+      RC's `renew.json` requires `exp-date`, documented as "Current Expiry Date of the Order in
+      epoch time format". That is an optimistic-concurrency guard — and
+      `resellerclub-wrapper.ts:136` **re-reads the expiry on every call** and passes whatever it
+      just read. So on a retry after a renewal we did not hear back from:
+      `getDomainExpiry` returns the NEW expiry, we pass that, it matches, and RC renews again.
+      **A retry buys a second year.** The guard that would have stopped it is defeated by our
+      own pre-flight.
+      No vendor page states the duplicate-call behaviour (the KB is 403 to fetching and the
+      published parameter tables are silent on it), but the conclusion does not depend on it:
+      if RC validates `exp-date` we pass a valid one, and if it ignores `exp-date` the renewal
+      proceeds anyway. Either way the second year is bought.
+      **This retrospectively proves the 409 shipped earlier today was right** — the renewal
+      route refuses to invite a retry on `sent_unknown`, and that was precautionary when
+      written. It is now measured.
+
+- [ ] **Phase 8's design follows from that, and it is better than a human release.** The
+      pre-renewal expiry is the reconciler: record it before calling, and on an ambiguous
+      outcome re-read it. **Moved → the renewal happened. Unchanged → it did not, and a retry
+      is free.** A pure read with a definite answer, which is exactly the bar Phase 6 set for
+      giving a command a reconciler — so `domain.renew` can be automated safely rather than
+      parked for a person.
+      Two things still worth asking RC support, now much narrower than the original question:
+      does `renew.json` REJECT a mismatched `exp-date`, and is there a request-id style
+      idempotency key? If it rejects, passing the ORIGINAL exp-date on a retry turns that field
+      into a proper idempotency key and the ambiguity disappears.
 
 ### 0.2 Mine — buildable now, in this order
 
-- [ ] **Phase 8 — `domain.renew`.** The first unrecoverable rupee, on a domain we already own.
-      Starts only once the idempotency question above is answered, because the answer changes
-      the design rather than a detail of it.
+- [ ] **Phase 8 — `domain.renew`. UNBLOCKED 2026-09-23.** The idempotency question is
+      answered: a retry buys a second year as we call it today (see §0.1). The design that
+      falls out is a reconciler on the expiry date — record it before the call, re-read it on
+      ambiguity, moved means done — which is a pure read with a definite answer and needs no
+      human release. Ready to build.
 - [ ] **Phase 9 — `domain.register`.** Last, behind two fail-closed env gates and a per-row
       human release. Blocked on both §0.1 decisions above it.
 - [x] **Per-command live control — the CODE half is built (2026-09-23).** The env-var half is
@@ -605,9 +631,11 @@ Phases are ordered so each guard ships **before** the capability it guards.
 
 - [ ] Does ResellerClub actually emit the prose in `BALANCE_PENDING_FRAGMENTS` etc.? Those lists
       are DMS's *model* of RC behaviour; the local RC host is unreachable by design.
-- [ ] **Is a domain renewal idempotent at ResellerClub, or does a second call add a year?** Not
-      determinable from either codebase. If it adds a year, renewals need the same per-row human
-      release that registrations get.
+- [x] **Is a domain renewal idempotent at ResellerClub?** ANSWERED 2026-09-23 — see §0.1. It
+      WAS determinable from this codebase, which is the lesson: `resellerclub-wrapper.ts`
+      re-reads the expiry on every call and passes it as `exp-date`, so a retry presents a
+      valid current expiry and renews again. The question was recorded as unanswerable without
+      anyone reading the wrapper.
 - [ ] What does DirectAdmin actually say when a *domain* (not username) is already hosted?
 - [ ] Is the ResellerClub account prepaid or on credit? Changes whether `balance_pending` is the
       dominant ambiguity or a rarity.
