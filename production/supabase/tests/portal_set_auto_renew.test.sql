@@ -7,8 +7,12 @@
 --   2. The same customer cannot toggle ANOTHER customer's sub → RPC raises and
 --      that sub is unchanged (no cross-customer write).
 --
--- NOTE: customer_users.auth_user_id FKs to auth.users, so the test borrows a
--- real auth user id (rolled back). Replace the literal below if that row is gone.
+-- This fixture OWNS its auth user (AGENTS.md L11). It used to borrow one with
+-- `select id from auth.users limit 1`, and that is why it failed:
+-- customer_users.auth_user_id is UNIQUE, so the borrow dies with a duplicate key
+-- the moment the borrowed user already has a portal link. It passed on
+-- production only because of which row happened to come back first, which is
+-- luck rather than design and could have broken any day.
 
 begin;
 -- ── setup (service_role) ──
@@ -18,10 +22,13 @@ insert into public.tenants (id, name, email, state_code, doc_code)
 insert into public.customers (id, tenant_id, name, contact_email)
   values ('cccccccc-0000-0000-0000-0000000000f1','ffffffff-0000-0000-0000-0000000000f1','Cust A','a@portal.in'),
          ('cccccccc-0000-0000-0000-0000000000f2','ffffffff-0000-0000-0000-0000000000f1','Cust B','b@portal.in');
--- borrow any real auth user for the FK; this row is rolled back
+-- Own the auth user rather than borrowing one, so this file does not depend on
+-- what the operator did to their data last week.
+insert into auth.users (id, email)
+  values ('dddddddd-0000-0000-0000-0000000000f1','portal-tester@example.test');
 insert into public.customer_users (auth_user_id, customer_id, tenant_id, email, role)
-  select id, 'cccccccc-0000-0000-0000-0000000000f1','ffffffff-0000-0000-0000-0000000000f1','a@portal.in','admin'
-  from auth.users limit 1;
+  values ('dddddddd-0000-0000-0000-0000000000f1','cccccccc-0000-0000-0000-0000000000f1',
+          'ffffffff-0000-0000-0000-0000000000f1','a@portal.in','admin');
 insert into public.subscriptions (id, tenant_id, customer_id, customer_name, plan, vendor, seats, mrr, status, start_date, renewal_date, auto_renew)
   values ('aaaaaaaa-0000-0000-0000-0000000000f1','ffffffff-0000-0000-0000-0000000000f1','cccccccc-0000-0000-0000-0000000000f1','Cust A','Google Workspace Standard','google',10,8640,'active',current_date,current_date+365,true),
          ('aaaaaaaa-0000-0000-0000-0000000000f2','ffffffff-0000-0000-0000-0000000000f1','cccccccc-0000-0000-0000-0000000000f2','Cust B','Google Workspace Standard','google',5,4320,'active',current_date,current_date+365,true);
