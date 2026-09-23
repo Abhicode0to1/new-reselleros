@@ -871,22 +871,26 @@ Consequences accepted with the decision:
       `<AdminLayoutSkeleton>` (re-counted 23 Sep; this said 19). Until then `components/skeletons/AdminLayout.tsx` still
       carries a `bg-blue-900` sidebar for its standalone use outside /admin — worth
       converting whenever that path is next touched.
-- [ ] **The DMS palette conversion was narrower than I reported.** I said "~2,900 legacy classes
-      → 7". The 7 was real but measured only over `app/admin`; `app/dashboard` is genuinely 0.
-      The conversion ran over the panel *page* directories and `components/admin` (53 left) /
-      `components/user`, and never covered `components/` root — where shared
-      components rendered *inside* the panels live.
-      **The figures previously here were wrong** — see §0.3. Re-measured 2026-09-23 with
-      `(bg|text|border)-(gray|blue|red|green|yellow|indigo|purple|pink|slate)-[0-9]{2,3}`
-      over `app/` + `components/` .tsx: **2,573 across 151 files**. Panel-scoped:
-      `app/admin` **563**, `app/dashboard` **200** (this file claimed 0, and
-      `app/dashboard/dns-management/page.tsx` alone disproves it), `components/admin` 111,
-      `components/user` 18. The old numbers are not reproducible because their pattern was
-      never recorded, which is the actual lesson. Much of that is the public marketing site and checkout, which were
-      never in scope — but `components/DomainRenewalModal.tsx` (30 instances) renders inside
-      the customer panel at `/dashboard/domains`, so the panels are not uniformly converted.
-      Worth a pass keyed on *what the panels render*, not on directory names.
-- [x] **The local stack's safety — code gate added 2026-09-23**, see §0.4. DMS `f5cb018`.
+- [ ] **The DMS palette conversion — and the headline number counts DEAD CODE (2026-09-23).**
+      The panel-scoped figures stand (`app/admin` 563, `app/dashboard` 200), but two things
+      found while starting the work change how to approach it:
+      · **114 legacy classes are in components nothing renders.** `DomainBookingProgress` (36),
+        `AdminStatsCard` (33), `AdminQuickActions` (29) and `NameServerManagement` (16) are
+        imported only by `components/index.ts` — **a barrel that nothing imports**. Git says
+        they were never wired rather than deliberately unmounted, so they are dead by neglect.
+        Left in place: deleting unused components is the owner's call, not a side effect of a
+        palette pass. But do not count them as work.
+      · **The obvious proxy for "is this rendered" is wrong in BOTH directions.** "Does any file
+        under `app/` mention it" marked `FooterClassic`, `CustomToast` and `LoadingComponents`
+        dead when they are reached through `Footer.tsx`, `lib/toast.tsx` and `UserLayout.tsx`.
+        Only enumerating every importer settles it.
+      · **`components/DomainRenewalModal.tsx` is DONE** (DMS `31bb336`) — the file this entry
+        named as proof the panels are not uniformly converted. 47 → 0, using the mapping already
+        applied in `ActionMenu.tsx`/`Modal.tsx` rather than a new one. Typecheck and the full
+        suite green; **not browser-verified**, because reaching that modal needs a customer
+        session, a domain and a click.
+      Next most valuable by the same test: `HostingRenewalModal` (49) and `DomainSetup` (36),
+      both genuinely rendered.
 - [ ] **Commit-email linkage unverified.** Commits use `pawan@exceltechnologies.in`; they will
       only link to the GitHub account if that address is verified under Settings → Emails.
 - [ ] **No PR opened from here, and that is now the standing rule** — do not open one unless
