@@ -2793,3 +2793,72 @@ nothing anyway, so even a working version would have changed no screen.
   pointless.** What is pinned now is that the User schema has no `domains` path — the reason
   the function could never have worked, and the reason reviving it would be wrong.
 
+## L112. Code that is WRONG and UNREACHABLE survives, because it reads exactly like code that is right
+
+*23 Sep 2026. Three independent instances in one day, found three different ways.*
+
+| What | Why it was wrong | Why nobody removed it |
+|---|---|---|
+| `AdminLayoutSkeleton`'s chrome | a `bg-blue-900` sidebar from before the restyle — the exact flash the shell was built to stop | all 19 importers sit under that shell, so the guard always fired and it never rendered |
+| `onLogout={() => { window.location.href = "/login" }}` in five admin pages | navigates without `signOut()` or clearing storage — the operator would land on /login still authenticated | inside the shell `AdminLayout` returns only its children, so a page's own `onLogout` is dead |
+| `\|\| "https://resellersos.web.app"` in 13 files | that host answers **503** | `NEXT_PUBLIC_APP_URL` is baked at build and set at runtime, so the fallback never fires |
+
+None of these could run. Every one of them was *wrong*. And that combination is
+what preserved them: a reader cannot tell dead-and-wrong from dead-and-fine, so
+the honest-looking response to each is to leave it alone.
+
+**Two of the three were actively defended.** The skeleton's chrome had a comment
+saying it was kept "because this component is also used outside the /admin
+subtree" — measured, there is no such use — and two tests that rendered it
+with no provider and asserted the dark chrome appeared. That is L111 one step on:
+not a test that asserts nothing, but a test that asserts something true of a
+configuration no caller can produce.
+
+**The rules:**
+
+- **"It cannot run" is not a reason to stop reading.** Ask the second question:
+  *and is it right?* Dead-and-right is housekeeping. Dead-and-wrong is a loaded
+  gun — it fires the day somebody deletes a guard, moves a component out of a
+  provider, or builds without an arg, and it fires as the behaviour nobody
+  reviewed.
+- **The compiler is the honest way to find a dead constant.** Deleting the
+  razorpay fix's `WEBHOOK_APP_URL` produced `TS6133: declared but its value is
+  never read`. Earlier the same day I *claimed* `compliance-reminders`' constant
+  was unused from a grep; it is used, 115 lines down. Remove the last use and let
+  tsc tell you, rather than counting matches.
+- **A justification written next to dead code ages with nothing to correct it.**
+  Normal code gets corrected when it misbehaves. This never misbehaves, so its
+  comment is never re-read, and the comment is usually the only reason it is
+  still there. Test the claim (§12, L41) rather than the sentence.
+- **Fix it toward "cannot be wrong", not toward "right today".** Both URL fixes
+  went to `new URL(path, request.url)` rather than a better fallback host: the
+  request's own origin needs no configuration, cannot drift, and survives this
+  service answering on more than one hostname (L18).
+
+## L113. Check where a string is CONSUMED, not where it is declared
+
+*23 Sep 2026, and it cost a wrong statement to the operator before it was caught.*
+
+Auditing the dead-host fallback, I grepped the declarations, read the first use in
+each file, and reported that all the remaining sites built "internal staff links".
+One did not. `api/webhooks/razorpay` used it **350 lines below the declaration** to
+build the GST tax-invoice link in the CUSTOMER's order confirmation — a statutory
+document link, sent after payment, pointing at a host that answers 503.
+
+A declaration tells you a value exists. Only the call site tells you who receives
+it. On a long route file those are nowhere near each other, and the first use is
+not representative of the rest.
+
+**The rules:**
+- **Trace every use to its `to:`.** The audit that was worth anything listed each
+  consumption against the recipient it reaches — `alert.to`, `owner.to`, a role
+  query, a customer address. "Internal" is a claim about the recipient, so it has
+  to be read off the recipient.
+- **A filter that hides a usage reads exactly like no usage.** Two of my own
+  passes over the same files produced false absences: an `awk` exclusion for
+  `^ *const ` swallowed `const msg = renderReminder(plan, APP_URL)`, and a
+  `head -40` truncated the last file. Both printed a clean-looking nothing. If a
+  file you expect to appear does not, suspect the pipeline before the code (L23).
+- **When a classification has been wrong once, do not restate it — re-derive it.**
+  Leaving "the rest are internal" in a comment as reassurance would have carried
+  my error forward in the place most likely to be trusted.
