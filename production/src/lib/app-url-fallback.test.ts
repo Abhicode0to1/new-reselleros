@@ -25,12 +25,22 @@
  *   customer impact was fixed properly and the rest are pinned here rather than
  *   rewritten in bulk by someone who cannot prove they did it right.
  *
- * WHAT WAS FIXED
- *   `api/public/trial/hosting/confirm` redirected the CUSTOMER — the person who
- *   clicked "confirm your email" — to `${APP_URL}/hosting/trial?…`. With the
- *   env unset that is a redirect to a 503. It now builds the redirect from the
- *   request's own origin, which needs no configuration and cannot be wrong,
- *   and which also survives this service having more than one hostname (L18).
+ * WHAT WAS FIXED — TWO SITES, and the second corrects my own first reading
+ *   1. `api/public/trial/hosting/confirm` redirected the CUSTOMER — the person
+ *      who clicked "confirm your email" — to `${APP_URL}/hosting/trial?…`.
+ *   2. `api/webhooks/razorpay` built the GST tax-invoice PDF link with it. I
+ *      first recorded the remaining sites as "internal staff links". That was
+ *      wrong: this one goes into the CUSTOMER's order confirmation, under the
+ *      heading "YOUR GST TAX INVOICE", after they have paid. A statutory
+ *      document link to a dead host is worse than the redirect above, and it
+ *      was in the list I had just called internal. Check where a string is
+ *      CONSUMED, not only where it is declared.
+ *
+ *   Both now build the base from the request's own origin — no configuration,
+ *   cannot be wrong, and it survives this service answering on more than one
+ *   hostname (L18). Razorpay calls our public webhook URL, so that request's
+ *   origin is a public origin for us. Deleting the razorpay constant made the
+ *   compiler report it unused, which is how a dead constant should be found.
  *
  * THE LIST BELOW MAY ONLY SHRINK. A new file using this host fails here.
  */
@@ -45,9 +55,11 @@ const SRC = join(ROOT, "src");
 /**
  * Files that still carry the dead host as a fallback, as of 23 Sep 2026.
  *
- * Every one of them uses it to build an INTERNAL alert link ("Open the lead:
- * …") sent to staff, which is why none was rewritten blind. Removing an entry
- * is progress; adding one is the bug this file exists to stop.
+ * The remaining uses build INTERNAL alert links ("Open the lead: …") sent to
+ * staff — but that was said once already about a site that turned out to email a
+ * customer their tax invoice, so treat it as a description of what was checked,
+ * not a guarantee. Removing an entry is progress; adding one is the bug this
+ * file exists to stop.
  */
 const KNOWN = [
   "app/api/cron/ai-support-sla/route.ts",
@@ -64,6 +76,18 @@ const KNOWN = [
   "app/api/webhooks/razorpay/route.ts",
   "lib/inbound/ingest.ts",
 ].sort();
+
+/**
+ * Comments stripped before an ABSENCE assertion (AGENTS.md L46).
+ *
+ * This bit me writing this very file: the razorpay route's new comment EXPLAINS
+ * that WEBHOOK_APP_URL was deleted, so asserting the raw source does not contain
+ * that name failed on the sentence describing its removal. A blunt scan would
+ * push the reasoning out of the file to satisfy the test.
+ */
+function code(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/[^\n]*/g, "$1");
+}
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {
@@ -105,6 +129,22 @@ describe("the dead fallback host does not spread", () => {
       goneButListed,
       "these no longer use the dead host — delete them from KNOWN so the list keeps meaning something"
     ).toEqual([]);
+  });
+
+  it("the GST invoice link is built from the request, not from the dead fallback", () => {
+    /**
+     * This link goes to the CUSTOMER after payment. The file still contains the
+     * dead host for its internal staff links, so "does the string appear"
+     * cannot tell whether this was fixed — pin the behaviour instead.
+     */
+    const src = readFileSync(join(SRC, "app/api/webhooks/razorpay/route.ts"), "utf8");
+    expect(src).toContain("const publicBase = new URL(request.url).origin;");
+    expect(src).toContain('pdfDownloadUrl(publicBase, "invoice"');
+    // The constant it used to take became unused and was deleted; if it comes
+    // back, something is reading env for a customer-facing URL again. Asserted
+    // against comment-stripped source, or the comment saying it was removed
+    // trips the assertion that it was removed (L46).
+    expect(code(src)).not.toContain("WEBHOOK_APP_URL");
   });
 
   it("the customer-facing redirect no longer depends on it", () => {
