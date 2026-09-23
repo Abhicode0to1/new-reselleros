@@ -90,6 +90,49 @@ live is still hard-disabled in code):
 - [x] **ResellerOS migration verified on local Supabase** — checked in `pg_proc`/`pg_trigger`,
       SQL test green, red-checked by dropping the trigger.
 
+- [x] **The SQL suite was run for the first time in about a month — 48/54, now 53/54.**
+      Those files are in neither CI nor the Stop hook (§9), so their claims age silently (L7).
+      **Not one of the six failures was a product defect** — all six were fixtures:
+      `portal_set_auto_renew` borrowed an auth user with `select id from auth.users limit 1`
+      (the thing L11 forbids in those words; `customer_users.auth_user_id` is UNIQUE, so it
+      passed on production only by luck of which row came back first); `subscriptions_item_id`
+      hardcoded a production auth id AND inserted into the LIVE ANUTECH tenant;
+      `quote_accepted_on_first_payment` and `txn_category_rules` chose `11111111-…`/`22222222-…`,
+      which the local seed also chose for its real tenants. All four own their data now.
+      `offsite_export` depended on the nightly cron having run — it owns its snapshots, and the
+      newest-per-tenant rule is now MEASURED rather than assumed. `sandbox_tenant_isolation` is
+      production-only by design and says `NOT APPLICABLE HERE` instead of dying on a foreign key.
+      · **And it was missing a precondition.** Every case-1 assertion is "the tester sees ZERO
+        rows of another tenant" — and zero is also what an EMPTY other tenant returns. L11
+        records the day every transactional table in the live tenant was cleared; on that day the
+        headline would have passed with nothing to find. It now counts what could leak first.
+      · **One runner, not two.** I built a second one before checking — §11 exists to stop that.
+        `scripts/test-sql.mjs` has been there since 29 Aug and is better. Mine is deleted; its two
+        real additions are merged in: `npm run test:sql:local` (the old one needed a linked
+        project and could not run at all locally, while §4a says work happens locally), and
+        `NOT APPLICABLE HERE` as its own column.
+
+- [x] **A customer confirming a hosting trial was redirected to a host that 503s** (`789b8011`).
+      `https://resellersos.web.app` is dead — measured 23 Sep, and L91 measured the same a month
+      earlier. L91 fixed the one function it was chasing and the pattern survived in **13** more
+      files. Twelve build internal staff links; `api/public/trial/hosting/confirm` redirected the
+      CUSTOMER. It now builds the redirect from the request's own origin — no configuration, and
+      it survives this service having more than one hostname (L18).
+      · **The other twelve are PINNED, not rewritten.** Latent (the Dockerfile bakes the var), and
+        none of those 13 route files has a single test — L58 says extracting shared code out of an
+        untested money-adjacent path is the risky option. `app-url-fallback.test.ts` fails on any
+        new use AND on a stale entry, so the list cannot rot into a standing excuse.
+      · DMS checked for the same shape: its only fallback host, `https://app.anutech.in`,
+        answers 200. Clean.
+
+- [x] **Lint and `npm run build` measured for both repos, for the first time.** §9 had said for
+      both that they were NOT run and not claimed. That mattered: CI does not run on feature
+      branches, so on this branch the local gate is the only gate, and a build was never in it.
+      ResellerOS lint exit 0 (0 errors / 29 warnings), build exit 0. DMS lint exit 0
+      (0 errors / 418 warnings), build exit 0. **Stop the dev server before building** — `next
+      build` rewrites `.next` under the running server, and because DMS's front door redirects
+      to ResellerOS, stopping the wrong one makes DMS look dead too.
+
 **Still open, in order:**
 
 - [x] **Domain TRANSFER — read end to end 2026-09-23, and MY ENTRY WAS WRONG.** It said the
