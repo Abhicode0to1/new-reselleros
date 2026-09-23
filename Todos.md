@@ -65,12 +65,24 @@ corrected in place. Grouped by who can move it, because most of what remains is 
       the design rather than a detail of it.
 - [ ] **Phase 9 — `domain.register`.** Last, behind two fail-closed env gates and a per-row
       human release. Blocked on both §0.1 decisions above it.
-- [ ] **There is no `ENGINE_COMMANDS_ENABLED` env var.** This file previously said to "make it
-      per-command"; grepping the whole DMS repo returns **no matches**. What exists is
-      `LIVE_COMMANDS_ENABLED = false as boolean`, a hardcoded constant in
-      `lib/integrations/engine-mode.ts`. So live traffic is not switched off by configuration —
-      it is switched off in code, and turning any command on is a deploy. Per-command control
-      has to be BUILT, not split.
+- [x] **Per-command live control — the CODE half is built (2026-09-23).** The env-var half is
+      NOT, deliberately: `engine-mode.ts` and its test both warned that the env-var version
+      belongs to the phase carrying two fail-closed gates and a per-row human release, and that
+      a single flag added as a convenience would look like the same thing and be much weaker.
+      That warning still holds, so nothing here reads the environment.
+      **What was actually wrong was worse than a missing env var.** `LIVE_COMMANDS_ENABLED` was
+      written when the only handler was `engine.selftest`, which contacts nothing — one boolean
+      was a complete answer because flipping it could do nothing. Phases 6 and 7 added four
+      provider-touching handlers and the boolean never changed, so the cheapest wrong action
+      available (flip one constant) would have armed **every** command at once, `domain.register`
+      included. L74 exactly.
+      Now `LIVE_ELIGIBLE_COMMANDS` is what the flag may enable and `LIVE_INELIGIBLE_REASONS`
+      names what it must never reach, with the reason doubling as the caller's refusal. A
+      command in neither list is refused — silence is "no" — and a test asserts every known
+      command is classified, so a handler added in Phase 8/9 cannot inherit a default.
+      Proved by flipping the constant to `true` against the real harness: the three dangerous
+      commands stayed refused, the three eligible ones armed.
+      **Still open for Phase 9:** the two fail-closed env gates and the per-row human release.
 - [ ] **The renewal route's `hard_failure` branch returns HTTP 500** — the status callers
       retry — on transport-ambiguous cases. Deliberately untouched: a retry there is the L3
       shape, and it needs the same transport treatment Phase 7 gave the engine route.
@@ -528,10 +540,10 @@ Phases are ordered so each guard ships **before** the capability it guards.
       says "user will use SSO" and DMS customers reach DirectAdmin by passwordless SSO from the
       DMS portal. So the real question is whether an engine-provisioned account gets a DMS
       portal user — without one there is no way in at all. Still blocks `hosting.provision`.
-- [ ] **Per-command live control has to be BUILT, not split.** This said "make
-      `ENGINE_COMMANDS_ENABLED` per-command". Grepped 2026-09-23: **that env var does not exist
-      anywhere in DMS.** What exists is `LIVE_COMMANDS_ENABLED = false as boolean`, hardcoded in
-      `lib/integrations/engine-mode.ts`, so enabling any command is a code change and a deploy.
+- [x] **Per-command live control — code half built 2026-09-23** (see §0.2). That env var never
+      existed; what exists is `LIVE_COMMANDS_ENABLED`, hardcoded, and it is now per-command via
+      `LIVE_ELIGIBLE_COMMANDS` / `LIVE_INELIGIBLE_REASONS`. Enabling a command is still a code
+      change and a deploy. The env gates remain Phase 9's, with the human release.
 - [x] **`getIndexes()` — done for the half that mattered.** Run against the local cluster
       before the `Domain.orderId` fix (the index was real; migration 008 followed). The
       "Phase 7 `Hosting` uniqueness change" half is **moot**: `hosting.change_plan` shipped
