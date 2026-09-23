@@ -218,8 +218,9 @@ which is §12 happening to this very file four times. `npm run build` was NOT ru
 claimed. If your change drops the test count, it is not done.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, currently **6,748 tests across 447 files**,
-typecheck clean (measured 23 Sep 2026; 6,724/447 on 21 Sep, and 6,451/432 earlier that day).
+`C:/xampp/htdocs/Domain-Management-Project`, currently **6,773 tests across 448 files**,
+typecheck clean (measured 23 Sep 2026 after Phase 8 and the transfer clean-up; 6,748/447 and
+6,724/447 earlier the same day, 6,451/432 on 21 Sep).
 Lint and build were NOT re-measured, and are not claimed here. A change that spans both repos
 has to be green in both, and neither suite knows about the other.
 
@@ -2714,3 +2715,41 @@ runner had been broken for months and nothing noticed, because nothing had run s
 - **A tool nobody has run since the environment changed is not known to work.** The runner
   was fine under the Node of May and broken under the Node of September, silently, because
   the gap between migrations was longer than the gap between Node releases.
+
+## L111 — "It does not throw" is not an assertion that anything happened
+
+*23 Sep 2026, deleting `appendUserDomain`.*
+
+The function pushed a subdocument onto `User.domains`. The User schema declares no such
+path, so Mongoose strict mode dropped every write silently. It had a test, it was green,
+and here is what the test said:
+
+```
+it("is a no-throw side effect — User schema doesn't declare a domains[] field, so
+    mongoose strict-mode strips the $push silently", ...)
+    // The helper is best-effort: callers treat it as a fire-and-forget audit hook.
+    // Test the contract that matters — it doesn't throw — rather than asserting a
+    // side-effect that strict-mode drops.
+await expect(appendUserDomain(...)).resolves.toBeUndefined();
+```
+
+The test **knew** the write was dropped, said so in its own name, and then asserted the one
+property that would hold whether the function worked, did nothing, or was an empty body. It
+is not a weak test; it is a test that argues the defect is a design choice. That framing is
+why nobody removed the function for months — and the destination turned out to be read by
+nothing anyway, so even a working version would have changed no screen.
+
+**The rules:**
+- **Assert the effect, or assert that there is none and say why.** `resolves.toBeUndefined()`
+  on a write is a test of the return type, not of the write. If the effect genuinely cannot
+  be asserted, that is a finding about the code, not a reason to assert something else.
+- **"Best-effort" and "fire-and-forget" are the words to grep for** when hunting for
+  silently-dead code. They are how a no-op gets described once somebody notices it is a
+  no-op and decides that is acceptable.
+- **Check the destination as well as the write.** Two independent things were wrong here and
+  either alone would have been enough: the write was dropped, AND nothing read where it was
+  going. Fixing the first would have produced a correct write into a field no screen reads.
+- **When deleting code a test defends, replace the assertion with the invariant that made it
+  pointless.** What is pinned now is that the User schema has no `domains` path — the reason
+  the function could never have worked, and the reason reviving it would be wrong.
+
