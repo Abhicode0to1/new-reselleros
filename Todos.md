@@ -188,12 +188,30 @@ live is still hard-disabled in code):
       warns once. Only the justification was wrong, and it is rewritten in the file rather than
       softened.
 
-- [ ] **And the "notice it a week later" half is still open.** Recording failures is not the
-      same as noticing a cron that stopped running altogether — a deleted job, or a service
-      that 404s, produces no error to log. That needs a heartbeat (each run stamps a row; a
-      watchdog reports crons with no successful run inside their window), which is its own
-      piece of work. L39's warning applies to building it: "inside the window and never ran"
-      needs three conditions, not two, or it cries wolf on day one.
+- [x] **The "notice it a week later" half — BUILT 2026-09-23.** DMS `def2d93`.
+      `models/CronRun.ts` (one row per invocation, 60-day TTL), `recordCronHeartbeat()` called
+      by all four scheduled crons, and `lib/cron/staleness.ts` — the decision as a PURE
+      function, because the last check of this shape cried wolf on its first contact with real
+      data (L39).
+      **Three conditions, not two:** no run in the window, a run was due, AND we were watching
+      when it became due. Without the third, day one has no history for any cron and the first
+      render reports the whole system broken — muting the alarm before it has ever been right.
+      *"on day one, NOTHING is stale"* is the assertion the design turns on.
+      **Two placement decisions are the real value:**
+      · The heartbeat is stamped **after the auth gate**. Before it, any probe of the public URL
+        would stamp a run and a deleted Scheduler job would read as alive — worse than no
+        heartbeat, because it looks like evidence. A source scan asserts the ordering per route.
+      · It surfaces on **admin integration-health**, not in a cron's own digest: a watchdog
+        inside the thing it watches cannot report its own death. That page is pulled by a human,
+        so it answers even when every job is dead. An unreadable heartbeat reports `unknown`,
+        never an empty list that would render as "nothing wrong".
+      It records THAT a cron ran, not whether it succeeded (`ranAt`, not `succeededAt` — L12);
+      failures are already covered by the error path.
+      `renewal-payment-dunning` and `da-health` are deliberately unwatched — no Scheduler job
+      means a permanent daily red, and a standing red gets the section skimmed. A test pins that
+      as a decision.
+      **Not yet observed running.** Test-verified only; the first real rows appear after a
+      deploy.
 
 - [ ] **`renewal-payment-dunning` and `da-health` have NO Scheduler job at all.** Found
       2026-09-23 by comparing the route list against the live jobs — and the irony is that
