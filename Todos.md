@@ -102,11 +102,35 @@ corrected in place. Grouped by who can move it, because most of what remains is 
       run, after the registrar had been charged. Bookkeeping now has its own `try`; on failure
       the response says the renewal worked, flags `recorded:false`, says there is no need to
       renew again, and logs loudly.
-- [ ] **`appendUserDomain` still writes nothing** (`lib/services/users.ts`). Re-checked today:
-      `models/User.ts` declares no `domains` path, so Mongoose strict mode drops the `$push`
-      silently. The real gap behind it is that nothing updates `expiresAt` after a renewal.
-      Needs a decision on where a user's domain list is canonically read from
-      (`Order.domains[]` vs the `Domain` collection) before either is worth fixing.
+- [x] **`appendUserDomain` / the renewal expiry gap — FIXED 2026-09-23. The "decision" was
+      not needed: the code had already made it.** `GET /api/user/domains` fills a Map from
+      recent orders, then pending domains, then the **Domain collection LAST**, so Domain rows
+      overwrite the other two. Its own comment states the precedence and the insertion order
+      implements it. Canonical source = the Domain collection; `User.domains` is read by
+      nothing.
+      **That made the gap bigger than a stale date.** `daily-scheduler` selects on
+      `next_action_at <= now`, derived from `expiresAt` at row creation, and nothing updated
+      either after a renewal — so a renewed domain kept its pre-renewal trigger and the cron
+      went on reminding the customer to renew what they had just renewed, feeding the same rows
+      to renewal dunning.
+      `applyDomainRenewal` now writes `expiresAt` + `next_action_at` and clears
+      `last_reminder_sent` (the trio the provisioner sets together), with `reminderTriggerFor`
+      shared rather than copied a third time.
+      **The expiry is read from ResellerClub, never computed.** `now + years × 365d` is wrong
+      by however long was left, because a renewal extends the CURRENT expiry — and that wrong
+      date would land in the customer's view and the reminder ladder looking authoritative.
+      `orders.endtime` is not a guess: `app/api/domains/sync` already parses it as Unix seconds.
+      No usable expiry from RC → nothing written, and logged.
+      `appendUserDomain` is deprecated and now WARNS instead of pretending. Kept, not deleted,
+      because the domain TRANSFER route still calls it and has no canonical write of its own —
+      deleting it would erase the last trace of that gap while leaving the gap.
+
+- [ ] **Domain TRANSFER has no canonical write.** Same shape as the renewal bug above, still
+      open: `app/api/domains/transfer` calls the deprecated `appendUserDomain` and never writes
+      a `Domain` row, so a transferred-in domain does not appear in the customer's list and gets
+      no reminder schedule. Not fixed here because a transfer's expiry comes from the losing
+      registrar and the flow was not read end to end — it needs its own pass, not a copy of the
+      renewal fix.
 
 ### 0.3 Corrections to this file's own numbers (all re-measured today)
 
