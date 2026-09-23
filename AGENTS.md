@@ -210,13 +210,12 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,610 tests
-passing across 356 files** (plus 1 file / 4 tests skipped), typecheck clean (measured
-23 Sep 2026 — this line said 6,609/356 on 21 Sep, 4,371/233 before that, 3,404/182 before
-that, and 1,492 before that, which is §12 happening to this very file four times). Lint and
-`npm run build` were NOT re-measured on that date — an earlier version of this line claimed
-both, and repeating an unverified claim is how this number went wrong repeatedly. If your
-change drops the test count, it is not done.
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,629 tests
+passing across 357 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 23 Sep 2026 after merging `abhishek-pre-merge`. Earlier
+markers: 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+which is §12 happening to this very file four times. `npm run build` was NOT run, and is not
+claimed. If your change drops the test count, it is not done.
 
 DMS has its own, separate gate — `npx vitest run` in
 `C:/xampp/htdocs/Domain-Management-Project`, currently **6,748 tests across 447 files**,
