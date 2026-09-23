@@ -903,8 +903,45 @@ Consequences accepted with the decision:
       · One thing deliberately not converted, with the reason recorded in the file: a decorative
         `from-indigo-50 to-purple-50` gradient. There is no gradient token pair and `purple` is
         off-palette entirely, so flattening it is a design decision rather than a substitution.
-      Next by the same test, all genuinely rendered: `HostingUpgradeModal` (26), `LoginForm`
-      (25), `DomainCrossSell` (21).
+      · **`HostingUpgradeModal`, `LoginForm` and `DomainCrossSell` are DONE** (DMS `385c482`),
+        all three to 0. `LoginForm` is **browser-verified** — it is the one screen of the three
+        that renders with no session, so it was screenshotted at `localhost:4310/login` rather
+        than reasoned about. The other two need a customer session and a click, so they are
+        reasoned-only. `DomainCrossSell`'s green "buy" CTA was deliberately **kept green**
+        (`bg-emerald`/`bg-emerald-ink`): green is semantic there — the affirmative action beside
+        a dismiss — and repainting it brand-blue would make it read as one more nav control.
+      · **Browser-verifying one of them found a defect no test could see** — see the CSP entry
+        below. That is the argument for doing this work in front of a browser rather than a diff:
+        jsdom does no layout and a class rename is invisible to the suite either way (L16), so
+        the screenshot is the only thing the conversion is actually checked against, and it
+        catches things that have nothing to do with colour.
+- [x] **DMS asked its own server for pages ResellerOS now owns — FIXED 2026-09-23** (DMS
+      `d304b18`). Seen as one CSP violation per page load while screenshotting `/login`:
+      `Connecting to 'https://localhost:4320/privacy' violates … "connect-src 'self' …"`.
+      Seventeen links across six files carried a literal href to a path ResellerOS owns
+      (`/privacy`, `/terms-and-conditions`, `/cancellation-refund`, `/contact`, `/about`). DMS
+      307s each of those to the ResellerOS origin; Next prefetches a `<Link>`; a prefetch is an
+      RSC *fetch*; a fetch redirecting cross-origin is policed by `connect-src`. So the prefetch
+      was refused on every public page view.
+      · **Measured before deciding, and it changes the framing: the click always worked.** A
+        navigation is not policed by `connect-src` — error count 1 before the click and 1 after,
+        landing on the right page. Never a dead link; console noise plus a wasted redirect hop.
+        Worth removing *because* it is harmless — a violation nobody needs to act on is what
+        teaches the next reader to skim the console (L6).
+      · Fixed with `publicPageHref()`, four lines over the already-tested `resellerOsOwnedUrl()`,
+        so a link carries the SAME url the middleware would have redirected it to. Standalone DMS
+        is untouched. **Widening `connect-src` was refused** — that buys a quiet console by
+        letting every DMS page fetch another origin, a real permission traded for a cosmetic one.
+        So was `prefetch={false}`: one decision copied twelve times (L98), redirect still there.
+      · Guarded by a **source scan**, not only a unit test, for the L98 reason — the helper's own
+        test stays green while somebody adds an eighteenth footer link with a literal path.
+        Red-checked by restoring one literal; it fails naming `components/FooterModern.tsx`. It
+        also asserts the helper is used in ≥6 files, since "no offenders" is equally true of
+        having deleted every link.
+      · **Browser-verified** against a rebuilt container: href absolute, **0 console errors**
+        before and after the click (was 1), click still lands on ResellerOS's Privacy Policy.
+      Next by the same test, all genuinely rendered: to be re-measured with the corrected
+      pattern above rather than carried forward from the wrong one.
 - [ ] **Commit-email linkage unverified.** Commits use `pawan@exceltechnologies.in`; they will
       only link to the GitHub account if that address is verified under Settings → Emails.
 - [ ] **No PR opened from here, and that is now the standing rule** — do not open one unless
