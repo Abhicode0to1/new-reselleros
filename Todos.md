@@ -161,19 +161,34 @@ live is still hard-disabled in code):
       dispatches per-row Cloud Tasks and takes locks; `check-unprovisioned` and `pending-sweeper`
       are reporters and are the safe ones to retry first.
 
-- [ ] **Two us-central1 jobs are not in this repo's cron list.** `daily-expiry-check` and
-      `hosting-expiry-check` do not match any route under `app/api/cron/` (the nearest is
-      `check-hosting-expiry`, a different name in a different region on a different schedule).
-      Either they target an older deployment — in which case they may have been failing nightly
-      since it went away, silently, because nothing retries or alerts — or they belong to
-      another service entirely. **Get their `httpTarget.uri` before assuming either.**
+- [ ] **DUPLICATE SCHEDULER JOBS — two endpoints are invoked twice a day, from two regions.**
+      Confirmed by `httpTarget.uri` 2026-09-23. The us-central1 jobs are not new routes; they
+      point at the SAME endpoints as the europe-west1 ones, under different names:
 
-- [ ] **Timezone inconsistency, unconfirmed.** The europe-west1 jobs are consistent with
-      Asia/Kolkata (`0 4` firing at 22:30Z = 04:00 IST; `0 3` at 21:30Z = 03:00 IST). But
-      `tokens-charge-recurring` is scheduled `0 22` and last fired at **22:00Z**, which is
-      consistent with UTC, i.e. **03:30 IST** rather than the 22:00 IST an author would likely
-      have meant. That job CHARGES CUSTOMER CARDS, so the hour matters — both for support cover
-      and for what a customer sees. Confirm with `timeZone` before treating it as a defect.
+      | Endpoint | europe-west1 (Asia/Kolkata) | us-central1 (UTC) |
+      |---|---|---|
+      | `/api/cron/daily-scheduler` | `daily-scheduler` — 04:00 IST | `daily-expiry-check` — 19:00 UTC = 00:30 IST |
+      | `/api/cron/check-hosting-expiry` | `check-hosting-expiry` — 06:00 IST | `hosting-expiry-check` — 19:30 UTC = 01:00 IST |
+
+      **Measured as NOT harmful today, and the reason matters.** `process-service-expiry`
+      advances `next_action_at` to the next threshold and sets `last_reminder_sent` before
+      saving, so the day's second run finds nothing due and no customer gets two reminders. The
+      cost is double load and a maintenance trap, not duplicate email.
+      **The trap is the real problem:** two jobs, one undocumented, and nobody knows which is
+      canonical. Change the schedule on one and the other still fires; delete what looks like
+      the only job and the work silently continues from the other region. Neither appears in any
+      setup script.
+      **Removing one is an operator act on production infrastructure and is yours, not mine.**
+      The europe-west1 pair is the one to keep — it matches the Cloud Run region and runs on
+      Asia/Kolkata like every other DMS job.
+
+- [x] **Timezone on `tokens-charge-recurring` — checked, and it is DELIBERATE.** I suspected a
+      missing `--time-zone` flag putting a card-charging job at 03:30 IST by accident.
+      `scripts/setup-cloud-scheduler-tokens.sh:105` sets `Etc/UTC` explicitly and says why:
+      *"~03:30 IST means customers in India see their charge attempted in the dead of night,
+      before their bank's batch-rejection cutoff if they have a low balance."* A real reason,
+      thought through. AGENTS.md L36 — the code was documentation written by somebody with
+      context I lacked.
 
 ### 0.3 Corrections to this file's own numbers (all re-measured today)
 
