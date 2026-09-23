@@ -916,15 +916,42 @@ Consequences accepted with the decision:
         session, a domain and a click.
       · **`HostingRenewalModal` (49) and `DomainSetup` (36) are DONE** (DMS `db6be24`). All
         three panel modals now agree on `bg-primary-600/700` for the primary action.
-      · **THE MEASURING PATTERN IS WRONG TOO — and this is the part to read before trusting any
-        number in this entry.** `(bg|text|border)-(gray|blue|…)-[0-9]{2,3}` does not match
-        `border-t-blue-600` (directional), `bg-white` (no numeric suffix), `ring-indigo-500`
-        (`ring-` was never in the alternation) or `from-indigo-50` (gradient stops). So the
-        headline is inflated by ~114 dead-code classes AND understated by every variant above.
-        **The two errors do not cancel, and neither is small.** Any future count should use
-        `(bg|text|border|ring|from|to)(-[a-z])?-(…)(-[0-9]{2,3})?` — and beware that the wider
-        pattern also matches TOKEN names like `text-indigo-ink`, so it over-reports unless the
-        token families are excluded.
+      · **RE-MEASURED 2026-09-23, and every earlier figure in this entry was far too small.**
+        `scripts/palette-audit.mjs` in DMS (`a334593`) replaces hand-grepping — **do not quote
+        the numbers below, run it.** They are recorded only so a reader can tell whether the
+        picture has moved.
+
+        | | classes | files |
+        |---|---|---|
+        | total | 3,750 | 161 |
+        | reachable by import | 3,506 | 135 |
+        | **served by DMS today** | **3,066** | **124** |
+        | only via a route that 307s to ResellerOS | 440 | 11 |
+        | unreachable (dead) | 244 | 26 |
+
+        Against the old headline of **1,272** the real served figure is **3,066** — about 2.4x.
+        This entry said the count was wrong in both directions; it is, and the understatement
+        dominates so completely that "inflated by dead code" was the less useful half.
+      · **Three corrections are baked into the script rather than left as advice.**
+        **Legacy = a stock Tailwind family with a NUMERIC suffix**, which fixes the token
+        boundary for free (`bg-emerald-50` counts, `bg-emerald-soft` does not, `primary-600`
+        is a token so that family is not listed). **Reachability comes from the import graph**,
+        walking `lib/`, `hooks/`, `store/` and `middleware/` as well — the first version omitted
+        them and called `CustomToast` dead, which is the exact blind spot recorded above
+        reappearing in a new form. And **reachable-by-import is not SERVED**: six DMS routes
+        redirect to ResellerOS, so `HostingLanding.tsx` — the biggest file in the repo at 158 —
+        is only reached through `/`, and proposing it as work would spend a day on a screen no
+        federated visitor can open. Listed separately, not dropped, since standalone DMS serves
+        all six.
+      · **The real worklist is `components/` (1,260) and `app/admin` (1,024)**, not the
+        marketing pages. Biggest served files: `app/admin/dashboard` 118, `app/payment-success`
+        109, `app/dashboard/dns-management` 108, `app/admin/pending-domains` 107,
+        `app/checkout/guest` 103.
+      · **This is a much larger job than the entry implied, and the shape of it is your call.**
+        At roughly 25-50 classes per component with a browser check each, 3,066 is weeks rather
+        than an afternoon. Worth deciding whether it happens panel-by-panel as screens get
+        touched anyway, or as a dedicated pass — rather than continuing to shave the top of the
+        list one component at a time.
       · One thing deliberately not converted, with the reason recorded in the file: a decorative
         `from-indigo-50 to-purple-50` gradient. There is no gradient token pair and `purple` is
         off-palette entirely, so flattening it is a design decision rather than a substitution.
@@ -965,8 +992,9 @@ Consequences accepted with the decision:
         having deleted every link.
       · **Browser-verified** against a rebuilt container: href absolute, **0 console errors**
         before and after the click (was 1), click still lands on ResellerOS's Privacy Policy.
-      Next by the same test, all genuinely rendered: to be re-measured with the corrected
-      pattern above rather than carried forward from the wrong one.
+      **Next step is a decision, not a component.** The worklist is now measured rather than
+      guessed, and it is large enough that picking the next file off the top is the wrong
+      move on its own — see the last bullet above.
 - [ ] **Commit-email linkage unverified.** Commits use `pawan@exceltechnologies.in`; they will
       only link to the GitHub account if that address is verified under Settings → Emails.
 - [ ] **No PR opened from here, and that is now the standing rule** — do not open one unless
