@@ -10,7 +10,6 @@
 
 import * as React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   // Single QueryClient instance per render — created lazily inside the component
@@ -36,41 +35,29 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      {/* ── DEVTOOLS TOGGLE, MOVED OFF THE CONTROLS IT WAS SITTING ON ─────────
-          Reported 23 Aug 2026 as "the avatar overlaps the bottom bar", and it is not an
-          avatar — it is this button, whose default artwork is a round colour emblem that
-          reads as a profile photo at a glance. I had spun off a task to fix the sidebar
-          before checking; the sidebar is correctly gated `hidden md:flex` and was never on
-          screen. Worth recording as a diagnosis error, not just a fix.
+      {/* ── NO DEVTOOLS TOGGLE HERE, ON PURPOSE (removed 21 Sep 2026) ─────────
+          `<ReactQueryDevtools>` used to render here. Its floating button's default
+          artwork is a round palm-tree emblem, and over three separate reports it was
+          mistaken for something in the app every time: "the avatar overlaps the bottom
+          bar" (23 Aug — it is not an avatar, and the sidebar I went to fix was correctly
+          `hidden md:flex` and never on screen), "logo show nahi kar raha" twice (26 Aug —
+          it sat on the brand mark and read as the company logo), and finally "remove this
+          icon, don't need it interfering with our ui".
 
-          It never reaches a customer — NODE_ENV gates it, and it is absent from the
-          production bundle. But it covered a real control at every width, which matters
-          because these are the widths browser verification runs at, and covering the very
-          button you are trying to click is how a dev-only overlay becomes a wrong bug
-          report:
+          It was moved twice before being removed. Moving it kept failing because every
+          corner of this app holds something real — hamburger, bell, bottom nav, FAB,
+          sidebar brand block, the user chip — so there was no free corner, and a debug
+          affordance does not get to outrank an app control.
 
-            bottom-left at <md  → MobileBottomNav's first item, and the lead drawer
-                                  footer's Call button — a 44px target per §20 that was
-                                  partly unreachable
-            bottom-left at md+  → the sidebar's user chip, which is a DropdownMenuTrigger
+          It never reached a customer: NODE_ENV gated it and it was absent from the
+          production bundle. The cost it kept charging was in dev, where it made people
+          ask the wrong question about their own UI — and a wrong bug report costs a real
+          session. See AGENTS.md L53.
 
-          `top-left` at md+ lands on the sidebar brand block, a plain div with no handler,
-          and the tenant name beside it stays readable. Below md it is hidden outright:
-          every mobile corner holds something real — hamburger, bell, bottom nav, FAB — so
-          there is no free corner to move it to, and a debug affordance does not get to
-          outrank an app control.
-
-          THE COST: no devtools on a narrow window. Widen the window to get them back. */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="hidden md:block">
-          {/* `bottom-left`, `top-left` NAHI. 26 Aug 2026: is button ka palm-tree logo
-              theek sidebar/header ke brand mark par baithta tha, aur Pardeep ne use apni
-              company ka logo samajh kar do baar "logo show nahi kar raha" bataya. Wo
-              dev-only hai aur production me jata bhi nahi — par jo cheez dev me galat
-              sawaal khadi karti hai, uski keemat asli hai. */}
-          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
-        </div>
-      )}
+          THE COST OF REMOVING IT: no query inspector in the browser. React Query itself
+          is untouched; `@tanstack/react-query-devtools` is still a devDependency, so
+          re-adding is this import plus one element. If you do, do not put it back on a
+          corner that holds a control. */}
     </QueryClientProvider>
   );
 }

@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { DevDemoPanel } from "@/components/shared/dev-demo-panel";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -25,6 +26,25 @@ type FormData = z.infer<typeof schema>;
 // Demo accounts shown only in development. Kept in sync with the actual
 // tenants in Supabase — when a tenant is added/removed or its password
 // rotated, update this list. Hidden in production builds.
+/**
+ * DMS's own sign-in, derived from the portal URL rather than a second env var
+ * so the two can never point at different deployments.
+ *
+ * `new URL("/login", …)` replaces the whole path, so the configured
+ * ".../dashboard" becomes ".../login" — the sign-in screen, not a page that
+ * bounces there. Empty when unconfigured, which hides the row: a hard-coded
+ * fallback would send staff to a host that may not be this deployment's engine.
+ */
+const DMS_LOGIN_URL = (() => {
+  const base = (process.env.NEXT_PUBLIC_DMS_PORTAL_URL ?? "").trim();
+  if (!base) return "";
+  try {
+    return new URL("/login", base).toString();
+  } catch {
+    return "";
+  }
+})();
+
 const DEMO_USERS: Array<{ label: string; email: string; password: string }> = [
   /* 26 Aug 2026: yahan teesri entry thi — `darshan@exceltechnologies.in`. DB me wo user
      MAUJOOD NAHI HAI, to wo button dabane par sirf login fail hota tha. Upar likha comment
@@ -111,31 +131,52 @@ function LoginPageInner() {
 
       {/* Dev-only demo credentials — hidden in production builds */}
       {showDemoHint && configured && (
-        <div className="mb-4 p-3 bg-indigo-50 border border-indigo/30 rounded-md text-xs">
-          <div className="flex items-start gap-2 mb-2">
-            <Icon name="info" size={14} className="text-indigo flex-shrink-0 mt-0.5" />
-            <div className="text-indigo flex-1">
-              <b>Dev mode — demo accounts</b>
-              <span className="text-ink-3 ml-1">· click to autofill</span>
-            </div>
-          </div>
-          <ul className="space-y-1.5">
-            {DEMO_USERS.map((u) => (
-              <li key={u.email}>
-                <button
-                  type="button"
-                  onClick={() => fillDemo(u.email, u.password)}
-                  className="w-full text-left rounded px-2 py-1.5 hover:bg-indigo/10 transition-colors"
-                >
-                  <div className="font-medium text-ink">{u.label}</div>
-                  <div className="text-2xs text-ink-3 font-mono">
-                    {u.email} · <span className="text-amber-ink">{u.password}</span>
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <DevDemoPanel
+          title="demo accounts"
+          entries={DEMO_USERS.map((u) => ({
+            label: u.label,
+            mono: (
+              <>
+                {u.email} · <span className="text-amber-ink">{u.password}</span>
+              </>
+            ),
+            onClick: () => fillDemo(u.email, u.password),
+          }))}
+          /* A LINK, not a third autofill row. A hosting/domains customer cannot
+             be a credential here: this form is signInWithPassword against a
+             `users` row, and that customer has neither a password nor a row —
+             autofilling one would give a button that always fails. This file
+             already carries a note about exactly that (the `darshan@` entry
+             above), and the fix then was to remove it, not to lengthen the list.
+
+             It points at DMS rather than this app's own /portal/login because
+             hosting and domains are DMS's, and so is the account that opens
+             them. Sending someone to a ResellerOS portal they cannot use those
+             services from is a longer way round to the same dead end. */
+          footer={
+            DMS_LOGIN_URL
+              ? [
+                  {
+                    /* Deliberately NOT `external: true`. That flag opens a new tab and
+                       appends the ↗ arrow together — the component couples them because
+                       the arrow is a promise about what the click does. Signing in to
+                       hosting and domains is the task, not a side trip, so it navigates
+                       in place; a second tab left the half-finished ResellerOS login
+                       sitting behind it. Re-adding the flag has to mean re-adding the
+                       new tab, not just the arrow. */
+                    label: "Hosting & domains sign-in",
+                    href: DMS_LOGIN_URL,
+                    note: (
+                      <>
+                        Opens the DMS sign-in directly. It is a separate account from this
+                        one.
+                      </>
+                    ),
+                  },
+                ]
+              : undefined
+          }
+        />
       )}
 
       {/* Google OAuth */}

@@ -138,3 +138,55 @@ export async function queueProvisioning(
     return "failed";
   }
 }
+
+/** One row as the operator's queue shows it. */
+export interface QueuedProvisioningRow {
+  id: string;
+  quote_id: string;
+  vendor: string;
+  seats: number;
+  domain: string | null;
+  plan: string | null;
+  amount_paid: number;
+  payment_mode: "live" | "test";
+  status: string;
+  blocker: string | null;
+  note: string | null;
+  vendor_ref: string | null;
+  created_at: string;
+}
+
+/**
+ * The queue for one tenant, for the operator's screen.
+ *
+ * Reads through the service-role client and filters by tenant_id EXPLICITLY.
+ * `provisioning_requests` is not in the generated Database type (see this
+ * file's header for the measured reason), so nothing checks that filter for
+ * me — it is the entire tenant boundary, which is why the tenant id is a
+ * required argument and comes from the caller's session, never a query param.
+ *
+ * Unlike `listReadyHostingRequests` this does NOT filter on payment_mode or
+ * blocker. A screen that hid the blocked rows would hide exactly the ones
+ * needing a human — the test-mode payments and the unconfigured vendors are
+ * the queue's whole content today.
+ */
+export async function listProvisioningQueue(
+  tenantId: string,
+  limit = 100,
+): Promise<QueuedProvisioningRow[]> {
+  const db = bare();
+  if (!db) return [];
+  const { data, error } = await db
+    .from("provisioning_requests")
+    .select(
+      "id, quote_id, vendor, seats, domain, plan, amount_paid, payment_mode, status, blocker, note, vendor_ref, created_at",
+    )
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error) {
+    console.error("[provisioning] queue read failed:", error.message);
+    return [];
+  }
+  return (data ?? []) as QueuedProvisioningRow[];
+}
