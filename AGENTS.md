@@ -210,19 +210,23 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,609 tests
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,610 tests
 passing across 356 files** (plus 1 file / 4 tests skipped), typecheck clean (measured
-21 Sep 2026 — this line said 4,371/233 until then, 3,404/182 before that, and 1,492 before
-that, which is §12 happening to this very file three times). Lint and `npm run build` were
-NOT re-measured on that date — the previous line claimed both, and repeating an unverified
-claim is how this number went wrong three times. If your change drops the test count, it is
-not done.
+23 Sep 2026 — this line said 6,609/356 on 21 Sep, 4,371/233 before that, 3,404/182 before
+that, and 1,492 before that, which is §12 happening to this very file four times). Lint and
+`npm run build` were NOT re-measured on that date — an earlier version of this line claimed
+both, and repeating an unverified claim is how this number went wrong repeatedly. If your
+change drops the test count, it is not done.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, currently **6,724 tests across 447 files**,
-typecheck clean (re-measured 21 Sep 2026; this line said 6,451/432 earlier the same day).
-Lint and build were NOT re-measured, and are not claimed here. A change that spans both repos has to be green in both, and
-neither suite knows about the other.
+`C:/xampp/htdocs/Domain-Management-Project`, currently **6,748 tests across 447 files**,
+typecheck clean (measured 23 Sep 2026; 6,724/447 on 21 Sep, and 6,451/432 earlier that day).
+Lint and build were NOT re-measured, and are not claimed here. A change that spans both repos
+has to be green in both, and neither suite knows about the other.
+
+**DMS also has 8 MongoDB migrations** (`scripts/db/migrations/`, tracked in the `_migrations`
+collection, run with `npm run migrate`). All 8 are applied to production as of 23 Sep 2026.
+The runner could not run at all on Windows until that date — see L110.
 
 **A targeted run is not the gate.** One function there had coverage in two test files;
 the targeted run was green while the full suite caught the second one. Run the whole suite
@@ -2615,3 +2619,99 @@ to "complete" it with `OR UPDATE`.
 - **And the harness has to be shown failing.** Green here means exit 0, which is also what a
   file that silently did nothing returns. One assertion was flipped, the run went exit 1 with
   `FAIL 1: ...` on screen, and only then was the green worth anything.
+
+---
+
+## L108 — "Not determinable from either codebase" was determinable from one of them
+
+*23 Sep 2026. The question had been blocking a whole phase.*
+
+`Todos.md` §E recorded: *"Is a domain renewal idempotent at ResellerClub, or does a second
+call add a year? **Not determinable from either codebase.**"* It gated Phase 8, and the plan
+around it assumed the worst — every renewal parked for a human to release.
+
+The answer was three lines of our own code. ResellerClub's `renew.json` requires `exp-date`,
+documented as *"Current Expiry Date of the Order"* — an optimistic-concurrency guard, and a
+good one. But `resellerclub-wrapper.ts:136` **re-reads the expiry on every call** and passes
+whatever it just read. So a retry after an unacknowledged renewal reads the NEW expiry, sends
+that, it matches, and the registrar renews again.
+
+A retry buys a second year. Not because of anything ResellerClub does — because of what WE
+send. The vendor's own guard was being handed a valid answer by our pre-flight.
+
+**The rules:**
+- **Before recording a question as needing an outside answer, read your own call path.** The
+  question was phrased about the vendor's behaviour, so nobody looked at the wrapper. "What
+  does the third party do" and "what do we ask it to do" are different questions and only the
+  second is free to answer.
+- **A required parameter naming current state is usually a concurrency guard.** `exp-date`,
+  `If-Match`, a version column — they exist so a stale writer loses. Re-reading the value
+  immediately before sending it converts the guard into a rubber stamp. If you want the
+  protection, send the value you read BEFORE the work, not after.
+- **The answer improved the design rather than merely unblocking it.** The pre-renewal expiry
+  is a reconciler: record it, re-read on ambiguity, moved means done. That is a pure read with
+  a definite answer — the bar Phase 6 set for giving a command a reconciler — so renewals can
+  be automated instead of parked. The pessimistic plan was more expensive AND less safe.
+
+## L109 — A status code is a retry instruction, and on a non-idempotent spend that is the whole safety story
+
+*23 Sep 2026, from `/api/domains/renew`.*
+
+`hard_failure` covered three situations — the request never left, the socket died after the
+POST, the registrar answered "no" — and returned **500** for all three. 500 is what clients,
+proxies, load balancers and impatient humans all retry. So the one case that must never be
+repeated was the only one being advertised as repeatable, on a call that buys a year of a
+domain with money that does not come back.
+
+The fix is not a better error message. It is choosing the status by **how far the request
+got**, which the caller cannot infer and the sender always knows:
+
+- `not_sent` / `responded` → **502**, "nothing was renewed, it is safe to try again"
+- `sent_unknown` → **409**, "do NOT try again, a second attempt could buy an extra year"
+
+409 because nothing retries it on its own. That property is the point; the wording is
+secondary, because an automated caller never reads the wording.
+
+**The rules:**
+- **Ask what a client DOES with the status, not what it means.** 500 and 502 read similarly to
+  a person and differently to a retry policy.
+- **The sender is the only thing that knows how far it got**, so it has to say so
+  structurally — `lib/integrations/transport.ts` for the DMS side, and the same three-way
+  split (`not_sent` / `sent_unknown` / `responded`) is now what the engine route reads off a
+  branded error.
+- **Found in the same file: a false failure is the same bug wearing better manners.**
+  `createOrder` sat in the same `try` as the registrar call, so a bookkeeping throw returned
+  500 and "Failed to renew domain" about a renewal that had just succeeded. The customer reads
+  a failure, presses the button, and buys the second year themselves. Post-success bookkeeping
+  gets its own `try`, and its failure is reported as what it is.
+
+## L110 — A tool that fails before it starts looks exactly like the work failing
+
+*23 Sep 2026, applying migration 008 to production.*
+
+The runner said:
+
+```
+[migrate]   008_drop_domain_orderid_unique.ts FAILED: Only URLs with a scheme in:
+file, data, and node are supported by the default ESM loader. Received protocol 'c:'
+```
+
+That reads as "the migration failed" and is nothing of the sort. `await import()` was handed
+an absolute Windows path, so the module never resolved — `up()` had not been called, the
+database was untouched, and because the ledger row is written AFTER `up()` returns, no false
+record of success existed either. Verified against production before retrying rather than
+assumed: still 7 ledger rows, `orderId_1` still unique.
+
+Migrations 001-007 were applied in May, before the Node version that enforces this. The
+runner had been broken for months and nothing noticed, because nothing had run since.
+
+**The rules:**
+- **After a failed write to a live system, measure what state it left before doing anything
+  else.** "It said FAILED" narrows nothing: it could mean nothing happened, everything
+  happened, or half did. One read settles it and costs nothing.
+- **Know where the ledger write sits relative to the work.** A tracking row written after the
+  work means a crash leaves no false success; written before, it means the opposite, and a
+  retry would skip a migration that never ran.
+- **A tool nobody has run since the environment changed is not known to work.** The runner
+  was fine under the Node of May and broken under the Node of September, silently, because
+  the gap between migrations was longer than the gap between Node releases.
