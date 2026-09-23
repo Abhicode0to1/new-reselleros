@@ -151,15 +151,40 @@ live is still hard-disabled in code):
       So the visibility added to `pending-sweeper` today IS reachable — it runs at 03:00 IST
       daily. Good.
 
-- [ ] **⚠️ ZERO RETRIES ON ALL EIGHT DMS CRONS.** `retryConfig.retryCount` is blank on every
-      one. Cloud Scheduler treats unset/0 as **no retry**, so one transient failure loses that
-      run entirely — and with no alerting, nobody is told. This is **AGENTS.md L1 repeating in
-      DMS**: the sibling project lost a night of backups exactly this way and it was found two
-      days later by reading logs.
-      Not a blind `--max-retry-attempts` on all of them, though — L3 applies. Before adding a
-      retry to any of these, ask what the endpoint does when it HALF succeeds. `daily-scheduler`
-      dispatches per-row Cloud Tasks and takes locks; `check-unprovisioned` and `pending-sweeper`
-      are reporters and are the safe ones to retry first.
+- [x] **ZERO RETRIES — script written 2026-09-23, YOU RUN IT.** All eight jobs have
+      `retryConfig.retryCount` blank, which Cloud Scheduler treats as no retry (AGENTS.md L1).
+      `scripts/setup-cloud-scheduler-retries.sh` adds retries to **three** of them, and the
+      omissions are the point (L3 — ask what each does when it HALF succeeds):
+      · **Safe:** `pending-sweeper`, `check-unprovisioned` (0 writes, they report — worst case a
+        duplicate admin digest), and `daily-scheduler` — safe *because of* its lock: rows are
+        claimed for 10 minutes, so a retry inside that window skips them. Its retry window is
+        capped at 5m, deliberately inside the lock.
+      · **Excluded:** `tokens-charge-recurring` (charges cards — L3's canonical case; make it
+        idempotent first), `tokens-provision-pending` (idempotency unverified),
+        `check-hosting-expiry` (dispatches a Cloud Task per hosting with no lock of its own).
+      The exclusions are asserted in `tests/unit/scripts/scheduler-retries.test.ts`, which also
+      pins that `LOCK_DURATION_MS` is still 10 minutes — shortening it silently invalidates the
+      cap. Red-checked both ways.
+      **Run it from Cloud Shell** (gcloud is not installed on this machine):
+      `bash scripts/setup-cloud-scheduler-retries.sh --dry-run` first, then without the flag.
+
+- [ ] **The other half of L1 is still open: nothing is TOLD when a cron fails.** A retry
+      shortens the odds; it does not answer "who is told when it fails, and how would you
+      notice a week later". After the retries are in, the next question is where a failed run
+      surfaces — Cloud Run logs nobody reads is a silent failure with extra steps.
+
+- [ ] **`renewal-payment-dunning` and `da-health` have NO Scheduler job at all.** Found
+      2026-09-23 by comparing the route list against the live jobs — and the irony is that
+      `renewal-payment-dunning` is the ONE route with a setup script
+      (`setup-cloud-scheduler-billing.sh`), so the script was either never run or the job was
+      deleted.
+      Its own docstring states the cost: *"without this cron, an abandoned checkout is never
+      followed up"* — a customer who opens the Razorpay renewal checkout and does not pay is
+      never chased, across a 24h/72h/7d ladder.
+      **Measured before claiming harm: production holds 2 orders total, 0 renewal orders in
+      `pending`, and no order has ever carried a dunning stamp.** So this is an exposure, not
+      an incident — nothing has been lost. It starts costing money the day renewals have
+      volume.
 
 - [ ] **DUPLICATE SCHEDULER JOBS — two endpoints are invoked twice a day, from two regions.**
       Confirmed by `httpTarget.uri` 2026-09-23. The us-central1 jobs are not new routes; they
