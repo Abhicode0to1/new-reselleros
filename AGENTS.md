@@ -214,8 +214,18 @@ Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6
 passing across 357 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
 with warnings only** — measured 23 Sep 2026 after merging `abhishek-pre-merge`. Earlier
 markers: 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
-which is §12 happening to this very file four times. `npm run build` was NOT run, and is not
-claimed. If your change drops the test count, it is not done.
+which is §12 happening to this very file four times. If your change drops the test count, it
+is not done.
+
+**`npm run build` passes — measured 23 Sep 2026, for the first time.** This line said it had
+NOT been run for as long as it existed, which mattered: CI does not run on feature branches,
+so on `pawan-api-system` the local gate is the only gate, and a build was never in it. Both
+repos build clean. Lint on this repo: exit 0, **0 errors / 29 warnings**.
+
+**Stop the dev server before building.** `next build` rewrites `.next`, which the running dev
+server is serving from, so the open page then 404s its own chunks and looks broken until it is
+restarted — and because DMS's front door redirects here, a stopped ResellerOS makes DMS look
+dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
 `C:/xampp/htdocs/Domain-Management-Project`, currently **6,845 tests across 452 files**,
@@ -227,7 +237,8 @@ That run also reports **16 "Errors"** alongside the passing count. They are unha
 rejections inside `tests/unit/lib/directadmin/retry-transport.test.ts`, which itself passes;
 they are not failures and not new. Said here because a reader who meets them for the first
 time will otherwise treat a green suite as red.
-Lint and build were NOT re-measured, and are not claimed here. A change that spans both repos
+DMS lint and build — also measured 23 Sep 2026 for the first time: `npx next lint` exits 0
+with **0 errors / 418 warnings**, and `npx next build` exits 0. A change that spans both repos
 has to be green in both, and neither suite knows about the other.
 
 **DMS also has 8 MongoDB migrations** (`scripts/db/migrations/`, tracked in the `_migrations`
