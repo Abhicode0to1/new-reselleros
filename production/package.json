@@ -33,7 +33,8 @@
     "db:cols": "node scripts/db-cols.mjs",
     "health:prod": "node scripts/health-prod.mjs",
     "apps-script:read": "node scripts/apps-script.mjs read",
-    "dry-run": "node scripts/sales-dry-run.mjs"
+    "dry-run": "node scripts/sales-dry-run.mjs",
+    "test:sql:local": "node scripts/test-sql.mjs --local"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

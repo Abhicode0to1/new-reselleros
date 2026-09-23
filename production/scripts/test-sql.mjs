@@ -47,11 +47,55 @@ writeFileSync(canary, "begin;\n  do $$ begin raise exception 'CANARY'; end $$;\n
 
 const TRANSIENT = /TransportError|LegacyDbConfigLoginRole|ECONNRESET|fetch failed/i;
 
+/* ── --local: chalao local Supabase par, production par nahi ────────────────
+ *
+ * 23 Sep 2026: `npm run test:sql` seedha `LegacyProjectNotLinkedError` deta tha, yaani
+ * bina link kiye ye script chalti hi nahi thi — aur AGENTS.md §4a kehta hai ki kaam
+ * production par nahi, local par hota hai. Ab `--local` local container se baat karta
+ * hai; bina flag ke purana raasta (production, --linked) waisa hi hai. */
+const LOCAL = process.argv.includes("--local");
+let CONTAINER = null;
+if (LOCAL) {
+  const ps = spawnSync("docker", ["ps", "--format", "{{.Names}}"], { encoding: "utf8" });
+  CONTAINER = (ps.stdout ?? "")
+    .split(/[\r\n]+/)
+    .map((x) => x.trim())
+    .find((n) => /^supabase_db_/.test(n));
+  if (!CONTAINER) {
+    console.error("--local ke liye local Supabase chalu hona chahiye (supabase_db_* container nahi mila).");
+    process.exit(2);
+  }
+}
+
+/* ── Teen khane, do nahi ───────────────────────────────────────────────────
+ *
+ * `NOT APPLICABLE HERE:` ka matlab hai file ka vishay is database par hai hi nahi.
+ * `sandbox_tenant_isolation` do ASLI tenant naapta hai — sandbox aur live — kyunki
+ * sawal hi yahi hai ki production par baitha tester live kitaabon tak pahunch sakta
+ * hai ya nahi. Jis database par wo do nahi hain, wahan kuch NAAPA HI NAHI GAYA. Use
+ * FAIL ginna utna hi jhootha hai jitna PASS ginna.
+ *
+ * (Pehle yahan ek teesra khana bhi tha, report-style `TESTRESULT` file ke liye, is
+ *  bharose par ki wo pass hone par non-zero deti hain. Naapa: teeno exit 0 deti hain.
+ *  Wo `raise` failure branch par hai, aur mera grep file ke HEADER me us purani shakl
+ *  ke hataye jaane ka zikr pakad raha tha — L46 wahi baat kehta hai, comment ko code
+ *  samajh lena. Khana hata diya gaya.) */
+const isSkippable = (src) => /NOT APPLICABLE HERE/.test(src);
+const classify = (r) => (r.ok ? "ok" : /NOT APPLICABLE HERE/.test(r.out) ? "skip" : "fail");
+
 function runOne(path) {
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const r = spawnSync("npx", ["supabase", "db", "query", "--linked", "-f", path], {
-      encoding: "utf8", shell: true, timeout: 120_000,
-    });
+    const r = LOCAL
+      ? spawnSync(
+          "docker",
+          ["exec", "-i", CONTAINER, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres"],
+          /* ON_ERROR_STOP ke bina psql galti dikhata hai aur exit 0 deta hai — yaani
+             har laal test hara padha jaata. */
+          { input: readFileSync(path, "utf8"), encoding: "utf8", timeout: 120_000 },
+        )
+      : spawnSync("npx", ["supabase", "db", "query", "--linked", "-f", path], {
+          encoding: "utf8", shell: true, timeout: 120_000,
+        });
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     /* Windows par process khatam ho jaane ka apna code hai — use "test fail" batana
        poori report ko jhootha bana dega. (backup:db isi par do baar mara tha.) */
@@ -74,6 +118,13 @@ console.log("canary laal — harness sach me fail hota hai. ab asli test.\n");
 
 /* ── 3. Asli test ── */
 const list = only ? files.filter((f) => f.includes(only)) : files;
+
+/* Bundle me sirf wo file ja sakti hai jo pass hone par exit 0 de. "NOT APPLICABLE
+   HERE" wali file exception phenkti hai, to bundle me daalne se poora bundle toot
+   jaata aur baaki 53 bewajah ek-ek karke dobara chaltin. Wo alag chalti hai. */
+const srcOf = (f) => readFileSync(join(DIR, f), "utf8");
+const special = list.filter((f) => isSkippable(srcOf(f)));
+const bundleable = list.filter((f) => !special.includes(f));
 if (!list.length) { console.error(`koi test "${only}" se mel nahi khata`); process.exit(2); }
 
 const nameOf = (f) => f.replace(/\.test\.sql$|\.sql$/, "");
@@ -104,7 +155,7 @@ const MARKER = "SQL_SUITE_REACHED_THE_END";
 const bundle = join(tmp, "bundle.sql");
 writeFileSync(
   bundle,
-  list.map((f) => readFileSync(join(DIR, f), "utf8")).join("\n\n") +
+  bundleable.map((f) => readFileSync(join(DIR, f), "utf8")).join("\n\n") +
     `\n\nselect '${MARKER}' as marker;\n`,
 );
 
@@ -113,7 +164,7 @@ const reachedEnd = fast.out.includes(MARKER);
 
 const failed = [];
 if (fast.ok && reachedEnd) {
-  for (const f of list) console.log(` ok   ${nameOf(f)}`);
+  for (const f of bundleable) console.log(` ok   ${nameOf(f)}`);
 } else {
   console.log(
     fast.ok
@@ -121,7 +172,7 @@ if (fast.ok && reachedEnd) {
       : " ek-saath wale run me kuch laal hai — ab ek-ek karke, taaki naam pata chale\n",
   );
   let n = 0;
-  for (const f of list) {
+  for (const f of bundleable) {
     n++;
     const r = runOne(join(DIR, f));
     if (r.fatal) {
@@ -129,7 +180,7 @@ if (fast.ok && reachedEnd) {
       console.error(" Ye test ka fail nahi hai. Machine par process khatam ho gaye — dobara chalao.");
       process.exit(4);
     }
-    console.log(`${r.ok ? " ok  " : " FAIL"} [${n}/${list.length}] ${nameOf(f)}`);
+    console.log(`${r.ok ? " ok  " : " FAIL"} [${n}/${bundleable.length}] ${nameOf(f)}`);
     if (!r.ok) failed.push({ name: nameOf(f), out: r.out });
   }
   if (failed.length === 0) {
@@ -138,10 +189,20 @@ if (fast.ok && reachedEnd) {
     console.log("\n ⚠️  ek saath laal, akele sab hare — test aapas me takra rahe hain");
   }
 }
+/* Alag chalne wali file. */
+const skipped = [];
+for (const f of special) {
+  const r = runOne(join(DIR, f));
+  const v = classify(r);
+  if (v === "skip") { skipped.push(nameOf(f)); console.log(` skip ${nameOf(f)} - is database par laagu nahi`); }
+  else if (v === "ok") { console.log(` ok   ${nameOf(f)}`); }
+  else { failed.push({ name: nameOf(f), out: r.out }); console.log(` FAIL ${nameOf(f)}`); }
+}
+
 console.log(`\n${((Date.now() - t0) / 1000).toFixed(0)}s`);
 
 /* ── 4. Nateeja ── */
-console.log(`\n${list.length - failed.length}/${list.length} pass`);
+console.log(`\n${list.length - failed.length - skipped.length}/${list.length} pass  ${skipped.length} not-applicable  ${failed.length} FAIL`);
 for (const f of failed) {
   console.log(`\n───── ${f.name}`);
   const why = f.out.match(/ERROR:[^\\"]{0,400}/g);
