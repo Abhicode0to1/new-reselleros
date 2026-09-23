@@ -43,8 +43,25 @@ corrected in place. Grouped by who can move it, because most of what remains is 
       production before retrying. Fixed with `pathToFileURL` (DMS `b90140a`); 001-007 predate
       the Node version that enforces this, which is why it surfaced on 008.
 
-- [ ] **ResellerOS migration still applied LOCALLY ONLY** —
-      `production/supabase/migrations/20260921100000_provisioning_facts_are_immutable.sql`.
+- [ ] **ResellerOS migration `20260921100000` — production DEFERRED at Pardeep's direction
+      (2026-09-23), local VERIFIED.** Not merely "applied locally": checked against the running
+      database rather than the migration file (L8 — a migration is not evidence a guard exists).
+      · `pg_proc` / `pg_trigger` on the local DB: `guard_provisioning_request_facts` and
+      `provisioning_requests_facts_immutable` both present.
+      · `supabase/tests/provisioning_facts_immutable.test.sql` exits 0 with all five locked
+      columns refused AND the complete-a-request workflow still working — the ALLOW half, which
+      is the half that decides whether a guard survives contact with the people it constrains.
+      · **Red-checked**: dropping the trigger made the test exit 3 with
+      `FAIL: a tenant member changed payment_mode — a test payment can be activated`. The
+      trigger was restored from the migration file and re-verified in a separate run. So exit 0
+      here means something; it is not a file that silently did nothing.
+      **Still to do:** the same migration on production, whenever that becomes possible. Until
+      then the hole is open there — a tenant member can flip `payment_mode` from `test` to
+      `live`, clear `blocker`, and have the worker provision real hosting against a payment that
+      settled zero rupees.
+      Note for whoever runs it: `npx supabase status` prints the DEFAULT ports (54322/54321);
+      the real local mapping is **14322/14321**, which `docker ps` shows. Commands aimed at
+      `--linked` go to PRODUCTION, not local.
 - [ ] **Domain renewal retail pricing.** Blocks the renewal checkout. There is no retail
       renewal price anywhere in DMS — `getRenewalPricing` returns the *registrar's cost*.
       Inventing a markup would put a made-up figure on a real charge, so nothing was invented
