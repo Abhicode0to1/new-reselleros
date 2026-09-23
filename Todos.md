@@ -1,7 +1,7 @@
 # Todos — ResellerOS ↔ DMS integration
 
-Recorded 2026-09-19. Last updated **2026-09-21**, after the renewal security fix and the
-front-door change.
+Recorded 2026-09-19. Last updated **2026-09-23**, after engine Phases 6-7 and a re-measure
+of §F's counts (three of which were wrong — see §0).
 
 Both repos now carry a branch named **`pawan-api-system`**, both pushed:
 - ResellerOS — `Abhicode0to1/new-reselleros` (this repo), merged with `abhishek-pre-merge`
@@ -20,6 +20,95 @@ working.
 
 Verification key: **[verified]** = read end-to-end in the code and confirmed here ·
 **[reported]** = raised by review, not independently confirmed.
+
+---
+
+## 0. What is left — measured 2026-09-23
+
+Everything below is verified against the code today, not carried forward. Where an older
+entry in this file disagrees, **this section is the measurement** and the older one has been
+corrected in place. Grouped by who can move it, because most of what remains is not code.
+
+### 0.1 Yours — nothing else can proceed past these
+
+- [ ] **Two migrations are applied LOCALLY ONLY.** Both drop or alter live objects, so
+      running them is an operator act, not mine.
+      · DMS `scripts/db/migrations/008_drop_domain_orderid_unique.ts` — drops and recreates an
+      index on a live collection. Until it runs in production, a multi-domain order still
+      loses every domain after the first (§A).
+      · ResellerOS `production/supabase/migrations/20260921100000_provisioning_facts_are_immutable.sql`.
+- [ ] **Domain renewal retail pricing.** Blocks the renewal checkout. There is no retail
+      renewal price anywhere in DMS — `getRenewalPricing` returns the *registrar's cost*.
+      Inventing a markup would put a made-up figure on a real charge, so nothing was invented
+      and the modal routes to support instead.
+- [ ] **Does an engine-provisioned hosting account get a DMS portal user?** Blocks
+      `hosting.provision` (Phase 7's other half). DMS mints a `Math.random()` password it never
+      returns because its customers arrive by SSO — so without a portal user there is no way in
+      at all, and provisioning reports success.
+- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. DMS's GST
+      engine is permanent and ungated; credit notes are manual with a statutory deadline.
+      Needs the CA.
+- [ ] **How does a ResellerOS-only buyer get a ResellerClub customer?** Blocks Phase 9.
+      `registerDomain` needs a numeric `customerId`, and contacts come from a private helper
+      inside DMS's payment pipeline.
+- [ ] **Which side owns DirectAdmin?** Two writers means two username derivations. It does
+      NOT block `hosting.change_plan`, which shipped — that command works with the existing
+      `(userId, domainName)` uniqueness rather than changing it.
+- [ ] **Is a ResellerClub domain renewal idempotent, or does a second call add a year?**
+      Gates Phase 8, and is not determinable from either codebase. If it adds a year, renewals
+      need the same per-row human release that registrations get.
+
+### 0.2 Mine — buildable now, in this order
+
+- [ ] **Phase 8 — `domain.renew`.** The first unrecoverable rupee, on a domain we already own.
+      Starts only once the idempotency question above is answered, because the answer changes
+      the design rather than a detail of it.
+- [ ] **Phase 9 — `domain.register`.** Last, behind two fail-closed env gates and a per-row
+      human release. Blocked on both §0.1 decisions above it.
+- [ ] **There is no `ENGINE_COMMANDS_ENABLED` env var.** This file previously said to "make it
+      per-command"; grepping the whole DMS repo returns **no matches**. What exists is
+      `LIVE_COMMANDS_ENABLED = false as boolean`, a hardcoded constant in
+      `lib/integrations/engine-mode.ts`. So live traffic is not switched off by configuration —
+      it is switched off in code, and turning any command on is a deploy. Per-command control
+      has to be BUILT, not split.
+- [ ] **The renewal route's `hard_failure` branch returns HTTP 500** — the status callers
+      retry — on transport-ambiguous cases. Deliberately untouched: a retry there is the L3
+      shape, and it needs the same transport treatment Phase 7 gave the engine route.
+- [ ] **`appendUserDomain` still writes nothing** (`lib/services/users.ts`). Re-checked today:
+      `models/User.ts` declares no `domains` path, so Mongoose strict mode drops the `$push`
+      silently. The real gap behind it is that nothing updates `expiresAt` after a renewal.
+      Needs a decision on where a user's domain list is canonically read from
+      (`Order.domains[]` vs the `Domain` collection) before either is worth fixing.
+
+### 0.3 Corrections to this file's own numbers (all re-measured today)
+
+Three §F claims were wrong. They are corrected in place below; recorded here because the
+pattern matters more than the numbers — **a count in a doc is a hypothesis** (§12).
+
+- **The palette conversion is far less complete than recorded.** §F said 1,272 remain, with
+  `app/admin` 8 and `app/dashboard` **0**. Measured today with
+  `(bg|text|border)-(gray|blue|red|green|yellow|indigo|purple|pink|slate)-[0-9]{2,3}`
+  over `app/` + `components/` .tsx: **2,573 across 151 files** — `app/admin` **563**,
+  `app/dashboard` **200**, `components/admin` 111, `components/user` 18. A claim of 0 is
+  falsified by any single match, and `app/dashboard/dns-management/page.tsx` alone holds
+  `bg-green-500`, `text-green-700`, `border-green-200`. The earlier figure is not
+  reproducible because its pattern was never written down — which is why the pattern is
+  written above.
+- **Admin wrappers: 20 pages, not 25**, and `AdminLayoutSkeleton` appears in **20** files,
+  not 19. Still passthroughs via the context flag, still safe to remove one at a time.
+
+### 0.4 Known and accepted — not work, but do not rediscover them
+
+- [ ] **No PR is open on either branch, deliberately.** Standing instruction: do not open one
+      unless asked. Recorded so the next reader does not treat its absence as an oversight —
+      AGENTS.md §10 rule 4 now says the same. The consequence to keep in mind: CI runs on PRs
+      and pushes to `main` only, so on these branches the local gate is the only gate.
+- [ ] **The local stack's safety is configuration, not isolation.** The DMS container has
+      working internet and resolves ResellerClub's real host; only the `.invalid` values in
+      `.env.docker` stop it reaching them. Now that write commands exist, this wants a
+      code-level gate so a stray real credential is not sufficient on its own.
+- [ ] **`gh` is not installed on this machine**, re-checked today. Anything needing the GitHub
+      API has to happen in a browser.
 
 ---
 
@@ -439,10 +528,16 @@ Phases are ordered so each guard ships **before** the capability it guards.
       says "user will use SSO" and DMS customers reach DirectAdmin by passwordless SSO from the
       DMS portal. So the real question is whether an engine-provisioned account gets a DMS
       portal user — without one there is no way in at all. Still blocks `hosting.provision`.
-- [ ] **Make `ENGINE_COMMANDS_ENABLED` per-command** (`dns.record,hosting.suspend`) rather than
-      one global switch — four phases want live traffic while register stays dark.
-- [ ] **Run `getIndexes()` against the real databases** before the `Domain.orderId` fix and the
-      Phase 7 `Hosting` uniqueness change.
+- [ ] **Per-command live control has to be BUILT, not split.** This said "make
+      `ENGINE_COMMANDS_ENABLED` per-command". Grepped 2026-09-23: **that env var does not exist
+      anywhere in DMS.** What exists is `LIVE_COMMANDS_ENABLED = false as boolean`, hardcoded in
+      `lib/integrations/engine-mode.ts`, so enabling any command is a code change and a deploy.
+- [x] **`getIndexes()` — done for the half that mattered.** Run against the local cluster
+      before the `Domain.orderId` fix (the index was real; migration 008 followed). The
+      "Phase 7 `Hosting` uniqueness change" half is **moot**: `hosting.change_plan` shipped
+      working WITH the existing `(userId, domainName)` unique index rather than altering it —
+      it refuses when two rows match instead. Still worth running against PRODUCTION before
+      migration 008 goes there.
 
 ---
 
@@ -516,23 +611,27 @@ Consequences accepted with the decision:
       a hop rather than being wrong. Left alone because that link carries `isActive('/')`
       styling and rewiring it means swapping `<Link>` for `<a>`. Worth doing if the marketing
       pages are kept long-term.
-- [ ] **The 25 admin pages still wrap themselves in `<AdminLayout>`.** The shell is now
+- [ ] **The 20 admin pages still wrap themselves in `<AdminLayout>`** (re-counted 23 Sep; this said 25). The shell is now
       mounted once by `app/admin/layout.tsx`, and those wrappers render as passthroughs via
       a context flag rather than being deleted — deliberately, because the flicker had to
       stop that day and rewriting 25 pages with no per-page tests is the larger risk. They
       can be removed one at a time; a page with the wrapper and one without render the same
-      tree, so there is no midpoint that breaks. Same for the 19 pages rendering
-      `<AdminLayoutSkeleton>`. Until then `components/skeletons/AdminLayout.tsx` still
+      tree, so there is no midpoint that breaks. Same for the 20 files rendering
+      `<AdminLayoutSkeleton>` (re-counted 23 Sep; this said 19). Until then `components/skeletons/AdminLayout.tsx` still
       carries a `bg-blue-900` sidebar for its standalone use outside /admin — worth
       converting whenever that path is next touched.
 - [ ] **The DMS palette conversion was narrower than I reported.** I said "~2,900 legacy classes
       → 7". The 7 was real but measured only over `app/admin`; `app/dashboard` is genuinely 0.
       The conversion ran over the panel *page* directories and `components/admin` (53 left) /
-      `components/user` (16 left), and never covered `components/` root — where shared
-      components rendered *inside* the panels live. Measured 2026-09-21 across
-      `app/` + `components/` .tsx: **1,272 remain** (was 1,302 before the 21 Sep modal/menu
-      batch; re-measured, not carried forward). Panel-scoped: `components/admin` 48,
-      `components/user` 16, `app/admin` 8, `app/dashboard` 0. Much of that is the public marketing site and checkout, which were
+      `components/user`, and never covered `components/` root — where shared
+      components rendered *inside* the panels live.
+      **The figures previously here were wrong** — see §0.3. Re-measured 2026-09-23 with
+      `(bg|text|border)-(gray|blue|red|green|yellow|indigo|purple|pink|slate)-[0-9]{2,3}`
+      over `app/` + `components/` .tsx: **2,573 across 151 files**. Panel-scoped:
+      `app/admin` **563**, `app/dashboard` **200** (this file claimed 0, and
+      `app/dashboard/dns-management/page.tsx` alone disproves it), `components/admin` 111,
+      `components/user` 18. The old numbers are not reproducible because their pattern was
+      never recorded, which is the actual lesson. Much of that is the public marketing site and checkout, which were
       never in scope — but `components/DomainRenewalModal.tsx` (30 instances) renders inside
       the customer panel at `/dashboard/domains`, so the panels are not uniformly converted.
       Worth a pass keyed on *what the panels render*, not on directory names.
@@ -542,8 +641,9 @@ Consequences accepted with the decision:
       stray real credential is not sufficient on its own.
 - [ ] **Commit-email linkage unverified.** Commits use `pawan@exceltechnologies.in`; they will
       only link to the GitHub account if that address is verified under Settings → Emails.
-- [ ] **No PR opened from here.** `gh` is not installed on this machine, so whether one
-      exists was NOT verified — only that neither was opened by me. Links:
+- [ ] **No PR opened from here, and that is now the standing rule** — do not open one unless
+      explicitly asked (AGENTS.md §10 rule 4, 23 Sep). `gh` is not installed on this machine
+      (re-checked 23 Sep), so whether one exists was NOT verified. Links:
       `github.com/Abhicode0to1/new-reselleros/pull/new/pawan-api-system` and
       `github.com/exceltechnologies-india/domain-management-system/pull/new/pawan-api-system`.
       Worth doing soon: AGENTS.md §9 notes CI runs on PRs and pushes to `main` but NOT on
