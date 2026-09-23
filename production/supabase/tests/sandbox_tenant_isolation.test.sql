@@ -29,6 +29,43 @@
 -- ROLLBACK. No live row is read into an assertion or written.
 begin;
 
+/* PRECONDITION 1 — the subjects must be here at all.
+   This file measures two REAL tenants against each other, which is deliberate: the
+   question it answers is whether a tester sitting in the sandbox on the production
+   database can reach the live company's books. On any database without them — a dev
+   box, a fresh restore — it used to die on `users_tenant_id_fkey`, which reads as a
+   broken schema and is not. Say what it is instead. */
+do $$
+begin
+  if not exists (select 1 from public.tenants where id = '7e57e57e-0000-4000-8000-000000000001')
+     or not exists (select 1 from public.tenants where id = 'fbb976f1-9090-4f10-9726-0901bd144e42') then
+    raise exception 'NOT APPLICABLE HERE: this file measures the real sandbox tenant against the real live tenant, and one of them is not on this database. Nothing was measured. Run it against the database those two live on — it is rollback-wrapped and reads no live row into an assertion.';
+  end if;
+end $$;
+
+/* PRECONDITION 2 — there must be something that COULD leak.
+   Case 1 asserts the tester sees ZERO rows belonging to another tenant, and zero is
+   also what you get when the other tenant has no rows. The file already guards the
+   session being dead (case 2, the control) and did NOT guard this: on 22 Aug 2026 the
+   live tenant had every transactional table cleared at the owner's request (AGENTS.md
+   L11), and on that day the headline assertion would have passed with nothing to find
+   — the same "every number is 0" shape as L14, one table over.
+
+   Checked as the connection role, BEFORE the switch to `authenticated`, because
+   afterwards RLS would hide exactly the rows being counted. */
+do $$
+declare v_other int;
+begin
+  select (select count(*) from public.customers where tenant_id <> '7e57e57e-0000-4000-8000-000000000001')
+       + (select count(*) from public.quotes     where tenant_id <> '7e57e57e-0000-4000-8000-000000000001')
+       + (select count(*) from public.invoices   where tenant_id <> '7e57e57e-0000-4000-8000-000000000001')
+       + (select count(*) from public.payments   where tenant_id <> '7e57e57e-0000-4000-8000-000000000001')
+    into v_other;
+  if v_other = 0 then
+    raise exception 'SETUP FAIL: no other tenant has a single customer, quote, invoice or payment, so case 1 would assert zero against nothing and pass for the wrong reason. Seed something, or do not believe this file today.';
+  end if;
+end $$;
+
 insert into auth.users (id, email) values
   ('5a5a5a5a-0000-4000-8000-00000000000b', 'sandbox-tester@example.test');
 
