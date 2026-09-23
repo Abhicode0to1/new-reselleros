@@ -747,7 +747,30 @@ Phases are ordered so each guard ships **before** the capability it guards.
       dominant ambiguity or a rarity.
 - [ ] Does a ResellerOS-originated hosting command travel DMS's DirectAdmin egress path, and is
       it covered by the four-layer IP whitelist?
-- [ ] Does the local Supabase match the committed migrations? No DB query was run in that pass.
+- [x] **Does the local Supabase match the committed migrations? ANSWERED 2026-09-23** — yes in
+      the direction that matters, with one thing worth knowing.
+      · **Nothing is missing.** Every table and function that `baseline.sql` and the 83
+        committed migrations create exists in the local database. Checked by extracting the
+        `create table` / `create function` names from all 84 files and querying `pg_tables` /
+        `pg_proc`, not by reading a ledger — because there IS no ledger: local has no
+        `supabase_migrations.schema_migrations` table at all. That is consistent with §4a (a
+        fresh database comes from `baseline.sql`, not from running the migrations).
+      · **Local carries 10 tables no committed SQL creates:** `domains`, `dns_records`,
+        `domain_watches`, `domain_renewals`, `domain_renewal_notices`, `hosting_accounts`,
+        `hosting_plan_changes`, `egress_ip_checks`, `recurring_charge_attempts`,
+        `reseller_wallet_entries`. Every one is domain/hosting — i.e. the territory DMS owns
+        since the federation decision. Almost certainly retired tables that predate the current
+        `baseline.sql`, still sitting in a local database nobody has rebuilt. **No ResellerOS
+        code references them** (checked; the only `dns_records` hits are an AI support-ticket
+        CATEGORY string, unrelated).
+      · **Consequence, and it is small but real:** local is not what a fresh build from
+        `baseline.sql` would produce. Rebuilding local would drop those 10, which is fine —
+        but it means "it works locally" is a statement about a database with history, not about
+        the committed schema. For anything schema-sensitive, rebuild first.
+      · The object counts in §4a (87 tables / 133 functions / …) match `baseline.sql` exactly —
+        87 `CREATE TABLE` statements — so those numbers describe the BASELINE, not today's
+        production, which has had 83 migrations applied since. Worth knowing before quoting
+        them as production's shape.
 
 ---
 
