@@ -23,184 +23,81 @@ Verification key: **[verified]** = read end-to-end in the code and confirmed her
 
 ---
 
-## 0. What is left — measured 2026-09-23
+## 0. What is left — measured 2026-09-23 (refreshed after Phase 8)
 
 Everything below is verified against the code today, not carried forward. Where an older
 entry in this file disagrees, **this section is the measurement** and the older one has been
 corrected in place. Grouped by who can move it, because most of what remains is not code.
 
-### 0.1 Yours — nothing else can proceed past these
+### 0.1 Yours — six decisions, and one thing to run
 
-- [x] **DMS migration 008 — APPLIED TO PRODUCTION 2026-09-23** at Pardeep's direction, on the
-      `domain-management` Atlas database. Verified in a separate run (§5): `_migrations` holds
-      8, `orderId_1` is now `unique=false sparse=true`, and **`resellerClubOrderId_1` is still
-      unique** — that is the index which actually prevents a double registration, and it was
-      the thing to check. `domains` held 0 rows, so the recreate was instant and no data was
-      at risk.
-      **It failed on the first attempt and that was a runner bug, not the database.** `await
-      import()` was handed an absolute Windows path and threw `Received protocol 'c:'` before
-      `up()` ran, so nothing was applied and no ledger row was written — confirmed against
-      production before retrying. Fixed with `pathToFileURL` (DMS `b90140a`); 001-007 predate
-      the Node version that enforces this, which is why it surfaced on 008.
+Ordered by what they unblock. Only the first two are urgent; the rest gate Phase 9, which is
+not started.
 
-- [ ] **ResellerOS migration `20260921100000` — production DEFERRED at Pardeep's direction
-      (2026-09-23), local VERIFIED.** Not merely "applied locally": checked against the running
-      database rather than the migration file (L8 — a migration is not evidence a guard exists).
-      · `pg_proc` / `pg_trigger` on the local DB: `guard_provisioning_request_facts` and
-      `provisioning_requests_facts_immutable` both present.
-      · `supabase/tests/provisioning_facts_immutable.test.sql` exits 0 with all five locked
-      columns refused AND the complete-a-request workflow still working — the ALLOW half, which
-      is the half that decides whether a guard survives contact with the people it constrains.
-      · **Red-checked**: dropping the trigger made the test exit 3 with
-      `FAIL: a tenant member changed payment_mode — a test payment can be activated`. The
-      trigger was restored from the migration file and re-verified in a separate run. So exit 0
-      here means something; it is not a file that silently did nothing.
-      **Still to do:** the same migration on production, whenever that becomes possible. Until
-      then the hole is open there — a tenant member can flip `payment_mode` from `test` to
-      `live`, clear `blocker`, and have the worker provision real hosting against a payment that
-      settled zero rupees.
-      Note for whoever runs it: `npx supabase status` prints the DEFAULT ports (54322/54321);
-      the real local mapping is **14322/14321**, which `docker ps` shows. Commands aimed at
-      `--linked` go to PRODUCTION, not local.
-- [ ] **Domain renewal retail pricing.** Blocks the renewal checkout. There is no retail
-      renewal price anywhere in DMS — `getRenewalPricing` returns the *registrar's cost*.
-      Inventing a markup would put a made-up figure on a real charge, so nothing was invented
-      and the modal routes to support instead.
+- [ ] **Apply ResellerOS migration `20260921100000` to production.** Deferred 23 Sep at your
+      direction; local is verified (§0.2). Until it runs, a tenant member can flip
+      `payment_mode` from `test` to `live`, clear `blocker`, and have the worker provision real
+      hosting against a payment that settled zero rupees. One file, and I can run it the way I
+      ran DMS 008.
+- [ ] **What shape should the engine's spend control take?** The newest blocker, and now the
+      *only* thing keeping `domain.renew` switched off — its other risks are handled. Nothing
+      caps how many money-spending commands a caller can trigger. Per tenant, per day, a rupee
+      total, or a human release per row. **This also gates Phase 9**, so it is the highest-value
+      answer on this list.
+- [ ] **Domain renewal retail pricing.** Blocks the customer-facing renewal checkout (not the
+      engine command). No retail renewal price exists anywhere — `getRenewalPricing` returns the
+      registrar's COST. Nothing was invented, so the modal routes to support.
 - [ ] **Does an engine-provisioned hosting account get a DMS portal user?** Blocks
-      `hosting.provision` (Phase 7's other half). DMS mints a `Math.random()` password it never
-      returns because its customers arrive by SSO — so without a portal user there is no way in
-      at all, and provisioning reports success.
-- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. DMS's GST
-      engine is permanent and ungated; credit notes are manual with a statutory deadline.
-      Needs the CA.
+      `hosting.provision`. DMS mints a `Math.random()` password it never returns because its
+      customers arrive by SSO, so without a portal user there is no way in and provisioning
+      still reports success. My recommendation: yes, create the portal user.
+- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. Needs the CA —
+      DMS's GST engine is permanent and ungated, and credit notes are manual with a statutory
+      deadline.
 - [ ] **How does a ResellerOS-only buyer get a ResellerClub customer?** Blocks Phase 9.
-      `registerDomain` needs a numeric `customerId`, and contacts come from a private helper
-      inside DMS's payment pipeline.
-- [ ] **Which side owns DirectAdmin?** Two writers means two username derivations. It does
-      NOT block `hosting.change_plan`, which shipped — that command works with the existing
-      `(userId, domainName)` uniqueness rather than changing it.
-- [x] **Is a renewal idempotent? ANSWERED 2026-09-23 — as we call it today, NO.** And the
-      answer came from our own code, not the vendor docs.
-      RC's `renew.json` requires `exp-date`, documented as "Current Expiry Date of the Order in
-      epoch time format". That is an optimistic-concurrency guard — and
-      `resellerclub-wrapper.ts:136` **re-reads the expiry on every call** and passes whatever it
-      just read. So on a retry after a renewal we did not hear back from:
-      `getDomainExpiry` returns the NEW expiry, we pass that, it matches, and RC renews again.
-      **A retry buys a second year.** The guard that would have stopped it is defeated by our
-      own pre-flight.
-      No vendor page states the duplicate-call behaviour (the KB is 403 to fetching and the
-      published parameter tables are silent on it), but the conclusion does not depend on it:
-      if RC validates `exp-date` we pass a valid one, and if it ignores `exp-date` the renewal
-      proceeds anyway. Either way the second year is bought.
-      **This retrospectively proves the 409 shipped earlier today was right** — the renewal
-      route refuses to invite a retry on `sent_unknown`, and that was precautionary when
-      written. It is now measured.
+      `registerDomain` needs a numeric `customerId`; contacts come from a private helper inside
+      DMS's payment pipeline.
+- [ ] **Which side owns DirectAdmin?** Lowest urgency of the six. It did not block Phase 7 in
+      the end.
 
-- [ ] **Phase 8's design follows from that, and it is better than a human release.** The
-      pre-renewal expiry is the reconciler: record it before calling, and on an ambiguous
-      outcome re-read it. **Moved → the renewal happened. Unchanged → it did not, and a retry
-      is free.** A pure read with a definite answer, which is exactly the bar Phase 6 set for
-      giving a command a reconciler — so `domain.renew` can be automated safely rather than
-      parked for a person.
-      Two things still worth asking RC support, now much narrower than the original question:
-      does `renew.json` REJECT a mismatched `exp-date`, and is there a request-id style
-      idempotency key? If it rejects, passing the ORIGINAL exp-date on a retry turns that field
-      into a proper idempotency key and the ambiguity disappears.
+### 0.2 Mine
 
-### 0.2 Mine — buildable now, in this order
+**Shipped 2026-09-23** (all test-verified and reasoned-only — no provider has been contacted,
+live is still hard-disabled in code):
 
-- [x] **Phase 8 — `domain.renew`. DONE 2026-09-23.** `lib/integrations/engine-handlers-domain.ts`,
-      registered in both maps. **`expiryBefore` is required in the payload** — the expiry the
-      CALLER observed — and the command refuses to look it up, because looking it up is the
-      defect: a fresh read always matches, so RC's own staleness check always passes. Equal →
-      proceed; greater → already renewed since they looked, refuse and say how to ask for a
-      second year deliberately; lesser → refuse rather than guess.
-      **The same baseline is the reconciler** (moved → done, unchanged → not_done), so this
-      needed no per-row human release. The pessimistic design the plan assumed was more
-      expensive AND less safe.
-      Registered as performable and **deliberately NOT live-eligible** — and its ineligibility
-      reason was rewritten rather than left, because the old one ("nobody has established the
-      double-renewal risk") is now false. It stays off because the engine has **no spend
-      control at all**: what is missing is a limit, not a guard.
-      27 tests. A red-check found one of them vacuous — "sends the caller's expiry, not the one
-      it just read" could not fail, because the equality guard makes the two values identical by
-      the time of the send. The protection is the guard; the test now says so.
-      Full suite 448 files / 6,774 tests, typecheck clean. **Test-verified and reasoned-only —
-      no call has been made to ResellerClub.**
+- [x] **Phase 8 — `domain.renew`.** `expiryBefore` required and sent verbatim, turning RC's own
+      `exp-date` into a working idempotency key; an already-renewed domain is refused before any
+      money moves, and the same baseline is the reconciler, so no human release was needed.
+      Performable, deliberately not live-eligible.
+- [x] **Per-command live control (code half).** `LIVE_COMMANDS_ENABLED` predated four
+      provider-touching handlers, so flipping one constant would have armed everything including
+      `domain.register`. Eligibility is now per command and silence means no.
+- [x] **The renewal route's retry-inviting 500**, plus a false failure it was hiding: a
+      bookkeeping throw after a successful renewal reported the renewal as failed, which is how a
+      customer buys a second year.
+- [x] **The renewal expiry gap.** The canonical source is the Domain collection; nothing updated
+      it, so `daily-scheduler` kept chasing renewed domains. Expiry read from RC, never computed.
+- [x] **Transport wiring.** Phase 4's catch recorded `not_sent` unconditionally; Phase 6 made
+      that false. A write that dies in flight now holds its claim.
+- [x] **DMS migration 008 applied to production**, and the Windows ESM bug in the migration
+      runner that made it fail first (L110).
+- [x] **ResellerOS migration verified on local Supabase** — checked in `pg_proc`/`pg_trigger`,
+      SQL test green, red-checked by dropping the trigger.
 
-- [ ] **The engine has no spend control.** Found while classifying `domain.renew` for live:
-      nothing anywhere caps how many money-spending commands a caller can trigger. It did not
-      matter while every command was free or reversible. It is now the reason `domain.renew`
-      cannot be armed, and it will be the same blocker for Phase 9. Needs a decision on the
-      shape — per tenant, per day, per rupee total — before either can go live.
-- [ ] **Phase 9 — `domain.register`.** Last, behind two fail-closed env gates and a per-row
-      human release. Blocked on both §0.1 decisions above it.
-- [x] **Per-command live control — the CODE half is built (2026-09-23).** The env-var half is
-      NOT, deliberately: `engine-mode.ts` and its test both warned that the env-var version
-      belongs to the phase carrying two fail-closed gates and a per-row human release, and that
-      a single flag added as a convenience would look like the same thing and be much weaker.
-      That warning still holds, so nothing here reads the environment.
-      **What was actually wrong was worse than a missing env var.** `LIVE_COMMANDS_ENABLED` was
-      written when the only handler was `engine.selftest`, which contacts nothing — one boolean
-      was a complete answer because flipping it could do nothing. Phases 6 and 7 added four
-      provider-touching handlers and the boolean never changed, so the cheapest wrong action
-      available (flip one constant) would have armed **every** command at once, `domain.register`
-      included. L74 exactly.
-      Now `LIVE_ELIGIBLE_COMMANDS` is what the flag may enable and `LIVE_INELIGIBLE_REASONS`
-      names what it must never reach, with the reason doubling as the caller's refusal. A
-      command in neither list is refused — silence is "no" — and a test asserts every known
-      command is classified, so a handler added in Phase 8/9 cannot inherit a default.
-      Proved by flipping the constant to `true` against the real harness: the three dangerous
-      commands stayed refused, the three eligible ones armed.
-      **Still open for Phase 9:** the two fail-closed env gates and the per-row human release.
-- [x] **The renewal route's `hard_failure` 500 — FIXED 2026-09-23.** `RenewDomainOutcome`'s
-      failure now carries a `transport`, and the route picks its status by how far the request
-      got rather than by whose fault it is: `not_sent`/`responded` → **502** "nothing was
-      renewed, safe to try again"; `sent_unknown` → **409** "do NOT try again, a second attempt
-      could buy an extra year", with an error log naming the domain, the payment and the reason.
-      409 because nothing retries it by itself, and because that is this repo's existing code
-      for "your state conflicts with this request".
-      Stated rather than hidden: the wrapper does an order-id/expiry PRE-FLIGHT inside the same
-      call, so an ambiguous throw from that lookup also reads `sent_unknown`. That errs toward
-      "a human checks", the safe direction for a spend that cannot be taken back.
+**Still open, in order:**
 
-- [x] **A bookkeeping failure was reported as a failed RENEWAL — found while fixing the above,
-      fixed 2026-09-23.** `createOrder` and `appendUserDomain` ran inside the same `try` as the
-      registrar call, so a throw returned 500 and "Failed to renew domain" about a renewal that
-      had just succeeded — the customer reads a failure, presses renew again, and buys a second
-      year. This route's own history is a ValidationError thrown in exactly that spot on every
-      run, after the registrar had been charged. Bookkeeping now has its own `try`; on failure
-      the response says the renewal worked, flags `recorded:false`, says there is no need to
-      renew again, and logs loudly.
-- [x] **`appendUserDomain` / the renewal expiry gap — FIXED 2026-09-23. The "decision" was
-      not needed: the code had already made it.** `GET /api/user/domains` fills a Map from
-      recent orders, then pending domains, then the **Domain collection LAST**, so Domain rows
-      overwrite the other two. Its own comment states the precedence and the insertion order
-      implements it. Canonical source = the Domain collection; `User.domains` is read by
-      nothing.
-      **That made the gap bigger than a stale date.** `daily-scheduler` selects on
-      `next_action_at <= now`, derived from `expiresAt` at row creation, and nothing updated
-      either after a renewal — so a renewed domain kept its pre-renewal trigger and the cron
-      went on reminding the customer to renew what they had just renewed, feeding the same rows
-      to renewal dunning.
-      `applyDomainRenewal` now writes `expiresAt` + `next_action_at` and clears
-      `last_reminder_sent` (the trio the provisioner sets together), with `reminderTriggerFor`
-      shared rather than copied a third time.
-      **The expiry is read from ResellerClub, never computed.** `now + years × 365d` is wrong
-      by however long was left, because a renewal extends the CURRENT expiry — and that wrong
-      date would land in the customer's view and the reminder ladder looking authoritative.
-      `orders.endtime` is not a guess: `app/api/domains/sync` already parses it as Unix seconds.
-      No usable expiry from RC → nothing written, and logged.
-      `appendUserDomain` is deprecated and now WARNS instead of pretending. Kept, not deleted,
-      because the domain TRANSFER route still calls it and has no canonical write of its own —
-      deleting it would erase the last trace of that gap while leaving the gap.
-
-- [ ] **Domain TRANSFER has no canonical write.** Same shape as the renewal bug above, still
-      open: `app/api/domains/transfer` calls the deprecated `appendUserDomain` and never writes
-      a `Domain` row, so a transferred-in domain does not appear in the customer's list and gets
-      no reminder schedule. Not fixed here because a transfer's expiry comes from the losing
-      registrar and the flow was not read end to end — it needs its own pass, not a copy of the
-      renewal fix.
+- [ ] **Domain TRANSFER has no canonical write.** The same bug I fixed for renewal:
+      `app/api/domains/transfer` calls the deprecated `appendUserDomain` and never writes a
+      `Domain` row, so a transferred-in domain never appears in the customer's list and gets no
+      reminder schedule. Not copied blind from the renewal fix because a transfer's expiry comes
+      from the LOSING registrar and I have not read that flow end to end. **This is the next
+      thing I can do without waiting on anyone.**
+- [ ] **Phase 9 — `domain.register`.** Blocked on three of §0.1: seller of record, the
+      ResellerClub customer, and the spend control. Not started.
+- [ ] **The two fail-closed env gates and the per-row human release** that Phase 9 carries. The
+      code-level eligibility list is built; the env half is deliberately still absent, because
+      `engine-mode.ts` and its test both warn that a convenience flag would look like those gates
+      and be much weaker.
 
 ### 0.3 Corrections to this file's own numbers (all re-measured today)
 
@@ -282,8 +179,14 @@ new design's guards assume they are fixed.
       `/api/payments/verify` drive the registrar call. **Needs an operator pricing decision
       first.**
 
-- [ ] **`appendUserDomain` writes nothing at all** — `lib/services/users.ts:466`,
-      `models/User.ts` **[verified]**
+- [x] **`appendUserDomain` writes nothing at all** — `lib/services/users.ts`,
+      `models/User.ts` **[verified]** — **RESOLVED 2026-09-23, see §0.2.** Both halves of the
+      entry below turned out to understate it: the write was not only dropped, its destination
+      is read by nothing. The canonical source is the Domain collection, which
+      `GET /api/user/domains` states in its own comment. The renewal now writes there; the
+      function is deprecated, warns instead of pretending, and is kept only because domain
+      TRANSFER still calls it and has no canonical write of its own.
+      Original finding, left for the reasoning:
       It does `$push: { domains: … }` on `User`, and `models/User.ts` declares no `domains`
       path — Mongoose strict mode (on by default; the options block sets no `strict:false`)
       silently drops it. `models/User.ts:93` and `:416` already document this exact hazard for
@@ -612,7 +515,10 @@ Phases are ordered so each guard ships **before** the capability it guards.
       `engine-transport-wiring.test.ts` is a SOURCE SCAN, because every existing engine test
       asks whether a decision is right and this was wiring (L85). It asserts the route reads
       the brand and that every provider write in a handler is wrapped.
-- [ ] **Phase 8** — domain renew (first unrecoverable rupee, on a domain we already own).
+- [x] **Phase 8** — domain renew. **DONE 2026-09-23** — see §0.2. `expiryBefore` is required
+      and sent verbatim, which turns RC's own `exp-date` into a working idempotency key;
+      the same baseline is the reconciler, so it needed no human release. Performable,
+      not live-eligible.
 - [ ] **Phase 9** — domain register, last, behind two fail-closed env gates and a per-row human
       release.
 
@@ -644,7 +550,15 @@ Phases are ordered so each guard ships **before** the capability it guards.
       register. `registerDomain` needs a numeric `customerId` and contacts that today come from
       a private helper inside DMS's payment pipeline.
 - [ ] **Which side owns DirectAdmin?** Keeping both writers means two username derivations and
-      two definitions of `vendor_ref`. Blocks Phase 7.
+      two definitions of `vendor_ref`. Did NOT block Phase 7 in the end — `hosting.change_plan`
+      shipped by working with the existing `(userId, domainName)` uniqueness rather than
+      altering it.
+- [ ] **What shape should the engine's spend control take?** Found 2026-09-23 while deciding
+      whether `domain.renew` could be armed. Nothing anywhere caps how many money-spending
+      commands a caller can trigger — irrelevant while every command was free or reversible,
+      and now the reason `domain.renew` stays live-ineligible. It will gate Phase 9 the same
+      way. Per tenant, per day, a rupee total, or a human release per row: the answer decides
+      how much of Phase 9 is design and how much is plumbing.
 - [x] **The hosting password — measured, and it is not a password question.** DMS's
       `createUser` sets a `Math.random()` throwaway it never returns *on purpose*: its comment
       says "user will use SSO" and DMS customers reach DirectAdmin by passwordless SSO from the
