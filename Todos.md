@@ -92,12 +92,28 @@ live is still hard-disabled in code):
 
 **Still open, in order:**
 
-- [ ] **Domain TRANSFER has no canonical write.** The same bug I fixed for renewal:
-      `app/api/domains/transfer` calls the deprecated `appendUserDomain` and never writes a
-      `Domain` row, so a transferred-in domain never appears in the customer's list and gets no
-      reminder schedule. Not copied blind from the renewal fix because a transfer's expiry comes
-      from the LOSING registrar and I have not read that flow end to end. **This is the next
-      thing I can do without waiting on anyone.**
+- [x] **Domain TRANSFER — read end to end 2026-09-23, and MY ENTRY WAS WRONG.** It said the
+      route "never writes a `Domain` row, so a transferred-in domain never appears in the
+      customer's list". It does write the row, and the domain does appear. Not copying the
+      renewal fix blind is the only reason that was caught.
+      **The real finding is narrower and worse.** The row is saved with **no `expiresAt`**, so
+      it gets no `next_action_at`, and `daily-scheduler` selects on `next_action_at <= now` — so
+      a transferred-in domain is **never reminded before it expires**. And **nothing completes a
+      transfer**: no cron, sweeper or route moves it off `status: "pending"`, and
+      `pending-sweeper` watches `PendingDomain`/`PendingHosting`, not `Domain`, so it never sees
+      the row.
+      `appendUserDomain` is now DELETED — transfer was its last caller — and the marker moved
+      into the route at the line it occupied. The route's test pins the absence of `expiresAt`
+      so whoever builds completion sees what to fill in.
+
+- [ ] **Transfer completion — the piece that is actually missing.** Poll ResellerClub for a
+      transfer's status, then set `status` and `expiresAt` together (the `orders.endtime`
+      parsing already exists in `app/api/domains/sync`). NOT built here on purpose: the expiry
+      is unknowable at initiation — it comes from the losing registrar days later — and writing
+      a guess into the canonical source is worse than leaving it null. Needs a decision on
+      cadence (extend `pending-sweeper` to watch `Domain`, or a new job) before it is worth
+      building. **Nobody has transferred a domain in yet, so this is an exposure, not an
+      incident** — but the first one in will silently expire.
 - [ ] **Phase 9 — `domain.register`.** Blocked on three of §0.1: seller of record, the
       ResellerClub customer, and the spend control. Not started.
 - [ ] **The two fail-closed env gates and the per-row human release** that Phase 9 carries. The
