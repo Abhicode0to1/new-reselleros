@@ -36,14 +36,29 @@ const BUY_PAGE_TENANT_ID =
 const TRIAL_DAYS = 15;
 const PKG_NAME: Record<string, string> = { starter: "Starter", standard: "Standard", plus: "Plus" };
 
-function done(status: string): NextResponse {
-  return NextResponse.redirect(`${APP_URL}/hosting/trial?confirmed=${status}`);
+/**
+ * Where to send the customer after they click the confirm link.
+ *
+ * Built from the REQUEST's own origin, not from `APP_URL`. This is the only
+ * customer-facing use of that constant in the file — everything else below is
+ * an internal alert to staff — and its fallback is
+ * `https://resellersos.web.app`, which answers **503** (measured 23 Sep 2026,
+ * and L91 measured the same a month earlier). So with NEXT_PUBLIC_APP_URL
+ * unset, a customer who clicked "confirm your email" landed on a dead host.
+ *
+ * The request's origin cannot be wrong and needs no configuration: whatever
+ * hostname the customer actually reached us on is the one to send them back
+ * to. That also survives this service having more than one hostname, which
+ * L18 records it does.
+ */
+function done(req: NextRequest, status: string): NextResponse {
+  return NextResponse.redirect(new URL(`/hosting/trial?confirmed=${status}`, req.url));
 }
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token") || "";
   const verdict = verifyTrialToken(token);
-  if (!verdict.ok) return done(verdict.reason === "expired" ? "expired" : "invalid");
+  if (!verdict.ok) return done(req, verdict.reason === "expired" ? "expired" : "invalid");
 
   const admin = createAdminClient();
   const { data: lead } = await admin
@@ -53,8 +68,8 @@ export async function GET(req: NextRequest) {
     .eq("tenant_id", BUY_PAGE_TENANT_ID)
     .maybeSingle();
 
-  if (!lead || lead.source !== "buy-hosting-trial") return done("invalid");
-  if (lead.trial_converted_at) return done("already");
+  if (!lead || lead.source !== "buy-hosting-trial") return done(req, "invalid");
+  if (lead.trial_converted_at) return done(req, "already");
 
   const tier = (lead.plan || "").replace(/^hosting-/, "") || "standard";
   const pkg = PKG_NAME[tier] || "Standard";
@@ -85,7 +100,7 @@ export async function GET(req: NextRequest) {
         text: `${lead.company} confirmed their email for a ${pkg} hosting trial.\n\n${domain ? `Domain: ${domain}\nProvision the cPanel account and send the login.` : `They still need a domain — help them register one, then provision.`}\n\nContact: ${lead.contact_name} <${email}> · ${lead.contact_phone}\nOpen the lead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
       }).catch(() => {});
     }
-    return done(domain ? "pending" : "needdomain");
+    return done(req, domain ? "pending" : "needdomain");
   }
 
   // ── Live provisioning (irreversible) ──────────────────────────────────────
@@ -106,7 +121,7 @@ export async function GET(req: NextRequest) {
         text: `Auto-provisioning the ${pkg} account for ${domain} failed:\n\n  ${result.message}\n\nProvision by hand and send the login.\nLead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
       }).catch(() => {});
     }
-    return done("error");
+    return done(req, "error");
   }
 
   // Success (or the account already existed — either way it's live).
@@ -154,5 +169,5 @@ No credit card. ${TRIAL_DAYS} days fully free. We'll check in before it ends.
     }).catch(() => {});
   }
 
-  return done(result.alreadyExisted ? "already" : "provisioned");
+  return done(req, result.alreadyExisted ? "already" : "provisioned");
 }

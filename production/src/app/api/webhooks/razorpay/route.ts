@@ -33,7 +33,6 @@ import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
 import { daWriteConfigured } from "@/lib/directadmin/provision";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 
-const WEBHOOK_APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
 import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
 import { applyGatewayEvent, type MandateStatus } from "@/lib/payments/mandate";
 import type { PaymentMandateInsertT as PaymentMandateInsert } from "@/lib/supabase/database.types";
@@ -395,8 +394,19 @@ export async function POST(request: NextRequest) {
   // The GST invoice record_payment just created — link it in the email so the
   // "you'll get your invoice" line is true, not a promise nothing keeps.
   const { data: paidQuote } = await admin.from("quotes").select("invoice_id").eq("id", quote.id).maybeSingle();
+  /* The base comes from THIS REQUEST, not from WEBHOOK_APP_URL.
+     That constant falls back to `https://resellersos.web.app`, which answers
+     503 (measured 23 Sep 2026; L91 measured it a month earlier). This link is
+     not an internal one — it goes straight into the customer's order
+     confirmation under the heading "YOUR GST TAX INVOICE", after they have
+     paid. With NEXT_PUBLIC_APP_URL unset at build, that is a statutory
+     document link pointing at a dead host.
+     Razorpay calls our public webhook URL, so this request's origin IS a
+     public origin for us, needs no configuration, and stays right even though
+     this service answers on more than one hostname (L18). */
+  const publicBase = new URL(request.url).origin;
   const invoiceUrl = paidQuote?.invoice_id
-    ? pdfDownloadUrl(WEBHOOK_APP_URL, "invoice", String(paidQuote.invoice_id), quote.tenant_id)
+    ? pdfDownloadUrl(publicBase, "invoice", String(paidQuote.invoice_id), quote.tenant_id)
     : null;
   const invoiceLine = invoiceUrl
     ? `YOUR GST TAX INVOICE\n  ${invoiceUrl}`

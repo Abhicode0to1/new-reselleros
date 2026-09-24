@@ -166,14 +166,42 @@ rollback;
 
 -- ── 9. The real client path: role `authenticated`, RLS on ───────────────────
 --
--- Runs against the LIVE ANUTECH DIGITAL tenant and its real catalog, because the
--- thing being tested is whether RLS + function grants let the trigger see `items`
--- at all — a synthetic tenant created as service_role would not prove that. Rolled
--- back, so nothing is left behind.
+-- Own tenant, own auth user, own catalogue (AGENTS.md L11).
+--
+-- This section used to run against the LIVE ANUTECH tenant with a hardcoded
+-- production auth id, on the stated grounds that "a synthetic tenant created as
+-- service_role would not prove" the RLS path. That reason does not hold: RLS is
+-- exercised by the SESSION, not by whoever inserted the rows. The fixtures go in
+-- as service_role and every assertion below then runs as `authenticated` with a
+-- sub belonging to a fixture user — which IS the client path.
+--
+-- What the old shape cost, measured: the file could not run anywhere but
+-- production, because that sub exists nowhere else, so current_tenant_id() was
+-- null and RLS showed an empty catalogue — surfacing as "FAIL 9: authenticated
+-- user sees 0 items", which reads as a product fault. And it INSERTED a
+-- subscription into the live company's books, which L11 forbids even inside a
+-- transaction: correctness should not depend on one keyword at the bottom.
+--
+-- Fixtures are created BEFORE the role switch, because `authenticated` cannot
+-- write them (L14).
 begin;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+insert into public.tenants (id, name, email, state_code, doc_code)
+  values ('aaaa0249-0000-0000-0000-000000000001','ITEMID RLS','rls@example.in','07','IT09');
+insert into auth.users (id, email)
+  values ('dddd0249-0000-0000-0000-000000000001','itemid-rls@example.test');
+insert into public.users (id, tenant_id, email, full_name, role, is_active)
+  values ('dddd0249-0000-0000-0000-000000000001','aaaa0249-0000-0000-0000-000000000001',
+          'itemid-rls@example.test','ItemId RLS Probe','owner',true);
+-- Exactly one active Google item, so the trigger has one unambiguous candidate.
+insert into public.items (id, tenant_id, name, vendor, wholesale, msrp, is_active)
+  values ('IT-RLS-STD','aaaa0249-0000-0000-0000-000000000001',
+          'Google Workspace Standard','google',620,864,true);
+
 set local role authenticated;
 select set_config('request.jwt.claims',
-  '{"sub":"3caa0f07-44d1-42ee-91b3-2123e04853b1","role":"authenticated"}', true);
+  '{"sub":"dddd0249-0000-0000-0000-000000000001","role":"authenticated"}', true);
 
 do $$
 declare v_item text; v_items int; v_expect text; v_plan text;
@@ -212,7 +240,7 @@ begin
   end if;
 
   insert into public.subscriptions (id, tenant_id, customer_name, plan, vendor, seats, mrr, status)
-    values ('bbbb0248-9999-0000-0000-000000000009','fbb976f1-9090-4f10-9726-0901bd144e42',
+    values ('bbbb0248-9999-0000-0000-000000000009','aaaa0249-0000-0000-0000-000000000001',
             'RLS Probe', v_plan, 'google', 10, 8640, 'active');
 
   select item_id into v_item from public.subscriptions

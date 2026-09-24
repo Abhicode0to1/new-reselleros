@@ -69,6 +69,29 @@ begin
   perform set_config('request.jwt.claims', '', true);
 end $$;
 
+/* Case 3 ke liye apna data, kyunki pehle ye raat wale cron par nirbhar tha.
+   Jis bhi database par sweep abhi chala na ho — naya restore, dev box, ya is file
+   ka mahine baad ka pehla run — ye "ek saal me ek bhi snapshot nahi" par marta tha,
+   jo ek toote function jaisa padha jata hai aur hai nahi.
+
+   Aur jiski jagah ye khada tha — raat ke backup ka alarm — wo bhi nahi de raha tha:
+   ye file na CI me hai na Stop hook me (§9). Jo alarm koi chalata hi nahi, wo alarm
+   nahi hai (L38).
+
+   Do nateeje, chhupe nahi, likhe hue: neeche ka contract ab HAR database par pakka
+   sabit hota hai — "sirf sabse naya" wala niyam bhi, jo pehle tabhi sach nikalta jab
+   production ke paas sanyog se kisi tenant ke do snapshot hon — aur "kya sach me har
+   tenant ka backup ja raha hai" ab is file ka sawal nahi raha. Wo monitoring ka kaam
+   hai: asli rows par, schedule par. */
+insert into backup.snapshots (tenant_id, created_at, label, table_count, payload, kind)
+  select t.id, now(), 'offsite-probe newest', 3, jsonb_build_object('probe', true), 'automated'
+  from public.tenants t;
+-- Ek purana, sirf ek tenant ke liye, taaki "sirf sabse naya" naapa jaye, maana na jaye.
+insert into backup.snapshots (tenant_id, created_at, label, table_count, payload, kind)
+  select t.id, now() - interval '9 days', 'offsite-probe STALE', 3,
+         jsonb_build_object('probe', 'stale'), 'automated'
+  from public.tenants t order by t.id limit 1;
+
 -- ── 3. Jo lautata hai wo sach me kaam ka ho ─────────────────────────────────
 do $$
 declare
@@ -108,6 +131,15 @@ begin
   select count(*) into v_tenants from public.tenants;
   if v_distinct <> v_tenants then
     raise exception 'FAIL 3: % tenant hain par sirf % ka backup ja raha hai', v_tenants, v_distinct;
+  end if;
+
+  /* Upar wali jaanch sirf itna kehti hai ki kisi tenant ke do snapshot nahi aaye.
+     Ye kehti hai ki jo aaya wo SAHI wala hai: purani nakal kabhi na jaye. Iske bina
+     function ulta sort karke bhi paas ho jata. */
+  select count(*) into v_empty from jsonb_array_elements(v_out) x
+   where x->>'label' = 'offsite-probe STALE';
+  if v_empty > 0 then
+    raise exception 'FAIL 3: purana snapshot bheja gaya — "sirf sabse naya" toota hua hai';
   end if;
 end $$;
 

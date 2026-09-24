@@ -134,12 +134,16 @@ Legend: ✅ shipped · 🟡 partial · 🔴 missing · 🅿️ parked
 | Cross-tenant invoice → vendor bill mirror | ✅ | |
 | Renewal sync (parent inventory alerts) | ✅ | |
 
-### Customer portal
+### Customer portal — ⛔ REMOVED 2026-09-19, see the Phase 8 note below
+These were built and then **deleted on purpose** (`61d3b4bd`). The ticks record that the work
+happened, not that the feature is there — verified absent 2026-09-23. DMS owns the customer
+experience now.
+
 | Module | Status | Notes |
 |---|---|---|
-| Magic link auth + portal layout | ✅ | |
-| Dashboard + orders + invoices | ✅ | |
-| Support tickets + subscription management | ✅ | |
+| Magic link auth + portal layout | ⛔ removed | deleted 2026-09-19 |
+| Dashboard + orders + invoices | ⛔ removed | deleted 2026-09-19 |
+| Support tickets + subscription management | ⛔ removed | deleted 2026-09-19 |
 
 ### Engagement
 | Module | Status | Notes |
@@ -155,7 +159,7 @@ Legend: ✅ shipped · 🟡 partial · 🔴 missing · 🅿️ parked
 | Google OAuth signin (existing user) | ✅ | Working — 4 users have signed in via Google |
 | Google OAuth signup (new user) | ✅ | Callback auto-provisions tenant + users row (`2ea2a6d` in revision 00047-rg6) |
 | Restricted sales role (Darshan) | ✅ | |
-| Customer portal magic link | ✅ | |
+| Customer portal magic link | ⛔ removed | deleted 2026-09-19 with the rest of the portal |
 
 ### Public marketing + legal pages
 | Module | Status | Notes |
@@ -356,10 +360,21 @@ These represent **223+ completed tasks** rolled up into modules. Not exhaustive,
 - SaaS Metrics (MRR/ARR/Churn/LTV)
 - TDS Receivable (4-tab lifecycle + Form 26AS reconciliation)
 
-### Phase 8 — Customer portal (Week 11)
-- Magic link auth
-- Portal dashboard + orders + invoices
-- Support tickets + subscription management
+> **Phase numbers here are this roadmap's own.** They are NOT the engine write-command
+> phases in `Todos.md` §C, which run 0-9 and are on a different clock — engine Phase 8 is
+> `domain.renew` and shipped 2026-09-23. Two different "Phase 8" exist; check which document
+> you are in.
+
+### Phase 8 — Customer portal (Week 11) — ⛔ BUILT, THEN DELETED 2026-09-19
+**Do not read this as a delivered feature, and do not rebuild it without being asked.**
+`(public)/portal`, `api/portal` and `lib/portal` were removed in `61d3b4bd` — 24 files, the
+nav entry, 11 route-map entries and a robots disallow. Verified absent 2026-09-23.
+DMS owns the customer experience now; staff reach it from the demo panel on `/login`.
+See AGENTS.md §0 and Todos.md §F for what that decision cost — chiefly that ResellerOS's OWN
+customers (Workspace / M365 / Zoho) have no self-service at all, and everything is
+staff-mediated until something replaces it.
+The `portal_*` database functions were deliberately left in place, so their presence is not
+evidence the feature exists.
 
 ### Phase 9 — Subscription lifecycle (Week 11)
 - Domain field end-to-end

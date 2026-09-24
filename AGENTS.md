@@ -210,19 +210,40 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,609 tests
-passing across 356 files** (plus 1 file / 4 tests skipped), typecheck clean (measured
-21 Sep 2026 — this line said 4,371/233 until then, 3,404/182 before that, and 1,492 before
-that, which is §12 happening to this very file three times). Lint and `npm run build` were
-NOT re-measured on that date — the previous line claimed both, and repeating an unverified
-claim is how this number went wrong three times. If your change drops the test count, it is
-not done.
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,629 tests
+passing across 357 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 23 Sep 2026 after merging `abhishek-pre-merge`. Earlier
+markers: 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+which is §12 happening to this very file four times. If your change drops the test count, it
+is not done.
+
+**`npm run build` passes — measured 23 Sep 2026, for the first time.** This line said it had
+NOT been run for as long as it existed, which mattered: CI does not run on feature branches,
+so on `pawan-api-system` the local gate is the only gate, and a build was never in it. Both
+repos build clean. Lint on this repo: exit 0, **0 errors / 29 warnings**.
+
+**Stop the dev server before building.** `next build` rewrites `.next`, which the running dev
+server is serving from, so the open page then 404s its own chunks and looks broken until it is
+restarted — and because DMS's front door redirects here, a stopped ResellerOS makes DMS look
+dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, currently **6,724 tests across 447 files**,
-typecheck clean (re-measured 21 Sep 2026; this line said 6,451/432 earlier the same day).
-Lint and build were NOT re-measured, and are not claimed here. A change that spans both repos has to be green in both, and
-neither suite knows about the other.
+`C:/xampp/htdocs/Domain-Management-Project`, currently **6,845 tests across 452 files**,
+typecheck clean (measured 23 Sep 2026 after the public-page link fixes; 6,773/448 earlier the
+same day after Phase 8 and the transfer clean-up, then 6,748/447 and 6,724/447, and 6,451/432
+on 21 Sep).
+
+That run also reports **16 "Errors"** alongside the passing count. They are unhandled
+rejections inside `tests/unit/lib/directadmin/retry-transport.test.ts`, which itself passes;
+they are not failures and not new. Said here because a reader who meets them for the first
+time will otherwise treat a green suite as red.
+DMS lint and build — also measured 23 Sep 2026 for the first time: `npx next lint` exits 0
+with **0 errors / 418 warnings**, and `npx next build` exits 0. A change that spans both repos
+has to be green in both, and neither suite knows about the other.
+
+**DMS also has 8 MongoDB migrations** (`scripts/db/migrations/`, tracked in the `_migrations`
+collection, run with `npm run migrate`). All 8 are applied to production as of 23 Sep 2026.
+The runner could not run at all on Windows until that date — see L110.
 
 **A targeted run is not the gate.** One function there had coverage in two test files;
 the targeted run was green while the full suite caught the second one. Run the whole suite
@@ -231,8 +252,29 @@ before calling anything done.
 - CI runs on **pull requests** and on pushes to `main`. It does **not** run on feature
   branches — on a long-lived branch the local gate is the only gate. This is exactly how
   4 unit tests sat broken for months.
-- The 28 SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change means
-  running them by hand, or it is not verified.
+- The **54** SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change
+  means running them by hand, or it is not verified. (This line said 28 and L7 said 38;
+  both were stale — counted 23 Sep 2026.)
+
+  Measured that day against the LOCAL Supabase: **53 pass / 1 not-applicable**. The one is
+  `sandbox_tenant_isolation`, which measures the REAL sandbox tenant against the REAL live
+  tenant — that IS the question it exists to answer — and now says
+  `NOT APPLICABLE HERE` rather than dying on a foreign key, which read as a broken schema. Two things about
+  running them that cost time otherwise. **Prove the detector first** (L23): the folder holds
+  two conventions, and the report-style files that end `raise exception 'TESTRESULT >> …'`
+  exit **non-zero when they PASS**, so a naive runner reports them as failures. And use
+  `psql -v ON_ERROR_STOP=1`, or psql exits 0 with errors on screen. The two still red are
+  `offsite_export_service_role_only` (asserts a backup snapshot exists; `backup.snapshots` is
+  empty locally) and `sandbox_tenant_isolation` — both environment, neither a defect. Both
+  have since been fixed; the second is production-only by design and now says so.
+
+  **A zero-based assertion needs a precondition that something could have leaked.** Every
+  case-1 assertion in `sandbox_tenant_isolation` is "the tester sees ZERO rows of another
+  tenant", and zero is also what an EMPTY other tenant returns. The file guarded the session
+  being dead and not this — so on 22 Aug 2026, when the live tenant's transactional tables
+  were all cleared (L11), its headline would have passed with nothing to find. It now counts
+  what could leak first, as the connection role, before switching to `authenticated`:
+  afterwards RLS hides the very rows being counted.
 
 **Say which kind of verified**, and never blur them:
 
@@ -470,7 +512,9 @@ legitimately acquires something.
 - **A security test that cries wolf is worse than no test.** The next reader learns to discount
   it, and the day it means something nobody believes it.
 - **Run `supabase/tests/` before trusting any sentence of the form "the wall is proven".** Those
-  38 files are not in CI and not in the Stop hook, so their claims age silently. Measured today:
+  files are not in CI and not in the Stop hook, so their claims age silently. **There are 54 of
+  them as of 23 Sep 2026** — this said 38, and §9 said 28; see §9 for the current state and for
+  how to run them without mis-reporting the report-style convention. Measured in Aug 2026:
   **6 of the 31 runnable files are red**, and none of the six is a live defect —
   one false positive (above), one assertion made stale by a deliberate change the same day
   (`renewal_and_subscription_creation` documents "monthly-flex creates NO subscription", which
@@ -2615,3 +2659,206 @@ to "complete" it with `OR UPDATE`.
 - **And the harness has to be shown failing.** Green here means exit 0, which is also what a
   file that silently did nothing returns. One assertion was flipped, the run went exit 1 with
   `FAIL 1: ...` on screen, and only then was the green worth anything.
+
+---
+
+## L108 — "Not determinable from either codebase" was determinable from one of them
+
+*23 Sep 2026. The question had been blocking a whole phase.*
+
+`Todos.md` §E recorded: *"Is a domain renewal idempotent at ResellerClub, or does a second
+call add a year? **Not determinable from either codebase.**"* It gated Phase 8, and the plan
+around it assumed the worst — every renewal parked for a human to release.
+
+The answer was three lines of our own code. ResellerClub's `renew.json` requires `exp-date`,
+documented as *"Current Expiry Date of the Order"* — an optimistic-concurrency guard, and a
+good one. But `resellerclub-wrapper.ts:136` **re-reads the expiry on every call** and passes
+whatever it just read. So a retry after an unacknowledged renewal reads the NEW expiry, sends
+that, it matches, and the registrar renews again.
+
+A retry buys a second year. Not because of anything ResellerClub does — because of what WE
+send. The vendor's own guard was being handed a valid answer by our pre-flight.
+
+**The rules:**
+- **Before recording a question as needing an outside answer, read your own call path.** The
+  question was phrased about the vendor's behaviour, so nobody looked at the wrapper. "What
+  does the third party do" and "what do we ask it to do" are different questions and only the
+  second is free to answer.
+- **A required parameter naming current state is usually a concurrency guard.** `exp-date`,
+  `If-Match`, a version column — they exist so a stale writer loses. Re-reading the value
+  immediately before sending it converts the guard into a rubber stamp. If you want the
+  protection, send the value you read BEFORE the work, not after.
+- **The answer improved the design rather than merely unblocking it.** The pre-renewal expiry
+  is a reconciler: record it, re-read on ambiguity, moved means done. That is a pure read with
+  a definite answer — the bar Phase 6 set for giving a command a reconciler — so renewals can
+  be automated instead of parked. The pessimistic plan was more expensive AND less safe.
+
+## L109 — A status code is a retry instruction, and on a non-idempotent spend that is the whole safety story
+
+*23 Sep 2026, from `/api/domains/renew`.*
+
+`hard_failure` covered three situations — the request never left, the socket died after the
+POST, the registrar answered "no" — and returned **500** for all three. 500 is what clients,
+proxies, load balancers and impatient humans all retry. So the one case that must never be
+repeated was the only one being advertised as repeatable, on a call that buys a year of a
+domain with money that does not come back.
+
+The fix is not a better error message. It is choosing the status by **how far the request
+got**, which the caller cannot infer and the sender always knows:
+
+- `not_sent` / `responded` → **502**, "nothing was renewed, it is safe to try again"
+- `sent_unknown` → **409**, "do NOT try again, a second attempt could buy an extra year"
+
+409 because nothing retries it on its own. That property is the point; the wording is
+secondary, because an automated caller never reads the wording.
+
+**The rules:**
+- **Ask what a client DOES with the status, not what it means.** 500 and 502 read similarly to
+  a person and differently to a retry policy.
+- **The sender is the only thing that knows how far it got**, so it has to say so
+  structurally — `lib/integrations/transport.ts` for the DMS side, and the same three-way
+  split (`not_sent` / `sent_unknown` / `responded`) is now what the engine route reads off a
+  branded error.
+- **Found in the same file: a false failure is the same bug wearing better manners.**
+  `createOrder` sat in the same `try` as the registrar call, so a bookkeeping throw returned
+  500 and "Failed to renew domain" about a renewal that had just succeeded. The customer reads
+  a failure, presses the button, and buys the second year themselves. Post-success bookkeeping
+  gets its own `try`, and its failure is reported as what it is.
+
+## L110 — A tool that fails before it starts looks exactly like the work failing
+
+*23 Sep 2026, applying migration 008 to production.*
+
+The runner said:
+
+```
+[migrate]   008_drop_domain_orderid_unique.ts FAILED: Only URLs with a scheme in:
+file, data, and node are supported by the default ESM loader. Received protocol 'c:'
+```
+
+That reads as "the migration failed" and is nothing of the sort. `await import()` was handed
+an absolute Windows path, so the module never resolved — `up()` had not been called, the
+database was untouched, and because the ledger row is written AFTER `up()` returns, no false
+record of success existed either. Verified against production before retrying rather than
+assumed: still 7 ledger rows, `orderId_1` still unique.
+
+Migrations 001-007 were applied in May, before the Node version that enforces this. The
+runner had been broken for months and nothing noticed, because nothing had run since.
+
+**The rules:**
+- **After a failed write to a live system, measure what state it left before doing anything
+  else.** "It said FAILED" narrows nothing: it could mean nothing happened, everything
+  happened, or half did. One read settles it and costs nothing.
+- **Know where the ledger write sits relative to the work.** A tracking row written after the
+  work means a crash leaves no false success; written before, it means the opposite, and a
+  retry would skip a migration that never ran.
+- **A tool nobody has run since the environment changed is not known to work.** The runner
+  was fine under the Node of May and broken under the Node of September, silently, because
+  the gap between migrations was longer than the gap between Node releases.
+
+## L111 — "It does not throw" is not an assertion that anything happened
+
+*23 Sep 2026, deleting `appendUserDomain`.*
+
+The function pushed a subdocument onto `User.domains`. The User schema declares no such
+path, so Mongoose strict mode dropped every write silently. It had a test, it was green,
+and here is what the test said:
+
+```
+it("is a no-throw side effect — User schema doesn't declare a domains[] field, so
+    mongoose strict-mode strips the $push silently", ...)
+    // The helper is best-effort: callers treat it as a fire-and-forget audit hook.
+    // Test the contract that matters — it doesn't throw — rather than asserting a
+    // side-effect that strict-mode drops.
+await expect(appendUserDomain(...)).resolves.toBeUndefined();
+```
+
+The test **knew** the write was dropped, said so in its own name, and then asserted the one
+property that would hold whether the function worked, did nothing, or was an empty body. It
+is not a weak test; it is a test that argues the defect is a design choice. That framing is
+why nobody removed the function for months — and the destination turned out to be read by
+nothing anyway, so even a working version would have changed no screen.
+
+**The rules:**
+- **Assert the effect, or assert that there is none and say why.** `resolves.toBeUndefined()`
+  on a write is a test of the return type, not of the write. If the effect genuinely cannot
+  be asserted, that is a finding about the code, not a reason to assert something else.
+- **"Best-effort" and "fire-and-forget" are the words to grep for** when hunting for
+  silently-dead code. They are how a no-op gets described once somebody notices it is a
+  no-op and decides that is acceptable.
+- **Check the destination as well as the write.** Two independent things were wrong here and
+  either alone would have been enough: the write was dropped, AND nothing read where it was
+  going. Fixing the first would have produced a correct write into a field no screen reads.
+- **When deleting code a test defends, replace the assertion with the invariant that made it
+  pointless.** What is pinned now is that the User schema has no `domains` path — the reason
+  the function could never have worked, and the reason reviving it would be wrong.
+
+## L112. Code that is WRONG and UNREACHABLE survives, because it reads exactly like code that is right
+
+*23 Sep 2026. Three independent instances in one day, found three different ways.*
+
+| What | Why it was wrong | Why nobody removed it |
+|---|---|---|
+| `AdminLayoutSkeleton`'s chrome | a `bg-blue-900` sidebar from before the restyle — the exact flash the shell was built to stop | all 19 importers sit under that shell, so the guard always fired and it never rendered |
+| `onLogout={() => { window.location.href = "/login" }}` in five admin pages | navigates without `signOut()` or clearing storage — the operator would land on /login still authenticated | inside the shell `AdminLayout` returns only its children, so a page's own `onLogout` is dead |
+| `\|\| "https://resellersos.web.app"` in 13 files | that host answers **503** | `NEXT_PUBLIC_APP_URL` is baked at build and set at runtime, so the fallback never fires |
+
+None of these could run. Every one of them was *wrong*. And that combination is
+what preserved them: a reader cannot tell dead-and-wrong from dead-and-fine, so
+the honest-looking response to each is to leave it alone.
+
+**Two of the three were actively defended.** The skeleton's chrome had a comment
+saying it was kept "because this component is also used outside the /admin
+subtree" — measured, there is no such use — and two tests that rendered it
+with no provider and asserted the dark chrome appeared. That is L111 one step on:
+not a test that asserts nothing, but a test that asserts something true of a
+configuration no caller can produce.
+
+**The rules:**
+
+- **"It cannot run" is not a reason to stop reading.** Ask the second question:
+  *and is it right?* Dead-and-right is housekeeping. Dead-and-wrong is a loaded
+  gun — it fires the day somebody deletes a guard, moves a component out of a
+  provider, or builds without an arg, and it fires as the behaviour nobody
+  reviewed.
+- **The compiler is the honest way to find a dead constant.** Deleting the
+  razorpay fix's `WEBHOOK_APP_URL` produced `TS6133: declared but its value is
+  never read`. Earlier the same day I *claimed* `compliance-reminders`' constant
+  was unused from a grep; it is used, 115 lines down. Remove the last use and let
+  tsc tell you, rather than counting matches.
+- **A justification written next to dead code ages with nothing to correct it.**
+  Normal code gets corrected when it misbehaves. This never misbehaves, so its
+  comment is never re-read, and the comment is usually the only reason it is
+  still there. Test the claim (§12, L41) rather than the sentence.
+- **Fix it toward "cannot be wrong", not toward "right today".** Both URL fixes
+  went to `new URL(path, request.url)` rather than a better fallback host: the
+  request's own origin needs no configuration, cannot drift, and survives this
+  service answering on more than one hostname (L18).
+
+## L113. Check where a string is CONSUMED, not where it is declared
+
+*23 Sep 2026, and it cost a wrong statement to the operator before it was caught.*
+
+Auditing the dead-host fallback, I grepped the declarations, read the first use in
+each file, and reported that all the remaining sites built "internal staff links".
+One did not. `api/webhooks/razorpay` used it **350 lines below the declaration** to
+build the GST tax-invoice link in the CUSTOMER's order confirmation — a statutory
+document link, sent after payment, pointing at a host that answers 503.
+
+A declaration tells you a value exists. Only the call site tells you who receives
+it. On a long route file those are nowhere near each other, and the first use is
+not representative of the rest.
+
+**The rules:**
+- **Trace every use to its `to:`.** The audit that was worth anything listed each
+  consumption against the recipient it reaches — `alert.to`, `owner.to`, a role
+  query, a customer address. "Internal" is a claim about the recipient, so it has
+  to be read off the recipient.
+- **A filter that hides a usage reads exactly like no usage.** Two of my own
+  passes over the same files produced false absences: an `awk` exclusion for
+  `^ *const ` swallowed `const msg = renderReminder(plan, APP_URL)`, and a
+  `head -40` truncated the last file. Both printed a clean-looking nothing. If a
+  file you expect to appear does not, suspect the pipeline before the code (L23).
+- **When a classification has been wrong once, do not restate it — re-derive it.**
+  Leaving "the rest are internal" in a comment as reassurance would have carried
+  my error forward in the place most likely to be trusted.

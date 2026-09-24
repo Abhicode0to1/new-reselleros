@@ -27,12 +27,12 @@
 begin;
 
 insert into public.tenants (id, name, email, doc_code, tier)
-values ('22222222-2222-2222-2222-222222222222', 'ZZ CATRULE TEST TENANT',
+values ('0a17e522-0000-4000-8000-000000000001', 'ZZ CATRULE TEST TENANT',
         'zz-catrule@example.invalid', 'ZZCAT', 'reseller');
 
 do $$
 declare
-  v_tenant uuid := '22222222-2222-2222-2222-222222222222';
+  v_tenant uuid := '0a17e522-0000-4000-8000-000000000001';
   v_acct   uuid;
   v_txn    uuid;
   v_ok     boolean;
