@@ -368,6 +368,41 @@ leaves the trap armed for the next reader. That rule is why §1 of this file exi
 
 ---
 
+## 13. Hands off: the "Billing & Subscriptions" section belongs to a colleague
+
+**Owner instruction, 24 Sep 2026:** *"This part of ResellerOS cannot be edited or touched by
+our any edits … that part is being worked on by my colleague and can cause massive
+conflict."* It applies to Claude Code and Antigravity alike, until the owner lifts it.
+
+Do not edit, reformat, move, rename or "fix" anything in:
+
+| Menu item | Files |
+|---|---|
+| Customers, Parent Accounts | `production/src/app/(app)/customers/**`, `src/components/features/customers/**` |
+| Quotes | `src/app/(app)/quotes/**`, `src/components/features/quotes/**` |
+| Subscriptions | `src/app/(app)/subscriptions/**`, `src/components/features/subscriptions/**` |
+| Renewals | `src/app/(app)/renewals/**` |
+| Invoices | `src/app/(app)/invoices/**`, `src/components/features/invoices/**` |
+| Payments Received | `src/app/(app)/payments/**` |
+| Project Sales | `src/app/(app)/projects/**`, `src/components/features/projects/**` |
+| The menu itself | the `section: "Billing & Subscriptions"` block and the `["Billing", …]` breadcrumbs in `src/lib/nav.ts` — the rest of `nav.ts` is not covered |
+
+- **This includes "harmless" edits.** A lint fix, a renamed import or a reworded comment in
+  those files is still a conflict for the person rebuilding them. If a change elsewhere
+  would need one of these files to change, stop and ask the owner. Do not make the edit
+  and do not work round it by moving the code.
+- **Guarded mechanically in this clone.** `.git/hooks/pre-commit` runs
+  `scripts/guard-billing-section.mjs`, which refuses a commit that stages any of the above.
+  It is local on purpose and not shared, so it never blocks the colleague. Override only when
+  the owner explicitly allows that commit: `ALLOW_BILLING_SECTION_EDIT=1 git commit …`. The
+  hook lives in `.git/`, so a fresh clone or a new worktree does not have it: reinstall it
+  there before editing anything.
+- **Not covered, but shared with that work:** money logic the pages call (`src/lib/quotes`,
+  `src/lib/subscriptions`, `src/lib/invoices`, `src/lib/renewals`, the query hooks). Treat it
+  as high-conflict: check `git log` for the colleague's recent commits before touching it.
+
+---
+
 # Learned Guidelines
 
 > One rule per incident, each written the day it cost something. Newest last.
