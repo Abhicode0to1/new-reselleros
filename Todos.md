@@ -104,6 +104,24 @@ because it shows which answers followed advice and which overrode it.
 | — | Protected area | *"This part of ResellerOs cannot be edited or touched by our any edits … being worked on by my collegue"* → AGENTS.md §13 |
 | — | Shared money logic behind it | *"block it for now. If need to edit, Ask me and i will ask my collegue"* → added to the guard |
 
+### Decisions 19–21 — enabling the ResellerOS cart (24 Sep 2026)
+
+Asked after finding that 6 of the site's add-to-cart buttons send no SKU (so checkout refuses
+them), that a domain line loses the actual domain name, that a paid domain is not queued for
+anyone, and that the domain search shows a live price while checkout charges a fixed table.
+
+| # | Question as asked | Options offered | Pardeep's answer |
+|---|---|---|---|
+| 19 | The domain search shows the live ResellerClub price (via DMS), but checkout charges a fixed price table in ResellerOS's code. Which should checkout charge? | Live price, re-checked *(recommended)* · Fixed price table | **Live price, re-checked** — the server re-fetches the price the customer saw; if unreachable, checkout refuses with a clear message instead of guessing |
+| 20 | Google Workspace licences, Anutech Mail (monthly) and SSL certificates can be added to the cart but have no server-side price. What should those buttons do? | Send to a quote *(recommended)* · Make them payable in cart | **Send to a quote** — Workspace keeps its own direct-buy page |
+| 21 | After a customer pays for a domain, what should happen? (registration spends real money and cannot be undone) | Staff registers it *(recommended)* · Register automatically | **Register automatically** — against the recommendation |
+
+**How decision 21 is being built:** as its own change, AFTER the cart fixes, behind a switch that
+is OFF until the owner approves a first real registration. Two open items it depends on are
+still open: who is seller of record for an engine-sourced sale, and how a ResellerOS-only buyer
+gets a ResellerClub customer account (§D below). Until the switch is on, a paid domain is
+queued with its exact name, so nothing is lost.
+
 ### Waiting on Pardeep — actions only he can take
 
 - [ ] **Pause `tokens-charge-recurring` (decision 18).** The Google Cloud CLI is not installed on
