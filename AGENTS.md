@@ -45,7 +45,9 @@ billing are primary for a first purchase; DMS keeps its cart only for in-panel p
 for reference. DMS's Razorpay Tokens recurring charger is gated off
 (`DMS_TOKEN_RECURRING_ENABLED`, default off), because two systems able to debit the same
 renewal is a double-collection with no detector. Do not re-enable it or build a second
-invoice series in DMS without being asked. Full record: `Todos.md` §0A.
+invoice series in DMS without being asked. **Hosting prices are ResellerOS's too**
+(`LANDING_PLANS` in `site/lib/data/hosting-landing.ts`); DMS's `hostingplans` prices are
+disregarded and must not be read as a price source. Full record: `Todos.md` §0A.
 
 Open items for the integration are tracked in `Todos.md`, not here.
 

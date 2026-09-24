@@ -46,6 +46,14 @@ overtaken on billing) and the "purchase funnel is deliberately NOT taken over" e
 | 4 | **Renewals are ResellerOS's.** DMS only fetches and shows the renewal bill | "Renewals subscription will be handled by ResellerOS. Period. Our DMS will only fetch that renewal bill from ResellerOs and show it." |
 | 5 | DMS's token-based recurring charging is **disabled, not deleted** | "Use the ResellerOs system compelely. DMS token based system will be disable for now. Until we need it someday later" |
 | 6 | No migration of existing DMS customers/mandates is needed | "Everything was in testing mode. No live customers at DMS" |
+| 7 | **Hosting prices come from ResellerOS only.** DMS's hosting prices are disregarded | "Use the prices of hosting set in ResellerOS completely. Ignore and disregard the prices of DMS from now on" |
+
+**The one price source (decision 7):** `LANDING_PLANS` in
+`production/src/site/lib/data/hosting-landing.ts` — Starter ₹49.99, Standard ₹125, Plus
+₹187.20 per month on yearly billing (yearly total = 12×, monthly billing = 2×). The public
+pages, the catalogue sync and the cart's server-side re-pricing all read it. DMS's
+`hostingplans` prices (monthly `renewalPrice`, no billing-period field) are not an input to
+anything any more. If the two ever disagree, ResellerOS is right by definition.
 
 Consequence of 2 + 3 together: an in-panel DMS cart purchase must still get its **bill from
 ResellerOS**. DMS's cart stays, DMS's invoice numbering does not.
@@ -99,6 +107,11 @@ with Razorpay before the first live mandate.
 - [x] **Historical `TI/…` invoices — NOT NEEDED. USER DECISION, Pardeep, 24 Sep 2026:** every
       DMS invoice so far was issued in testing, so there is no GSTR-1 history to preserve.
       Do not build anything to keep them reportable.
+- [ ] **DMS's in-panel cart must price hosting from ResellerOS (decision 7).** Today it prices
+      from its own `hostingplans`. It needs to read ResellerOS's plan prices (over the engine
+      API) or hand the line to ResellerOS to price. Either way DMS must not show or charge
+      its own figure. Until this lands, a hosting price shown in DMS's panel is not
+      authoritative.
 - [ ] **Domains in the ResellerOS cart.** `/api/public/checkout/cart` re-prices every line from
       SKU server-side and v1 knows hosting SKUs only; domains need a server-side price source
       before they can be sold here.
