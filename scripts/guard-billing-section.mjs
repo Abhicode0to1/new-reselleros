@@ -29,6 +29,12 @@ const PROTECTED_DIRS = [
   "production/src/components/features/subscriptions/",
   "production/src/components/features/invoices/",
   "production/src/components/features/projects/",
+  // Shared money logic behind those pages — blocked too (owner, 24 Sep 2026):
+  // "block it for now. If need to edit, ask me and I will ask my colleague".
+  "production/src/lib/quotes/",
+  "production/src/lib/subscriptions/",
+  "production/src/lib/invoices/",
+  "production/src/lib/renewals/",
 ];
 
 const NAV = "production/src/lib/nav.ts";
@@ -83,7 +89,8 @@ if (hits.length) {
       "   Files:",
       ...hits.map((h) => `     - ${h}`),
       "",
-      "   What to do: unstage them (git restore --staged <file>) and leave them alone.",
+      "   What to do: unstage them (git restore --staged <file>) and ask the owner, who will",
+      "   check with the colleague. Do not work round this by moving the code elsewhere.",
       "   If the owner has explicitly allowed this commit: ALLOW_BILLING_SECTION_EDIT=1 git commit ...",
       "",
     ].join("\n")

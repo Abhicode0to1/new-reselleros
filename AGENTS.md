@@ -385,6 +385,7 @@ Do not edit, reformat, move, rename or "fix" anything in:
 | Invoices | `src/app/(app)/invoices/**`, `src/components/features/invoices/**` |
 | Payments Received | `src/app/(app)/payments/**` |
 | Project Sales | `src/app/(app)/projects/**`, `src/components/features/projects/**` |
+| Shared money logic | `src/lib/quotes/**`, `src/lib/subscriptions/**`, `src/lib/invoices/**`, `src/lib/renewals/**` |
 | The menu itself | the `section: "Billing & Subscriptions"` block and the `["Billing", …]` breadcrumbs in `src/lib/nav.ts` — the rest of `nav.ts` is not covered |
 
 - **This includes "harmless" edits.** A lint fix, a renamed import or a reworded comment in
@@ -397,9 +398,12 @@ Do not edit, reformat, move, rename or "fix" anything in:
   the owner explicitly allows that commit: `ALLOW_BILLING_SECTION_EDIT=1 git commit …`. The
   hook lives in `.git/`, so a fresh clone or a new worktree does not have it: reinstall it
   there before editing anything.
-- **Not covered, but shared with that work:** money logic the pages call (`src/lib/quotes`,
-  `src/lib/subscriptions`, `src/lib/invoices`, `src/lib/renewals`, the query hooks). Treat it
-  as high-conflict: check `git log` for the colleague's recent commits before touching it.
+- **The shared money logic is blocked too** (owner, 24 Sep 2026: *"block it for now. If need
+  to edit, ask me and I will ask my colleague"*): `src/lib/quotes/**`,
+  `src/lib/subscriptions/**`, `src/lib/invoices/**`, `src/lib/renewals/**`. If a task needs
+  any of it, stop and ask the owner, who checks with the colleague. Query hooks in
+  `src/lib/queries/` are not blocked, but check `git log` for the colleague's recent commits
+  before touching one that serves these pages.
 
 ---
 
