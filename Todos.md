@@ -345,17 +345,37 @@ with Razorpay before the first live mandate.
       **test-verified:** DMS 18 provision tests (adopt-on-retry red-checked: 2 fail without it), the
       engine tripwires moved (every known command now has a handler); ResellerOS 9 worker tests +
       helpers. Gates: ResellerOS 6,713 / 365, DMS 6,750 / 447, typecheck + lint clean.
-      **NOT verified live — blocked:** the live DirectAdmin (`server1.anutech.in:2222`) answers this
-      machine, but a read-only login test with the key in DMS `.env.local` returned **401 "Not
-      logged in"** — the key is stale, or it is restricted to Cloud Run's IP (a DMS comment says
-      "operator machines aren't DA-whitelisted"). Probing stopped after one call: DirectAdmin
-      blocks an IP after repeated failed logins. Local DMS points DirectAdmin at a placeholder on
-      purpose, and `checkProviderSafety` refuses a non-production build contacting a provider, so
-      a live run needs a deliberate local override too.
-- [ ] **For the live DirectAdmin test:** a DirectAdmin login key that works from this machine
-      (or whitelist its IP), then a deliberate local override of the inert placeholder. First
-      run in `mode:"test"` (reads only), then one live account on a clearly-named test domain, then
-      delete it (owner: "will delete those testing hostings later on").
+      **Verified LIVE on 24 Sep 2026** against `server1.anutech.in:2222`, using a new key from Pardeep
+      and a local override that lives only in the session scratchpad (the committed config still
+      points DirectAdmin at the placeholder):
+      1. test mode: DirectAdmin read, "would create `rsospf34b2`, package Starter", nothing written;
+      2. live: account `rsospf34b2` created on `rsosprovtest2409.in`, package Starter, IP
+         35.207.233.155, plus the DMS account and hosting row;
+      3. same commandId: replayed, nothing ran;
+      4. new commandId: DMS already had the hosting row, no second account. DirectAdmin afterwards
+         lists exactly one user.
+      **Not exercised live:** the adopt-from-DirectAdmin path, where DMS has no row but the DA
+      account exists (a lost response). Running it needed a hosting row deleted locally and was
+      not done; unit tests only.
+      **The live run found two DMS bugs, fixed in DMS `23680de9`:**
+      - `createPackage` sent `action=create`, which DirectAdmin reads as a LIST request, so it had
+        never created a package.
+      - `unwrapDAError` dropped DirectAdmin's reply text, so a user that does not exist read as
+        "Unknown DirectAdmin error" and every provision refused (safely).
+- [ ] **DELETE the test account** (Pardeep: "will delete those testing hostings later on"):
+      DirectAdmin user `rsospf34b2` / `rsosprovtest2409.in` on server1. Locally there are also a DMS
+      user `rsos-provision-test@example.invalid` and its hosting row.
+- [ ] **server1 is not the server DMS's config describes. Check before any production hosting
+      sale.** Measured 24 Sep 2026: server1.anutech.in has IP **35.207.233.155**, and before this test
+      it had **no packages, no users and no resellers**. In July the same hostname answered on
+      **34.93.167.160** and held live accounts (`testi5491c`, `ramushamu`, DMS TASKS.md L229/L311).
+      Production DMS still has `DIRECTADMIN_IP=34.93.167.160`, and so does the fallback in
+      `lib/directadmin/client.ts:41`. Against this box a create would probably fail with "That IP
+      does not exist in your list" (the July failure; not re-tested). Customers' existing hosting
+      rows in DMS may point at DA accounts that are not on this box. Not changed: the owner has to
+      say which server is the real one. Three packages (Starter 10 GB, Standard 25 GB, Plus 50 GB;
+      sites 1 / 5 / unlimited) were created on it for this test, so Packages Available is no
+      longer 0.
 - [ ] **The hosting TRIAL still writes to DirectAdmin from ResellerOS** (`api/public/trial/hosting/
       confirm` → `daCreateAccount`, gated by `HOSTING_TRIAL_LIVE`). A second writer, left as is —
       move it onto `hosting.provision` when trials are next touched.
