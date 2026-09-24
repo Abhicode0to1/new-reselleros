@@ -5,14 +5,12 @@
  * term before a price means anything, which is exactly what the quote form collects.
  */
 import { useRouter } from "next/navigation";
-import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee } from "@/site/lib/money";
 import { MAIL_RATES } from "@/site/lib/data/catalog";
 import { MAIL_OPTIONS } from "@/site/lib/data/copy";
 import { Tick } from "@/site/components/ui/bits";
 
 export function MailOptions({ gwMonthlyRate = null }: { gwMonthlyRate?: number | null }) {
-  const cart = useCart();
   const router = useRouter();
 
   return (
@@ -33,11 +31,9 @@ export function MailOptions({ gwMonthlyRate = null }: { gwMonthlyRate?: number |
           <button
             className={`btn ${m.highlighted ? "btn-primary" : "btn-outline"}`}
             style={{ marginTop: 18 }}
-            onClick={() =>
-              m.highlighted
-                ? cart.add({ label: "Anutech Mail", detail: "Hosted in India · add or remove seats monthly", unitPrice: MAIL_RATES["Anutech Mail"], unit: "mailbox", cycle: "monthly" })
-                : router.push("/quote" as never)
-            }
+            /* Every option is a quote (owner decision 20): monthly Anutech Mail has no
+               server-side price, so a cart line for it was refused at payment. */
+            onClick={() => router.push("/quote" as never)}
           >
             {m.cta}
           </button>

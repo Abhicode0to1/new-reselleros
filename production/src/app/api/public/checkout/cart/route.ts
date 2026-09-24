@@ -15,8 +15,17 @@
  * whole reason a generic cart checkout is riskier than a per-product buy, and
  * it's handled by refusing to charge anything we can't price ourselves.
  *
- * v1 supports hosting SKUs (`hosting:starter|standard|plus`). Domains / email /
- * other SKUs get added here as their server-side price sources are wired.
+ * Priceable SKUs: `hosting:starter|standard|plus`, `domain:<tld>` and
+ * `mailbox:anutech`. Anything else is sent to a quote (owner decision 20, 24 Sep 2026:
+ * Workspace licences, monthly Anutech Mail and SSL are quote items, not cart items).
+ *
+ * ─── DOMAINS: the live price, re-checked, for the exact name ───────────────
+ * Owner decision 19 (24 Sep 2026). Until then a domain line was priced from a fixed
+ * table while the search showed the live ResellerClub price, and the line carried only
+ * its TLD — "Domain .com" — so nothing downstream knew WHICH name had been paid for. A
+ * domain line now carries `domain` (the full name), is re-priced from the same live
+ * lookup the search uses (lib/domains/live-lookup.ts), and is refused — never charged a
+ * guess — when that lookup is unreachable, the name is taken, or the price is unknown.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { captureFromRequest } from "@/lib/marketing/utm";
@@ -25,8 +34,9 @@ import Razorpay from "razorpay";
 import { createAdminClient } from "@/lib/supabase/server";
 import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { HOSTING_TIERS } from "@/site/lib/data/hosting-landing-v2";
-import { TLDS } from "@/site/lib/data/catalog";
+import { lookupDomains, splitDomain } from "@/lib/domains/live-lookup";
 import { MAILBOX_YR } from "@/site/lib/data/domains-landing";
+import { COUPONS } from "@/site/lib/money";
 
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
@@ -38,6 +48,8 @@ const lineSchema = z.object({
   label: z.string().max(200).optional(),
   qty: z.coerce.number().int().min(1).max(1000).default(1),
   cycle: z.enum(["monthly", "yearly", "once"]).optional(),
+  /** The full domain name, required on a `domain:<tld>` line — it is what gets registered. */
+  domain: z.string().max(253).optional(),
 });
 const cartSchema = z.object({
   fullName: z.string().min(2).max(120),
@@ -48,10 +60,16 @@ const cartSchema = z.object({
   /** Required when a hosting line is present — the account is provisioned on it. */
   domain: z.string().max(120).optional(),
   lines: z.array(lineSchema).min(1).max(50),
+  /** The cart page's coupon. Applied from the SAME table the cart uses (site/lib/money). */
+  coupon: z.string().max(40).optional(),
   simulate: z.boolean().optional(),
 });
 
-interface QuoteLine { id: string; name: string; qty: number; rate: number; cost: number; }
+interface QuoteLine {
+  id: string; name: string; qty: number; rate: number; cost: number;
+  /** Domain lines only: the exact name paid for, so provisioning registers THAT name. */
+  domain?: string;
+}
 
 type LineKind = "hosting" | "domain" | "mailbox";
 interface Repriced { line: QuoteLine; kind: LineKind; tier?: string; yearly: boolean }
@@ -85,19 +103,84 @@ function repriceLine(sku: string | undefined, cycle: string | undefined, qty: nu
     return { kind: "hosting", tier, yearly, line: { id: newId(), name: `${t.name} hosting (${yearly ? "billed yearly" : "billed monthly"})`, qty, rate, cost: 0 } };
   }
 
-  const d = /^domain:(.+)$/.exec(s);
-  if (d) {
-    const ext = "." + d[1].replace(/^\./, "");
-    const t = TLDS.find((x) => x.tld.toLowerCase() === ext);
-    if (!t) return null;
-    return { kind: "domain", yearly: true, line: { id: newId(), name: `Domain ${t.tld} — registration, 1 year`, qty, rate: t.reg, cost: 0 } };
-  }
+  // Domain lines are priced live, per name, in priceDomainLines() — not here.
+  if (/^domain:/.test(s)) return null;
 
   if (s === "mailbox:anutech") {
     return { kind: "mailbox", yearly: true, line: { id: newId(), name: "Mailbox — Anutech Mail, 1 year", qty, rate: Math.round(MAILBOX_YR), cost: 0 } };
   }
 
   return null;
+}
+
+type DomainPricing =
+  | { ok: true; line: QuoteLine }
+  | { ok: false; reason: string };
+
+/**
+ * Price every domain line from the live lookup, one call per base name.
+ * Each line must name its domain, match its sku's TLD, be for one year, and be
+ * available with a known price at this moment.
+ */
+async function priceDomainLines(
+  lines: { sku?: string; label?: string; qty: number; domain?: string }[],
+): Promise<Map<number, DomainPricing>> {
+  const out = new Map<number, DomainPricing>();
+  const wanted = new Map<string, { idx: number; domain: string; tld: string }[]>();
+
+  lines.forEach((l, idx) => {
+    const m = /^domain:(.+)$/.exec((l.sku ?? "").toLowerCase());
+    if (!m) return;
+    const skuTld = m[1].replace(/^\./, "");
+    const parts = splitDomain(l.domain ?? "");
+    if (!parts) {
+      out.set(idx, { ok: false, reason: `${l.label || "a domain"} (search for the exact name you want, then add it)` });
+      return;
+    }
+    if (parts.tld !== skuTld) {
+      out.set(idx, { ok: false, reason: `${l.domain} (its extension does not match the item — remove it and add it again)` });
+      return;
+    }
+    if (l.qty !== 1) {
+      out.set(idx, { ok: false, reason: `${l.domain} (a domain is registered once — set its quantity to 1)` });
+      return;
+    }
+    const list = wanted.get(parts.name) ?? [];
+    list.push({ idx, domain: `${parts.name}.${parts.tld}`, tld: parts.tld });
+    wanted.set(parts.name, list);
+  });
+
+  for (const [name, entries] of wanted) {
+    const live = await lookupDomains(name, entries.map((e) => e.tld));
+    for (const e of entries) {
+      if (!live.ok) {
+        out.set(e.idx, { ok: false, reason: `${e.domain} (we couldn't reach the domain registry to confirm its price just now — please try again in a minute)` });
+        continue;
+      }
+      const hit = live.domains.find((d) => d.domain === e.domain);
+      if (!hit || !hit.available) {
+        out.set(e.idx, { ok: false, reason: `${e.domain} (it is no longer available — search for another name)` });
+        continue;
+      }
+      if (!hit.priceKnown || !(hit.price > 0)) {
+        out.set(e.idx, { ok: false, reason: `${e.domain} (its price couldn't be confirmed)` });
+        continue;
+      }
+      out.set(e.idx, {
+        ok: true,
+        line: {
+          id: newId(),
+          name: `Domain ${e.domain} — registration, 1 year`,
+          qty: 1,
+          // Whole rupees, like every other line (CLAUDE.md §13).
+          rate: Math.round(hit.price),
+          cost: 0,
+          domain: e.domain,
+        },
+      });
+    }
+  }
+  return out;
 }
 
 export async function POST(request: NextRequest) {
@@ -110,7 +193,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const { fullName, companyName, email, phone, gstin, domain, lines, simulate } = parsed.data;
+    const { fullName, companyName, email, phone, gstin, domain, lines, coupon, simulate } = parsed.data;
 
     // ── Re-price every line server-side; collect anything we can't charge ──
     const items: QuoteLine[] = [];
@@ -119,7 +202,17 @@ export async function POST(request: NextRequest) {
     let hasYearlyHosting = false;
     let hostingTier: string | null = null;
     const bundleEligible: QuoteLine[] = []; // domain + mailbox lines that go ₹0 with a yearly plan
-    for (const l of lines) {
+    const domainPricing = await priceDomainLines(lines);
+    const domainNames: string[] = [];
+    for (const [idx, l] of lines.entries()) {
+      const dp = domainPricing.get(idx);
+      if (dp) {
+        if (!dp.ok) { unpriced.push(dp.reason); continue; }
+        items.push(dp.line);
+        bundleEligible.push(dp.line);
+        if (dp.line.domain) domainNames.push(dp.line.domain);
+        continue;
+      }
       const r = repriceLine(l.sku, l.cycle, l.qty);
       if (!r) { unpriced.push(l.label || l.sku || "an item"); continue; }
       items.push(r.line);
@@ -134,7 +227,7 @@ export async function POST(request: NextRequest) {
     }
     if (unpriced.length) {
       return NextResponse.json(
-        { error: `We can't take online payment for: ${unpriced.join(", ")}. Please request a quote for these — the rest can be paid online.`, unpriced },
+        { error: `We can't take online payment for: ${unpriced.join("; ")}. Nothing was charged. Remove ${unpriced.length === 1 ? "it" : "them"} from the cart to pay for the rest, or request a quote.`, unpriced },
         { status: 400 },
       );
     }
@@ -142,7 +235,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nothing to pay for." }, { status: 400 });
     }
 
-    const cleanDomain = (domain || "").toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
+    // The hosting account is set up on the typed domain, or — when the customer is
+    // buying exactly one domain in the same cart and typed nothing — on that domain.
+    const typedDomain = (domain || "").toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
+    const cleanDomain = typedDomain || (hasHosting && domainNames.length === 1 ? domainNames[0] : "");
     if (hasHosting && cleanDomain.length < 3) {
       return NextResponse.json(
         { error: "Please enter the domain your hosting should be set up on.", needDomain: true },
@@ -150,7 +246,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const subtotal = items.reduce((s, i) => s + i.qty * i.rate, 0);
+    /* Coupon, exactly as the cart page shows it (cartTotals in site/lib/money):
+       percent off the gross, before GST. Until 24 Sep 2026 the cart page applied
+       ANUTECH10 / MIGRATE15 to the total it SHOWED while this route ignored them, so a
+       customer who used a coupon was charged more than they had been shown. An unknown
+       code counts for nothing here, as it does on the cart page. */
+    const couponCode = (coupon ?? "").trim().toUpperCase();
+    const discountRate = Object.prototype.hasOwnProperty.call(COUPONS, couponCode) ? COUPONS[couponCode] : 0;
+    const gross = items.reduce((s, i) => s + i.qty * i.rate, 0);
+    // Whole rupees, like every other money column (CLAUDE.md §13).
+    const subtotal = Math.round(gross * (1 - discountRate));
     const amount = Math.round(subtotal * 1.18);
     if (amount <= 0) return NextResponse.json({ error: "Nothing to pay for." }, { status: 400 });
 
@@ -188,10 +293,14 @@ export async function POST(request: NextRequest) {
 
     // ── Lead (stage='quote' = intent to buy) ───────────────────────────────
     const leadId = "L-" + Date.now().toString(36).toUpperCase();
-    const planLabel = hostingTier ? `hosting-${hostingTier}` : "cart-order";
+    // The webhook reads the vendor from this label when lines carry no item_id, so a
+    // domain-only cart must say "domain" — as "cart-order" it was filed as vendor 'other'.
+    const planLabel = hostingTier ? `hosting-${hostingTier}` : domainNames.length ? "domain-registration" : "cart-order";
     const notes = [
       `DIRECT BUY (cart) · ${items.length} line(s) · ₹${amount.toLocaleString("en-IN")} incl 18% GST`,
+      discountRate ? `Coupon ${couponCode}: ${Math.round(discountRate * 100)}% off ₹${gross.toLocaleString("en-IN")}` : null,
       hasHosting ? `Hosting domain: ${cleanDomain}` : null,
+      domainNames.length ? `Domains to register: ${domainNames.join(", ")}` : null,
       gstin ? `GSTIN: ${gstin}` : null,
       ...items.map((i) => `  • ${i.name} × ${i.qty} @ ₹${i.rate}`),
     ].filter(Boolean).join("\n");
@@ -237,9 +346,9 @@ export async function POST(request: NextRequest) {
       plan: planLabel,
       seats: items.reduce((s, i) => s + i.qty, 0),
       line_items: items,
-      subtotal,
+      subtotal: gross,
       total_cost: 0,
-      discount_pct: 0,
+      discount_pct: Math.round(discountRate * 100),
       tax_rate: 18,
       amount,
       status: "sent",

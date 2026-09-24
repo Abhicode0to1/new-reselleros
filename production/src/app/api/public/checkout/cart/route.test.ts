@@ -1,0 +1,165 @@
+/**
+ * POST /api/public/checkout/cart — the site cart's checkout (24 Sep 2026 rework).
+ *
+ * Pinned, each for a defect that was live before this date:
+ *  - a domain line is priced from the LIVE lookup the search shows (decision 19),
+ *    for the EXACT name, and refused — never charged a guess — when that lookup
+ *    is unreachable, the name is taken, or no name was sent;
+ *  - the coupon the cart page shows is the coupon that is charged;
+ *  - a domain-only cart is labelled so the webhook files it as a domain order;
+ *  - a hosting account defaults to the domain bought in the same cart;
+ *  - an item with no server-side price (Workspace, SSL…) is refused, not charged.
+ *
+ * Runs through the route's simulation path (no Razorpay keys, NODE_ENV=test), so
+ * the quote it would charge is observable without calling Razorpay.
+ */
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
+
+const inserts = vi.hoisted(() => ({ rows: [] as { table: string; row: Record<string, unknown> }[] }));
+const rpc = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/supabase/server", () => ({
+  createAdminClient: () => ({
+    from: (table: string) => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+      insert: async (row: Record<string, unknown>) => {
+        inserts.rows.push({ table, row });
+        return { error: null };
+      },
+      update: () => ({ eq: async () => ({ error: null }) }),
+    }),
+    rpc,
+  }),
+}));
+vi.mock("@/lib/crypto/tenant-secrets", () => ({ decryptTenantSecrets: () => null }));
+vi.mock("@/lib/marketing/utm", () => ({ captureFromRequest: () => ({}) }));
+
+const lookupDomains = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/domains/live-lookup", async (orig) => ({
+  ...(await orig<typeof import("@/lib/domains/live-lookup")>()),
+  lookupDomains,
+}));
+
+import { POST } from "./route";
+
+const buyer = {
+  fullName: "Test Buyer",
+  companyName: "Test Co",
+  email: "buyer@example.invalid",
+  phone: "9999999999",
+  simulate: true,
+};
+
+function req(body: Record<string, unknown>) {
+  return new NextRequest("https://example.invalid/api/public/checkout/cart", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...buyer, ...body }),
+  });
+}
+
+const quote = () => inserts.rows.find((r) => r.table === "quotes")?.row;
+const lead = () => inserts.rows.find((r) => r.table === "leads")?.row;
+
+beforeEach(() => {
+  inserts.rows = [];
+  rpc.mockReset().mockImplementation(async (name: string) =>
+    name === "next_document_number" ? { data: "Q-TEST-0001", error: null } : { data: null, error: null },
+  );
+  lookupDomains.mockReset().mockResolvedValue({
+    ok: true,
+    base: "acme",
+    source: "engine",
+    domains: [
+      { domain: "acme.in", available: true, price: 749, currency: "INR", years: 1, priceKnown: true },
+      { domain: "acme.com", available: false, price: 0, currency: "INR", years: 1, priceKnown: false },
+    ],
+  });
+});
+
+describe("domain lines — live price, exact name", () => {
+  it("charges the live price for the named domain and records the name on the line", async () => {
+    const res = await POST(req({ lines: [{ sku: "domain:in", label: "acme.in", domain: "acme.in", qty: 1 }] }));
+    expect(res.status).toBe(200);
+    expect(lookupDomains).toHaveBeenCalledWith("acme", ["in"]);
+    const q = quote()!;
+    const items = q.line_items as { name: string; rate: number; domain?: string }[];
+    expect(items).toEqual([expect.objectContaining({ name: "Domain acme.in — registration, 1 year", rate: 749, domain: "acme.in" })]);
+    expect(q.amount).toBe(Math.round(749 * 1.18));
+    expect(q.plan).toBe("domain-registration"); // not "cart-order", which the webhook filed as 'other'
+    expect(String(lead()!.notes)).toContain("Domains to register: acme.in");
+  });
+
+  it("refuses when the registry can't be reached — no quote, no guessed price", async () => {
+    lookupDomains.mockResolvedValueOnce({ ok: false });
+    const res = await POST(req({ lines: [{ sku: "domain:in", label: "acme.in", domain: "acme.in", qty: 1 }] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/couldn't reach the domain registry/);
+    expect(quote()).toBeUndefined();
+  });
+
+  it("refuses a taken name", async () => {
+    const res = await POST(req({ lines: [{ sku: "domain:com", label: "acme.com", domain: "acme.com", qty: 1 }] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/acme\.com \(it is no longer available/);
+  });
+
+  it("refuses a domain line with no name (the old placeholder shape)", async () => {
+    const res = await POST(req({ lines: [{ sku: "domain:in", label: "yourname.in", qty: 1 }] }));
+    expect(res.status).toBe(400);
+    expect(lookupDomains).not.toHaveBeenCalled();
+  });
+
+  it("refuses a name whose extension differs from its sku, and a quantity above one", async () => {
+    let res = await POST(req({ lines: [{ sku: "domain:com", domain: "acme.in", qty: 1 }] }));
+    expect(res.status).toBe(400);
+    res = await POST(req({ lines: [{ sku: "domain:in", domain: "acme.in", qty: 2 }] }));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("hosting + domain in one cart", () => {
+  it("the domain is ₹0 with yearly hosting, and the hosting goes on it when none was typed", async () => {
+    const res = await POST(req({
+      lines: [
+        { sku: "domain:in", domain: "acme.in", qty: 1 },
+        { sku: "hosting:starter", cycle: "yearly", qty: 1 },
+      ],
+    }));
+    expect(res.status).toBe(200);
+    const items = quote()!.line_items as { rate: number; domain?: string }[];
+    expect(items.find((i) => i.domain)?.rate).toBe(0);
+    expect(quote()!.amount).toBe(708); // ₹600 Starter year + 18%
+    expect(lead()!.domain).toBe("acme.in");
+  });
+});
+
+describe("coupon — charged exactly as the cart page shows it", () => {
+  it("ANUTECH10 takes 10% off before GST", async () => {
+    const res = await POST(req({ coupon: "anutech10", domain: "x.in", lines: [{ sku: "hosting:standard", cycle: "yearly", qty: 1 }] }));
+    expect(res.status).toBe(200);
+    const q = quote()!;
+    expect(q.subtotal).toBe(1500);
+    expect(q.discount_pct).toBe(10);
+    expect(q.amount).toBe(Math.round(1350 * 1.18)); // 1593
+  });
+
+  it("an unknown code counts for nothing, as on the cart page", async () => {
+    await POST(req({ coupon: "FREE100", domain: "x.in", lines: [{ sku: "hosting:standard", cycle: "yearly", qty: 1 }] }));
+    expect(quote()!.discount_pct).toBe(0);
+    expect(quote()!.amount).toBe(1770);
+  });
+});
+
+describe("items with no server-side price are refused, not charged", () => {
+  it.each([
+    [{ label: "Google Workspace Business Starter", qty: 5, cycle: "yearly" }],
+    [{ label: "Positive SSL", qty: 1, cycle: "yearly" }],
+    [{ sku: "ssl:positive", label: "Positive SSL", qty: 1 }],
+  ])("%j", async (l) => {
+    const res = await POST(req({ lines: [l] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/request a quote/);
+    expect(quote()).toBeUndefined();
+  });
+});

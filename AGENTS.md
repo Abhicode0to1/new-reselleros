@@ -224,10 +224,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,629 tests
-passing across 357 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 23 Sep 2026 after merging `abhishek-pre-merge`. Earlier
-markers: 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,668 tests
+passing across 362 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 24 Sep 2026 after enabling the site cart. Earlier markers:
+6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 

@@ -30,6 +30,7 @@ import { decryptTenantSecrets } from "@/lib/crypto/tenant-secrets";
 import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
+import { provisioningProducts } from "@/lib/provisioning/products";
 import { daWriteConfigured } from "@/lib/directadmin/provision";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 
@@ -322,49 +323,60 @@ export async function POST(request: NextRequest) {
   const provisioningVendor = await vendorForQuote(admin, quote.line_items, quote.plan);
   const provisioningDomain = (notes.domain as string | undefined)?.trim() || null;
 
-  const provisioning = decideProvisioning({
-    paymentMode: razorpayMode(keyIdForMode),
-    /* The signature verified and the amount was checked above — those two together are what
-       "verified" means here, and nothing weaker reaches this line. */
-    paymentVerified: true,
-    amountPaid: paymentAmount,
-    amountExpected: quote.amount ?? paymentAmount,
+  /* One request per PRODUCT (24 Sep 2026). A cart can buy a domain and a hosting
+     account in one payment; picking a single vendor left the paid domain queued for
+     nobody. Each product gets the same gate as before, on its own vendor and domain. */
+  const dialMode = (await loadAutonomyPolicy(quote.tenant_id)).modes?.["provisioning.activate"] ?? "off";
+  const products = provisioningProducts({
+    lineItems: quote.line_items,
     vendor: provisioningVendor,
+    domain: provisioningDomain,
     seats: Number(quote.seats ?? 0),
-    /* No adapter exists — `src/lib/google-csp/` is absent. Hardcoded false rather than a
-       config read, because a config that could say "true" would be a config that can lie. */
-    vendorApiConfigured: false,
-    domainName: provisioningDomain,
-    /* HOSTING is now provisioned by us directly on DirectAdmin (2 Sep 2026), so it
-       IS connected — but only once the same explicit go-live gate the trial uses is
-       on (HOSTING_TRIAL_LIVE=1 + DA credentials present). DOMAIN stays false: we
-       read ResellerClub for availability/price but do NOT order on it yet, and a
-       registration is irreversible spend that must never flip on by config accident.
-       The hosting worker (/api/cron/provision-hosting) turns an unblocked hosting
-       request into a real cPanel account + login email. */
-    engineConnected:
-      provisioningVendor === "hosting"
-        ? process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured()
-        : false,
-    dialMode: (await loadAutonomyPolicy(quote.tenant_id)).modes?.["provisioning.activate"] ?? "off",
   });
 
-  if (provisioning.action !== "refuse") {
-    const queued = await queueProvisioning({
-      tenantId:    quote.tenant_id,
-      quoteId:     quote.id,
-      vendor:      provisioningVendor,
-      seats:       Number(quote.seats ?? 0) || 1,
-      domain:      provisioningDomain,
-      plan:        quote.plan ?? null,
-      amountPaid:  paymentAmount,
+  for (const product of products) {
+    const provisioning = decideProvisioning({
       paymentMode: razorpayMode(keyIdForMode),
-      blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
-      note:        provisioning.reason,
+      /* The signature verified and the amount was checked above — those two together are what
+         "verified" means here, and nothing weaker reaches this line. */
+      paymentVerified: true,
+      amountPaid: paymentAmount,
+      amountExpected: quote.amount ?? paymentAmount,
+      vendor: product.vendor,
+      seats: product.seats,
+      /* No adapter exists — `src/lib/google-csp/` is absent. Hardcoded false rather than a
+         config read, because a config that could say "true" would be a config that can lie. */
+      vendorApiConfigured: false,
+      domainName: product.domain,
+      /* HOSTING is provisioned by us directly on DirectAdmin (2 Sep 2026), so it IS
+         connected — but only once the same explicit go-live gate the trial uses is on
+         (HOSTING_TRIAL_LIVE=1 + DA credentials present). DOMAIN stays false here: a
+         registration is irreversible spend that must never flip on by config accident.
+         Automatic registration (owner decision 21) is a separate, switched build. */
+      engineConnected:
+        product.vendor === "hosting"
+          ? process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured()
+          : false,
+      dialMode,
     });
-    console.log(`[webhooks/razorpay] provisioning ${queued} for ${quote.id} — ${provisioning.reason}`);
-  } else {
-    console.warn(`[webhooks/razorpay] not provisioning ${quote.id} — ${provisioning.reason}`);
+
+    if (provisioning.action !== "refuse") {
+      const queued = await queueProvisioning({
+        tenantId:    quote.tenant_id,
+        quoteId:     quote.id,
+        vendor:      product.vendor,
+        seats:       product.seats,
+        domain:      product.domain,
+        plan:        quote.plan ?? null,
+        amountPaid:  paymentAmount,
+        paymentMode: razorpayMode(keyIdForMode),
+        blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
+        note:        provisioning.reason,
+      });
+      console.log(`[webhooks/razorpay] provisioning ${queued} for ${quote.id} ${product.vendor}${product.domain ? ` ${product.domain}` : ""} — ${provisioning.reason}`);
+    } else {
+      console.warn(`[webhooks/razorpay] not provisioning ${quote.id} ${product.vendor} — ${provisioning.reason}`);
+    }
   }
 
   // ── Send confirmation emails (best-effort) ────────────────────────────

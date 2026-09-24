@@ -282,7 +282,10 @@ export function HostingLanding() {
                   <button type="button" onClick={() => cart.add({
                     label: `${p.name} hosting`,
                     detail: `${p.storage} · ${p.bandwidth} · cPanel on Google Cloud`,
-                    unitPrice: yearly ? p.yearlyTotal : p.monthly,
+                    /* Whole rupees, exactly as the checkout API charges (Math.round of the
+                       same figure) — ₹599.88 here against ₹600 there made the shown total
+                       and the charged total disagree. */
+                    unitPrice: Math.round(yearly ? p.yearlyTotal : p.monthly),
                     unit: yearly ? "year" : "month",
                     cycle: yearly ? "yearly" : "monthly",
                     sku: `hosting:${p.name.toLowerCase()}`,

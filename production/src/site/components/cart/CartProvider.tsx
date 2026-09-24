@@ -66,6 +66,7 @@ function load(): CartLine[] {
         /* Preserve the server-repriceable SKU across a reload — without this it was
            dropped on load, so every line reached checkout unpriced and was refused. */
         sku: typeof l.sku === "string" ? l.sku : undefined,
+        domain: typeof l.domain === "string" ? l.domain : undefined,
       }))
       .filter((l) => l.label && Number.isFinite(l.unitPrice));
   } catch {

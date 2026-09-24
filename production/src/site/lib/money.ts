@@ -34,6 +34,12 @@ export interface CartLine {
    * recognised SKU can't be charged online (it's sent to a quote instead).
    */
   sku?: string;
+  /**
+   * Domain lines only: the full name being registered ("acme.in"). The checkout
+   * API refuses a `domain:<tld>` line without it — the name is what gets
+   * registered, and a TLD alone ("Domain .in") told nobody which one was paid for.
+   */
+  domain?: string;
 }
 
 /** The two launch coupons from the handoff. Percent off the gross, before GST. */

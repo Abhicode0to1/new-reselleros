@@ -246,9 +246,41 @@ with Razorpay before the first live mandate.
       `NEXT_PUBLIC_RESELLEROS_URL=https://reselleros.anutech.in` (decision 14) in `.env.local`,
       because the deploy refuses without it. Before that deploy, update the
       policy URLs registered with Razorpay if they point at DMS's domain: they will now 307.
-- [ ] **Domains in the ResellerOS cart.** `/api/public/checkout/cart` re-prices every line from
-      SKU server-side and v1 knows hosting SKUs only; domains need a server-side price source
-      before they can be sold here.
+- [x] **ResellerOS cart enabled properly (decisions 19-20), 24 Sep 2026.** The line above said
+      "v1 knows hosting SKUs only" — stale: domains were priced, but from a fixed table while the
+      search showed the live price. Found and fixed together:
+      · 6 site add-to-cart buttons sent no SKU, so checkout refused them at payment. Domain lines
+        now carry `sku` AND the exact `domain`; Workspace / Anutech Mail / SSL buttons go to a quote.
+      · A domain line kept only its TLD ("Domain .com"), so nobody knew WHICH name was paid for.
+        It now carries the name, validated (`lib/domains/live-lookup.ts` `splitDomain`).
+      · Domains are charged the live price, re-checked at payment from the same module the
+        search uses (`lookupDomains`); unreachable / taken / unpriced → refused, never guessed.
+      · The cart page applied coupons ANUTECH10 / MIGRATE15 to the total it SHOWED; the server
+        ignored them, so a coupon user was charged more than shown. Server now applies the same
+        table; checkout compares its total with the shown one and asks before charging a
+        different figure (reusing the same order, so no second quote number).
+      · Rate-card rows added placeholders `yourname.<tld>` / `yourbusiness.<tld>`; now "Search".
+      · A domain-only cart was labelled `cart-order` and filed as vendor `other`; now
+        `domain-registration`. Hosting defaults to the domain bought in the same cart.
+      · After payment only ONE provisioning request per quote was allowed, so in a domain +
+        hosting cart the domain was queued for nobody. Migration
+        `20260924120000_provisioning_one_per_product` + `lib/provisioning/products.ts`: one
+        request per product, re-delivered events still refused (SQL test
+        `provisioning_one_per_product`, red-checked against the old index).
+      **test-verified:** 11 route tests, 6-test source scan that every site cart add carries a
+      sku (red-checked), products + splitDomain units, SQL test. **browser-verified, local:**
+      email/SSL → quote, rate card → Search with no cart add, hosting line ₹600 with sku,
+      coupon shown ₹540, checkout passes pricing (stops at "payment not set up" — no local keys),
+      a domain line refused honestly ("couldn't reach the domain registry"), an old SKU-less
+      Workspace line refused. **NOT verified:** a live domain price and a real payment — the
+      registry does not answer this machine and there are no local Razorpay keys.
+- [ ] **Apply migration `20260924120000_provisioning_one_per_product` to production** — applied
+      to LOCAL only. Must be live before the new webhook code deploys: the webhook now inserts
+      one row per product, and under the old one-per-quote index the second row would fail
+      (logged, not thrown — but the domain would again be queued for nobody).
+- [ ] **Two dead components hold SKU-less adds:** `DomainRateCard`, `HostingPlans` (replaced
+      2-3 Sep, unmounted since). Pinned unmounted by `src/site/cart-lines-priceable.test.ts`;
+      delete them when convenient.
 
 - [ ] **In-panel DMS purchases pay into ResellerOS's Razorpay account (decision 12).** DMS's
       checkout currently uses DMS's own keys. Moving it means ResellerOS creates the Razorpay

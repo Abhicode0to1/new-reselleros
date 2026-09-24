@@ -11,7 +11,6 @@
  */
 import { useState } from "react";
 import Link from "@/site/components/ui/SiteLink";
-import { useCart } from "@/site/components/cart/CartProvider";
 import { rupee, GST_RATE } from "@/site/lib/money";
 import { LICENCE_EDITIONS } from "@/site/lib/data/catalog";
 import type { MergedEdition } from "@/site/lib/live-catalog";
@@ -27,7 +26,6 @@ export function LicenceCalculator({
   const [editionName, setEditionName] = useState(list[1]?.name ?? list[0].name);
   const [term, setTerm] = useState<"Annual" | "Monthly">("Annual");
   const [seats, setSeats] = useState(20);
-  const cart = useCart();
 
   const edition = list.find((e) => e.name === editionName) ?? list[0];
   /* A live product with no flexible tier CANNOT be priced monthly — the term falls back to
@@ -112,40 +110,15 @@ export function LicenceCalculator({
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            className="btn btn-primary"
-            onClick={() =>
-              cart.add(
-                isAnnual
-                  ? {
-                      /* Annual commitment, saal ka daam, saal me renew — cart bhi wahi
-                         bole jo quotation bolegi. */
-                      label: edition.name,
-                      detail: "annual commitment · setup and migration free",
-                      unitPrice: perSeatShown,
-                      qty: seats,
-                      unit: "seat/year",
-                      cycle: "yearly",
-                    }
-                  : {
-                      label: edition.name,
-                      detail: "monthly, flexible · setup and migration free",
-                      unitPrice: perSeatMo,
-                      qty: seats,
-                      unit: "seat/month",
-                      cycle: "monthly",
-                    },
-              )
-            }
-          >
-            Add to cart
-          </button>
+          {/* No "Add to cart" (owner decision 20, 24 Sep 2026): the cart checkout has no
+             server-side price for Workspace licences, so it refused every one of these at
+             payment. A quote, pre-filled with this exact selection, is the way to buy. */}
           {/* Poora chunav saath jata hai — edition, seats, term. Pehle ye khaali /quote tha
              aur Pardeep ne wahi pakda: form par edition ka option hi nahi tha, to quote kis
              cheez ki jati? Ab form yahi selection khula milta hai. */}
           <Link
             href={{ pathname: "/quote", query: { edition: edition.name, seats: String(seats), term: isAnnual ? "annual" : "monthly" } }}
-            className="btn btn-outline"
+            className="btn btn-primary"
           >
             Get this as a quote
           </Link>

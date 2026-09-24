@@ -66,6 +66,11 @@ export default function CheckoutPage() {
   const [agreed, setAgreed] = useState(false);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Set when the server's re-priced total differs from what this page showed. */
+  const [priceCheck, setPriceCheck] = useState<{
+    server: number; shown: number;
+    order: { orderId: string; amount: number; currency?: string; razorpayKeyId: string; quoteId?: string; totalRupees?: number };
+  } | null>(null);
 
   const hasHosting = cart.lines.some((l) => (l.sku || "").startsWith("hosting:"));
 
@@ -81,6 +86,12 @@ export default function CheckoutPage() {
       if (typeof s.domain === "string") setDomain(s.domain);
     } catch { /* private window / blocked storage — just start empty */ }
   }, []);
+  // Hosting + a domain being bought in the same cart: the hosting goes on that domain,
+  // so pre-fill it rather than making the customer type what is already in the cart.
+  const cartDomain = cart.lines.find((l) => l.domain)?.domain ?? "";
+  useEffect(() => {
+    if (hasHosting && cartDomain) setDomain((d) => d.trim() || cartDomain);
+  }, [hasHosting, cartDomain]);
   useEffect(() => {
     try {
       window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain }));
@@ -105,8 +116,14 @@ export default function CheckoutPage() {
     phone.trim().length >= 10 &&
     (!hasHosting || domain.trim().length >= 3);
 
+  interface StartedOrder {
+    orderId: string; amount: number; currency?: string; razorpayKeyId: string;
+    quoteId?: string; totalRupees?: number;
+  }
+
   async function placeOrder() {
     if (!agreed || paying) return;
+    setPriceCheck(null);
     setPaying(true);
     setError(null);
     try {
@@ -120,12 +137,14 @@ export default function CheckoutPage() {
           phone: phone.trim(),
           gstin: gstin.trim() || undefined,
           domain: hasHosting ? domain.trim() : undefined,
-          lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle })),
+          lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain })),
+          coupon: cart.coupon.trim() || undefined,
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {
         success?: boolean; simulated?: boolean; orderId?: string; amount?: number;
         currency?: string; razorpayKeyId?: string; quoteId?: string; error?: string;
+        totalRupees?: number;
       };
       if (!res.ok || !json.success) throw new Error(json.error || "Could not start checkout. Please retry.");
 
@@ -139,19 +158,44 @@ export default function CheckoutPage() {
       if (!json.orderId || !json.razorpayKeyId || !json.amount) {
         throw new Error("Payment details missing from server. Please retry.");
       }
+      const order: StartedOrder = {
+        orderId: json.orderId, amount: json.amount, currency: json.currency,
+        razorpayKeyId: json.razorpayKeyId, quoteId: json.quoteId, totalRupees: json.totalRupees,
+      };
+      /* The server re-prices every line (domains live, coupon from the same table). If
+         its total differs from what this page showed, say so and let the customer decide
+         — never open Razorpay on a figure they were not shown. Confirming reuses THIS
+         order: placing it again would take a second quote number for one purchase. */
+      const shown = Math.round(t.payable);
+      if (typeof order.totalRupees === "number" && Math.abs(order.totalRupees - shown) > 1) {
+        setPriceCheck({ server: order.totalRupees, shown, order });
+        setPaying(false);
+        return;
+      }
+      await openPayment(order);
+    } catch (err) {
+      setError((err as Error).message);
+      setPaying(false);
+    }
+  }
+
+  async function openPayment(order: StartedOrder) {
+    setPriceCheck(null);
+    setPaying(true);
+    try {
       const Razorpay = await loadRazorpay();
       const rzp = new Razorpay({
-        key: json.razorpayKeyId,
-        amount: json.amount,
-        currency: json.currency ?? "INR",
+        key: order.razorpayKeyId,
+        amount: order.amount,
+        currency: order.currency ?? "INR",
         name: "ANUTECH DIGITAL PVT LTD",
-        description: `Order ${json.quoteId ?? ""}`,
-        order_id: json.orderId,
+        description: `Order ${order.quoteId ?? ""}`,
+        order_id: order.orderId,
         prefill: { name, email, contact: phone },
-        notes: { quoteId: json.quoteId ?? "", domain: hasHosting ? domain.trim() : "" },
+        notes: { quoteId: order.quoteId ?? "", domain: hasHosting ? domain.trim() : "" },
         theme: { color: "#C2410C" },
         handler: () => {
-          try { window.sessionStorage.setItem("anutech.order", json.quoteId || ""); } catch { /* default */ }
+          try { window.sessionStorage.setItem("anutech.order", order.quoteId || ""); } catch { /* default */ }
           cart.clear();
           router.push("/done" as never);
         },
@@ -224,6 +268,20 @@ export default function CheckoutPage() {
                 </span>
               </label>
 
+              {priceCheck && (
+                <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+                  The total has changed from {rupee(priceCheck.shown)} to <strong>{rupee(priceCheck.server)}</strong> — usually because a
+                  domain&apos;s registry price moved since you added it. Nothing has been charged.
+                  <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => void openPayment(priceCheck.order)}>
+                      Pay {rupee(priceCheck.server)}
+                    </button>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => router.push("/cart" as never)}>
+                      Back to cart
+                    </button>
+                  </div>
+                </div>
+              )}
               {error && (
                 <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
               )}
@@ -237,7 +295,7 @@ export default function CheckoutPage() {
                   cursor: agreed && !paying ? "pointer" : "not-allowed",
                 }}
                 disabled={!agreed || paying}
-                onClick={placeOrder}
+                onClick={() => void placeOrder()}
               >
                 {paying ? "Starting secure payment…" : `Pay ${rupee(t.payable)}`}
               </button>

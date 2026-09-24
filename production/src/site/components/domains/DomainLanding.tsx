@@ -147,7 +147,8 @@ export function DomainLanding() {
   const yearly = term === "yearly";
   const bundleFree = hostingOn && yearly; // the only state where the domain is ₹0
   const domainCost = bundleFree ? 0 : domainReg;
-  const hostingCost = hostingOn ? (yearly ? tier.yearlyTotal : tier.monthly) : 0;
+  // Whole rupees, as the checkout API charges it (Math.round of the same tier figure).
+  const hostingCost = hostingOn ? Math.round(yearly ? tier.yearlyTotal : tier.monthly) : 0;
   const mailboxCost = mailOn ? (bundleFree ? 0 : MAILBOX_YR) : 0;
   const subtotal = domainCost + hostingCost + mailboxCost;
   const total = Math.round(subtotal * 1.18);
@@ -155,7 +156,9 @@ export function DomainLanding() {
   const available = primary?.available ?? false;
 
   function addToCart() {
-    if (!primary) return;
+    /* Only a name that is available at a live, known price can be paid for: the
+       checkout re-checks both and refuses otherwise, so adding it would only fail later. */
+    if (!primary || !primary.available || !primary.priceKnown) return;
     const planId = tier.name.toLowerCase();
     // Domain line — sku lets the server re-price + apply the ₹0 bundle rule.
     cart.add({
@@ -167,6 +170,7 @@ export function DomainLanding() {
       unit: "year",
       cycle: "yearly",
       sku: `domain:${tld.replace(/^\./, "")}`,
+      domain: primary.domain,
     });
     if (hostingOn) {
       cart.add({
@@ -192,16 +196,13 @@ export function DomainLanding() {
     }
   }
 
-  // Rate-card add — a plain first-year registration for that extension.
+  /* Rate-card row: pick the extension and search for it. It used to add a
+     placeholder "yourname.<tld>" to the cart — a name nobody asked for, at a fixed
+     price, which the checkout could neither price live nor register. */
   function addRateRow(t: Tld) {
-    cart.add({
-      label: `yourname${t.tld}`,
-      detail: `Registration, 1 year · renews ${inr(t.renew)} · add hosting to make it ₹0`,
-      unitPrice: t.reg,
-      unit: "year",
-      cycle: "yearly",
-      sku: `domain:${t.tld.replace(/^\./, "")}`,
-    });
+    setTld(t.tld);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (normaliseName(q)) void runSearch();
   }
 
   const shownTlds = TLDS.filter((t) => (RATE_FILTERS.find((f) => f.key === filter)?.groups ?? []).includes(t.group));
@@ -468,7 +469,7 @@ export function DomainLanding() {
                       <div style={{ fontSize: 12, color: C.muted }}>first year · yearly plan</div>
                     </td>
                     <td style={{ textAlign: "left", padding: "13px 16px" }}>
-                      <button onClick={() => addRateRow(t)} style={{ appearance: "none", cursor: "pointer", background: C.accSurf, color: C.accent, border: `1px solid ${C.accBorder}`, borderRadius: 7, padding: "6px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", whiteSpace: "nowrap" }}>Add</button>
+                      <button onClick={() => addRateRow(t)} style={{ appearance: "none", cursor: "pointer", background: C.accSurf, color: C.accent, border: `1px solid ${C.accBorder}`, borderRadius: 7, padding: "6px 12px", fontSize: 13, fontWeight: 600, fontFamily: "inherit", whiteSpace: "nowrap" }}>Search</button>
                     </td>
                   </tr>
                 ))}

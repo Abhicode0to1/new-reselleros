@@ -1,12 +1,10 @@
 "use client";
 /** Four certificate cards. Positive SSL and Wildcard add to cart; OV/EV routes to quote. */
 import { useRouter } from "next/navigation";
-import { useCart } from "@/site/components/cart/CartProvider";
 import { CERTS } from "@/site/lib/data/catalog";
 import { Tick } from "@/site/components/ui/bits";
 
 export function CertCards() {
-  const cart = useCart();
   const router = useRouter();
 
   return (
@@ -29,15 +27,9 @@ export function CertCards() {
             style={{ marginTop: 16 }}
             disabled={c.cta === "Included"}
             onClick={() => {
-              if (c.addPrice !== null) {
-                cart.add({
-                  label: c.name === "Positive SSL" ? "Positive SSL" : "Wildcard SSL",
-                  detail: c.name === "Positive SSL" ? "DV certificate for one domain" : "Covers every subdomain",
-                  unitPrice: c.addPrice,
-                  unit: "year",
-                  cycle: "yearly",
-                });
-              } else if (c.cta === "Talk to us") {
+              /* Paid certificates are quote items (owner decision 20): the cart checkout
+                 has no server-side SSL price, so a cart line was refused at payment. */
+              if (c.addPrice !== null || c.cta === "Talk to us") {
                 router.push("/quote" as never);
               } else {
                 router.push("/hosting" as never);
