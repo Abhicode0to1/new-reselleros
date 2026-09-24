@@ -69,6 +69,65 @@ anything any more. If the two ever disagree, ResellerOS is right by definition.
 Consequence of 2 + 3 together: an in-panel DMS cart purchase must still get its **bill from
 ResellerOS**. DMS's cart stays, DMS's invoice numbering does not.
 
+### Decisions 12–18 — the questions as asked, and Pardeep's answers (24 Sep 2026)
+
+Asked in two rounds. Recorded with the options that were offered, so a later reader can see
+what was chosen **against** what, not just the result. The recommendation marker is kept
+because it shows which answers followed advice and which overrode it.
+
+**Round 1**
+
+| # | Question as asked | Options offered | Pardeep's answer |
+|---|---|---|---|
+| 12 | Which Razorpay account should take the money for hosting and domain sales, including purchases made inside the DMS panel? | ResellerOS's account *(recommended)* · DMS's account · Same account already | **ResellerOS's account** |
+| 13 | When a customer opens their bills inside the DMS panel, what should they see? | ResellerOS's own PDF *(recommended)* · DMS's own view of the same numbers | **ResellerOS's own PDF** |
+| 14 | Production DMS still serves its old public pages until it's deployed with the ResellerOS address. What is the production ResellerOS address? | `https://reselleros.anutech.in` · Not decided yet | **`https://reselleros.anutech.in`** |
+| 15 | DMS's Admin → Page management still has visibility switches for the deleted pages and a homepage-design switch. They do nothing now. What should happen to them? | Remove them *(recommended)* · Leave them | **Remove them** |
+
+**Round 2**
+
+| # | Question as asked | Options offered | Pardeep's answer |
+|---|---|---|---|
+| 16 | When a customer buys inside the DMS panel, the bill now comes from ResellerOS. If ResellerOS is down at that moment, what should DMS do? | Take payment, bill later *(recommended)* · Block the purchase | **Take payment, bill later** |
+| 17 | DMS has three admin invoice actions: re-sync invoice, invoice retry, and the issue-invoice worker. Once DMS stops issuing bills, what should they do? | Become "fetch from ResellerOS" *(recommended)* · Remove them | **Remove them** — against the recommendation. Bill problems are handled in ResellerOS; DMS keeps no repair button of its own. |
+| 18 | DMS's nightly `tokens-charge-recurring` job in Cloud Scheduler is already a no-op. Should I also pause the job in production? | Yes, pause it *(recommended)* · Leave it running | **Yes, pause it** |
+
+**Earlier answers the same day, recorded here with their wording for completeness:**
+
+| # | Question / prompt | Pardeep's answer |
+|---|---|---|
+| 8 | (instruction) | *"Remove the frontend pages of DMS completely since we are using the frontend page of ResellerOS now"* |
+| 8 | DMS's shop pages are also how a signed-in customer buys from inside the panel — what should happen to them? (Remove and send to ResellerOS · Keep them for the panel) | *"Build inner small models to be able for user to purchase hosting and domain when inside the customer panel. Then remove those full fledged pages."* |
+| 9 | Facebook login needs a data-deletion page; ResellerOS has none. (Keep DMS's page · Remove it) | **Remove it** |
+| 10 | Which address should production DMS redirect to? (reselleros.anutech.in · Local only for now) | **Local only for now** — superseded by decision 14 above |
+| 11 | DMS reads ₹49.99/month as GST-inclusive, ResellerOS adds GST on top (₹599.88 vs ₹708). Which is right? | *"Reseller Os is correct price one. use that"* |
+| — | Protected area | *"This part of ResellerOs cannot be edited or touched by our any edits … being worked on by my collegue"* → AGENTS.md §13 |
+| — | Shared money logic behind it | *"block it for now. If need to edit, Ask me and i will ask my collegue"* → added to the guard |
+
+### Waiting on Pardeep — actions only he can take
+
+- [ ] **Pause `tokens-charge-recurring` (decision 18).** The Google Cloud CLI is not installed on
+      the development machine, so it could not be done from here. Run where `gcloud` is logged in:
+      `gcloud scheduler jobs pause tokens-charge-recurring --location=asia-south1 --project=speedy-unison-453807-e9`
+      — undo with `resume`. Harmless until then: the code gate (DMS `8bf941e`) stops it charging.
+- [ ] **Confirm `MAX_MANDATE_AMOUNT` with Razorpay** before the first live UPI Autopay mandate. The
+      per-debit cap cannot be raised after a customer approves it.
+- [ ] **Cancel any leftover DMS test subscriptions** in the Razorpay dashboard. DMS no longer creates
+      them (DMS `06a9546`), but ones created before still carry the old ₹599.88 amounts.
+
+### Ready to build — each waits for a go-ahead
+
+1. **In-panel DMS payments onto ResellerOS's Razorpay account** (decision 12).
+2. **Bill hand-off with the "bill later" queue** (decisions 13, 16): after payment DMS asks
+   ResellerOS for the bill; if unreachable it queues and retries, the panel shows "bill being
+   prepared", a stuck one alerts the owner, and the panel then serves ResellerOS's PDF. Built in
+   the SAME change that stops DMS issuing invoices and removes the three admin invoice actions
+   (decision 17) — so there is never a window with two invoice issuers or none.
+3. **Remove the dead Admin → Page management controls** in DMS (decision 15).
+4. **Deploy production DMS** with `NEXT_PUBLIC_RESELLEROS_URL=https://reselleros.anutech.in`
+   (decision 14). Only on an explicit go: it switches production's public pages over to
+   ResellerOS. Before it, update any Razorpay-registered policy URLs that point at DMS's domain.
+
 ### Why decision 5 was a safety change, not tidying
 
 The two apps collect renewals with different Razorpay instruments:
@@ -185,10 +244,8 @@ with Razorpay before the first live mandate.
       DMS issuing invoices: re-sync invoice (`api/admin/orders/[id]/re-sync-invoice`), invoice
       retry (`lib/invoice-retry.ts` + its pill), and the issue-invoice worker
       (`api/workers/issue-invoice`).
-- [ ] **Pause `tokens-charge-recurring` in Cloud Scheduler (decision 18) — for the owner.** The
-      Google Cloud CLI is not installed on this machine. Run it where `gcloud` is logged in:
-      `gcloud scheduler jobs pause tokens-charge-recurring --location=asia-south1 --project=speedy-unison-453807-e9`
-      (undo: `… jobs resume …`). The code gate already makes the job charge nobody.
+- [ ] **Pause `tokens-charge-recurring` (decision 18)** — the owner's to run; command under
+      "Waiting on Pardeep" above.
 
 ### Open questions for Pardeep
 
