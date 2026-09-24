@@ -96,8 +96,9 @@ with Razorpay before the first live mandate.
 - [ ] **New engine command `billing.record_external_invoice`.** DMS stores ResellerOS's invoice
       number and PDF link as a foreign reference. Touches no DMS `Counter`, idempotent on the
       ResellerOS invoice number.
-- [ ] **Historical `TI/…` invoices stay reportable.** DMS issued them; they remain in its
-      GSTR-1 history. Stopping new issues must not hide the old ones.
+- [x] **Historical `TI/…` invoices — NOT NEEDED. USER DECISION, Pardeep, 24 Sep 2026:** every
+      DMS invoice so far was issued in testing, so there is no GSTR-1 history to preserve.
+      Do not build anything to keep them reportable.
 - [ ] **Domains in the ResellerOS cart.** `/api/public/checkout/cart` re-prices every line from
       SKU server-side and v1 knows hosting SKUs only; domains need a server-side price source
       before they can be sold here.
