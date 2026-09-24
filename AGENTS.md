@@ -45,13 +45,23 @@ ResellerOS reaches it over a read-only HTTP API plus a signed SSO hand-off
 
 **Billing belongs to ResellerOS (owner decision, 24 Sep 2026).** ResellerOS's cart and
 billing are primary for a first purchase; DMS keeps its cart only for in-panel purchases.
-**DMS issues no bills** — every bill and every renewal is ResellerOS's, and DMS holds a copy
-for reference. DMS's Razorpay Tokens recurring charger is gated off
+**DMS is to issue no bills** — every bill and every renewal is ResellerOS's, and DMS holds a
+copy for reference. That is DECIDED, not yet BUILT: DMS's own invoice engine
+(`createPrimaryInvoice`) still issues today, and switching it off is queued in `Todos.md` §0A. DMS's Razorpay Tokens recurring charger is gated off
 (`DMS_TOKEN_RECURRING_ENABLED`, default off), because two systems able to debit the same
 renewal is a double-collection with no detector. Do not re-enable it or build a second
 invoice series in DMS without being asked. **Hosting prices are ResellerOS's too**
 (`LANDING_PLANS` in `site/lib/data/hosting-landing.ts`); DMS's `hostingplans` prices are
-disregarded and must not be read as a price source. Full record: `Todos.md` §0A.
+disregarded and must not be read as a price source; DMS charges them plus 18% GST
+(`lib/pricing/hosting-price.ts` in DMS). Full record: `Todos.md` §0A.
+
+**The site cart charges only what the server can price** (24 Sep 2026). Every site
+`cart.add` must carry a `sku`, and a domain line must also carry the exact `domain` —
+`src/site/cart-lines-priceable.test.ts` fails otherwise. Domains are charged the LIVE price,
+re-checked at payment through `lib/domains/live-lookup.ts` (the same code the search uses),
+and refused when it cannot be read — never a fallback figure. Workspace, Anutech Mail and SSL
+are quote items, not cart items. After payment, provisioning is one request per product
+(`lib/provisioning/products.ts`), so a domain and hosting bought together are both queued.
 
 Open items for the integration are tracked in `Todos.md`, not here.
 

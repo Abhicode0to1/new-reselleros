@@ -1,8 +1,17 @@
 # Todos — ResellerOS ↔ DMS integration
 
-Recorded 2026-09-19. Last updated **2026-09-24**, after the billing-architecture decisions
-(§0A). Before that 2026-09-23, after engine Phases 6-8, the production apply of DMS
-migration 008, and merging `abhishek-pre-merge`.
+Recorded 2026-09-19. Last updated **2026-09-24 (evening)**, after enabling the ResellerOS site
+cart (ResellerOS `c49cd098`). Earlier the same day: the billing-architecture decisions 1–21
+(§0A), DMS pricing moved to ResellerOS + GST (DMS `06a9546`), DMS's public pages removed (DMS
+`0fe6c95`), and the Billing & Subscriptions hands-off guard (AGENTS.md §13). Before that
+2026-09-23: engine Phases 6-8, the production apply of DMS migration 008, and merging
+`abhishek-pre-merge`.
+
+**Gates at the last update:** ResellerOS 6,668 tests / 362 files, typecheck clean, lint exit 0
+(warnings only). DMS 6,702 / 445, typecheck clean, lint 0 errors.
+
+**Read §0A first.** It is the newest record and supersedes older entries below where they
+conflict; each superseded entry is marked in place.
 
 Both repos now carry a branch named **`pawan-api-system`**, both pushed:
 - ResellerOS — `Abhicode0to1/new-reselleros` (this repo). **`abhishek-pre-merge` merged in on
@@ -132,6 +141,15 @@ queued with its exact name, so nothing is lost.
       per-debit cap cannot be raised after a customer approves it.
 - [ ] **Cancel any leftover DMS test subscriptions** in the Razorpay dashboard. DMS no longer creates
       them (DMS `06a9546`), but ones created before still carry the old ₹599.88 amounts.
+- [ ] **Say go for the ResellerOS production migrations.** Two are applied to LOCAL only:
+      `20260921100000_provisioning_facts_are_immutable` (deferred 23 Sep, §0.1) and
+      `20260924120000_provisioning_one_per_product` (24 Sep). Both must be live before the
+      matching code deploys — the second especially: the webhook now writes one provisioning
+      row per product, and under the old index a paid domain in a domain + hosting cart would
+      again be queued for nobody.
+- [ ] **Test a real payment** on the ResellerOS cart (you said you would do the payment part).
+      Not verifiable here: no Razorpay keys locally, and the domain registry does not answer
+      this machine, so a live domain price has never been observed by the new checkout.
 
 ### Ready to build — each waits for a go-ahead
 
@@ -145,6 +163,11 @@ queued with its exact name, so nothing is lost.
 4. **Deploy production DMS** with `NEXT_PUBLIC_RESELLEROS_URL=https://reselleros.anutech.in`
    (decision 14). Only on an explicit go: it switches production's public pages over to
    ResellerOS. Before it, update any Razorpay-registered policy URLs that point at DMS's domain.
+5. **Automatic domain registration after payment** (decision 21). Next build. Behind a switch
+   that is OFF until the owner approves a first real registration, and it drains the
+   per-product `vendor = 'domain'` provisioning rows the cart now writes, each carrying the
+   exact name. Still depends on the two open items in §D: seller of record (partly answered —
+   see there) and how a ResellerOS-only buyer gets a ResellerClub customer account.
 
 ### Why decision 5 was a safety change, not tidying
 
@@ -313,6 +336,10 @@ with Razorpay before the first live mandate.
 
 ## 0. What is left — measured 2026-09-23 (refreshed after Phase 8)
 
+> **Older than §0A.** This section was measured on 23 Sep. The 24 Sep decisions and builds in
+> §0A come after it and win where they disagree — notably DMS no longer being the invoice
+> issuer (decision 3), which changes the seller-of-record entry below.
+
 Everything below is verified against the code today, not carried forward. Where an older
 entry in this file disagrees, **this section is the measurement** and the older one has been
 corrected in place. Grouped by who can move it, because most of what remains is not code.
@@ -339,9 +366,11 @@ not started.
       `hosting.provision`. DMS mints a `Math.random()` password it never returns because its
       customers arrive by SSO, so without a portal user there is no way in and provisioning
       still reports success. My recommendation: yes, create the portal user.
-- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. Needs the CA —
-      DMS's GST engine is permanent and ungated, and credit notes are manual with a statutory
-      deadline.
+- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. **Partly
+      answered 24 Sep:** ResellerOS issues every bill and takes the money into its Razorpay
+      account (decisions 3 and 12), so ResellerOS is the issuing side. What still needs the CA:
+      confirming that for GST, and how credit notes work once DMS stops issuing. The line this
+      replaced said "DMS's GST engine is permanent and ungated" — true until decision 3 is built.
 - [ ] **How does a ResellerOS-only buyer get a ResellerClub customer?** Blocks Phase 9.
       `registerDomain` needs a numeric `customerId`; contacts come from a private helper inside
       DMS's payment pipeline.
@@ -1029,8 +1058,9 @@ Phases are ordered so each guard ships **before** the capability it guards.
    command is the one forbidden operation.
 7. A dry run writes nothing, claims nothing, and makes no mutating outbound call.
 8. The command endpoints create no Order, Payment or Invoice in DMS — DMS's GST engine is
-   permanent and ungated, so reusing the paid path would mint a second tax invoice for one
-   supply.
+   still live and ungated TODAY, so reusing the paid path would mint a second tax invoice for
+   one supply. Decision 3 (24 Sep) will switch that engine off; this invariant stays until then,
+   and afterwards the reason becomes "ResellerOS is the only issuer" — the rule is the same.
 9. The rate limiter is not a spend control (it returns `allowed: true` when Redis is absent).
 10. A test-mode Razorpay payment can never reach a live command.
 
@@ -1049,9 +1079,9 @@ Phases are ordered so each guard ships **before** the capability it guards.
       (Zoho Workplace licences) is unaffected — this is only about Zoho Books as DMS's
       accounting back end.
 
-- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. DMS's GST
-      engine is permanent and ungated; credit notes are manual with a statutory deadline. Needs
-      the CA.
+- [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. **Partly
+      answered 24 Sep (§0A decisions 3 and 12):** ResellerOS issues every bill and takes the
+      money. Still needs the CA to confirm for GST, and a credit-note route once DMS stops issuing.
 - [ ] **How does a ResellerOS-only buyer get a ResellerClub customer?** Top blocker for
       register. `registerDomain` needs a numeric `customerId` and contacts that today come from
       a private helper inside DMS's payment pipeline.
