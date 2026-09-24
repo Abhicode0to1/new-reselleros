@@ -6,6 +6,9 @@ import {
   registrantFor,
   registrationCommandId,
   splitName,
+  hostingProvisioningEnabled,
+  provisionCommandId,
+  hostingLineFor,
 } from "./domain-registration";
 import { classifyCommandResponse } from "@/lib/dms-engine/commands";
 
@@ -71,5 +74,22 @@ describe("classifyCommandResponse — what the worker does with each engine answ
   it("a hold keeps the engine's own sentence, so the person reading the queue sees why", () => {
     const o = classifyCommandResponse(500, { status: "failed", transport: "not_sent", error: "generic", detail: "[held] acme.in costs ₹550" });
     expect(o.kind === "held" && o.reason).toContain("acme.in costs ₹550");
+  });
+});
+
+describe("hosting provisioning helpers", () => {
+  it("the switch is exact 1 only", () => {
+    expect(hostingProvisioningEnabled({})).toBe(false);
+    expect(hostingProvisioningEnabled({ HOSTING_PROVISIONING_LIVE: "true" })).toBe(false);
+    expect(hostingProvisioningEnabled({ HOSTING_PROVISIONING_LIVE: "1" })).toBe(true);
+  });
+  it("the command id is day-keyed and distinct from registration's", () => {
+    expect(provisionCommandId("R1", new Date("2026-09-24T05:00:00Z"))).toBe("rsos-hostprov-R1-2026-09-24");
+  });
+  it("reads the plan and months from the line, then an older line's name, then the plan label", () => {
+    expect(hostingLineFor([{ hostingPlan: "plus", months: 1 }], null)).toEqual({ planId: "plus", months: 1 });
+    expect(hostingLineFor([{ name: "Starter hosting (billed monthly)" }], null)).toEqual({ planId: "starter", months: 1 });
+    expect(hostingLineFor([], "hosting-standard")).toEqual({ planId: "standard", months: 12 });
+    expect(hostingLineFor([], null)).toBeNull();
   });
 });

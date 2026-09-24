@@ -140,8 +140,15 @@ to manage the domain from, and that nothing capped automatic spending.
 | # | Question as asked | Options offered | Pardeep's answer |
 |---|---|---|---|
 | 22 | Whose details should the domain be registered under? | Customer's, add address *(recommended)* · ANUTECH's own details | **Customer's — checkout collects the address** |
-| 23 | Should a DMS account be created for the buyer? | Yes, create one *(recommended)* · No account | **Yes — found or created by email, reached by the SSO hand-off** |
+| 23 | Should a DMS account be created for the buyer? | Yes, create one *(recommended)* · No account | **Yes — found or created by email.** Corrected the same day: the option text said the customer "reaches it by the SSO hand-off", but ResellerOS has no customer portal to hand off FROM. So the engine sends a "set your password" email at creation, as DMS's guest checkout does (`engine-customer.ts`) |
 | 24 | What limit should automatic registration have? | Per-domain + daily cap *(recommended)* · Per-domain checks only · Human release every time | **Per-domain + daily cap** — live payment, paid ≥ ResellerClub cost, and under a daily count + ₹ cap; anything else waits for a person. No figures were given, so it ships at **5 per day / ₹10,000 per day**, set by env |
+
+### Decision 25 — hosting goes through the DMS engine (24 Sep 2026)
+
+| # | Question as asked | Options offered | Pardeep's answer |
+|---|---|---|---|
+| 25 | Which app should create the hosting account after a customer pays on ResellerOS? | DMS engine *(recommended)* · ResellerOS worker (exists) | **DMS engine** — DMS stays the only app writing to DirectAdmin for a sale, and the hosting lands in the customer's DMS panel |
+| — | How should it be verified, with no DirectAdmin reachable locally? | Tests now, real run later *(recommended)* · A test DA server | **"Will use the live DA for testing. Don't worry, will delete those testing hostings later on."** Also: ResellerClub is out of scope locally ("needs a whitelisted static single IP") |
 
 ### Waiting on Pardeep — actions only he can take
 
@@ -322,6 +329,41 @@ with Razorpay before the first live mandate.
          ResellerOS.
       Rows paid BEFORE step 8 keep the `engine_not_connected` blocker and are never picked up
       automatically — register those by hand.
+- [x] **Hosting provisioning through the DMS engine (decision 25) — BUILT, SWITCHED OFF.** 24 Sep.
+      **DMS** `hosting.provision` (`engine-handlers-provision.ts`), unblocked by decision 23: the
+      buyer's DMS account is found or created (`engine-customer.ts`, shared with
+      `domain.register`) with a "set your password" email. The DirectAdmin package comes from the
+      catalogue. **Usernames are deterministic per domain** (DMS's other provisioners pick them at
+      random, so a retry after a lost response would create a SECOND account): DirectAdmin is read
+      first — an account already on this domain is ADOPTED, one on another domain moves to the
+      next candidate, only a free name is created. Reconciler asks the same question. Its own gate
+      `ENGINE_HOSTING_PROVISION_LIVE=1`; a test-mode payment is held.
+      **ResellerOS** `/api/cron/provision-hosting` REWRITTEN: it no longer calls DirectAdmin or
+      emails a cPanel password — it sends `hosting.provision` (gate `HOSTING_PROVISIONING_LIVE=1`,
+      kill switch, day-keyed command id). The checkout records the hosting line's plan and months.
+      The webhook approves a paid hosting row on that gate instead of this app's own DA creds.
+      **test-verified:** DMS 18 provision tests (adopt-on-retry red-checked: 2 fail without it), the
+      engine tripwires moved (every known command now has a handler); ResellerOS 9 worker tests +
+      helpers. Gates: ResellerOS 6,713 / 365, DMS 6,750 / 447, typecheck + lint clean.
+      **NOT verified live — blocked:** the live DirectAdmin (`server1.anutech.in:2222`) answers this
+      machine, but a read-only login test with the key in DMS `.env.local` returned **401 "Not
+      logged in"** — the key is stale, or it is restricted to Cloud Run's IP (a DMS comment says
+      "operator machines aren't DA-whitelisted"). Probing stopped after one call: DirectAdmin
+      blocks an IP after repeated failed logins. Local DMS points DirectAdmin at a placeholder on
+      purpose, and `checkProviderSafety` refuses a non-production build contacting a provider, so
+      a live run needs a deliberate local override too.
+- [ ] **For the live DirectAdmin test:** a DirectAdmin login key that works from this machine
+      (or whitelist its IP), then a deliberate local override of the inert placeholder. First
+      run in `mode:"test"` (reads only), then one live account on a clearly-named test domain, then
+      delete it (owner: "will delete those testing hostings later on").
+- [ ] **The hosting TRIAL still writes to DirectAdmin from ResellerOS** (`api/public/trial/hosting/
+      confirm` → `daCreateAccount`, gated by `HOSTING_TRIAL_LIVE`). A second writer, left as is —
+      move it onto `hosting.provision` when trials are next touched.
+- [ ] **Before switching hosting provisioning on:** production migrations, deploy both apps, set
+      `DMS_ENGINE_COMMAND_KEY`/`DMS_ENGINE_URL`, `provisioning.activate` on auto, a Cloud Scheduler
+      job for `/api/cron/provision-hosting` with a retry count, one test-mode run, then
+      `ENGINE_HOSTING_PROVISION_LIVE=1` on DMS and `HOSTING_PROVISIONING_LIVE=1` here. Rows paid
+      earlier keep their blocker and are set up by hand.
 - [ ] **No customer email yet on registration.** The domain appears in the customer's DMS panel,
       and the owner is alerted on a lost response or a refusal. A "your domain is registered"
       email to the customer is an automated customer send, so it needs its own action on the
@@ -1071,7 +1113,8 @@ Phases are ordered so each guard ships **before** the capability it guards.
       allowed and flagged rather than refused (L103: a guard that fires on a right answer gets
       deleted; a downgrade to a retired tier is legitimate).
 
-- [ ] **`hosting.provision` — blocked, and not on effort.** DMS's `createUser` mints the
+- [x] **`hosting.provision` — UNBLOCKED and built 24 Sep 2026** (decisions 23, 25; see §0A). The
+      original entry, kept for the reasoning: **blocked, and not on effort.** DMS's `createUser` mints the
       username itself and sets `passwd: Math.random().toString(36).slice(-10) + 'A1!'`, which
       it never stores and never returns. That is deliberate: the comment beside it says "user
       will use SSO", and DMS customers reach DirectAdmin by passwordless SSO from the DMS

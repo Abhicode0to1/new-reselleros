@@ -87,6 +87,9 @@ interface QuoteLine {
   domain?: string;
   /** Domain lines only: whose name it is registered in (owner decision 22). */
   registrant?: Registrant;
+  /** Hosting lines only: the tier and the months paid for, read by the provisioning worker. */
+  hostingPlan?: string;
+  months?: 1 | 12;
 }
 
 type LineKind = "hosting" | "domain" | "mailbox";
@@ -118,7 +121,7 @@ function repriceLine(sku: string | undefined, cycle: string | undefined, qty: nu
     // Whole rupees — the money spine stores integers (CLAUDE.md §13); a fractional
     // tier total like ₹599.88 would break the integer lead/quote columns.
     const rate = Math.round(yearly ? t.yearlyTotal : t.monthly);
-    return { kind: "hosting", tier, yearly, line: { id: newId(), name: `${t.name} hosting (${yearly ? "billed yearly" : "billed monthly"})`, qty, rate, cost: 0 } };
+    return { kind: "hosting", tier, yearly, line: { id: newId(), name: `${t.name} hosting (${yearly ? "billed yearly" : "billed monthly"})`, qty, rate, cost: 0, hostingPlan: tier, months: yearly ? 12 : 1 } };
   }
 
   // Domain lines are priced live, per name, in priceDomainLines() — not here.

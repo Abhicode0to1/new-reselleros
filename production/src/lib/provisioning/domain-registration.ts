@@ -79,3 +79,37 @@ export function normalisePhone(raw: string): { phone: string; phoneCc: string } 
   if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
   return { phone: d, phoneCc: "91" };
 }
+
+/**
+ * Hosting provisioning through the engine's `hosting.provision` (24 Sep 2026).
+ * This side's own fail-closed switch, exact "1" only; the engine has a second
+ * (`ENGINE_HOSTING_PROVISION_LIVE`).
+ */
+export function hostingProvisioningEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return env.HOSTING_PROVISIONING_LIVE === "1";
+}
+
+/** Same one-id-per-request-per-IST-day rule as registration; see registrationCommandId. */
+export function provisionCommandId(requestId: string, now: Date = new Date()): string {
+  return registrationCommandId(requestId, now).replace("rsos-domreg-", "rsos-hostprov-");
+}
+
+/** The tier and months of the hosting line in a quote; defaults to the plan label and a year. */
+export function hostingLineFor(lineItems: unknown, planLabel: string | null): { planId: string; months: 1 | 12 } | null {
+  if (Array.isArray(lineItems)) {
+    for (const l of lineItems) {
+      const line = (l && typeof l === "object" ? l : {}) as { hostingPlan?: unknown; months?: unknown; name?: unknown };
+      if (typeof line.hostingPlan === "string" && line.hostingPlan) {
+        return { planId: line.hostingPlan, months: line.months === 1 ? 1 : 12 };
+      }
+    }
+    // A line written before hostingPlan existed: read the cycle from its name.
+    for (const l of lineItems) {
+      const name = String((l as { name?: unknown })?.name ?? "");
+      const m = /^(\w+) hosting \(billed (yearly|monthly)\)/i.exec(name);
+      if (m) return { planId: m[1].toLowerCase(), months: m[2].toLowerCase() === "monthly" ? 1 : 12 };
+    }
+  }
+  const tier = (planLabel ?? "").replace(/^hosting-/, "").trim().toLowerCase();
+  return tier ? { planId: tier, months: 12 } : null;
+}

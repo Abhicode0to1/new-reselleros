@@ -31,9 +31,8 @@ import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
 import { provisioningProducts } from "@/lib/provisioning/products";
-import { domainRegistrationEnabled } from "@/lib/provisioning/domain-registration";
+import { domainRegistrationEnabled, hostingProvisioningEnabled } from "@/lib/provisioning/domain-registration";
 import { commandsConfigured } from "@/lib/dms-engine/commands";
-import { daWriteConfigured } from "@/lib/directadmin/provision";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 
 import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
@@ -358,9 +357,13 @@ export async function POST(request: NextRequest) {
          key is configured. Otherwise the row is queued with `engine_not_connected`
          and the register-domains worker never picks it up. The engine has a second,
          independent gate and the spend limit (DMS engine-register-policy.ts). */
+      /* HOSTING (24 Sep 2026): provisioned by the DMS engine's hosting.provision,
+         so it is connected when THIS side's switch HOSTING_PROVISIONING_LIVE=1 is
+         on and the engine command key is set — no longer this app's own
+         DirectAdmin credentials, which only the hosting trial still uses. */
       engineConnected:
         product.vendor === "hosting"
-          ? process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured()
+          ? hostingProvisioningEnabled() && commandsConfigured()
           : product.vendor === "domain"
             ? domainRegistrationEnabled() && commandsConfigured()
             : false,

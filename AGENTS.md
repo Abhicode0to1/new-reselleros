@@ -70,6 +70,11 @@ enforces (live payment, paid ≥ cost, daily count + ₹ cap). Two independent f
 switches: `DOMAIN_REGISTRATION_LIVE=1` here, `ENGINE_DOMAIN_REGISTER_LIVE=1` on DMS. Do not set
 either without the owner — the eight steps before switching on are in `Todos.md` §0A.
 
+**Paid hosting is provisioned by the DMS engine too, and it is OFF** (decision 25). This app no
+longer creates DirectAdmin accounts for a sale: `/api/cron/provision-hosting` sends
+`hosting.provision`, behind `HOSTING_PROVISIONING_LIVE=1` here and `ENGINE_HOSTING_PROVISION_LIVE=1`
+on DMS. The hosting TRIAL is the one path that still writes to DirectAdmin from this app.
+
 Open items for the integration are tracked in `Todos.md`, not here.
 
 ---

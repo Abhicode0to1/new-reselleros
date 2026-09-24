@@ -1,42 +1,69 @@
 /**
- * Provision-hosting worker — runs on a schedule (and can be poked by hand).
+ * Provision-hosting worker — turns a PAID hosting order into a live account,
+ * through the DMS engine's `hosting.provision` command.
  *
- * This is the piece that turns a PAID hosting order into a live account. The
- * Razorpay webhook records the payment and queues a `provisioning_requests` row;
- * nothing executed it until now. For every hosting request that decideProvisioning
- * fully approved (blocker IS NULL, live payment), this:
- *   1. creates the cPanel account on DirectAdmin (permanent — no trial suspend),
- *   2. emails the customer their control-panel login,
- *   3. marks the request 'activated' with the cPanel username as vendor_ref.
- * A failure marks the row 'failed' and alerts the owner; nothing is charged again
- * and daCreateAccount is idempotent, so a re-run cannot double-create an account.
+ * ─── CHANGED 24 Sep 2026: the account is created by DMS, not by this app ────
+ * Owner decision: DMS is the only app that writes to DirectAdmin for a sale,
+ * and the hosting lands in the customer's DMS panel. Until this date this
+ * worker called DirectAdmin itself (daCreateAccount) and emailed the customer a
+ * control-panel password — an account DMS never knew about, which the customer
+ * could not see or manage in their panel, and a password sitting in an inbox.
+ * Now DMS creates the account, the Hosting row and (if needed) the customer's
+ * DMS account with a "set your password" email; the customer reaches cPanel
+ * from the panel by SSO. See DMS lib/integrations/engine-handlers-provision.ts.
  *
- * Auth: same fail-closed Bearer(CRON_SECRET) pattern as the other crons.
+ * (The hosting TRIAL confirm route still creates its account directly — a
+ * second DirectAdmin writer that is recorded in Todos.md, not removed here.)
+ *
+ * ─── WHAT MUST BE TRUE BEFORE A LIVE COMMAND IS SENT ────────────────────────
+ *   1. HOSTING_PROVISIONING_LIVE=1 on THIS server;
+ *   2. the row was fully approved by decideProvisioning (live, verified, full
+ *      payment; `provisioning.activate` dial on auto) — else it has a blocker;
+ *   3. the workspace kill switch is off;
+ *   4. the order names a domain and the buyer's email.
+ * The engine then applies its own gate (ENGINE_HOSTING_PROVISION_LIVE=1).
+ *
+ * ─── L1 ───────────────────────────────────────────────────────────────────
+ *   Retries: the scheduler re-runs this; one commandId per request per IST day,
+ *     so a same-day re-run replays and the engine adopts an account an earlier
+ *     attempt made instead of creating a second.
+ *   Told: the owner is emailed on a lost response or a refusal.
+ *   Noticed later: rows stay `queued` with a note until activated or failed.
+ *
+ * Auth: Bearer(CRON_SECRET) or a signed-in owner.
  */
 import { NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
-import { daCreateAccount, daWriteConfigured, genUsername, genPassword } from "@/lib/directadmin/provision";
-import { listReadyHostingRequests, markProvisioningActivated, markProvisioningFailed } from "@/lib/provisioning/provisioning.server";
+import { loadAutonomyPolicy } from "@/lib/ai/autonomy.server";
+import {
+  listReadyHostingRequests,
+  markProvisioningActivated,
+  markProvisioningFailed,
+  noteProvisioning,
+} from "@/lib/provisioning/provisioning.server";
+import { commandsConfigured, sendEngineCommand } from "@/lib/dms-engine/commands";
+import {
+  hostingLineFor,
+  hostingProvisioningEnabled,
+  normalisePhone,
+  provisionCommandId,
+  splitName,
+} from "@/lib/provisioning/domain-registration";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const FROM_EMAIL = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
-const DA_LOGIN_URL = (process.env.DIRECTADMIN_URL?.trim() || "").replace(/\/+$/, "");
-const PKG_NAME: Record<string, string> = { starter: "Starter", standard: "Standard", plus: "Plus" };
 
-/** Cron secret (for the scheduler) OR a signed-in owner (for a manual run). */
 async function authorized(req: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET?.trim();
   if (secret) {
     const m = /^Bearer\s+(.+)$/i.exec(req.headers.get("authorization") ?? "");
     if (timingSafeEqualStr(m?.[1] ?? "", secret)) return true;
   }
-  // Manual run: an owner opening the URL in their signed-in browser.
   try {
     const supabase = createClient();
     const { data: authData } = await supabase.auth.getUser();
@@ -51,99 +78,127 @@ async function authorized(req: Request): Promise<boolean> {
 export async function GET(req: Request) { return handle(req); }
 export async function POST(req: Request) { return handle(req); }
 
+async function alertOwner(tenantId: string, subject: string, text: string) {
+  const admin = createAdminClient();
+  const { alert } = await loadOwnerAlert(admin, tenantId);
+  if (!alert.ok) {
+    console.error(`[provision-hosting] no owner alert for tenant ${tenantId}: ${alert.reason} — ${subject}`);
+    return;
+  }
+  // Internal, to the owner: deliberately NOT gated by the automation switch (L64).
+  await sendEmail({ to: alert.to, from: FROM_EMAIL, kind: "hosting_provisioning_owner", route: { tenantId }, subject, text }).catch((e) =>
+    console.error("[provision-hosting] owner alert failed:", e),
+  );
+}
+
 async function handle(req: Request) {
   if (!(await authorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  if (!daWriteConfigured() || process.env.HOSTING_TRIAL_LIVE !== "1") {
-    return NextResponse.json({ ran: true, activated: 0, note: "hosting provisioning not live (DA creds / HOSTING_TRIAL_LIVE)" });
+  if (!hostingProvisioningEnabled()) {
+    return NextResponse.json({ ran: true, activated: 0, note: "automatic hosting provisioning is switched off (HOSTING_PROVISIONING_LIVE is not 1)" });
+  }
+  if (!commandsConfigured()) {
+    return NextResponse.json({ error: "DMS_ENGINE_URL / DMS_ENGINE_COMMAND_KEY are not set, so nothing can be provisioned." }, { status: 503 });
   }
 
   const admin = createAdminClient();
-  const ready = await listReadyHostingRequests();
-  const result = { ran_at: new Date().toISOString(), total: ready.length, activated: 0, failed: 0, skipped: 0, details: [] as { quote_id: string; outcome: string }[] };
+  const rows = await listReadyHostingRequests();
+  const summary = { considered: rows.length, activated: 0, held: 0, reconciling: 0, refused: 0, skipped: 0 };
 
-  for (const r of ready) {
-    try {
-      // Buyer + domain: from the quote and its lead.
-      const { data: quote } = await admin.from("quotes").select("lead_id, customer_name, domain").eq("id", r.quote_id).maybeSingle();
-      let email = "", name = "there";
-      if (quote?.lead_id) {
-        const { data: lead } = await admin.from("leads").select("contact_email, contact_name").eq("id", quote.lead_id).maybeSingle();
-        email = lead?.contact_email ?? "";
-        name = (lead?.contact_name ?? quote.customer_name ?? "there").split(" ")[0];
-      }
-      const domain = (r.domain || quote?.domain || "").toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
-      const tier = (r.plan || "").replace(/^hosting-/, "") || "standard";
-      const pkg = PKG_NAME[tier] || "Standard";
+  for (const row of rows) {
+    const policy = await loadAutonomyPolicy(row.tenant_id);
+    if (policy.killSwitch) {
+      await noteProvisioning(row.id, "Waiting: automation is switched off for this workspace (Automation page). Nothing was created.");
+      summary.skipped += 1;
+      continue;
+    }
 
-      if (domain.length < 3) {
-        // Paid, but we don't have a domain to build on — the owner must reach out.
-        await markProvisioningFailed(r.id, "No domain on the order — contact the customer to provision.");
-        const { alert: owner } = await loadOwnerAlert(admin, r.tenant_id);
-        if (owner.ok) {
-          await sendEmail({
-            to: owner.to, from: FROM_EMAIL, kind: "razorpay_payment_owner", route: { tenantId: r.tenant_id },
-            subject: `⚠️ Paid hosting order needs a domain — ${quote?.customer_name ?? r.quote_id}`,
-            text: `A paid ${pkg} hosting order (${r.quote_id}) has no domain to provision on. Contact ${email || "the customer"} and set it up.\n${APP_URL}/quotes/${r.quote_id}`,
-          }).catch(() => {});
+    const { data: quote } = await admin
+      .from("quotes")
+      .select("id, lead_id, customer_name, domain, line_items")
+      .eq("id", row.quote_id)
+      .eq("tenant_id", row.tenant_id) // service-role client: this IS the tenant boundary
+      .maybeSingle();
+    if (!quote) {
+      await noteProvisioning(row.id, `Waiting: the quote ${row.quote_id} could not be read, so nothing was created.`);
+      summary.skipped += 1;
+      continue;
+    }
+
+    let lead: { contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; company?: string | null } | null = null;
+    if (quote.lead_id) {
+      const { data } = await admin
+        .from("leads")
+        .select("contact_name, contact_email, contact_phone, company")
+        .eq("id", quote.lead_id)
+        .eq("tenant_id", row.tenant_id)
+        .maybeSingle();
+      lead = data;
+    }
+
+    const domain = (row.domain || quote.domain || "").toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "").trim();
+    const email = (lead?.contact_email ?? "").trim().toLowerCase();
+    const plan = hostingLineFor(quote.line_items, row.plan);
+    const missing = [!domain && "a domain", !email && "the buyer's email", !plan && "a plan"].filter(Boolean);
+    if (missing.length) {
+      await noteProvisioning(row.id, `Held: the order has no ${missing.join(", ")}, so the account cannot be created automatically. Contact the customer and set it up by hand.`);
+      summary.held += 1;
+      continue;
+    }
+
+    const name = splitName(lead?.contact_name || quote.customer_name || email.split("@")[0]);
+    const outcome = await sendEngineCommand({
+      commandId: provisionCommandId(row.id),
+      command: "hosting.provision",
+      subject: domain,
+      mode: "live",
+      payload: {
+        planId: plan!.planId,
+        months: plan!.months,
+        customer: { ...name, email, ...normalisePhone(lead?.contact_phone ?? ""), companyName: lead?.company || quote.customer_name || undefined },
+        paymentMode: "live",
+        sourceRef: row.quote_id,
+      },
+    });
+
+    switch (outcome.kind) {
+      case "done":
+        await markProvisioningActivated(row.id, String(outcome.result.daUsername ?? "provisioned"));
+        summary.activated += 1;
+        break;
+      case "held":
+      case "busy":
+        await noteProvisioning(row.id, `Held: ${outcome.reason}`);
+        summary.held += 1;
+        break;
+      case "gate_closed":
+        await noteProvisioning(row.id, `Waiting: ${outcome.reason}`);
+        return NextResponse.json({ ...summary, note: "the DMS engine's hosting.provision gate is closed — stopped" });
+      case "needs_reconciliation":
+        if (await noteProvisioning(row.id, `RECONCILE: ${outcome.reason}`)) {
+          await alertOwner(
+            row.tenant_id,
+            `⚠️ Hosting setup needs checking — ${domain}`,
+            `Creating the hosting account for ${domain} (quote ${row.quote_id}) reached DirectAdmin and no clear answer came back.\n\n${outcome.reason}\n\nIt has NOT been retried. Check DirectAdmin, then settle the command in DMS (Admin → Engine commands). Do not create it by hand until you have checked.\n\n— ResellerOS`,
+          );
         }
-        result.failed++; result.details.push({ quote_id: r.quote_id, outcome: "no-domain" });
-        continue;
-      }
-
-      const username = genUsername(domain);
-      const password = genPassword();
-      const res = await daCreateAccount({ username, password, email: email || "owner@anutech.in", domain, pkg });
-
-      if (!res.ok) {
-        await markProvisioningFailed(r.id, res.message);
-        const { alert: owner } = await loadOwnerAlert(admin, r.tenant_id);
-        if (owner.ok) {
-          await sendEmail({
-            to: owner.to, from: FROM_EMAIL, kind: "razorpay_payment_owner", route: { tenantId: r.tenant_id },
-            subject: `⚠️ Hosting provisioning failed — ${quote?.customer_name ?? r.quote_id}`,
-            text: `Auto-provisioning the paid ${pkg} account for ${domain} failed:\n\n  ${res.message}\n\nProvision by hand and send the login.\n${APP_URL}/quotes/${r.quote_id}`,
-          }).catch(() => {});
-        }
-        result.failed++; result.details.push({ quote_id: r.quote_id, outcome: "da-failed" });
-        continue;
-      }
-
-      await markProvisioningActivated(r.id, username);
-
-      // Credential email — skip the password if the account merely already existed.
-      if (email && DA_LOGIN_URL && !res.alreadyExisted) {
-        const { alert: owner } = await loadOwnerAlert(admin, r.tenant_id);
-        await sendEmail({
-          to: email, from: FROM_EMAIL, kind: "razorpay_payment_customer", route: { tenantId: r.tenant_id },
-          replyTo: owner.ok ? owner.to : undefined,
-          subject: `Your ${pkg} hosting is live — your login is inside`,
-          text: `Hi ${name},
-
-Your ${pkg} hosting account is set up and ready. Here's your control-panel login:
-
-  Control panel : ${DA_LOGIN_URL}
-  Username      : ${username}
-  Password      : ${password}
-  Domain        : ${domain}
-
-Please change the password after your first login. From here you can install
-WordPress, set up email and upload your site. Moving from another host? Reply to
-this email with your current login and we'll migrate you for free.
-
-Your GST invoice for this order reaches you separately.
-
-— ${owner.ok ? owner.ownerName || "Your hosting team" : "Your hosting team"}`,
-        }).catch(() => {});
-      }
-
-      result.activated++; result.details.push({ quote_id: r.quote_id, outcome: res.alreadyExisted ? "already-existed" : "activated" });
-    } catch (e) {
-      console.error("[provision-hosting] request crashed:", (e as Error).message);
-      await markProvisioningFailed(r.id, (e as Error).message).catch(() => {});
-      result.failed++; result.details.push({ quote_id: r.quote_id, outcome: "crash" });
+        summary.reconciling += 1;
+        break;
+      case "refused":
+        await markProvisioningFailed(row.id, `DirectAdmin refused: ${outcome.reason}`);
+        await alertOwner(
+          row.tenant_id,
+          `❌ Hosting setup failed — ${domain}`,
+          `DirectAdmin refused to create the hosting account for ${domain} (quote ${row.quote_id}):\n\n${outcome.reason}\n\nNothing was created. The customer has paid, so set it up by hand or contact them.\n\n— ResellerOS`,
+        );
+        summary.refused += 1;
+        break;
+      case "unreachable":
+        await noteProvisioning(row.id, `Waiting: could not reach the DMS engine (${outcome.reason}). It will be tried again on the next run.`);
+        summary.skipped += 1;
+        break;
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json({ ran: true, ...summary });
 }
