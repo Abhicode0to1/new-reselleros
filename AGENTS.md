@@ -79,6 +79,8 @@ on DMS. The hosting TRIAL is the one path that still writes to DirectAdmin from 
 "Start free trial" on /hosting puts a ₹0 `hosting-trial:starter` line in the cart. Checkout
 starts it with no payment step (`lib/hosting/start-trial.ts`), and a trial checks out on its own.
 There is no trial form any more: `/hosting/trial` is only where the confirm-your-email link lands.
+**One trial per customer**, matched on email, phone (last 10 digits) or domain against earlier
+`buy-hosting-trial` leads, and a trial line is always quantity 1.
 The one rule is `lib/hosting/trial-plan.ts`. DMS enforces the same rule on its in-panel trial,
 which on monthly renews one month at a time (`Hosting.billingCycle`).
 It was **run once against the live DirectAdmin on 24 Sep 2026** (test, create, replay,
@@ -258,10 +260,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,725 tests
-passing across 366 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 24 Sep 2026 after the trial moved into the cart. Earlier markers:
-6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,733 tests
+passing across 367 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 24 Sep 2026 after one-trial-per-customer. Earlier markers:
+6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 

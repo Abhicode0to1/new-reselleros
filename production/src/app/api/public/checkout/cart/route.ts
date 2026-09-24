@@ -238,6 +238,14 @@ export async function POST(request: NextRequest) {
         );
       }
       const t = trialLines[0];
+      // One trial is one trial. The cart no longer lets the quantity move, but a
+      // stored or hand-built line can still say 5, and that is refused, not rounded.
+      if (t.qty !== 1) {
+        return NextResponse.json(
+          { error: "A free trial is for one hosting account. Nothing was saved. Remove the trial and add it again from the hosting page.", next: "/hosting#choose" },
+          { status: 400 },
+        );
+      }
       const tier = (t.sku ?? "").slice("hosting-trial:".length);
       if (!isTrialPlan(tier)) {
         return NextResponse.json(

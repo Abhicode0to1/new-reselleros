@@ -14,7 +14,7 @@
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { cartTotals, type CartLine, type CartTotals } from "@/site/lib/money";
+import { cartTotals, isSingleUnit, type CartLine, type CartTotals } from "@/site/lib/money";
 
 const STORAGE_KEY = "anutech.cart.v1";
 const NO_DRAWER_ROUTES = ["/cart", "/checkout", "/done"];
@@ -68,6 +68,8 @@ function load(): CartLine[] {
         sku: typeof l.sku === "string" ? l.sku : undefined,
         domain: typeof l.domain === "string" ? l.domain : undefined,
       }))
+      // A cart saved before single-unit lines existed can hold "5 ×" a trial.
+      .map((l) => (isSingleUnit(l) ? { ...l, qty: 1 } : l))
       .filter((l) => l.label && Number.isFinite(l.unitPrice));
   } catch {
     return [];
@@ -99,9 +101,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         /* Same label + same unit price = the same thing; bump qty instead of a duplicate
            row. A cart with two "Positive SSL ₹899" rows reads like a billing mistake. */
         const existing = prev.find((l) => l.label === line.label && l.unitPrice === line.unitPrice);
+        const single = isSingleUnit(line);
         const next = existing
-          ? prev.map((l) => (l.key === existing.key ? { ...l, qty: l.qty + (line.qty ?? 1) } : l))
-          : [...prev, { ...line, qty: line.qty ?? 1, key: `${line.label}-${Date.now()}` }];
+          ? prev.map((l) => (l.key === existing.key ? { ...l, qty: single ? 1 : l.qty + (line.qty ?? 1) } : l))
+          : [...prev, { ...line, qty: single ? 1 : line.qty ?? 1, key: `${line.label}-${Date.now()}` }];
         save(next);
         return next;
       });
@@ -114,7 +117,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const setQty = useCallback((key: string, delta: number) => {
     setLines((prev) => {
       const next = prev
-        .map((l) => (l.key === key ? { ...l, qty: Math.max(1, l.qty + delta) } : l));
+        .map((l) => (l.key === key && !isSingleUnit(l) ? { ...l, qty: Math.max(1, l.qty + delta) } : l));
       save(next);
       return next;
     });

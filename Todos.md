@@ -226,6 +226,25 @@ Measured run:
   stamped the lead for the owner. The account is not created automatically because
   `HOSTING_TRIAL_LIVE` is off.
 
+**One trial per customer, and a trial is always ×1** (Pardeep: *"this should be not possible?
+trial can be taken only 1 time per account"* — the cart had let the trial go to 5 ×). Built:
+- **Cart:** trial and domain lines are single-unit (`isSingleUnit` in `site/lib/money.ts`). They
+  show no stepper, adding again never bumps them, and a stored quantity is reset to 1. Domains
+  were included because the checkout already refused a domain quantity above one while the cart
+  offered a stepper.
+- **Server:** a trial quantity other than 1 is refused.
+- **One per customer:** the site has no customer login, so it matches on what we hold. A
+  `buy-hosting-trial` lead with the same email (case-insensitive), the same phone (last 10
+  digits) or the same domain means "already trialled". Refused before anything is written. An
+  unreadable history also refuses (fail closed).
+
+Measured on the dev server: repeats by the same email, the same phone under a different email,
+a capitalised email and the same domain were all refused; a new person was allowed; quantity
+5 was refused.
+
+Not covered: a customer who trialled in the DMS panel is not recognised here. DMS keeps its
+own one-per-account rule, and the two do not share a history.
+
 **Before production:**
 - confirm `HOSTING_TRIAL_SECRET` or `CRON_SECRET` is set on Cloud Run, or production trials send
   no confirm link;

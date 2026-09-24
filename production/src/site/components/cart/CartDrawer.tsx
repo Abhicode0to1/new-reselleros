@@ -9,7 +9,7 @@
 import Link from "@/site/components/ui/SiteLink";
 import { useRouter } from "next/navigation";
 import { useCart } from "./CartProvider";
-import { rupee, cycleLabel } from "@/site/lib/money";
+import { rupee, cycleLabel, isSingleUnit, isTrialLine } from "@/site/lib/money";
 
 export function CartDrawer() {
   const cart = useCart();
@@ -66,14 +66,16 @@ export function CartDrawer() {
               <div className="meta" style={{ margin: "3px 0 8px" }}>{l.detail}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ fontSize: 13, color: l.cycle === "monthly" ? "var(--primary)" : "var(--text-muted)" }}>
-                  {cycleLabel(l.cycle)}
+                  {isTrialLine(l) ? "Free for 15 days" : cycleLabel(l.cycle)}
                 </span>
                 <span style={{ flex: 1 }} />
-                <span style={{ display: "inline-flex", border: "1px solid var(--border-strong)", borderRadius: 6 }}>
-                  <button onClick={() => cart.setQty(l.key, -1)} aria-label={`Fewer ${l.label}`} style={stepBtn}>−</button>
-                  <span style={{ padding: "4px 10px", fontSize: 14, minWidth: 26, textAlign: "center" }}>{l.qty}</span>
-                  <button onClick={() => cart.setQty(l.key, 1)} aria-label={`More ${l.label}`} style={stepBtn}>+</button>
-                </span>
+                {!isSingleUnit(l) && (
+                  <span style={{ display: "inline-flex", border: "1px solid var(--border-strong)", borderRadius: 6 }}>
+                    <button onClick={() => cart.setQty(l.key, -1)} aria-label={`Fewer ${l.label}`} style={stepBtn}>−</button>
+                    <span style={{ padding: "4px 10px", fontSize: 14, minWidth: 26, textAlign: "center" }}>{l.qty}</span>
+                    <button onClick={() => cart.setQty(l.key, 1)} aria-label={`More ${l.label}`} style={stepBtn}>+</button>
+                  </span>
+                )}
                 <button
                   onClick={() => cart.remove(l.key)}
                   style={{ background: "none", border: "none", color: "var(--danger)", fontSize: 13, cursor: "pointer" }}

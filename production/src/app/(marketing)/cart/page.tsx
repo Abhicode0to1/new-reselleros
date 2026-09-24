@@ -9,7 +9,7 @@
 import Link from "@/site/components/ui/SiteLink";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/site/components/cart/CartProvider";
-import { rupee, cycleLabel, COUPONS } from "@/site/lib/money";
+import { rupee, cycleLabel, COUPONS, isSingleUnit, isTrialLine } from "@/site/lib/money";
 
 export default function CartPage() {
   const cart = useCart();
@@ -42,16 +42,18 @@ export default function CartPage() {
               <div style={{ flex: "1 1 240px" }}>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{l.label}</div>
                 <div className="meta" style={{ margin: "2px 0" }}>{l.detail}</div>
-                <div className="meta">{l.qty} × {rupee(l.unitPrice)} per {l.unit}</div>
+                {!isTrialLine(l) && <div className="meta">{l.qty} × {rupee(l.unitPrice)} per {l.unit}</div>}
                 <div style={{ fontSize: 13, marginTop: 2, color: l.cycle === "monthly" ? "var(--primary)" : "var(--text-muted)" }}>
-                  {cycleLabel(l.cycle)}
+                  {isTrialLine(l) ? `Free for 15 days · one trial per customer` : cycleLabel(l.cycle)}
                 </div>
               </div>
-              <span style={{ display: "inline-flex", alignSelf: "center", border: "1px solid var(--border-strong)", borderRadius: 6 }}>
-                <button onClick={() => cart.setQty(l.key, -1)} aria-label={`Fewer ${l.label}`} style={step}>−</button>
-                <span style={{ padding: "6px 12px", fontSize: 15, minWidth: 30, textAlign: "center" }}>{l.qty}</span>
-                <button onClick={() => cart.setQty(l.key, 1)} aria-label={`More ${l.label}`} style={step}>+</button>
-              </span>
+              {!isSingleUnit(l) && (
+                <span style={{ display: "inline-flex", alignSelf: "center", border: "1px solid var(--border-strong)", borderRadius: 6 }}>
+                  <button onClick={() => cart.setQty(l.key, -1)} aria-label={`Fewer ${l.label}`} style={step}>−</button>
+                  <span style={{ padding: "6px 12px", fontSize: 15, minWidth: 30, textAlign: "center" }}>{l.qty}</span>
+                  <button onClick={() => cart.setQty(l.key, 1)} aria-label={`More ${l.label}`} style={step}>+</button>
+                </span>
+              )}
               <div style={{ alignSelf: "center", fontSize: 17, fontWeight: 700, minWidth: 90, textAlign: "right" }}>
                 {rupee(l.unitPrice * l.qty)}
               </div>

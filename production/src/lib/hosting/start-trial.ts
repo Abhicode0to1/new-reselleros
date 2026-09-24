@@ -41,7 +41,17 @@ export interface StartTrialInput {
 
 export type StartTrialResult =
   | { ok: true; leadId: string; trialEnds: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; alreadyTrialled?: true };
+
+/** Escape LIKE wildcards, so an email containing `_` or `%` matches only itself. */
+export function likeEscape(v: string): string {
+  return v.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/** Double-quote a value for a PostgREST `or=(…)` filter, so a comma or bracket in it cannot split the filter. */
+export function quoteForOr(v: string): string {
+  return `"${v.replace(/"/g, '\\"')}"`;
+}
 
 export async function startHostingTrial(
   admin: ReturnType<typeof createAdminClient>,
@@ -61,6 +71,40 @@ export async function startHostingTrial(
     .replace(/\/+$/, "")
     .trim();
 
+
+  // ── One free trial per customer (owner, 24 Sep 2026) ──────────────────────
+  // The site has no customer login, so "the same customer" is judged on what we
+  // hold: an earlier trial with the same email, the same phone number (last 10
+  // digits, so +91 / spaces do not matter) or the same website domain. Read
+  // BEFORE anything is written; an unreadable history refuses rather than lets a
+  // second trial through (fail closed), and says so.
+  const emailKey = email.trim().toLowerCase();
+  const phoneKey = phone.replace(/\D/g, "").slice(-10);
+  const orParts = [`contact_email.ilike.${quoteForOr(likeEscape(emailKey))}`];
+  if (phoneKey.length === 10) orParts.push(`contact_phone.ilike.${quoteForOr(`%${phoneKey}`)}`);
+  if (cleanDomain.length >= 3) orParts.push(`domain.eq.${quoteForOr(cleanDomain)}`);
+  const { data: priorTrials, error: priorErr } = await admin
+    .from("leads")
+    .select("id, created_at")
+    .eq("tenant_id", BUY_PAGE_TENANT_ID)
+    .eq("source", "buy-hosting-trial")
+    .or(orParts.join(","))
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (priorErr) {
+    console.error("[startHostingTrial] could not read earlier trials:", priorErr);
+    return { ok: false, error: "We couldn't check whether you've had a trial before, so we haven't started one. Nothing was saved. Please try again in a minute." };
+  }
+  if (priorTrials && priorTrials.length > 0) {
+    const when = new Date(priorTrials[0].created_at as string).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return {
+      ok: false,
+      alreadyTrialled: true,
+      error:
+        `You've already had a free hosting trial with us (started ${when}), and it's one per customer — matched on this email, phone number or domain. ` +
+        `Nothing was saved. You can buy ${tierName} from the hosting page, or reply to our earlier email if you need more time on the trial.`,
+    };
+  }
 
   const notes = [
     `HOSTING TRIAL REQUEST · ${TRIAL_DAYS}-day free trial (no card)`,

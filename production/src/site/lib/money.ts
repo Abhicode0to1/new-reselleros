@@ -79,6 +79,21 @@ export function cartTotals(lines: readonly CartLine[], couponCode: string): Cart
 }
 
 /** "Recurring monthly" | "Renews yearly" | "One time" — the cart row's cycle label. */
+/**
+ * A line that is always exactly one: a free hosting trial (one per customer — a
+ * "5 ×" trial is meaningless) and a domain (one name is one registration; the
+ * checkout already refuses a quantity above one). No stepper is shown for these,
+ * adding one again never bumps it, and a stored quantity is put back to 1.
+ */
+export function isSingleUnit(line: Pick<CartLine, "sku">): boolean {
+  const sku = (line.sku ?? "").toLowerCase();
+  return sku.startsWith("hosting-trial:") || sku.startsWith("domain:");
+}
+
+export function isTrialLine(line: Pick<CartLine, "sku">): boolean {
+  return (line.sku ?? "").toLowerCase().startsWith("hosting-trial:");
+}
+
 export function cycleLabel(cycle: Cycle): string {
   return cycle === "monthly" ? "Recurring monthly" : cycle === "yearly" ? "Renews yearly" : "One time";
 }

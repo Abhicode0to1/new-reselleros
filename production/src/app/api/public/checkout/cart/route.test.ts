@@ -242,6 +242,13 @@ describe("a free Starter trial in the cart (24 Sep 2026: no form in between)", (
     expect(startHostingTrial).not.toHaveBeenCalled();
   });
 
+  it("a trial with a quantity other than 1 is refused, not rounded", async () => {
+    const res = await POST(req({ lines: [{ ...trial, qty: 5 }] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("one hosting account");
+    expect(startHostingTrial).not.toHaveBeenCalled();
+  });
+
   it("a trial needs no domain — the owner helps a customer who has none", async () => {
     const res = await POST(req({ lines: [trial] }));
     expect(res.status).toBe(200);
