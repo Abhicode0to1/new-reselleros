@@ -159,6 +159,15 @@ Verified:
 - browser-verified on the dev server: page HTML, the `?plan=plus` form, and a POST with
   `tierId:"plus"` refused.
 
+**DMS, same rule (DMS `19c1134a`):** the panel's Buy-hosting dialog already offered the trial on
+Starter alone, but no server check looked at the plan. The eligibility check and create-order now
+refuse any other plan.
+- [ ] **Open: a monthly Starter trial in the DMS panel.** DMS's trial is yearly-only by design:
+  the dialog shows it on the Yearly toggle, create-order refuses a monthly one, and the trial
+  converts to a yearly plan. ResellerOS's trial is only a lead, so there it covers both. Making
+  DMS convert a trial to MONTHLY is a billing change, and DMS is not meant to bill (§0A), so it
+  was not built. Say if you want it.
+
 ### Decision 25 — hosting goes through the DMS engine (24 Sep 2026)
 
 | # | Question as asked | Options offered | Pardeep's answer |
