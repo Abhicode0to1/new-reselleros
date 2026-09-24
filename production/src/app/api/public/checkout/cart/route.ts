@@ -38,6 +38,8 @@ import { lookupDomains, splitDomain } from "@/lib/domains/live-lookup";
 import { MAILBOX_YR } from "@/site/lib/data/domains-landing";
 import { COUPONS } from "@/site/lib/money";
 import { normalisePhone, splitName, type Registrant } from "@/lib/provisioning/domain-registration";
+import { isTrialPlan, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
+import { startHostingTrial } from "@/lib/hosting/start-trial";
 
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
@@ -215,6 +217,43 @@ export async function POST(request: NextRequest) {
       );
     }
     const { fullName, companyName, email, phone, gstin, domain, lines, coupon, address, simulate } = parsed.data;
+
+    // ── A free hosting trial (`hosting-trial:starter`) ─────────────────────
+    // Since 24 Sep 2026 "Start free trial" puts a ₹0 trial line in the cart
+    // instead of opening a separate form. It is never charged and never quoted:
+    // it starts the trial exactly as the old form did (lib/hosting/start-trial)
+    // and returns. It checks out ON ITS OWN, so no paid line, coupon or
+    // bundle rule ever sees a ₹0 hosting line it could mistake for a plan.
+    const trialLines = lines.filter((l) => /^hosting-trial:/i.test(l.sku ?? ""));
+    if (trialLines.length) {
+      if (lines.length > 1) {
+        return NextResponse.json(
+          {
+            error:
+              `The free ${TRIAL_PLAN_NAME} trial checks out on its own. Nothing was charged. ` +
+              "Remove the other items to start the trial now, or remove the trial to pay for them.",
+            next: "/cart",
+          },
+          { status: 400 },
+        );
+      }
+      const t = trialLines[0];
+      const tier = (t.sku ?? "").slice("hosting-trial:".length);
+      if (!isTrialPlan(tier)) {
+        return NextResponse.json(
+          { error: `The free trial is only on the ${TRIAL_PLAN_NAME} plan. Remove this line and add the ${TRIAL_PLAN_NAME} trial from the hosting page.`, next: "/hosting#choose" },
+          { status: 400 },
+        );
+      }
+      const started = await startHostingTrial(
+        createAdminClient(),
+        { fullName, companyName, email, phone, domain, cycle: t.cycle === "monthly" ? "monthly" : "yearly" },
+        request,
+        body as Record<string, unknown>,
+      );
+      if (!started.ok) return NextResponse.json({ error: started.error }, { status: 500 });
+      return NextResponse.json({ success: true, trial: true, leadId: started.leadId, trialEnds: started.trialEnds });
+    }
 
     // ── Re-price every line server-side; collect anything we can't charge ──
     const items: QuoteLine[] = [];

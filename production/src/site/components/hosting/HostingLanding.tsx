@@ -11,7 +11,7 @@
  * and the way back to the home page and across to Domains, Email, ResellerOS,
  * etc. is never lost. So this component renders only its own body (hero → final
  * CTA); in-page navigation is the quick-jump strip. "Start free trial" leads to
- * the customer trial form (/hosting/trial); "Buy now" adds the plan to the cart.
+ * the cart as a ₹0 trial line (no form in between); "Buy now" adds the plan to the cart.
  * Prices come from LANDING_PLANS via HOSTING_TIERS.
  *
  * Responsive is driven off a measured window width (`w`), exactly as the
@@ -19,6 +19,7 @@
  * there is no hydration mismatch, and the layout settles after mount.
  */
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Manrope, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { useCart } from "@/site/components/cart/CartProvider";
 import { isTrialPlan, TRIAL_PLAN_ID, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
@@ -122,6 +123,25 @@ export function HostingLanding() {
     cycle: yearly ? "yearly" : "monthly",
     sku: `hosting:${p.name.toLowerCase()}`,
   });
+  /* "Start free trial" goes straight to the cart (Pardeep, 24 Sep 2026: no page in
+     between). A ₹0 trial line on the billing cycle being viewed; checkout then asks
+     for the details and starts the trial with no payment step. Any earlier trial
+     line is removed first, so switching Monthly/Yearly and clicking again never
+     leaves two trials or a "2 ×" trial in the cart. */
+  const router = useRouter();
+  const startTrialInCart = () => {
+    for (const l of cart.lines) if ((l.sku || "").startsWith("hosting-trial:")) cart.remove(l.key);
+    cart.add({
+      label: `${TRIAL_PLAN_NAME} hosting — 15-day free trial`,
+      detail: `No card · then ${TRIAL_PLAN_NAME} billed ${yearly ? "yearly" : "monthly"} if you keep it`,
+      unitPrice: 0,
+      unit: "trial",
+      cycle: yearly ? "yearly" : "monthly",
+      sku: `hosting-trial:${TRIAL_PLAN_ID}`,
+    });
+    cart.closeDrawer();
+    router.push("/cart" as never);
+  };
   const anchor = plans.find((p) => p.badge) ?? plans[1];
   const anchorBase = HOSTING_TIERS.find((t) => t.name === anchor.name)!;
 
@@ -181,7 +201,7 @@ export function HostingLanding() {
               Enterprise-grade web hosting powered by Google Cloud. Free SSL, daily backups, free migration and 24×7 expert support — and the trial needs no credit card, so your old host stays live until you approve the move.
             </p>
             <div style={{ marginTop: 26, display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <a href="/hosting/trial" className="hlp-orange" style={{ background: C.accent, color: "#fff", padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free {TRIAL_PLAN_NAME} trial</a>
+              <button type="button" onClick={startTrialInCart} className="hlp-orange" style={{ background: C.accent, color: "#fff", padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center", border: 0, cursor: "pointer", fontFamily: "inherit" }}>Start the free {TRIAL_PLAN_NAME} trial</button>
               <a href="#move" className="hlp-outline" style={{ background: "#fff", border: `1px solid ${C.line}`, color: C.ink, padding: "16px 24px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>See how migration works</a>
             </div>
             <ul style={{ marginTop: 24, display: "flex", gap: "8px 22px", flexWrap: "wrap", listStyle: "none", padding: 0, margin: "24px 0 0" }}>
@@ -294,7 +314,7 @@ export function HostingLanding() {
                 <div style={{ marginTop: 16, display: "grid", gap: 8 }}>
                   {isTrialPlan(p.name) ? (
                     <>
-                      <a href={`/hosting/trial?plan=${p.name.toLowerCase()}`} className={p.isTop ? "hlp-orange" : "hlp-dark"} style={{ textAlign: "center", padding: 15, borderRadius: 11, fontSize: 15, fontWeight: 700, color: "#fff", minHeight: 50, background: p.isTop ? C.accent : C.ink, display: "flex", alignItems: "center", justifyContent: "center" }}>Start free trial on {p.name}</a>
+                      <button type="button" onClick={startTrialInCart} className={p.isTop ? "hlp-orange" : "hlp-dark"} style={{ textAlign: "center", padding: 15, borderRadius: 11, fontSize: 15, fontWeight: 700, color: "#fff", minHeight: 50, background: p.isTop ? C.accent : C.ink, border: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontFamily: "inherit" }}>Start free trial on {p.name}</button>
                       <button type="button" onClick={() => addPlanToCart(p)} className="hlp-outline" style={{ textAlign: "center", padding: 12, borderRadius: 11, fontSize: 14, fontWeight: 700, color: C.ink2, border: `1px solid ${C.line}`, background: "#fff", minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>Buy now, skip the trial</button>
                     </>
                   ) : (
@@ -303,7 +323,7 @@ export function HostingLanding() {
                           yearly alike. This plan is bought, so buying is the main action. */}
                       <button type="button" onClick={() => addPlanToCart(p)} className={p.isTop ? "hlp-orange" : "hlp-dark"} style={{ textAlign: "center", padding: 15, borderRadius: 11, fontSize: 15, fontWeight: 700, color: "#fff", minHeight: 50, background: p.isTop ? C.accent : C.ink, border: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>Buy {p.name}</button>
                       <div style={{ textAlign: "center", fontSize: 13, lineHeight: 1.45, color: C.muted, minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 6px" }}>
-                        <span>No free trial on {p.name}. <a href={`/hosting/trial?plan=${TRIAL_PLAN_ID}`} style={{ color: C.accentDark, fontWeight: 700 }}>Try {TRIAL_PLAN_NAME} free</a> and move up later.</span>
+                        <span>No free trial on {p.name}. <button type="button" onClick={startTrialInCart} style={{ color: C.accentDark, fontWeight: 700, background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit", textDecoration: "underline" }}>Try {TRIAL_PLAN_NAME} free</button> and move up later.</span>
                       </div>
                     </>
                   )}
@@ -529,7 +549,7 @@ export function HostingLanding() {
           <h2 style={{ fontSize: "clamp(30px,5vw,44px)", lineHeight: 1.08, letterSpacing: "-.04em", fontWeight: 800 }}>Try it with your real website. <span style={{ fontFamily: SERIF, fontStyle: "italic", fontWeight: 400, color: C.accent }}>Then decide.</span></h2>
           <p style={{ marginTop: 16, fontSize: 17.5, color: C.ink2, maxWidth: 560, marginLeft: "auto", marginRight: "auto", lineHeight: 1.55 }}>{TRIAL_DAYS} days on {TRIAL_PLAN_NAME}, every feature, no credit card, and our team does the migration while your current site stays live.</p>
           <div style={{ marginTop: 26, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-            <a href="/hosting/trial" className="hlp-dark" style={{ background: C.ink, color: C.paper, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Start the free {TRIAL_PLAN_NAME} trial</a>
+            <button type="button" onClick={startTrialInCart} className="hlp-dark" style={{ background: C.ink, color: C.paper, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center", border: 0, cursor: "pointer", fontFamily: "inherit" }}>Start the free {TRIAL_PLAN_NAME} trial</button>
             <a href="/quote" className="hlp-outline" style={{ background: "#fff", color: C.ink, border: `1px solid ${C.line}`, padding: "16px 28px", borderRadius: 12, fontSize: 16, fontWeight: 700, minHeight: 52, display: "inline-flex", alignItems: "center" }}>Get a written quote</a>
           </div>
           <div style={{ marginTop: 20, fontSize: 13, color: C.muted, fontFamily: MONO, letterSpacing: ".04em" }}>NO CARD · CANCEL ANYTIME · GST INVOICE ON EVERY ORDER</div>

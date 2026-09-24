@@ -1,21 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isTrialPlan, TRIAL_PLAN_ID } from "./trial-plan";
 
-const src = (p: string) => readFileSync(join(__dirname, "..", "..", p), "utf8");
+const root = join(__dirname, "..", "..");
+const src = (p: string) => readFileSync(join(root, p), "utf8");
 
 describe("only Starter has a free trial (owner, 24 Sep 2026)", () => {
   it("Starter is eligible, the others are not", () => {
     expect(isTrialPlan("starter")).toBe(true);
     expect(isTrialPlan(" Starter ")).toBe(true);
     for (const p of ["standard", "plus", "", null, undefined, "hosting-starter"]) expect(isTrialPlan(p), String(p)).toBe(false);
+    expect(TRIAL_PLAN_ID).toBe("starter");
   });
 
-  it("the trial API accepts no plan but Starter, so a direct POST cannot start a Plus trial", () => {
-    const api = src("app/api/public/trial/hosting/route.ts");
-    expect(api).toMatch(/isTrialPlan\(/);
-    expect(api).not.toMatch(/z\.enum\(\["starter", "standard", "plus"\]\)/);
+  it("the cart checkout refuses a trial line on any other plan", () => {
+    expect(src("app/api/public/checkout/cart/route.ts")).toMatch(/isTrialPlan\(tier\)/);
   });
 
   it("the confirm route never provisions a non-trial plan, even from an older lead", () => {
@@ -27,11 +27,34 @@ describe("only Starter has a free trial (owner, 24 Sep 2026)", () => {
     expect(page).toMatch(/isTrialPlan\(p\.name\)/);
     expect(page).not.toMatch(/trial on any plan/i);
   });
+});
 
-  it("the trial form has no plan picker; it always asks for the trial plan", () => {
-    const form = src("site/components/hosting/HostingTrialForm.tsx");
-    expect(form).toMatch(/tierId: TRIAL_PLAN_ID/);
-    expect(form).not.toMatch(/setPlan\(/);
-    expect(TRIAL_PLAN_ID).toBe("starter");
+describe("Start free trial goes straight to the cart (owner, 24 Sep 2026)", () => {
+  const page = () => src("site/components/hosting/HostingLanding.tsx");
+
+  it("no trial button links to the old form any more", () => {
+    expect(page()).not.toMatch(/href=\{?[`"]\/hosting\/trial/);
+  });
+
+  it("the trial is a ₹0 Starter trial line, on the cycle being viewed, then the cart page", () => {
+    const p = page();
+    expect(p).toMatch(/sku: `hosting-trial:\$\{TRIAL_PLAN_ID\}`/);
+    expect(p).toMatch(/unitPrice: 0,/);
+    expect(p).toMatch(/cycle: yearly \? "yearly" : "monthly"/);
+    expect(p).toMatch(/router\.push\("\/cart"/);
+    // Every trial button calls it: hero, the Starter card, the footer, the "Try Starter free" note.
+    expect(p.match(/onClick=\{startTrialInCart\}/g)?.length).toBe(4);
+  });
+
+  it("the old form and its API route are gone; the page left only renders the confirmation", () => {
+    expect(existsSync(join(root, "site/components/hosting/HostingTrialForm.tsx"))).toBe(false);
+    expect(existsSync(join(root, "app/api/public/trial/hosting/route.ts"))).toBe(false);
+    expect(src("app/(marketing)/hosting/trial/page.tsx")).toMatch(/redirect\("\/hosting#choose"\)/);
+  });
+
+  it("the trial's emailed links use the request origin, not a fallback host", () => {
+    const s = src("lib/hosting/start-trial.ts");
+    expect(s).not.toMatch(/resellersos\.web\.app/);
+    expect(s).toMatch(/new URL\(`\/api\/public\/trial\/hosting\/confirm/);
   });
 });

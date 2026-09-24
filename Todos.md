@@ -178,6 +178,33 @@ refuse any other plan.
   **test-verified only.** Not tried in the running panel: the container still runs the previous
   build, and it needs a signed-in customer.
 
+### Decision 27 — "Start free trial" goes straight to the cart (24 Sep 2026)
+
+Pardeep: *"when clicking Start Free trial button we should go to cart page? right — remove this
+in b/w app"*. **Built.**
+- **Every trial button on /hosting** adds a ₹0 `hosting-trial:starter` line and opens `/cart`.
+  That is the hero, the Starter card, the footer and the "Try Starter free" note. The line is on
+  the Monthly/Yearly cycle being viewed. Clicking again replaces the line, never "2 ×".
+- **Checkout** collects the same details the form did, with no payment step. The domain is
+  optional ("leave blank if you don't have one yet"). The trial is started by
+  `lib/hosting/start-trial.ts`: the old route's logic, moved verbatim. It creates the lead, sends
+  the owner alert and the confirm-your-email link, and schedules the tasks.
+- **The trial checks out on its own.** A cart with a trial plus paid items is refused whole, so
+  no ₹0 hosting line ever meets the coupon or the domain-bundle rule.
+- **The form and `POST /api/public/trial/hosting` are deleted.** `/hosting/trial` remains only as
+  the confirm link's landing page. Without `?confirmed=` it redirects to the plans.
+- **The done page shows "confirm your email" for a trial.** For a paid order it no longer invents
+  the order number `ORD-ADPL-2026-4107` when none was saved (AGENTS.md §2).
+
+Verified:
+- test-verified in the cart route and `trial-plan.test.ts`;
+- on the dev server: `/hosting` has no form links, the two refusals return their messages, and
+  `/hosting/trial` redirects.
+
+**Not seen working end to end locally.** The local database has no buy-page tenant `fbb976f1…`
+(locally Anutech is `22222222-…`), so every site checkout fails locally at the lead insert,
+paid ones included. Set `BUY_PAGE_TENANT_ID` in `.env.local` to try it here.
+
 ### Decision 25 — hosting goes through the DMS engine (24 Sep 2026)
 
 | # | Question as asked | Options offered | Pardeep's answer |

@@ -79,6 +79,12 @@ export default function CheckoutPage() {
 
   const hasHosting = cart.lines.some((l) => (l.sku || "").startsWith("hosting:"));
   const hasDomain = cart.lines.some((l) => (l.sku || "").startsWith("domain:"));
+  /* A free hosting trial (24 Sep 2026: "Start free trial" goes straight to the cart,
+     no form in between). It checks out on its own, with no payment step: the
+     server starts the trial and emails a confirmation link. */
+  const hasTrial = cart.lines.some((l) => (l.sku || "").startsWith("hosting-trial:"));
+  const isTrialCart = hasTrial && cart.lines.length === 1;
+  const trialMixed = hasTrial && cart.lines.length > 1;
 
   // Remember the buyer's details across a refresh so nothing has to be re-typed.
   useEffect(() => {
@@ -125,8 +131,38 @@ export default function CheckoutPage() {
     email.includes("@") &&
     phone.trim().length >= 10 &&
     (!hasHosting || domain.trim().length >= 3) &&
+    !trialMixed &&
     (!hasDomain ||
       (addrLine1.trim().length >= 3 && addrCity.trim().length >= 2 && addrState.trim().length >= 2 && /^\d{6}$/.test(addrPin.trim())));
+
+  /** The trial path: no payment, no quote — the server starts the trial and we show the done page. */
+  async function startTrial() {
+    if (paying) return;
+    setPaying(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/public/checkout/cart", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: name.trim(),
+          companyName: company.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          domain: domain.trim() || undefined,
+          lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle })),
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { success?: boolean; trial?: boolean; error?: string };
+      if (!res.ok || !json.success || !json.trial) throw new Error(json.error || "Could not start your trial. Nothing was saved — please try again.");
+      try { window.sessionStorage.setItem("anutech.trial", email.trim()); window.sessionStorage.removeItem("anutech.order"); } catch { /* done page falls back */ }
+      cart.clear();
+      router.push("/done" as never);
+    } catch (err) {
+      setError((err as Error).message);
+      setPaying(false);
+    }
+  }
 
   interface StartedOrder {
     orderId: string; amount: number; currency?: string; razorpayKeyId: string;
@@ -164,7 +200,7 @@ export default function CheckoutPage() {
       if (!res.ok || !json.success) throw new Error(json.error || "Could not start checkout. Please retry.");
 
       if (json.simulated) {
-        try { window.sessionStorage.setItem("anutech.order", json.quoteId || ""); } catch { /* default shown */ }
+        try { window.sessionStorage.removeItem("anutech.trial"); window.sessionStorage.setItem("anutech.order", json.quoteId || ""); } catch { /* default shown */ }
         cart.clear();
         router.push("/done" as never);
         return;
@@ -210,7 +246,7 @@ export default function CheckoutPage() {
         notes: { quoteId: order.quoteId ?? "", domain: hasHosting ? domain.trim() : "" },
         theme: { color: "#C2410C" },
         handler: () => {
-          try { window.sessionStorage.setItem("anutech.order", order.quoteId || ""); } catch { /* default */ }
+          try { window.sessionStorage.removeItem("anutech.trial"); window.sessionStorage.setItem("anutech.order", order.quoteId || ""); } catch { /* default */ }
           cart.clear();
           router.push("/done" as never);
         },
@@ -233,7 +269,9 @@ export default function CheckoutPage() {
         <div>
           <h1 className="h1-narrow" style={{ marginBottom: 6 }}>Checkout</h1>
           <p className="meta" style={{ marginBottom: 24 }}>
-            {step === "details" ? "Step 1 of 2 — who the invoice is for" : "Step 2 of 2 — how you would like to pay"}
+            {isTrialCart
+              ? "Your details — no card needed, nothing is charged"
+              : step === "details" ? "Step 1 of 2 — who the invoice is for" : "Step 2 of 2 — how you would like to pay"}
           </p>
 
           {step === "details" ? (
@@ -246,6 +284,9 @@ export default function CheckoutPage() {
               {hasHosting && (
                 <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
               )}
+              {hasTrial && !hasHosting && (
+                <Field label="YOUR WEBSITE DOMAIN — LEAVE BLANK IF YOU DON'T HAVE ONE YET" value={domain} onChange={setDomain} mono />
+              )}
               {hasDomain && (
                 <>
                   <p className="meta" style={{ margin: "6px 0 2px" }}>
@@ -257,9 +298,30 @@ export default function CheckoutPage() {
                   <Field label="PIN CODE" value={addrPin} onChange={setAddrPin} mono />
                 </>
               )}
-              <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk} onClick={() => setStep("payment")}>
-                Continue
-              </button>
+              {trialMixed && (
+                <div role="alert" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>
+                  The free trial checks out on its own. Remove the other items to start the trial now, or
+                  remove the trial to pay for them.{" "}
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => router.push("/cart" as never)}>Back to cart</button>
+                </div>
+              )}
+              {isTrialCart && error && (
+                <div role="alert" style={{ background: "#FEF2F2", border: "1px solid #FECACA", color: "#991B1B", borderRadius: 8, padding: "11px 14px", fontSize: 14, marginBottom: 12 }}>{error}</div>
+              )}
+              {isTrialCart ? (
+                <>
+                  <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk || paying} onClick={() => void startTrial()}>
+                    {paying ? "Starting your trial…" : "Start my 15-day free trial"}
+                  </button>
+                  <p className="meta" style={{ marginTop: 10 }}>
+                    We email you a link to confirm your address; the account is set up once you click it.
+                  </p>
+                </>
+              ) : (
+                <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk} onClick={() => setStep("payment")}>
+                  Continue
+                </button>
+              )}
             </div>
           ) : (
             <div style={{ maxWidth: 460 }}>

@@ -93,7 +93,6 @@ const KNOWN = [
   "app/api/public/enquiry/general/route.ts",
   "app/api/public/enquiry/workspace/route.ts",
   "app/api/public/trial/hosting/confirm/route.ts",
-  "app/api/public/trial/hosting/route.ts",
   "app/api/public/trial/workspace/route.ts",
   "app/api/v1/integrations/support-email-inbound/route.ts",
   "app/api/v1/integrations/support-whatsapp-inbound/route.ts",

@@ -40,6 +40,9 @@ vi.mock("@/lib/domains/live-lookup", async (orig) => ({
   lookupDomains,
 }));
 
+const startHostingTrial = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/hosting/start-trial", () => ({ startHostingTrial }));
+
 import { POST } from "./route";
 
 const buyer = {
@@ -64,6 +67,7 @@ const lead = () => inserts.rows.find((r) => r.table === "leads")?.row;
 
 beforeEach(() => {
   inserts.rows = [];
+  startHostingTrial.mockReset().mockResolvedValue({ ok: true, leadId: "L-TRIAL", trialEnds: "2026-10-09T00:00:00.000Z" });
   rpc.mockReset().mockImplementation(async (name: string) =>
     name === "next_document_number" ? { data: "Q-TEST-0001", error: null } : { data: null, error: null },
   );
@@ -207,5 +211,40 @@ describe("a domain is registered in the customer's own name (owner decision 22)"
     expect(res.status).toBe(200);
     const line = (quote()!.line_items as { registrant?: unknown }[])[0];
     expect(line.registrant).toBeUndefined();
+  });
+});
+
+describe("a free Starter trial in the cart (24 Sep 2026: no form in between)", () => {
+  const trial = { sku: "hosting-trial:starter", label: "Starter hosting — 15-day free trial", qty: 1, cycle: "monthly" };
+
+  it("starts the trial with the cycle shown — no quote, no document number, nothing charged", async () => {
+    const res = await POST(req({ lines: [trial], domain: "acme.in" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true, trial: true, leadId: "L-TRIAL" });
+    expect(startHostingTrial).toHaveBeenCalledTimes(1);
+    expect(startHostingTrial.mock.calls[0][1]).toMatchObject({ email: buyer.email, domain: "acme.in", cycle: "monthly" });
+    expect(quote()).toBeUndefined();
+    expect(rpc).not.toHaveBeenCalledWith("next_document_number", expect.anything());
+  });
+
+  it("a trial with other items is refused whole — no trial started, nothing charged", async () => {
+    const res = await POST(req({ lines: [trial, { sku: "hosting:starter", qty: 1, cycle: "yearly" }], domain: "acme.in" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("checks out on its own");
+    expect(startHostingTrial).not.toHaveBeenCalled();
+    expect(quote()).toBeUndefined();
+  });
+
+  it("a trial on any plan but Starter is refused", async () => {
+    const res = await POST(req({ lines: [{ ...trial, sku: "hosting-trial:plus" }] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("only on the Starter plan");
+    expect(startHostingTrial).not.toHaveBeenCalled();
+  });
+
+  it("a trial needs no domain — the owner helps a customer who has none", async () => {
+    const res = await POST(req({ lines: [trial] }));
+    expect(res.status).toBe(200);
+    expect(startHostingTrial.mock.calls[0][1].domain).toBeUndefined();
   });
 });

@@ -1,24 +1,23 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
-import { HostingTrialForm } from "@/site/components/hosting/HostingTrialForm";
+import { redirect } from "next/navigation";
+import { HostingTrialStatus } from "@/site/components/hosting/HostingTrialStatus";
 
 /**
- * /hosting/trial — the customer's "start a hosting trial" form. Under (marketing)
- * so it keeps the site's home-page menu (Pardeep: the menu on every page). This
- * is where the /hosting "Start free trial" buttons lead — a customer flow, not
- * the reseller /signup. noindex: it's a form endpoint, not a page to rank; the
- * /hosting page is the one search + AI engines should surface.
+ * /hosting/trial — only where the trial's "confirm your email" link lands
+ * (?confirmed=<status>, set by api/public/trial/hosting/confirm).
+ *
+ * It used to be the trial form. Since 24 Sep 2026 "Start free trial" puts the
+ * trial in the cart and checkout collects the details, so a visit with no status
+ * — an old bookmark, or a link carrying ?plan= — goes to the plans, where the
+ * button is. noindex: it is a status page, not a page to rank.
  */
 export const metadata: Metadata = {
-  title: "Start your hosting trial — no credit card | Anutech Digital",
-  description: "Start a 15-day free cPanel hosting trial on Google Cloud. No credit card. We set up the account and handle migration.",
+  title: "Your hosting trial | Anutech Digital",
   robots: { index: false, follow: true },
 };
 
-export default function HostingTrialPage() {
-  return (
-    <Suspense fallback={null}>
-      <HostingTrialForm />
-    </Suspense>
-  );
+export default function HostingTrialPage({ searchParams }: { searchParams: { confirmed?: string } }) {
+  const status = typeof searchParams.confirmed === "string" ? searchParams.confirmed : "";
+  if (!status) redirect("/hosting#choose");
+  return <HostingTrialStatus status={status} />;
 }
