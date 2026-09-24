@@ -162,11 +162,21 @@ Verified:
 **DMS, same rule (DMS `19c1134a`):** the panel's Buy-hosting dialog already offered the trial on
 Starter alone, but no server check looked at the plan. The eligibility check and create-order now
 refuse any other plan.
-- [ ] **Open: a monthly Starter trial in the DMS panel.** DMS's trial is yearly-only by design:
-  the dialog shows it on the Yearly toggle, create-order refuses a monthly one, and the trial
-  converts to a yearly plan. ResellerOS's trial is only a lead, so there it covers both. Making
-  DMS convert a trial to MONTHLY is a billing change, and DMS is not meant to bill (§0A), so it
-  was not built. Say if you want it.
+- [x] **Monthly Starter trial in the DMS panel — BUILT (Pardeep: "Yes add that too"), DMS `47f0a81a`.**
+  - **Dialog:** offers the Starter trial on both toggles.
+  - **Hosting record:** remembers its cycle in a new optional `Hosting.billingCycle`. When it is
+    absent the hosting renews yearly, so every existing row renews exactly as before.
+  - **`renew` and `renew-info`:** charge and quote one month for a monthly hosting. The renewal
+    dialog now says "1 Month Extension".
+  - **Checkout:** shows the post-trial price for the trial's own cycle. It also no longer claims
+    the card is "saved for automatic yearly billing". That was false for every trial: the only
+    trial path running takes no card.
+  - **Where it is refused:** a monthly trial is refused wherever a YEARLY mandate or subscription
+    would be set up (`HOSTING_MANDATE_FLOW=tokens` with DMS subscriptions on). It is never
+    silently billed for a year.
+
+  **test-verified only.** Not tried in the running panel: the container still runs the previous
+  build, and it needs a signed-in customer.
 
 ### Decision 25 — hosting goes through the DMS engine (24 Sep 2026)
 
