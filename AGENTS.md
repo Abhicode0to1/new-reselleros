@@ -74,6 +74,13 @@ either without the owner — the eight steps before switching on are in `Todos.m
 longer creates DirectAdmin accounts for a sale: `/api/cron/provision-hosting` sends
 `hosting.provision`, behind `HOSTING_PROVISIONING_LIVE=1` here and `ENGINE_HOSTING_PROVISION_LIVE=1`
 on DMS. The hosting TRIAL is the one path that still writes to DirectAdmin from this app.
+
+**The free hosting trial is Starter only, on monthly and yearly** (decisions 26-27, 24 Sep 2026).
+"Start free trial" on /hosting puts a ₹0 `hosting-trial:starter` line in the cart. Checkout
+starts it with no payment step (`lib/hosting/start-trial.ts`), and a trial checks out on its own.
+There is no trial form any more: `/hosting/trial` is only where the confirm-your-email link lands.
+The one rule is `lib/hosting/trial-plan.ts`. DMS enforces the same rule on its in-panel trial,
+which on monthly renews one month at a time (`Hosting.billingCycle`).
 It was **run once against the live DirectAdmin on 24 Sep 2026** (test, create, replay,
 no-duplicate all passed; test account `rsospf34b2` / `rsosprovtest2409.in` still to delete).
 **server1.anutech.in is not the server DMS's config describes**: its IP is 35.207.233.155,

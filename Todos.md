@@ -149,8 +149,10 @@ Pardeep: *"we only offer free trial for Starter plan for both monthly and yearly
 plans is eligible for free trial."* **Built.** One rule, `lib/hosting/trial-plan.ts`, read in four places:
 - **/hosting:** Starter keeps "Start free trial". Standard and Plus show "Buy" plus a "Try Starter
   free" link.
-- **The trial form:** the plan picker is gone. `?plan=plus` gets a note and a buy link.
-- **The trial API:** refuses any other plan with a 400 that says what to do instead.
+- ~~**The trial form:** the plan picker is gone. `?plan=plus` gets a note and a buy link.~~
+- ~~**The trial API:** refuses any other plan with a 400 that says what to do instead.~~
+  *Superseded the same day by decision 27:* the form and that API are deleted. The rule now sits
+  in the cart checkout, which refuses a `hosting-trial:` line on any plan but Starter.
 - **The confirm route:** never provisions a Standard/Plus trial from an older lead. The owner
   is told to offer Starter or a paid plan. The unknown-plan fallback to Standard is removed.
 
