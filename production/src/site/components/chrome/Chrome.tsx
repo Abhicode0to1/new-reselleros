@@ -113,7 +113,7 @@ export function Footer() {
         <div style={{ display: "grid", gridTemplateColumns: "1.5fr repeat(5, 1fr)", gap: 28 }} className="footer-grid">
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <Image src="/anutech-logo.png" alt="" width={30} height={30} style={{ objectFit: "contain" }} />
+              <Image src="/anutech-digital-logo.png" alt="" width={30} height={30} style={{ objectFit: "contain" }} />
               <span style={{ fontSize: 16, fontWeight: 700 }}>Anutech Digital</span>
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--text-secondary)", maxWidth: 260, margin: "0 0 14px" }}>

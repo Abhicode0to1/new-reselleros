@@ -228,7 +228,11 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, currently **6,845 tests across 452 files**,
+`C:/xampp/htdocs/Domain-Management-Project`, **6,594 passing across 442 files** on 24 Sep 2026
+after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the code). At that
+measurement 23 more failed, all in `recurring-charge-service.test.ts`, which belonged to a
+concurrent session's uncommitted `DMS_TOKEN_RECURRING_ENABLED` change; integration suite 238
+passing. Before that: **6,845 tests across 452 files**,
 typecheck clean (measured 23 Sep 2026 after the public-page link fixes; 6,773/448 earlier the
 same day after Phase 8 and the transfer clean-up, then 6,748/447 and 6,724/447, and 6,451/432
 on 21 Sep).

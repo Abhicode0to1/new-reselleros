@@ -756,6 +756,15 @@ Phases are ordered so each guard ships **before** the capability it guards.
 
 ## D. Decisions needed — these block phases
 
+- [x] **Zoho Books — REMOVED from DMS. USER DECISION, Pardeep, 24 Sep 2026:** *"Remove the Zoho
+      completely. Mark it as user decision."* DMS's own GST engine is the only invoice issuer,
+      with no fallback; a failed invoice is flagged on the order and retried, never re-issued
+      elsewhere. Record and rules: DMS `CLAUDE.md` → "Zoho Books removed". Consequence for the
+      seller-of-record question below: there is now exactly one invoice series on the DMS
+      side (`TI/…`), which is simpler to reason about. Zoho as a PRODUCT ResellerOS resells
+      (Zoho Workplace licences) is unaffected — this is only about Zoho Books as DMS's
+      accounting back end.
+
 - [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. DMS's GST
       engine is permanent and ungated; credit notes are manual with a statutory deadline. Needs
       the CA.
