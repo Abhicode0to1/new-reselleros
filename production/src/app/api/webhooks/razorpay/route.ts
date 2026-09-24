@@ -31,6 +31,8 @@ import { razorpayMode } from "@/lib/payments/razorpay-readiness";
 import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/provisioning";
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
 import { provisioningProducts } from "@/lib/provisioning/products";
+import { domainRegistrationEnabled } from "@/lib/provisioning/domain-registration";
+import { commandsConfigured } from "@/lib/dms-engine/commands";
 import { daWriteConfigured } from "@/lib/directadmin/provision";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 
@@ -350,13 +352,18 @@ export async function POST(request: NextRequest) {
       domainName: product.domain,
       /* HOSTING is provisioned by us directly on DirectAdmin (2 Sep 2026), so it IS
          connected — but only once the same explicit go-live gate the trial uses is on
-         (HOSTING_TRIAL_LIVE=1 + DA credentials present). DOMAIN stays false here: a
-         registration is irreversible spend that must never flip on by config accident.
-         Automatic registration (owner decision 21) is a separate, switched build. */
+         (HOSTING_TRIAL_LIVE=1 + DA credentials present).
+         DOMAIN (owner decision 21, 24 Sep 2026): connected only when this side's own
+         fail-closed switch DOMAIN_REGISTRATION_LIVE=1 is on AND the engine command
+         key is configured. Otherwise the row is queued with `engine_not_connected`
+         and the register-domains worker never picks it up. The engine has a second,
+         independent gate and the spend limit (DMS engine-register-policy.ts). */
       engineConnected:
         product.vendor === "hosting"
           ? process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured()
-          : false,
+          : product.vendor === "domain"
+            ? domainRegistrationEnabled() && commandsConfigured()
+            : false,
       dialMode,
     });
 

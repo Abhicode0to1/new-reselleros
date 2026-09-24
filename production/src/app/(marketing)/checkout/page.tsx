@@ -62,6 +62,11 @@ export default function CheckoutPage() {
   const [gstin, setGstin] = useState("");
   const [phone, setPhone] = useState("");
   const [domain, setDomain] = useState("");
+  // Registrant address — asked only when the cart holds a domain (owner decision 22).
+  const [addrLine1, setAddrLine1] = useState("");
+  const [addrCity, setAddrCity] = useState("");
+  const [addrState, setAddrState] = useState("");
+  const [addrPin, setAddrPin] = useState("");
   const [method, setMethod] = useState<string>("UPI");
   const [agreed, setAgreed] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -73,6 +78,7 @@ export default function CheckoutPage() {
   } | null>(null);
 
   const hasHosting = cart.lines.some((l) => (l.sku || "").startsWith("hosting:"));
+  const hasDomain = cart.lines.some((l) => (l.sku || "").startsWith("domain:"));
 
   // Remember the buyer's details across a refresh so nothing has to be re-typed.
   useEffect(() => {
@@ -84,6 +90,10 @@ export default function CheckoutPage() {
       if (typeof s.gstin === "string") setGstin(s.gstin);
       if (typeof s.phone === "string") setPhone(s.phone);
       if (typeof s.domain === "string") setDomain(s.domain);
+      if (typeof s.addrLine1 === "string") setAddrLine1(s.addrLine1);
+      if (typeof s.addrCity === "string") setAddrCity(s.addrCity);
+      if (typeof s.addrState === "string") setAddrState(s.addrState);
+      if (typeof s.addrPin === "string") setAddrPin(s.addrPin);
     } catch { /* private window / blocked storage — just start empty */ }
   }, []);
   // Hosting + a domain being bought in the same cart: the hosting goes on that domain,
@@ -94,9 +104,9 @@ export default function CheckoutPage() {
   }, [hasHosting, cartDomain]);
   useEffect(() => {
     try {
-      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain }));
+      window.localStorage.setItem("anutech.checkout", JSON.stringify({ name, company, email, gstin, phone, domain, addrLine1, addrCity, addrState, addrPin }));
     } catch { /* ignore */ }
-  }, [name, company, email, gstin, phone, domain]);
+  }, [name, company, email, gstin, phone, domain, addrLine1, addrCity, addrState, addrPin]);
 
   if (cart.lines.length === 0) {
     return (
@@ -114,7 +124,9 @@ export default function CheckoutPage() {
     company.trim().length >= 2 &&
     email.includes("@") &&
     phone.trim().length >= 10 &&
-    (!hasHosting || domain.trim().length >= 3);
+    (!hasHosting || domain.trim().length >= 3) &&
+    (!hasDomain ||
+      (addrLine1.trim().length >= 3 && addrCity.trim().length >= 2 && addrState.trim().length >= 2 && /^\d{6}$/.test(addrPin.trim())));
 
   interface StartedOrder {
     orderId: string; amount: number; currency?: string; razorpayKeyId: string;
@@ -139,6 +151,9 @@ export default function CheckoutPage() {
           domain: hasHosting ? domain.trim() : undefined,
           lines: cart.lines.map((l) => ({ sku: l.sku, label: l.label, qty: l.qty, cycle: l.cycle, domain: l.domain })),
           coupon: cart.coupon.trim() || undefined,
+          address: hasDomain
+            ? { line1: addrLine1.trim(), city: addrCity.trim(), state: addrState.trim(), zipcode: addrPin.trim(), country: "IN" }
+            : undefined,
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {
@@ -230,6 +245,17 @@ export default function CheckoutPage() {
               <Field label="MOBILE" value={phone} onChange={setPhone} type="tel" />
               {hasHosting && (
                 <Field label="DOMAIN FOR YOUR HOSTING (e.g. yourcompany.in)" value={domain} onChange={setDomain} mono />
+              )}
+              {hasDomain && (
+                <>
+                  <p className="meta" style={{ margin: "6px 0 2px" }}>
+                    The domain is registered in your name, so the registry needs the owner&apos;s postal address.
+                  </p>
+                  <Field label="ADDRESS" value={addrLine1} onChange={setAddrLine1} />
+                  <Field label="CITY" value={addrCity} onChange={setAddrCity} />
+                  <Field label="STATE" value={addrState} onChange={setAddrState} />
+                  <Field label="PIN CODE" value={addrPin} onChange={setAddrPin} mono />
+                </>
               )}
               <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} disabled={!detailsOk} onClick={() => setStep("payment")}>
                 Continue

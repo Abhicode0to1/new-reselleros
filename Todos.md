@@ -131,6 +131,18 @@ still open: who is seller of record for an engine-sourced sale, and how a Resell
 gets a ResellerClub customer account (§D below). Until the switch is on, a paid domain is
 queued with its exact name, so nothing is lost.
 
+### Decisions 22–24 — how automatic registration works (24 Sep 2026)
+
+Asked while building decision 21, after finding that ResellerClub needs a registrant postal
+address (the ResellerOS checkout collected none), that a ResellerOS buyer has no DMS account
+to manage the domain from, and that nothing capped automatic spending.
+
+| # | Question as asked | Options offered | Pardeep's answer |
+|---|---|---|---|
+| 22 | Whose details should the domain be registered under? | Customer's, add address *(recommended)* · ANUTECH's own details | **Customer's — checkout collects the address** |
+| 23 | Should a DMS account be created for the buyer? | Yes, create one *(recommended)* · No account | **Yes — found or created by email, reached by the SSO hand-off** |
+| 24 | What limit should automatic registration have? | Per-domain + daily cap *(recommended)* · Per-domain checks only · Human release every time | **Per-domain + daily cap** — live payment, paid ≥ ResellerClub cost, and under a daily count + ₹ cap; anything else waits for a person. No figures were given, so it ships at **5 per day / ₹10,000 per day**, set by env |
+
 ### Waiting on Pardeep — actions only he can take
 
 - [ ] **Pause `tokens-charge-recurring` (decision 18).** The Google Cloud CLI is not installed on
@@ -163,11 +175,8 @@ queued with its exact name, so nothing is lost.
 4. **Deploy production DMS** with `NEXT_PUBLIC_RESELLEROS_URL=https://reselleros.anutech.in`
    (decision 14). Only on an explicit go: it switches production's public pages over to
    ResellerOS. Before it, update any Razorpay-registered policy URLs that point at DMS's domain.
-5. **Automatic domain registration after payment** (decision 21). Next build. Behind a switch
-   that is OFF until the owner approves a first real registration, and it drains the
-   per-product `vendor = 'domain'` provisioning rows the cart now writes, each carrying the
-   exact name. Still depends on the two open items in §D: seller of record (partly answered —
-   see there) and how a ResellerOS-only buyer gets a ResellerClub customer account.
+5. ~~Automatic domain registration after payment~~ — **built 24 Sep, switched off.** See
+   "Shipped" below for what it does and the eight steps before switching it on.
 
 ### Why decision 5 was a safety change, not tidying
 
@@ -269,6 +278,54 @@ with Razorpay before the first live mandate.
       `NEXT_PUBLIC_RESELLEROS_URL=https://reselleros.anutech.in` (decision 14) in `.env.local`,
       because the deploy refuses without it. Before that deploy, update the
       policy URLs registered with Razorpay if they point at DMS's domain: they will now 307.
+- [x] **Automatic domain registration (decisions 21-24) — BUILT, SWITCHED OFF.** 24 Sep 2026.
+      **DMS** (engine `domain.register`, Phase 9): `lib/integrations/engine-handlers-register.ts`
+      + pure rules in `engine-register-policy.ts`. Order: validate → already in our reseller
+      account? (this customer → done with no spend; another → held) → ResellerClub cost
+      (stale cache refused) + last-24h usage → **test mode stops here and reports** → spend
+      decision (live payment, paid ≥ cost, ≤ 5/day, ≤ ₹10,000/day — env
+      `ENGINE_DOMAIN_REGISTER_MAX_PER_DAY` / `_MAX_RUPEES_PER_DAY`) → DMS account + RC
+      customer/contact (found or created by email) → register (a lost response is
+      `sent_unknown` and HOLDS the lock; balance-pending too) → Domain row on the customer's
+      account. Reconciler: "in our account, owned by this customer". Live only behind its OWN
+      gate `ENGINE_DOMAIN_REGISTER_LIVE=1` — flipping it puts nothing else live. The route now
+      returns the handler's sentence as `detail`, so a hold is readable on the first answer.
+      **ResellerOS:** checkout asks for the registrant's address when the cart holds a domain
+      (server-validated, 6-digit PIN) and records the registrant on the domain line;
+      `lib/dms-engine/commands.ts` (write client, `DMS_ENGINE_COMMAND_KEY`); worker
+      `/api/cron/register-domains` (gate `DOMAIN_REGISTRATION_LIVE=1`, workspace kill switch,
+      one command id per request per IST day so re-runs replay); the webhook approves a paid
+      domain row only when that gate is on.
+      **test-verified:** DMS 29 handler/policy tests (spend guard red-checked: 4 fail without it)
+      + updated engine tripwires; ResellerOS 11 worker tests (kill switch red-checked), 22
+      client/helper tests, 4 new checkout-route tests. Gates: ResellerOS 6,702 / 364, DMS
+      6,732 / 446, typecheck + lint clean in both. **browser-verified, local:** the address
+      fields appear only with a domain in the cart, the hosting domain pre-fills, Continue stays
+      disabled until the address (incl. a 6-digit PIN) is complete. **NOT verified:** any call to
+      ResellerClub — it does not answer this machine — and the engine was not exercised through a
+      running container.
+- [ ] **Before switching automatic registration on — in this order:**
+      1. Apply both ResellerOS migrations to production (see "Waiting on Pardeep").
+      2. Deploy both apps with this code.
+      3. Set the keys: ResellerOS `DMS_ENGINE_COMMAND_KEY` = DMS `BILLING_COMMAND_API_KEY`
+         (production DMS has no value for it yet, by design until now), and `DMS_ENGINE_URL`.
+      4. Top up the ResellerClub reseller balance — an unfunded registration is held.
+      5. On the Automation page, set **provisioning.activate** to auto; otherwise every paid
+         domain is queued with a blocker and the worker never sees it.
+      6. Create a Cloud Scheduler job for `/api/cron/register-domains` (Bearer `CRON_SECRET`),
+         **with** a retry count (L1: a retryConfig without `retryCount` is zero retries). Safe to
+         retry: the command id is stable per day.
+      7. Run one `domain.register` in `mode:"test"` against production for a real paid order and
+         read the answer: availability, cost, cap, account. That is the "first real
+         registration" approval.
+      8. Then set `ENGINE_DOMAIN_REGISTER_LIVE=1` on DMS and `DOMAIN_REGISTRATION_LIVE=1` on
+         ResellerOS.
+      Rows paid BEFORE step 8 keep the `engine_not_connected` blocker and are never picked up
+      automatically — register those by hand.
+- [ ] **No customer email yet on registration.** The domain appears in the customer's DMS panel,
+      and the owner is alerted on a lost response or a refusal. A "your domain is registered"
+      email to the customer is an automated customer send, so it needs its own action on the
+      automation registry (L62-L65) — not added in this change.
 - [x] **ResellerOS cart enabled properly (decisions 19-20), 24 Sep 2026.** The line above said
       "v1 knows hosting SKUs only" — stale: domains were priced, but from a fixed table while the
       search showed the live price. Found and fixed together:
@@ -1082,14 +1139,18 @@ Phases are ordered so each guard ships **before** the capability it guards.
 - [ ] **Who is the seller of record for an engine-sourced sale?** Blocks Phase 9. **Partly
       answered 24 Sep (§0A decisions 3 and 12):** ResellerOS issues every bill and takes the
       money. Still needs the CA to confirm for GST, and a credit-note route once DMS stops issuing.
-- [ ] **How does a ResellerOS-only buyer get a ResellerClub customer?** Top blocker for
-      register. `registerDomain` needs a numeric `customerId` and contacts that today come from
-      a private helper inside DMS's payment pipeline.
+- [x] **How does a ResellerOS-only buyer get a ResellerClub customer?** **Answered 24 Sep
+      (decisions 22-23):** the checkout collects the registrant's address, and the engine's
+      `domain.register` finds or creates the DMS account and the RC customer + contact by email
+      (`getOrCreateCustomerAndContact`), then registers under them.
 - [ ] **Which side owns DirectAdmin?** Keeping both writers means two username derivations and
       two definitions of `vendor_ref`. Did NOT block Phase 7 in the end — `hosting.change_plan`
       shipped by working with the existing `(userId, domainName)` uniqueness rather than
       altering it.
-- [ ] **What shape should the engine's spend control take?** Found 2026-09-23 while deciding
+- [x] **Spend control — answered for `domain.register` (decision 24):** live payment, paid ≥
+      cost, daily count + ₹ cap (engine-register-policy.ts). `domain.renew` still has none and
+      stays live-ineligible; the same policy shape could be reused for it.
+- [ ] **(original entry) What shape should the engine's spend control take?** Found 2026-09-23 while deciding
       whether `domain.renew` could be armed. Nothing anywhere caps how many money-spending
       commands a caller can trigger — irrelevant while every command was free or reversible,
       and now the reason `domain.renew` stays live-ineligible. It will gate Phase 9 the same

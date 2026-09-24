@@ -37,6 +37,7 @@ import { HOSTING_TIERS } from "@/site/lib/data/hosting-landing-v2";
 import { lookupDomains, splitDomain } from "@/lib/domains/live-lookup";
 import { MAILBOX_YR } from "@/site/lib/data/domains-landing";
 import { COUPONS } from "@/site/lib/money";
+import { normalisePhone, splitName, type Registrant } from "@/lib/provisioning/domain-registration";
 
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
@@ -60,6 +61,21 @@ const cartSchema = z.object({
   /** Required when a hosting line is present — the account is provisioned on it. */
   domain: z.string().max(120).optional(),
   lines: z.array(lineSchema).min(1).max(50),
+  /**
+   * The registrant's postal address — REQUIRED when the cart holds a domain.
+   * Owner decision 22 (24 Sep 2026): a domain is registered under the customer's
+   * own details, and ResellerClub will not create the owner record without an
+   * address. Collected here so the automatic registration has it.
+   */
+  address: z
+    .object({
+      line1: z.string().max(200),
+      city: z.string().max(80),
+      state: z.string().max(80),
+      zipcode: z.string().max(12),
+      country: z.string().max(2).optional(),
+    })
+    .optional(),
   /** The cart page's coupon. Applied from the SAME table the cart uses (site/lib/money). */
   coupon: z.string().max(40).optional(),
   simulate: z.boolean().optional(),
@@ -69,6 +85,8 @@ interface QuoteLine {
   id: string; name: string; qty: number; rate: number; cost: number;
   /** Domain lines only: the exact name paid for, so provisioning registers THAT name. */
   domain?: string;
+  /** Domain lines only: whose name it is registered in (owner decision 22). */
+  registrant?: Registrant;
 }
 
 type LineKind = "hosting" | "domain" | "mailbox";
@@ -193,7 +211,7 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    const { fullName, companyName, email, phone, gstin, domain, lines, coupon, simulate } = parsed.data;
+    const { fullName, companyName, email, phone, gstin, domain, lines, coupon, address, simulate } = parsed.data;
 
     // ── Re-price every line server-side; collect anything we can't charge ──
     const items: QuoteLine[] = [];
@@ -233,6 +251,37 @@ export async function POST(request: NextRequest) {
     }
     if (items.length === 0) {
       return NextResponse.json({ error: "Nothing to pay for." }, { status: 400 });
+    }
+
+    // ── A domain is registered in the customer's own name: that needs an address ──
+    if (domainNames.length) {
+      const a = address;
+      const country = (a?.country || "IN").toUpperCase();
+      const problems: string[] = [];
+      if (!a || a.line1.trim().length < 3) problems.push("address");
+      if (!a || a.city.trim().length < 2) problems.push("city");
+      if (!a || a.state.trim().length < 2) problems.push("state");
+      if (!a || (country === "IN" ? !/^\d{6}$/.test(a.zipcode.trim()) : a.zipcode.trim().length < 3)) problems.push("PIN code");
+      if (!/^[A-Z]{2}$/.test(country)) problems.push("country");
+      if (problems.length || !a) {
+        return NextResponse.json(
+          {
+            error:
+              `To register ${domainNames.join(", ")} in your name we need your ${problems.join(", ")}. ` +
+              `The domain registry records the owner's postal address. Nothing was charged.`,
+            needAddress: true,
+          },
+          { status: 400 },
+        );
+      }
+      const registrant: Registrant = {
+        ...splitName(fullName),
+        email: email.trim().toLowerCase(),
+        ...normalisePhone(phone),
+        companyName: companyName.trim() || undefined,
+        address: { line1: a.line1.trim(), city: a.city.trim(), state: a.state.trim(), zipcode: a.zipcode.trim(), country },
+      };
+      for (const line of items) if (line.domain) line.registrant = registrant;
     }
 
     // The hosting account is set up on the typed domain, or — when the customer is

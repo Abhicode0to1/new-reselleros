@@ -63,6 +63,13 @@ and refused when it cannot be read — never a fallback figure. Workspace, Anute
 are quote items, not cart items. After payment, provisioning is one request per product
 (`lib/provisioning/products.ts`), so a domain and hosting bought together are both queued.
 
+**Automatic domain registration exists and is OFF** (24 Sep 2026, decisions 21-24). It is
+registered under the customer's own details (checkout collects the address), into a DMS
+account for them, through the engine's `domain.register`, within a spend limit the ENGINE
+enforces (live payment, paid ≥ cost, daily count + ₹ cap). Two independent fail-closed
+switches: `DOMAIN_REGISTRATION_LIVE=1` here, `ENGINE_DOMAIN_REGISTER_LIVE=1` on DMS. Do not set
+either without the owner — the eight steps before switching on are in `Todos.md` §0A.
+
 Open items for the integration are tracked in `Todos.md`, not here.
 
 ---

@@ -59,6 +59,61 @@ export async function listReadyHostingRequests(limit = 50): Promise<ReadyHosting
   return (data ?? []) as ReadyHostingRequest[];
 }
 
+/** One paid domain request the registration worker may send to the engine. */
+export interface ReadyDomainRequest {
+  id: string;
+  tenant_id: string;
+  quote_id: string;
+  domain: string | null;
+  amount_paid: number;
+  note: string | null;
+}
+
+/**
+ * Domain requests decideProvisioning fully approved (blocker IS NULL) on a LIVE
+ * payment. A row queued while registration was switched off carries the
+ * `engine_not_connected` blocker and is deliberately NOT picked up when it is
+ * switched on — it was paid for under the old arrangement and a person clears it.
+ */
+export async function listReadyDomainRequests(limit = 20): Promise<ReadyDomainRequest[]> {
+  const db = bare();
+  if (!db) return [];
+  const { data, error } = await db
+    .from("provisioning_requests")
+    .select("id, tenant_id, quote_id, domain, amount_paid, note")
+    .eq("vendor", "domain")
+    .eq("status", "queued")
+    .eq("payment_mode", "live")
+    .is("blocker", null)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error) {
+    console.error("[provisioning] list ready domains failed:", error.message);
+    return [];
+  }
+  return (data ?? []) as ReadyDomainRequest[];
+}
+
+/**
+ * Record why a request is still waiting, without changing its status. Returns
+ * whether a row was actually updated — an update matching nothing is a success
+ * in supabase-js (AGENTS.md L84), so the count is read.
+ */
+export async function noteProvisioning(id: string, note: string): Promise<boolean> {
+  const db = bare();
+  if (!db) return false;
+  const { data, error } = await db
+    .from("provisioning_requests")
+    .update({ note: note.slice(0, 500), updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id");
+  if (error) {
+    console.error("[provisioning] note failed:", error.message);
+    return false;
+  }
+  return (data ?? []).length === 1;
+}
+
 export async function markProvisioningActivated(id: string, vendorRef: string): Promise<void> {
   const db = bare();
   if (!db) return;

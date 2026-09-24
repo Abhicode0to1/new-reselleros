@@ -59,6 +59,7 @@ function req(body: Record<string, unknown>) {
 }
 
 const quote = () => inserts.rows.find((r) => r.table === "quotes")?.row;
+const address = { line1: "12 MG Road", city: "New Delhi", state: "Delhi", zipcode: "110001" };
 const lead = () => inserts.rows.find((r) => r.table === "leads")?.row;
 
 beforeEach(() => {
@@ -79,7 +80,7 @@ beforeEach(() => {
 
 describe("domain lines — live price, exact name", () => {
   it("charges the live price for the named domain and records the name on the line", async () => {
-    const res = await POST(req({ lines: [{ sku: "domain:in", label: "acme.in", domain: "acme.in", qty: 1 }] }));
+    const res = await POST(req({ address, lines: [{ sku: "domain:in", label: "acme.in", domain: "acme.in", qty: 1 }] }));
     expect(res.status).toBe(200);
     expect(lookupDomains).toHaveBeenCalledWith("acme", ["in"]);
     const q = quote()!;
@@ -121,6 +122,7 @@ describe("domain lines — live price, exact name", () => {
 describe("hosting + domain in one cart", () => {
   it("the domain is ₹0 with yearly hosting, and the hosting goes on it when none was typed", async () => {
     const res = await POST(req({
+      address,
       lines: [
         { sku: "domain:in", domain: "acme.in", qty: 1 },
         { sku: "hosting:starter", cycle: "yearly", qty: 1 },
@@ -161,5 +163,49 @@ describe("items with no server-side price are refused, not charged", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/request a quote/);
     expect(quote()).toBeUndefined();
+  });
+});
+
+describe("a domain is registered in the customer's own name (owner decision 22)", () => {
+  it("refuses a domain cart with no address, and charges nothing", async () => {
+    const res = await POST(req({ lines: [{ sku: "domain:in", domain: "acme.in", qty: 1 }] }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.needAddress).toBe(true);
+    expect(body.error).toMatch(/in your name we need your address, city, state, PIN code/);
+    expect(quote()).toBeUndefined();
+  });
+
+  it("refuses a PIN that is not six digits", async () => {
+    const res = await POST(req({ address: { ...address, zipcode: "1100" }, lines: [{ sku: "domain:in", domain: "acme.in", qty: 1 }] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/PIN code/);
+  });
+
+  it("records the full registrant on the domain line, for the registration worker", async () => {
+    const res = await POST(req({
+      address,
+      fullName: "Asha K Verma",
+      phone: "+91 98765 43210",
+      lines: [{ sku: "domain:in", domain: "acme.in", qty: 1 }],
+    }));
+    expect(res.status).toBe(200);
+    const line = (quote()!.line_items as { registrant?: Record<string, unknown> }[])[0];
+    expect(line.registrant).toEqual({
+      firstName: "Asha",
+      lastName: "K Verma",
+      email: "buyer@example.invalid",
+      phone: "9876543210",
+      phoneCc: "91",
+      companyName: "Test Co",
+      address: { ...address, country: "IN" },
+    });
+  });
+
+  it("a hosting-only cart needs no address", async () => {
+    const res = await POST(req({ domain: "x.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
+    expect(res.status).toBe(200);
+    const line = (quote()!.line_items as { registrant?: unknown }[])[0];
+    expect(line.registrant).toBeUndefined();
   });
 });
