@@ -79,8 +79,10 @@ on DMS. The hosting TRIAL is the one path that still writes to DirectAdmin from 
 "Start free trial" on /hosting puts a ₹0 `hosting-trial:starter` line in the cart. Checkout
 starts it with no payment step (`lib/hosting/start-trial.ts`), and a trial checks out on its own.
 There is no trial form any more: `/hosting/trial` is only where the confirm-your-email link lands.
-**One trial per customer**, matched on email, phone (last 10 digits) or domain against earlier
-`buy-hosting-trial` leads, and a trial line is always quantity 1.
+**One trial per customer across BOTH apps**, matched on email, phone (last 10 digits) or domain.
+This app checks its own `buy-hosting-trial` leads, then asks DMS, which holds the shared record
+(`lib/dms-engine/trials.ts`). If DMS does not answer, the trial is refused. A trial line is
+always quantity 1.
 The one rule is `lib/hosting/trial-plan.ts`. DMS enforces the same rule on its in-panel trial,
 which on monthly renews one month at a time (`Hosting.billingCycle`).
 It was **run once against the live DirectAdmin on 24 Sep 2026** (test, create, replay,
@@ -260,10 +262,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,733 tests
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,737 tests
 passing across 367 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 24 Sep 2026 after one-trial-per-customer. Earlier markers:
-6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+with warnings only** — measured 24 Sep 2026 after the cross-app trial check. Earlier markers:
+6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 
@@ -278,8 +280,9 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,768 passing across 448 files, zero failures**
-on 24 Sep 2026, after the monthly Starter trial (DMS `47f0a81a`). Earlier the same day:
+`C:/xampp/htdocs/Domain-Management-Project`, **6,787 passing across 450 files, zero failures**
+on 24 Sep 2026, after the cross-app trial record (DMS `2315ae26`). Earlier the same day:
+6,768 / 448 after the monthly Starter trial (DMS `47f0a81a`),
 6,758 / 448 after the Starter-only trial guard (DMS `19c1134a`),
 6,753 / 447 after the live DirectAdmin fixes (DMS `23680de9`),
 6,702 / 445 after hosting moved to ResellerOS's price + GST (DMS `06a9546`), 6,676 / 444 after DMS's public pages were removed (`0fe6c95`), and 6,617 / 442, after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the

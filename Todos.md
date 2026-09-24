@@ -242,8 +242,27 @@ Measured on the dev server: repeats by the same email, the same phone under a di
 a capitalised email and the same domain were all refused; a new person was allowed; quantity
 5 was refused.
 
-Not covered: a customer who trialled in the DMS panel is not recognised here. DMS keeps its
-own one-per-account rule, and the two do not share a history.
+**Across both apps — BUILT (Pardeep: "Fix the identified gap"), DMS `2315ae26`.** A customer
+who trialled in the DMS panel was not recognised on the site, and the reverse.
+
+DMS cannot reach ResellerOS, so DMS is the shared record. It holds its own trials plus an
+`ExternalTrial` row for every site trial.
+- **Before a site trial:** ResellerOS asks DMS (`lib/dms-engine/trials.ts` →
+  `GET /api/integrations/engine/trials`, read key). If DMS does not answer, the trial is
+  refused.
+- **After a site trial:** ResellerOS records it there (POST, command key, idempotent on the lead
+  id). If that record fails, the trial stands and the lead notes "NOT RECORDED IN DMS" instead of
+  the gap being silent.
+- **DMS's own gates:** eligibility and create-order read the same history.
+
+Measured locally across both apps:
+- a site trial appeared in DMS;
+- DMS recognised a different email with the same phone;
+- a DMS-only trial blocked a site trial on its domain;
+- with DMS stopped, the site refused.
+
+Needs on Cloud Run before production: `DMS_ENGINE_COMMAND_KEY` on ResellerOS; it was not set
+locally either.
 
 **Before production:**
 - confirm `HOSTING_TRIAL_SECRET` or `CRON_SECRET` is set on Cloud Run, or production trials send

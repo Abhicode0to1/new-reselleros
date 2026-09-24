@@ -21,6 +21,7 @@ import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { makeTrialToken } from "@/lib/hosting/trial-token";
 import { TRIAL_PLAN_ID, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
+import { checkTrialHistory, recordTrialInDms } from "@/lib/dms-engine/trials";
 
 const FROM_EMAIL = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const BUY_PAGE_TENANT_ID =
@@ -106,6 +107,27 @@ export async function startHostingTrial(
     };
   }
 
+  // …and in DMS: a trial in the DMS customer panel, or one this app recorded
+  // there, on the same email, phone or domain also counts. DMS not answering
+  // refuses the trial rather than reads as "no earlier trial".
+  const dmsHistory = await checkTrialHistory({ email: emailKey, phone: phoneKey || undefined, domain: cleanDomain || undefined });
+  if (!dmsHistory.ok) {
+    console.error(`[startHostingTrial] could not check DMS trial history: ${dmsHistory.reason}`);
+    return { ok: false, error: "We couldn't check whether you've had a trial before, so we haven't started one. Nothing was saved. Please try again in a minute." };
+  }
+  if (dmsHistory.trialled) {
+    const when = dmsHistory.startedAt
+      ? ` (started ${new Date(dmsHistory.startedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })})`
+      : "";
+    return {
+      ok: false,
+      alreadyTrialled: true,
+      error:
+        `You've already had a free hosting trial with us${when}, and it's one per customer — matched on this email, phone number or domain. ` +
+        `Nothing was saved. You can buy ${tierName} from the hosting page, or reply to our earlier email if you need more time on the trial.`,
+    };
+  }
+
   const notes = [
     `HOSTING TRIAL REQUEST · ${TRIAL_DAYS}-day free trial (no card)`,
     `Plan to trial: ${tierName} hosting (cPanel on Google Cloud)`,
@@ -161,6 +183,21 @@ export async function startHostingTrial(
     }
     console.error("[startHostingTrial] lead insert failed:", leadErr);
     return { ok: false, error: "Could not start your trial — nothing was saved, so please try again. If it happens twice, email us using the address on this page and we will set it up by hand." };
+  }
+
+  // Tell DMS, so a later trial in its customer panel on the same email, phone or
+  // domain is refused there. If DMS cannot be told, the trial still stands (this
+  // app will refuse a repeat here), but the gap is written on the lead and in the
+  // error log rather than left silent.
+  const recorded = await recordTrialInDms({
+    ref: leadId, email: emailKey, phone: phoneKey || undefined, domain: cleanDomain || undefined, planId: tierId, cycle,
+  });
+  if (!recorded.ok) {
+    console.error(`[startHostingTrial] trial ${leadId} started but NOT recorded in DMS: ${recorded.reason}`);
+    await admin
+      .from("leads")
+      .update({ notes: `${notes}\n\n⚠ NOT RECORDED IN DMS (${recorded.reason}). DMS cannot see this trial, so the same customer could start another in the DMS panel. Record it there by hand.` })
+      .eq("id", leadId);
   }
 
   // Follow-up tasks — best-effort (non-fatal).
