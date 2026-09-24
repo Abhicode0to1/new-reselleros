@@ -39,6 +39,14 @@ ResellerOS reaches it over a read-only HTTP API plus a signed SSO hand-off
 - **ResellerOS is the front door.** With `NEXT_PUBLIC_RESELLEROS_URL` set on DMS, DMS's `/`
   redirects here and it serves no marketing homepage of its own.
 
+**Billing belongs to ResellerOS (owner decision, 24 Sep 2026).** ResellerOS's cart and
+billing are primary for a first purchase; DMS keeps its cart only for in-panel purchases.
+**DMS issues no bills** — every bill and every renewal is ResellerOS's, and DMS holds a copy
+for reference. DMS's Razorpay Tokens recurring charger is gated off
+(`DMS_TOKEN_RECURRING_ENABLED`, default off), because two systems able to debit the same
+renewal is a double-collection with no detector. Do not re-enable it or build a second
+invoice series in DMS without being asked. Full record: `Todos.md` §0A.
+
 Open items for the integration are tracked in `Todos.md`, not here.
 
 ---
@@ -228,11 +236,12 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,594 passing across 442 files** on 24 Sep 2026
-after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the code). At that
-measurement 23 more failed, all in `recurring-charge-service.test.ts`, which belonged to a
-concurrent session's uncommitted `DMS_TOKEN_RECURRING_ENABLED` change; integration suite 238
-passing. Before that: **6,845 tests across 452 files**,
+`C:/xampp/htdocs/Domain-Management-Project`, **6,617 passing across 442 files, zero failures**
+on 24 Sep 2026, after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the
+code) and the tokens recurring flow was gated off (DMS `8bf941e`). An earlier reading the same
+day, 6,594 passing with 23 failing in `recurring-charge-service.test.ts`, caught that gate
+mid-change, before those tests were opted in; it was not a real regression. Integration suite
+238 passing. Before that: **6,845 tests across 452 files**,
 typecheck clean (measured 23 Sep 2026 after the public-page link fixes; 6,773/448 earlier the
 same day after Phase 8 and the transfer clean-up, then 6,748/447 and 6,724/447, and 6,451/432
 on 21 Sep).

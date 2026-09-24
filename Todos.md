@@ -1,7 +1,8 @@
 # Todos — ResellerOS ↔ DMS integration
 
-Recorded 2026-09-19. Last updated **2026-09-23**, after engine Phases 6-8, the production
-apply of DMS migration 008, and merging `abhishek-pre-merge`.
+Recorded 2026-09-19. Last updated **2026-09-24**, after the billing-architecture decisions
+(§0A). Before that 2026-09-23, after engine Phases 6-8, the production apply of DMS
+migration 008, and merging `abhishek-pre-merge`.
 
 Both repos now carry a branch named **`pawan-api-system`**, both pushed:
 - ResellerOS — `Abhicode0to1/new-reselleros` (this repo). **`abhishek-pre-merge` merged in on
@@ -26,6 +27,93 @@ working.
 
 Verification key: **[verified]** = read end-to-end in the code and confirmed here ·
 **[reported]** = raised by review, not independently confirmed.
+
+---
+
+## 0A. BILLING ARCHITECTURE — decided by Pardeep, 24 Sep 2026
+
+**This supersedes two older entries in this file**, which are corrected in place below:
+§D's Zoho entry ("DMS's own GST engine is the only invoice issuer" — true about Zoho,
+overtaken on billing) and the "purchase funnel is deliberately NOT taken over" entry.
+
+### Decisions (USER DECISIONS — do not re-litigate)
+
+| # | Decision | In Pardeep's words |
+|---|---|---|
+| 1 | ResellerOS cart + billing is PRIMARY for a customer's **first** purchase of domain and hosting | "cart and billing of ResellerOs will be as primary … when buying the domain and hosting" |
+| 2 | DMS keeps its cart for purchases made **from inside the customer panel** | "When customer buys something from inside the customer panel itself Then we will use the cart flow of DMS itself" |
+| 3 | **DMS issues no bills.** Every bill comes from ResellerOS; DMS holds a copy as reference | "DMS does not do its own billing anymore. Period. … no duplicate bills or different number series needed." |
+| 4 | **Renewals are ResellerOS's.** DMS only fetches and shows the renewal bill | "Renewals subscription will be handled by ResellerOS. Period. Our DMS will only fetch that renewal bill from ResellerOs and show it." |
+| 5 | DMS's token-based recurring charging is **disabled, not deleted** | "Use the ResellerOs system compelely. DMS token based system will be disable for now. Until we need it someday later" |
+| 6 | No migration of existing DMS customers/mandates is needed | "Everything was in testing mode. No live customers at DMS" |
+
+Consequence of 2 + 3 together: an in-panel DMS cart purchase must still get its **bill from
+ResellerOS**. DMS's cart stays, DMS's invoice numbering does not.
+
+### Why decision 5 was a safety change, not tidying
+
+The two apps collect renewals with different Razorpay instruments:
+
+- **ResellerOS** — Razorpay **Subscriptions** (UPI Autopay / e-NACH), `payment_mandates`,
+  `lib/payments/mandate.ts`. Razorpay fires each debit; ResellerOS cannot initiate one.
+- **DMS** — Razorpay **Tokens API**. DMS fires each debit itself (`chargeViaToken`,
+  cron `tokens-charge-recurring`, daily 22:00 UTC).
+
+Both running means two independent systems able to collect the same renewal. DMS dedups on
+`(hostingId, dueDate)` inside its own Mongo and knows nothing of ResellerOS, so a double debit
+would be caught by nothing on either side — the customer would be the detector.
+
+Two facts worth keeping for when real customers exist: a mandate cannot be moved between
+instruments silently (each needs fresh customer approval), and a UPI Autopay per-debit cap
+cannot be raised after approval — so `MAX_MANDATE_AMOUNT` in ResellerOS must be confirmed
+with Razorpay before the first live mandate.
+
+### Shipped 24 Sep 2026
+
+- [x] **DMS `8bf941e` — tokens recurring charging gated OFF.** Gate is inside
+      `chargeRecurringHosting` (the chokepoint, so `scripts/charge-recurring-hostings.js`
+      cannot walk round it — L65), placed **before** any Razorpay call, returns `skipped`
+      rather than throwing (a disabled feature is not a failed night — L6), and is off unless
+      `DMS_TOKEN_RECURRING_ENABLED === "1"` exactly (fails closed — L41). Nothing deleted: the
+      dedup claim, abandon-on-first-failure and yearly/monthly inference all stay.
+      Pinned by `tests/unit/lib/services/payment/recurring-charge-disabled.test.ts` (8 tests,
+      red-checked). The 23 existing tests in `recurring-charge-service.test.ts` opt in via the
+      env var in `beforeEach`. **test-verified.** DMS gate after the change:
+      **6,617 tests / 442 files, zero failures.**
+- [x] **ResellerOS shop gate — built (`32a454af`) and REVERTED (`0fc35259`) the same day.**
+      Pardeep first chose DMS as the shop, then reversed to decision 1 above. Recorded here so
+      nobody finds the commit in history and rebuilds it: the ResellerOS shop is **open and
+      primary**. DMS's `/hosting` page visibility is back to `draft` locally.
+
+### Still to build (not started — each waits for a go-ahead)
+
+- [ ] **Stop DMS issuing invoices.** Gate `lib/services/billing/createPrimaryInvoice.ts` (the
+      only caller of `allocateInvoiceNumber()`; 10 flows reach it). **In the same commit**
+      neutralise the legacy pre-save hook in `models/Order.ts` (~line 541) that mints
+      `INV-${timestamp}-${random}` when `status === "completed" && !invoiceNumber &&
+      invoiceProvider !== "primary"` — gating the first alone makes the second fire MORE
+      (L112 shape). Needs a scan test that both are closed.
+- [ ] **New engine command `billing.record_external_invoice`.** DMS stores ResellerOS's invoice
+      number and PDF link as a foreign reference. Touches no DMS `Counter`, idempotent on the
+      ResellerOS invoice number.
+- [ ] **Historical `TI/…` invoices stay reportable.** DMS issued them; they remain in its
+      GSTR-1 history. Stopping new issues must not hide the old ones.
+- [ ] **Domains in the ResellerOS cart.** `/api/public/checkout/cart` re-prices every line from
+      SKU server-side and v1 knows hosting SKUs only; domains need a server-side price source
+      before they can be sold here.
+
+### Open questions for Pardeep
+
+- [ ] Which Razorpay account takes the money — ResellerOS's, DMS's, or one shared account?
+- [ ] One bill or two for the customer to see: DMS proxying ResellerOS's PDF, or DMS rendering
+      its own view of the same numbers? (Either way, one number series.)
+- [ ] An in-panel DMS cart purchase now needs ResellerOS to be up to get a bill. Acceptable, or
+      does DMS queue and bill later?
+- [ ] Do DMS's three admin invoice actions (re-sync invoice, invoice retry, issue-invoice
+      worker) stop, or become "fetch from ResellerOS"?
+- [ ] Confirm `MAX_MANDATE_AMOUNT` with Razorpay (see above).
+- [ ] Disable the `tokens-charge-recurring` Cloud Scheduler job too. The code gate already
+      makes it a no-op; disabling the job removes a nightly run that does nothing.
 
 ---
 
@@ -761,7 +849,9 @@ Phases are ordered so each guard ships **before** the capability it guards.
       with no fallback; a failed invoice is flagged on the order and retried, never re-issued
       elsewhere. Record and rules: DMS `CLAUDE.md` → "Zoho Books removed". Consequence for the
       seller-of-record question below: there is now exactly one invoice series on the DMS
-      side (`TI/…`), which is simpler to reason about. Zoho as a PRODUCT ResellerOS resells
+      side (`TI/…`), which is simpler to reason about. **Overtaken the same day by §0A:**
+      DMS is to issue no bills at all; ResellerOS issues every one and DMS keeps a copy. The
+      Zoho removal itself stands. Zoho as a PRODUCT ResellerOS resells
       (Zoho Workplace licences) is unaffected — this is only about Zoho Books as DMS's
       accounting back end.
 
@@ -904,7 +994,10 @@ Consequences accepted with the decision:
       `app.anutech.in`. This switch is off in production (`deploy-cloud-run.sh` passes no
       such var), so nothing is live yet — but turning it on there means updating those URLs
       to the ResellerOS origin first, or the account's policy links 307 off-domain.
-- [ ] **The purchase funnel is deliberately NOT taken over.** `/hosting`, `/domains/*`,
+- [x] **SUPERSEDED 24 Sep 2026 by §0A decision 1** — ResellerOS's cart and billing are now
+      primary for first purchases; DMS's funnel stays for in-panel purchases. The entry below
+      is kept as the record of what was true before.
+      **The purchase funnel is deliberately NOT taken over.** `/hosting`, `/domains/*`,
       `/cart` and `/checkout` are the **only working way to buy hosting or a domain**;
       ResellerOS has marketing pages for both but no management UI (see below). Tests in
       both `lib/reseller-os.test.ts` and `middleware.test.ts` pin that these are untouched,
