@@ -103,6 +103,18 @@ export async function startHostingTrial(
   });
 
   if (leadErr) {
+    // 23503 on tenant_id: BUY_PAGE_TENANT_ID names a tenant this database does not
+    // have. A deployment fault that no retry can fix, so the customer is not told to
+    // retry, and the log says exactly which setting to correct. Measured 24 Sep 2026:
+    // the local database has no row for the production fallback id, so every trial
+    // failed here while the message said "please try again".
+    if (leadErr.code === "23503" && /tenant/i.test(`${leadErr.message} ${leadErr.details ?? ""}`)) {
+      console.error(
+        `[startHostingTrial] BUY_PAGE_TENANT_ID=${BUY_PAGE_TENANT_ID} is not a tenant in this database. ` +
+          "Set BUY_PAGE_TENANT_ID to the tenant the site sells for. Nothing was saved.",
+      );
+      return { ok: false, error: "We can't start trials right now — the problem is on our side, not yours, and trying again won't help yet. Nothing was saved. Please email or WhatsApp us using the details on this page and we'll set your trial up by hand." };
+    }
     console.error("[startHostingTrial] lead insert failed:", leadErr);
     return { ok: false, error: "Could not start your trial — nothing was saved, so please try again. If it happens twice, email us using the address on this page and we will set it up by hand." };
   }

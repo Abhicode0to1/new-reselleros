@@ -203,9 +203,34 @@ Verified:
 - on the dev server: `/hosting` has no form links, the two refusals return their messages, and
   `/hosting/trial` redirects.
 
-**Not seen working end to end locally.** The local database has no buy-page tenant `fbb976f1…`
-(locally Anutech is `22222222-…`), so every site checkout fails locally at the lead insert,
-paid ones included. Set `BUY_PAGE_TENANT_ID` in `.env.local` to try it here.
+**Seen working end to end locally, 24 Sep 2026**, after fixing why it did not work.
+
+Why it failed: the buy page, cart and trial save to `BUY_PAGE_TENANT_ID`. Unset, that falls
+back to PRODUCTION's Anutech id `fbb976f1…`, which the local database does not have, so every
+site checkout and every trial died on `leads_tenant_id_fkey`. The customer was then told
+"nothing was saved, please try again", which could never help.
+
+Fixed:
+- **`.env.local`** now sets `BUY_PAGE_TENANT_ID=22222222-…` (the local Anutech). It also sets a
+  local `HOSTING_TRIAL_SECRET`. Without one there is no confirm-your-email link at all, and the
+  customer is emailed "we'll set it up by hand" instead.
+- **The message:** that tenant error now tells the customer the problem is on our side, and
+  logs which setting to correct.
+
+Measured run:
+- lead `L-MUFHHZNC` created on the right tenant, stage `trial`, trial ends 9 Oct;
+- all three follow-up tasks created;
+- both emails attempted and logged as `failed`, "No email provider is configured". That is
+  correct: this machine has no email provider;
+- a signed confirm link opened, landed on "Email confirmed — setting up your account", and
+  stamped the lead for the owner. The account is not created automatically because
+  `HOSTING_TRIAL_LIVE` is off.
+
+**Before production:**
+- confirm `HOSTING_TRIAL_SECRET` or `CRON_SECRET` is set on Cloud Run, or production trials send
+  no confirm link;
+- production also relies on the fallback tenant id rather than setting `BUY_PAGE_TENANT_ID`
+  (reasoned-only; not checked).
 
 ### Decision 25 — hosting goes through the DMS engine (24 Sep 2026)
 
