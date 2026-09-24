@@ -51,6 +51,13 @@ overtaken on billing) and the "purchase funnel is deliberately NOT taken over" e
 | 9 | DMS's `/data-deletion` is removed too | answered "Remove it" when told ResellerOS has no equivalent and Facebook login may want one |
 | 10 | **Production DMS is not touched yet** — local only until a production ResellerOS address is given | answered "Local only for now" |
 | 11 | **Hosting prices exclude GST; 18% is added on top**, as ResellerOS does. A Starter year is ₹600 + ₹108 = ₹708 everywhere | "Reseller Os is correct price one. use that" |
+| 12 | **ResellerOS's Razorpay account takes all the money**, including purchases made inside the DMS panel | chose "ResellerOS's account" |
+| 13 | **DMS shows ResellerOS's own PDF** for a bill; it renders no bill of its own | chose "ResellerOS's own PDF" |
+| 14 | **Production ResellerOS address: `https://reselleros.anutech.in`** (DMS's `NEXT_PUBLIC_RESELLEROS_URL`) | chose it |
+| 15 | **Remove DMS's dead Admin → Page management controls** (deleted pages' visibility, homepage design) | chose "Remove them" |
+| 16 | **If ResellerOS is down during an in-panel purchase: take the payment, bill later.** DMS queues the bill request and retries; the panel shows "bill being prepared"; a stuck one alerts the owner | chose "Take payment, bill later" |
+| 17 | **Remove DMS's three admin invoice actions** (re-sync invoice, invoice retry, issue-invoice worker); bill problems are handled in ResellerOS | chose "Remove them" |
+| 18 | **Pause DMS's `tokens-charge-recurring` Cloud Scheduler job** in production | chose "Yes, pause it" |
 
 **The one price source (decision 7):** `LANDING_PLANS` in
 `production/src/site/lib/data/hosting-landing.ts` — Starter ₹49.99, Standard ₹125, Plus
@@ -156,31 +163,44 @@ with Razorpay before the first live mandate.
       still carry the old amounts. DMS no longer creates new ones, and there are no live
       customers (decision 6), but any test subscription left in the Razorpay dashboard should
       be cancelled there.
-- [ ] **Admin → Page management in DMS has dead controls.** Visibility toggles for the deleted
-      pages and the homepage-design switch change nothing now. Remove them, or say so on the
-      screen (L64: a control nobody enforces reads as one the operator has).
-- [ ] **Production DMS still has its old pages.** Deploying needs the production ResellerOS
-      address in `.env.local` (the deploy refuses without it). Before that deploy, update the
+- [ ] **Remove the dead Admin → Page management controls in DMS (decision 15).** Visibility
+      toggles for the deleted pages and the homepage-design switch change nothing now.
+- [ ] **Production DMS still has its old pages.** Deploying needs
+      `NEXT_PUBLIC_RESELLEROS_URL=https://reselleros.anutech.in` (decision 14) in `.env.local`,
+      because the deploy refuses without it. Before that deploy, update the
       policy URLs registered with Razorpay if they point at DMS's domain: they will now 307.
 - [ ] **Domains in the ResellerOS cart.** `/api/public/checkout/cart` re-prices every line from
       SKU server-side and v1 knows hosting SKUs only; domains need a server-side price source
       before they can be sold here.
 
+- [ ] **In-panel DMS purchases pay into ResellerOS's Razorpay account (decision 12).** DMS's
+      checkout currently uses DMS's own keys. Moving it means ResellerOS creates the Razorpay
+      order and receives the webhook, or DMS is given ResellerOS's keys. Design this together
+      with the bill hand-off below.
+- [ ] **Bill hand-off with an offline queue (decisions 13 and 16).** After payment DMS asks
+      ResellerOS for the bill; if ResellerOS is unreachable it queues and retries (L1: say what
+      retries it, who is told, and how a stuck one is noticed a week later). The panel shows
+      "bill being prepared" until the ResellerOS PDF arrives, then serves that PDF.
+- [ ] **Remove DMS's three admin invoice actions (decision 17)** in the same change that stops
+      DMS issuing invoices: re-sync invoice (`api/admin/orders/[id]/re-sync-invoice`), invoice
+      retry (`lib/invoice-retry.ts` + its pill), and the issue-invoice worker
+      (`api/workers/issue-invoice`).
+- [ ] **Pause `tokens-charge-recurring` in Cloud Scheduler (decision 18) — for the owner.** The
+      Google Cloud CLI is not installed on this machine. Run it where `gcloud` is logged in:
+      `gcloud scheduler jobs pause tokens-charge-recurring --location=asia-south1 --project=speedy-unison-453807-e9`
+      (undo: `… jobs resume …`). The code gate already makes the job charge nobody.
+
 ### Open questions for Pardeep
 
-- [ ] Which Razorpay account takes the money — ResellerOS's, DMS's, or one shared account?
-- [ ] One bill or two for the customer to see: DMS proxying ResellerOS's PDF, or DMS rendering
-      its own view of the same numbers? (Either way, one number series.)
-- [ ] An in-panel DMS cart purchase now needs ResellerOS to be up to get a bill. Acceptable, or
-      does DMS queue and bill later?
-- [ ] Do DMS's three admin invoice actions (re-sync invoice, invoice retry, issue-invoice
-      worker) stop, or become "fetch from ResellerOS"?
+- [x] Which Razorpay account takes the money? **ResellerOS's (decision 12).**
+- [x] One bill or two? **DMS shows ResellerOS's own PDF (decision 13).**
+- [x] ResellerOS down during an in-panel purchase? **Take payment, bill later (decision 16).**
+- [x] DMS's three admin invoice actions? **Removed (decision 17).**
 - [x] **Is a hosting price GST-inclusive or not?** Answered 24 Sep: ResellerOS's reading —
       GST on top (decision 11). Built the same day, see above.
-- [ ] What is the production ResellerOS address DMS should redirect to? (decision 10)
+- [x] Production ResellerOS address? **`https://reselleros.anutech.in` (decision 14).**
 - [ ] Confirm `MAX_MANDATE_AMOUNT` with Razorpay (see above).
-- [ ] Disable the `tokens-charge-recurring` Cloud Scheduler job too. The code gate already
-      makes it a no-op; disabling the job removes a nightly run that does nothing.
+- [x] Pause the `tokens-charge-recurring` job? **Yes (decision 18); the command is in the build list above.**
 
 ---
 
