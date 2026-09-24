@@ -74,6 +74,11 @@ either without the owner — the eight steps before switching on are in `Todos.m
 longer creates DirectAdmin accounts for a sale: `/api/cron/provision-hosting` sends
 `hosting.provision`, behind `HOSTING_PROVISIONING_LIVE=1` here and `ENGINE_HOSTING_PROVISION_LIVE=1`
 on DMS. The hosting TRIAL is the one path that still writes to DirectAdmin from this app.
+It was **run once against the live DirectAdmin on 24 Sep 2026** (test, create, replay,
+no-duplicate all passed; test account `rsospf34b2` / `rsosprovtest2409.in` still to delete).
+**server1.anutech.in is not the server DMS's config describes**: its IP is 35.207.233.155,
+production DMS still says 34.93.167.160, and it held no accounts before the test. Settle which
+server is real before switching provisioning on (`Todos.md` §0A).
 
 Open items for the integration are tracked in `Todos.md`, not here.
 
@@ -246,10 +251,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,668 tests
-passing across 362 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 24 Sep 2026 after enabling the site cart. Earlier markers:
-6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,713 tests
+passing across 365 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 24 Sep 2026 after hosting provisioning moved to the DMS
+engine. Earlier markers: 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 
@@ -264,9 +269,9 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,702 passing across 445 files, zero failures**
-on 24 Sep 2026, after hosting moved to ResellerOS's price + GST (DMS `06a9546`). Earlier
-the same day: 6,676 / 444 after DMS's public pages were removed (`0fe6c95`), and 6,617 / 442, after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the
+`C:/xampp/htdocs/Domain-Management-Project`, **6,753 passing across 447 files, zero failures**
+on 24 Sep 2026, after the live DirectAdmin fixes (DMS `23680de9`). Earlier the same day:
+6,702 / 445 after hosting moved to ResellerOS's price + GST (DMS `06a9546`), 6,676 / 444 after DMS's public pages were removed (`0fe6c95`), and 6,617 / 442, after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the
 code) and the tokens recurring flow was gated off (DMS `8bf941e`). An earlier reading the same
 day, 6,594 passing with 23 failing in `recurring-charge-service.test.ts`, caught that gate
 mid-change, before those tests were opted in; it was not a real regression. Integration suite
