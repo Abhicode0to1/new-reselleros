@@ -11,6 +11,11 @@ import { updateSession } from "@/lib/supabase/middleware";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { allowedRoutesForRole, ROLE_HOME, type UserRole } from "@/lib/nav";
 import { rateLimit, clientIp, publicApiLimit } from "@/lib/security/rate-limit";
+import {
+  shopApiRefused,
+  shopApiRefusalMessage,
+  shopPageRedirect,
+} from "@/lib/shop/reseller-shop-gate";
 
 // Routes that require authentication (the entire app shell).
 // Keep this in sync with APP_NAV in src/lib/nav.ts — any new section's
@@ -105,6 +110,25 @@ export async function middleware(request: NextRequest) {
     if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEV_PAGES !== "1") {
       return new NextResponse(null, { status: 404 });
     }
+  }
+
+  /* ─── The shop is closed; DMS sells hosting (Pardeep, 24 Sep 2026) ─────────
+     Before auth, because a buyer is not signed in. The shop CODE is untouched
+     by instruction — this only decides whether a request reaches it. See
+     lib/shop/reseller-shop-gate.ts for why a page redirects and an API is
+     refused. */
+  if (shopApiRefused(pathname)) {
+    /* 410 Gone, not 404: the endpoint existed and has been withdrawn, which is
+       what an integrator needs to know. Not 503 — nothing is going to recover
+       on a retry, and a retryable status on a checkout is how a second order
+       gets created (L109). */
+    return NextResponse.json({ error: shopApiRefusalMessage() }, { status: 410 });
+  }
+  const shopTarget = shopPageRedirect(pathname);
+  if (shopTarget) {
+    /* Query and hash carried across, so ?plan=starter still selects a plan on
+       the other side rather than dumping the buyer on a generic page. */
+    return NextResponse.redirect(`${shopTarget}${request.nextUrl.search}`, 308);
   }
 
   /* ─── Rate limit: unauthenticated public surface (audit A3, 1 Sep 2026) ────
