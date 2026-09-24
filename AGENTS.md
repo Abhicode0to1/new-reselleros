@@ -36,8 +36,12 @@ ResellerOS reaches it over a read-only HTTP API plus a signed SSO hand-off
   it from the demo panel on `/login`. Do not rebuild one without being asked. The `portal_*`
   DB functions and their SQL tests were left in place on purpose, so their presence is not
   evidence the feature exists.
-- **ResellerOS is the front door.** With `NEXT_PUBLIC_RESELLEROS_URL` set on DMS, DMS's `/`
-  redirects here and it serves no marketing homepage of its own.
+- **ResellerOS is the front door, and DMS has no public pages at all** (owner decision,
+  24 Sep 2026). DMS's `/`, legal pages and shop pages (`/hosting`, `/domains/*`) were
+  deleted; each URL is a 307 to its ResellerOS page, so `NEXT_PUBLIC_RESELLEROS_URL` is
+  required on DMS and its deploy refuses to build without it. A customer already inside the
+  DMS panel buys from two dialogs there (`?buy=hosting` / `?buy=domain`), which use DMS's
+  own cart. Do not rebuild DMS marketing pages without being asked.
 
 **Billing belongs to ResellerOS (owner decision, 24 Sep 2026).** ResellerOS's cart and
 billing are primary for a first purchase; DMS keeps its cart only for in-panel purchases.
@@ -238,8 +242,9 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,617 passing across 442 files, zero failures**
-on 24 Sep 2026, after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the
+`C:/xampp/htdocs/Domain-Management-Project`, **6,676 passing across 444 files, zero failures**
+on 24 Sep 2026, after DMS's public pages were removed (DMS `0fe6c95`). Before that, the
+same day, 6,617 across 442, after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the
 code) and the tokens recurring flow was gated off (DMS `8bf941e`). An earlier reading the same
 day, 6,594 passing with 23 failing in `recurring-charge-service.test.ts`, caught that gate
 mid-change, before those tests were opted in; it was not a real regression. Integration suite
