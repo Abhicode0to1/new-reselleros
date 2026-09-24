@@ -23,6 +23,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { verifyTrialToken } from "@/lib/hosting/trial-token";
+import { isTrialPlan } from "@/lib/hosting/trial-plan";
 import { daCreateAccount, daWriteConfigured, genUsername, genPassword } from "@/lib/directadmin/provision";
 
 export const dynamic = "force-dynamic";
@@ -71,13 +72,23 @@ export async function GET(req: NextRequest) {
   if (!lead || lead.source !== "buy-hosting-trial") return done(req, "invalid");
   if (lead.trial_converted_at) return done(req, "already");
 
-  const tier = (lead.plan || "").replace(/^hosting-/, "") || "standard";
-  const pkg = PKG_NAME[tier] || "Standard";
+  // A lead made before 24 Sep 2026 can still ask for Standard or Plus. Those are
+  // no longer trialled, so they are never provisioned here: the owner is told and
+  // offers Starter or a paid plan. The package is never guessed (it used to fall
+  // back to Standard for an unknown plan).
+  const tier = (lead.plan || "").replace(/^hosting-/, "");
+  const trialPlanOk = isTrialPlan(tier);
+  const pkg = PKG_NAME[tier] || "an unknown";
   const domain = (lead.domain || "").trim();
+  const ownerStep = !trialPlanOk
+    ? `They asked to trial ${pkg} hosting, which no longer has a free trial (only Starter does). Offer a Starter trial or a paid ${pkg} plan; do not provision ${pkg} free.`
+    : domain
+      ? "Provision the Starter cPanel account and send the login."
+      : "They still need a domain — help them register one, then provision.";
   const email = lead.contact_email || "";
   const firstName = (lead.contact_name || "there").split(" ")[0];
 
-  const canProvision = process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured() && domain.length >= 3;
+  const canProvision = trialPlanOk && process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured() && domain.length >= 3;
 
   // Re-anchor the trial clock to confirmation time (the 15 days start now).
   const startedAt = new Date();
@@ -89,7 +100,7 @@ export async function GET(req: NextRequest) {
     await admin.from("leads").update({
       trial_started_at: startedAt.toISOString(),
       trial_expires_at: expiresAt.toISOString(),
-      notes: `${lead.notes || ""}\n\n[${startedAt.toISOString()}] EMAIL CONFIRMED — ${domain ? "ready to provision" : "needs a domain first"}. Provision the ${pkg} cPanel account and send the login.`,
+      notes: `${lead.notes || ""}\n\n[${startedAt.toISOString()}] EMAIL CONFIRMED — ${ownerStep}`,
     }).eq("id", lead.id);
 
     const { alert: owner } = await loadOwnerAlert(admin, BUY_PAGE_TENANT_ID);
@@ -97,10 +108,10 @@ export async function GET(req: NextRequest) {
       await sendEmail({
         to: owner.to, from: FROM_EMAIL, kind: "buy_page_trial_owner", route: { tenantId: BUY_PAGE_TENANT_ID }, replyTo: email,
         subject: `✅ HOSTING TRIAL CONFIRMED — ${lead.company} (${pkg})`,
-        text: `${lead.company} confirmed their email for a ${pkg} hosting trial.\n\n${domain ? `Domain: ${domain}\nProvision the cPanel account and send the login.` : `They still need a domain — help them register one, then provision.`}\n\nContact: ${lead.contact_name} <${email}> · ${lead.contact_phone}\nOpen the lead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
+        text: `${lead.company} confirmed their email for a ${pkg} hosting trial.\n\n${domain ? `Domain: ${domain}\n` : ""}${ownerStep}\n\nContact: ${lead.contact_name} <${email}> · ${lead.contact_phone}\nOpen the lead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
       }).catch(() => {});
     }
-    return done(req, domain ? "pending" : "needdomain");
+    return done(req, !trialPlanOk ? "notrialplan" : domain ? "pending" : "needdomain");
   }
 
   // ── Live provisioning (irreversible) ──────────────────────────────────────

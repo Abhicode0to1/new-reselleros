@@ -22,6 +22,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { makeTrialToken } from "@/lib/hosting/trial-token";
+import { isTrialPlan, TRIAL_PLAN_ID, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 
 const FROM_EMAIL = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
@@ -30,14 +31,13 @@ const BUY_PAGE_TENANT_ID =
 
 const TRIAL_DAYS = 15;
 
-const PLAN_NAMES: Record<string, string> = { starter: "Starter", standard: "Standard", plus: "Plus" };
-
 const trialSchema = z.object({
   fullName: z.string().min(2).max(120),
   companyName: z.string().min(2).max(200),
   email: z.string().email().max(200),
   phone: z.string().min(10).max(20),
-  tierId: z.enum(["starter", "standard", "plus"]).optional(),
+  /** Only Starter has a trial (owner, 24 Sep 2026); anything else is refused below. */
+  tierId: z.string().max(20).optional(),
   /** Their website domain (optional — a first-time site may not have one yet). */
   domain: z.string().max(120).optional(),
   domainStatus: z.enum(["have", "need"]).optional(),
@@ -55,13 +55,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { fullName, companyName, email, phone, tierId, domain, domainStatus, message } = parsed.data;
+    const { fullName, companyName, email, phone, domain, domainStatus, message } = parsed.data;
+    if (parsed.data.tierId !== undefined && !isTrialPlan(parsed.data.tierId)) {
+      return NextResponse.json(
+        {
+          error: `The free trial is only on the ${TRIAL_PLAN_NAME} plan. Start a ${TRIAL_PLAN_NAME} trial and move up whenever you like, or buy ${parsed.data.tierId} straight away from the hosting page.`,
+          next: "/hosting#choose",
+        },
+        { status: 400 },
+      );
+    }
+    const tierId = TRIAL_PLAN_ID;
     const cleanDomain = (domain || "")
       .toLowerCase()
       .replace(/^https?:\/\//, "")
       .replace(/\/+$/, "")
       .trim();
-    const tierName = tierId ? PLAN_NAMES[tierId] : "Standard (default)";
+    const tierName = TRIAL_PLAN_NAME;
 
     const admin = createAdminClient();
     const leadId = "L-" + Date.now().toString(36).toUpperCase();
@@ -94,7 +104,7 @@ export async function POST(request: NextRequest) {
       contact_name: fullName,
       contact_email: email,
       contact_phone: phone,
-      plan: tierId ? `hosting-${tierId}` : "hosting-trial",
+      plan: `hosting-${tierId}`,
       seats: 1,
       value: 0,
       stage: "trial",

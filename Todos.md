@@ -143,6 +143,22 @@ to manage the domain from, and that nothing capped automatic spending.
 | 23 | Should a DMS account be created for the buyer? | Yes, create one *(recommended)* · No account | **Yes — found or created by email.** Corrected the same day: the option text said the customer "reaches it by the SSO hand-off", but ResellerOS has no customer portal to hand off FROM. So the engine sends a "set your password" email at creation, as DMS's guest checkout does (`engine-customer.ts`) |
 | 24 | What limit should automatic registration have? | Per-domain + daily cap *(recommended)* · Per-domain checks only · Human release every time | **Per-domain + daily cap** — live payment, paid ≥ ResellerClub cost, and under a daily count + ₹ cap; anything else waits for a person. No figures were given, so it ships at **5 per day / ₹10,000 per day**, set by env |
 
+### Decision 26 — only Starter has a free hosting trial (24 Sep 2026)
+
+Pardeep: *"we only offer free trial for Starter plan for both monthly and yearly … No other
+plans is eligible for free trial."* **Built.** One rule, `lib/hosting/trial-plan.ts`, read in four places:
+- **/hosting:** Starter keeps "Start free trial". Standard and Plus show "Buy" plus a "Try Starter
+  free" link.
+- **The trial form:** the plan picker is gone. `?plan=plus` gets a note and a buy link.
+- **The trial API:** refuses any other plan with a 400 that says what to do instead.
+- **The confirm route:** never provisions a Standard/Plus trial from an older lead. The owner
+  is told to offer Starter or a paid plan. The unknown-plan fallback to Standard is removed.
+
+Verified:
+- test-verified by `trial-plan.test.ts`;
+- browser-verified on the dev server: page HTML, the `?plan=plus` form, and a POST with
+  `tierId:"plus"` refused.
+
 ### Decision 25 — hosting goes through the DMS engine (24 Sep 2026)
 
 | # | Question as asked | Options offered | Pardeep's answer |

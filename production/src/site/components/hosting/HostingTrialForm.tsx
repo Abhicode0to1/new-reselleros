@@ -15,6 +15,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Manrope, Instrument_Serif } from "next/font/google";
 import { HOSTING_TIERS, TRIAL_DAYS } from "@/site/lib/data/hosting-landing-v2";
+import { isTrialPlan, TRIAL_PLAN_ID, TRIAL_PLAN_NAME } from "@/lib/hosting/trial-plan";
 
 const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--htf-sans", display: "swap" });
 const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: "italic", variable: "--htf-serif", display: "swap" });
@@ -29,11 +30,14 @@ type Status = "have" | "need";
 
 export function HostingTrialForm() {
   const params = useSearchParams();
+  /* Only Starter has a free trial (owner, 24 Sep 2026), so there is no plan to
+     pick. A link that still carries ?plan=standard / plus gets a plain note that
+     those plans are bought, not trialled — never a silent swap. */
   const planParam = (params.get("plan") || "").toLowerCase();
-  const initialPlan = HOSTING_TIERS.some((t) => t.name.toLowerCase() === planParam) ? planParam : "standard";
+  const askedForOther = planParam !== "" && !isTrialPlan(planParam) ? HOSTING_TIERS.find((t) => t.name.toLowerCase() === planParam)?.name ?? null : null;
+  const trialTier = HOSTING_TIERS.find((t) => isTrialPlan(t.name));
   const confirmed = params.get("confirmed");
 
-  const [plan, setPlan] = useState(initialPlan);
   const [company, setCompany] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -71,7 +75,7 @@ export function HostingTrialForm() {
           companyName: company.trim(),
           email: email.trim(),
           phone: phone.trim(),
-          tierId: plan,
+          tierId: TRIAL_PLAN_ID,
           domain: domainStatus === "have" ? domain.trim() : undefined,
           domainStatus,
           message: message.trim() || undefined,
@@ -99,6 +103,7 @@ export function HostingTrialForm() {
       provisioned: { ok: true, title: "You're all set — check your email.", body: "Your hosting account is live and we've emailed your control-panel login. Please change the password after your first sign-in." },
       already: { ok: true, title: "Your trial is already active.", body: "This account is already set up. Check your inbox for the login we sent earlier, or reply to that email if you need it again." },
       pending: { ok: true, title: "Email confirmed — setting up your account.", body: "Thanks! We're creating your cPanel account now and will email your login shortly. No credit card is charged." },
+      notrialplan: { ok: true, title: "Email confirmed — we'll call you about the plan.", body: `The free trial is now only on the ${TRIAL_PLAN_NAME} plan, and you asked for a bigger one. We'll be in touch shortly to start a ${TRIAL_PLAN_NAME} trial or set up the plan you picked. Nothing is charged.` },
       needdomain: { ok: true, title: "Email confirmed — one thing left.", body: "You told us you still need a domain. We'll be in touch shortly to help you pick one, then set up your trial." },
       error: { ok: false, title: "Almost there — we'll finish this by hand.", body: "We hit a snag setting things up automatically, so our team will complete it and email your login shortly. Nothing is wrong on your end." },
       expired: { ok: false, title: "That link has expired.", body: "Confirmation links are valid for 48 hours. Please start the trial again and we'll send a fresh one." },
@@ -124,7 +129,7 @@ export function HostingTrialForm() {
           <div style={{ fontSize: 40 }}>✓</div>
           <h1 style={{ fontSize: "clamp(26px,4vw,36px)", fontWeight: 800, letterSpacing: "-.03em", marginTop: 8 }}>Trial request received.</h1>
           <p style={{ marginTop: 14, fontSize: 17, lineHeight: 1.55, color: C.ink2 }}>
-            We&apos;ll set up your <strong>{HOSTING_TIERS.find((t) => t.name.toLowerCase() === plan)?.name || "hosting"}</strong> cPanel
+            We&apos;ll set up your <strong>{TRIAL_PLAN_NAME}</strong> cPanel
             account and email your login to <strong>{email}</strong> within a few hours — and WhatsApp you on {phone}.
             <strong> No credit card is charged.</strong> Your {TRIAL_DAYS} free days start once the account is ready.
           </p>
@@ -152,21 +157,19 @@ export function HostingTrialForm() {
           {/* Plan */}
           {field(
             <>
-              <span style={label}>Which plan?</span>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8 }}>
-                {HOSTING_TIERS.map((t) => {
-                  const id = t.name.toLowerCase();
-                  const active = plan === id;
-                  return (
-                    <button type="button" key={id} onClick={() => setPlan(id)}
-                      style={{ padding: "12px 8px", borderRadius: 11, cursor: "pointer", textAlign: "center",
-                        border: `1.5px solid ${active ? C.accent : C.line}`, background: active ? C.accSurf : C.card,
-                        color: active ? C.accentDark : C.ink2 }}>
-                      <div style={{ fontSize: 14.5, fontWeight: 800 }}>{t.name}</div>
-                      <div style={{ fontSize: 12, color: active ? C.accentDark : C.muted, marginTop: 2 }}>₹{t.yearlyMo}/mo</div>
-                    </button>
-                  );
-                })}
+              <span style={label}>Plan</span>
+              {askedForOther && (
+                <div role="status" style={{ marginBottom: 10, padding: "11px 13px", borderRadius: 11, background: C.accSurf, border: `1px solid ${C.accBorder}`, fontSize: 14, lineHeight: 1.5, color: C.ink2 }}>
+                  The free trial is only on {TRIAL_PLAN_NAME}. {askedForOther} is not trialled. You can trial {TRIAL_PLAN_NAME} here and move up later, or{" "}
+                  <a href="/hosting#choose" style={{ color: C.accentDark, fontWeight: 700 }}>buy {askedForOther} now</a>.
+                </div>
+              )}
+              <div style={{ padding: "12px 14px", borderRadius: 11, border: `1.5px solid ${C.accent}`, background: C.accSurf, color: C.accentDark, display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 14.5, fontWeight: 800 }}>{TRIAL_PLAN_NAME} · free for {TRIAL_DAYS} days</span>
+                {trialTier && <span style={{ fontSize: 12.5 }}>then from ₹{trialTier.yearlyMo}/mo</span>}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 13, color: C.muted }}>
+                Standard and Plus have no trial. <a href="/hosting#choose" style={{ color: C.ink2, fontWeight: 700 }}>Buy them from the plans</a>.
               </div>
             </>,
           )}
