@@ -50,6 +50,7 @@ overtaken on billing) and the "purchase funnel is deliberately NOT taken over" e
 | 8 | **DMS has no public pages.** ResellerOS's frontend is the one in use; in-panel buying is small dialogs inside the DMS panel | "Remove the frontend pages of DMS completely since we are using the frontend page of ResellerOS now" · "Build inner small models to be able for user to purchase hosting and domain when inside the customer panel. Then remove those full fledged pages." |
 | 9 | DMS's `/data-deletion` is removed too | answered "Remove it" when told ResellerOS has no equivalent and Facebook login may want one |
 | 10 | **Production DMS is not touched yet** — local only until a production ResellerOS address is given | answered "Local only for now" |
+| 11 | **Hosting prices exclude GST; 18% is added on top**, as ResellerOS does. A Starter year is ₹600 + ₹108 = ₹708 everywhere | "Reseller Os is correct price one. use that" |
 
 **The one price source (decision 7):** `LANDING_PLANS` in
 `production/src/site/lib/data/hosting-landing.ts` — Starter ₹49.99, Standard ₹125, Plus
@@ -132,13 +133,29 @@ with Razorpay before the first live mandate.
 - [x] **Historical `TI/…` invoices — NOT NEEDED. USER DECISION, Pardeep, 24 Sep 2026:** every
       DMS invoice so far was issued in testing, so there is no GSTR-1 history to preserve.
       Do not build anything to keep them reportable.
-- [ ] **DMS's in-panel cart must price hosting from ResellerOS (decision 7).** Corrected
-      24 Sep after reading the code: the panel dialog shows `config/hosting-plans.ts`, whose
-      three figures EQUAL ResellerOS's `LANDING_PLANS` today (pinned by a DMS test, so a change
-      to one fails until the other follows). `create-order` separately reads the Mongo
-      `hostingplans` row, including its Razorpay plan ids, and what amount those Razorpay plans
-      charge has NOT been checked. Still a second copy either way: DMS should read
-      ResellerOS's prices over the engine API.
+- [x] **DMS charges hosting at ResellerOS's price + GST (decisions 7 and 11).** One function,
+      DMS `lib/pricing/hosting-price.ts`, is ResellerOS's cart formula; every DMS hosting
+      charge reads it: the panel dialog, `create-order` (member and guest, now re-priced on
+      the server — before this both charged whatever price the browser sent), `/renew`,
+      `/renew-info`, `/upgrade`, `/upgrade-info` and the expiry worker. A plan ResellerOS does
+      not price is refused, never guessed. A cart holding the old figure gets `409
+      PRICE_CHANGED` with the new one. DMS no longer opens Razorpay Subscriptions for hosting
+      (their plans hard-code yearly = 12 × monthly, and renewals are ResellerOS's): paid hosting
+      is one payment for its period, trials take the no-mandate flow. Fixed on the way, both
+      customer-visible: the expiry worker emailed yearly renewals at the per-MONTH figure
+      (₹49.99 for a year), and fell back to Starter's price for unknown plans.
+      DMS `06a9546`. **test-verified:** 6,702 tests / 445 files; 25 go red if the GST is
+      removed. **browser-verified, local:** dialog ₹600→₹708 · ₹1,500→₹1,770 · ₹2,246→₹2,650
+      yearly and ₹118 · ₹295 · ₹441 monthly; cart Subtotal ₹600 · GST ₹108 · Total ₹708; the
+      running server refuses ₹599.88 with `409 PRICE_CHANGED`. A successful payment was NOT
+      run, because that creates a Razorpay order.
+- [ ] **DMS still holds a COPY of ResellerOS's hosting prices** (`config/hosting-plans.ts`,
+      pinned equal to `LANDING_PLANS` by a DMS test). Reading them over the engine API would
+      remove the copy.
+- [ ] **Existing DMS Razorpay hosting plans and subscriptions** (`hostingplans.razorpayPlans`)
+      still carry the old amounts. DMS no longer creates new ones, and there are no live
+      customers (decision 6), but any test subscription left in the Razorpay dashboard should
+      be cancelled there.
 - [ ] **Admin → Page management in DMS has dead controls.** Visibility toggles for the deleted
       pages and the homepage-design switch change nothing now. Remove them, or say so on the
       screen (L64: a control nobody enforces reads as one the operator has).
@@ -158,11 +175,8 @@ with Razorpay before the first live mandate.
       does DMS queue and bill later?
 - [ ] Do DMS's three admin invoice actions (re-sync invoice, invoice retry, issue-invoice
       worker) stop, or become "fetch from ResellerOS"?
-- [ ] **Is a hosting price GST-inclusive or not?** Found 24 Sep while building the dialog. DMS's
-      cart treats the figure as INCLUSIVE (`CartOrderSummary`: subtotal = total ÷ 1.18);
-      ResellerOS adds 18% on top. The same Starter year is **₹599.88 on DMS and ₹708 on
-      ResellerOS**. Decision 7 says ResellerOS's price wins, which would mean DMS undercharges
-      in-panel hosting by 18% — but that is a money decision, so nothing was changed.
+- [x] **Is a hosting price GST-inclusive or not?** Answered 24 Sep: ResellerOS's reading —
+      GST on top (decision 11). Built the same day, see above.
 - [ ] What is the production ResellerOS address DMS should redirect to? (decision 10)
 - [ ] Confirm `MAX_MANDATE_AMOUNT` with Razorpay (see above).
 - [ ] Disable the `tokens-charge-recurring` Cloud Scheduler job too. The code gate already

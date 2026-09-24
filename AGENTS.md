@@ -242,9 +242,9 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,676 passing across 444 files, zero failures**
-on 24 Sep 2026, after DMS's public pages were removed (DMS `0fe6c95`). Before that, the
-same day, 6,617 across 442, after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the
+`C:/xampp/htdocs/Domain-Management-Project`, **6,702 passing across 445 files, zero failures**
+on 24 Sep 2026, after hosting moved to ResellerOS's price + GST (DMS `06a9546`). Earlier
+the same day: 6,676 / 444 after DMS's public pages were removed (`0fe6c95`), and 6,617 / 442, after Zoho Books was removed (owner decision; ~250 Zoho tests deleted with the
 code) and the tokens recurring flow was gated off (DMS `8bf941e`). An earlier reading the same
 day, 6,594 passing with 23 failing in `recurring-charge-service.test.ts`, caught that gate
 mid-change, before those tests were opted in; it was not a real regression. Integration suite
