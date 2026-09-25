@@ -81,33 +81,51 @@ function dayStart(lines: StatementLine[]): number {
 }
 
 export function checkStatement(lines: StatementLine[], openingBalance: number): StatementCheck | null {
-  const withBal = lines.filter((l) => l.balance_after !== null);
   /* Without the bank's own running balance there is nothing to check against — say
-     nothing rather than something made up. */
-  if (withBal.length === 0 || withBal.length !== lines.length) return null;
+     nothing rather than something made up. Lines WITHOUT a balance (typed by hand, or
+     read from a PDF that did not show one) still count: their amounts are part of the
+     day's movement; they just cannot anchor the chain. Hiding the whole check because
+     one line lacks a balance is how a wrong opening balance went unflagged. */
+  const withBal = lines.filter((l) => l.balance_after !== null);
+  if (withBal.length === 0) return null;
 
   const byDay = new Map<string, StatementLine[]>();
   for (const l of lines) byDay.set(l.txn_date, [...(byDay.get(l.txn_date) ?? []), l]);
   const days = [...byDay.keys()].sort();
+  const balOf = (d: string) => byDay.get(d)!.filter((l) => l.balance_after !== null);
+  const netOf = (ls: StatementLine[]) => ls.reduce((s, l) => s + l.credit - l.debit, 0);
 
-  const impliedOpening = dayStart(byDay.get(days[0])!);
-  const appBalance = openingBalance + lines.reduce((s, l) => s + l.credit - l.debit, 0);
+  /* Opening: the first day that has a balance, walked back over any earlier days. */
+  const firstBalDay = days.find((d) => balOf(d).length > 0)!;
+  const beforeFirst = days.filter((d) => d < firstBalDay).flatMap((d) => byDay.get(d)!);
+  const impliedOpening = dayStart(balOf(firstBalDay)) - netOf(beforeFirst);
+
+  /* Compared at the last date the statement states a balance; lines after it are not
+     checked (nothing to check them against), so they are left out of both sides. */
+  const lastBalDay = [...days].reverse().find((d) => balOf(d).length > 0)!;
+  const appBalance = openingBalance + netOf(lines.filter((l) => l.txn_date <= lastBalDay));
 
   const gaps: StatementGap[] = [];
   let cur = impliedOpening;
   let lastGood = "";
   for (const d of days) {
+    if (d > lastBalDay) break;
     const dayLines = byDay.get(d)!;
-    const { rest } = thread(cur, dayLines);
-    const net = dayLines.reduce((s, l) => s + l.credit - l.debit, 0);
-    if (rest.length === 0) {
+    const bal = balOf(d);
+    const net = netOf(dayLines);
+    if (bal.length === 0) {
+      cur += net;   // no evidence for this day — take its lines as they are
+      continue;
+    }
+    const complete = bal.length === dayLines.length && thread(cur, dayLines).rest.length === 0;
+    if (complete) {
       cur += net;
       lastGood = d;
       continue;
     }
-    /* The chain broke: something happened that these lines do not show. Measure it at
-       the day's end, then carry on from the statement's own figure. */
-    const end = dayEnd(dayLines);
+    /* The chain broke, or the day has lines with no balance to thread: compare the day's
+       total movement with the statement's closing figure for that day. */
+    const end = dayEnd(bal);
     const expected = cur + net;
     if (!close(expected, end)) gaps.push({ after: lastGood || d, by: d, amount: expected - end });
     cur = end;
@@ -129,11 +147,10 @@ export function checkStatement(lines: StatementLine[], openingBalance: number): 
   }
   const realGaps = merged.filter((g) => !close(g.amount, 0));
 
-  const lastDay = byDay.get(days[days.length - 1])!;
-  const statementBalance = dayEnd(lastDay);
+  const statementBalance = dayEnd(balOf(lastBalDay));
   return {
     statementBalance,
-    statementDate: days[days.length - 1],
+    statementDate: lastBalDay,
     appBalance,
     difference: appBalance - statementBalance,
     impliedOpening,

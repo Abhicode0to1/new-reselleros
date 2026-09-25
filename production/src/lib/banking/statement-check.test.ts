@@ -68,4 +68,25 @@ describe("checkStatement", () => {
     expect(checkStatement([L("2026-04-02", 1000, 0, null)], 0)).toBeNull();
     expect(checkStatement([], 0)).toBeNull();
   });
+
+  it("lines without a balance still count — a filled gap stops being reported", () => {
+    // The 2,00,000 RTGS was added later without a running balance (read from a PDF).
+    const r = checkStatement([
+      L("2026-07-08", 0, 540000, 640000),
+      L("2026-07-16", 200000, 0, null),
+      L("2026-07-17", 2835, 0, 437165),
+    ], 100000);
+    expect(r?.gaps).toEqual([]);
+    expect(r?.difference).toBe(0);
+  });
+
+  it("still flags a wrong opening balance when some lines lack a balance", () => {
+    // Before: one missing-balance line made the whole check return null, hiding this.
+    const r = checkStatement([
+      L("2026-04-16", 19056, 0, 281245),
+      L("2026-05-02", 18999, 0, null),
+      L("2026-05-12", 1000, 0, 261246),
+    ], 0);
+    expect(r).toMatchObject({ impliedOpening: 300301, openingDifference: -300301, gaps: [] });
+  });
 });
