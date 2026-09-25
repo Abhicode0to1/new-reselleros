@@ -92,6 +92,20 @@ interface QuoteLine {
   /** Hosting lines only: the tier and the months paid for, read by the provisioning worker. */
   hostingPlan?: string;
   months?: 1 | 12;
+  /**
+   * Hosting lines only: how the plan renews. `record_payment` creates a subscription ONLY
+   * for a line carrying this, and the renewals cron works from that subscription. Missing
+   * until 25 Sep 2026, so every paid cart hosting order was a one-off that never came up
+   * for renewal. Same values as the Workspace checkout and the quote builder.
+   * Deliberately NOT on domain or mailbox lines: they renew at a different price.
+   */
+  commitment?: "annual_yearly" | "monthly";
+  /**
+   * The tenant's own hosting catalogue item, when it has one. `record_payment` reads the
+   * subscription's vendor from it; without it the vendor is guessed from the line name,
+   * and "Starter hosting" guesses as `other`.
+   */
+  item_id?: string;
 }
 
 type LineKind = "hosting" | "domain" | "mailbox";
@@ -123,7 +137,10 @@ function repriceLine(sku: string | undefined, cycle: string | undefined, qty: nu
     // Whole rupees — the money spine stores integers (CLAUDE.md §13); a fractional
     // tier total like ₹599.88 would break the integer lead/quote columns.
     const rate = Math.round(yearly ? t.yearlyTotal : t.monthly);
-    return { kind: "hosting", tier, yearly, line: { id: newId(), name: `${t.name} hosting (${yearly ? "billed yearly" : "billed monthly"})`, qty, rate, cost: 0, hostingPlan: tier, months: yearly ? 12 : 1 } };
+    // No `domain` on this line, on purpose: provisioning reads any line's `domain` as a
+    // domain to REGISTER (lib/provisioning/products.ts). The subscription takes the
+    // hosting domain from the quote instead.
+    return { kind: "hosting", tier, yearly, line: { id: newId(), name: `${t.name} hosting (${yearly ? "billed yearly" : "billed monthly"})`, qty, rate, cost: 0, hostingPlan: tier, months: yearly ? 12 : 1, commitment: yearly ? "annual_yearly" : "monthly" } };
   }
 
   // Domain lines are priced live, per name, in priceDomainLines() — not here.
@@ -388,6 +405,29 @@ export async function POST(request: NextRequest) {
     }
     if (isSimulation && !simulationAllowed) {
       return NextResponse.json({ error: "Online payment isn't available yet. Please use 'Get a quote'." }, { status: 503 });
+    }
+
+    // ── Link each hosting line to the tenant's hosting catalogue item ──────
+    // So the subscription record_payment builds is filed under vendor `hosting`. Matched
+    // on the tenant's own `vendor = 'hosting'` rows by name ("Starter Hosting"); with no
+    // match the line is simply left unlinked, which record_payment already handles.
+    // Optional: it only files the vendor, so it can never fail the sale.
+    if (hasHosting) {
+      try {
+        const { data: hostingItems, error: itemsErr } = await admin
+          .from("items")
+          .select("id, name")
+          .eq("tenant_id", BUY_PAGE_TENANT_ID)
+          .eq("vendor", "hosting");
+        if (itemsErr) console.warn("[checkout/cart] hosting catalogue lookup failed; lines left unlinked:", itemsErr.message);
+        for (const line of items) {
+          if (!line.hostingPlan) continue;
+          const match = (hostingItems ?? []).find((i) => i.name?.trim().toLowerCase() === `${line.hostingPlan} hosting`);
+          if (match) line.item_id = match.id;
+        }
+      } catch (err) {
+        console.warn("[checkout/cart] hosting catalogue lookup threw; lines left unlinked:", err instanceof Error ? err.message : err);
+      }
     }
 
     // ── Lead (stage='quote' = intent to buy) ───────────────────────────────

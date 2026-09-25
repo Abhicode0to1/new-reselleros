@@ -203,10 +203,27 @@ signed with the webhook secret and delivered locally.
 **Refusals:** Workspace (no online price), hosting with no domain, and a domain whose live price
 cannot be read. Each says why, and nothing is charged.
 
-**BUG FOUND, not fixed — awaiting Pardeep's go:** a paid hosting order creates NO subscription,
-so it never comes up for renewal. `record_payment` makes a subscription only for a line carrying
-`commitment`, and the cart's hosting lines carry none. The proposed fix is in the cart checkout
-route (not a blocked Billing file): set `commitment` on hosting lines.
+**BUG FIXED (Pardeep: "Fix the bug"):** a paid hosting order created NO subscription, so it never
+came up for renewal. `record_payment` makes a subscription only for a line carrying `commitment`,
+and the cart's hosting lines carried none. Fixed in the cart checkout route; `record_payment` is
+unchanged:
+- **`commitment`:** hosting lines now carry `annual_yearly` or `monthly`, the same values the
+  Workspace checkout uses.
+- **`item_id`:** hosting lines are linked to the tenant's `vendor = 'hosting'` catalogue item, so
+  the subscription is filed under `hosting` rather than a guessed `other`.
+
+Deliberately NOT changed:
+- **No `domain` on the hosting line.** Provisioning reads any line's `domain` as a domain to
+  REGISTER. The subscription takes its domain from the quote instead.
+- **No `commitment` on domain or mailbox lines.** They renew at their own price.
+
+Verified:
+- **Real Razorpay test payment** (Q-2222-2026-27-0014, `pay_Tg9m4ITt9J3ZUs`) → subscription
+  "Starter hosting (billed yearly)", vendor `hosting`, ₹50/month, 12 months, renews 25 Sep 2027,
+  on `subfix2509.in`. Only a hosting provisioning row, no stray domain registration.
+- **Monthly Standard**, checked inside a rolled-back transaction → ₹250/month, 1 month, renews
+  30 days later.
+- **Unit tests** in `checkout/cart/route.test.ts` fail if the commitment is removed.
 
 **Not testable here:** a real domain price. ResellerClub answers only the whitelisted IP.
 

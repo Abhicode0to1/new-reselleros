@@ -18,10 +18,17 @@ import { NextRequest } from "next/server";
 
 const inserts = vi.hoisted(() => ({ rows: [] as { table: string; row: Record<string, unknown> }[] }));
 const rpc = vi.hoisted(() => vi.fn());
+const catalog = vi.hoisted(() => ({ rows: [] as { id: string; name: string }[] }));
 vi.mock("@/lib/supabase/server", () => ({
   createAdminClient: () => ({
     from: (table: string) => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+      // tenant_secrets: select().eq().maybeSingle(). items: select().eq().eq() awaited.
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({ data: null, error: null }),
+          eq: async () => ({ data: table === "items" ? catalog.rows : [], error: null }),
+        }),
+      }),
       insert: async (row: Record<string, unknown>) => {
         inserts.rows.push({ table, row });
         return { error: null };
@@ -67,6 +74,7 @@ const lead = () => inserts.rows.find((r) => r.table === "leads")?.row;
 
 beforeEach(() => {
   inserts.rows = [];
+  catalog.rows = [];
   startHostingTrial.mockReset().mockResolvedValue({ ok: true, leadId: "L-TRIAL", trialEnds: "2026-10-09T00:00:00.000Z" });
   rpc.mockReset().mockImplementation(async (name: string) =>
     name === "next_document_number" ? { data: "Q-TEST-0001", error: null } : { data: null, error: null },
@@ -120,6 +128,53 @@ describe("domain lines — live price, exact name", () => {
     expect(res.status).toBe(400);
     res = await POST(req({ lines: [{ sku: "domain:in", domain: "acme.in", qty: 2 }] }));
     expect(res.status).toBe(400);
+  });
+});
+
+describe("a paid hosting order renews (25 Sep 2026: it created no subscription)", () => {
+  type Line = { name: string; commitment?: string; domain?: string; hostingPlan?: string };
+
+  it("a yearly hosting line carries commitment annual_yearly, so record_payment makes a subscription", async () => {
+    const res = await POST(req({ domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
+    expect(res.status).toBe(200);
+    const [line] = quote()!.line_items as Line[];
+    expect(line.commitment).toBe("annual_yearly");
+  });
+
+  it("a monthly hosting line carries commitment monthly", async () => {
+    await POST(req({ domain: "acme.in", lines: [{ sku: "hosting:standard", cycle: "monthly", qty: 1 }] }));
+    const [line] = quote()!.line_items as Line[];
+    expect(line.commitment).toBe("monthly");
+  });
+
+  it("the hosting line carries NO domain, or provisioning would try to REGISTER the customer's own domain", async () => {
+    await POST(req({ domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
+    const [line] = quote()!.line_items as Line[];
+    expect(line.domain).toBeUndefined();
+    expect(quote()!.domain).toBe("acme.in"); // where the subscription takes its domain from
+  });
+
+  it("links the tenant's own hosting catalogue item, so the subscription is filed under vendor hosting", async () => {
+    catalog.rows = [{ id: "HOST-STARTER-x", name: "Starter Hosting" }, { id: "HOST-PLUS-x", name: "Plus Hosting" }];
+    await POST(req({ domain: "acme.in", lines: [{ sku: "hosting:starter", cycle: "yearly", qty: 1 }] }));
+    const [line] = quote()!.line_items as { item_id?: string }[];
+    expect(line.item_id).toBe("HOST-STARTER-x");
+  });
+
+  it("no matching catalogue item → the line is left unlinked and the sale still goes through", async () => {
+    const res = await POST(req({ domain: "acme.in", lines: [{ sku: "hosting:standard", cycle: "yearly", qty: 1 }] }));
+    expect(res.status).toBe(200);
+    expect((quote()!.line_items as { item_id?: string }[])[0].item_id).toBeUndefined();
+  });
+
+  it("a domain line gets no commitment: a domain renews at its own price, not as a subscription here", async () => {
+    await POST(req({
+      address,
+      lines: [{ sku: "domain:in", domain: "acme.in", qty: 1 }, { sku: "hosting:starter", cycle: "yearly", qty: 1 }],
+    }));
+    const lines = quote()!.line_items as Line[];
+    expect(lines.find((l) => l.domain)?.commitment).toBeUndefined();
+    expect(lines.find((l) => l.hostingPlan)?.commitment).toBe("annual_yearly");
   });
 });
 
