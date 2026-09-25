@@ -26,7 +26,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
-import { useImportBankTransactions, useExistingTxnKeys, bankTxnKey } from "@/lib/queries/bank";
+import {
+  useImportBankTransactions,
+  useExistingTxnKeys,
+  bankTxnKey,
+  useBankAccount,
+  useUpdateBankAccount,
+} from "@/lib/queries/bank";
+import { openingBalanceFromStatement, fyStartFor } from "@/lib/banking/opening-balance";
 import { useTxnCategoryRules, useCreateTxnCategoryRule } from "@/lib/queries/txn-category-rules";
 import { proposePatterns } from "@/lib/banking/rule-from-line";
 import { directionOf } from "@/lib/banking/categorise";
@@ -262,12 +269,41 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
 
   const categorisedCount = parsed ? parsed.rows.filter((_, i) => categoryFor(i)).length : 0;
 
+  /* ── Opening balance from this statement ──────────────────────────────────
+     Off by default: replacing an account's opening balance moves every balance it
+     shows, so it happens only when the operator ticks it. The date defaults to the
+     start of the FY the statement's LATEST line is in — a statement that dips a few
+     days into March is still this year's statement. */
+  const { data: account } = useBankAccount(open ? accountId : null);
+  const updateAccount = useUpdateBankAccount();
+  const [applyOpening, setApplyOpening] = React.useState(false);
+  const [openingDate, setOpeningDate] = React.useState("");
+  React.useEffect(() => {
+    setApplyOpening(false);
+    const latest = parsed?.rows.reduce<string | null>(
+      (max, r) => (max === null || r.txn_date > max ? r.txn_date : max), null);
+    setOpeningDate(latest ? fyStartFor(latest) : "");
+  }, [parsed]);
+  const opening = React.useMemo(
+    () => (parsed && openingDate ? openingBalanceFromStatement(parsed.rows, openingDate) : null),
+    [parsed, openingDate],
+  );
+  const openingOn = applyOpening && opening?.ok === true;
+
+  /* Lines dated before the opening date are already inside the opening balance —
+     importing them too would count that money twice. */
+  const isExcluded = React.useCallback(
+    (r: ParsedRow) => openingOn && r.txn_date < openingDate,
+    [openingOn, openingDate],
+  );
+  const excludedCount = parsed ? parsed.rows.filter(isExcluded).length : 0;
+
   // How many parsed rows are already in the books (will be skipped on import).
   const dupCount = React.useMemo(() => {
     if (!parsed || !existingKeys) return 0;
-    return parsed.rows.filter((r) => existingKeys.has(bankTxnKey(r))).length;
-  }, [parsed, existingKeys]);
-  const freshCount = (parsed?.rows.length ?? 0) - dupCount;
+    return parsed.rows.filter((r) => !isExcluded(r) && existingKeys.has(bankTxnKey(r))).length;
+  }, [parsed, existingKeys, isExcluded]);
+  const freshCount = (parsed?.rows.length ?? 0) - excludedCount - dupCount;
 
   React.useEffect(() => {
     if (!open) { setCsvText(""); setParsed(null); setMode("csv"); setReading(false); }
@@ -336,20 +372,31 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
          picked it and 'rule' where a layer did, because the DB refuses a category with no
          stated source — an unattributable number in the books is the thing an auditor
          asks about first. */
-      await importMut.mutateAsync({
-        accountId,
-        rows: parsed.rows.map((r, i) => {
-          const category = categoryFor(i);
-          if (!category) return r;
-          const touched = override[i] !== undefined;
-          return {
-            ...r,
-            category,
-            category_source: touched ? ("manual" as const) : ("rule" as const),
-            category_confidence: 100,
-          };
-        }),
-      });
+      if (freshCount > 0) {
+        await importMut.mutateAsync({
+          accountId,
+          rows: parsed.rows.flatMap((r, i) => {
+            if (isExcluded(r)) return [];
+            const category = categoryFor(i);
+            if (!category) return [r];
+            const touched = override[i] !== undefined;
+            return [{
+              ...r,
+              category,
+              category_source: touched ? ("manual" as const) : ("rule" as const),
+              category_confidence: 100,
+            }];
+          }),
+        });
+      }
+      /* After the lines, not before: if the import fails the account keeps its old
+         opening balance rather than one that assumes lines which never arrived. */
+      if (openingOn && opening?.ok) {
+        await updateAccount.mutateAsync({
+          id: accountId,
+          patch: { opening_balance: opening.amount, opening_balance_date: openingDate },
+        });
+      }
       onOpenChange(false);
     } catch {
       /* hook handles toast */
@@ -463,7 +510,11 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
                         const suggestion = suggestions[i];
                         const chosen = categoryFor(i);
                         return (
-                          <tr key={i} className="border-t border-hairline">
+                          <tr
+                            key={i}
+                            className={`border-t border-hairline ${isExcluded(r) ? "opacity-40 line-through" : ""}`}
+                            title={isExcluded(r) ? "Before the opening-balance date — already inside the opening balance, not imported" : undefined}
+                          >
                             <td className="py-1 whitespace-nowrap">{formatDate(r.txn_date)}</td>
                             <td className="py-1 truncate max-w-[170px]" title={r.description}>{r.description}</td>
                             <td className="py-1 text-right text-rose tabular-nums">{r.debit > 0 ? rupee(r.debit) : "—"}</td>
@@ -559,6 +610,73 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
             </div>
           )}
 
+          {/* Opening balance from this statement's running-balance column. */}
+          {parsed && parsed.rows.length > 0 && opening && (
+            <div className="rounded-md border border-hairline bg-paper-2/30 p-3">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-amber"
+                  checked={applyOpening}
+                  disabled={!opening.ok}
+                  onChange={(e) => setApplyOpening(e.target.checked)}
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-ink">Set opening balance from this statement</span>
+                  <span className="block text-2xs text-ink-3">
+                    Currently {account ? <>{rupee(account.opening_balance)} as of {formatDate(account.opening_balance_date)}</> : "…"}
+                  </span>
+                </span>
+              </label>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2 pl-6">
+                <label htmlFor="opening-date" className="text-2xs text-ink-2">As of</label>
+                <input
+                  id="opening-date"
+                  type="date"
+                  value={openingDate}
+                  onChange={(e) => setOpeningDate(e.target.value)}
+                  className="rounded border border-hairline bg-paper px-2 py-0.5 text-2xs text-ink focus:outline-none focus:ring-2 focus:ring-amber"
+                />
+                {opening.ok && (
+                  <span className="text-sm font-semibold tabular-nums text-ink">{rupee(opening.amount)}</span>
+                )}
+              </div>
+
+              <div className="mt-1.5 pl-6 space-y-1 text-2xs">
+                {!opening.ok && <p className="text-rose-ink">{opening.reason}</p>}
+                {opening.ok && (
+                  <p className="text-ink-3">
+                    Balance just before the {formatDate(opening.firstLineDate)} line (its balance, plus its debit, minus its credit).
+                  </p>
+                )}
+                {opening.ok && opening.firstLineDate > openingDate && (
+                  <p className="text-amber-ink flex items-start gap-1.5">
+                    <Icon name="alert" size={12} className="mt-0.5 shrink-0" />
+                    <span>
+                      The statement&apos;s first line on or after {formatDate(openingDate)} is on {formatDate(opening.firstLineDate)}.
+                      This figure is the balance on {formatDate(openingDate)} only if nothing moved in between — check it against your passbook.
+                    </span>
+                  </p>
+                )}
+                {opening.ok && opening.chainBreaks > 0 && (
+                  <p className="text-amber-ink flex items-start gap-1.5">
+                    <Icon name="alert" size={12} className="mt-0.5 shrink-0" />
+                    <span>
+                      {opening.chainBreaks} line{opening.chainBreaks === 1 ? "" : "s"} where the running balance does not follow from the line before.
+                      Some lines may have been skipped while reading the statement — check before using this figure.
+                    </span>
+                  </p>
+                )}
+                {openingOn && excludedCount > 0 && (
+                  <p className="text-ink-2">
+                    {excludedCount} line{excludedCount === 1 ? "" : "s"} dated before {formatDate(openingDate)} will <b>not</b> be imported — the opening balance already includes {excludedCount === 1 ? "it" : "them"}.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="rounded-md bg-indigo-50 border border-indigo/20 px-3 py-2 text-2xs text-indigo-ink">
             <b>Tip:</b> Net banking se statement <b>PDF</b> ya <b>CSV</b> dono chalti hai —
             PDF ko AI padh leta hai, CSV auto-detect hoti hai (HDFC, ICICI, SBI, Axis,
@@ -573,13 +691,15 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
           <Button
             variant="primary"
             icon="upload"
-            disabled={freshCount === 0}
-            loading={importMut.isPending}
+            disabled={freshCount === 0 && !openingOn}
+            loading={importMut.isPending || updateAccount.isPending}
             onClick={handleImport}
           >
-            {dupCount > 0 && freshCount === 0
-              ? "Sab pehle se hain"
-              : `Import ${freshCount} row${freshCount === 1 ? "" : "s"}`}
+            {freshCount === 0 && openingOn
+              ? "Set opening balance"
+              : dupCount > 0 && freshCount === 0
+                ? "Sab pehle se hain"
+                : `Import ${freshCount} row${freshCount === 1 ? "" : "s"}${openingOn ? " + opening balance" : ""}`}
           </Button>
         </SheetFooter>
       </SheetContent>
