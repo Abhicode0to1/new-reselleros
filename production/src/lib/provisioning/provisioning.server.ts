@@ -16,6 +16,7 @@
 import { createClient as createBareClient } from "@supabase/supabase-js";
 import type { ProvisioningBlocker, ProvisioningVendor } from "./provisioning";
 import { DOMAIN_RENEWAL_PLAN } from "@/lib/domains/renewal";
+import { HOSTING_RENEWAL_PLAN } from "@/lib/hosting/renewal";
 
 function bare() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -42,19 +43,33 @@ export interface ReadyHostingRequest {
  * engine-not-connected or dial-hold row carries a blocker and is left alone.
  */
 export async function listReadyHostingRequests(limit = 50): Promise<ReadyHostingRequest[]> {
+  return listReadyHostingRows("new", limit);
+}
+
+/**
+ * Paid hosting RENEWALS approved the same way (25 Sep 2026). Separate, so the
+ * provision-hosting worker never creates an account for somebody renewing one; the
+ * renew-hosting worker takes only these.
+ */
+export async function listReadyHostingRenewals(limit = 50): Promise<ReadyHostingRequest[]> {
+  return listReadyHostingRows("renewal", limit);
+}
+
+async function listReadyHostingRows(kind: "new" | "renewal", limit: number): Promise<ReadyHostingRequest[]> {
   const db = bare();
   if (!db) return [];
-  const { data, error } = await db
+  let q = db
     .from("provisioning_requests")
     .select("id, tenant_id, quote_id, domain, plan")
     .eq("vendor", "hosting")
     .eq("status", "queued")
     .eq("payment_mode", "live")
-    .is("blocker", null)
-    .order("created_at", { ascending: true })
-    .limit(limit);
+    .is("blocker", null);
+  // As for domains: `neq` alone would drop NULL-plan rows, so the null case is named.
+  q = kind === "renewal" ? q.eq("plan", HOSTING_RENEWAL_PLAN) : q.or(`plan.is.null,plan.neq.${HOSTING_RENEWAL_PLAN}`);
+  const { data, error } = await q.order("created_at", { ascending: true }).limit(limit);
   if (error) {
-    console.error("[provisioning] list ready hosting failed:", error.message);
+    console.error(`[provisioning] list ready hosting ${kind === "new" ? "requests" : "renewals"} failed:`, error.message);
     return [];
   }
   return (data ?? []) as ReadyHostingRequest[];

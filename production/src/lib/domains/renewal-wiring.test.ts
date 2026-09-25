@@ -21,13 +21,20 @@ describe("the payment webhook", () => {
     expect(rpc).toBeGreaterThan(lookup);
   });
 
-  it("a paid domain renewal is queued as a RENEWAL row, behind the renewal switch", () => {
-    expect(w).toMatch(/plan:\s*renewalDomain \? DOMAIN_RENEWAL_PLAN/);
-    expect(w).toMatch(/renewalDomain \? domainRenewalEnabled\(\) : domainRegistrationEnabled\(\)/);
+  it("a paid renewal is queued with its renewal plan, behind the renewal switch — domain and hosting alike", () => {
+    expect(w).toMatch(/renewedSub\?\.vendor === "domain" \? DOMAIN_RENEWAL_PLAN : renewedSub\?\.vendor === "hosting" \? HOSTING_RENEWAL_PLAN : null/);
+    expect(w).toMatch(/plan:\s*renewalPlan \?\? quote\.plan/);
+    expect(w).toMatch(/renewalPlan \? domainRenewalEnabled\(\) : domainRegistrationEnabled\(\)/);
+    expect(w).toMatch(/renewalPlan \? hostingRenewalEnabled\(\) : hostingProvisioningEnabled\(\)/);
+  });
+
+  it("a renewal is never read from the lines as a new sale; a Workspace renewal queues nothing", () => {
+    expect(w).toMatch(/const products = isRenewal\s*\?\s*renewalPlan && renewalDomain/);
+    expect(w).toMatch(/:\s*\[\]\s*:\s*provisioningProducts\(/);
   });
 
   it("creates domain subscriptions only on a first sale, never on a renewal", () => {
-    expect(w).toMatch(/if \(!quote\.is_renewal && !renewedDomainSub\)/);
+    expect(w).toMatch(/if \(!isRenewal\)/);
     expect(w).toMatch(/domainSubscriptionsToCreate\(quote\.line_items\)/);
   });
 });
@@ -40,6 +47,15 @@ describe("the queue", () => {
   it("the renewal list takes only renewal rows", () => {
     expect(p).toMatch(/q\.eq\("plan", DOMAIN_RENEWAL_PLAN\)/);
   });
+  it("hosting: new-account list excludes renewals, renewal list takes only them", () => {
+    expect(p).toMatch(/plan\.is\.null,plan\.neq\.\$\{HOSTING_RENEWAL_PLAN\}/);
+    expect(p).toMatch(/q\.eq\("plan", HOSTING_RENEWAL_PLAN\)/);
+    expect(code("app/api/cron/provision-hosting/route.ts")).toMatch(/listReadyHostingRequests\(\)/);
+    const r = code("app/api/cron/renew-hosting/route.ts");
+    expect(r).toMatch(/listReadyHostingRenewals\(\)/);
+    expect(r).not.toMatch(/listReadyHostingRequests/);
+  });
+
   it("register-domains reads the registration list; renew-domains the renewal list", () => {
     expect(code("app/api/cron/register-domains/route.ts")).toMatch(/listReadyDomainRequests\(\)/);
     const r = code("app/api/cron/renew-domains/route.ts");

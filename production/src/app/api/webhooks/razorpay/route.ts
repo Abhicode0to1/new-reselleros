@@ -38,6 +38,7 @@ import {
   domainSubscriptionInsert,
   domainSubscriptionsToCreate,
 } from "@/lib/domains/renewal";
+import { HOSTING_RENEWAL_PLAN, hostingRenewalEnabled } from "@/lib/hosting/renewal";
 import { commandsConfigured } from "@/lib/dms-engine/commands";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 
@@ -292,15 +293,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid payment amount" }, { status: 400 });
   }
 
-  /* Is this the renewal of a DOMAIN subscription? Read BEFORE record_payment, which rolls
-     the subscription forward. A paid domain is otherwise queued as a REGISTRATION, and
-     registering a domain the customer already owns is the wrong spend (25 Sep 2026). */
-  const { data: renewedDomainSub } = await admin
+  /* Which subscription does this quote RENEW, if any? Read BEFORE record_payment, which
+     rolls it forward and clears the link. Until 25 Sep 2026 every paid quote was read as a
+     sale, so a paid domain renewal was queued as a REGISTRATION of a domain the customer
+     already owns, and a paid hosting renewal as a NEW account, with DMS's expiry never
+     moved. */
+  const { data: renewedSub } = await admin
     .from("subscriptions")
     .select("id, domain, vendor")
     .eq("tenant_id", quote.tenant_id)
     .eq("renewal_quote_id", quote.id)
-    .eq("vendor", "domain")
     .maybeSingle();
 
   const { error: rpcErr } = await admin.rpc("record_payment", {
@@ -345,11 +347,26 @@ export async function POST(request: NextRequest) {
      account in one payment; picking a single vendor left the paid domain queued for
      nobody. Each product gets the same gate as before, on its own vendor and domain. */
   const dialMode = (await loadAutonomyPolicy(quote.tenant_id)).modes?.["provisioning.activate"] ?? "off";
-  /* A paid domain RENEWAL is one product: renew that domain. Never the lines' reading,
-     which would make it a registration. */
-  const renewalDomain = renewedDomainSub?.domain?.trim().toLowerCase() || null;
-  const products = renewalDomain
-    ? [{ vendor: "domain" as const, domain: renewalDomain, seats: 1 }]
+  /* A paid RENEWAL is never read from the lines, which would make it a new sale:
+       domain  → renew that domain (DOMAIN_RENEWAL_PLAN row, renew-domains worker);
+       hosting → extend that account in DMS (HOSTING_RENEWAL_PLAN row, renew-hosting worker);
+       anything else (a Workspace / M365 / Zoho licence) → nothing to activate: the licence
+       is already running, the payment only settles its next term.
+     A quote marked as a renewal whose subscription cannot be found is not guessed at: it
+     queues nothing, loudly. */
+  const isRenewal = Boolean(renewedSub) || Boolean(quote.is_renewal);
+  const renewalDomain = renewedSub?.domain?.trim().toLowerCase() || null;
+  const renewalPlan =
+    renewedSub?.vendor === "domain" ? DOMAIN_RENEWAL_PLAN : renewedSub?.vendor === "hosting" ? HOSTING_RENEWAL_PLAN : null;
+  if (quote.is_renewal && !renewedSub) {
+    console.error(`[webhooks/razorpay] ${quote.id} is a renewal quote but no subscription points at it, so nothing was queued. Find the subscription it renews and extend it by hand.`);
+  } else if (renewedSub && !renewalPlan) {
+    console.log(`[webhooks/razorpay] ${quote.id} renews a ${renewedSub.vendor} subscription — nothing to activate.`);
+  }
+  const products = isRenewal
+    ? renewalPlan && renewalDomain
+      ? [{ vendor: renewedSub!.vendor as "domain" | "hosting", domain: renewalDomain, seats: 1 }]
+      : []
     : provisioningProducts({
         lineItems: quote.line_items,
         vendor: provisioningVendor,
@@ -385,9 +402,9 @@ export async function POST(request: NextRequest) {
          DirectAdmin credentials, which only the hosting trial still uses. */
       engineConnected:
         product.vendor === "hosting"
-          ? hostingProvisioningEnabled() && commandsConfigured()
+          ? (renewalPlan ? hostingRenewalEnabled() : hostingProvisioningEnabled()) && commandsConfigured()
           : product.vendor === "domain"
-            ? (renewalDomain ? domainRenewalEnabled() : domainRegistrationEnabled()) && commandsConfigured()
+            ? (renewalPlan ? domainRenewalEnabled() : domainRegistrationEnabled()) && commandsConfigured()
             : false,
       dialMode,
     });
@@ -399,8 +416,8 @@ export async function POST(request: NextRequest) {
         vendor:      product.vendor,
         seats:       product.seats,
         domain:      product.domain,
-        // The renew-domains worker takes only DOMAIN_RENEWAL_PLAN rows; register-domains skips them.
-        plan:        renewalDomain ? DOMAIN_RENEWAL_PLAN : quote.plan ?? null,
+        // Renewal rows carry their plan marker; the new-sale workers skip them.
+        plan:        renewalPlan ?? quote.plan ?? null,
         amountPaid:  paymentAmount,
         paymentMode: razorpayMode(keyIdForMode),
         blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
@@ -418,7 +435,7 @@ export async function POST(request: NextRequest) {
      here rather than through record_payment's line `commitment`, which keeps one
      subscription per (quote, domain) and would drop it when hosting shares the name.
      Best-effort and logged: the payment is already recorded. */
-  if (!quote.is_renewal && !renewedDomainSub) {
+  if (!isRenewal) {
     const toCreate = domainSubscriptionsToCreate(quote.line_items);
     if (toCreate.length) {
       const { data: paidQuote } = await admin
