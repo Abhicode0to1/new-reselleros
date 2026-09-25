@@ -493,8 +493,9 @@ with Razorpay before the first live mandate.
       25 Sep 2026. DirectAdmin user `rsospf34b2` / `rsosprovtest2409.in` was confirmed first as the
       only user on the server, created 24 Sep with the test email and holding 0.14 MB. DirectAdmin
       answered "User deleted", its user list is now empty, and a lookup of the user answers
-      "Unable to show user". Still present LOCALLY only: the DMS user
-      `rsos-provision-test@example.invalid` and its hosting row in local Mongo.
+      "Unable to show user". The local DMS records went too (Pardeep: "Remove from local DB
+      also"), all by exact id: the DMS user `rsos-provision-test@example.invalid`, its hosting
+      row, and the six `live-da-test-*` engine commands. Nothing else referred to them.
 - [ ] **server1 is not the server DMS's config describes. Check before any production hosting
       sale.** Measured 24 Sep 2026: server1.anutech.in has IP **35.207.233.155**, and before this test
       it had **no packages, no users and no resellers**. In July the same hostname answered on
