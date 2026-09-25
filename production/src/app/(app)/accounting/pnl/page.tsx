@@ -31,7 +31,7 @@ import { PnLDrilldownDialog, type PnLDrillKind } from "@/components/features/acc
 import { PnlWaterfall, HundredRupeeBar } from "@/components/features/accounting/pnl-waterfall";
 import { MoneyFlow } from "@/components/features/accounting/money-flow";
 import {
-  buildPnl, vendorsFromSubscriptions, cogsBasisNote, compareFigures, isPartialPeriod,
+  buildPnl, vendorsFromSubscriptions, compareFigures, isPartialPeriod,
   type PnlPeriod,
 } from "@/lib/accounting/pnl";
 import { pnlWaterfall, hundredRupeeSplit } from "@/lib/accounting/waterfall";
@@ -42,6 +42,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { buildExpenseReport, type ExpenseReport } from "@/lib/accounting/expense-report";
+import { PnlHeadline } from "@/components/features/accounting/pnl-headline";
 import { ExpenseReportCard } from "@/components/features/accounting/expense-report-card";
 
 // ────────────────────────────────────────────────────────────────
@@ -404,13 +405,16 @@ export default function PnLPage() {
       `pnl-${range.from}-to-${range.to}.csv`,
       ["Line", "Amount (INR)"],
       [
+        /* Same figures as the screen (`model`): a missing cost of goods exports as
+           "not recorded", not as ₹0 with a profit computed on top of it. */
         ["Period", `${range.from} to ${range.to}`],
-        ["Revenue", data.revenue],
-        ["Cost of goods sold", -data.cogs],
-        ["Gross margin", data.grossMargin],
+        ["Revenue", data.model.revenue],
+        ["Cost of goods (licence cost)", data.model.cogsBasis === "unknown" ? "not recorded" : -data.model.cogs],
+        ["Cost of goods basis", data.model.cogsBasis],
+        ["Gross margin", data.model.grossMargin ?? "unknown"],
         ["Operating expenses", -data.expenses],
         ["Commissions", -data.commissions],
-        ["Net profit", data.netProfit],
+        ["Net profit", data.model.netProfit ?? "unknown (cost of goods not recorded)"],
         ["", ""],
         ["Output GST (on sales)", data.outputGST],
         ["Input GST (ITC)", data.inputGST],
@@ -478,6 +482,188 @@ export default function PnLPage() {
         </div>
       </Card>
 
+      {/* ── THE ANSWER FIRST ────────────────────────────────────────────────
+          Revenue · cost of goods · expenses · net profit, before any chart. The page used
+          to open on a "per ₹100" bar that refused to draw when the licence cost was
+          missing, with the statement itself at the bottom. */}
+      {!isLoading && data && (
+        <PnlHeadline
+          model={data.model}
+          revenueCount={data.revenueCount}
+          expensesCount={data.expensesCount}
+          onOpen={(k) => { if (k === "expenses") setDrillExpenseCat(null); setDrill(k); }}
+        />
+      )}
+
+      {/* P&L waterfall */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 mb-6">
+        {/* Left: waterfall */}
+        <Card className="p-5 md:p-6">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
+            Profit &amp; Loss statement · {range.from} to {range.to}
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : data ? (
+            <div className="space-y-2.5">
+              {/* These rows read `model`, not the flat fields. The flat `cogs` comes from
+                  `vendor_bills`, which is empty here — it is what printed "₹0 · 100.0%
+                  margin" directly under a chart saying 37%. One page cannot hold two
+                  answers to the same question. */}
+              <Row label="Revenue"        amount={data.model.revenue}     hint={`${data.revenueCount} invoice${data.revenueCount === 1 ? "" : "s"}`} onHint={() => setDrill("revenue")} tone="ink" />
+              {/* Unknown is written as unknown. "₹0" under an unrecorded cost of goods — and a
+                  "₹0" gross margin under it — read as facts; they are gaps. */}
+              {data.model.cogsBasis === "unknown" ? (
+                <UnknownRow label={<>− <Term k="cogs">Cost of goods</Term> (licence cost)</>} value="Not recorded" note="enter the vendor bills" />
+              ) : (
+                <Row label={<>− <Term k="cogs">Cost of goods</Term> (licence cost)</>}
+                     amount={-data.model.cogs}
+                     hint={data.model.cogsBasis === "estimated"
+                       ? "estimated from your wholesale rates"
+                       : `${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`}
+                     onHint={() => setDrill("cogs")}
+                     tone="rose" />
+              )}
+
+              <Divider />
+              {data.model.grossMargin === null ? (
+                <UnknownRow label={<Term k="gross_margin">Gross Margin</Term>} value="Unknown" note="needs the cost of goods" />
+              ) : (
+                <Row label={<Term k="gross_margin">Gross Margin</Term>}
+                     amount={data.model.grossMargin}
+                     hint={data.model.grossMarginPct === null ? "no revenue this period" : `${data.model.grossMarginPct}% margin`}
+                     tone={data.model.grossMargin >= 0 ? "emerald" : "rose"}
+                     emphasis />
+              )}
+
+              <Row label={<>− <Term k="opex">Operating expenses</Term></>}
+                   amount={-data.expenses}
+                   hint={`${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"}`}
+                   onHint={() => { setDrillExpenseCat(null); setDrill("expenses"); }}
+                   tone="rose" />
+
+              {/* The per-category breakdown lives in the Expense report card below — listing
+                  it here as well was a third copy of the same numbers on one page. */}
+
+              {data.commissions > 0 && (
+                <Row label="− Referral commissions"
+                     amount={-data.commissions}
+                     hint={`${data.commissionsCount} ${data.commissionsCount === 1 ? "payout" : "payouts"}`}
+                     tone="rose" />
+              )}
+
+              <Divider thick />
+              {/* From `model`, like every other line of this statement. The flat
+                  `data.netProfit` subtracts vendor-bill COGS, which is ₹0 when no bills are
+                  entered — so the statement said "margin unknown" on one line and printed a
+                  confident net profit two lines later. */}
+              {data.model.netProfit === null ? (
+                <UnknownRow label="Net Profit" value="Unknown" note="cost of goods not recorded" large />
+              ) : (
+                <Row label={data.model.netProfit < 0 ? "Net Loss" : "Net Profit"}
+                     amount={data.model.netProfit}
+                     hint={data.model.revenue > 0
+                       ? `${((data.model.netProfit / data.model.revenue) * 100).toFixed(1)}% of revenue`
+                       : "no revenue this period"}
+                     tone={data.model.netProfit >= 0 ? "emerald" : "rose"}
+                     emphasis
+                     xl />
+              )}
+            </div>
+          ) : null}
+        </Card>
+
+        {/* Right: GST snapshot */}
+        <Card className="p-5 md:p-6">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
+            GST snapshot (same period)
+          </div>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : data ? (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between items-baseline">
+                <span className="text-ink-3"><Term k="output_gst">Output GST</Term> (on sales)</span>
+                <span className="font-mono text-ink font-semibold">{rupee(data.outputGST)}</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-ink-3">− <Term k="input_gst">Input GST</Term> paid</span>
+                <span className="font-mono text-emerald">−{rupee(data.inputGST)}</span>
+              </div>
+              <div className="border-t-2 border-ink pt-3 flex justify-between items-baseline">
+                <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold"><Term k="net_liability">Net liability</Term></span>
+                <span className={`font-serif text-2xl ${data.netGST >= 0 ? "text-rose" : "text-emerald"}`}>
+                  {rupee(data.netGST)}
+                </span>
+              </div>
+              <p className="text-2xs text-ink-3 leading-relaxed mt-3">
+                Net positive = payable to govt. Negative = refund / carryforward credit.
+                File via GSTR-3B by the 20th of next month.
+              </p>
+            </div>
+          ) : null}
+        </Card>
+      </div>
+
+      {/* Quick insights */}
+      {data && data.revenue > 0 && (
+        <Card className="p-5 bg-paper-2/30 mb-6">
+          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
+            What this means
+          </div>
+          <ul className="text-sm text-ink-2 space-y-1.5 list-disc pl-5">
+            {/* Every line reads `model`. These used to run off the flat fields, so the
+                page could congratulate the owner on a 100% margin in the same breath as
+                telling them no COGS was recorded — two conclusions from one gap. */}
+            {data.model.netProfit === null ? (
+              <li className="text-amber-ink">
+                Net profit can&apos;t be stated for this period — no licence cost is recorded, and
+                a licence you buy and resell is never 100% profit.
+              </li>
+            ) : data.model.netProfit >= 0 ? (
+              <li>
+                Aapne is period mein <b className="text-emerald">{rupee(data.model.netProfit)}</b> net
+                profit kamaya
+                {data.model.revenue > 0 && ` — ${Math.round((data.model.netProfit / data.model.revenue) * 100)}% margin`}.
+              </li>
+            ) : (
+              <li className="text-rose">
+                Is period mein <b>{rupee(Math.abs(data.model.netProfit))} ka loss</b> hai. Licence cost ya
+                running costs zyada hain.
+              </li>
+            )}
+            {data.model.grossMarginPct !== null && data.model.grossMarginPct < 20 && data.model.revenue > 0 && (
+              <li className="text-amber-ink">Gross margin is only {data.model.grossMarginPct}% — a healthy reseller range is 25–35%. Check your vendor bills or review your pricing.</li>
+            )}
+            {data.model.cogsBasis === "estimated" && (
+              <li className="text-amber-ink">
+                The licence cost above is estimated from your own wholesale rates — no vendor bills
+                are recorded. Enter the Google CSP / Microsoft / Zoho invoices to make this exact.
+              </li>
+            )}
+          </ul>
+        </Card>
+      )}
+
+
+      {/* ── EXPENSE REPORT ─────────────────────────────────────────────────────
+          The operating expenses behind the waterfall, as a report: category (share of
+          the total), vendor, month. Same rows as the "Operating expenses" line, so the
+          totals match; a category opens the same drill-down the line uses. */}
+      {!isLoading && data && (
+        <ExpenseReportCard
+          report={data.expenseReport}
+          periodLabel={`${range.from} to ${range.to}`}
+          fileStem={`${range.from}-to-${range.to}`}
+          onCategory={(c) => { setDrillExpenseCat(c); setDrill("expenses"); }}
+        />
+      )}
+
       {/* ── THE MONEY FLOW ───────────────────────────────────────────────────
           The chart the page always claimed to have: "P&L waterfall" was a comment over a
           list of rows. Bars are clickable into the same drill-down the rows use, so it is
@@ -542,7 +728,7 @@ export default function PnLPage() {
                       onOpen: () => setDrill("revenue"),
                     },
                     {
-                      key: "cogs", group: "out", label: "Vendor licences",
+                      key: "cogs", group: "out", label: "Cost of goods (licence cost)",
                       amount: m.cogs,
                       hint: m.cogsBasis === "estimated"
                         ? "from your wholesale rates"
@@ -603,15 +789,15 @@ export default function PnLPage() {
                  is wrong and where to fix it. */
               <div className="rounded-md border border-amber/40 bg-amber-soft/30 px-3 py-2.5">
                 <p className="text-[12px] font-medium text-ink">
-                  Can&apos;t chart this period — the licence cost is missing.
+                  The step chart needs the cost of goods (licence cost), which isn&apos;t recorded for this period.
                 </p>
-                <p className="mt-0.5 text-2xs leading-snug text-ink-2">{cogsBasisNote(m)}</p>
+                <p className="mt-0.5 text-2xs leading-snug text-ink-2">
+                  Enter the vendor bills (Google / Microsoft / Zoho invoices) and it draws itself.
+                </p>
               </div>
             )}
-
-            <p className="mt-3 border-t border-hairline pt-2 text-2xs leading-snug text-ink-3">
-              {cogsBasisNote(m)}
-            </p>
+            {/* The cost-basis note is said once, in the headline at the top of the page —
+                it used to appear here twice more. */}
 
             {/* Comparison — deltas that refuse to lie. See compareFigures. */}
             {compare && (
@@ -636,19 +822,6 @@ export default function PnLPage() {
           </Card>
         );
       })()}
-
-      {/* ── EXPENSE REPORT ─────────────────────────────────────────────────────
-          The operating expenses behind the waterfall, as a report: category (share of
-          the total), vendor, month. Same rows as the "Operating expenses" line, so the
-          totals match; a category opens the same drill-down the line uses. */}
-      {!isLoading && data && (
-        <ExpenseReportCard
-          report={data.expenseReport}
-          periodLabel={`${range.from} to ${range.to}`}
-          fileStem={`${range.from}-to-${range.to}`}
-          onCategory={(c) => { setDrillExpenseCat(c); setDrill("expenses"); }}
-        />
-      )}
 
       {/* ── PROFIT BY VENDOR ─────────────────────────────────────────────────
           Both sides come from the SAME subscription rows, so each vendor's margin is
@@ -771,160 +944,6 @@ export default function PnLPage() {
         </Card>
       )}
 
-      {/* P&L waterfall */}
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 mb-6">
-        {/* Left: waterfall */}
-        <Card className="p-5 md:p-6">
-          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
-            For period · {range.from} to {range.to}
-          </div>
-
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
-            </div>
-          ) : data ? (
-            <div className="space-y-2.5">
-              {/* These rows read `model`, not the flat fields. The flat `cogs` comes from
-                  `vendor_bills`, which is empty here — it is what printed "₹0 · 100.0%
-                  margin" directly under a chart saying 37%. One page cannot hold two
-                  answers to the same question. */}
-              <Row label="Revenue"        amount={data.model.revenue}     hint={`${data.revenueCount} invoice${data.revenueCount === 1 ? "" : "s"}`} onHint={() => setDrill("revenue")} tone="ink" />
-              <Row label={<>− <Term k="cogs">COGS</Term></>}
-                   amount={-data.model.cogs}
-                   hint={data.model.cogsBasis === "estimated"
-                     ? "estimated from your wholesale rates"
-                     : `${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`}
-                   onHint={() => setDrill("cogs")}
-                   tone="rose" />
-
-              <Divider />
-              <Row label={<Term k="gross_margin">Gross Margin</Term>}
-                   amount={data.model.grossMargin ?? 0}
-                   hint={data.model.grossMarginPct === null
-                     ? "margin unknown — no licence cost recorded"
-                     : `${data.model.grossMarginPct}% margin`}
-                   tone={(data.model.grossMargin ?? 0) >= 0 ? "emerald" : "rose"}
-                   emphasis />
-
-              <Row label={<>− <Term k="opex">Operating expenses</Term></>}
-                   amount={-data.expenses}
-                   hint={`${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"}`}
-                   onHint={() => { setDrillExpenseCat(null); setDrill("expenses"); }}
-                   tone="rose" />
-
-              {/* Category breakdown — click a group to see its entries. */}
-              {data.expensesByCategory.length > 0 && (
-                <div className="mt-1 mb-1 space-y-0.5">
-                  {data.expensesByCategory.map((c) => (
-                    <button
-                      key={c.category}
-                      type="button"
-                      onClick={() => { setDrillExpenseCat(c.category); setDrill("expenses"); }}
-                      title={`See ${c.category} entries`}
-                      className="w-full flex items-center justify-between gap-3 rounded pl-6 pr-1 py-1 text-left transition-colors hover:bg-paper-2/60"
-                    >
-                      <span className="text-[13px] text-ink-2">
-                        {c.category} <span className="text-2xs text-ink-3">· {c.count}</span>
-                      </span>
-                      <span className="font-mono text-[13px] tabular-nums text-rose">-{rupee(c.total)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {data.commissions > 0 && (
-                <Row label="− Referral commissions"
-                     amount={-data.commissions}
-                     hint={`${data.commissionsCount} ${data.commissionsCount === 1 ? "payout" : "payouts"}`}
-                     tone="rose" />
-              )}
-
-              <Divider thick />
-              <Row label="Net Profit"
-                   amount={data.netProfit}
-                   hint={`${data.profitPct.toFixed(1)}% net margin`}
-                   tone={data.netProfit >= 0 ? "emerald" : "rose"}
-                   emphasis
-                   xl />
-            </div>
-          ) : null}
-        </Card>
-
-        {/* Right: GST snapshot */}
-        <Card className="p-5 md:p-6">
-          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-4">
-            GST snapshot (same period)
-          </div>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
-          ) : data ? (
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between items-baseline">
-                <span className="text-ink-3"><Term k="output_gst">Output GST</Term> (on sales)</span>
-                <span className="font-mono text-ink font-semibold">{rupee(data.outputGST)}</span>
-              </div>
-              <div className="flex justify-between items-baseline">
-                <span className="text-ink-3">− <Term k="input_gst">Input GST</Term> paid</span>
-                <span className="font-mono text-emerald">−{rupee(data.inputGST)}</span>
-              </div>
-              <div className="border-t-2 border-ink pt-3 flex justify-between items-baseline">
-                <span className="text-2xs uppercase tracking-wider text-ink-3 font-semibold"><Term k="net_liability">Net liability</Term></span>
-                <span className={`font-serif text-2xl ${data.netGST >= 0 ? "text-rose" : "text-emerald"}`}>
-                  {rupee(data.netGST)}
-                </span>
-              </div>
-              <p className="text-2xs text-ink-3 leading-relaxed mt-3">
-                Net positive = payable to govt. Negative = refund / carryforward credit.
-                File via GSTR-3B by the 20th of next month.
-              </p>
-            </div>
-          ) : null}
-        </Card>
-      </div>
-
-      {/* Quick insights */}
-      {data && data.revenue > 0 && (
-        <Card className="p-5 bg-paper-2/30">
-          <div className="text-2xs uppercase tracking-wider text-ink-3 font-semibold mb-2">
-            What this means
-          </div>
-          <ul className="text-sm text-ink-2 space-y-1.5 list-disc pl-5">
-            {/* Every line reads `model`. These used to run off the flat fields, so the
-                page could congratulate the owner on a 100% margin in the same breath as
-                telling them no COGS was recorded — two conclusions from one gap. */}
-            {data.model.netProfit === null ? (
-              <li className="text-amber-ink">
-                Net profit can&apos;t be stated for this period — no licence cost is recorded, and
-                a licence you buy and resell is never 100% profit.
-              </li>
-            ) : data.model.netProfit >= 0 ? (
-              <li>
-                Aapne is period mein <b className="text-emerald">{rupee(data.model.netProfit)}</b> net
-                profit kamaya
-                {data.model.revenue > 0 && ` — ${Math.round((data.model.netProfit / data.model.revenue) * 100)}% margin`}.
-              </li>
-            ) : (
-              <li className="text-rose">
-                Is period mein <b>{rupee(Math.abs(data.model.netProfit))} ka loss</b> hai. Licence cost ya
-                running costs zyada hain.
-              </li>
-            )}
-            {data.model.grossMarginPct !== null && data.model.grossMarginPct < 20 && data.model.revenue > 0 && (
-              <li className="text-amber-ink">Gross margin is only {data.model.grossMarginPct}% — a healthy reseller range is 25–35%. Check your vendor bills or review your pricing.</li>
-            )}
-            {data.model.cogsBasis === "estimated" && (
-              <li className="text-amber-ink">
-                The licence cost above is estimated from your own wholesale rates — no vendor bills
-                are recorded. Enter the Google CSP / Microsoft / Zoho invoices to make this exact.
-              </li>
-            )}
-          </ul>
-        </Card>
-      )}
-
       <PnLDrilldownDialog
         open={drill !== null}
         onOpenChange={(o) => { if (!o) { setDrill(null); setDrillExpenseCat(null); } }}
@@ -969,6 +988,21 @@ function Row({
       </div>
       <div className={`font-mono whitespace-nowrap ${xl ? "font-serif text-3xl" : emphasis ? "text-lg font-semibold" : "text-base"} ${colorClass}`}>
         {amount < 0 ? "−" : ""}{rupee(Math.abs(amount))}
+      </div>
+    </div>
+  );
+}
+
+/** A statement line whose figure is not known — shown as words, never as ₹0. */
+function UnknownRow({ label, value, note, large }: {
+  label: React.ReactNode; value: string; note: string; large?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <div className={`${large ? "text-base font-semibold" : "text-sm"} text-ink leading-tight`}>{label}</div>
+      <div className="text-right">
+        <div className={`${large ? "font-serif text-2xl" : "text-base"} text-ink-3 italic`}>{value}</div>
+        <div className="text-2xs text-amber-ink">{note}</div>
       </div>
     </div>
   );
