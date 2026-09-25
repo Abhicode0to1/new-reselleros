@@ -36,6 +36,7 @@ import {
 } from "@/lib/queries/bank";
 import { rupee, formatDate } from "@/lib/utils";
 import { ImportStatementDialog } from "@/components/features/banking/import-statement-dialog";
+import { SalaryLinesDialog, salaryLinesOf } from "@/components/features/banking/salary-lines-dialog";
 import { ReconcileTransactionDialog } from "@/components/features/banking/reconcile-transaction-dialog";
 import { ConnectAaDialog } from "@/components/features/banking/connect-aa-dialog";
 import { useBankAaConnection, useFetchAaNow } from "@/lib/queries/bank-aa";
@@ -65,6 +66,7 @@ export default function BankAccountDetailPage() {
   const [tab,           setTab]           = React.useState<FilterTab>("all");
   const [search,        setSearch]        = React.useState("");
   const [importOpen,    setImportOpen]    = React.useState(false);
+  const [salaryOpen,    setSalaryOpen]    = React.useState(false);
   const [aaConnectOpen, setAaConnectOpen] = React.useState(false);
   const [reconcileTxn,  setReconcileTxn]  = React.useState<BankTransactionRow | null>(null);
 
@@ -82,6 +84,7 @@ export default function BankAccountDetailPage() {
     const unmatched = all - matched;
     return { all, unmatched, matched };
   }, [transactions]);
+  const salaryLineCount = React.useMemo(() => salaryLinesOf(transactions ?? []).length, [transactions]);
 
   const tabs: TabBarItem[] = [
     { id: "all",       label: "All",        count: counts.all       },
@@ -258,15 +261,29 @@ export default function BankAccountDetailPage() {
       <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
         <TabBar items={tabs} value={tab} onChange={(v) => setTab(v as FilterTab)} />
         {counts.unmatched > 0 && (
-          <Button
-            icon="sparkles"
-            variant="default"
-            loading={autoReconcile.isPending}
-            onClick={() => autoReconcile.mutate(account.id)}
-            title="Auto-match every unmatched line to its expense / salary / payment where the match is unambiguous"
-          >
-            {autoReconcile.isPending ? "Matching…" : `Auto-reconcile (${counts.unmatched})`}
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Salary lines Payroll never recorded — auto-reconcile has nothing to match
+                them to, so offer to create the records (every line previewed first). */}
+            {salaryLineCount > 0 && (
+              <Button
+                icon="users"
+                variant="default"
+                onClick={() => setSalaryOpen(true)}
+                title="Create salary records from this account's salary lines and reconcile them — you review every line first"
+              >
+                {`Salary lines (${salaryLineCount})`}
+              </Button>
+            )}
+            <Button
+              icon="sparkles"
+              variant="default"
+              loading={autoReconcile.isPending}
+              onClick={() => autoReconcile.mutate(account.id)}
+              title="Auto-match every unmatched line to its expense / salary / payment where the match is unambiguous"
+            >
+              {autoReconcile.isPending ? "Matching…" : `Auto-reconcile (${counts.unmatched})`}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -368,6 +385,7 @@ export default function BankAccountDetailPage() {
       )}
 
       <ImportStatementDialog open={importOpen} onOpenChange={setImportOpen} accountId={account.id} />
+      <SalaryLinesDialog open={salaryOpen} onOpenChange={setSalaryOpen} accountId={account.id} transactions={allTxns} />
       <ConnectAaDialog
         open={aaConnectOpen}
         onOpenChange={setAaConnectOpen}
