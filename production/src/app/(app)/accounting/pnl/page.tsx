@@ -43,6 +43,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { buildExpenseReport, type ExpenseReport } from "@/lib/accounting/expense-report";
 import { PnlHeadline } from "@/components/features/accounting/pnl-headline";
+import { netProfitView } from "@/lib/accounting/pnl-bound";
 import { ExpenseReportCard } from "@/components/features/accounting/expense-report-card";
 
 // ────────────────────────────────────────────────────────────────
@@ -491,6 +492,7 @@ export default function PnLPage() {
           model={data.model}
           revenueCount={data.revenueCount}
           expensesCount={data.expensesCount}
+          outputGst={data.outputGST}
           onOpen={(k) => { if (k === "expenses") setDrillExpenseCat(null); setDrill(k); }}
         />
       )}
@@ -513,7 +515,11 @@ export default function PnLPage() {
                   `vendor_bills`, which is empty here — it is what printed "₹0 · 100.0%
                   margin" directly under a chart saying 37%. One page cannot hold two
                   answers to the same question. */}
-              <Row label="Revenue"        amount={data.model.revenue}     hint={`${data.revenueCount} invoice${data.revenueCount === 1 ? "" : "s"}`} onHint={() => setDrill("revenue")} tone="ink" />
+              {/* Revenue is the invoiced amount less the GST on it — GST is collected for
+                  the government, not earned — and the hint says so in numbers. */}
+              <Row label="Revenue"        amount={data.model.revenue}
+                   hint={`${rupee(data.model.revenue + data.outputGST)} invoiced − ${rupee(data.outputGST)} GST · ${data.revenueCount} invoice${data.revenueCount === 1 ? "" : "s"}`}
+                   onHint={() => setDrill("revenue")} tone="ink" />
               {/* Unknown is written as unknown. "₹0" under an unrecorded cost of goods — and a
                   "₹0" gross margin under it — read as facts; they are gaps. */}
               {data.model.cogsBasis === "unknown" ? (
@@ -561,7 +567,22 @@ export default function PnLPage() {
                   entered — so the statement said "margin unknown" on one line and printed a
                   confident net profit two lines later. */}
               {data.model.netProfit === null ? (
-                <UnknownRow label="Net Profit" value="Unknown" note="cost of goods not recorded" large />
+                /* Without the licence cost the exact figure is unknown — but when expenses
+                   alone exceed revenue it is certainly a loss of at least the gap. */
+                (() => {
+                  const v = netProfitView(data.model);
+                  return v.kind === "loss-at-least" ? (
+                    <div className="flex items-baseline justify-between gap-3">
+                      <div className="text-base font-semibold text-ink leading-tight">Net Loss</div>
+                      <div className="text-right">
+                        <div className="font-serif text-2xl text-rose">at least {rupee(v.value)}</div>
+                        <div className="text-2xs text-amber-ink">the licence cost, once recorded, only adds to it</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <UnknownRow label="Net Profit" value="Unknown" note={`cost of goods not recorded · at most ${rupee(v.value)}`} large />
+                  );
+                })()
               ) : (
                 <Row label={data.model.netProfit < 0 ? "Net Loss" : "Net Profit"}
                      amount={data.model.netProfit}
@@ -621,10 +642,17 @@ export default function PnLPage() {
                 page could congratulate the owner on a 100% margin in the same breath as
                 telling them no COGS was recorded — two conclusions from one gap. */}
             {data.model.netProfit === null ? (
-              <li className="text-amber-ink">
-                Net profit can&apos;t be stated for this period — no licence cost is recorded, and
-                a licence you buy and resell is never 100% profit.
-              </li>
+              netProfitView(data.model).kind === "loss-at-least" ? (
+                <li className="text-rose">
+                  Is period mein <b>kam se kam {rupee(data.model.expenses - data.model.revenue)} ka loss</b> hai —
+                  sirf kharche hi revenue se zyada hain. Licence cost darj hone par loss aur badhega.
+                </li>
+              ) : (
+                <li className="text-amber-ink">
+                  Net profit can&apos;t be stated for this period — no licence cost is recorded, and
+                  a licence you buy and resell is never 100% profit.
+                </li>
+              )
             ) : data.model.netProfit >= 0 ? (
               <li>
                 Aapne is period mein <b className="text-emerald">{rupee(data.model.netProfit)}</b> net

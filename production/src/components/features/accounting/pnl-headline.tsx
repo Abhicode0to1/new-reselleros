@@ -3,10 +3,12 @@
  * Revenue · Cost of goods (licence cost) · Expenses · Net profit.
  *
  * Every figure reads `model` (lib/accounting/pnl.ts), the basis-aware numbers. When the
- * cost of goods is not recorded, net profit is shown as UNKNOWN — with "revenue −
- * expenses" given only as a ceiling, labelled as such — never as a confident number
- * that quietly treats the licence cost as zero. The one note on the cost basis lives
- * here, once, instead of being repeated in every card below.
+ * cost of goods is not recorded, net profit is never a confident number that quietly
+ * treats the licence cost as zero: if expenses alone exceed revenue it is a LOSS OF AT
+ * LEAST the gap (a fact whatever the licence cost is); otherwise it is UNKNOWN, with
+ * revenue − expenses given only as a ceiling (lib/accounting/pnl-bound.ts). Revenue
+ * shows "invoiced − GST" so the ex-GST figure explains itself. The one note on the cost
+ * basis lives here, once, instead of being repeated in every card below.
  */
 "use client";
 
@@ -14,11 +16,14 @@ import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { rupee } from "@/lib/utils";
 import { cogsBasisNote, type PnlPeriod } from "@/lib/accounting/pnl";
+import { netProfitView } from "@/lib/accounting/pnl-bound";
 
 interface Props {
   model: PnlPeriod;
   revenueCount: number;
   expensesCount: number;
+  /** Output GST on the same invoices — shown so "revenue = invoiced − GST" is visible. */
+  outputGst: number;
   onOpen: (kind: "revenue" | "cogs" | "expenses") => void;
 }
 
@@ -54,10 +59,9 @@ function Tile({
   );
 }
 
-export function PnlHeadline({ model, revenueCount, expensesCount, onOpen }: Props) {
+export function PnlHeadline({ model, revenueCount, expensesCount, outputGst, onOpen }: Props) {
   const pctOfRevenue = (v: number) => (model.revenue > 0 ? Math.round((v / model.revenue) * 100) : null);
-  const net = model.netProfit;
-  const netPct = net === null ? null : pctOfRevenue(net);
+  const view = netProfitView(model);
 
   return (
     <Card className="mb-6 p-2 md:p-3">
@@ -65,7 +69,7 @@ export function PnlHeadline({ model, revenueCount, expensesCount, onOpen }: Prop
         <Tile
           label="Revenue"
           value={rupee(model.revenue)}
-          sub={`${revenueCount} invoice${revenueCount === 1 ? "" : "s"} · before GST`}
+          sub={<>{rupee(model.revenue + outputGst)} invoiced − {rupee(outputGst)} GST · {revenueCount} invoice{revenueCount === 1 ? "" : "s"}</>}
           onClick={() => onOpen("revenue")}
         />
         <Tile
@@ -86,14 +90,29 @@ export function PnlHeadline({ model, revenueCount, expensesCount, onOpen }: Prop
           sub={`${expensesCount} ${expensesCount === 1 ? "entry" : "entries"} · salaries, software, office…`}
           onClick={() => onOpen("expenses")}
         />
-        <Tile
-          label={net !== null && net < 0 ? "Net loss" : "Net profit"}
-          value={net === null ? "Unknown" : rupee(Math.abs(net))}
-          tone={net === null ? "muted" : net >= 0 ? "emerald" : "rose"}
-          sub={net === null
-            ? <>cost of goods missing · at most {rupee(model.revenue - model.expenses)} (revenue − expenses)</>
-            : netPct === null ? "no revenue this period" : `${netPct}% of revenue`}
-        />
+        {view.kind === "known" ? (
+          <Tile
+            label={view.value < 0 ? "Net loss" : "Net profit"}
+            value={rupee(Math.abs(view.value))}
+            tone={view.value >= 0 ? "emerald" : "rose"}
+            sub={pctOfRevenue(view.value) === null ? "no revenue this period" : `${pctOfRevenue(view.value)}% of revenue`}
+          />
+        ) : view.kind === "loss-at-least" ? (
+          /* Expenses alone exceed revenue, so this is a loss whatever the licence cost is. */
+          <Tile
+            label="Net loss"
+            value={<>at least {rupee(view.value)}</>}
+            tone="rose"
+            sub="expenses alone exceed revenue · the licence cost, once recorded, only adds to it"
+          />
+        ) : (
+          <Tile
+            label="Net profit"
+            value="Unknown"
+            tone="muted"
+            sub={<>cost of goods missing · at most {rupee(view.value)} (revenue − expenses)</>}
+          />
+        )}
       </div>
 
       {/* The cost-of-goods caveat, said once for the whole page. */}
