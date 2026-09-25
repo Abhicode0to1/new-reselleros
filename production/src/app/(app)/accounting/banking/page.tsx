@@ -62,6 +62,10 @@ export default function BankingPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {/* The tenant's "narration contains X → category Y" rules used on import. */}
+          <Button icon="list" onClick={() => router.push("/accounting/banking/rules" as Route)}>
+            Category rules
+          </Button>
           {(accounts?.length ?? 0) >= 2 && (
             <Button icon="refresh" onClick={() => setTransferOpen(true)}>
               Move money / withdraw

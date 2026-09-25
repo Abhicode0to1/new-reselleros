@@ -102,3 +102,72 @@ export function useCreateTxnCategoryRule() {
     },
   });
 }
+
+/* ── Category Rules page (Banking → Category Rules) ─────────────────────────── */
+
+export type TxnCategoryRuleRow = CategoryRule & {
+  hit_count: number;
+  created_at: string;
+};
+
+/** Every rule with its bookkeeping fields, newest first — for the rules page. */
+export function useTxnCategoryRuleList() {
+  return useQuery({
+    queryKey: ["txn-category-rules", "list"],
+    queryFn: async (): Promise<TxnCategoryRuleRow[]> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("txn_category_rules")
+        .select("id, pattern, category, direction, hit_count, created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as TxnCategoryRuleRow[];
+    },
+  });
+}
+
+/**
+ * Change what a rule files lines as, or which side it fires on. Changing the direction
+ * can collide with a rule that already owns that pattern+direction (the unique index);
+ * that is refused with a sentence rather than a Postgres code.
+ */
+export function useUpdateTxnCategoryRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; category?: string; direction?: TxnRuleDirection }) => {
+      const supabase = createClient();
+      const patch: { category?: string; direction?: TxnRuleDirection; updated_at: string } = {
+        updated_at: new Date().toISOString(),
+      };
+      if (input.category !== undefined) patch.category = input.category;
+      if (input.direction !== undefined) patch.direction = input.direction;
+      const { error } = await supabase.from("txn_category_rules").update(patch).eq("id", input.id);
+      if (error?.code === "23505") {
+        throw new Error("Another rule already matches this text on that side — edit or delete that one instead.");
+      }
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["txn-category-rules"] });
+      toast.success("Rule updated.");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update that rule"),
+  });
+}
+
+/** Delete a rule. Lines already imported keep the category they were given. */
+export function useDeleteTxnCategoryRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const supabase = createClient();
+      const { error } = await supabase.from("txn_category_rules").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["txn-category-rules"] });
+      toast.success("Rule deleted.");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not delete that rule"),
+  });
+}
