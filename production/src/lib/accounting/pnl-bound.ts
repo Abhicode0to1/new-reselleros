@@ -14,8 +14,9 @@ export type NetProfitView =
   | { kind: "loss-at-least"; value: number }    // positive number: the minimum loss
   | { kind: "profit-at-most"; value: number };  // ceiling ≥ 0; could still be a loss
 
-export function netProfitView(m: Pick<PnlPeriod, "netProfit" | "revenue" | "expenses">): NetProfitView {
+export function netProfitView(m: Pick<PnlPeriod, "netProfit" | "revenue" | "expenses"> & { cogs?: number }): NetProfitView {
   if (m.netProfit !== null) return { kind: "known", value: m.netProfit };
-  const ceiling = m.revenue - m.expenses;
+  /* `cogs` here is only the KNOWN part (project delivery cost) — the licence part is what is unknown. */
+  const ceiling = m.revenue - (m.cogs ?? 0) - m.expenses;
   return ceiling < 0 ? { kind: "loss-at-least", value: -ceiling } : { kind: "profit-at-most", value: ceiling };
 }

@@ -72,15 +72,22 @@ export function PnlHeadline({ model, revenueCount, expensesCount, outputGst, onO
           sub={<>{rupee(model.revenue + outputGst)} invoiced − {rupee(outputGst)} GST · {revenueCount} invoice{revenueCount === 1 ? "" : "s"}</>}
           onClick={() => onOpen("revenue")}
         />
+        {/* Cost of goods = licence cost + project delivery cost (salary on customer
+            projects). The project part is always booked, so it shows even while the
+            licence part is not recorded. */}
         <Tile
-          label="Cost of goods (licence cost)"
-          value={model.cogsBasis === "unknown" ? "Not recorded" : `− ${rupee(model.cogs)}`}
+          label={model.projectCost > 0 ? "Cost of goods" : "Cost of goods (licence cost)"}
+          value={model.cogsBasis === "unknown"
+            ? (model.projectCost > 0 ? `− ${rupee(model.projectCost)} + ?` : "Not recorded")
+            : `− ${rupee(model.cogs)}`}
           tone={model.cogsBasis === "unknown" ? "amber" : "rose"}
           sub={model.cogsBasis === "unknown"
-            ? "enter vendor bills to see margin"
-            : model.cogsBasis === "estimated"
-              ? `estimated${model.grossMarginPct !== null ? ` · gross margin ${model.grossMarginPct}%` : ""}`
-              : `from vendor bills${model.grossMarginPct !== null ? ` · gross margin ${model.grossMarginPct}%` : ""}`}
+            ? (model.projectCost > 0 ? "project salary · licence cost not recorded" : "enter vendor bills to see margin")
+            : [
+                model.projectCost > 0 ? `${rupee(model.projectCost)} project salary` : null,
+                model.licenceCogs > 0 ? (model.cogsBasis === "estimated" ? "licences estimated" : "licences from vendor bills") : null,
+                model.grossMarginPct !== null ? `gross margin ${model.grossMarginPct}%` : null,
+              ].filter(Boolean).join(" · ")}
           onClick={() => onOpen("cogs")}
         />
         <Tile
@@ -103,7 +110,7 @@ export function PnlHeadline({ model, revenueCount, expensesCount, outputGst, onO
             label="Net loss"
             value={<>at least {rupee(view.value)}</>}
             tone="rose"
-            sub="expenses alone exceed revenue · the licence cost, once recorded, only adds to it"
+            sub={`${model.projectCost > 0 ? "project cost and expenses" : "expenses"} alone exceed revenue · the licence cost, once recorded, only adds to it`}
           />
         ) : (
           <Tile

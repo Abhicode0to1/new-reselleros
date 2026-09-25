@@ -20,6 +20,8 @@ interface Props {
   periodLabel: string;          // "2026-09-01 to 2026-09-30"
   fileStem: string;             // for the CSV name
   onCategory: (category: string) => void;
+  /** ₹ of these rows the P&L shows under cost of goods (salary on projects) — lib/accounting/project-cost.ts. */
+  movedToCogs?: number;
 }
 
 const monthLabel = (ym: string) => {
@@ -27,7 +29,7 @@ const monthLabel = (ym: string) => {
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
 };
 
-export function ExpenseReportCard({ report, periodLabel, fileStem, onCategory }: Props) {
+export function ExpenseReportCard({ report, periodLabel, fileStem, onCategory, movedToCogs = 0 }: Props) {
   const [showAllVendors, setShowAllVendors] = React.useState(false);
   const maxCat = Math.max(1, ...report.byCategory.map((c) => c.total));
   const maxMonth = Math.max(1, ...report.byMonth.map((m) => m.total));
@@ -54,7 +56,9 @@ export function ExpenseReportCard({ report, periodLabel, fileStem, onCategory }:
           <h2 className="text-2xs uppercase tracking-wider text-ink-3 font-semibold">Expense report</h2>
           <p className="font-serif text-2xl text-ink mt-1 tabular-nums">{rupee(report.total)}</p>
           <p className="text-2xs text-ink-3">
-            {report.count} {report.count === 1 ? "entry" : "entries"} · {periodLabel} · same total as “Operating expenses” below
+            {report.count} {report.count === 1 ? "entry" : "entries"} · {periodLabel} · {movedToCogs > 0
+              ? <>every booked expense — {rupee(movedToCogs)} of it (salary on projects) is shown under cost of goods, the rest is “Operating expenses”</>
+              : <>same total as “Operating expenses” below</>}
           </p>
         </div>
         <Button icon="download" variant="ghost" onClick={exportCsv} disabled={report.count === 0}>Export CSV</Button>

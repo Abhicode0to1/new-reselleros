@@ -44,6 +44,8 @@ import { cn } from "@/lib/utils";
 import { buildExpenseReport, type ExpenseReport } from "@/lib/accounting/expense-report";
 import { PnlHeadline } from "@/components/features/accounting/pnl-headline";
 import { netProfitView } from "@/lib/accounting/pnl-bound";
+import { projectCostForPeriod, type ProjectCostResult } from "@/lib/accounting/project-cost";
+import { ProjectMarginCard } from "@/components/features/accounting/project-margin-card";
 import { ExpenseReportCard } from "@/components/features/accounting/expense-report-card";
 
 // ────────────────────────────────────────────────────────────────
@@ -138,6 +140,8 @@ interface PnLNumbers {
    * they do, because `cogs` reads an empty table — **`model` is the one to trust.**
    */
   model: PnlPeriod;
+  /** Salary on customer projects + project-tagged expenses — lib/accounting/project-cost.ts. */
+  projectCost: ProjectCostResult;
 }
 
 function usePnL(range: DateRange, enabled = true) {
@@ -155,7 +159,7 @@ function usePnL(range: DateRange, enabled = true) {
       // revenue recognition point is invoice issue, not payment receipt.
       const { data: invoices, error: invErr } = await supabase
         .from("invoices")
-        .select("amount, status, invoice_date, net_payable, taxable_value, tax_amount, tax_rate")
+        .select("id, amount, status, invoice_date, net_payable, taxable_value, tax_amount, tax_rate")
         .gte("invoice_date", range.from)
         .lte("invoice_date", range.to)
         .in("status", ["pending", "paid", "overdue"]);
@@ -200,7 +204,7 @@ function usePnL(range: DateRange, enabled = true) {
       // ── Expenses: non-COGS ─────────────────────────────────────────
       const { data: expenses, error: eErr } = await supabase
         .from("expenses")
-        .select("amount, gst_paid, category, vendor_name, expense_date")
+        .select("amount, gst_paid, category, vendor_name, expense_date, project_id")
         .gte("expense_date", range.from)
         .lte("expense_date", range.to);
       if (eErr) throw eErr;
@@ -267,6 +271,46 @@ function usePnL(range: DateRange, enabled = true) {
         range.from, range.to,
       );
 
+      /* ── PROJECT DELIVERY COST — salary spent building customers' software ──
+         The project page records who worked on which project (project_labour). That
+         salary is the cost of the project sale, so it moves from operating expenses into
+         cost of goods — moved, never added, and never more than the salary booked in the
+         period (lib/accounting/project-cost.ts). Revenue invoiced against a project's
+         milestones is marked as project revenue so the licence ratio is not applied to it. */
+      const [
+        { data: labourRows, error: lErr },
+        { data: emps, error: empErr },
+        { data: projects, error: prErr },
+        { data: milestones, error: msErr },
+      ] = await Promise.all([
+        supabase.from("project_labour").select("project_id, employee_id, percent, months, start_date, end_date"),
+        supabase.from("employees").select("id, monthly_gross"),
+        supabase.from("project_sales").select("id, title, customer_name, start_date"),
+        supabase.from("project_milestones").select("project_id, invoice_id").not("invoice_id", "is", null),
+      ]);
+      if (lErr) throw lErr;
+      if (empErr) throw empErr;
+      if (prErr) throw prErr;
+      if (msErr) throw msErr;
+
+      const projectByInvoice = new Map((milestones ?? []).map((m) => [String(m.invoice_id), m.project_id]));
+      const revenueByProjectMap = new Map<string, number>();
+      for (const i of invoices ?? []) {
+        const pid = projectByInvoice.get(String(i.id));
+        if (pid) revenueByProjectMap.set(pid, (revenueByProjectMap.get(pid) ?? 0) + invTaxable(i));
+      }
+      const revenueByProject = [...revenueByProjectMap.entries()].map(([project_id, rev]) => ({ project_id, revenue: rev }));
+      const projectRevenue = revenueByProject.reduce((s, r) => s + r.revenue, 0);
+
+      const projectCost = projectCostForPeriod({
+        from: range.from, to: range.to,
+        allocations: (labourRows ?? []).map((l) => ({ ...l, percent: Number(l.percent), months: Number(l.months) })),
+        monthlyGross: new Map((emps ?? []).map((e) => [e.id, e.monthly_gross ?? 0])),
+        projects: projects ?? [],
+        expenses: expenses ?? [],
+        revenueByProject,
+      });
+
       /* Commissions are an operating cost, not a cost of goods — they are paid on a sale
          that already happened, so they sit below the gross margin exactly as netProfit
          has always treated them. */
@@ -275,6 +319,8 @@ function usePnL(range: DateRange, enabled = true) {
         expenses: expensesTotal + commissions,
         billedCogs: cogs > 0 ? cogs : null,
         vendors,
+        projectCost: projectCost.total,
+        projectRevenue,
       });
 
       // ── Compute derived numbers ─────────────────────────────────────
@@ -296,6 +342,7 @@ function usePnL(range: DateRange, enabled = true) {
         outputGST, inputGST, netGST,
         marginPct, profitPct,
         model,
+        projectCost,
       };
     },
   });
@@ -393,7 +440,9 @@ export default function PnLPage() {
   const cogsRatio = React.useMemo(() => {
     const m = data?.model;
     if (!m || m.revenue <= 0) return 0;
-    return m.cogs / m.revenue;
+    /* Licence part only: the trend subtracts every booked expense month by month, and
+       project salary is already inside those — adding it again as cost would count it twice. */
+    return m.licenceCogs / m.revenue;
   }, [data?.model]);
   const fyStart = React.useMemo(() => fiscalYearStart(istToday()).getUTCFullYear(), []);
   const { data: trend } = useMonthlyTrend(fyStart, cogsRatio, !!data);
@@ -410,10 +459,11 @@ export default function PnLPage() {
            "not recorded", not as ₹0 with a profit computed on top of it. */
         ["Period", `${range.from} to ${range.to}`],
         ["Revenue", data.model.revenue],
-        ["Cost of goods (licence cost)", data.model.cogsBasis === "unknown" ? "not recorded" : -data.model.cogs],
-        ["Cost of goods basis", data.model.cogsBasis],
+        ["Cost of goods — project delivery (salary on projects)", -data.model.projectCost],
+        ["Cost of goods — licence cost", data.model.cogsBasis === "unknown" ? "not recorded" : -data.model.licenceCogs],
+        ["Licence cost basis", data.model.cogsBasis],
         ["Gross margin", data.model.grossMargin ?? "unknown"],
-        ["Operating expenses", -data.expenses],
+        ["Operating expenses", -(data.expenses - data.model.projectCost)],
         ["Commissions", -data.commissions],
         ["Net profit", data.model.netProfit ?? "unknown (cost of goods not recorded)"],
         ["", ""],
@@ -522,11 +572,23 @@ export default function PnLPage() {
                    onHint={() => setDrill("revenue")} tone="ink" />
               {/* Unknown is written as unknown. "₹0" under an unrecorded cost of goods — and a
                   "₹0" gross margin under it — read as facts; they are gaps. */}
+              {/* Salary spent building customers' software is the cost of those sales —
+                  moved here from operating expenses (lib/accounting/project-cost.ts). */}
+              {data.model.projectCost > 0 && (
+                <Row label={<>− <Term k="cogs">Cost of goods</Term> (project delivery)</>}
+                     amount={-data.model.projectCost}
+                     hint={[
+                       data.projectCost.labour > 0 ? `${rupee(data.projectCost.labour)} salary on projects` : null,
+                       data.projectCost.direct > 0 ? `${rupee(data.projectCost.direct)} project expenses` : null,
+                       data.projectCost.capped ? "capped to salary booked" : null,
+                     ].filter(Boolean).join(" · ")}
+                     tone="rose" />
+              )}
               {data.model.cogsBasis === "unknown" ? (
                 <UnknownRow label={<>− <Term k="cogs">Cost of goods</Term> (licence cost)</>} value="Not recorded" note="enter the vendor bills" />
-              ) : (
+              ) : data.model.licenceCogs === 0 && data.model.projectCost > 0 ? null : (
                 <Row label={<>− <Term k="cogs">Cost of goods</Term> (licence cost)</>}
-                     amount={-data.model.cogs}
+                     amount={-data.model.licenceCogs}
                      hint={data.model.cogsBasis === "estimated"
                        ? "estimated from your wholesale rates"
                        : `${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`}
@@ -546,8 +608,8 @@ export default function PnLPage() {
               )}
 
               <Row label={<>− <Term k="opex">Operating expenses</Term></>}
-                   amount={-data.expenses}
-                   hint={`${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"}`}
+                   amount={-(data.expenses - data.model.projectCost)}
+                   hint={`${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"}${data.model.projectCost > 0 ? ` · ${rupee(data.model.projectCost)} moved to project cost` : ""}`}
                    onHint={() => { setDrillExpenseCat(null); setDrill("expenses"); }}
                    tone="rose" />
 
@@ -644,8 +706,8 @@ export default function PnLPage() {
             {data.model.netProfit === null ? (
               netProfitView(data.model).kind === "loss-at-least" ? (
                 <li className="text-rose">
-                  Is period mein <b>kam se kam {rupee(data.model.expenses - data.model.revenue)} ka loss</b> hai —
-                  sirf kharche hi revenue se zyada hain. Licence cost darj hone par loss aur badhega.
+                  Is period mein <b>kam se kam {rupee(netProfitView(data.model).value)} ka loss</b> hai —
+                  {data.model.projectCost > 0 ? " project cost aur kharche hi" : " sirf kharche hi"} revenue se zyada hain. Licence cost darj hone par loss aur badhega.
                 </li>
               ) : (
                 <li className="text-amber-ink">
@@ -668,6 +730,19 @@ export default function PnLPage() {
             {data.model.grossMarginPct !== null && data.model.grossMarginPct < 20 && data.model.revenue > 0 && (
               <li className="text-amber-ink">Gross margin is only {data.model.grossMarginPct}% — a healthy reseller range is 25–35%. Check your vendor bills or review your pricing.</li>
             )}
+            {data.projectCost.capped && (
+              <li className="text-amber-ink">
+                Projects par allocate ki gayi salary ({rupee(data.projectCost.labourAllocated)}) is period mein book hui salary
+                ({rupee(data.projectCost.salaryPool)}) se zyada hai — isliye project cost utni hi li gayi hai jitni salary book hui.
+                Is period ki salary entries book karein.
+              </li>
+            )}
+            {data.projectCost.undated > 0 && (
+              <li className="text-amber-ink">
+                {data.projectCost.undated} project labour allocation{data.projectCost.undated === 1 ? "" : "s"} ki koi date nahi hai
+                (na allocation par, na project par) — isliye wo kisi period mein nahi gini gayi. Project page par start date daalein.
+              </li>
+            )}
             {data.model.cogsBasis === "estimated" && (
               <li className="text-amber-ink">
                 The licence cost above is estimated from your own wholesale rates — no vendor bills
@@ -689,7 +764,15 @@ export default function PnLPage() {
           periodLabel={`${range.from} to ${range.to}`}
           fileStem={`${range.from}-to-${range.to}`}
           onCategory={(c) => { setDrillExpenseCat(c); setDrill("expenses"); }}
+          movedToCogs={data.model.projectCost}
         />
+      )}
+
+      {/* ── PROJECT MARGIN ─────────────────────────────────────────────────────
+          Software built for customers: what each project brought in this period against
+          the salary and expenses spent delivering it. */}
+      {!isLoading && data && (data.projectCost.byProject.length > 0 || data.projectCost.undated > 0) && (
+        <ProjectMarginCard result={data.projectCost} periodLabel={`${range.from} to ${range.to}`} />
       )}
 
       {/* ── THE MONEY FLOW ───────────────────────────────────────────────────
@@ -756,11 +839,15 @@ export default function PnLPage() {
                       onOpen: () => setDrill("revenue"),
                     },
                     {
-                      key: "cogs", group: "out", label: "Cost of goods (licence cost)",
+                      key: "cogs", group: "out",
+                      label: m.projectCost > 0 ? "Cost of goods (licences + project salary)" : "Cost of goods (licence cost)",
                       amount: m.cogs,
-                      hint: m.cogsBasis === "estimated"
-                        ? "from your wholesale rates"
-                        : `${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`,
+                      hint: [
+                        m.projectCost > 0 ? `${rupee(m.projectCost)} project delivery` : null,
+                        m.licenceCogs > 0
+                          ? (m.cogsBasis === "estimated" ? "licences from your wholesale rates" : `${data.cogsCount} vendor bill${data.cogsCount === 1 ? "" : "s"}`)
+                          : null,
+                      ].filter(Boolean).join(" · ") || "nothing bought to resell",
                       ofSalesPct: m.revenue > 0 ? Math.round((m.cogs / m.revenue) * 100) : null,
                       estimated: m.cogsBasis === "estimated",
                       onOpen: () => setDrill("cogs"),
@@ -768,7 +855,7 @@ export default function PnLPage() {
                     {
                       key: "opex", group: "out", label: "Running the business",
                       amount: m.expenses,
-                      hint: `${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"} — salaries, hosting, office`,
+                      hint: `${data.expensesCount} ${data.expensesCount === 1 ? "entry" : "entries"} — salaries, hosting, office${m.projectCost > 0 ? " (project salary moved to cost of goods)" : ""}`,
                       ofSalesPct: m.revenue > 0 ? Math.round((m.expenses / m.revenue) * 100) : null,
                       onOpen: () => { setDrillExpenseCat(null); setDrill("expenses"); },
                     },
