@@ -62,6 +62,7 @@ import { detectGovtPayment } from "@/lib/banking/govt-payment";
 import { payeeFromNarration, TEST_TRANSFER_MAX } from "@/lib/banking/narration";
 import { usePrepaidAdvances, useBookBankTxnAsPrepaid } from "@/lib/queries/prepaid-advances";
 import { AddCustomerForm } from "@/components/features/customers/add-customer-form";
+import { ProjectPaymentSection } from "@/components/features/banking/project-payment-section";
 
 /** Sentinel option value for "+ Naya customer banao" in the customer select. */
 const NEW_CUSTOMER = "__new_customer__";
@@ -256,6 +257,10 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
      (components/features/customers — Billing's form, used as-is, not copied), and
      picks the customer it creates. */
   const [newCustomerOpen, setNewCustomerOpen] = React.useState(false);
+  /* "Project payment" — which project (existing or new) this money is for; booked here
+     instead of sending the operator off to the projects page. */
+  const [showProject, setShowProject]   = React.useState(false);
+  const [projCustomer, setProjCustomer] = React.useState("");
   const [invLineName, setInvLineName]   = React.useState("");
   const [invTaxable, setInvTaxable]     = React.useState("");
   /* "" = not picked · CUSTOM_ITEM = typed name · else an items.id from the catalog. */
@@ -264,6 +269,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
   const activeItems = (items ?? []).filter((i) => i.is_active);
   React.useEffect(() => {
     setShowInvoice(false); setInvCustomer(""); setInvLineName(""); setInvTaxable(""); setInvItem("");
+    setShowProject(false); setProjCustomer("");
   }, [transaction?.id]);
 
   const handleBookInvoice = async () => {
@@ -696,7 +702,18 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 <p className="text-2xs text-ink-3 mb-3 leading-relaxed">
                   Income aksar invoice se aati hai. Is {rupee(amount)} ki invoice abhi nahi bani? Yahan se invoice (ya project payment) banao — uska payment record karte hi ye line neeche <b>suggested match</b> me aa jayegi, phir ek click me reconcile.
                 </p>
-                {!showInvoice ? (
+                {showProject && transaction ? (
+                  <ProjectPaymentSection
+                    txn={transaction}
+                    amount={amount}
+                    customers={customers ?? []}
+                    customerId={projCustomer}
+                    onCustomerChange={setProjCustomer}
+                    onNewCustomer={() => setNewCustomerOpen(true)}
+                    onCancel={() => setShowProject(false)}
+                    onDone={() => { setShowProject(false); onOpenChange(false); }}
+                  />
+                ) : !showInvoice ? (
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
@@ -716,11 +733,8 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                     <Button
                       size="sm"
                       variant="default"
-                      icon="external"
-                      onClick={() => {
-                        onOpenChange(false);
-                        router.push(`/projects?amount=${Math.round(amount)}&reconcile=${transaction?.id ?? ""}` as never);
-                      }}
+                      icon="briefcase"
+                      onClick={() => setShowProject(true)}
                     >
                       Project payment
                     </Button>
@@ -1256,7 +1270,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
       <AddCustomerForm
         open={newCustomerOpen}
         onOpenChange={setNewCustomerOpen}
-        onCreated={(id) => { setInvCustomer(id); setNewCustomerOpen(false); }}
+        onCreated={(id) => { setInvCustomer(id); setProjCustomer(id); setNewCustomerOpen(false); }}
       />
     </Sheet>
   );

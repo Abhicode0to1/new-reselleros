@@ -5214,6 +5214,10 @@ export type Database = {
         Args: { p_txn_id: string; p_kind: string; p_notes?: string | null };
         Returns: undefined;
       };
+      add_project_receipt_milestone: {
+        Args: { p_project_id: string; p_amount: number; p_label?: string | null };
+        Returns: string;
+      };
       book_bank_txn_as_tax: {
         Args: { p_txn_id: string; p_kind: string; p_period?: string | null; p_fy?: string | null; p_interest?: number; p_late_fee?: number; p_notes?: string | null };
         Returns: string;
