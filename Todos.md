@@ -180,6 +180,36 @@ refuse any other plan.
   **test-verified only.** Not tried in the running panel: the container still runs the previous
   build, and it needs a signed-in customer.
 
+### Site cart and checkout — tested end to end with Razorpay TEST mode (25 Sep 2026)
+
+Pardeep: *"our ResellerOS cart and checkout process works properly?"* He then gave Razorpay
+test keys, which are in local `.env.local` only.
+
+**Browser-verified**, headless Chromium against the local dev server:
+- /hosting "Buy" → cart → checkout details → payment step.
+- The real Razorpay checkout opened in Test Mode for ANUTECH DIGITAL at ₹708. Test netbanking
+  (Canara) → "Success" → `/done`.
+- Razorpay: payment `pay_Tg9f4Yp9hyzIoh` captured, order paid.
+
+**Webhook:** Razorpay cannot reach this machine, so that same payment's `payment.captured` was
+signed with the webhook secret and delivered locally.
+- The quote was marked paid (₹708, `received`) and one payment was recorded with the Razorpay id.
+- The hosting was queued with `test_mode_payment`, correctly held because it is a test payment.
+- Both emails were attempted; they logged `failed` because there is no email provider locally.
+- A wrong signature → 401. Both events replayed → `alreadyProcessed`, still one payment.
+
+**Prices:** Starter yearly ₹708; Standard monthly ₹295; Plus yearly with ANUTECH10 ₹2,385.
+
+**Refusals:** Workspace (no online price), hosting with no domain, and a domain whose live price
+cannot be read. Each says why, and nothing is charged.
+
+**BUG FOUND, not fixed — awaiting Pardeep's go:** a paid hosting order creates NO subscription,
+so it never comes up for renewal. `record_payment` makes a subscription only for a line carrying
+`commitment`, and the cart's hosting lines carry none. The proposed fix is in the cart checkout
+route (not a blocked Billing file): set `commitment` on hosting lines.
+
+**Not testable here:** a real domain price. ResellerClub answers only the whitelisted IP.
+
 ### Decision 27 — "Start free trial" goes straight to the cart (24 Sep 2026)
 
 Pardeep: *"when clicking Start Free trial button we should go to cart page? right — remove this
