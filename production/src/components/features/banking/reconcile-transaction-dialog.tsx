@@ -46,7 +46,9 @@ import {
   type BankTransactionRow,
   type MatchSuggestion,
 } from "@/lib/queries/bank";
-import { EXPENSE_CATEGORIES, useUnreconciledExpenses } from "@/lib/queries/expenses";
+import { EXPENSE_CATEGORIES, useUnreconciledExpenses, suggestCategory } from "@/lib/queries/expenses";
+import { useTxnCategoryRules } from "@/lib/queries/txn-category-rules";
+import { suggestForLine } from "@/lib/banking/categorise";
 import { useUnreconciledSalaries } from "@/lib/queries/payroll";
 import { useCustomers } from "@/lib/queries/customers";
 import { useItems } from "@/lib/queries/items";
@@ -148,9 +150,24 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
   const [bookCategory, setBookCategory] = React.useState("");
   const [bookVendor, setBookVendor]     = React.useState("");
   const [bookGst, setBookGst]           = React.useState("");
+
+  /* What this line probably IS, from the same layers the import uses: the category
+     saved on the line at import, else the tenant's Category Rules, else the built-in
+     keywords. Only an expense category counts — Salaries belong to Payroll. It PREFILLS
+     the expense form and moves it to the top; nothing is booked until the click. */
+  const { data: categoryRules } = useTxnCategoryRules();
+  const expenseSuggestion = React.useMemo((): { category: string; reason: string } | null => {
+    if (!transaction || transaction.debit <= 0) return null;
+    const isExpenseCat = (c: string | null | undefined): c is string =>
+      !!c && c !== "Salaries" && (EXPENSE_CATEGORIES as readonly string[]).includes(c);
+    if (isExpenseCat(transaction.category)) return { category: transaction.category, reason: "set when the statement was imported" };
+    const s = suggestForLine(transaction, categoryRules ?? [], suggestCategory);
+    return s && isExpenseCat(s.category) ? { category: s.category, reason: s.reason } : null;
+  }, [transaction, categoryRules]);
+
   React.useEffect(() => {
-    setBookCategory(""); setBookVendor(""); setBookGst("");
-  }, [transaction?.id]);
+    setBookCategory(expenseSuggestion?.category ?? ""); setBookVendor(""); setBookGst("");
+  }, [transaction?.id, expenseSuggestion?.category]);
 
   const handleBookExpense = async () => {
     if (!transaction || !bookCategory) return;
@@ -591,6 +608,63 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
               </div>
             )}
 
+            {/* Book directly as an expense — money-out lines only. Creates the
+                expense (P&L) and reconciles this line, with NO extra cash leg.
+                FIRST among the money-out choices: most money out is an expense, and
+                when a rule or the import already named the category it is prefilled. */}
+            {!isCredit && (
+              <div className={`rounded-md border p-3 ${expenseSuggestion ? "border-amber bg-amber-soft/40" : "border-amber/40 bg-amber-soft/25"}`}>
+                <p className="text-xs font-semibold text-ink-2 mb-1">
+                  {expenseSuggestion ? <>Looks like a <b>{expenseSuggestion.category}</b> expense</> : "Book as a new expense"}
+                </p>
+                <p className="text-2xs text-ink-3 mb-3 leading-relaxed">
+                  {expenseSuggestion
+                    ? <>Category filled from <b>{expenseSuggestion.reason}</b> — change it if that&apos;s wrong. </>
+                    : "Not in your books yet? "}
+                  Record this {rupee(amount)} as an expense and reconcile it in one step. No double entry — this bank line is the cash-out.
+                </p>
+                <div className="space-y-2">
+                  <select
+                    value={bookCategory}
+                    onChange={(e) => setBookCategory(e.target.value)}
+                    aria-label="Expense category"
+                    className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                  >
+                    <option value="" disabled>Choose category…</option>
+                    {/* Salaries are NOT a plain expense — they're booked in Payroll
+                        (payslip + statutory + paid-status), so they're excluded here. */}
+                    {EXPENSE_CATEGORIES.filter((c) => c !== "Salaries").map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input value={bookVendor} onChange={(e) => setBookVendor(e.target.value)} placeholder="Vendor / payee (optional)" />
+                    <Input value={bookGst} onChange={(e) => setBookGst(e.target.value)} type="number" min={0} placeholder="GST paid ₹ (optional)" />
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon="check"
+                  className="mt-3"
+                  disabled={!bookCategory || bookExpense.isPending}
+                  loading={bookExpense.isPending}
+                  onClick={handleBookExpense}
+                >
+                  {bookCategory ? `Book ${rupee(amount)} as ${bookCategory}` : `Book ${rupee(amount)} expense`}
+                </Button>
+                <p className="mt-2.5 text-2xs text-ink-3 leading-relaxed">
+                  Paying a salary?{" "}
+                  <button
+                    type="button"
+                    onClick={() => { onOpenChange(false); router.push("/accounting/payroll" as never); }}
+                    className="text-amber-ink font-medium underline hover:no-underline"
+                  >
+                    Open Payroll &amp; Leave →
+                  </button>{" "}
+                  run it there (payslip + statutory), then reconcile this line to it under “Combine multiple expenses”.
+                </p>
+              </div>
+            )}
+
             {/* Loan / advance between you and a person — BOTH sides. Not income,
                 not expense: books a balance-sheet ASSET (you lent) or LIABILITY
                 (you borrowed) so the P&L is untouched; the pair nets to zero once
@@ -679,54 +753,6 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
               </div>
             )}
 
-            {/* Book directly as an expense — money-out lines only. Creates the
-                expense (P&L) and reconciles this line, with NO extra cash leg. */}
-            {!isCredit && (
-              <div className="rounded-md border border-amber/40 bg-amber-soft/25 p-3">
-                <p className="text-xs font-semibold text-ink-2 mb-1">Book as a new expense</p>
-                <p className="text-2xs text-ink-3 mb-3 leading-relaxed">
-                  Not in your books yet? Record this {rupee(amount)} as an expense and reconcile it in one step. No double entry — this bank line is the cash-out.
-                </p>
-                <div className="space-y-2">
-                  <select
-                    value={bookCategory}
-                    onChange={(e) => setBookCategory(e.target.value)}
-                    className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
-                  >
-                    <option value="" disabled>Choose category…</option>
-                    {/* Salaries are NOT a plain expense — they're booked in Payroll
-                        (payslip + statutory + paid-status), so they're excluded here. */}
-                    {EXPENSE_CATEGORIES.filter((c) => c !== "Salaries").map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input value={bookVendor} onChange={(e) => setBookVendor(e.target.value)} placeholder="Vendor / payee (optional)" />
-                    <Input value={bookGst} onChange={(e) => setBookGst(e.target.value)} type="number" min={0} placeholder="GST paid ₹ (optional)" />
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  icon="check"
-                  className="mt-3"
-                  disabled={!bookCategory || bookExpense.isPending}
-                  loading={bookExpense.isPending}
-                  onClick={handleBookExpense}
-                >
-                  Book {rupee(amount)} expense
-                </Button>
-                <p className="mt-2.5 text-2xs text-ink-3 leading-relaxed">
-                  Paying a salary?{" "}
-                  <button
-                    type="button"
-                    onClick={() => { onOpenChange(false); router.push("/accounting/payroll" as never); }}
-                    className="text-amber-ink font-medium underline hover:no-underline"
-                  >
-                    Open Payroll &amp; Leave →
-                  </button>{" "}
-                  run it there (payslip + statutory), then reconcile this line to it under “Combine multiple expenses”.
-                </p>
-              </div>
-            )}
 
             {/* Statutory challan (TDS/PF/ESI) — money-out. Settles the statutory
                 payable against THIS imported line; no duplicate line is made. */}

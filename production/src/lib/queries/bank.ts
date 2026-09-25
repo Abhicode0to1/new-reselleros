@@ -56,6 +56,8 @@ export type BankTransactionRow = {
   matched_at:       string | null;
   matched_by:       string | null;
   match_confidence: "exact" | "high" | "low" | "manual" | null;
+  /** Category given at import (rule / keyword / operator) — a suggestion, not a booking. */
+  category?:        string | null;
   imported_at:      string;
   created_at:       string;
   updated_at:       string;
