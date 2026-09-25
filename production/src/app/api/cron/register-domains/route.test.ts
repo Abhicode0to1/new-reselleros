@@ -102,7 +102,26 @@ describe("what it does with the answer", () => {
     engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: { orderId: "RC-9" }, replayed: false });
     await GET(req());
     expect(prov.markProvisioningActivated).toHaveBeenCalledWith("R1", "RC-9");
+    // 25 Sep 2026: the one email on success goes to the CUSTOMER, through the automation
+    // dial (domain.registered.send) — never an owner alert.
+    expect(mail.sendEmail).toHaveBeenCalledTimes(1);
+    const msg = mail.sendEmail.mock.calls[0][0];
+    expect(msg.to).toBe(registrant.email);
+    expect(msg.subject).toBe("acme.in is registered");
+    expect(msg.automated).toEqual({ tenantId: "T1", action: "domain.registered.send" });
+  });
+  it("a domain found already registered to this customer → activated, but no email", async () => {
+    engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: { alreadyRegistered: true }, replayed: false });
+    await GET(req());
+    expect(prov.markProvisioningActivated).toHaveBeenCalledWith("R1", "already-registered");
     expect(mail.sendEmail).not.toHaveBeenCalled();
+  });
+  it("a failed customer email does not undo the registration", async () => {
+    engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: { orderId: "RC-9" }, replayed: false });
+    mail.sendEmail.mockRejectedValue(new Error("smtp down"));
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    expect(prov.markProvisioningActivated).toHaveBeenCalledWith("R1", "RC-9");
   });
   it("held → note, still queued, no alert", async () => {
     engine.sendEngineCommand.mockResolvedValue({ kind: "held", reason: "[held] daily limit" });

@@ -14,19 +14,17 @@
  *  - nothing adds a placeholder name ("yourname", "yourbusiness").
  */
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = join(process.cwd(), "src/site");
 
 /**
- * Two components still hold SKU-less adds, and neither is mounted: they were
- * replaced by the redesigned DomainLanding / HostingLanding on 2-3 Sep 2026
- * (git log -S"<DomainRateCard" / "<HostingPlans"). Listed so the scan stays
- * strict everywhere else — and pinned unmounted below, so mounting one of them
- * again fails here until its adds are fixed.
+ * DomainRateCard and HostingPlans held SKU-less adds and were replaced by the
+ * redesigned DomainLanding / HostingLanding on 2-3 Sep 2026. They were deleted on
+ * 25 Sep 2026, so every cart add in the site is now scanned with no exceptions.
  */
-const UNMOUNTED = ["components/domains/DomainRateCard.tsx", "components/hosting/HostingPlans.tsx"];
+const DELETED = ["components/domains/DomainRateCard.tsx", "components/hosting/HostingPlans.tsx"];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir)) {
@@ -62,7 +60,7 @@ describe("site cart lines are chargeable", () => {
     expect(withAdds.length).toBeGreaterThanOrEqual(3);
   });
 
-  for (const f of files.filter((x) => x.src.includes("cart.add(") && !UNMOUNTED.includes(x.rel))) {
+  for (const f of files.filter((x) => x.src.includes("cart.add(") && !DELETED.includes(x.rel))) {
     it(`${f.rel}: every add carries a sku, domain lines carry the name, no placeholders`, () => {
       for (const call of addCalls(f.src)) {
         // A ternary add (`cart.add(yearly ? {...} : {...})`) must carry a sku in each branch.
@@ -76,9 +74,9 @@ describe("site cart lines are chargeable", () => {
     });
   }
 
-  it("the two components with SKU-less adds are still not mounted anywhere", () => {
+  it("the two old components with SKU-less adds stay deleted, and nothing imports them", () => {
+    for (const rel of DELETED) expect(existsSync(join(ROOT, rel)), rel).toBe(false);
     const appSrc = walk(join(process.cwd(), "src"))
-      .filter((p) => !p.includes(`${join("src", "site", "components", "domains", "DomainRateCard")}`))
       .map((p) => readFileSync(p, "utf8"))
       .join("\n");
     expect(appSrc).not.toMatch(/import[^\n]*DomainRateCard/);

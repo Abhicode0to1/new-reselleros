@@ -40,6 +40,7 @@ import {
   noteProvisioning,
 } from "@/lib/provisioning/provisioning.server";
 import { commandsConfigured, sendEngineCommand } from "@/lib/dms-engine/commands";
+import { dmsPanelUrl } from "@/lib/dms-engine/client";
 import {
   coverFromPaid,
   domainRegistrationEnabled,
@@ -83,6 +84,45 @@ async function alertOwner(tenantId: string, subject: string, text: string) {
   await sendEmail({ to: alert.to, from: FROM_EMAIL, kind: "domain_registration_owner", route: { tenantId }, subject, text }).catch((e) =>
     console.error("[register-domains] owner alert failed:", e),
   );
+}
+
+/**
+ * "Your domain is registered" — an automated customer send, so it goes through the
+ * automation dial (`domain.registered.send`) and the kill switch like every other one.
+ * A failure is logged, never thrown: the domain IS registered either way.
+ */
+async function tellCustomer(tenantId: string, to: string, firstName: string, domain: string, quoteId: string) {
+  const panel = dmsPanelUrl("customer");
+  const text =
+    `Hi ${firstName || "there"},
+
+` +
+    `${domain} is now registered in your name. It usually takes a few hours for a new domain to work everywhere on the internet.
+
+` +
+    (panel
+      ? `You can manage it — nameservers, DNS records, renewal — in your customer panel: ${panel}
+` +
+        `If this is your first time there, use the "set your password" email we sent you to sign in.
+
+`
+      : `Reply to this email if you need anything changed on it.
+
+`) +
+    `Order reference: ${quoteId}
+`;
+  const res = await sendEmail({
+    to,
+    from: FROM_EMAIL,
+    kind: "domain_registered_customer",
+    route: { tenantId },
+    subject: `${domain} is registered`,
+    text,
+    automated: { tenantId, action: "domain.registered.send" },
+  }).catch((e: unknown) => ({ status: "failed" as const, errorMessage: e instanceof Error ? e.message : String(e) }));
+  if (res && (res as { status?: string }).status === "failed") {
+    console.error(`[register-domains] ${domain} registered, but the customer email to ${to} failed: ${(res as { errorMessage?: string }).errorMessage ?? "unknown error"}`);
+  }
 }
 
 async function handle(req: Request) {
@@ -151,6 +191,11 @@ async function handle(req: Request) {
         const ref = String(outcome.result.orderId ?? (outcome.result.alreadyRegistered ? "already-registered" : "registered"));
         await markProvisioningActivated(row.id, ref);
         summary.registered += 1;
+        /* Tell the customer — only for a registration made now, not one found already in
+           the account (that customer has been told, or registered it some other way). */
+        if (!outcome.result.alreadyRegistered && registrant.email) {
+          await tellCustomer(row.tenant_id, registrant.email, `${registrant.firstName ?? ""}`.trim(), domain, row.quote_id);
+        }
         break;
       }
       case "held":
