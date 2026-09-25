@@ -62,7 +62,9 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile, onBill
   /* Stable id so aria-controls points at something real — useId, not a hand-rolled
      counter, because the card can appear more than once on a page. */
   const bodyId = React.useId();
-  const actionable = rows.filter((r) => r.result.kind === "under_billed" || r.result.kind === "over_billed");
+  /* Leaking only — see the note on the tiles. Over-billed rows are shown in the Seats
+     column of the table instead, where the action is per customer. */
+  const actionable = rows.filter((r) => r.result.kind === "under_billed");
 
   if (rows.length === 0) return null;
 
@@ -97,8 +99,8 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile, onBill
           leaking, hidden" would look identical. */}
       {!open && (
         <p className="text-xs text-ink-2">
-          {totals.underBilledCount > 0 || totals.overBilledCount > 0
-            ? `${rupee(totals.underBilledMonthly)}/mo leaking · ${rupee(totals.overBilledMonthly)}/mo over-billed`
+          {totals.underBilledCount > 0
+            ? `${rupee(totals.underBilledMonthly)}/mo leaking`
             : totals.unknownCount > 0
               ? `${totals.unknownCount} ${totals.unknownCount === 1 ? "subscription" : "subscriptions"} never checked against the vendor`
               : "Nothing leaking"}
@@ -106,23 +108,30 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile, onBill
       )}
 
       <div id={bodyId} hidden={!open}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* ── THIS CARD IS ABOUT LEAKAGE, IN ONE DIRECTION ──────────────────────
+          A third tile used to sit here — "Billed ahead of vendor", the cases where the
+          customer is charged for more seats than the vendor has provisioned. Abhishek
+          removed it on 23 Sep 2026: "showing overbilled in leakage is not right".
+
+          He is right twice over. The card is named for seats WE PAY FOR AND DO NOT BILL,
+          and the other direction is not that — it is the opposite sign, so a reader
+          scanning two rupee figures has to work out which is which before either means
+          anything. And the common cause is deliberate: customers buy two or four seats
+          ahead of staff who have not joined, which he had already corrected the wording
+          for. A card that reports normal business alongside lost margin teaches the
+          owner to skim both.
+
+          The finding is NOT lost. Every over-billed subscription still carries an amber
+          "OVER-BILLED" badge in the Seats column of the table below, which is where it is
+          acted on anyway — per customer, not as a total. `leakageTotals` still computes
+          overBilledMonthly for any caller that wants it. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Figure
           label="Leaking (we pay, not billed)"
           value={rupee(totals.underBilledMonthly)}
           suffix="/mo"
           count={totals.underBilledCount}
           tone={totals.underBilledCount > 0 ? "bad" : undefined}
-        />
-        <Figure
-          /* Not "refund risk" any more — see the over_billed branch in lib/vendor/leakage.ts.
-             Buying seats ahead of new staff is normal, and a tile that calls every such
-             customer a refund is a tile the owner learns to ignore. */
-          label="Billed ahead of vendor"
-          value={rupee(totals.overBilledMonthly)}
-          suffix="/mo"
-          count={totals.overBilledCount}
-          tone={totals.overBilledCount > 0 ? "warn" : undefined}
         />
         <Figure
           label="Never reconciled"
@@ -201,9 +210,15 @@ export function LicenseLeakageCard({ subscriptions, catalog, onReconcile, onBill
         </ul>
       )}
 
+      {/* ── SAYS ONLY WHAT THIS CARD CHECKED ──────────────────────────────────
+          This read "Every active subscription matches the vendor", which was true while
+          the card reported BOTH directions. Since over-billed moved out (23 Sep 2026) it
+          would be a false all-clear: a customer billed for two seats the vendor never
+          provisioned does not match, and the card would have said they did. The claim is
+          now exactly as wide as the check behind it. */}
       {actionable.length === 0 && totals.unknownCount === 0 && (
         <p className="mt-3 flex items-center gap-1.5 text-sm text-emerald">
-          <Icon name="check_circle" size={14} /> Every active subscription matches the vendor.
+          <Icon name="check_circle" size={14} /> No active subscription is leaking.
         </p>
       )}
       </div>

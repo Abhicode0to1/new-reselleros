@@ -25,6 +25,7 @@ import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useSubscriptions } from "@/lib/queries/subscriptions";
 import { useItems } from "@/lib/queries/items";
+import { buildPlanPriceIndex, planKey } from "@/lib/subscriptions/plan-match";
 import { createClient } from "@/lib/supabase/client";
 import { rupee, cn } from "@/lib/utils";
 import { PORTALS } from "@/components/shared/portal-dock";
@@ -89,12 +90,24 @@ export function ReconcileGoogleDialog({ open, onOpenChange, onAddMissing }: Prop
   }, [open]);
   React.useEffect(() => { setVisible(60); }, [bucket]);
 
-  // catalog SKU → msrp (₹/seat/mo), for the "only in Google" estimate.
+  /* Keyed through planKey, not raw lowercase. Google's export says "Google Workspace
+     Business Starter" and the catalogue row is "Google Workspace Starter" — an exact
+     match misses, and on 24 Sep 2026 that imported four subscriptions at ₹0/month while
+     their COST matched, because the cost side already normalised. See the price-side
+     note in lib/subscriptions/plan-match.ts. */
+  const priceIndex = React.useMemo(
+    () => buildPlanPriceIndex((items ?? []).map((it) => ({
+      name: it.name, vendor: it.vendor, msrpPerSeatMonth: it.msrp,
+    }))),
+    [items],
+  );
   const priceMap = React.useMemo(() => {
+    /* The downstream parsers take a plain Map keyed by planKey; the index keeps the
+       ambiguity guard, so a key two catalogue rows disagree on never reaches them. */
     const m = new Map<string, number>();
-    for (const it of items ?? []) m.set(it.name.trim().toLowerCase(), it.msrp ?? 0);
+    for (const [k, v] of priceIndex.prices) m.set(k, v);
     return m;
-  }, [items]);
+  }, [priceIndex]);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -465,7 +478,7 @@ function buildReport(
       agg.subs += 1; agg.seats += seats;
       googleAggByDomain.set(domain, agg);    // aggregate — matched counted per domain (below)
     } else {
-      const est = (priceMap.get(sku.toLowerCase()) ?? 0) * seats;  // ₹/seat/mo × seats
+      const est = (priceMap.get(planKey(sku)) ?? 0) * seats;  // ₹/seat/mo × seats, keyed through planKey
       row.estMrr = est || undefined;
       if (isActive) estMissingMrr += est;
       buckets.only_google.push(row);

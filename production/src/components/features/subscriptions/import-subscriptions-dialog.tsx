@@ -34,6 +34,12 @@ import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+import {
+  buildImportDedupeIndex, duplicateReason,
+  type ImportDedupeIndex, type TrackedSubscription,
+} from "@/lib/subscriptions/import-dedupe";
+import { mapHeader, monthlyRateFrom, periodMonths } from "@/lib/export/subscription-portable";
+import { attachPrimaryContact } from "@/lib/contacts/attach";
 import { cn, rupee, formatDate } from "@/lib/utils";
 
 interface ParsedSub {
@@ -50,6 +56,24 @@ interface ParsedSub {
   renewal_date?: string;
   domain?: string;
   error?: string;   // unmatched / invalid → skipped
+  /** Set when this subscription is already on file. Skipped, never merged. */
+  duplicate?: string;
+  /* ── Carried for a row whose customer does not exist yet ──────────────────
+     The portable export writes the customer's identity and their primary contact
+     alongside the subscription, so a restore can rebuild the customer rather than
+     skipping the row. The contact is mandatory for that: this app refuses to create a
+     customer with nobody on it. */
+  customer_gstin?: string;
+  customer_state?: string;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  /** The customer NAME as the file spells it — only used when creating. */
+  file_customer_name?: string;
+  /** Google's own seat count, so a restore does not lose the reconciliation. */
+  vendor_seats?: number;
+  /** True when this row will create the customer as well as the subscription. */
+  willCreateCustomer?: boolean;
 }
 
 interface Props {
@@ -67,6 +91,9 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
   const [importing, setImporting] = React.useState(false);
   // customer_number(lower) → { id, name }
   const [custMap, setCustMap] = React.useState<Map<string, { id: string; name: string }>>(new Map());
+  const [domainMap, setDomainMap] = React.useState<Map<string, { id: string; name: string }>>(new Map());
+  /** Subscriptions already on file, indexed by domain and by customer+plan. */
+  const [dedupe, setDedupe] = React.useState<ImportDedupeIndex>(() => buildImportDedupeIndex([]));
 
   React.useEffect(() => {
     if (!open) {
@@ -76,12 +103,25 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
     }
     (async () => {
       const supabase = createClient();
-      const { data } = await supabase.from("customers").select("id, name, customer_number");
+      /* Both lookups in one round trip. The second is the duplicate guard: this importer
+         inserts every matched row and never asked whether the subscription was already
+         here, which is correct for the one-time Zoho migration it was built for and
+         wrong every time after. See lib/subscriptions/import-dedupe.ts. */
+      const [{ data }, { data: subs }] = await Promise.all([
+        supabase.from("customers").select("id, name, customer_number, domain"),
+        supabase.from("subscriptions").select("domain, customer_id, plan"),
+      ]);
       const m = new Map<string, { id: string; name: string }>();
+      /* Domain is the SECOND way in, for a portable export whose customer numbers do not
+         exist in this workspace — restoring into a fresh app, or moving between them. */
+      const d = new Map<string, { id: string; name: string }>();
       (data ?? []).forEach((c) => {
         if (c.customer_number) m.set(c.customer_number.trim().toLowerCase(), { id: c.id, name: c.name });
+        if (c.domain) d.set(c.domain.trim().toLowerCase().replace(/^www\./, ""), { id: c.id, name: c.name });
       });
       setCustMap(m);
+      setDomainMap(d);
+      setDedupe(buildImportDedupeIndex((subs ?? []) as TrackedSubscription[]));
     })();
   }, [open]);
 
@@ -92,7 +132,12 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
     setFileName(file.name);
     try {
       const text = await file.text();
-      const rows = parseSubsCsv(text, custMap);
+      const rows = parseSubsCsv(text, custMap, domainMap).map((r) => ({
+        ...r,
+        /* Only worth asking for rows that matched a customer — an unmatched row is
+           already being skipped and a second reason would just be noise. */
+        duplicate: r.error ? undefined : (duplicateReason(r, dedupe) ?? undefined),
+      }));
       if (rows.length === 0) { toast.error("No rows found (header + data needed)."); return; }
       setParsed(rows);
     } catch (err) {
@@ -102,12 +147,86 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
 
   const handleImport = async () => {
     if (!parsed || !me) return;
-    const valid = parsed.filter((r) => !r.error && r.customer_id);
-    if (valid.length === 0) { toast.error("No matched subscriptions to import."); return; }
+    /* A row is importable when it has a customer OR can create one. `willCreateCustomer`
+       is only set when the file carried a contact name and email, because this app refuses
+       to create a customer with nobody on it. */
+    const valid = parsed.filter((r) => !r.error && !r.duplicate && (r.customer_id || r.willCreateCustomer));
+    if (valid.length === 0) {
+      const dupes = parsed.filter((r) => r.duplicate).length;
+      toast.error(
+        dupes > 0 ? "Every matched subscription is already in the app" : "No matched subscriptions to import.",
+        dupes > 0
+          ? { description: `${dupes} row${dupes === 1 ? " was" : "s were"} skipped because that domain already has a subscription. Nothing was imported — re-importing would have created a second copy of each.` }
+          : { description: "No row matched a customer by Customer Number. Check the file has that column, and that the numbers match your customers." },
+      );
+      return;
+    }
     setImporting(true);
     try {
       const supabase = createClient();
-      const payload = valid.map((r) => ({
+
+      /* ── Customers the file brings with it ──────────────────────────────────
+         Created BEFORE the subscriptions, and each one gets its contact person in the
+         same step — the same writer the Add Subscription dialog and the Customers page
+         use, so a restored customer is indistinguishable from one created by hand.
+
+         A customer whose contact cannot be written is removed again and its rows are
+         reported, rather than left on the books with nobody to invoice. That is the same
+         rule the rest of the app follows; a restore is not an excuse to break it. */
+      const createFailures: string[] = [];
+      for (const r of valid.filter((x) => x.willCreateCustomer)) {
+        const name = r.file_customer_name || r.domain || r.customer_number || "Unnamed customer";
+        const { data: created, error: custErr } = await supabase
+          .from("customers")
+          .insert({
+            tenant_id: me.tenantId,
+            name,
+            domain: r.domain ?? null,
+            gstin: r.customer_gstin ?? null,
+            state: r.customer_state ?? null,
+            customer_number: r.customer_number || null,
+            contact_name: r.contact_name ?? null,
+            contact_email: r.contact_email ?? null,
+            contact_phone: r.contact_phone ?? null,
+          } as never)
+          .select("id")
+          .single();
+        if (custErr || !created?.id) {
+          createFailures.push(`${name}: ${custErr?.message ?? "the customer could not be created"}`);
+          r.error = "could not create the customer";
+          continue;
+        }
+        const outcome = await attachPrimaryContact(supabase, {
+          tenantId: me.tenantId,
+          customerId: created.id,
+          name: r.contact_name!,
+          email: r.contact_email ?? null,
+          phone: r.contact_phone ?? null,
+          role: "poc",
+          company: name,
+        });
+        if (outcome.kind === "failed") {
+          await supabase.from("customers").delete().eq("id", created.id);
+          createFailures.push(`${name}: ${outcome.reason}`);
+          r.error = "the contact could not be saved, so the customer was not created";
+          continue;
+        }
+        r.customer_id = created.id;
+        r.customer_name = name;
+      }
+
+      /* Rows whose customer creation just failed drop out here rather than inserting a
+         subscription pointing at nothing. */
+      const insertable = valid.filter((r) => r.customer_id && !r.error);
+      if (insertable.length === 0) {
+        setImporting(false);
+        toast.error("Nothing could be imported", {
+          description: createFailures[0] ?? "Every row was refused. Open the preview to see why.",
+        });
+        return;
+      }
+
+      const payload = insertable.map((r) => ({
         tenant_id: me.tenantId,
         customer_id: r.customer_id!,
         customer_name: r.customer_name ?? "",
@@ -122,6 +241,11 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
         domain: r.domain ?? null,
         outstanding_amount: 0,
         auto_renew: true,
+        /* Carried through so a restore does not lose the reconciliation — otherwise every
+           restored row reads "never checked against the vendor" and the licence-leakage
+           card has to be rebuilt by hand. */
+        vendor_seats: r.vendor_seats ?? null,
+        vendor_synced_at: r.vendor_seats == null ? null : new Date().toISOString(),
       }));
       let inserted = 0;
       for (let i = 0; i < payload.length; i += 500) {
@@ -130,8 +254,24 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
         if (error) throw error;
         inserted += chunk.length;
       }
-      const skipped = parsed.length - valid.length;
-      toast.success(`Imported ${inserted} subscription${inserted === 1 ? "" : "s"}` + (skipped > 0 ? ` · ${skipped} skipped` : ""));
+      /* Duplicates counted SEPARATELY from unmatched rows. "12 skipped" reads as a
+         problem with the file; "12 already in the app" reads as the guard working. */
+      const dupes = parsed.filter((r) => r.duplicate).length;
+      const unmatchedCount = parsed.filter((r) => r.error).length;
+      const createdCustomers = insertable.filter((r) => r.willCreateCustomer).length;
+      toast.success(
+        `Imported ${inserted} subscription${inserted === 1 ? "" : "s"}`,
+        (dupes > 0 || unmatchedCount > 0 || createdCustomers > 0)
+          ? {
+              description: [
+                createdCustomers > 0 ? `${createdCustomers} new customer${createdCustomers === 1 ? "" : "s"} created from the file` : null,
+                dupes > 0 ? `${dupes} already in the app, left alone` : null,
+                unmatchedCount > 0 ? `${unmatchedCount} skipped` : null,
+              ].filter(Boolean).join(" · "),
+              duration: 9000,
+            }
+          : undefined,
+      );
       onImportComplete?.();
       onOpenChange(false);
     } catch (err) {
@@ -141,7 +281,13 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
     }
   };
 
-  const matched = parsed?.filter((r) => !r.error && r.customer_id) ?? [];
+  /* `matched` drives the Subscriptions / MRR / ARR tiles AND the import itself, so it has
+     to mean "will actually be written". Counting duplicates here would show an MRR total
+     that includes revenue already in the app — the operator verifies that number before
+     committing, and it would be wrong in the direction that looks fine. */
+  const matched = parsed?.filter((r) => !r.error && !r.duplicate && (r.customer_id || r.willCreateCustomer)) ?? [];
+  const newCustomers = parsed?.filter((r) => !r.error && !r.duplicate && r.willCreateCustomer) ?? [];
+  const duplicates = parsed?.filter((r) => r.duplicate) ?? [];
   const unmatched = parsed?.filter((r) => r.error) ?? [];
   const totalMRR = matched.reduce((s, r) => s + r.mrr, 0);
 
@@ -154,8 +300,11 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
             Import subscriptions
           </DialogTitle>
           <DialogDescription className="break-words">
-            CSV with <span className="font-mono text-2xs">Customer Number, Item Name, Quantity, Item Price, Start Date, End Date</span>.
-            Each row attaches to a customer by Customer Number. MRR is computed from the price ÷ the period (from Start→End dates).
+            Reads this app&apos;s own <b>Export</b> file — so a subscription list can be moved
+            between workspaces or restored from a backup. A row attaches by{" "}
+            <span className="font-mono text-2xs">Customer Number</span> or{" "}
+            <span className="font-mono text-2xs">Domain</span>, and creates the customer when
+            neither is on file. A Zoho Billing export still works too.
           </DialogDescription>
         </DialogHeader>
 
@@ -182,8 +331,19 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
               <div className="text-sm text-ink min-w-0">
                 <p className="font-semibold truncate">{fileName}</p>
                 <p className="text-xs text-ink-3 mt-0.5 inline-flex items-center gap-2 flex-wrap">
-                  <Badge kind="success" size="sm">{matched.length} matched</Badge>
-                  {unmatched.length > 0 && <Badge kind="danger" size="sm">{unmatched.length} skipped</Badge>}
+                  <Badge kind="success" size="sm">{matched.length} to import</Badge>
+                  {/* A row that brings its own customer is a normal import, not a warning —
+                      but the operator should know the file is about to create records
+                      beyond the subscriptions they asked for. */}
+                  {newCustomers.length > 0 && (
+                    <Badge kind="info" size="sm">{newCustomers.length} new customer{newCustomers.length === 1 ? "" : "s"}</Badge>
+                  )}
+                  {/* Amber, not rose: an already-imported row is the guard working, not a
+                      broken file. Rose is reserved for rows that matched nothing. */}
+                  {duplicates.length > 0 && (
+                    <Badge kind="warning" size="sm">{duplicates.length} already in the app</Badge>
+                  )}
+                  {unmatched.length > 0 && <Badge kind="danger" size="sm">{unmatched.length} no customer</Badge>}
                 </p>
               </div>
               <Button type="button" variant="ghost" size="sm" icon="x"
@@ -223,16 +383,26 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
                   </thead>
                   <tbody>
                     {parsed.slice(0, 300).map((r) => (
-                      <tr key={r.rowNum} className={cn("border-b border-hairline last:border-0", r.error && "bg-rose/5")}>
+                      <tr key={r.rowNum} className={cn(
+                        "border-b border-hairline last:border-0",
+                        r.error ? "bg-rose/5" : r.duplicate ? "bg-amber-soft/30" : "",
+                      )}>
                         <td className="p-2 text-ink-3 tabular-nums">{r.rowNum}</td>
                         <td className="p-2">
                           {r.error
                             ? <span className="text-rose inline-flex items-center gap-1"><Icon name="alert" size={11} />{r.customer_number}: {r.error}</span>
-                            : <span className="text-ink">{r.customer_name}</span>}
+                            : r.duplicate
+                              /* Names the row AND why it is being left out. "Skipped" on
+                                 its own sends the operator hunting for a problem that is
+                                 not there. */
+                              ? <span className="text-amber-ink inline-flex items-center gap-1"><Icon name="check_circle" size={11} />{r.customer_name} — {r.duplicate}</span>
+                              : r.willCreateCustomer
+                              ? <span className="text-ink">{r.customer_name} <span className="text-2xs text-amber-ink">· new customer</span></span>
+                              : <span className="text-ink">{r.customer_name}</span>}
                         </td>
                         <td className="p-2 text-ink-2">{r.plan}</td>
                         <td className="p-2 text-right tabular-nums text-ink-2">{r.seats}</td>
-                        <td className="p-2 text-right tabular-nums text-ink-2">{r.error ? "—" : rupee(r.mrr)}</td>
+                        <td className="p-2 text-right tabular-nums text-ink-2">{r.error || r.duplicate ? "—" : rupee(r.mrr)}</td>
                         <td className="p-2 text-ink-2">{r.renewal_date ? formatDate(r.renewal_date) : "—"}</td>
                       </tr>
                     ))}
@@ -243,7 +413,16 @@ export function ImportSubscriptionsDialog({ open, onOpenChange, onImportComplete
 
             <p className="text-xs text-ink-3">
               Matched subs import into <span className="font-semibold text-ink">{me?.tenantName ?? "your tenant"}</span> as <b>active</b>.
-              Skipped = Customer Number not found (import that customer first).
+              {" "}A row whose customer is not on file <b>creates one</b>, using the Customer,
+              GSTIN, State and Contact columns — which is why the export carries them.
+              A row with no contact name and email cannot create a customer and is skipped.
+              {duplicates.length > 0 && (
+                <>
+                  {" "}<b>Already in the app</b> = that domain has a subscription here, so the row is
+                  left out — importing it again would create a second copy. The existing one is
+                  not changed.
+                </>
+              )}
               {parsed.length > 300 && <> Showing first 300 of {parsed.length} rows.</>}
             </p>
           </div>
@@ -315,63 +494,97 @@ function vendorFor(plan: string): ParsedSub["vendor"] {
   return "other";
 }
 
-function parseSubsCsv(text: string, custMap: Map<string, { id: string; name: string }>): ParsedSub[] {
+/**
+ * Read a subscription CSV — the app's own portable export first, a Zoho Billing file second.
+ *
+ * Header mapping and the money rule both live in `lib/export/subscription-portable.ts`, so
+ * the reader and the writer cannot drift. That file explains why the monthly rate is its
+ * own column and why a missing period is REFUSED rather than assumed to be a year.
+ */
+function parseSubsCsv(
+  text: string,
+  custMap: Map<string, { id: string; name: string }>,
+  byDomain: Map<string, { id: string; name: string }>,
+): ParsedSub[] {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
   const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
   if (lines.length < 2) throw new Error("CSV needs a header row + at least one data row.");
 
   const header = parseLine(lines[0]).map((h) => h.trim().toLowerCase().replace(/^"|"$/g, ""));
-  const col = (aliases: string[]): number => {
-    for (const a of aliases) { const i = header.indexOf(a); if (i >= 0) return i; }
-    return -1;
-  };
-  const idxNum   = col(["customer_number", "customer number", "customer no"]);
-  const idxItem  = col(["item name", "item_name", "plan", "product", "plan name"]);
-  const idxQty   = col(["quantity", "qty", "seats"]);
-  const idxPrice = col(["item price", "item_price", "price", "rate", "selling price"]);
-  const idxStart = col(["start date", "start_date", "start"]);
-  const idxEnd   = col(["end date", "end_date", "end", "renewal date", "expiry date"]);
-  const idxDomain= col(["domain name", "domain_name", "domain"]);
+  const idx = mapHeader(header);
 
-  if (idxNum === -1) throw new Error("Couldn't find a 'Customer Number' column (needed to match the customer).");
-  if (idxItem === -1) throw new Error("Couldn't find an 'Item Name' / plan column.");
+  if (idx.plan === -1) {
+    throw new Error("Couldn't find a Plan / Item Name column — that is the one column every row needs.");
+  }
+  /* A file with neither a customer number nor a domain cannot be attached to anybody.
+     Saying so once, up front, beats every row failing individually. */
+  if (idx.customerNumber === -1 && idx.domain === -1) {
+    throw new Error("Couldn't find a 'Customer Number' or 'Domain' column — one of them is needed to attach each row to a customer.");
+  }
 
   const rows: ParsedSub[] = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = parseLine(lines[i]);
     const rowNum = i + 1;
-    const cell = (idx: number) => (idx >= 0 ? nv(cols[idx]) : "");
+    const cell = (at: number) => (at >= 0 ? nv(cols[at]) : "");
+    const num = (at: number) => { const v = cell(at); return v === "" ? null : (Number(v) || 0); };
 
-    const customer_number = cell(idxNum);
-    const rawPlan = cell(idxItem);
-    const plan = rawPlan.replace(/\s*-\s*/, " ").trim() || rawPlan;  // "Google Workspace - Business Starter" → "Google Workspace Business Starter"
-    const seats = Math.max(0, Math.round(Number(cell(idxQty)) || 0));
-    const price = Number(cell(idxPrice)) || 0;
-    const start = toISODate(cell(idxStart));
-    const end = toISODate(cell(idxEnd));
+    const customer_number = cell(idx.customerNumber);
+    const rawPlan = cell(idx.plan);
+    const plan = rawPlan.replace(/\s*-\s*/, " ").trim() || rawPlan;  // "Google Workspace - Business Starter" → "…Business Starter"
+    const seats = Math.max(0, Math.round(Number(cell(idx.seats)) || 0));
+    const domain = cell(idx.domain) || undefined;
+    const start = toISODate(cell(idx.start));
+    const end = toISODate(cell(idx.end));
 
-    // period in months (from Start↔End); MRR = (price × seats) / months.
-    let periodMonths = 12;
-    if (start && end) {
-      const days = (Date.parse(end) - Date.parse(start)) / 86400000;
-      periodMonths = Math.max(1, Math.round(days / 30.44));
-    }
-    const mrr = periodMonths > 0 ? Math.round((price * seats) / periodMonths) : 0;
+    const months = periodMonths(start ?? null, end ?? null);
+    const rate = monthlyRateFrom(num(idx.monthly), num(idx.itemPrice), seats, months);
 
-    const match = custMap.get(customer_number.toLowerCase());
     const base: ParsedSub = {
       rowNum, customer_number,
       plan: plan || "—",
       vendor: vendorFor(plan),
-      seats, mrr, periodMonths,
+      seats,
+      mrr: rate.ok ? rate.mrr : 0,
+      periodMonths: months ?? 0,
       start_date: start ?? undefined,
       renewal_date: end ?? undefined,
-      domain: cell(idxDomain) || undefined,
+      domain,
+      /* Carried so a row whose customer does not exist yet can CREATE one — this app
+         refuses to create a customer with no contact person. */
+      customer_gstin: cell(idx.gstin) || undefined,
+      customer_state: cell(idx.state) || undefined,
+      contact_name: cell(idx.contactName) || undefined,
+      contact_email: cell(idx.contactEmail) || undefined,
+      contact_phone: cell(idx.contactPhone) || undefined,
+      file_customer_name: cell(idx.customerName) || undefined,
+      vendor_seats: idx.vendorSeats >= 0 && cell(idx.vendorSeats) !== "" ? Number(cell(idx.vendorSeats)) : undefined,
     };
-    if (!customer_number) { rows.push({ ...base, error: "no customer number" }); continue; }
-    if (!match) { rows.push({ ...base, error: "customer not found" }); continue; }
-    if (!plan || seats <= 0) { rows.push({ ...base, error: "missing plan/seats" }); continue; }
-    rows.push({ ...base, customer_id: match.id, customer_name: match.name });
+
+    /* Customer number first, domain second — the number is an identifier somebody chose,
+       the domain is an identifier the service imposes. Both beat the company NAME, which
+       is typed differently every time it is typed. */
+    const match =
+      (customer_number ? custMap.get(customer_number.toLowerCase()) : undefined)
+      ?? (domain ? byDomain.get(domain.trim().toLowerCase().replace(/^www\./, "")) : undefined);
+
+    if (!plan || seats <= 0) { rows.push({ ...base, error: "missing plan or seats" }); continue; }
+    if (!rate.ok)            { rows.push({ ...base, error: rate.reason }); continue; }
+    if (match) { rows.push({ ...base, customer_id: match.id, customer_name: match.name }); continue; }
+
+    /* No customer on file. That is not an error any more — the row can create one, as
+       long as it carries a contact person. Without that the customer cannot be created
+       at all, so say which column is missing rather than a bare "not found". */
+    if (base.contact_name && base.contact_email) {
+      rows.push({ ...base, customer_name: base.file_customer_name ?? domain ?? customer_number, willCreateCustomer: true });
+    } else {
+      rows.push({
+        ...base,
+        error: customer_number || domain
+          ? "no such customer, and the file has no Contact Name + Contact Email to create one"
+          : "no customer number or domain",
+      });
+    }
   }
   return rows;
 }

@@ -11,6 +11,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { primaryContactsFor, type PrimaryContact } from "@/lib/contacts/primary";
 import {
   buildContactSearchIndex,
   type ContactSearchIndex,
@@ -734,6 +735,32 @@ export function useContactSearchIndex() {
         return buildContactSearchIndex([]);
       }
       return buildContactSearchIndex((data ?? []) as unknown as ContactLinkRow[]);
+    },
+  });
+}
+
+/**
+ * The primary contact for every customer, as a map.
+ *
+ * Added 23 Sep 2026 for the portable subscription export, which carries the contact so a
+ * re-import can rebuild a missing customer — this app refuses to create one without a
+ * contact person, so a file without it cannot restore.
+ *
+ * Wraps `primaryContactsFor`, the one resolver the invoice and dunning paths use, rather
+ * than reading `customer_contacts` again here. Two readers of "who gets this customer's
+ * mail" is how the answer starts to differ depending on which screen asked.
+ */
+export function usePrimaryContacts(customerIds: readonly string[]) {
+  /* Sorted and joined, so re-rendering with the same customers in a different order does
+     not refetch. The list comes from a filtered table and its order changes constantly. */
+  const key = [...new Set(customerIds)].sort().join(",");
+  return useQuery({
+    queryKey: ["contacts", "primary-map", key],
+    enabled: customerIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async (): Promise<Map<string, PrimaryContact>> => {
+      const supabase = createClient();
+      return primaryContactsFor(supabase, [...new Set(customerIds)]);
     },
   });
 }

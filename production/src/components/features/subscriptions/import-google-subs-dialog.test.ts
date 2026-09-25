@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseGoogle, classifyRows, buildSubscriptionRow, type RawSub, type GRow } from "./google-subs-parse";
+import { planKey } from "@/lib/subscriptions/plan-match";
 
 /**
  * The Google→app subscription matcher writes money rows, so its classification
@@ -20,7 +21,11 @@ const lookups = {
   // an app subscription already exists on tracked.com
   appSubDomains: new Set(["tracked.com"]),
 };
-const priceMap = new Map([["google workspace business starter", 270]]);
+/* Keyed through planKey, exactly as the dialog now builds it. The fixture is the
+   CATALOGUE's spelling — "Google Workspace Starter" — while the CSV below carries
+   Google's — "Google Workspace Business Starter". They must still meet: matching those
+   two by raw lowercase is what imported four real subscriptions at ₹0 on 24 Sep 2026. */
+const priceMap = new Map([[planKey("Google Workspace Starter"), 270]]);
 
 describe("parseGoogle — Google reconciliation matcher", () => {
   it("links a row to an existing customer by Customer Number", () => {

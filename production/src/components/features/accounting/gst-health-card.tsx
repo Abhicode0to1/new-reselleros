@@ -31,6 +31,10 @@ import { useGstHealth } from "@/lib/queries/gst-health";
 
 export function GstHealthCard() {
   const { data, isLoading, error } = useGstHealth();
+  /* Collapsed by default: the headline (rupee figure + counts) stays visible, so the
+     finding is never hidden — only the per-customer detail folds away. */
+  const [open, setOpen] = React.useState(false);
+  const listId = React.useId();
 
   if (isLoading) {
     return (
@@ -76,26 +80,40 @@ export function GstHealthCard() {
 
   return (
     <Card className="mb-4 p-0 overflow-hidden border-rose/40">
-      <div className="px-4 py-3 bg-rose-soft/50 border-b border-rose/25">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className={`px-4 py-3 bg-rose-soft/50 ${open ? "border-b border-rose/25" : ""}`}>
+        <div className="flex items-start justify-between gap-3">
           <p className="text-[13px] text-rose-ink">
             <b>{rupee(data.totalAtRisk)} of GST</b> is resting on something that was never
             established, across {data.customers.length} customer{one ? "" : "s"} and{" "}
             {data.invoicesWithIssues} invoice{data.invoicesWithIssues === 1 ? "" : "s"}.
           </p>
-          <span className="text-2xs text-ink-3 tabular-nums shrink-0">
-            {data.invoicesChecked} checked
+          <span className="flex items-center gap-2 shrink-0">
+            <span className="text-2xs text-ink-3 tabular-nums">
+              {data.invoicesChecked} checked
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              aria-controls={listId}
+              className="inline-flex items-center gap-1 rounded-md border border-rose/30 bg-paper px-2 py-1 text-2xs font-medium text-ink-2 hover:text-ink hover:border-rose/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+            >
+              {open ? "Collapse" : "Expand"}
+              <Icon name={open ? "chevron_up" : "chevron_down"} size={13} />
+            </button>
           </span>
         </div>
         {/* The amount is not a shortfall, and saying so prevents the wrong panic. */}
-        <p className="mt-1 text-2xs leading-snug text-ink-3">
-          This is the tax whose <b>head</b> may be wrong (CGST + SGST vs IGST), not money
-          missing. The customer paid the right total; it may have gone into the wrong pots,
-          and they may be unable to claim the credit.
-        </p>
+        {open && (
+          <p className="mt-1 text-2xs leading-snug text-ink-3">
+            This is the tax whose <b>head</b> may be wrong (CGST + SGST vs IGST), not money
+            missing. The customer paid the right total; it may have gone into the wrong pots,
+            and they may be unable to claim the credit.
+          </p>
+        )}
       </div>
 
-      <ul className="divide-y divide-hairline">
+      <ul id={listId} hidden={!open} className="divide-y divide-hairline">
         {data.customers.map((c) => (
           <li key={c.customerId ?? c.customerName} className="px-4 py-2.5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">

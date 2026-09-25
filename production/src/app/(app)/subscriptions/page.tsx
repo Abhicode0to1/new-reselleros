@@ -68,7 +68,9 @@ import { Icon } from "@/components/ui/icon";
 import { downloadCSV } from "@/lib/csv";
 import { bulkOutcomeMessage, type BulkFailure } from "@/lib/customers/bulk-outcome";
 import { SubscriptionsBulkBar } from "@/components/features/subscriptions/subscriptions-bulk-bar";
-import { SUBSCRIPTIONS_CSV_HEADERS, subscriptionsCsvRows } from "@/lib/export/crm-csv";
+import { PORTABLE_SUBSCRIPTION_HEADERS, portableSubscriptionRow } from "@/lib/export/subscription-portable";
+import { useCustomers } from "@/lib/queries/customers";
+import { usePrimaryContacts } from "@/lib/queries/contacts";
 import { rupee, formatDate, daysBetween, cleanDisplayName } from "@/lib/utils";
 import { subscriptionExceptions } from "@/lib/subscriptions/exceptions";
 import { term, renewalDistance, termValue, termValueLabel } from "@/lib/subscriptions/renewal-display";
@@ -378,6 +380,14 @@ export default function SubscriptionsPage() {
   /* Who serves which customers — lets the search box find a subscription by the person
      you deal with. Shared with the Customers page through the query cache. */
   const { data: contactIndex } = useContactSearchIndex();
+  /* For the portable export: the customer's own identity (number, GSTIN, state) and the
+     person who receives their invoices. Both are needed to rebuild a customer on import. */
+  const { data: customers } = useCustomers();
+  const customerIdsForExport = React.useMemo(
+    () => [...new Set((subs ?? []).map((x) => x.customer_id).filter((id): id is string => !!id))],
+    [subs],
+  );
+  const { data: primaryContacts } = usePrimaryContacts(customerIdsForExport);
 
   const filtered = subsByWorkspace.filter((s) => {
     if (tab === "trials") return false;  // trials handled in separate table below
@@ -466,14 +476,49 @@ export default function SubscriptionsPage() {
        having done half a job. */
   };
 
+  /* ── THE PORTABLE EXPORT ──────────────────────────────────────────────────
+     One builder for both export buttons, joining each subscription to its customer and
+     that customer's primary contact. The contact is not decoration: a re-import creates
+     a missing customer, and this app refuses to create one without a contact person — so
+     a file without it cannot restore. See lib/export/subscription-portable.ts for why
+     the monthly rate is written as its own column rather than derived on the way back. */
+  const exportRows = React.useCallback((rows: readonly Subscription[]) => {
+    const custById = new Map((customers ?? []).map((c) => [c.id, c]));
+    return rows.map((sub) => {
+      const c = sub.customer_id ? custById.get(sub.customer_id) : undefined;
+      const contact = sub.customer_id ? primaryContacts?.get(sub.customer_id) : undefined;
+      return portableSubscriptionRow({
+        customer_number: c?.customer_number,
+        customer_name: sub.customer_name ?? c?.name,
+        domain: sub.domain ?? c?.domain,
+        gstin: c?.gstin,
+        state: c?.state,
+        contact_name: contact?.name,
+        contact_email: contact?.email,
+        contact_phone: contact?.phone,
+        plan: sub.plan,
+        vendor: sub.vendor,
+        seats: sub.seats,
+        status: sub.status,
+        mrr: sub.mrr,
+        outstanding_amount: sub.outstanding_amount,
+        start_date: sub.start_date,
+        renewal_date: sub.renewal_date,
+        vendor_seats: sub.vendor_seats,
+      });
+    });
+  }, [customers, primaryContacts]);
+
   const bulkExport = () => {
     if (pickedSubs.length === 0) return;
     downloadCSV(
       `subscriptions-${new Date().toISOString().slice(0, 10)}.csv`,
-      [...SUBSCRIPTIONS_CSV_HEADERS],
-      subscriptionsCsvRows(pickedSubs),
+      [...PORTABLE_SUBSCRIPTION_HEADERS],
+      exportRows(pickedSubs),
     );
-    toast.success(`Exported ${pickedSubs.length} subscription${pickedSubs.length === 1 ? "" : "s"} to CSV`);
+    toast.success(`Exported ${pickedSubs.length} subscription${pickedSubs.length === 1 ? "" : "s"} to CSV`, {
+      description: "Includes the customer and contact details, so this file can be imported back.",
+    });
   };
 
   /**
@@ -886,8 +931,10 @@ export default function SubscriptionsPage() {
               variant="outline"
               icon="download"
               onClick={() => {
-                downloadCSV(`subscriptions-${new Date().toISOString().slice(0, 10)}.csv`, [...SUBSCRIPTIONS_CSV_HEADERS], subscriptionsCsvRows(subs ?? []));
-                toast.success(`Exported ${(subs ?? []).length} subscriptions to CSV`);
+                downloadCSV(`subscriptions-${new Date().toISOString().slice(0, 10)}.csv`, [...PORTABLE_SUBSCRIPTION_HEADERS], exportRows(subs ?? []));
+                toast.success(`Exported ${(subs ?? []).length} subscriptions to CSV`, {
+                  description: "Includes the customer and contact details, so this file can be imported back.",
+                });
               }}
             >
               <span className="hidden md:inline">Export</span>
