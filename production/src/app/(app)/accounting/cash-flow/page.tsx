@@ -21,10 +21,13 @@ import { rupee } from "@/lib/utils";
 import { downloadCSV } from "@/lib/csv";
 import { createClient } from "@/lib/supabase/client";
 import { useBalanceSheetAuto } from "@/lib/queries/balance-sheet";
+import { useBankAccounts } from "@/lib/queries/bank";
+import { Icon } from "@/components/ui/icon";
+import { CashFlowMonthSheet } from "@/components/features/accounting/cash-flow-month-sheet";
+import type { CashFlowTxn } from "@/lib/accounting/cash-flow-lines";
 
 type RangeKey = "month" | "fy" | "12m" | "all";
 
-interface CashLine { date: string; cashIn: number; cashOut: number }
 interface MonthRow { ym: string; cashIn: number; cashOut: number; net: number; cumulative: number }
 
 function fyStart(d: Date): Date {
@@ -49,15 +52,26 @@ function useCashFlow(range: RangeKey) {
   const { from, to } = rangeBounds(range);
   return useQuery({
     queryKey: ["cash-flow", { from, to }],
-    queryFn: async (): Promise<CashLine[]> => {
+    /* The whole line, not just amounts: the month drill-down lists these same rows,
+       so its totals are the row's totals by construction. */
+    queryFn: async (): Promise<CashFlowTxn[]> => {
       const supabase = createClient();
-      let q = supabase.from("bank_transactions").select("txn_date, debit, credit");
+      let q = supabase
+        .from("bank_transactions")
+        .select("id, bank_account_id, txn_date, description, debit, credit, matched_to_type, category");
       if (from) q = q.gte("txn_date", from);
       if (to)   q = q.lte("txn_date", to);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []).map((t) => ({
-        date: t.txn_date, cashIn: t.credit ?? 0, cashOut: t.debit ?? 0,
+        id: t.id,
+        bank_account_id: t.bank_account_id,
+        txn_date: t.txn_date,
+        description: t.description ?? null,
+        debit: t.debit ?? 0,
+        credit: t.credit ?? 0,
+        matched_to_type: t.matched_to_type ?? null,
+        category: t.category ?? null,
       }));
     },
   });
@@ -71,12 +85,24 @@ export default function CashFlowPage() {
 
   const currentCash = bsAuto?.cashAndBank ?? 0;
 
+  /* Month drill-down: click a row → its bank lines. */
+  const [openYm, setOpenYm] = React.useState<string | null>(null);
+  const { data: accounts } = useBankAccounts();
+  const accountName = React.useCallback(
+    (id: string) => accounts?.find((a) => a.id === id)?.name ?? "Bank account",
+    [accounts],
+  );
+  const openLines = React.useMemo(
+    () => (openYm ? (lines ?? []).filter((l) => l.txn_date.startsWith(openYm)) : []),
+    [lines, openYm],
+  );
+
   const months = React.useMemo<MonthRow[]>(() => {
     const m = new Map<string, { cashIn: number; cashOut: number }>();
     for (const l of lines ?? []) {
-      const ym = l.date.slice(0, 7);
+      const ym = l.txn_date.slice(0, 7);
       const g = m.get(ym) ?? { cashIn: 0, cashOut: 0 };
-      g.cashIn += l.cashIn; g.cashOut += l.cashOut;
+      g.cashIn += l.credit; g.cashOut += l.debit;
       m.set(ym, g);
     }
     const sorted = Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
@@ -190,8 +216,24 @@ export default function CashFlowPage() {
               </thead>
               <tbody className="divide-y divide-hairline">
                 {months.map((r) => (
-                  <tr key={r.ym} className="hover:bg-paper-2/40">
-                    <td className="px-3 py-2.5 font-medium text-ink whitespace-nowrap">{monthLabel(r.ym)}</td>
+                  <tr
+                    key={r.ym}
+                    onClick={() => setOpenYm(r.ym)}
+                    className="hover:bg-paper-2/40 cursor-pointer"
+                    title="Click to see this month's bank lines"
+                  >
+                    <td className="px-3 py-2.5 font-medium text-ink whitespace-nowrap">
+                      {/* The keyboard route into the drill-down; the row click is a convenience. */}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setOpenYm(r.ym); }}
+                        className="inline-flex items-center gap-1 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+                        aria-label={`Show bank lines for ${monthLabel(r.ym)}`}
+                      >
+                        {monthLabel(r.ym)}
+                        <Icon name="chevron_right" size={13} className="text-ink-3" />
+                      </button>
+                    </td>
                     <td className="px-3 py-2.5">
                       <div className="flex flex-col gap-1">
                         <div className="h-1.5 rounded-full bg-emerald/70" style={{ width: `${Math.round((r.cashIn / maxFlow) * 100)}%` }} />
@@ -223,7 +265,16 @@ export default function CashFlowPage() {
         </Card>
       )}
 
+      <CashFlowMonthSheet
+        open={openYm !== null}
+        onOpenChange={(o) => { if (!o) setOpenYm(null); }}
+        monthLabel={openYm ? monthLabel(openYm) : ""}
+        lines={openLines}
+        accountName={accountName}
+      />
+
       <p className="text-2xs text-ink-3 mt-3 leading-relaxed">
+        Click a month to see the bank lines behind it.{" "}
         Cash flow = actual bank credits (in) minus debits (out) per month, from your imported/connected statements.
         This is different from Profit (P&amp;L), which counts invoices whether or not the cash has arrived.
       </p>
