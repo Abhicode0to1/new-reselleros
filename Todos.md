@@ -341,11 +341,26 @@ registration queue picks up renewals.
   expiry worker still suspends but raises no DMS renewal order.
 - [ ] **DMS env to set:** `RESELLEROS_SERVER_URL`, `DMS_PANEL_API_KEY` (same as here) and
   `RESELLEROS_BILLING_API_KEY` (a ResellerOS tenant API key). On this app: `DMS_PANEL_API_KEY`.
-- [ ] **Left open by round 2 (needs an owner go-ahead):**
-  - DMS's old `/cart` → `/checkout` → `api/payments/create-order` still takes paid carts on DMS's
-    own Razorpay keys, and such a payment is now only flagged, never billed. It is fed by
-    `HostingUpsell` and `DomainCrossSell` on the cart page and by saved carts.
-  - `HostingUpgradeModal` + `api/user/hosting/upgrade`: the same.
+- [x] **Round 3 — DMS takes no new payment on its own keys** (owner answers, 25 Sep 2026:
+  "Route through ResellerOS", "Request, billed by ResellerOS", "Remove both").
+  - DMS `0b41b2ff`: guest checkout and autopay (create/cancel-subscription) removed.
+  - DMS `71799b38`: the Upgrade dialog is "Request a plan upgrade". It calls ResellerOS
+    `POST /api/dms/upgrade-request` (ResellerOS `8757adb4`), which makes a lead with DMS's figure as an
+    estimate. Staff quote it and change the plan in DMS once it is paid.
+  - DMS `f575ce64`: `/cart` pays through `/api/dms/panel-order`. `create-order` and `verify` are
+    deleted, and the ₹0 trial moved to `api/user/hosting/start-trial`. The cart REFUSES by name
+    anything the contract cannot carry: multi-year domains, two hosting plans, TLDs needing registry
+    details.
+  - DMS `84b5ae33`: a scan test fails if anything outside a named allow-list can create a Razorpay
+    order, subscription or capture.
+- [ ] **Left open by rounds 2-3 (needs an owner go-ahead):**
+  - Multi-year domain registration and a cart with two hosting plans can no longer be bought in DMS,
+    because `panel-order` takes one year and one `domain`. Widen the contract if they are wanted.
+  - DMS `app/api/admin/hosting/packages/route.ts:303,312` still creates Razorpay PLANS when an admin
+    edits package prices. That is not a payment, but it writes to DMS's Razorpay account.
+  - Dead in DMS, kept for now: `app/api/domains/renew` (nothing can reach it), `createCompletedOrder`,
+    and `lib/razorpay.ts` `createCustomer` / `createRecurringTokenOrder` (used only by the gated Tokens
+    live harness).
   - An in-panel TRIAL has no ResellerOS renewal quote, so its convert button says to contact support.
   - `process-service-expiry` reminders quote `service.price`, a DMS figure (around L243).
     `renewal-payment-dunning` still chases old DMS renewal orders.

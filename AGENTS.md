@@ -125,6 +125,13 @@ bill is the paid-order PDF at once, and the GST invoice when staff issue it (dec
 bills through the existing `/api/v1` API. The DMS half is built (DMS `15f52e9f`..`abf8cb57`); what it
 still leaves open is in `Todos.md`.
 
+**DMS takes no new payment on its own Razorpay keys** (25 Sep 2026, DMS `0b41b2ff`..`84b5ae33`). Its
+`/cart` pays through `/api/dms/panel-order`. A plan upgrade is a request, `POST /api/dms/upgrade-request`,
+which becomes a lead here; staff quote it and change the plan once it is paid. Guest checkout, autopay,
+`api/payments/create-order` and `verify` are deleted. A DMS scan test fails if anything outside a named
+allow-list can create a Razorpay order again: refunds, webhooks for old orders, and the gated Tokens
+charger remain.
+
 Open items for the integration are tracked in `Todos.md`, not here.
 
 ---
@@ -314,9 +321,11 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,783 passing across 453 files, zero failures**
-on 25 Sep 2026, after billing moved to ResellerOS (DMS `abf8cb57`). The count FELL, on purpose:
-about 180 tests were deleted with the invoice and renewal code they covered. Earlier:
+`C:/xampp/htdocs/Domain-Management-Project`, **6,497 passing across 444 files, zero failures**
+on 25 Sep 2026, after DMS stopped taking payments on its own keys (DMS `84b5ae33`). The count
+FELL, on purpose: tests were deleted along with the payment code they covered (guest checkout,
+autopay, create-order, verify). Earlier:
+6,783 / 453 the same day after billing moved to ResellerOS (DMS `abf8cb57`), about 180 deleted with the invoice and renewal code,
 6,886 / 453 the same day after trial mode for hosting.provision (DMS `05a2dce2`),
 6,860 / 451 the same day after hosting.renew (DMS `e80c7851`),
 6,810 / 450 the same day after domain.renew got its gate and spend limit (DMS `e6c1406c`),
