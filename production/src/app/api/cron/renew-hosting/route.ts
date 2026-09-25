@@ -153,6 +153,24 @@ async function handle(req: Request) {
         const after = typeof outcome.result.expiryAfter === "string" ? outcome.result.expiryAfter : "extended";
         await markProvisioningActivated(row.id, after);
         summary.renewed += 1;
+        /* The expiry moved, but a suspended account could not be switched back on. DMS
+           reports that as a success with `unsuspendError`, because the renewal itself did
+           land — so it is said out loud here, or the customer who paid stays suspended. */
+        const unsuspendError = typeof outcome.result.unsuspendError === "string" ? outcome.result.unsuspendError : "";
+        if (unsuspendError) {
+          await noteProvisioning(row.id, `Extended to ${after}, but the account is still SUSPENDED: ${unsuspendError}`);
+          await alertOwner(
+            row.tenant_id,
+            `⚠️ Hosting renewed but still suspended — ${domain}`,
+            `${domain}'s hosting was extended to ${after} after the paid renewal (quote ${row.quote_id}), but it could not be switched back on:
+
+${unsuspendError}
+
+Unsuspend it in DMS. Do not send the renewal again; the expiry has already moved.
+
+— ResellerOS`,
+          );
+        }
         break;
       }
       case "held":

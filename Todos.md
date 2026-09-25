@@ -278,12 +278,37 @@ registration queue picks up renewals.
 - the ResellerClub balance funded;
 - then both switches.
 
-**Found on the way, not changed** (the first is in a blocked folder; ask the colleague):
-- **`src/lib/renewals/create-renewal-quote.ts`** hardcodes `extension_months: 12` on every renewal
-  quote, including a MONTHLY subscription's. `record_payment` reads that when rolling forward. It
-  also estimates cost as `× 0.83`, the AGENTS.md §2 pattern.
-- **A paid HOSTING or Workspace renewal** re-queues provisioning as though it were a new sale.
-  Nothing extends the DMS hosting's own expiry.
+**Found on the way** (Pardeep: "Fix those too"):
+- [ ] **`src/lib/renewals/create-renewal-quote.ts` — HANDED TO THE COLLEAGUE** (a blocked folder;
+  Pardeep asked for a prompt to pass on instead of an edit).
+  - **The bug:** it writes `extension_months: 12` on every renewal quote, including a MONTHLY
+    subscription's, and `record_payment` uses that to roll the subscription forward. **Measured**
+    in a rolled-back transaction: one ₹295 monthly renewal moved renewal_date 25 Oct 2026 →
+    **25 Oct 2027** (should be 25 Nov) and cut mrr **₹250 → ₹21**.
+  - **Same file:** cost is still guessed as `× 0.83`, the AGENTS.md §2 pattern.
+  - **Not affected:** domain renewals and the hosting renewal worker read the term elsewhere.
+- [x] **A paid HOSTING or Workspace renewal was set up again as a new sale — FIXED**
+  (ResellerOS `97e42743`, DMS `e80c7851`). The webhook now finds the subscription a quote renews
+  BEFORE `record_payment`:
+  - **domain:** a `domain-renewal` row;
+  - **hosting:** a `hosting-renewal` row, sent by `/api/cron/renew-hosting` to DMS's new
+    `hosting.renew`. That moves DMS's own expiry, so DMS no longer suspends an account the customer
+    paid for, and unsuspends one that already was. It sends the expiry DMS holds as `expiryBefore`
+    and the term from the quote line's `commitment`, never `extension_months`. A failed unsuspend
+    is reported to the owner.
+  - **anything else** (Workspace, M365, Zoho): nothing queued.
+  - **A renewal quote nothing points at:** queues nothing, loudly.
+
+  Switches: `HOSTING_RENEWAL_LIVE=1` here and `ENGINE_HOSTING_RENEW_LIVE=1` on DMS, both off.
+
+  **Verified locally with signed webhooks:**
+  - a Starter yearly renewal gave one `hosting-renewal` row and no new-account row, and the
+    subscription rolled a year;
+  - a Workspace renewal queued nothing, and the subscription rolled a year.
+
+  **Not verified:** a live DMS extension against DirectAdmin (DMS side is test-verified only).
+
+  **Before switching on:** a Cloud Scheduler job for `/api/cron/renew-hosting`, with a retry count.
 
 ### Decision 27 — "Start free trial" goes straight to the cart (24 Sep 2026)
 

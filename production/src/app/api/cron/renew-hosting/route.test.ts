@@ -89,6 +89,19 @@ describe("the expiry sent is the one DMS holds — never guessed", () => {
     expect(cmd.payload).toEqual({ months: 12, expiryBefore: 1821830400, paymentMode: "live", sourceRef: "Q9" });
     expect(prov.markProvisioningActivated).toHaveBeenCalledWith("R1", "2028-09-25T00:00:00.000Z");
   });
+  it("extended but still suspended → marked done AND the owner is told to unsuspend, not to resend", async () => {
+    engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: { expiryAfter: "2028-09-25T00:00:00.000Z", unsuspended: false, unsuspendError: "DirectAdmin refused the unsuspend" } });
+    await GET(req());
+    expect(prov.markProvisioningActivated).toHaveBeenCalledWith("R1", "2028-09-25T00:00:00.000Z");
+    expect(prov.noteProvisioning).toHaveBeenCalledWith("R1", expect.stringMatching(/still SUSPENDED/));
+    expect(mail.sendEmail.mock.calls[0][0].text).toMatch(/Do not send the renewal again/);
+  });
+  it("a clean extension sends no alert", async () => {
+    engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: { expiryAfter: "2028-09-25T00:00:00.000Z", unsuspended: false } });
+    await GET(req());
+    expect(mail.sendEmail).not.toHaveBeenCalled();
+  });
+
   it("a MONTHLY renewal extends by 1 month, not 12", async () => {
     rows.quote = { id: "Q9", customer_id: "C1", line_items: [{ commitment: "monthly" }] };
     engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: {} });

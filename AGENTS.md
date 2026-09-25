@@ -81,6 +81,17 @@ price (`lib/domains/renewal.ts`). A paid renewal is queued as `plan = "domain-re
 registration, and `/api/cron/renew-domains` sends DMS's `domain.renew` with the current expiry.
 Switches: `DOMAIN_RENEWAL_LIVE=1` here, `ENGINE_DOMAIN_RENEW_LIVE=1` on DMS.
 
+**A paid renewal is never set up again as a new sale** (25 Sep 2026). The Razorpay webhook finds
+the subscription a quote renews before `record_payment`:
+- **domain:** renewal row;
+- **hosting:** `hosting-renewal` row. `/api/cron/renew-hosting` sends DMS `hosting.renew` so DMS's
+  own expiry moves and it does not suspend a paid account. Switches: `HOSTING_RENEWAL_LIVE=1` here,
+  `ENGINE_HOSTING_RENEW_LIVE=1` on DMS.
+- **anything else:** nothing queued.
+
+Known and handed to the colleague (blocked folder): `lib/renewals/create-renewal-quote.ts` writes
+`extension_months: 12` even for monthly subscriptions (`Todos.md`).
+
 **The free hosting trial is Starter only, on monthly and yearly** (decisions 26-27, 24 Sep 2026).
 "Start free trial" on /hosting puts a ₹0 `hosting-trial:starter` line in the cart. Checkout
 starts it with no payment step (`lib/hosting/start-trial.ts`), and a trial checks out on its own.
@@ -274,10 +285,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,776 tests
-passing across 370 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 25 Sep 2026 after domain renewals. Earlier markers:
-6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,799 tests
+passing across 372 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 25 Sep 2026 after hosting renewals. Earlier markers:
+6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 
@@ -292,8 +303,9 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,810 passing across 450 files, zero failures**
-on 25 Sep 2026, after domain.renew got its gate and spend limit (DMS `e6c1406c`). Earlier:
+`C:/xampp/htdocs/Domain-Management-Project`, **6,860 passing across 451 files, zero failures**
+on 25 Sep 2026, after hosting.renew (DMS `e80c7851`). Earlier:
+6,810 / 450 the same day after domain.renew got its gate and spend limit (DMS `e6c1406c`),
 6,787 / 450 on 24 Sep after the cross-app trial record (DMS `2315ae26`),
 6,768 / 448 after the monthly Starter trial (DMS `47f0a81a`),
 6,758 / 448 after the Starter-only trial guard (DMS `19c1134a`),
