@@ -14,6 +14,10 @@ export const EXPENSE_CATEGORIES = [
   "Hosting",
   "Software",
   "Salaries",
+  /* Paid to a director — shown apart from Salaries because the accounts disclose it
+     separately. An employee-director's salary still goes through Payroll (TDS u/s 192);
+     this is for remuneration / commission / sitting fees booked as an expense. */
+  "Director's Remuneration",
   "Office Rent",
   "Marketing",
   "Advertising",

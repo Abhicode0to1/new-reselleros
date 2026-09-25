@@ -165,6 +165,11 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
     if (!transaction || transaction.debit <= 0) return null;
     const isExpenseCat = (c: string | null | undefined): c is string =>
       !!c && c !== "Salaries" && (EXPENSE_CATEGORIES as readonly string[]).includes(c);
+    /* "SALARY TO DIRECTOR": booked as an expense, this is Director's Remuneration —
+       never plain Salaries (which belongs to Payroll) and never a guessed category. */
+    if (/\bDIRECTORS?\b/i.test(transaction.description ?? "")) {
+      return { category: "Director's Remuneration", reason: "the word \"director\" in the narration" };
+    }
     if (isExpenseCat(transaction.category)) return { category: transaction.category, reason: "set when the statement was imported" };
     const s = suggestForLine(transaction, categoryRules ?? [], suggestCategory);
     if (s && isExpenseCat(s.category)) return { category: s.category, reason: s.reason };
@@ -846,8 +851,8 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                 </p>
                 {salaryHint.director && (
                   <p className="text-2xs text-amber-ink bg-amber-soft/40 rounded px-2 py-1">
-                    The narration says <b>director</b>. A director&apos;s remuneration is usually not employee payroll — check with
-                    your CA before booking it here.
+                    The narration says <b>director</b>. If the director is on the payroll (salary, TDS u/s 192), book it here.
+                    Otherwise book it below as a <b>Director&apos;s Remuneration</b> expense — check with your CA which applies.
                   </p>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
