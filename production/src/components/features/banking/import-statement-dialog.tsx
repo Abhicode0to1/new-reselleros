@@ -36,6 +36,7 @@ import {
 import { openingBalanceFromStatement, fyStartFor } from "@/lib/banking/opening-balance";
 import { isEncryptedPdf } from "@/lib/banking/pdf-check";
 import { fixStatementDates } from "@/lib/banking/statement-dates";
+import { localDateISO } from "@/lib/leads/outcomes";
 import { useTxnCategoryRules, useCreateTxnCategoryRule } from "@/lib/queries/txn-category-rules";
 import { proposePatterns } from "@/lib/banking/rule-from-line";
 import { directionOf } from "@/lib/banking/categorise";
@@ -184,7 +185,7 @@ type ParseResult = { rows: ParsedRow[]; skipped: number; warnings: string[] };
  * Without this one bad date ("2026-21-08") failed the whole import in Postgres.
  */
 function withRealDates(p: ParseResult, serverSwapped = 0): ParseResult {
-  const fix = fixStatementDates(p.rows.map((r) => r.txn_date));
+  const fix = fixStatementDates(p.rows.map((r) => r.txn_date), localDateISO(new Date(Date.now() + 86_400_000)));   // +1 day: server clock may be UTC
   const rows = p.rows.flatMap((r, i) => (fix.dates[i] ? [{ ...r, txn_date: fix.dates[i]! }] : []));
   const dropped = p.rows.length - rows.length;
   const swapped = fix.swapped + serverSwapped;

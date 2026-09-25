@@ -26,6 +26,16 @@ describe("fixStatementDates", () => {
     expect(r.swappedAll).toBe(true);
   });
 
+  it("a date after today is impossible too — the real 8 Oct / 8 Nov misreads of 10 and 11 Aug", () => {
+    const r = fixStatementDates(["2026-08-09", "2026-10-08", "2026-11-08", "2026-09-03"], "2026-09-25");
+    expect(r.dates).toEqual(["2026-08-09", "2026-08-10", "2026-08-11", "2026-09-03"]);
+    expect(r).toMatchObject({ swapped: 2, swappedAll: false });
+  });
+
+  it("without `today`, a future date is left as it is", () => {
+    expect(fixStatementDates(["2026-11-08"]).dates).toEqual(["2026-11-08"]);
+  });
+
   it("returns null for a date that is impossible either way", () => {
     expect(fixStatementDates(["2026-08-07", "2026-31-31"]).dates).toEqual(["2026-08-07", null]);
   });

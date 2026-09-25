@@ -47,9 +47,16 @@ function disorder(dates: Array<string | null>): number {
   return Math.min(up, down);
 }
 
-export function fixStatementDates(input: string[]): DateFix {
-  const asIs = input.map((d) => (isRealDate(d) ? d : null));
-  const flipped = input.map((d) => (isRealDate(swap(d)) ? swap(d) : null));
+/**
+ * @param today YYYY-MM-DD. A statement line cannot be dated after today, so such a date
+ *   counts as impossible too — the same day-first misread that gives "2026-21-08" gives
+ *   "2026-11-08" (8 Nov) for 11 Aug whenever the day is 12 or less. Measured 25 Sep 2026:
+ *   two lines came back as 8 Oct and 8 Nov.
+ */
+export function fixStatementDates(input: string[], today?: string): DateFix {
+  const ok = (d: string) => isRealDate(d) && (!today || d <= today);
+  const asIs = input.map((d) => (ok(d) ? d : null));
+  const flipped = input.map((d) => (ok(swap(d)) ? swap(d) : null));
 
   /* Two readings. "Each row" keeps a real date as it is and flips only an impossible one;
      "all flipped" assumes the reader went day-first throughout. Statements are in date

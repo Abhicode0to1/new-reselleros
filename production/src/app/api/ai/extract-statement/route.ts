@@ -15,6 +15,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { resolveGeminiConfig, geminiJson } from "@/lib/ai/gemini";
 import { fixStatementDates } from "@/lib/banking/statement-dates";
+import { localDateISO } from "@/lib/leads/outcomes";
 
 const bodySchema = z.object({
   fileBase64: z.string().min(20, "Empty file"),
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
   const clean = sanitizeRows(ai);
   /* Real calendar dates only (the reader has returned "2026-21-08" for 21 Aug). Swaps are
      decided for the whole statement; a date impossible either way is dropped and counted. */
-  const fix = fixStatementDates(clean.rows.map((r) => r.txn_date));
+  const fix = fixStatementDates(clean.rows.map((r) => r.txn_date), localDateISO(new Date(Date.now() + 86_400_000)));   // +1 day: server clock may be UTC
   const rows = clean.rows.flatMap((r, i) => (fix.dates[i] ? [{ ...r, txn_date: fix.dates[i]! }] : []));
   const skipped = clean.skipped + (clean.rows.length - rows.length);
   return NextResponse.json({ rows, skipped, mode: "gemini", datesSwapped: fix.swapped, datesSwappedAll: fix.swappedAll });
