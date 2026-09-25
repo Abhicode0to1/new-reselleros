@@ -86,7 +86,8 @@ always quantity 1.
 The one rule is `lib/hosting/trial-plan.ts`. DMS enforces the same rule on its in-panel trial,
 which on monthly renews one month at a time (`Hosting.billingCycle`).
 It was **run once against the live DirectAdmin on 24 Sep 2026** (test, create, replay,
-no-duplicate all passed; test account `rsospf34b2` / `rsosprovtest2409.in` still to delete).
+no-duplicate all passed). The test account `rsospf34b2` / `rsosprovtest2409.in` was deleted from
+server1 on 25 Sep 2026, which leaves server1 with no users.
 **server1.anutech.in is not the server DMS's config describes**: its IP is 35.207.233.155,
 production DMS still says 34.93.167.160, and it held no accounts before the test. Settle which
 server is real before switching provisioning on (`Todos.md` §0A).
