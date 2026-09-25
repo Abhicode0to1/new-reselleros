@@ -19,6 +19,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import {
   Sheet,
@@ -49,13 +50,14 @@ import {
 import { EXPENSE_CATEGORIES, useUnreconciledExpenses, suggestCategory } from "@/lib/queries/expenses";
 import { useTxnCategoryRules } from "@/lib/queries/txn-category-rules";
 import { suggestForLine, categoriseByRules } from "@/lib/banking/categorise";
-import { useUnreconciledSalaries } from "@/lib/queries/payroll";
+import { useUnreconciledSalaries, useEmployees } from "@/lib/queries/payroll";
 import { useCustomers } from "@/lib/queries/customers";
 import { useItems } from "@/lib/queries/items";
 import { rupee, formatDate } from "@/lib/utils";
 import { useBookBankTxnAsTax } from "@/lib/queries/tax-payments";
 import { fyLabel, fyStartYearOf } from "@/lib/accounting/tax-payments";
-import { previousPeriod, titleCaseName } from "@/lib/banking/salary-lines";
+import { previousPeriod, titleCaseName, parseSalaryNarration, matchEmployee } from "@/lib/banking/salary-lines";
+import { useBookSalaryLines } from "@/lib/queries/salary-from-bank";
 import { detectGovtPayment } from "@/lib/banking/govt-payment";
 import { payeeFromNarration, TEST_TRANSFER_MAX } from "@/lib/banking/narration";
 import { usePrepaidAdvances, useBookBankTxnAsPrepaid } from "@/lib/queries/prepaid-advances";
@@ -331,6 +333,42 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
   const txnFyStart = transaction ? fyStartYearOf(transaction.txn_date) : 0;
   /* A money-out line whose narration names a government payment (ESIC, EPFO, TDS, GST,
      income tax): the statutory section opens first, with that kind already picked. */
+  /* A salary transfer: employee + month read from the narration (lib/banking/salary-lines),
+     booked through the same Payroll path as Banking → Salary lines. */
+  const salaryHint = React.useMemo(
+    () => (transaction && transaction.debit > 0 ? parseSalaryNarration(transaction.description ?? "", transaction.txn_date) : null),
+    [transaction],
+  );
+  const { data: employees } = useEmployees();
+  const bookSalary = useBookSalaryLines();
+  const [salaryEmp, setSalaryEmp] = React.useState("");
+  const [salaryPeriod, setSalaryPeriod] = React.useState("");
+  React.useEffect(() => {
+    if (!salaryHint) { setSalaryEmp(""); setSalaryPeriod(""); return; }
+    const m = matchEmployee(salaryHint.name, employees ?? []);
+    setSalaryEmp(m.kind === "match" ? m.id : m.kind === "none" && salaryHint.name ? "create" : "");
+    setSalaryPeriod(salaryHint.period);
+  }, [transaction?.id, salaryHint, employees]);
+  const handleBookSalary = async () => {
+    if (!transaction || !salaryHint || !salaryEmp || !salaryPeriod) return;
+    try {
+      const [r] = await bookSalary.mutateAsync({
+        accountId: transaction.bank_account_id,
+        groups: [{
+          employee: salaryEmp === "create"
+            ? { createName: titleCaseName(salaryHint.name ?? ""), monthlyGross: transaction.debit }
+            : { id: salaryEmp },
+          period: salaryPeriod,
+          lines: [{ txnId: transaction.id, txnDate: transaction.txn_date, amount: transaction.debit, description: transaction.description ?? "" }],
+        }],
+      });
+      /* The hook's toast gives the count; a refusal (e.g. month already paid) carries
+         its own sentence — show it and keep the sheet open. */
+      if (r && !r.ok) { toast.error(r.message); return; }
+      onOpenChange(false);
+    } catch { /* hook toasts */ }
+  };
+
   const govtHint = React.useMemo(
     () => (transaction && transaction.debit > 0 ? detectGovtPayment(transaction.description) : null),
     [transaction],
@@ -790,6 +828,53 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   onClick={handleBookCredit}
                 >
                   Book {rupee(amount)} as {creditKind === "capital" ? "capital" : "director's loan"}
+                </Button>
+              </div>
+            )}
+
+            {/* A salary transfer ("…-TPT-SALARY APR 2026-PAWAN", "NEFT DR-…-PRATIK-…-JULY
+                SALARY"): lead with booking it as that employee's salary for that month —
+                the same Payroll path as Banking → Salary lines — not as a plain expense. */}
+            {salaryHint && (
+              <div className="rounded-md border border-emerald/40 bg-emerald-soft/25 p-3 space-y-2">
+                <p className="text-xs font-semibold text-ink-2">
+                  Looks like salary{salaryHint.name ? <> for <b>{titleCaseName(salaryHint.name)}</b></> : ""}
+                </p>
+                <p className="text-2xs text-ink-3 leading-relaxed">
+                  Books this {rupee(amount)} as the employee&apos;s salary for the month — the salary record is created in
+                  Payroll (or the existing one is used) and this line is reconciled to it.
+                </p>
+                {salaryHint.director && (
+                  <p className="text-2xs text-amber-ink bg-amber-soft/40 rounded px-2 py-1">
+                    The narration says <b>director</b>. A director&apos;s remuneration is usually not employee payroll — check with
+                    your CA before booking it here.
+                  </p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <select
+                    value={salaryEmp}
+                    onChange={(e) => setSalaryEmp(e.target.value)}
+                    aria-label="Employee"
+                    className="rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-emerald/40"
+                  >
+                    <option value="" disabled>Pick employee…</option>
+                    {salaryHint.name && <option value="create">＋ New employee “{titleCaseName(salaryHint.name)}”</option>}
+                    {(employees ?? []).filter((e) => e.is_active).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  </select>
+                  <Input type="month" value={salaryPeriod} onChange={(e) => setSalaryPeriod(e.target.value)} aria-label="Salary month" />
+                </div>
+                {!salaryHint.periodFromNarration && (
+                  <p className="text-3xs text-amber-ink">No month in the narration — assumed the month before payment. Change it if needed.</p>
+                )}
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon="check"
+                  disabled={!salaryEmp || !salaryPeriod || bookSalary.isPending}
+                  loading={bookSalary.isPending}
+                  onClick={handleBookSalary}
+                >
+                  Book {rupee(amount)} as salary{salaryPeriod ? ` · ${salaryPeriod}` : ""}
                 </Button>
               </div>
             )}

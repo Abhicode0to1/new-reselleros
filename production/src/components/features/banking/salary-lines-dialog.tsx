@@ -126,7 +126,8 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
     return { ok: true, text: `Reconcile to existing ${monthLabel(per)} record (${rupee(remaining)} left)` };
   };
 
-  const isOn = (l: Line) => (include[l.txn.id] ?? true) && planFor(l).ok;
+  /* A director's salary starts unticked: it is usually remuneration, not payroll. */
+  const isOn = (l: Line) => (include[l.txn.id] ?? !l.parsed.director) && planFor(l).ok;
   const selected = lines.filter(isOn);
   const selectedTotal = selected.reduce((s, l) => s + l.txn.debit, 0);
   const anyCreatesRecord = selected.some((l) => planFor(l).text.includes("New "));
@@ -249,6 +250,9 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
                             )}
                             {l.parsed.fullAndFinal && (
                               <Badge kind="info" size="sm">full &amp; final</Badge>
+                            )}
+                            {l.parsed.director && (
+                              <Badge kind="warning" size="sm" title="Director's remuneration is usually not employee payroll — left unticked; tick only if it is.">director — unticked</Badge>
                             )}
                           </div>
                           <p className={`mt-1 text-3xs ${plan.ok ? "text-ink-3" : "text-rose-ink"}`}>{plan.text}</p>

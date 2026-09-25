@@ -4,7 +4,7 @@ import { parseSalaryNarration, matchEmployee, previousPeriod, titleCaseName } fr
 describe("parseSalaryNarration", () => {
   it("reads name and month + year", () => {
     expect(parseSalaryNarration("50100784857169-TPT-SALARY APR 2026-PAWAN", "2026-05-12")).toEqual({
-      name: "PAWAN", period: "2026-04", periodFromNarration: true, fullAndFinal: false,
+      name: "PAWAN", period: "2026-04", periodFromNarration: true, fullAndFinal: false, director: false,
     });
   });
 
@@ -71,4 +71,19 @@ describe("matchEmployee", () => {
 describe("helpers", () => {
   it("previousPeriod wraps the year", () => expect(previousPeriod("2026-01-10")).toBe("2025-12"));
   it("titleCaseName", () => expect(titleCaseName("RANJEET RAJ")).toBe("Ranjeet Raj"));
+});
+
+/* 25 Sep 2026 — real HDFC NEFT/RTGS narrations: "NEFT DR" was not recognised as a rail,
+   so the payee came back null and the reconcile screen offered "Book as expense". */
+describe("parseSalaryNarration — NEFT DR / RTGS DR", () => {
+  it("reads the payee in the third slot", () => {
+    expect(parseSalaryNarration("NEFT DR-BKID0006087-PRATIK-NETBANK, MUM-HDFCH01182738271-JULY SALARY", "2026-08-08"))
+      .toMatchObject({ name: "PRATIK", period: "2026-07", periodFromNarration: true, director: false });
+    expect(parseSalaryNarration("NEFT DR-PUNB0520810-DARSHAN-NETBANK, MUM-HDFCH01236011736-SALARY AUG 2026", "2026-09-03"))
+      .toMatchObject({ name: "DARSHAN", period: "2026-08" });
+  });
+  it("flags a director's salary", () => {
+    expect(parseSalaryNarration("RTGS DR-ICIC0000828-PARDEEP SHARMA-NETBANK, MUM-HDFCR52026071684013560-SALARY TO DIRECTOR", "2026-07-16"))
+      .toMatchObject({ name: "PARDEEP SHARMA", director: true });
+  });
 });

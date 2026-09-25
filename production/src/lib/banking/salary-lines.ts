@@ -44,6 +44,8 @@ export type SalaryNarration = {
   period: string;
   periodFromNarration: boolean;
   fullAndFinal: boolean;
+  /** "SALARY TO DIRECTOR" — director's remuneration is not employee payroll; flag it. */
+  director: boolean;
 };
 
 export function parseSalaryNarration(description: string, txnDate: string): SalaryNarration | null {
@@ -59,7 +61,8 @@ export function parseSalaryNarration(description: string, txnDate: string): Sala
   const isName = (s: string | undefined) => !!s && /^[A-Z][A-Z .]*[A-Z.]$/.test(s) && !/\bSALARY\b/.test(s);
   let nameIdx = -1;
   if (isName(segments[segments.length - 1])) nameIdx = segments.length - 1;
-  else if (/^(IMPS|NEFT|RTGS)$/.test(segments[0] ?? "") && isName(segments[2])) nameIdx = 2;
+  // "NEFT", "NEFT DR", "RTGS CR" … — HDFC writes "NEFT DR-<IFSC>-<NAME>-NETBANK, MUM-…".
+  else if (/^(IMPS|NEFT|RTGS)(\s+(DR|CR))?$/.test(segments[0] ?? "") && isName(segments[2])) nameIdx = 2;
   const name = nameIdx >= 0 ? segments[nameIdx].replace(/\s+/g, " ") : null;
 
   /* Month: search every segment except the payee's (a name like "MAY" must not count). */
@@ -85,6 +88,7 @@ export function parseSalaryNarration(description: string, txnDate: string): Sala
     period: period ?? previousPeriod(txnDate),
     periodFromNarration: period !== null,
     fullAndFinal: /\bFULL\s*(N|AND|&)\s*FINAL\b|\bF\s*&\s*F\b|\bFNF\b/.test(text),
+    director: /\bDIRECTORS?\b/.test(text),
   };
 }
 
