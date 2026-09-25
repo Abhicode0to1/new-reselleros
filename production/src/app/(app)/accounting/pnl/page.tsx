@@ -41,6 +41,8 @@ import {
 } from "@/lib/accounting/pnl-charts";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { buildExpenseReport, type ExpenseReport } from "@/lib/accounting/expense-report";
+import { ExpenseReportCard } from "@/components/features/accounting/expense-report-card";
 
 // ────────────────────────────────────────────────────────────────
 // Range helpers — all IST-safe (Indian FY runs Apr 1 → Mar 31)
@@ -110,6 +112,8 @@ interface PnLNumbers {
   expenses:       number;
   expensesCount:  number;
   expensesByCategory: { category: string; total: number; count: number }[];
+  /** The same expense rows as a report — category, vendor, month (lib/accounting/expense-report). */
+  expenseReport: ExpenseReport;
   commissions:      number;   // referral / channel-partner commissions (gross)
   commissionsCount: number;
   netProfit:      number;
@@ -194,10 +198,11 @@ function usePnL(range: DateRange, enabled = true) {
       // ── Expenses: non-COGS ─────────────────────────────────────────
       const { data: expenses, error: eErr } = await supabase
         .from("expenses")
-        .select("amount, gst_paid, category")
+        .select("amount, gst_paid, category, vendor_name, expense_date")
         .gte("expense_date", range.from)
         .lte("expense_date", range.to);
       if (eErr) throw eErr;
+      const expenseReport = buildExpenseReport(expenses ?? []);
 
       const expensesTotal = (expenses ?? []).reduce((s, e) => s + (e.amount ?? 0), 0);
       const expensesCount = (expenses ?? []).length;
@@ -283,7 +288,7 @@ function usePnL(range: DateRange, enabled = true) {
         revenue, revenueCount,
         cogs, cogsCount,
         grossMargin,
-        expenses: expensesTotal, expensesCount, expensesByCategory,
+        expenses: expensesTotal, expensesCount, expensesByCategory, expenseReport,
         commissions, commissionsCount,
         netProfit,
         outputGST, inputGST, netGST,
@@ -631,6 +636,19 @@ export default function PnLPage() {
           </Card>
         );
       })()}
+
+      {/* ── EXPENSE REPORT ─────────────────────────────────────────────────────
+          The operating expenses behind the waterfall, as a report: category (share of
+          the total), vendor, month. Same rows as the "Operating expenses" line, so the
+          totals match; a category opens the same drill-down the line uses. */}
+      {!isLoading && data && (
+        <ExpenseReportCard
+          report={data.expenseReport}
+          periodLabel={`${range.from} to ${range.to}`}
+          fileStem={`${range.from}-to-${range.to}`}
+          onCategory={(c) => { setDrillExpenseCat(c); setDrill("expenses"); }}
+        />
+      )}
 
       {/* ── PROFIT BY VENDOR ─────────────────────────────────────────────────
           Both sides come from the SAME subscription rows, so each vendor's margin is
