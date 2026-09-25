@@ -35,6 +35,27 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
 - **Done when:** a failed insert shows an error and adds nothing to the list; no code path inserts
   with tenant `11111111-…`.
 
+### R-002 · "New project sale" should pick a real customer, not a typed name
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-25
+- **Why accounting needs it:** Banking → Reconcile → "Project payment" sends a bank receipt to
+  `/projects?amount=…&reconcile=…` to be booked as a project sale. Today the project is saved with
+  `customerId: null` and only a typed name, so:
+  - the sale never appears in that customer's **Ledger (Khata)** or **Customer Aging**;
+  - a typo ("Excel Tech" vs "Excel Technologies") silently becomes a different party;
+  - IGST vs CGST+SGST comes from a manual checkbox, not the customer's state — the same
+    "place of supply assumed" problem the GST health card on Accounting Overview flags.
+- **What to change** — `production/src/components/features/projects/create-project-dialog.tsx`:
+  1. Replace the free-text Customer `Input` (line ~117) with the existing
+     `components/features/customers/customer-combobox.tsx`, plus a "＋ New customer" that opens the
+     existing `AddCustomerForm` (same pattern as the quote builder and the reconcile dialog).
+  2. Send the chosen `customerId` (line ~91) instead of `null`, with `customerName` from the record.
+  3. Default the inter-state checkbox from the customer's `state_code` vs the seller's state
+     (still editable).
+- **Done when:** a project sale created from the dialog has `customer_id` set and shows under that
+  customer's Ledger; inter-state is pre-set from the customer.
+
 <!-- Template — copy for each new request:
 
 ### R-001 · <short title>

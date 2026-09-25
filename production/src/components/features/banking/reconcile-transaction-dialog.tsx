@@ -49,6 +49,7 @@ import {
 import { EXPENSE_CATEGORIES, useUnreconciledExpenses } from "@/lib/queries/expenses";
 import { useUnreconciledSalaries } from "@/lib/queries/payroll";
 import { useCustomers } from "@/lib/queries/customers";
+import { useItems } from "@/lib/queries/items";
 import { rupee, formatDate } from "@/lib/utils";
 import { useBookBankTxnAsTax } from "@/lib/queries/tax-payments";
 import { fyLabel, fyStartYearOf } from "@/lib/accounting/tax-payments";
@@ -57,6 +58,8 @@ import { AddCustomerForm } from "@/components/features/customers/add-customer-fo
 
 /** Sentinel option value for "+ Naya customer banao" in the customer select. */
 const NEW_CUSTOMER = "__new_customer__";
+/** Sentinel option value for "Custom — type the name" in the product select. */
+const CUSTOM_ITEM = "__custom_item__";
 
 interface Props {
   open: boolean;
@@ -176,18 +179,23 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
   const [newCustomerOpen, setNewCustomerOpen] = React.useState(false);
   const [invLineName, setInvLineName]   = React.useState("");
   const [invTaxable, setInvTaxable]     = React.useState("");
+  /* "" = not picked · CUSTOM_ITEM = typed name · else an items.id from the catalog. */
+  const [invItem, setInvItem]           = React.useState("");
+  const { data: items } = useItems();
+  const activeItems = (items ?? []).filter((i) => i.is_active);
   React.useEffect(() => {
-    setShowInvoice(false); setInvCustomer(""); setInvLineName(""); setInvTaxable("");
+    setShowInvoice(false); setInvCustomer(""); setInvLineName(""); setInvTaxable(""); setInvItem("");
   }, [transaction?.id]);
 
   const handleBookInvoice = async () => {
-    if (!transaction || !invCustomer || !(Number(invTaxable) > 0)) return;
+    if (!transaction || !invCustomer || !invLineName.trim() || !(Number(invTaxable) > 0)) return;
     try {
       await bookInvoice.mutateAsync({
         transactionId: transaction.id,
         bankAccountId: transaction.bank_account_id,
         customerId:    invCustomer,
-        lineName:      invLineName || transaction.description || "Sale",
+        lineName:      invLineName.trim(),
+        itemId:        invItem && invItem !== CUSTOM_ITEM ? invItem : null,
         taxableAmount: Math.round(Number(invTaxable)),
         reference:     transaction.reference,
       });
@@ -450,7 +458,10 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                       icon="file"
                       onClick={() => {
                         setShowInvoice(true);
-                        setInvLineName(transaction?.description ?? "");
+                        /* No prefill from the bank narration: "50200008254523-TPT-PO 00038-…"
+                           is a transfer reference, not what was sold, and it would print on
+                           the customer's tax invoice. The operator picks the product. */
+                        setInvItem(""); setInvLineName("");
                         setInvTaxable(String(Math.round(amount / 1.18)));
                       }}
                     >
@@ -490,7 +501,32 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                         New
                       </Button>
                     </div>
-                    <Input value={invLineName} onChange={(e) => setInvLineName(e.target.value)} placeholder="Kya becha? (e.g. Website / Setup fee)" />
+                    <select
+                      value={invItem}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setInvItem(v);
+                        const it = activeItems.find((i) => i.id === v);
+                        setInvLineName(it ? it.name : "");
+                      }}
+                      aria-label="Product"
+                      className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                    >
+                      <option value="" disabled>Kya becha? Product chuno…</option>
+                      <option value={CUSTOM_ITEM}>✎ Custom — naam khud likho</option>
+                      {activeItems.map((i) => (
+                        <option key={i.id} value={i.id}>{i.name}{i.vendor ? ` · ${i.vendor}` : ""}</option>
+                      ))}
+                    </select>
+                    {invItem === CUSTOM_ITEM && (
+                      <Input
+                        value={invLineName}
+                        onChange={(e) => setInvLineName(e.target.value)}
+                        placeholder="Kya becha? (e.g. Website / Setup fee)"
+                        aria-label="Custom product name"
+                        autoFocus
+                      />
+                    )}
                     <Input value={invTaxable} onChange={(e) => setInvTaxable(e.target.value)} type="number" min={0} placeholder="Taxable amount ₹ (ex-GST)" />
                     <p className="text-3xs text-ink-3">GST customer ke place-of-supply se apne-aap lagega. {rupee(amount)} received ka taxable (÷1.18) prefill kiya — theek kar lena.</p>
                     <div className="flex gap-2 pt-1">
@@ -499,7 +535,7 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                         variant="primary"
                         icon="check"
                         loading={bookInvoice.isPending}
-                        disabled={!invCustomer || !(Number(invTaxable) > 0)}
+                        disabled={!invCustomer || !invLineName.trim() || !(Number(invTaxable) > 0)}
                         onClick={handleBookInvoice}
                       >
                         Invoice banao &amp; reconcile

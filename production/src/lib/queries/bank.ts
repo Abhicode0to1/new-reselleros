@@ -562,14 +562,23 @@ export function useBookCreditAsInvoice() {
       bankAccountId: string;
       customerId: string;
       lineName: string;
+      /** Catalog product the line is for, when picked from the catalog. */
+      itemId?: string | null;
       taxableAmount: number;   // ex-GST ₹
       reference?: string | null;
     }) => {
       const supabase = createClient();
-      // 1. Invoice + one-off quote (atomic).
+      // 1. Invoice + one-off quote (atomic). A one-off quote never creates a
+      //    subscription on payment (record_payment's is_one_off guard), so linking a
+      //    catalog product here cannot start a recurring bill. Cost stays 0: the
+      //    receipt tells us the price, not what the sale cost us.
+      const line = {
+        id: "line-1", name: input.lineName.trim() || "Sale", qty: 1, rate: Math.round(input.taxableAmount), cost: 0,
+        ...(input.itemId ? { item_id: input.itemId } : {}),
+      };
       const { data: invData, error: e1 } = await supabase.rpc("create_direct_invoice", {
         p_customer_id: input.customerId,
-        p_line_items:  [{ id: "line-1", name: input.lineName.trim() || "Sale", qty: 1, rate: Math.round(input.taxableAmount), cost: 0 }],
+        p_line_items:  [line],
         p_notes:       "Raised from a bank receipt (reconcile)",
         p_recurring:   false,
       });
