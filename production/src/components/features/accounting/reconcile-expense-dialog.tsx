@@ -33,10 +33,20 @@ export function ReconcileExpenseDialog({ expense, onClose }: { expense: Expense;
   const reconcile = useReconcileTransaction();
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
-  const ranked = React.useMemo(() => {
+  /* Only lines whose amount is close enough to BE this expense are offered as matches
+     (within ₹100 or 2%, whichever is larger — bank charges and rounding). Everything
+     else sits behind a warning: the list used to offer a ₹2,00,000 expense three ₹3,000
+     ESIC lines with the same Reconcile button, one click from a wrong match. */
+  const tolerance = Math.max(100, Math.round(expense.amount * 0.02));
+  const [showOthers, setShowOthers] = React.useState(false);
+  const { close, others } = React.useMemo(() => {
     const all = [...(lines ?? [])].sort((a, b) => rank(a, b, expense.amount, expense.expense_date));
-    return all.slice(0, 40);
-  }, [lines, expense.amount, expense.expense_date]);
+    return {
+      close: all.filter((t) => Math.abs(t.debit - expense.amount) <= tolerance).slice(0, 40),
+      others: all.filter((t) => Math.abs(t.debit - expense.amount) > tolerance).slice(0, 40),
+    };
+  }, [lines, expense.amount, expense.expense_date, tolerance]);
+  const ranked = showOthers ? [...close, ...others] : close;
 
   async function match(txnId: string) {
     setBusyId(txnId);
@@ -66,22 +76,36 @@ export function ReconcileExpenseDialog({ expense, onClose }: { expense: Expense;
 
         {isLoading ? (
           <p className="py-6 text-center text-sm text-ink-3">Loading bank lines…</p>
-        ) : ranked.length === 0 ? (
+        ) : close.length === 0 && others.length === 0 ? (
           <EmptyState
             icon="refresh"
             title="No unmatched bank lines"
             body="Import your bank statement in Banking first — then the matching debit will show up here to reconcile."
           />
         ) : (
+          <>
+          {close.length === 0 && !showOthers && (
+            <div className="rounded-md border border-amber/40 bg-amber-soft/30 px-3 py-2.5 text-2xs text-ink-2 leading-relaxed">
+              <b className="text-ink">No bank line for {rupee(expense.amount)}.</b> None of the unreconciled bank debits is within{" "}
+              {rupee(tolerance)} of this expense. Import the statement that covers {formatDate(expense.expense_date)}, or — if
+              this was paid in cash or from another account — leave it unreconciled.
+            </div>
+          )}
           <ul className="max-h-[50vh] overflow-y-auto divide-y divide-hairline -mx-1">
             {ranked.map((t) => {
               const exact = t.debit === expense.amount;
+              const far = Math.abs(t.debit - expense.amount) > tolerance;
               return (
-                <li key={t.id} className="flex items-center gap-3 px-1 py-2">
+                <li key={t.id} className={`flex items-center gap-3 px-1 py-2 ${far ? "opacity-70" : ""}`}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-medium text-ink tabular-nums">{rupee(t.debit)}</span>
                       {exact && <span className="rounded-full bg-emerald/10 text-emerald px-1.5 py-0.5 text-3xs font-medium">exact match</span>}
+                      {far && (
+                        <span className="rounded-full bg-rose/10 text-rose px-1.5 py-0.5 text-3xs font-medium">
+                          {rupee(Math.abs(t.debit - expense.amount))} {t.debit > expense.amount ? "more" : "less"}
+                        </span>
+                      )}
                     </div>
                     <div className="text-2xs text-ink-3 truncate">
                       {formatDate(t.txn_date)} · {t.account_name}{t.description ? ` · ${t.description}` : ""}
@@ -95,6 +119,18 @@ export function ReconcileExpenseDialog({ expense, onClose }: { expense: Expense;
               );
             })}
           </ul>
+          {others.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowOthers((s) => !s)}
+              className="mt-1 text-2xs text-amber-ink hover:underline"
+            >
+              {showOthers
+                ? "Hide lines whose amount doesn't match"
+                : `Show ${others.length} line${others.length === 1 ? "" : "s"} whose amount doesn't match`}
+            </button>
+          )}
+          </>
         )}
 
         <DialogFooter>
