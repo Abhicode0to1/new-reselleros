@@ -330,14 +330,29 @@ registration queue picks up renewals.
   (Settings → Integrations). Spec: `docs/dsp-integration-api.md`. One gap: a paid cart order has a
   customer only after `record_payment`, so an unpaid order does not appear there, which is right
   for a bills page.
-- [ ] **DMS:** the `?buy=hosting` / `?buy=domain` dialogs call that API and open Razorpay with
-  ResellerOS's key; refuse clearly when ResellerOS is down.
-- [ ] **DMS:** the invoices page shows ResellerOS's bills.
-- [ ] **DMS:** stop `createPrimaryInvoice` and the legacy `models/Order.ts` pre-save INV hook in the
-  same commit, with a scan test; remove the three admin invoice actions (re-sync-invoice,
-  `lib/invoice-retry.ts` + pill, `api/workers/issue-invoice`).
-- [ ] **DMS:** renew buttons, expiry-worker renewal orders and the trial-end renewal order go to
-  ResellerOS renewals.
+- [x] **DMS `15f52e9f`:** the `?buy=hosting` / `?buy=domain` dialogs order through
+  `/api/dms/panel-order` and open Razorpay with ResellerOS's key. Identity comes from the session.
+  Nothing is written in DMS. A timeout is never retried.
+- [x] **DMS `2598cc4f`:** DMS issues no bills. The invoice engine, the INV hook, all 8 callers and the
+  three admin invoice actions are removed, with a scan test. Existing invoices stay viewable.
+- [x] **DMS `08d8ec0c`:** the Invoices page shows ResellerOS's quotes, pending renewals (Pay link)
+  and invoice PDFs. "No bills yet" appears only on a 404 from the customer lookup.
+- [x] **DMS `abf8cb57`:** the Renew and trial-convert buttons show the pending ResellerOS quote. The
+  expiry worker still suspends but raises no DMS renewal order.
+- [ ] **DMS env to set:** `RESELLEROS_SERVER_URL`, `DMS_PANEL_API_KEY` (same as here) and
+  `RESELLEROS_BILLING_API_KEY` (a ResellerOS tenant API key). On this app: `DMS_PANEL_API_KEY`.
+- [ ] **Left open by round 2 (needs an owner go-ahead):**
+  - DMS's old `/cart` → `/checkout` → `api/payments/create-order` still takes paid carts on DMS's
+    own Razorpay keys, and such a payment is now only flagged, never billed. It is fed by
+    `HostingUpsell` and `DomainCrossSell` on the cart page and by saved carts.
+  - `HostingUpgradeModal` + `api/user/hosting/upgrade`: the same.
+  - An in-panel TRIAL has no ResellerOS renewal quote, so its convert button says to contact support.
+  - `process-service-expiry` reminders quote `service.price`, a DMS figure (around L243).
+    `renewal-payment-dunning` still chases old DMS renewal orders.
+  - ResellerOS `/api/v1/customers?email=` matches with `ilike`, so `_` and `%` act as wildcards. A
+    database error there, and on quotes/invoices, answers 404. DMS fails closed on an inexact email.
+  - DMS integration e2e `purchase-to-invoice` / `verify-path-purchase` have been red since
+    `06a9546b` (a ₹999 Starter price gives 409). They are not in the gate.
 
 ### Decision 27 — "Start free trial" goes straight to the cart (24 Sep 2026)
 

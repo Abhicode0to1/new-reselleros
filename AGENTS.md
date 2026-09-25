@@ -46,8 +46,9 @@ ResellerOS reaches it over a read-only HTTP API plus a signed SSO hand-off
 **Billing belongs to ResellerOS (owner decision, 24 Sep 2026).** ResellerOS's cart and
 billing are primary for a first purchase; DMS keeps its cart only for in-panel purchases.
 **DMS is to issue no bills** — every bill and every renewal is ResellerOS's, and DMS holds a
-copy for reference. That is DECIDED, not yet BUILT: DMS's own invoice engine
-(`createPrimaryInvoice`) still issues today, and switching it off is queued in `Todos.md` §0A. DMS's Razorpay Tokens recurring charger is gated off
+copy for reference. BUILT on 25 Sep 2026 (DMS `2598cc4f`): `createPrimaryInvoice`, its number
+allocator and the INV pre-save hook are gone, and a scan test fails if any returns. A payment DMS
+still takes is flagged "raise the bill in ResellerOS", never billed silently. DMS's Razorpay Tokens recurring charger is gated off
 (`DMS_TOKEN_RECURRING_ENABLED`, default off), because two systems able to debit the same
 renewal is a double-collection with no detector. Do not re-enable it or build a second
 invoice series in DMS without being asked. **Hosting prices are ResellerOS's too**
@@ -121,7 +122,8 @@ DMS service (Cloud Run), its env vars or its data. Do not list it as an open ite
 `DMS_PANEL_API_KEY`, and it is priced by the same function as the site cart
 (`lib/checkout/cart-checkout.ts`). If ResellerOS cannot be reached, DMS refuses the purchase. The
 bill is the paid-order PDF at once, and the GST invoice when staff issue it (decision 29). DMS reads
-bills through the existing `/api/v1` API. The DMS half is not built yet (`Todos.md`).
+bills through the existing `/api/v1` API. The DMS half is built (DMS `15f52e9f`..`abf8cb57`); what it
+still leaves open is in `Todos.md`.
 
 Open items for the integration are tracked in `Todos.md`, not here.
 
@@ -312,8 +314,10 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,886 passing across 453 files, zero failures**
-on 25 Sep 2026, after trial mode for hosting.provision (DMS `05a2dce2`). Earlier:
+`C:/xampp/htdocs/Domain-Management-Project`, **6,783 passing across 453 files, zero failures**
+on 25 Sep 2026, after billing moved to ResellerOS (DMS `abf8cb57`). The count FELL, on purpose:
+about 180 tests were deleted with the invoice and renewal code they covered. Earlier:
+6,886 / 453 the same day after trial mode for hosting.provision (DMS `05a2dce2`),
 6,860 / 451 the same day after hosting.renew (DMS `e80c7851`),
 6,810 / 450 the same day after domain.renew got its gate and spend limit (DMS `e6c1406c`),
 6,787 / 450 on 24 Sep after the cross-app trial record (DMS `2315ae26`),
