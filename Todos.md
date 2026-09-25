@@ -64,7 +64,7 @@ overtaken on billing) and the "purchase funnel is deliberately NOT taken over" e
 | 13 | **DMS shows ResellerOS's own PDF** for a bill; it renders no bill of its own | chose "ResellerOS's own PDF" |
 | 14 | **Production ResellerOS address: `https://reselleros.anutech.in`** (DMS's `NEXT_PUBLIC_RESELLEROS_URL`) | chose it |
 | 15 | **Remove DMS's dead Admin → Page management controls** (deleted pages' visibility, homepage design) | chose "Remove them" |
-| 16 | **If ResellerOS is down during an in-panel purchase: take the payment, bill later.** DMS queues the bill request and retries; the panel shows "bill being prepared"; a stuck one alerts the owner | chose "Take payment, bill later" |
+| 16 | **SUPERSEDED by decision 30 (25 Sep 2026).** ~~If ResellerOS is down during an in-panel purchase: take the payment, bill later.~~ DMS queues the bill request and retries; the panel shows "bill being prepared"; a stuck one alerts the owner | chose "Take payment, bill later" |
 | 17 | **Remove DMS's three admin invoice actions** (re-sync invoice, invoice retry, issue-invoice worker); bill problems are handled in ResellerOS | chose "Remove them" |
 | 18 | **Pause DMS's `tokens-charge-recurring` Cloud Scheduler job** in production | chose "Yes, pause it" |
 
@@ -309,6 +309,28 @@ registration queue picks up renewals.
   **Not verified:** a live DMS extension against DirectAdmin (DMS side is test-verified only).
 
   **Before switching on:** a Cloud Scheduler job for `/api/cron/renew-hosting`, with a retry count.
+
+### Decisions 29-30 — who bills an in-panel purchase (25 Sep 2026) — DECIDED, NOT BUILT
+
+| # | Question | Pardeep's answer |
+|---|---|---|
+| 29 | What is the customer's bill for a purchase? | **Quote now, invoice when issued** — the paid-order (quote) PDF straight away; the GST tax invoice when staff issue it in Invoices |
+| 30 | May DMS create its own Razorpay order when ResellerOS is down? | **No, ResellerOS creates every order.** An in-panel purchase is refused, with a clear message, while ResellerOS cannot be reached. This replaces decision 16 |
+
+**Round 2 — what this needs, in order:**
+- [ ] **ResellerOS:** a server-to-server panel-order API DMS calls, reusing the cart checkout core;
+  it returns a Razorpay order made with ResellerOS's keys. The webhook already provisions through
+  the engine.
+- [ ] **ResellerOS:** a bills-read API for DMS: the customer's paid-order PDFs, invoice PDFs, renewal
+  quotes and their accept links.
+- [ ] **DMS:** the `?buy=hosting` / `?buy=domain` dialogs call that API and open Razorpay with
+  ResellerOS's key; refuse clearly when ResellerOS is down.
+- [ ] **DMS:** the invoices page shows ResellerOS's bills.
+- [ ] **DMS:** stop `createPrimaryInvoice` and the legacy `models/Order.ts` pre-save INV hook in the
+  same commit, with a scan test; remove the three admin invoice actions (re-sync-invoice,
+  `lib/invoice-retry.ts` + pill, `api/workers/issue-invoice`).
+- [ ] **DMS:** renew buttons, expiry-worker renewal orders and the trial-end renewal order go to
+  ResellerOS renewals.
 
 ### Decision 27 — "Start free trial" goes straight to the cart (24 Sep 2026)
 
@@ -634,18 +656,22 @@ with Razorpay before the first live mandate.
       `ramushamu`, DMS TASKS.md L229/L311). Before the 24 Sep test it had no users; after the test
       cleanup it has none again, and it keeps the three packages (Starter 10 GB, Standard 25 GB,
       Plus 50 GB; sites 1 / 5 / unlimited).
-- [ ] **The hosting TRIAL still writes to DirectAdmin from ResellerOS** (`api/public/trial/hosting/
-      confirm` → `daCreateAccount`, gated by `HOSTING_TRIAL_LIVE`). A second writer, left as is —
-      move it onto `hosting.provision` when trials are next touched.
+- [x] **The hosting TRIAL no longer writes to DirectAdmin from ResellerOS** (25 Sep 2026). The
+      confirm link sends DMS `hosting.provision` with `trial: true` (DMS `05a2dce2`), command id
+      `rsos-hosttrial-<lead id>`, still behind `HOSTING_TRIAL_LIVE=1` here and
+      `ENGINE_HOSTING_PROVISION_LIVE=1` on DMS. The trial-expiry cron no longer suspends on
+      DirectAdmin: DMS suspends an expired trial itself. The customer is pointed at their DMS
+      panel; no password is emailed from here. Tests: `confirm/route.test.ts`.
+      **Open:** DMS's expiry worker still raises a DMS renewal order when a trial ends, which
+      conflicts with "DMS issues no bills" — part of round 2 below.
 - [ ] **Before switching hosting provisioning on:** production migrations, deploy both apps, set
       `DMS_ENGINE_COMMAND_KEY`/`DMS_ENGINE_URL`, `provisioning.activate` on auto, a Cloud Scheduler
       job for `/api/cron/provision-hosting` with a retry count, one test-mode run, then
       `ENGINE_HOSTING_PROVISION_LIVE=1` on DMS and `HOSTING_PROVISIONING_LIVE=1` here. Rows paid
       earlier keep their blocker and are set up by hand.
-- [ ] **No customer email yet on registration.** The domain appears in the customer's DMS panel,
-      and the owner is alerted on a lost response or a refusal. A "your domain is registered"
-      email to the customer is an automated customer send, so it needs its own action on the
-      automation registry (L62-L65) — not added in this change.
+- [x] **Customer email on registration** (25 Sep 2026, `ae6010f6`). `register-domains` emails the
+      registrant "<domain> is registered" after a registration made now (not one found already
+      registered), through the new automation action `domain.registered.send` (today: auto).
 - [x] **ResellerOS cart enabled properly (decisions 19-20), 24 Sep 2026.** The line above said
       "v1 knows hosting SKUs only" — stale: domains were priced, but from a fixed table while the
       search showed the live price. Found and fixed together:

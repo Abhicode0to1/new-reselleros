@@ -23,7 +23,6 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { timingSafeEqualStr } from "@/lib/crypto/timing-safe";
 import { resolveOwnerAlert, type TenantContact } from "@/lib/email/owner-alert";
-import { daSuspendAccount, daWriteConfigured, genUsername } from "@/lib/directadmin/provision";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,7 +44,6 @@ interface CronResult {
   errors:         { lead_id: string; message: string }[];
   details:        { lead_id: string; company: string; days_past: number }[];
   /** Hosting trials whose cPanel account was suspended on expiry. */
-  hosting_suspended: number;
 }
 
 function checkAuth(req: Request): NextResponse | null {
@@ -77,7 +75,6 @@ async function handle(req: Request) {
     alerts_unaddressed: [],
     errors:        [],
     details:       [],
-    hosting_suspended: 0,
   };
 
   // Pull trials past their expiry that haven't been marked yet
@@ -146,22 +143,15 @@ async function handle(req: Request) {
       const sellerPerson = tenant?.contact_name?.trim() || sellerName;
       const sellerPhone  = (tenant as { phone?: string | null } | null)?.phone?.trim() || "";
 
-      // ── Hosting trials: suspend the cPanel account + a hosting-worded note ──
+      // ── Hosting trials: a hosting-worded note ─────────────────────────────
       // (The Workspace-worded customer email below is gated to non-hosting leads.)
+      // No DirectAdmin suspend from here any more (25 Sep 2026): trial accounts are
+      // created by the DMS engine under DMS's own usernames, and DMS suspends an
+      // expired trial itself at the Hosting row's expiry. The suspend this cron used
+      // to send guessed the username with this app's old scheme, which no longer
+      // matches the account.
       const isHosting = lead.source === "buy-hosting-trial";
       if (isHosting) {
-        // Suspend the auto-provisioned account (deterministic username from the
-        // domain). Only when live provisioning is on — manual-era trials are
-        // suspended by the owner. Best-effort; never fails the cron.
-        if (process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured() && lead.domain) {
-          try {
-            const r = await daSuspendAccount(genUsername(lead.domain));
-            if (r.ok) result.hosting_suspended++;
-            else console.error(`[trial-expiry] suspend failed for ${lead.domain}: ${r.message}`);
-          } catch (e) {
-            console.error("[trial-expiry] suspend threw:", e);
-          }
-        }
         if (lead.contact_email && owner.ok) {
           try {
             await sendEmail({

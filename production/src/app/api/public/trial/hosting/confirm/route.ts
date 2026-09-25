@@ -3,20 +3,25 @@
  *
  * The customer clicks this from the confirmation email (the trial's bot guard).
  * It verifies the signed token, then — if live provisioning is enabled and the
- * customer already has a domain — creates the cPanel account on DirectAdmin and
- * emails the login. Otherwise it records the confirmation and alerts the owner
- * to provision by hand (a domain-less trial can't be auto-created). Either way
- * it redirects to a friendly page; it never shows a raw error or a token.
+ * customer already has a domain — asks the DMS engine to create the trial account
+ * (`hosting.provision` with `trial: true`). Otherwise it records the confirmation and
+ * alerts the owner to provision by hand (a domain-less trial can't be auto-created).
+ * Either way it redirects to a friendly page; it never shows a raw error or a token.
+ *
+ * ─── One DirectAdmin writer (25 Sep 2026) ──────────────────────────────────
+ * Until this date the trial created the account on DirectAdmin FROM THIS APP, the
+ * last path that did. It now goes through the engine like paid hosting, so DMS is
+ * the only DirectAdmin writer and the trial lands in the customer's DMS account,
+ * where they manage it. DMS emails them a "set your password" link for that panel.
  *
  * ─── The live-provisioning gate ─────────────────────────────────────────────
- * Creating a real account is irreversible, so it fires ONLY when
- * HOSTING_TRIAL_LIVE=1 is set on the server (the ALLOW_*-style switch). Until
- * that flag is flipped — after a controlled test account is created and deleted
- * by hand, on Pardeep's go — every confirmation falls through to the
- * notify-owner path, so the whole flow can ship and be exercised safely first.
+ * Creating a real account is irreversible, so it fires ONLY when HOSTING_TRIAL_LIVE=1
+ * is set here AND the engine command key is configured; the engine applies its own
+ * gate (ENGINE_HOSTING_PROVISION_LIVE=1). Until then every confirmation falls through
+ * to the notify-owner path.
  *
- * Idempotency: daCreateAccount refuses if the account already exists, so a link
- * clicked twice cannot create two accounts.
+ * Idempotency: one engine command id per lead (`rsos-hosttrial-<lead id>`), so a link
+ * clicked twice replays the first answer instead of creating a second account.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -24,14 +29,15 @@ import { sendEmail } from "@/lib/email/send";
 import { loadOwnerAlert } from "@/lib/email/owner-alert.server";
 import { verifyTrialToken } from "@/lib/hosting/trial-token";
 import { isTrialPlan } from "@/lib/hosting/trial-plan";
-import { daCreateAccount, daWriteConfigured, genUsername, genPassword } from "@/lib/directadmin/provision";
+import { commandsConfigured, sendEngineCommand } from "@/lib/dms-engine/commands";
+import { dmsPanelUrl } from "@/lib/dms-engine/client";
+import { normalisePhone, splitName } from "@/lib/provisioning/domain-registration";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const FROM_EMAIL = process.env.RESEND_FROM_DEFAULT?.trim() || "ResellerOS <onboarding@resend.dev>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://resellersos.web.app";
-const DA_LOGIN_URL = (process.env.DIRECTADMIN_URL?.trim() || "").replace(/\/+$/, "");
 const BUY_PAGE_TENANT_ID =
   process.env.BUY_PAGE_TENANT_ID?.trim() || "fbb976f1-9090-4f10-9726-0901bd144e42";
 const TRIAL_DAYS = 15;
@@ -88,7 +94,7 @@ export async function GET(req: NextRequest) {
   const email = lead.contact_email || "";
   const firstName = (lead.contact_name || "there").split(" ")[0];
 
-  const canProvision = trialPlanOk && process.env.HOSTING_TRIAL_LIVE === "1" && daWriteConfigured() && domain.length >= 3;
+  const canProvision = trialPlanOk && process.env.HOSTING_TRIAL_LIVE === "1" && commandsConfigured() && domain.length >= 3;
 
   // Re-anchor the trial clock to confirmation time (the 15 days start now).
   const startedAt = new Date();
@@ -114,71 +120,80 @@ export async function GET(req: NextRequest) {
     return done(req, !trialPlanOk ? "notrialplan" : domain ? "pending" : "needdomain");
   }
 
-  // ── Live provisioning (irreversible) ──────────────────────────────────────
-  const username = genUsername(domain);
-  const password = genPassword();
-  const result = await daCreateAccount({ username, password, email, domain, pkg });
+  // ── Live provisioning (irreversible), through the DMS engine ───────────────
+  // The billing cycle the customer picked is recorded on the lead's notes by
+  // lib/hosting/start-trial ("After the trial: Starter billed monthly|yearly").
+  const cycle: "monthly" | "yearly" = /After the trial: \S+ billed monthly/.test(lead.notes || "") ? "monthly" : "yearly";
+  const outcome = await sendEngineCommand({
+    commandId: `rsos-hosttrial-${lead.id}`,
+    command: "hosting.provision",
+    subject: domain.toLowerCase(),
+    mode: "live",
+    payload: {
+      planId: "starter",
+      trial: true,
+      paymentMode: "trial",
+      cycle,
+      // This trial is already in DMS's shared trial history under the lead id; naming it
+      // stops it blocking itself (lib/dms-engine/trials.ts records it at checkout).
+      trialRef: lead.id,
+      customer: { ...splitName(lead.contact_name || email.split("@")[0]), email, ...normalisePhone(lead.contact_phone ?? ""), companyName: lead.company || undefined },
+      sourceRef: lead.id,
+    },
+  });
 
-  if (!result.ok) {
-    // Never expose DA internals to the visitor — record it and alert the owner.
+  if (outcome.kind !== "done") {
+    // Never expose engine internals to the visitor — record it and alert the owner.
+    const why = `${outcome.kind}: ${outcome.reason}`;
     await admin.from("leads").update({
-      notes: `${lead.notes || ""}\n\n[${startedAt.toISOString()}] AUTO-PROVISION FAILED: ${result.message}. Provision by hand.`,
+      trial_started_at: startedAt.toISOString(),
+      trial_expires_at: expiresAt.toISOString(),
+      notes: `${lead.notes || ""}\n\n[${startedAt.toISOString()}] EMAIL CONFIRMED — the trial account was NOT created automatically (${why}). Provision the Starter account by hand and send the login.`,
     }).eq("id", lead.id);
     const { alert: owner } = await loadOwnerAlert(admin, BUY_PAGE_TENANT_ID);
     if (owner.ok) {
       await sendEmail({
         to: owner.to, from: FROM_EMAIL, kind: "buy_page_trial_owner", route: { tenantId: BUY_PAGE_TENANT_ID }, replyTo: email,
-        subject: `⚠️ HOSTING TRIAL — auto-provision failed for ${lead.company}`,
-        text: `Auto-provisioning the ${pkg} account for ${domain} failed:\n\n  ${result.message}\n\nProvision by hand and send the login.\nLead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
+        subject: `⚠️ HOSTING TRIAL — not created automatically for ${lead.company}`,
+        text: `The Starter trial for ${domain} was confirmed, but the DMS engine did not create it:\n\n  ${why}\n\n${outcome.kind === "needs_reconciliation" ? "The request may have reached DirectAdmin: check DMS (Admin → Engine commands) before creating anything by hand.\n\n" : ""}Otherwise provision it by hand and send the login.\nLead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
       }).catch(() => {});
     }
-    return done(req, "error");
+    return done(req, outcome.kind === "needs_reconciliation" || outcome.kind === "unreachable" ? "error" : "pending");
   }
 
-  // Success (or the account already existed — either way it's live).
+  const r = outcome.result as { daUsername?: unknown; alreadyProvisioned?: unknown };
+  const daUser = typeof r.daUsername === "string" ? r.daUsername : "(see DMS)";
+  const already = r.alreadyProvisioned === true || outcome.replayed === true;
   await admin.from("leads").update({
     trial_started_at: startedAt.toISOString(),
     trial_expires_at: expiresAt.toISOString(),
-    notes: `${lead.notes || ""}\n\n[${startedAt.toISOString()}] AUTO-PROVISIONED ${pkg} · cPanel user: ${username} · domain: ${domain}${result.alreadyExisted ? " (already existed)" : ""}`,
+    notes: `${lead.notes || ""}\n\n[${startedAt.toISOString()}] TRIAL ACCOUNT CREATED by the DMS engine · Starter · DirectAdmin user: ${daUser} · domain: ${domain}${already ? " (already existed)" : ""}`,
   }).eq("id", lead.id);
 
   const { alert: owner } = await loadOwnerAlert(admin, BUY_PAGE_TENANT_ID);
 
-  // Credential email to the customer (skip if the account merely already existed
-  // — we must not re-send a password we didn't just set).
-  if (!result.alreadyExisted && DA_LOGIN_URL) {
+  // The customer: where the account lives. No password is sent from here — DMS emails a
+  // "set your password" link for its customer panel when it creates their account.
+  if (!already) {
+    const panel = dmsPanelUrl("customer");
+    const panelLine = panel
+      ? `Manage it — control panel, email, WordPress — from your customer panel: ${panel}\nIf this is your first time there, use the "set your password" email we just sent you to sign in.`
+      : `We'll send your sign-in details shortly.`;
     await sendEmail({
       to: email, from: FROM_EMAIL, kind: "buy_page_trial_customer", route: { tenantId: BUY_PAGE_TENANT_ID },
       replyTo: owner.ok ? owner.to : undefined,
-      subject: `Your ${pkg} hosting trial is live — your login is inside`,
-      text: `Hi ${firstName},
-
-Your ${TRIAL_DAYS}-day ${pkg} hosting trial is ready. Here's your control-panel login:
-
-  Control panel : ${DA_LOGIN_URL}
-  Username      : ${username}
-  Password      : ${password}
-  Domain        : ${domain}
-
-Please change the password after your first login.
-
-From here you can install WordPress, set up email, and upload your site. Moving
-from another host? Reply to this email with your current login and we'll migrate
-you for free — your old site stays live until you approve the switch.
-
-No credit card. ${TRIAL_DAYS} days fully free. We'll check in before it ends.
-
-— ${owner.ok ? owner.ownerName || "Your hosting team" : "Your hosting team"}`,
+      subject: `Your Starter hosting trial is live`,
+      text: `Hi ${firstName},\n\nYour ${TRIAL_DAYS}-day Starter hosting trial for ${domain} is ready.\n\n${panelLine}\n\nMoving from another host? Reply to this email with your current login and we'll migrate you for free — your old site stays live until you approve the switch.\n\nNo credit card. ${TRIAL_DAYS} days fully free. We'll check in before it ends.\n\n— ${owner.ok ? owner.ownerName || "Your hosting team" : "Your hosting team"}`,
     }).catch(() => {});
   }
 
   if (owner.ok) {
     await sendEmail({
       to: owner.to, from: FROM_EMAIL, kind: "buy_page_trial_owner", route: { tenantId: BUY_PAGE_TENANT_ID },
-      subject: `🚀 HOSTING TRIAL LIVE — ${lead.company} · ${pkg} · ${domain}`,
-      text: `Auto-provisioned a ${pkg} cPanel account.\n\nCompany: ${lead.company}\ncPanel user: ${username}\nDomain: ${domain}\nContact: ${lead.contact_name} <${email}> · ${lead.contact_phone}\nTrial ends: ${expiresAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}\n\nLead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
+      subject: `🚀 HOSTING TRIAL LIVE — ${lead.company} · Starter · ${domain}`,
+      text: `The DMS engine created a Starter trial account.\n\nCompany: ${lead.company}\nDirectAdmin user: ${daUser}\nDomain: ${domain}\nContact: ${lead.contact_name} <${email}> · ${lead.contact_phone}\nTrial ends: ${expiresAt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}\n\nLead: ${APP_URL}/leads/${lead.id}\n\n— ResellerOS`,
     }).catch(() => {});
   }
 
-  return done(req, result.alreadyExisted ? "already" : "provisioned");
+  return done(req, already ? "already" : "provisioned");
 }
