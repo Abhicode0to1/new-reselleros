@@ -51,7 +51,7 @@ export type BankTransactionRow = {
   balance_after:    number | null;
   reference:        string | null;
   source:           "manual" | "csv_upload" | "api_fetch";
-  matched_to_type:  "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | null;
+  matched_to_type:  "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | "statutory" | "prepaid" | null;
   matched_to_id:    string | null;
   matched_at:       string | null;
   matched_by:       string | null;

@@ -457,7 +457,8 @@ export type BankTransactionSource =
   | "manual" | "csv_upload" | "api_fetch";
 
 export type BankMatchToType =
-  | "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | "statutory";
+  | "payment" | "project" | "expense" | "vendor_bill" | "transfer" | "salary" | "split" | "manual" | "statutory"
+  | "prepaid";   // migration 20260925160000 — line funded a prepaid advance
 
 export type BankMatchConfidence =
   | "exact" | "high" | "low" | "manual";
@@ -3874,6 +3875,8 @@ export type PrepaidAdvanceRow = {
   created_by:      string | null;
   created_at:      string;
   updated_at:      string;
+  /** The bank line that funded it (migration 20260925160000); null when entered by hand. */
+  bank_txn_id?:    string | null;
 };
 type PrepaidAdvanceInsert = {
   id?:              string;
@@ -4367,6 +4370,16 @@ export type Database = {
       consume_prepaid_advance: {
         Args: { p_advance_id: string; p_amount: number; p_date?: string; p_note?: string | null; p_gst?: number; p_attachment?: string | null };
         Returns: number;
+      };
+      /** Migration 20260925160000 — one vendor invoice, oldest open advances first. */
+      consume_prepaid_fifo: {
+        Args: { p_vendor_name: string; p_amount: number; p_gst?: number; p_date?: string; p_note?: string | null; p_attachment?: string | null };
+        Returns: number;
+      };
+      /** Migration 20260925160000 — money-out bank line → prepaid advance, reconciled. */
+      book_bank_txn_as_prepaid: {
+        Args: { p_txn_id: string; p_vendor_name: string; p_category?: string; p_notes?: string | null };
+        Returns: string;
       };
       /** In-app backup (migration 0211) — owner-only, tenant-scoped snapshot of the caller's own data. */
       create_tenant_backup: {

@@ -18,6 +18,7 @@ describe("lineLabel", () => {
     expect(lineLabel({ matched_to_type: "salary", category: null })).toBe("Salary");
     expect(lineLabel({ matched_to_type: "statutory", category: null })).toBe("Tax & statutory");
     expect(lineLabel({ matched_to_type: "transfer", category: null })).toBe("Transfer (own accounts)");
+    expect(lineLabel({ matched_to_type: "prepaid", category: "Advertising" })).toBe("Prepaid advance");
   });
 });
 
