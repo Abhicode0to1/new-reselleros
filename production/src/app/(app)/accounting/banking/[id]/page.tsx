@@ -37,6 +37,8 @@ import {
 import { rupee, formatDate } from "@/lib/utils";
 import { ImportStatementDialog } from "@/components/features/banking/import-statement-dialog";
 import { SalaryLinesDialog, salaryLinesOf } from "@/components/features/banking/salary-lines-dialog";
+import { StatementCheckCard } from "@/components/features/banking/statement-check-card";
+import { checkStatement } from "@/lib/banking/statement-check";
 import { ReconcileTransactionDialog } from "@/components/features/banking/reconcile-transaction-dialog";
 import { ConnectAaDialog } from "@/components/features/banking/connect-aa-dialog";
 import { useBankAaConnection, useFetchAaNow } from "@/lib/queries/bank-aa";
@@ -158,6 +160,8 @@ export default function BankAccountDetailPage() {
   const bankBalance = openingBal + sumDelta(allTxns);
   const appBalance  = openingBal + sumDelta(allTxns.filter((t) => t.matched_to_type !== null));
   const toReconcile = bankBalance - appBalance;
+  /* Plain call, not a hook — this runs after the early returns above. Cheap: one pass. */
+  const statementCheck = checkStatement(allTxns, openingBal);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
@@ -231,7 +235,11 @@ export default function BankAccountDetailPage() {
             <p className={`font-serif text-2xl mt-1 ${bankBalance >= 0 ? "text-ink" : "text-rose"}`}>
               {rupee(bankBalance)}
             </p>
-            <p className="text-3xs text-ink-3 mt-0.5">Per imported statement</p>
+            <p className="text-3xs text-ink-3 mt-0.5">
+              {statementCheck && Math.abs(statementCheck.difference) > 1
+                ? <span className="text-rose">Statement says {rupee(statementCheck.statementBalance)}</span>
+                : "Per imported statement"}
+            </p>
           </div>
           <div>
             <p className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Balance in app</p>
@@ -256,6 +264,16 @@ export default function BankAccountDetailPage() {
           </div>
         </div>
       </Card>
+
+      {/* Balance in bank vs the statement's own running balance. */}
+      {statementCheck && (
+        <StatementCheckCard
+          check={statementCheck}
+          openingBalance={openingBal}
+          openingDate={account.opening_balance_date}
+          onImport={() => setImportOpen(true)}
+        />
+      )}
 
       {/* Filter tabs + one-tap auto-reconcile */}
       <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
