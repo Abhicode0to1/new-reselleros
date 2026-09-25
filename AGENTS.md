@@ -90,9 +90,12 @@ no-duplicate all passed). The test account `rsospf34b2` / `rsosprovtest2409.in` 
 server1 on 25 Sep 2026, which leaves server1 with no users.
 **server1.anutech.in is the DirectAdmin server, on 35.207.233.155** (owner, 25 Sep 2026: "Update the
 address"). That is the only IP in server1's own list. DMS's `DA_FALLBACK_IP` and its `.env.local` now
-say so; they said 34.93.167.160 before. Production takes `DIRECTADMIN_IP` from `.env.local` when
-it is deployed, so the live DMS service keeps the old address until its next deploy
-(`Todos.md` §0A).
+say so; they said 34.93.167.160 before.
+
+**The live / production DMS is a SEPARATE project, not ours** (owner, 25 Sep 2026: "Ignore the Live
+DMS or Production DMS. That is a separate project from ours"). "DMS" in this repo's work means the
+local DMS repo and its local container. Do not plan, deploy, reconfigure or report on the production
+DMS service (Cloud Run), its env vars or its data. Do not list it as an open item.
 
 Open items for the integration are tracked in `Todos.md`, not here.
 

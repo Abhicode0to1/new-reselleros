@@ -306,9 +306,8 @@ locally either.
    the SAME change that stops DMS issuing invoices and removes the three admin invoice actions
    (decision 17) — so there is never a window with two invoice issuers or none.
 3. **Remove the dead Admin → Page management controls** in DMS (decision 15).
-4. **Deploy production DMS** with `NEXT_PUBLIC_RESELLEROS_URL=https://reselleros.anutech.in`
-   (decision 14). Only on an explicit go: it switches production's public pages over to
-   ResellerOS. Before it, update any Razorpay-registered policy URLs that point at DMS's domain.
+4. ~~Deploy production DMS~~ — **out of scope** (owner, 25 Sep 2026): the live / production DMS
+   is a separate project, not ours. Our DMS is the local repo.
 5. ~~Automatic domain registration after payment~~ — **built 24 Sep, switched off.** See
    "Shipped" below for what it does and the eight steps before switching it on.
 
@@ -408,10 +407,8 @@ with Razorpay before the first live mandate.
       be cancelled there.
 - [ ] **Remove the dead Admin → Page management controls in DMS (decision 15).** Visibility
       toggles for the deleted pages and the homepage-design switch change nothing now.
-- [ ] **Production DMS still has its old pages.** Deploying needs
-      `NEXT_PUBLIC_RESELLEROS_URL=https://reselleros.anutech.in` (decision 14) in `.env.local`,
-      because the deploy refuses without it. Before that deploy, update the
-      policy URLs registered with Razorpay if they point at DMS's domain: they will now 307.
+- ~~**Production DMS still has its old pages.**~~ Out of scope: the live / production DMS is a
+      separate project (owner, 25 Sep 2026).
 - [x] **Automatic domain registration (decisions 21-24) — BUILT, SWITCHED OFF.** 24 Sep 2026.
       **DMS** (engine `domain.register`, Phase 9): `lib/integrations/engine-handlers-register.ts`
       + pure rules in `engine-register-policy.ts`. Order: validate → already in our reseller
@@ -442,7 +439,7 @@ with Razorpay before the first live mandate.
       1. Apply both ResellerOS migrations to production (see "Waiting on Pardeep").
       2. Deploy both apps with this code.
       3. Set the keys: ResellerOS `DMS_ENGINE_COMMAND_KEY` = DMS `BILLING_COMMAND_API_KEY`
-         (production DMS has no value for it yet, by design until now), and `DMS_ENGINE_URL`.
+         on the DMS the engine points at, and `DMS_ENGINE_URL`.
       4. Top up the ResellerClub reseller balance — an unfunded registration is held.
       5. On the Automation page, set **provisioning.activate** to auto; otherwise every paid
          domain is queued with a blocker and the worker never sees it.
@@ -507,10 +504,6 @@ with Razorpay before the first live mandate.
       `ramushamu`, DMS TASKS.md L229/L311). Before the 24 Sep test it had no users; after the test
       cleanup it has none again, and it keeps the three packages (Starter 10 GB, Standard 25 GB,
       Plus 50 GB; sites 1 / 5 / unlimited).
-- [ ] **The LIVE DMS service still runs with 34.93.167.160.** The new value reaches production on
-      its next deploy; nothing was deployed. Until then a DirectAdmin create from production would be
-      refused with "That IP does not exist in your list". Separately, hosting rows in production DMS
-      from before the move may point at DirectAdmin accounts that are not on server1.
 - [ ] **The hosting TRIAL still writes to DirectAdmin from ResellerOS** (`api/public/trial/hosting/
       confirm` → `daCreateAccount`, gated by `HOSTING_TRIAL_LIVE`). A second writer, left as is —
       move it onto `hosting.provision` when trials are next touched.
