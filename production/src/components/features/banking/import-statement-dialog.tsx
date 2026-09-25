@@ -437,10 +437,10 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
               <label className="cursor-pointer flex flex-col items-center text-center gap-2">
                 <Icon name="upload" size={20} className="text-ink-3" />
                 <span className="text-sm font-medium">Choose file — PDF / CSV</span>
-                <span className="text-2xs text-ink-3">Bank statement PDF (AI reads it) · ya .csv · up to 8 MB</span>
+                <span className="text-2xs text-ink-3">Bank statement PDF (AI reads it) · ya .csv / .txt (HDFC &quot;Delimited&quot;) · up to 8 MB</span>
                 <input
                   type="file"
-                  accept=".csv,text/csv,application/pdf,image/*"
+                  accept=".csv,.txt,text/csv,text/plain,application/pdf,image/*"
                   className="hidden"
                   onChange={onFileChange}
                 />
