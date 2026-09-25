@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planKey, buildPlanIndex, matchPlan, type CatalogRow } from "./plan-match";
+import { planKey, buildPlanIndex, matchPlan, buildPlanPriceIndex, matchPlanPrice, type CatalogRow } from "./plan-match";
 
 /**
  * The real `items` rows, read from the database on 14 Aug 2026.
@@ -181,5 +181,86 @@ describe("buildPlanIndex — disagreeing duplicates", () => {
   it("ignores an unnamed catalog row instead of indexing it under the empty key", () => {
     const idx = buildPlanIndex([{ vendor: "google", name: "  ", costPerSeatMonth: 999 }]);
     expect(idx.costs.size).toBe(0);
+  });
+});
+
+/**
+ * ─── THE PRICE SIDE, AND THE BUG IT WAS FOUND BY ────────────────────────────
+ *
+ * 24 Sep 2026. Four subscriptions imported straight from Google came in at ₹0/month,
+ * and their billing drawer said "No MRR on this subscription, so there is nothing to
+ * schedule". Google's export names the plan "Google Workspace Business Starter"; the
+ * catalogue row is "Google Workspace Starter". The importer looked the price up by exact
+ * name, missed, and wrote zero.
+ *
+ * The COST lookup had matched all four the whole time, because it goes through planKey.
+ * So the app believed it was paying the vendor ₹110/seat and charging nothing — a margin
+ * of −₹220 on a customer who is in fact being billed normally.
+ */
+describe("buildPlanPriceIndex / matchPlanPrice", () => {
+  const CATALOG = [
+    { name: "Google Workspace Starter",    vendor: "google", msrpPerSeatMonth: 136 },
+    { name: "Google Workspace Standard",   vendor: "google", msrpPerSeatMonth: 736 },
+    { name: "Google Workspace Enterprise", vendor: "google", msrpPerSeatMonth: 2400 },
+  ];
+  const index = buildPlanPriceIndex(CATALOG);
+
+  it("prices the name GOOGLE uses against the name the CATALOGUE uses", () => {
+    // The exact bug: one filler word apart.
+    expect(matchPlanPrice(index, "google", "Google Workspace Business Starter")).toBe(136);
+  });
+
+  it("still prices the catalogue's own spelling", () => {
+    expect(matchPlanPrice(index, "google", "Google Workspace Starter")).toBe(136);
+  });
+
+  it("never collapses Starter into Standard", () => {
+    /* The one thing loosening must not do. These are different products at 5x the
+       price, and a matcher that confused them would put a wrong number behind a real
+       margin figure. */
+    expect(matchPlanPrice(index, "google", "Google Workspace Business Standard")).toBe(736);
+    expect(matchPlanPrice(index, "google", "Google Workspace Business Starter")).toBe(136);
+  });
+
+  it("returns null for a plan the catalogue does not have", () => {
+    // Null, never 0 — "unpriced" and "free" must stay distinguishable.
+    expect(matchPlanPrice(index, "google", "Google Workspace Enterprise Plus")).toBeNull();
+  });
+
+  it("does not price one vendor's plan from another's catalogue", () => {
+    expect(matchPlanPrice(index, "microsoft", "Google Workspace Starter")).toBeNull();
+  });
+
+  it("refuses when two catalogue rows disagree about the price", () => {
+    // Picking one would be a coin toss with money attached.
+    const clash = buildPlanPriceIndex([
+      { name: "Google Workspace Business Starter", vendor: "google", msrpPerSeatMonth: 136 },
+      { name: "Google Workspace Starter",          vendor: "google", msrpPerSeatMonth: 270 },
+    ]);
+    expect(matchPlanPrice(clash, "google", "Google Workspace Starter")).toBeNull();
+    expect(clash.ambiguous.size).toBe(1);
+  });
+
+  it("tolerates a duplicate that AGREES", () => {
+    const dupe = buildPlanPriceIndex([
+      { name: "Google Workspace Business Starter", vendor: "google", msrpPerSeatMonth: 136 },
+      { name: "Google Workspace Starter",          vendor: "google", msrpPerSeatMonth: 136 },
+    ]);
+    expect(matchPlanPrice(dupe, "google", "Google Workspace Starter")).toBe(136);
+  });
+
+  it("skips an unpriced catalogue row rather than indexing it as free", () => {
+    const unpriced = buildPlanPriceIndex([
+      { name: "Google Workspace Starter", vendor: "google", msrpPerSeatMonth: null },
+    ]);
+    expect(matchPlanPrice(unpriced, "google", "Google Workspace Starter")).toBeNull();
+  });
+
+  it("uses the SAME key as the cost side, so one cannot match while the other misses", () => {
+    /* The defect in one sentence: cost resolved and price did not. */
+    const costs = buildPlanIndex([{ name: "Google Workspace Starter", vendor: "google", costPerSeatMonth: 110 }]);
+    const plan = "Google Workspace Business Starter";
+    expect(matchPlan(costs, "google", plan).matched).toBe(true);
+    expect(matchPlanPrice(index, "google", plan)).not.toBeNull();
   });
 });

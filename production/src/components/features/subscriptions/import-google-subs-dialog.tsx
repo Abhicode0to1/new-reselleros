@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { useItems } from "@/lib/queries/items";
+import { buildPlanPriceIndex } from "@/lib/subscriptions/plan-match";
 import { cn, rupee, formatDate } from "@/lib/utils";
 import { parseGoogle, classifyRows, normDomain, buildSubscriptionRow, type GRow, type Parsed, type RawSub } from "./google-subs-parse";
 
@@ -61,11 +62,24 @@ export function ImportGoogleSubsDialog({ open, onOpenChange, onComplete }: Props
     appSubDomains: Set<string>;
   }>({ byNumber: new Map(), byDomain: new Map(), appSubDomains: new Set() });
 
+  /* Keyed through planKey, not raw lowercase. Google's export says "Google Workspace
+     Business Starter" and the catalogue row is "Google Workspace Starter" — an exact
+     match misses, and on 24 Sep 2026 that imported four subscriptions at ₹0/month while
+     their COST matched, because the cost side already normalised. See the price-side
+     note in lib/subscriptions/plan-match.ts. */
+  const priceIndex = React.useMemo(
+    () => buildPlanPriceIndex((items ?? []).map((it) => ({
+      name: it.name, vendor: it.vendor, msrpPerSeatMonth: it.msrp,
+    }))),
+    [items],
+  );
   const priceMap = React.useMemo(() => {
+    /* The downstream parsers take a plain Map keyed by planKey; the index keeps the
+       ambiguity guard, so a key two catalogue rows disagree on never reaches them. */
     const m = new Map<string, number>();
-    for (const it of items ?? []) m.set(it.name.trim().toLowerCase(), it.msrp ?? 0);
+    for (const [k, v] of priceIndex.prices) m.set(k, v);
     return m;
-  }, [items]);
+  }, [priceIndex]);
 
   React.useEffect(() => {
     if (!open) {

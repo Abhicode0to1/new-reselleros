@@ -6,6 +6,8 @@
  * MONEY-HONESTY: the Google export carries NO price. estMrr is an ESTIMATE
  * (catalog msrp × seats); the UI flags it and never presents it as confirmed.
  */
+import { planKey } from "@/lib/subscriptions/plan-match";
+
 export type Category = "link" | "new" | "in_app";
 
 export interface GRow {
@@ -55,7 +57,11 @@ export function classifyRows(raws: RawSub[], lk: Lookups, priceMap: Map<string, 
   const rows: GRow[] = raws.map((r, i) => {
     const domain = normDomain(r.domain);
     const customer_number = (r.customer_number ?? "").trim();
-    const estMrr = Math.round((priceMap.get(r.sku.trim().toLowerCase()) ?? 0) * r.seats);
+    /* planKey, not raw lowercase: Google says "Google Workspace Business Starter" and the
+       catalogue says "Google Workspace Starter". See the price-side note in
+       lib/subscriptions/plan-match.ts — an exact match here imported four real
+       subscriptions at ₹0. */
+    const estMrr = Math.round((priceMap.get(planKey(r.sku)) ?? 0) * r.seats);
 
     let category: Category;
     let customer_id: string | undefined;

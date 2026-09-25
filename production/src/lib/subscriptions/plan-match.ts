@@ -113,3 +113,78 @@ export function matchPlan(
   if (cost === undefined) return { matched: false, reason: "no_such_plan" };
   return { matched: true, costPerSeatMonth: cost };
 }
+
+/* ── The same problem, on the RETAIL side ──────────────────────────────────────
+   Everything above resolves a plan's COST. The Google importer and the reconcile
+   report need its PRICE, and both were doing their own exact-name lookup:
+
+       m.set(it.name.trim().toLowerCase(), it.msrp)
+       priceMap.get(sku.trim().toLowerCase())
+
+   Measured 24 Sep 2026, on four real subscriptions. Google's export says
+   "Google Workspace Business Starter"; the catalogue row is named
+   "Google Workspace Starter". One word apart, exact match fails, price resolves to
+   ZERO — so Accesstel, Chandan Trading, FF Impex and Harvestal were all imported at
+   ₹0/month. The billing drawer then says "No MRR on this subscription, so there is
+   nothing to schedule", which is true and reads as a missing feature.
+
+   The COST lookup had matched them all along, because it goes through `planKey` and
+   that drops the filler word "business". So one half of the margin was found and the
+   other was not: the subscriptions show a margin of −₹220, meaning the app believes we
+   pay the vendor and charge the customer nothing.
+
+   Two lookups for one question, normalising differently, is the whole defect. This is
+   the price side of `buildPlanIndex`, deliberately the same shape and the same guard. */
+
+/** Retail price index: vendor|key → ₹/seat/month, only where it is unambiguous. */
+export interface PlanPriceIndex {
+  prices: Map<string, number>;
+  /** Keys two catalogue rows disagree on. Matched as unmatched, never averaged. */
+  ambiguous: Set<string>;
+}
+
+export interface CatalogPriceRow {
+  name: string;
+  vendor: string;
+  /** ₹/seat/month list price. */
+  msrpPerSeatMonth: number | null | undefined;
+}
+
+export function buildPlanPriceIndex(rows: readonly CatalogPriceRow[]): PlanPriceIndex {
+  const prices = new Map<string, number>();
+  const ambiguous = new Set<string>();
+
+  for (const row of rows) {
+    const k = indexKey(row.vendor, row.name);
+    if (k.endsWith("|")) continue;                 // an unnamed row indexes nothing
+    /* A row with no price is NOT a ₹0 product — it is a row nobody has priced. Indexing
+       it as 0 is the failure this whole file exists to avoid: a confident wrong number
+       where a visible gap belongs. */
+    if (row.msrpPerSeatMonth == null) continue;
+    const existing = prices.get(k);
+    if (existing !== undefined && existing !== row.msrpPerSeatMonth) {
+      ambiguous.add(k);
+      continue;
+    }
+    prices.set(k, row.msrpPerSeatMonth);
+  }
+
+  for (const k of ambiguous) prices.delete(k);
+  return { prices, ambiguous };
+}
+
+/**
+ * ₹/seat/month for a plan name, or null when it cannot be resolved.
+ *
+ * Null, not 0 — the caller decides how to present "we do not know what this costs",
+ * and every one of them must be able to tell that apart from "this is free".
+ */
+export function matchPlanPrice(
+  index: PlanPriceIndex,
+  vendor: string | null | undefined,
+  plan: string | null | undefined,
+): number | null {
+  const k = indexKey(vendor ?? "", plan ?? "");
+  if (index.ambiguous.has(k)) return null;
+  return index.prices.get(k) ?? null;
+}
