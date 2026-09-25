@@ -88,9 +88,11 @@ which on monthly renews one month at a time (`Hosting.billingCycle`).
 It was **run once against the live DirectAdmin on 24 Sep 2026** (test, create, replay,
 no-duplicate all passed). The test account `rsospf34b2` / `rsosprovtest2409.in` was deleted from
 server1 on 25 Sep 2026, which leaves server1 with no users.
-**server1.anutech.in is not the server DMS's config describes**: its IP is 35.207.233.155,
-production DMS still says 34.93.167.160, and it held no accounts before the test. Settle which
-server is real before switching provisioning on (`Todos.md` §0A).
+**server1.anutech.in is the DirectAdmin server, on 35.207.233.155** (owner, 25 Sep 2026: "Update the
+address"). That is the only IP in server1's own list. DMS's `DA_FALLBACK_IP` and its `.env.local` now
+say so; they said 34.93.167.160 before. Production takes `DIRECTADMIN_IP` from `.env.local` when
+it is deployed, so the live DMS service keeps the old address until its next deploy
+(`Todos.md` §0A).
 
 Open items for the integration are tracked in `Todos.md`, not here.
 

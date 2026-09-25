@@ -496,18 +496,21 @@ with Razorpay before the first live mandate.
       "Unable to show user". The local DMS records went too (Pardeep: "Remove from local DB
       also"), all by exact id: the DMS user `rsos-provision-test@example.invalid`, its hosting
       row, and the six `live-da-test-*` engine commands. Nothing else referred to them.
-- [ ] **server1 is not the server DMS's config describes. Check before any production hosting
-      sale.** Measured 24 Sep 2026: server1.anutech.in has IP **35.207.233.155**, and before this test
-      it had **no packages, no users and no resellers**. In July the same hostname answered on
-      **34.93.167.160** and held live accounts (`testi5491c`, `ramushamu`, DMS TASKS.md L229/L311).
-      Production DMS still has `DIRECTADMIN_IP=34.93.167.160`, and so does the fallback in
-      `lib/directadmin/client.ts:41`. Against this box a create would probably fail with "That IP
-      does not exist in your list" (the July failure; not re-tested). Customers' existing hosting
-      rows in DMS may point at DA accounts that are not on this box. Not changed: the owner has to
-      say which server is the real one. Three packages (Starter 10 GB, Standard 25 GB, Plus 50 GB;
-      sites 1 / 5 / unlimited) were created on it for this test, so Packages Available is no
-      longer 0. **State on 25 Sep 2026:** the three packages remain, and the test account is
-      deleted, so server1 again has **no users**.
+- [x] **server1's address is updated to 35.207.233.155** (Pardeep: "Update the address",
+      25 Sep 2026). Measured first: server1's own IP list (`CMD_API_SHOW_RESELLER_IPS`) holds exactly
+      `35.207.233.155` and nothing else. Changed:
+      - DMS `lib/directadmin/client.ts` `DA_FALLBACK_IP` (was 34.93.167.160);
+      - DMS `.env.local` `DIRECTADMIN_IP`, which is gitignored and is what `scripts/deploy-cloud-run.sh`
+        sends to production.
+
+      History: in July the same hostname answered on 34.93.167.160 and held accounts (`testi5491c`,
+      `ramushamu`, DMS TASKS.md L229/L311). Before the 24 Sep test it had no users; after the test
+      cleanup it has none again, and it keeps the three packages (Starter 10 GB, Standard 25 GB,
+      Plus 50 GB; sites 1 / 5 / unlimited).
+- [ ] **The LIVE DMS service still runs with 34.93.167.160.** The new value reaches production on
+      its next deploy; nothing was deployed. Until then a DirectAdmin create from production would be
+      refused with "That IP does not exist in your list". Separately, hosting rows in production DMS
+      from before the move may point at DirectAdmin accounts that are not on server1.
 - [ ] **The hosting TRIAL still writes to DirectAdmin from ResellerOS** (`api/public/trial/hosting/
       confirm` → `daCreateAccount`, gated by `HOSTING_TRIAL_LIVE`). A second writer, left as is —
       move it onto `hosting.provision` when trials are next touched.
