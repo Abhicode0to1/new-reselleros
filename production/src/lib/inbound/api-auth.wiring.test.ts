@@ -45,7 +45,19 @@ const CHECKS_USER = /auth\.getUser\s*\(/;
    Ise regex dheela karke chhoot NAHI di gayi. Dheela regex agli baar chup-chaap kisi
    aur ko bhi chhoot de deta — aur wo agla shayad asli chhed ho. Naam se chhoot dikhti
    hai, aur is list me kuch jodne ke liye wajah likhni padti hai. */
-const MACHINE_DOORS = new Set(["attendance/punch/route.ts"]);
+/* `dms/upgrade-request` bhi machine ka darwaza hai (25 Sep 2026): DMS ka server ise
+   call karta hai, koi login nahi. Chaabi: `DMS_PANEL_API_KEY`, `checkPanelKey()` se —
+   neeche ka test pakka karta hai ki wo jaanch sach me route me hai. */
+const MACHINE_DOORS = new Set(["attendance/punch/route.ts", "dms/upgrade-request/route.ts"]);
+
+describe("machine darwaze apni chaabi sach me jaanchte hain", () => {
+  it("dms/upgrade-request calls checkPanelKey before anything else", () => {
+    const src = readFileSync(join(API_DIR, "dms", "upgrade-request", "route.ts"), "utf8");
+    const post = src.slice(src.indexOf("export async function POST"));
+    expect(post.indexOf("checkPanelKey(")).toBeGreaterThan(-1);
+    expect(post.indexOf("checkPanelKey(")).toBeLessThan(post.indexOf("createAdminClient("));
+  });
+});
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const d of readdirSync(dir, { withFileTypes: true })) {
