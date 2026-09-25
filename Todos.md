@@ -506,7 +506,8 @@ with Razorpay before the first live mandate.
       rows in DMS may point at DA accounts that are not on this box. Not changed: the owner has to
       say which server is the real one. Three packages (Starter 10 GB, Standard 25 GB, Plus 50 GB;
       sites 1 / 5 / unlimited) were created on it for this test, so Packages Available is no
-      longer 0.
+      longer 0. **State on 25 Sep 2026:** the three packages remain, and the test account is
+      deleted, so server1 again has **no users**.
 - [ ] **The hosting TRIAL still writes to DirectAdmin from ResellerOS** (`api/public/trial/hosting/
       confirm` → `daCreateAccount`, gated by `HOSTING_TRIAL_LIVE`). A second writer, left as is —
       move it onto `hosting.provision` when trials are next touched.
