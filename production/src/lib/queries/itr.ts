@@ -27,6 +27,7 @@ import {
   computeItrPack, financialYear,
   type ExpenseCategoryLine, type ItrPack, type ItrSources,
 } from "@/lib/tax/itr";
+import { incomeTaxPaidForFy } from "@/lib/accounting/tax-payments";
 
 /** pnl/page.tsx ka pinned fallback — purani rows jinke breakdown persist nahi hue. */
 function invTaxable(i: { amount: number | null; taxable_value: number | null; tax_rate: number | null }): number {
@@ -40,7 +41,7 @@ export function useItrPack(fyStartYear: number) {
       const fy = financialYear(fyStartYear);
       const supabase = createClient();
 
-      const [inv, cn, dn, po, exp, tds] = await Promise.all([
+      const [inv, cn, dn, po, exp, tds, taxPay] = await Promise.all([
         supabase
           .from("invoices")
           .select("amount, taxable_value, tax_rate, status, invoice_date")
@@ -73,9 +74,14 @@ export function useItrPack(fyStartYear: number) {
           .from("tds_receivable")
           .select("tds_amount, fiscal_year")
           .eq("fiscal_year", fy.fiscalKey),
+        // Advance + self-assessment tax jo bank line se "tax payment" book hua (tax_payments).
+        supabase
+          .from("tax_payments")
+          .select("kind, amount, period, fy")
+          .in("kind", ["advance_tax", "self_assessment_tax"]),
       ]);
 
-      for (const r of [inv, cn, dn, po, exp, tds]) {
+      for (const r of [inv, cn, dn, po, exp, tds, taxPay]) {
         if (r.error) throw r.error;
       }
 
@@ -112,8 +118,9 @@ export function useItrPack(fyStartYear: number) {
         expenses: [...byCategory.values()],
         tdsCredit: tdsRows.reduce((s, t) => s + (t.tds_amount ?? 0), 0),
         tdsCount: tdsRows.length,
-        // Advance-tax ke bhugtan ki app me koi jagah nahi — pack ka gap yahi kehta hai.
-        advanceTaxPaid: 0,
+        // Banking me bank line ko "Income tax" payment book karne se aata hai. Kuch book
+        // nahi hua to 0 — aur pack ka gap wahi kehta rahega.
+        advanceTaxPaid: incomeTaxPaidForFy(taxPay.data ?? [], fyStartYear),
       };
 
       return computeItrPack(fy, sources);

@@ -39,6 +39,11 @@ import { EXPENSE_CATEGORIES } from "@/lib/accounting/expense-categories";
 // Keywords are English + Hinglish/Hindi (Roman) — operators here write notes
 // like "client ke pass jane ke liye" (travel) or "team ke liye khana" (food).
 const CATEGORY_KEYWORDS: [RegExp, (typeof EXPENSE_CATEGORIES)[number]][] = [
+  // Taxes that are an EXPENSE — FIRST, because "trade licence" would otherwise be taken by
+  // Software's "licence" and "professional tax" by nothing at all. Deliberately not bare
+  // "gst" / "tax" / "tds": a GST or income-tax payment is not an expense and must not be
+  // filed as one by a keyword.
+  [/\b(late ?fee|penalty|penal ?interest|interest on (?:gst|tds|tax)|professional ?tax|prof ?tax|property ?tax|house ?tax|roc ?fee|mca ?fee|stamp ?duty|trade ?licen[cs]e|shop ?act)\b/i, "Rates & Taxes"],
   [/\b(rent|lease|kiraya|kiraaya)\b/i, "Office Rent"],
   [/\b(cab|taxi|uber|ola|rapido|flight|air ?fare|train|irctc|hotel|stay|travel|petrol|diesel|fuel|toll|parking|mileage|conveyance|jaana|jaane|jana|jane|aana|aane|safar|yatra|gaadi|gadi|rickshaw|riksha|\bbus\b|\btel\b|luggage|suitcase|trolley|backpack|travel ?bag)\b/i, "Travel"],
   [/\b(internet|wi-?fi|broadband|phone|mobile|airtel|jio|vodafone|\bvi\b|bsnl|recharge|data ?pack|\bsim\b|net ?pack)\b/i, "Internet & Phone"],

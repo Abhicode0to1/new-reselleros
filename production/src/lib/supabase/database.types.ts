@@ -2674,6 +2674,42 @@ type StatutoryDuesPaymentInsert = {
 };
 type StatutoryDuesPaymentUpdate = Partial<Omit<StatutoryDuesPaymentInsert, "tenant_id">>;
 
+// GST + income-tax payments booked from bank lines (migration 20260925140000).
+// Separate from statutory_dues_payments so TDS/PF/ESI totals never include GST.
+export type TaxPaymentKind = "gst" | "advance_tax" | "self_assessment_tax";
+type TaxPaymentRow = {
+  id:              string;
+  tenant_id:       string;
+  kind:            TaxPaymentKind;
+  amount:          number;          // tax only, whole rupees
+  interest:        number;
+  late_fee:        number;
+  period:          string | null;   // gst: YYYY-MM return month
+  fy:              string | null;   // income tax: YYYY-YY
+  paid_on:         string;
+  bank_account_id: string | null;
+  bank_txn_id:     string | null;
+  expense_id:      string | null;   // interest + late fee expense
+  notes:           string | null;
+  created_at:      string;
+};
+type TaxPaymentInsert = {
+  id?:              string;
+  tenant_id:        string;
+  kind:             TaxPaymentKind;
+  amount:           number;
+  interest?:        number;
+  late_fee?:        number;
+  period?:          string | null;
+  fy?:              string | null;
+  paid_on:          string;
+  bank_account_id?: string | null;
+  bank_txn_id?:     string | null;
+  expense_id?:      string | null;
+  notes?:           string | null;
+};
+type TaxPaymentUpdate = Partial<Omit<TaxPaymentInsert, "tenant_id">>;
+
 // Customer advance credit — money received over the expected amount (migration 0141).
 export type CustomerCreditRow = {
   id:                string;
@@ -4176,6 +4212,7 @@ export type Database = {
       project_payments:  { Row: ProjectPaymentRow;   Insert: ProjectPaymentInsert;   Update: ProjectPaymentUpdate;   Relationships: [] };
       documents:         { Row: DocumentRow;         Insert: DocumentInsert;         Update: DocumentUpdate;         Relationships: [] };
       statutory_dues_payments:{ Row: StatutoryDuesPaymentRow; Insert: StatutoryDuesPaymentInsert; Update: StatutoryDuesPaymentUpdate; Relationships: [] };
+      tax_payments:           { Row: TaxPaymentRow; Insert: TaxPaymentInsert; Update: TaxPaymentUpdate; Relationships: [] };
       customer_credits:{ Row: CustomerCreditRow; Insert: CustomerCreditInsert; Update: CustomerCreditUpdate; Relationships: [] };
       credit_notes:    { Row: CreditNoteRow;      Insert: CreditNoteInsert;      Update: CreditNoteUpdate;      Relationships: [] };
       debit_notes:     { Row: DebitNoteRow;       Insert: DebitNoteInsert;       Update: DebitNoteUpdate;       Relationships: [] };
@@ -5163,6 +5200,10 @@ export type Database = {
       book_bank_txn_as_statutory: {
         Args: { p_txn_id: string; p_kind: string; p_notes?: string | null };
         Returns: undefined;
+      };
+      book_bank_txn_as_tax: {
+        Args: { p_txn_id: string; p_kind: string; p_period?: string | null; p_fy?: string | null; p_interest?: number; p_late_fee?: number; p_notes?: string | null };
+        Returns: string;
       };
       redeem_customer_credits: {
         Args: { p_customer_id: string; p_amount: number; p_note?: string | null };

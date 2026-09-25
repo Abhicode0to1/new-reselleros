@@ -50,6 +50,13 @@ import { EXPENSE_CATEGORIES, useUnreconciledExpenses } from "@/lib/queries/expen
 import { useUnreconciledSalaries } from "@/lib/queries/payroll";
 import { useCustomers } from "@/lib/queries/customers";
 import { rupee, formatDate } from "@/lib/utils";
+import { useBookBankTxnAsTax } from "@/lib/queries/tax-payments";
+import { fyLabel, fyStartYearOf } from "@/lib/accounting/tax-payments";
+import { previousPeriod } from "@/lib/banking/salary-lines";
+import { AddCustomerForm } from "@/components/features/customers/add-customer-form";
+
+/** Sentinel option value for "+ Naya customer banao" in the customer select. */
+const NEW_CUSTOMER = "__new_customer__";
 
 interface Props {
   open: boolean;
@@ -163,6 +170,10 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
   const { data: customers } = useCustomers();
   const [showInvoice, setShowInvoice]   = React.useState(false);
   const [invCustomer, setInvCustomer]   = React.useState("");
+  /* New customer from here opens the SAME side-sheet form the quote builder uses
+     (components/features/customers — Billing's form, used as-is, not copied), and
+     picks the customer it creates. */
+  const [newCustomerOpen, setNewCustomerOpen] = React.useState(false);
   const [invLineName, setInvLineName]   = React.useState("");
   const [invTaxable, setInvTaxable]     = React.useState("");
   React.useEffect(() => {
@@ -227,18 +238,56 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
 
   // Statutory (TDS/PF/ESI) challan — money-out. Records a statutory-dues
   // payment against THIS imported line (settles the payable) — no phantom line.
+  // GST and income tax go to tax_payments instead (migration 20260925140000), so
+  // they never mix into the TDS/PF/ESI "dues payable" total.
   const [showStatutory, setShowStatutory] = React.useState(false);
-  const [statutoryKind, setStatutoryKind] = React.useState<"esi" | "pf" | "tds" | "mixed">("esi");
-  React.useEffect(() => { setShowStatutory(false); setStatutoryKind("esi"); }, [transaction?.id]);
+  const [statutoryKind, setStatutoryKind] = React.useState<"esi" | "pf" | "tds" | "mixed" | "gst" | "income_tax">("esi");
+  const bookTax = useBookBankTxnAsTax();
+  const [gstPeriod, setGstPeriod] = React.useState("");
+  const [taxInterest, setTaxInterest] = React.useState("");
+  const [taxLateFee, setTaxLateFee] = React.useState("");
+  const [itKind, setItKind] = React.useState<"advance_tax" | "self_assessment_tax">("advance_tax");
+  const [itFy, setItFy] = React.useState("");
+  const txnFyStart = transaction ? fyStartYearOf(transaction.txn_date) : 0;
+  React.useEffect(() => {
+    setShowStatutory(false); setStatutoryKind("esi");
+    /* GST is normally paid by the 20th for the month before; advance tax is paid
+       during the year it is for. Both are only defaults — the operator can change them. */
+    setGstPeriod(transaction ? previousPeriod(transaction.txn_date) : "");
+    setTaxInterest(""); setTaxLateFee("");
+    setItKind("advance_tax");
+    setItFy(transaction ? fyLabel(fyStartYearOf(transaction.txn_date)) : "");
+  }, [transaction?.id, transaction]);
+  /* Self-assessment tax is paid AFTER the year closes, for the year before. */
+  const pickItKind = (k: "advance_tax" | "self_assessment_tax") => {
+    setItKind(k);
+    setItFy(fyLabel(k === "advance_tax" ? txnFyStart : txnFyStart - 1));
+  };
+  const interestNum = Math.max(0, Math.round(Number(taxInterest) || 0));
+  const lateFeeNum  = Math.max(0, Math.round(Number(taxLateFee) || 0));
+  const taxPortion  = (transaction?.debit ?? 0) - interestNum - lateFeeNum;
   const handleBookStatutory = async () => {
     if (!transaction) return;
     try {
-      await bookStatutory.mutateAsync({
-        transactionId: transaction.id,
-        accountId:     transaction.bank_account_id,
-        kind:          statutoryKind,
-        notes:         transaction.description,
-      });
+      if (statutoryKind === "gst" || statutoryKind === "income_tax") {
+        await bookTax.mutateAsync({
+          transactionId: transaction.id,
+          accountId:     transaction.bank_account_id,
+          kind:          statutoryKind === "gst" ? "gst" : itKind,
+          period:        gstPeriod,
+          fy:            itFy,
+          interest:      interestNum,
+          lateFee:       lateFeeNum,
+          notes:         transaction.description,
+        });
+      } else {
+        await bookStatutory.mutateAsync({
+          transactionId: transaction.id,
+          accountId:     transaction.bank_account_id,
+          kind:          statutoryKind,
+          notes:         transaction.description,
+        });
+      }
       onOpenChange(false);
     } catch { /* hook toasts the error */ }
   };
@@ -421,14 +470,26 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <select
-                      value={invCustomer}
-                      onChange={(e) => setInvCustomer(e.target.value)}
-                      className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
-                    >
-                      <option value="" disabled>Customer chuno…</option>
-                      {(customers ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
+                    <div className="flex gap-2">
+                      <select
+                        value={invCustomer}
+                        onChange={(e) => {
+                          /* "+ Naya customer" is an action, not a value: open the form and
+                             keep the current pick until a customer is actually created. */
+                          if (e.target.value === NEW_CUSTOMER) { setNewCustomerOpen(true); return; }
+                          setInvCustomer(e.target.value);
+                        }}
+                        aria-label="Customer"
+                        className="w-full rounded-md border border-hairline bg-paper px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                      >
+                        <option value="" disabled>Customer chuno…</option>
+                        <option value={NEW_CUSTOMER}>＋ Naya customer banao</option>
+                        {(customers ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <Button type="button" size="sm" variant="default" icon="plus" onClick={() => setNewCustomerOpen(true)} className="shrink-0">
+                        New
+                      </Button>
+                    </div>
                     <Input value={invLineName} onChange={(e) => setInvLineName(e.target.value)} placeholder="Kya becha? (e.g. Website / Setup fee)" />
                     <Input value={invTaxable} onChange={(e) => setInvTaxable(e.target.value)} type="number" min={0} placeholder="Taxable amount ₹ (ex-GST)" />
                     <p className="text-3xs text-ink-3">GST customer ke place-of-supply se apne-aap lagega. {rupee(amount)} received ka taxable (÷1.18) prefill kiya — theek kar lena.</p>
@@ -640,35 +701,109 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
                   onClick={() => setShowStatutory((v) => !v)}
                   className="w-full flex items-center justify-between text-left"
                 >
-                  <span className="text-xs font-semibold text-ink-2">Statutory payment (ESI / PF / TDS challan)?</span>
+                  <span className="text-xs font-semibold text-ink-2">Statutory / tax payment (ESI / PF / TDS / GST / Income tax)?</span>
                   <Icon name={showStatutory ? "chevron_up" : "chevron_down"} size={14} className="text-ink-3" />
                 </button>
                 {showStatutory && (
                   <div className="mt-2 space-y-2">
                     <p className="text-2xs text-ink-3">
-                      Records this {rupee(amount)} as a statutory payment to the government and clears it from your “dues payable”. Pick which challan this is:
+                      Records this {rupee(amount)} as a payment to the government. Pick what it is:
                     </p>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {(["esi", "pf", "tds", "mixed"] as const).map((k) => (
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                      {([
+                        ["esi", "ESI"], ["pf", "PF"], ["tds", "TDS"], ["mixed", "Mixed"],
+                        ["gst", "GST"], ["income_tax", "Income tax"],
+                      ] as const).map(([k, label]) => (
                         <button
                           key={k}
                           type="button"
+                          aria-pressed={statutoryKind === k}
                           onClick={() => setStatutoryKind(k)}
-                          className={`rounded-md border px-2 py-1.5 text-xs font-medium uppercase ${statutoryKind === k ? "border-indigo bg-indigo/10 text-indigo" : "border-hairline text-ink-2"}`}
+                          className={`rounded-md border px-2 py-1.5 text-xs font-medium ${statutoryKind === k ? "border-indigo bg-indigo/10 text-indigo" : "border-hairline text-ink-2"}`}
                         >
-                          {k}
+                          {label}
                         </button>
                       ))}
                     </div>
+
+                    {/* What each choice does to the books — said before the click. */}
+                    {statutoryKind === "gst" ? (
+                      <div className="space-y-2">
+                        <p className="text-2xs text-ink-3">
+                          Reduces GST payable for the return month. Interest and late fee paid with it are booked as a
+                          <b> Rates &amp; Taxes</b> expense — they are a cost, the tax is not.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <label className="text-3xs text-ink-3 space-y-0.5">
+                            <span className="block">Return month</span>
+                            <Input type="month" value={gstPeriod} onChange={(e) => setGstPeriod(e.target.value)} aria-label="GST return month" />
+                          </label>
+                          <label className="text-3xs text-ink-3 space-y-0.5">
+                            <span className="block">Interest ₹ (if any)</span>
+                            <Input type="number" min={0} value={taxInterest} onChange={(e) => setTaxInterest(e.target.value)} placeholder="0" aria-label="Interest" />
+                          </label>
+                          <label className="text-3xs text-ink-3 space-y-0.5">
+                            <span className="block">Late fee ₹ (if any)</span>
+                            <Input type="number" min={0} value={taxLateFee} onChange={(e) => setTaxLateFee(e.target.value)} placeholder="0" aria-label="Late fee" />
+                          </label>
+                        </div>
+                        <p className={`text-2xs tabular-nums ${taxPortion > 0 ? "text-ink-2" : "text-rose-ink"}`}>
+                          {taxPortion > 0
+                            ? <>GST (tax) <b>{rupee(taxPortion)}</b>{interestNum + lateFeeNum > 0 && <> · expense <b>{rupee(interestNum + lateFeeNum)}</b></>}</>
+                            : "Interest + late fee cannot be the whole amount — there must be some tax in it."}
+                        </p>
+                      </div>
+                    ) : statutoryKind === "income_tax" ? (
+                      <div className="space-y-2">
+                        <p className="text-2xs text-ink-3">
+                          Shows as <b>Advance tax paid</b> on the balance sheet for that year, and counts in the ITR pack. Not an expense.
+                        </p>
+                        <div className="flex flex-wrap items-end gap-2">
+                          <div className="flex gap-1.5" role="group" aria-label="Income tax type">
+                            {([["advance_tax", "Advance tax"], ["self_assessment_tax", "Self-assessment"]] as const).map(([k, label]) => (
+                              <button
+                                key={k}
+                                type="button"
+                                aria-pressed={itKind === k}
+                                onClick={() => pickItKind(k)}
+                                className={`rounded-md border px-2 py-1 text-2xs font-medium ${itKind === k ? "border-indigo bg-indigo/10 text-indigo" : "border-hairline text-ink-2"}`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <label className="text-3xs text-ink-3 space-y-0.5">
+                            <span className="block">For financial year</span>
+                            <select
+                              value={itFy}
+                              onChange={(e) => setItFy(e.target.value)}
+                              aria-label="Financial year"
+                              className="rounded-md border border-hairline bg-paper px-2 py-1.5 text-xs text-ink"
+                            >
+                              {[txnFyStart - 1, txnFyStart, txnFyStart + 1].map((y) => (
+                                <option key={y} value={fyLabel(y)}>FY {fyLabel(y)}</option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-2xs text-ink-3">Clears it from your TDS / PF / ESI “dues payable”.</p>
+                    )}
+
                     <Button
                       size="sm"
                       variant="primary"
                       icon="check"
-                      disabled={bookStatutory.isPending}
-                      loading={bookStatutory.isPending}
+                      disabled={bookStatutory.isPending || bookTax.isPending || (statutoryKind === "gst" && (taxPortion <= 0 || !gstPeriod))}
+                      loading={bookStatutory.isPending || bookTax.isPending}
                       onClick={handleBookStatutory}
                     >
-                      Book {rupee(amount)} as {statutoryKind.toUpperCase()} paid
+                      {statutoryKind === "gst"
+                        ? `Book ${rupee(amount)} as GST paid${gstPeriod ? ` (${gstPeriod})` : ""}`
+                        : statutoryKind === "income_tax"
+                          ? `Book ${rupee(amount)} as ${itKind === "advance_tax" ? "advance tax" : "self-assessment tax"} · FY ${itFy}`
+                          : `Book ${rupee(amount)} as ${statutoryKind.toUpperCase()} paid`}
                     </Button>
                   </div>
                 )}
@@ -822,6 +957,14 @@ export function ReconcileTransactionDialog({ open, onOpenChange, transaction }: 
           </Button>
         </SheetFooter>
       </SheetContent>
+
+      {/* Nested inside the reconcile sheet so closing the form returns here with the
+          new customer already picked. */}
+      <AddCustomerForm
+        open={newCustomerOpen}
+        onOpenChange={setNewCustomerOpen}
+        onCreated={(id) => { setInvCustomer(id); setNewCustomerOpen(false); }}
+      />
     </Sheet>
   );
 }

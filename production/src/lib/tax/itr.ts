@@ -304,7 +304,7 @@ export function computeItrPack(fy: FinancialYear, s: ItrSources): ItrPack {
   );
   if (s.advanceTaxPaid === 0 && advanceTaxRequired)
     gaps.push(
-      "Advance tax ka koi bhugtan darj nahi — agar bhara hai to challan CA ko dijiye; nahi bhara to schedule upar hai, aur der par Section 234B/C ka byaaj lagta hai.",
+      "Advance tax ka koi bhugtan darj nahi — agar bhara hai to Banking me us challan ki bank line ko Reconcile → Statutory → Income tax book kijiye (aur challan CA ko dijiye); nahi bhara to schedule upar hai, aur der par Section 234B/C ka byaaj lagta hai.",
     );
 
   return {

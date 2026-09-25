@@ -19,6 +19,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { BalanceSheetSection } from "@/lib/supabase/database.types";
+import { gstPaidForFy, incomeTaxPaidForFy } from "@/lib/accounting/tax-payments";
 
 export type BalanceSheetItem = {
   id:         string;
@@ -45,7 +46,9 @@ export interface BalanceSheetAuto {
   creditCardPayable: number; // outstanding owed on company credit-card accounts (a liability)
   emiLoansPayable: number;   // outstanding EMI/asset loans (a liability)
   businessLoansPayable: number; // outstanding principal on loans TAKEN by the company (a liability)
-  gstPayable:      number;   // net GST this FY (output − input); may be negative (credit)
+  gstPayable:      number;   // net GST this FY (output − input − GST paid for this FY's returns); may be negative (credit)
+  gstPaid:         number;   // GST paid for this FY's return months (already inside gstPayable)
+  advanceTaxPaid:  number;   // advance + self-assessment income tax paid for this FY (an asset)
   fyLabel:         string;   // e.g. "FY 2026-27" for the GST caveat
 }
 
@@ -303,9 +306,18 @@ export function useBalanceSheetAuto() {
         .gte("expense_date", fyFrom).lte("expense_date", fyTo);
       const expGst = (fyExp ?? []).reduce((s, e) => s + (e.gst_paid ?? 0), 0);
 
-      const gstPayable = outputGST - billsGst - expGst;
+      /* Tax paid from the bank (tax_payments). GST settles this FY's returns, so it comes
+         off GST payable; income tax paid for this FY is an asset until the year's tax is
+         worked out. A failed read throws — a silent 0 would overstate GST payable. */
+      const { data: taxRows, error: taxErr } = await supabase
+        .from("tax_payments").select("kind, amount, period, fy");
+      if (taxErr) throw taxErr;
+      const gstPaid = gstPaidForFy(taxRows ?? [], fyStartYear);
+      const advanceTaxPaid = incomeTaxPaidForFy(taxRows ?? [], fyStartYear);
 
-      return { cashAndBank, receivables, advancesFromCustomers, projectReceivable, tdsReceivable, employeeLoans, prepaidAdvances, fixedAssets, payables, salaryPayable, salaryDuesPayable, reimbursementsPayable, creditCardPayable, emiLoansPayable, businessLoansPayable, gstPayable, fyLabel };
+      const gstPayable = outputGST - billsGst - expGst - gstPaid;
+
+      return { cashAndBank, receivables, advancesFromCustomers, projectReceivable, tdsReceivable, employeeLoans, prepaidAdvances, fixedAssets, payables, salaryPayable, salaryDuesPayable, reimbursementsPayable, creditCardPayable, emiLoansPayable, businessLoansPayable, gstPayable, gstPaid, advanceTaxPaid, fyLabel };
     },
     staleTime: 30_000,
   });

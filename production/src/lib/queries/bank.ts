@@ -773,6 +773,10 @@ export function useReconcileTransaction() {
       qc.invalidateQueries({ queryKey: ["salary-payments"] });
       qc.invalidateQueries({ queryKey: ["expenses"] });
       qc.invalidateQueries({ queryKey: ["balance-sheet"] });
+      // Un-reconciling a tax line deletes its tax payment (reconcile_bank_txn).
+      qc.invalidateQueries({ queryKey: ["tax-payments"] });
+      qc.invalidateQueries({ queryKey: ["accounting", "gst"] });
+      qc.invalidateQueries({ queryKey: ["itr-pack"] });
       toast.success(row.matched_to_type ? "Reconciled" : "Un-reconciled");
     },
     onError: (err) => {

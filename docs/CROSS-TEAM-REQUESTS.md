@@ -15,7 +15,25 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
 
 ## Open
 
-_None yet._
+### R-001 · `useCreateCustomer` can put a customer in the wrong company, or report a fake one
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-25
+- **Why accounting needs it:** Banking → Reconcile → "Kisi sale / customer ka paisa?" now opens your
+  `AddCustomerForm` for "＋ Naya customer" (used as-is, not changed). The customer it returns is then
+  invoiced against a real bank receipt, so the two problems below can reach the books.
+- **What to change** — `production/src/lib/queries/customers.ts`, `useCreateCustomer`:
+  1. **Line ~69 — hardcoded tenant.** `let tenantId = "11111111-1111-1111-1111-111111111111"` is used
+     whenever the user/tenant lookup returns nothing. That is the local demo tenant; in production a
+     failed lookup would insert the customer into the wrong company (AGENTS.md: never hardcode a
+     tenant). It should throw instead ("Not signed in / not linked to a company").
+  2. **Lines ~134–162 — fake customer on insert failure.** When the insert errors, it builds a
+     `CUST-<timestamp>` customer, puts it in the list cache and returns it as success
+     ("Dev mode customer insert warning"). The screen then shows a customer that does not exist, and
+     anything done with its id (invoice, reconcile) fails later with a confusing error (AGENTS.md: never
+     turn a failure into a plausible value). It should `throw error` so the form shows the real reason.
+- **Done when:** a failed insert shows an error and adds nothing to the list; no code path inserts
+  with tenant `11111111-…`.
 
 <!-- Template — copy for each new request:
 
