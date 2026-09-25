@@ -34,6 +34,7 @@ import {
   useUpdateBankAccount,
 } from "@/lib/queries/bank";
 import { openingBalanceFromStatement, fyStartFor } from "@/lib/banking/opening-balance";
+import { isEncryptedPdf } from "@/lib/banking/pdf-check";
 import { useTxnCategoryRules, useCreateTxnCategoryRule } from "@/lib/queries/txn-category-rules";
 import { proposePatterns } from "@/lib/banking/rule-from-line";
 import { directionOf } from "@/lib/banking/categorise";
@@ -318,6 +319,15 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
 
   // Read a bank-statement PDF/photo with AI → transaction rows (operator reviews).
   const readPdf = async (file: File) => {
+    /* A password-protected PDF (bank e-statements usually are) cannot be read by the AI —
+       it fails with a bare 400. Say so before uploading it, and say what works instead. */
+    if (/pdf/i.test(file.type) && isEncryptedPdf(new Uint8Array(await file.arrayBuffer()))) {
+      toast.error(
+        "This PDF is password-protected, so it can't be read. Download the statement as CSV / \"Delimited\" (.txt) from net banking — or open the PDF with its password, Print → Save as PDF, and upload that copy.",
+        { duration: 12000 },
+      );
+      return;
+    }
     setReading(true);
     setMode("ai");
     setCsvText("");
