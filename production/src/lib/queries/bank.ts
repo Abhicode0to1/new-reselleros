@@ -438,6 +438,21 @@ export function bankTxnKey(r: { txn_date?: string | null; debit?: number | null;
   return `${d}|${Math.round(r.debit ?? 0)}|${Math.round(r.credit ?? 0)}|${desc}`;
 }
 
+/**
+ * Every identity a bank line has: the description key above, plus — when the statement
+ * printed a running balance — date + amount + balance. The balance changes after every
+ * line, so two different lines never share all three; the same line read twice (CSV once,
+ * the AI from a PDF once) always does, however differently its narration came out.
+ * A line is a duplicate when ANY of its keys is already known.
+ */
+export function bankTxnKeys(r: { txn_date?: string | null; debit?: number | null; credit?: number | null; description?: string | null; balance_after?: number | null }): string[] {
+  const keys = [bankTxnKey(r)];
+  if (r.balance_after != null) {
+    keys.push(`bal|${(r.txn_date ?? "").slice(0, 10)}|${Math.round(r.debit ?? 0)}|${Math.round(r.credit ?? 0)}|${Math.round(r.balance_after)}`);
+  }
+  return keys;
+}
+
 /** Existing bank-line keys for an account — to flag/skip duplicate imports. */
 export function useExistingTxnKeys(accountId: string | null) {
   return useQuery({
@@ -447,11 +462,11 @@ export function useExistingTxnKeys(accountId: string | null) {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("bank_transactions")
-        .select("txn_date, debit, credit, description, reference")
+        .select("txn_date, debit, credit, description, reference, balance_after")
         .eq("bank_account_id", accountId as string)
         .limit(5000);
       if (error) throw error;
-      return new Set((data ?? []).map((r) => bankTxnKey(r as never)));
+      return new Set((data ?? []).flatMap((r) => bankTxnKeys(r as never)));
     },
     staleTime: 15_000,
   });
@@ -495,16 +510,16 @@ export function useImportBankTransactions() {
       // Skip lines already in this account (re-uploaded / overlapping statement).
       const { data: existing } = await supabase
         .from("bank_transactions")
-        .select("txn_date, debit, credit, description, reference")
+        .select("txn_date, debit, credit, description, reference, balance_after")
         .eq("bank_account_id", input.accountId)
         .limit(5000);
-      const seen = new Set((existing ?? []).map((r) => bankTxnKey(r as never)));
+      const seen = new Set((existing ?? []).flatMap((r) => bankTxnKeys(r as never)));
       const fresh: typeof cleaned = [];
       let duplicates = 0;
       for (const r of cleaned) {
-        const k = bankTxnKey(r as never);
-        if (seen.has(k)) { duplicates++; continue; }
-        seen.add(k);   // also dedup within the same batch
+        const keys = bankTxnKeys(r as never);
+        if (keys.some((k) => seen.has(k))) { duplicates++; continue; }
+        keys.forEach((k) => seen.add(k));   // also dedup within the same batch
         fresh.push(r);
       }
 

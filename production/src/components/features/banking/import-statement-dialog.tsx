@@ -29,12 +29,13 @@ import { Icon } from "@/components/ui/icon";
 import {
   useImportBankTransactions,
   useExistingTxnKeys,
-  bankTxnKey,
+  bankTxnKeys,
   useBankAccount,
   useUpdateBankAccount,
 } from "@/lib/queries/bank";
 import { openingBalanceFromStatement, fyStartFor } from "@/lib/banking/opening-balance";
 import { isEncryptedPdf } from "@/lib/banking/pdf-check";
+import { fixStatementDates } from "@/lib/banking/statement-dates";
 import { useTxnCategoryRules, useCreateTxnCategoryRule } from "@/lib/queries/txn-category-rules";
 import { proposePatterns } from "@/lib/banking/rule-from-line";
 import { directionOf } from "@/lib/banking/categorise";
@@ -174,7 +175,27 @@ function detectColumns(headerRow: string[]): Record<keyof ParsedRow, number> | n
   };
 }
 
-function parseStatement(text: string): { rows: ParsedRow[]; skipped: number; warnings: string[] } {
+type ParseResult = { rows: ParsedRow[]; skipped: number; warnings: string[] };
+
+/**
+ * Last gate before the preview (CSV and AI alike): every date must be a real calendar
+ * date. A day/month swap is corrected — for the whole statement when it was read
+ * day-first — and said out loud; a date impossible either way skips its row, counted.
+ * Without this one bad date ("2026-21-08") failed the whole import in Postgres.
+ */
+function withRealDates(p: ParseResult, serverSwapped = 0): ParseResult {
+  const fix = fixStatementDates(p.rows.map((r) => r.txn_date));
+  const rows = p.rows.flatMap((r, i) => (fix.dates[i] ? [{ ...r, txn_date: fix.dates[i]! }] : []));
+  const dropped = p.rows.length - rows.length;
+  const swapped = fix.swapped + serverSwapped;
+  const warnings = [...p.warnings];
+  if (fix.swappedAll) warnings.push(`The dates were in day-first order — all ${fix.swapped} were flipped. Check a few dates in the preview before importing.`);
+  else if (swapped > 0) warnings.push(`${swapped} date${swapped === 1 ? " had its" : "s had their"} day and month swapped and ${swapped === 1 ? "was" : "were"} corrected — check ${swapped === 1 ? "it" : "them"} in the preview.`);
+  if (dropped > 0) warnings.push(`${dropped} row${dropped === 1 ? "" : "s"} had an impossible date and ${dropped === 1 ? "was" : "were"} skipped.`);
+  return { rows, skipped: p.skipped + dropped, warnings };
+}
+
+function parseStatement(text: string): ParseResult {
   const raw = parseCSV(text);
   if (raw.length === 0) return { rows: [], skipped: 0, warnings: ["Empty file"] };
 
@@ -302,7 +323,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
   // How many parsed rows are already in the books (will be skipped on import).
   const dupCount = React.useMemo(() => {
     if (!parsed || !existingKeys) return 0;
-    return parsed.rows.filter((r) => !isExcluded(r) && existingKeys.has(bankTxnKey(r))).length;
+    return parsed.rows.filter((r) => !isExcluded(r) && bankTxnKeys(r).some((k) => existingKeys.has(k))).length;
   }, [parsed, existingKeys, isExcluded]);
   const freshCount = (parsed?.rows.length ?? 0) - excludedCount - dupCount;
 
@@ -314,7 +335,7 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
   React.useEffect(() => {
     if (mode !== "csv") return;
     if (!csvText.trim()) { setParsed(null); return; }
-    setParsed(parseStatement(csvText));
+    setParsed(withRealDates(parseStatement(csvText)));
   }, [csvText, mode]);
 
   // Read a bank-statement PDF/photo with AI → transaction rows (operator reviews).
@@ -345,11 +366,11 @@ export function ImportStatementDialog({ open, onOpenChange, accountId }: Props) 
       });
       const json = await res.json();
       if (!res.ok) { toast.error(json.error ?? "Couldn't read the statement."); setParsed(null); return; }
-      setParsed({
+      setParsed(withRealDates({
         rows: (json.rows ?? []) as ParsedRow[],
         skipped: json.skipped ?? 0,
         warnings: (json.rows ?? []).length === 0 ? ["AI ne koi transaction nahi padha — CSV download try karo."] : [],
-      });
+      }, Number(json.datesSwapped) || 0));
     } catch {
       toast.error("Upload failed — try again, ya CSV daalo.");
       setParsed(null);
