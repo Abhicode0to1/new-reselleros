@@ -75,6 +75,12 @@ longer creates DirectAdmin accounts for a sale: `/api/cron/provision-hosting` se
 `hosting.provision`, behind `HOSTING_PROVISIONING_LIVE=1` here and `ENGINE_HOSTING_PROVISION_LIVE=1`
 on DMS. The hosting TRIAL is the one path that still writes to DirectAdmin from this app.
 
+**Domain renewals exist and are OFF** (decision 28, 25 Sep 2026). A paid domain gets a yearly
+vendor-`domain` subscription. Its renewal quote is priced at ResellerClub's LIVE renewal price, full
+price (`lib/domains/renewal.ts`). A paid renewal is queued as `plan = "domain-renewal"`, never a
+registration, and `/api/cron/renew-domains` sends DMS's `domain.renew` with the current expiry.
+Switches: `DOMAIN_RENEWAL_LIVE=1` here, `ENGINE_DOMAIN_RENEW_LIVE=1` on DMS.
+
 **The free hosting trial is Starter only, on monthly and yearly** (decisions 26-27, 24 Sep 2026).
 "Start free trial" on /hosting puts a ₹0 `hosting-trial:starter` line in the cart. Checkout
 starts it with no payment step (`lib/hosting/start-trial.ts`), and a trial checks out on its own.
@@ -268,10 +274,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,743 tests
-passing across 367 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 25 Sep 2026 after the cart-hosting subscription fix. Earlier markers:
-6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,776 tests
+passing across 370 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 25 Sep 2026 after domain renewals. Earlier markers:
+6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 
@@ -286,8 +292,9 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,787 passing across 450 files, zero failures**
-on 24 Sep 2026, after the cross-app trial record (DMS `2315ae26`). Earlier the same day:
+`C:/xampp/htdocs/Domain-Management-Project`, **6,810 passing across 450 files, zero failures**
+on 25 Sep 2026, after domain.renew got its gate and spend limit (DMS `e6c1406c`). Earlier:
+6,787 / 450 on 24 Sep after the cross-app trial record (DMS `2315ae26`),
 6,768 / 448 after the monthly Starter trial (DMS `47f0a81a`),
 6,758 / 448 after the Starter-only trial guard (DMS `19c1134a`),
 6,753 / 447 after the live DirectAdmin fixes (DMS `23680de9`),

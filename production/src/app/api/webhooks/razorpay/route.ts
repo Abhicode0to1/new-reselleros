@@ -32,6 +32,12 @@ import { decideProvisioning, type ProvisioningVendor } from "@/lib/provisioning/
 import { queueProvisioning } from "@/lib/provisioning/provisioning.server";
 import { provisioningProducts } from "@/lib/provisioning/products";
 import { domainRegistrationEnabled, hostingProvisioningEnabled } from "@/lib/provisioning/domain-registration";
+import {
+  DOMAIN_RENEWAL_PLAN,
+  domainRenewalEnabled,
+  domainSubscriptionInsert,
+  domainSubscriptionsToCreate,
+} from "@/lib/domains/renewal";
 import { commandsConfigured } from "@/lib/dms-engine/commands";
 import { pdfDownloadUrl } from "@/lib/pdf/pdf-token";
 
@@ -244,7 +250,7 @@ export async function POST(request: NextRequest) {
   // ── Look up the quote we created at checkout time ─────────────────────
   const { data: quote, error: qErr } = await admin
     .from("quotes")
-    .select("id, tenant_id, customer_name, amount, payment_status, lead_id, seats, plan, line_items")
+    .select("id, tenant_id, customer_name, amount, payment_status, lead_id, seats, plan, line_items, is_renewal")
     .eq("id", receipt)
     .single();
 
@@ -285,6 +291,17 @@ export async function POST(request: NextRequest) {
     console.error("[webhooks/razorpay] zero/negative payment amount — refusing to record");
     return NextResponse.json({ error: "Invalid payment amount" }, { status: 400 });
   }
+
+  /* Is this the renewal of a DOMAIN subscription? Read BEFORE record_payment, which rolls
+     the subscription forward. A paid domain is otherwise queued as a REGISTRATION, and
+     registering a domain the customer already owns is the wrong spend (25 Sep 2026). */
+  const { data: renewedDomainSub } = await admin
+    .from("subscriptions")
+    .select("id, domain, vendor")
+    .eq("tenant_id", quote.tenant_id)
+    .eq("renewal_quote_id", quote.id)
+    .eq("vendor", "domain")
+    .maybeSingle();
 
   const { error: rpcErr } = await admin.rpc("record_payment", {
     p_quote_id:  quote.id,
@@ -328,12 +345,17 @@ export async function POST(request: NextRequest) {
      account in one payment; picking a single vendor left the paid domain queued for
      nobody. Each product gets the same gate as before, on its own vendor and domain. */
   const dialMode = (await loadAutonomyPolicy(quote.tenant_id)).modes?.["provisioning.activate"] ?? "off";
-  const products = provisioningProducts({
-    lineItems: quote.line_items,
-    vendor: provisioningVendor,
-    domain: provisioningDomain,
-    seats: Number(quote.seats ?? 0),
-  });
+  /* A paid domain RENEWAL is one product: renew that domain. Never the lines' reading,
+     which would make it a registration. */
+  const renewalDomain = renewedDomainSub?.domain?.trim().toLowerCase() || null;
+  const products = renewalDomain
+    ? [{ vendor: "domain" as const, domain: renewalDomain, seats: 1 }]
+    : provisioningProducts({
+        lineItems: quote.line_items,
+        vendor: provisioningVendor,
+        domain: provisioningDomain,
+        seats: Number(quote.seats ?? 0),
+      });
 
   for (const product of products) {
     const provisioning = decideProvisioning({
@@ -365,7 +387,7 @@ export async function POST(request: NextRequest) {
         product.vendor === "hosting"
           ? hostingProvisioningEnabled() && commandsConfigured()
           : product.vendor === "domain"
-            ? domainRegistrationEnabled() && commandsConfigured()
+            ? (renewalDomain ? domainRenewalEnabled() : domainRegistrationEnabled()) && commandsConfigured()
             : false,
       dialMode,
     });
@@ -377,7 +399,8 @@ export async function POST(request: NextRequest) {
         vendor:      product.vendor,
         seats:       product.seats,
         domain:      product.domain,
-        plan:        quote.plan ?? null,
+        // The renew-domains worker takes only DOMAIN_RENEWAL_PLAN rows; register-domains skips them.
+        plan:        renewalDomain ? DOMAIN_RENEWAL_PLAN : quote.plan ?? null,
         amountPaid:  paymentAmount,
         paymentMode: razorpayMode(keyIdForMode),
         blocker:     provisioning.action === "queue" ? provisioning.blocker : null,
@@ -386,6 +409,37 @@ export async function POST(request: NextRequest) {
       console.log(`[webhooks/razorpay] provisioning ${queued} for ${quote.id} ${product.vendor}${product.domain ? ` ${product.domain}` : ""} — ${provisioning.reason}`);
     } else {
       console.warn(`[webhooks/razorpay] not provisioning ${quote.id} ${product.vendor} — ${provisioning.reason}`);
+    }
+  }
+
+  /* ── A yearly subscription for each domain this sale bought ─────────────────
+     So the domain comes up for renewal (owner, 25 Sep 2026). Only on a first sale: a
+     renewal quote rolls its existing subscription forward in record_payment. Written
+     here rather than through record_payment's line `commitment`, which keeps one
+     subscription per (quote, domain) and would drop it when hosting shares the name.
+     Best-effort and logged: the payment is already recorded. */
+  if (!quote.is_renewal && !renewedDomainSub) {
+    const toCreate = domainSubscriptionsToCreate(quote.line_items);
+    if (toCreate.length) {
+      const { data: paidQuote } = await admin
+        .from("quotes").select("customer_id").eq("id", quote.id).eq("tenant_id", quote.tenant_id).maybeSingle();
+      const customerId = (paidQuote as { customer_id?: string | null } | null)?.customer_id ?? null;
+      if (!customerId) {
+        console.error(`[webhooks/razorpay] ${quote.id}: paid, but no customer to hang domain subscriptions on — ${toCreate.map((d) => d.domain).join(", ")} will not come up for renewal. Add them by hand.`);
+      } else {
+        const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10); // IST (AGENTS.md §6)
+        for (const row of toCreate) {
+          const { data: existing } = await admin
+            .from("subscriptions").select("id")
+            .eq("tenant_id", quote.tenant_id).eq("vendor", "domain").eq("domain", row.domain).eq("status", "active")
+            .limit(1);
+          if (existing && existing.length) continue;
+          const { error: subErr } = await admin.from("subscriptions").insert(
+            domainSubscriptionInsert({ tenantId: quote.tenant_id, customerId, customerName: quote.customer_name ?? "", row, today }),
+          );
+          if (subErr) console.error(`[webhooks/razorpay] ${quote.id}: domain subscription for ${row.domain} NOT created — ${subErr.message}. It will not come up for renewal; add it by hand.`);
+        }
+      }
     }
   }
 

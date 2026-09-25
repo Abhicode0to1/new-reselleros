@@ -1,0 +1,142 @@
+/**
+ * The renew-domains worker (25 Sep 2026). Pinned: nothing is sent while a switch is off;
+ * the domain's CURRENT expiry, read from DMS, is sent as `expiryBefore` (the double-renewal
+ * defence); no expiry → held, never guessed; each engine answer becomes the right queue state.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+const prov = vi.hoisted(() => ({
+  listReadyDomainRenewals: vi.fn(),
+  markProvisioningActivated: vi.fn(),
+  markProvisioningFailed: vi.fn(),
+  noteProvisioning: vi.fn(),
+}));
+vi.mock("@/lib/provisioning/provisioning.server", () => prov);
+
+const engine = vi.hoisted(() => ({ sendEngineCommand: vi.fn(), commandsConfigured: vi.fn() }));
+vi.mock("@/lib/dms-engine/commands", () => engine);
+const client = vi.hoisted(() => ({ getEngineServices: vi.fn() }));
+vi.mock("@/lib/dms-engine/client", () => client);
+
+const autonomy = vi.hoisted(() => ({ loadAutonomyPolicy: vi.fn() }));
+vi.mock("@/lib/ai/autonomy.server", () => autonomy);
+
+const mail = vi.hoisted(() => ({ sendEmail: vi.fn(), loadOwnerAlert: vi.fn() }));
+vi.mock("@/lib/email/send", () => ({ sendEmail: mail.sendEmail }));
+vi.mock("@/lib/email/owner-alert.server", () => ({ loadOwnerAlert: mail.loadOwnerAlert }));
+
+const rows = vi.hoisted(() => ({ quote: { id: "Q9", customer_id: "C1" } as unknown, customer: { contact_email: "buyer@example.invalid" } as unknown }));
+vi.mock("@/lib/supabase/server", () => ({
+  createAdminClient: () => ({
+    from: (table: string) => ({
+      select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: table === "quotes" ? rows.quote : rows.customer, error: null }) }) }) }),
+    }),
+  }),
+  createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
+}));
+
+import { GET } from "./route";
+
+const row = { id: "R1", tenant_id: "T1", quote_id: "Q9", domain: "acme.in", amount_paid: 1061, note: null };
+const req = () => new Request("https://example.invalid/api/cron/renew-domains", { headers: { authorization: "Bearer s3cret" } });
+const services = (expiresAt: string | null) => ({
+  ok: true,
+  data: { linked: true, domains: [{ id: "D1", domainName: "acme.in", status: "active", registeredAt: null, expiresAt, autoRenew: false, privacyProtection: false, nameservers: [] }], hostings: [] },
+});
+
+const ENV = { ...process.env };
+beforeEach(() => {
+  for (const f of [...Object.values(prov), ...Object.values(engine), client.getEngineServices, autonomy.loadAutonomyPolicy, mail.sendEmail, mail.loadOwnerAlert]) f.mockReset();
+  process.env.CRON_SECRET = "s3cret";
+  process.env.DOMAIN_RENEWAL_LIVE = "1";
+  engine.commandsConfigured.mockReturnValue(true);
+  prov.listReadyDomainRenewals.mockResolvedValue([row]);
+  prov.noteProvisioning.mockResolvedValue(true);
+  autonomy.loadAutonomyPolicy.mockResolvedValue({ killSwitch: false, modes: {} });
+  mail.loadOwnerAlert.mockResolvedValue({ alert: { ok: true, to: "owner@example.invalid" } });
+  mail.sendEmail.mockResolvedValue({ status: "sent" });
+  client.getEngineServices.mockResolvedValue(services("2027-09-25T00:00:00.000Z"));
+  rows.quote = { id: "Q9", customer_id: "C1" };
+  rows.customer = { contact_email: "buyer@example.invalid" };
+});
+afterEach(() => { process.env = { ...ENV }; });
+
+describe("nothing is sent while anything is switched off", () => {
+  it("DOMAIN_RENEWAL_LIVE not exactly 1 → no-op", async () => {
+    process.env.DOMAIN_RENEWAL_LIVE = "true";
+    const body = await (await GET(req())).json();
+    expect(body.note).toMatch(/switched off/);
+    expect(engine.sendEngineCommand).not.toHaveBeenCalled();
+  });
+  it("no command key → 503", async () => {
+    engine.commandsConfigured.mockReturnValue(false);
+    expect((await GET(req())).status).toBe(503);
+  });
+  it("the workspace's kill switch → noted, nothing sent", async () => {
+    autonomy.loadAutonomyPolicy.mockResolvedValue({ killSwitch: true, modes: {} });
+    await GET(req());
+    expect(engine.sendEngineCommand).not.toHaveBeenCalled();
+  });
+});
+
+describe("the expiry sent is the one DMS holds — never guessed", () => {
+  it("sends domain.renew with expiryBefore in epoch seconds, cover pre-GST, live mode, day-keyed id", async () => {
+    engine.sendEngineCommand.mockResolvedValue({ kind: "done", result: { orderId: "RC-1" } });
+    await GET(req());
+    const cmd = engine.sendEngineCommand.mock.calls[0][0];
+    expect(cmd).toMatchObject({ command: "domain.renew", subject: "acme.in", mode: "live" });
+    expect(cmd.commandId).toMatch(/^rsos-domrenew-R1-\d{4}-\d{2}-\d{2}$/);
+    expect(cmd.payload).toEqual({ years: 1, expiryBefore: 1821830400, coverRupees: 899, paymentMode: "live", sourceRef: "Q9" });
+    expect(prov.markProvisioningActivated).toHaveBeenCalledWith("R1", "RC-1");
+  });
+  it("DMS has no expiry for the domain → held, nothing sent", async () => {
+    client.getEngineServices.mockResolvedValue(services(null));
+    await GET(req());
+    expect(engine.sendEngineCommand).not.toHaveBeenCalled();
+    expect(prov.noteProvisioning).toHaveBeenCalledWith("R1", expect.stringMatching(/no expiry date/));
+  });
+  it("DMS does not hold the domain for this customer → held", async () => {
+    client.getEngineServices.mockResolvedValue({ ok: true, data: { linked: true, domains: [], hostings: [] } });
+    await GET(req());
+    expect(engine.sendEngineCommand).not.toHaveBeenCalled();
+    expect(prov.noteProvisioning).toHaveBeenCalledWith("R1", expect.stringMatching(/no record/));
+  });
+  it("DMS unreachable → waits for the next run, nothing sent", async () => {
+    client.getEngineServices.mockResolvedValue({ ok: false, reason: "unreachable" });
+    await GET(req());
+    expect(engine.sendEngineCommand).not.toHaveBeenCalled();
+  });
+  it("the customer has no email → held", async () => {
+    rows.customer = { contact_email: "" };
+    await GET(req());
+    expect(engine.sendEngineCommand).not.toHaveBeenCalled();
+  });
+});
+
+describe("each engine answer lands in the right queue state", () => {
+  it("held → note, still queued", async () => {
+    engine.sendEngineCommand.mockResolvedValue({ kind: "held", reason: "[held] daily cap" });
+    await GET(req());
+    expect(prov.noteProvisioning).toHaveBeenCalledWith("R1", "Held: [held] daily cap");
+    expect(prov.markProvisioningActivated).not.toHaveBeenCalled();
+  });
+  it("lost response → RECONCILE note + owner told not to renew by hand", async () => {
+    engine.sendEngineCommand.mockResolvedValue({ kind: "needs_reconciliation", reason: "socket closed" });
+    await GET(req());
+    expect(prov.noteProvisioning).toHaveBeenCalledWith("R1", "RECONCILE: socket closed");
+    expect(mail.sendEmail.mock.calls[0][0].text).toMatch(/renewed twice/);
+  });
+  it("refused → failed + owner alert", async () => {
+    engine.sendEngineCommand.mockResolvedValue({ kind: "refused", reason: "already renewed since you read it" });
+    await GET(req());
+    expect(prov.markProvisioningFailed).toHaveBeenCalled();
+    expect(mail.sendEmail).toHaveBeenCalled();
+  });
+  it("engine gate closed → stops the run", async () => {
+    prov.listReadyDomainRenewals.mockResolvedValue([row, { ...row, id: "R2" }]);
+    engine.sendEngineCommand.mockResolvedValue({ kind: "gate_closed", reason: "ENGINE_DOMAIN_RENEW_LIVE" });
+    const body = await (await GET(req())).json();
+    expect(body.note).toMatch(/gate is closed/);
+    expect(engine.sendEngineCommand).toHaveBeenCalledTimes(1);
+  });
+});

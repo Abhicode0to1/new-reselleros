@@ -15,6 +15,7 @@
  */
 import { createClient as createBareClient } from "@supabase/supabase-js";
 import type { ProvisioningBlocker, ProvisioningVendor } from "./provisioning";
+import { DOMAIN_RENEWAL_PLAN } from "@/lib/domains/renewal";
 
 function bare() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -76,19 +77,34 @@ export interface ReadyDomainRequest {
  * switched on — it was paid for under the old arrangement and a person clears it.
  */
 export async function listReadyDomainRequests(limit = 20): Promise<ReadyDomainRequest[]> {
+  return listReadyDomainRows("registration", limit);
+}
+
+/**
+ * Paid domain RENEWALS approved the same way (25 Sep 2026). A separate list, because
+ * registering a domain the customer already owns would be the wrong spend: the
+ * register-domains worker never sees these rows, and renew-domains sees only them.
+ */
+export async function listReadyDomainRenewals(limit = 20): Promise<ReadyDomainRequest[]> {
+  return listReadyDomainRows("renewal", limit);
+}
+
+async function listReadyDomainRows(kind: "registration" | "renewal", limit: number): Promise<ReadyDomainRequest[]> {
   const db = bare();
   if (!db) return [];
-  const { data, error } = await db
+  let q = db
     .from("provisioning_requests")
     .select("id, tenant_id, quote_id, domain, amount_paid, note")
     .eq("vendor", "domain")
     .eq("status", "queued")
     .eq("payment_mode", "live")
-    .is("blocker", null)
-    .order("created_at", { ascending: true })
-    .limit(limit);
+    .is("blocker", null);
+  // `neq` alone would also drop rows whose plan is NULL (a NULL is never "not equal"),
+  // which is most registrations, so the null case is named.
+  q = kind === "renewal" ? q.eq("plan", DOMAIN_RENEWAL_PLAN) : q.or(`plan.is.null,plan.neq.${DOMAIN_RENEWAL_PLAN}`);
+  const { data, error } = await q.order("created_at", { ascending: true }).limit(limit);
   if (error) {
-    console.error("[provisioning] list ready domains failed:", error.message);
+    console.error(`[provisioning] list ready domain ${kind}s failed:`, error.message);
     return [];
   }
   return (data ?? []) as ReadyDomainRequest[];

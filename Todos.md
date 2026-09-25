@@ -227,6 +227,64 @@ Verified:
 
 **Not testable here:** a real domain price. ResellerClub answers only the whitelisted IP.
 
+### Decision 28 — domain renewals (25 Sep 2026) — BUILT, SWITCHED OFF
+
+Pardeep: *"Handle the domain renewals too."*
+
+| Question | Pardeep's answer |
+|---|---|
+| What does a customer pay to renew a domain? | **Live price at renewal time** |
+| A domain free with yearly hosting — at renewal? | **Full price at renewal** |
+
+**How it works.** No file in the blocked Billing folders was edited.
+1. **Sale.** The payment webhook gives each paid domain its own yearly subscription: vendor
+   `domain`, renewing a year out. It is created there rather than through `record_payment`'s
+   `commitment` rule, because that rule keeps one subscription per (quote, domain), so hosting on
+   the same name would take it.
+2. **Renewal quote.** The renewals cron (same reminder schedule and emails) prices a vendor-`domain`
+   subscription with `lib/domains/renewal.ts` `createDomainRenewalQuote`. The price is ResellerClub's
+   CUSTOMER renewal price (`renewdomain`) for the extension, read then, + GST. It is never the stored
+   mrr, which is ₹0 for a bundled domain. If the price can't be read, that reminder is not sent
+   (never a priceless email), the error is reported, and it is retried next run. The quote line
+   names no domain, because provisioning reads a line's domain as a domain to register.
+3. **Renewal paid.** The webhook spots the renewal of a domain subscription BEFORE `record_payment`
+   and queues a RENEWAL row (`plan = "domain-renewal"`), never a registration.
+   `register-domains` skips those rows.
+4. **Renew.** `/api/cron/renew-domains` reads the domain's current expiry from DMS and sends DMS's
+   `domain.renew` with it as `expiryBefore`. DMS renews only if the registrar still agrees, so a
+   renewal made elsewhere is refused rather than bought twice.
+5. **DMS** (`e6c1406c`). `domain.renew` has its own gate `ENGINE_DOMAIN_RENEW_LIVE` and a spend
+   limit: live payment only, paid ≥ ResellerClub's renewal cost, 5 a day and ₹10,000 a day by
+   default (`ENGINE_DOMAIN_RENEW_MAX_PER_DAY` / `_MAX_RUPEES_PER_DAY`).
+
+**Switches:** off by default. `DOMAIN_RENEWAL_LIVE=1` on this app and `ENGINE_DOMAIN_RENEW_LIVE=1`
+on DMS. Both are needed.
+
+**Verified locally, end to end:** a paid domain sale, then a signed webhook →
+1. **Sale:** subscription "Domain domrenew2509.in", vendor `domain`, renewing a year out.
+2. **Cron, no live price here:** the reminder was held with the reason, and no quote was made.
+3. **Renewal quote** (real function, stand-in price ₹899): ₹1,061.
+4. **Renewal paid:** the subscription rolled 5 Oct 2026 → 5 Oct 2027, one `domain-renewal` row was
+   queued (held as a test payment), and no second subscription or registration was created.
+
+**Not verified:** a real renewal at ResellerClub, which does not answer this machine.
+
+**Tests:** 33 in `lib/domains`, plus 12 for the worker and a wiring scan that fails if the
+registration queue picks up renewals.
+
+**Before switching on:**
+- a Cloud Scheduler job for `/api/cron/renew-domains` (Bearer `CRON_SECRET`, WITH a retry count, L1);
+- `provisioning.activate` on auto;
+- the ResellerClub balance funded;
+- then both switches.
+
+**Found on the way, not changed** (the first is in a blocked folder; ask the colleague):
+- **`src/lib/renewals/create-renewal-quote.ts`** hardcodes `extension_months: 12` on every renewal
+  quote, including a MONTHLY subscription's. `record_payment` reads that when rolling forward. It
+  also estimates cost as `× 0.83`, the AGENTS.md §2 pattern.
+- **A paid HOSTING or Workspace renewal** re-queues provisioning as though it were a new sale.
+  Nothing extends the DMS hosting's own expiry.
+
 ### Decision 27 — "Start free trial" goes straight to the cart (24 Sep 2026)
 
 Pardeep: *"when clicking Start Free trial button we should go to cart page? right — remove this

@@ -147,6 +147,9 @@ describe("every writer of a sent quote is accounted for", () => {
     "create-renewal-quote.ts":   "renewal quote for an existing customer — sets customer_id, never lead_id",
     "create-extension-quote.ts": "extension quote for an existing customer — no lead_id",
     "add-seats.ts":              "add-seats upsell for an existing customer — no lead_id",
+    /* 25 Sep 2026: lib/domains/renewal.ts createDomainRenewalQuote, the domain twin of
+       create-renewal-quote.ts. Read before listing: customer_id set, no lead_id. */
+    "renewal.ts":                "domain renewal quote for an existing customer — sets customer_id, never lead_id",
     /* Creates the lead AND the quote together, so it sets the stage at insert time. There is
        no prior stage for a forward-only rule to move forward from. */
     "route.ts:checkout":         "public buy-page checkout — sets the stage at insert",
