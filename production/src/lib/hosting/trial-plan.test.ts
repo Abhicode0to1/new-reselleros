@@ -15,7 +15,7 @@ describe("only Starter has a free trial (owner, 24 Sep 2026)", () => {
   });
 
   it("the cart checkout refuses a trial line on any other plan", () => {
-    expect(src("app/api/public/checkout/cart/route.ts")).toMatch(/isTrialPlan\(tier\)/);
+    expect(src("lib/checkout/cart-checkout.ts")).toMatch(/isTrialPlan\(tier\)/);
   });
 
   it("the confirm route never provisions a non-trial plan, even from an older lead", () => {

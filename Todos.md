@@ -318,11 +318,18 @@ registration queue picks up renewals.
 | 30 | May DMS create its own Razorpay order when ResellerOS is down? | **No, ResellerOS creates every order.** An in-panel purchase is refused, with a clear message, while ResellerOS cannot be reached. This replaces decision 16 |
 
 **Round 2 — what this needs, in order:**
-- [ ] **ResellerOS:** a server-to-server panel-order API DMS calls, reusing the cart checkout core;
-  it returns a Razorpay order made with ResellerOS's keys. The webhook already provisions through
-  the engine.
-- [ ] **ResellerOS:** a bills-read API for DMS: the customer's paid-order PDFs, invoice PDFs, renewal
-  quotes and their accept links.
+- [x] **ResellerOS: `POST /api/dms/panel-order`** (25 Sep 2026). Body = the site cart's body plus
+  `dmsUserId`; `Authorization: Bearer <DMS_PANEL_API_KEY>`. The cart checkout moved into
+  `lib/checkout/cart-checkout.ts` so both callers are priced by the same code. It returns the
+  Razorpay `orderId` and `razorpayKeyId`. The lead's source is `dms-panel` and the lead and Razorpay
+  order name the DMS account. It refuses to simulate or start a trial. Tests: `panel-order/route.test.ts`.
+- [x] **ResellerOS bills-read API — ALREADY EXISTED, nothing built** (AGENTS §11).
+  `/api/v1/customers?email=` finds the customer, then `/api/v1/customers/{id}/quotes`,
+  `/invoices`, `/payments` and `/subscriptions` return them. Each quote carries `pdf_url` and
+  `payment_url` (the accept link); each invoice carries `pdf_url`. Auth is a tenant API key
+  (Settings → Integrations). Spec: `docs/dsp-integration-api.md`. One gap: a paid cart order has a
+  customer only after `record_payment`, so an unpaid order does not appear there, which is right
+  for a bills page.
 - [ ] **DMS:** the `?buy=hosting` / `?buy=domain` dialogs call that API and open Razorpay with
   ResellerOS's key; refuse clearly when ResellerOS is down.
 - [ ] **DMS:** the invoices page shows ResellerOS's bills.

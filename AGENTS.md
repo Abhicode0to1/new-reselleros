@@ -116,6 +116,13 @@ DMS or Production DMS. That is a separate project from ours"). "DMS" in this rep
 local DMS repo and its local container. Do not plan, deploy, reconfigure or report on the production
 DMS service (Cloud Run), its env vars or its data. Do not list it as an open item.
 
+**ResellerOS creates every Razorpay order, including one made inside the DMS panel** (decision
+30, 25 Sep 2026; it replaces decision 16). DMS calls `POST /api/dms/panel-order` with
+`DMS_PANEL_API_KEY`, and it is priced by the same function as the site cart
+(`lib/checkout/cart-checkout.ts`). If ResellerOS cannot be reached, DMS refuses the purchase. The
+bill is the paid-order PDF at once, and the GST invoice when staff issue it (decision 29). DMS reads
+bills through the existing `/api/v1` API. The DMS half is not built yet (`Todos.md`).
+
 Open items for the integration are tracked in `Todos.md`, not here.
 
 ---
@@ -287,10 +294,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,812 tests
-passing across 373 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 25 Sep 2026 after the trial moved onto the DMS engine. Earlier markers:
-6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,820 tests
+passing across 374 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 25 Sep 2026 after the DMS panel-order API. Earlier markers:
+6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 

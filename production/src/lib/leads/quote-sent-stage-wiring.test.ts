@@ -88,8 +88,9 @@ describe("the buy-page checkout is still the only place that sets the stage inli
     const offenders = files.filter((f) => {
       const code = strip(readFileSync(f, "utf8"));
       if (!/stage:\s*"quote"/.test(code)) return false;
-      /* The checkout is the one legitimate holder. */
-      return !f.includes(join("public", "checkout"));
+      /* The checkout is the one legitimate holder. Since 25 Sep 2026 its code lives in
+         lib/checkout/cart-checkout.ts, shared by the site cart and the DMS panel. */
+      return !f.includes(join("public", "checkout")) && !f.endsWith(join("lib", "checkout", "cart-checkout.ts"));
     });
 
     expect(offenders, `these hardcode stage:"quote" instead of calling stageAfterQuoteSent: ${offenders.join(", ")}`)
