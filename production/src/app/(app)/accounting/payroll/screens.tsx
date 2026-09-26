@@ -52,6 +52,7 @@ import type { CurrentUserInfo } from "@/lib/hooks/useCurrentUser";
 import { EmployeeDetailDrawer } from "@/components/features/payroll/employee-detail-drawer";
 import { OfferLetterDialog } from "@/components/features/payroll/offer-letter-dialog";
 import { useConfirm } from "@/components/providers/confirm-provider";
+import { SalaryBreakdownDialog } from "@/components/features/accounting/salary-breakdown-dialog";
 
 function todayISO(): string {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -878,6 +879,8 @@ export function PayrollTab() {
   const [editFor, setEditFor] = React.useState<Employee | null>(null);
   const [calendarFor, setCalendarFor] = React.useState<Employee | null>(null);
   const [attendanceEmp, setAttendanceEmp] = React.useState<Employee | null>(null);
+  /* Click a Net → how it was reached (salary, LOP, incentive, deductions, paid so far). */
+  const [breakdownFor, setBreakdownFor] = React.useState<{ name: string; p: SalaryPayment } | null>(null);
   const undoSalary = useDeleteSalaryPayment();
   const confirm = useConfirm();
 
@@ -1029,7 +1032,17 @@ export function PayrollTab() {
                           const noLopButLowPresent = p.lop_days === 0 && a.expected > 0 && a.present < a.expected;
                           return (
                             <>
-                              <div>{rupee(p.net)}</div>
+                              <button
+                                type="button"
+                                onClick={() => setBreakdownFor({ name: toTitleCase(e.name), p })}
+                                className="hover:text-amber-ink hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber rounded"
+                                title="Net kaise bana — click karo"
+                              >
+                                {rupee(p.net)}
+                              </button>
+                              {(p.incentive ?? 0) > 0 && (
+                                <div className="text-3xs font-sans text-ink-3 mt-0.5">incl. {rupee(p.incentive ?? 0)} incentive</div>
+                              )}
                               {p.lop_days > 0 ? (
                                 <div className="text-3xs font-sans text-ink-3 mt-0.5" title={`${p.lop_days} day(s) of loss-of-pay deducted from gross for absences.`}>
                                   {p.lop_days}d LOP deducted
@@ -1120,7 +1133,11 @@ export function PayrollTab() {
                         {employeeSubline(e) && <div className="text-2xs text-ink-3 mt-0.5">{employeeSubline(e)}</div>}
                       </button>
                       <div className="font-serif text-xl leading-none shrink-0 text-ink">
-                        {p ? rupee(p.net) : e.monthly_gross > 0 ? rupee(e.monthly_gross) : <span className="text-ink-3">—</span>}
+                        {p ? (
+                          <button type="button" onClick={() => setBreakdownFor({ name: toTitleCase(e.name), p })} className="hover:text-amber-ink" title="Net kaise bana">
+                            {rupee(p.net)}
+                          </button>
+                        ) : e.monthly_gross > 0 ? rupee(e.monthly_gross) : <span className="text-ink-3">—</span>}
                       </div>
                     </div>
                     <div className="text-2xs text-ink-3 mb-2">
@@ -1172,6 +1189,7 @@ export function PayrollTab() {
         </>
       )}
       {payFor && <PaySalaryDialog employee={payFor} period={period} onClose={() => setPayFor(null)} />}
+      <SalaryBreakdownDialog name={breakdownFor?.name ?? ""} record={breakdownFor?.p ?? null} onClose={() => setBreakdownFor(null)} />
       {editFor && <EmployeeDialog employee={editFor} onClose={() => setEditFor(null)} />}
       {attendanceEmp && <AttendanceRegisterDialog employee={attendanceEmp} initialPeriod={period} onClose={() => setAttendanceEmp(null)} />}
       {calendarFor && (
