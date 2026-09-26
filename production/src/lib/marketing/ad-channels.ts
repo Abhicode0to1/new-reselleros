@@ -20,6 +20,9 @@ export const AD_CHANNELS: readonly AdChannel[] = [
   { value: "tele-calling",   label: "Tele calling" },
   { value: "referral",       label: "Referral" },
   { value: "trade-show",     label: "Trade show / event" },
+  // Paid lead marketplaces — their subscription is marketing spend with leads behind it.
+  { value: "indiamart",      label: "IndiaMART" },
+  { value: "justdial",       label: "JustDial" },
 ];
 
 /** The same test the report uses to decide an expense is marketing spend. */
@@ -36,6 +39,8 @@ const HINTS: ReadonlyArray<[RegExp, string]> = [
   [/\b(whatsapp|wati|interakt|aisensy|gupshup)\b/i, "whatsapp"],
   [/\b(mailchimp|sendgrid|brevo|sendinblue|zoho campaigns)\b/i, "email-outreach"],
   [/\b(expo|exhibition|trade ?show|event)\b/i,      "trade-show"],
+  [/\bindia ?mart\b/i,                              "indiamart"],
+  [/\bjust ?dial\b/i,                               "justdial"],
 ];
 
 /** The channel the bill's own words point to, or null when they point nowhere. */

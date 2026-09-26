@@ -57,6 +57,7 @@ import { amountInIndianWords } from "@/lib/accounting/amount-words";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { sourceOptions } from "@/lib/leads/lead-sources";
 import type { Lead, LeadPriority } from "@/lib/supabase/database.types";
 
 const STAGES = [
@@ -76,15 +77,8 @@ const STAGES = [
 const RAW_LEAD_STAGE_VALUES   = ["new", "contact", "lost"] as const;
 const POST_QUOTE_STAGE_VALUES = ["quote", "demo", "trial", "won", "lost"] as const;
 
-const SOURCES = [
-  { value: "manual",            label: "Added manually" },
-  { value: "buy-workspace-v2",  label: "Buy Workspace page" },
-  { value: "csv",               label: "CSV import" },
-  { value: "whatsapp",          label: "WhatsApp" },
-  { value: "referral",          label: "Referral" },
-  { value: "tele-calling",      label: "Tele calling" },
-  { value: "google-ads",        label: "Google Ads" },
-] as const;
+// Source options live in lib/leads/lead-sources.ts — their keys must match the ad-spend
+// channels, so they are not a local list any more.
 
 const PLANS = [
   "Google Workspace Business Starter",
@@ -1062,7 +1056,7 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {SOURCES.map((s) => (
+                  {sourceOptions(source).map((s) => (
                     <SelectItem key={s.value} value={s.value}>
                       {s.label}
                     </SelectItem>

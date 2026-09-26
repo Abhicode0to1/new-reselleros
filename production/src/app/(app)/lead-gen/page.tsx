@@ -41,11 +41,13 @@ import type { Lead } from "@/lib/supabase/database.types";
 const SOURCE_ICON: Record<string, string> = {
   whatsapp: "whatsapp", website: "globe", referral: "award", cold: "send",
   ads: "target", linkedin: "users", email: "mail", manual: "user", import: "download",
+  facebook: "target", marketplace: "cart", seo: "globe",
 };
 const SOURCE_LABEL: Record<string, string> = {
   whatsapp: "WhatsApp Business", website: "Website form", referral: "Referral",
   cold: "Cold outreach", ads: "Google Ads", linkedin: "LinkedIn",
   email: "Email / Inbound", manual: "Manual entry", import: "CSV import",
+  facebook: "Facebook / Instagram", marketplace: "IndiaMART / JustDial", seo: "Google search / SEO",
 };
 
 /** Collapse a raw leads.source string into a canonical channel key. */
@@ -56,6 +58,10 @@ function normalizeSource(raw: string | null | undefined): string {
   if (s.startsWith("buy") || s.includes("website") || s.includes("form")) return "website";
   if (s.includes("referr")) return "referral";
   if (s.includes("linkedin")) return "linkedin";
+  // Before the generic "ads" test below — meta-ads is a Facebook ad, not a Google one.
+  if (s.includes("meta") || s.includes("facebook") || s.includes("instagram")) return "facebook";
+  if (s.includes("indiamart") || s.includes("justdial")) return "marketplace";
+  if (s.includes("google-organic")) return "seo";   // found us on Google, no ad
   if (s.includes("cold") || s.includes("apollo") || s.includes("lemlist")) return "cold";
   if (s.includes("google") || s.includes("ads") || s.includes("adword")) return "ads";
   if (s.includes("csv") || s.includes("import")) return "import";
