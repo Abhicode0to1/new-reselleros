@@ -18,7 +18,7 @@ import { FormField } from "@/components/ui/label";
 import { rupee } from "@/lib/utils";
 import { gstinState, liveMoney, commitMoney, parseMoney } from "@/lib/forms/poka-yoke";
 import { MILESTONE_SPLITS, milestonesFor, withGst, interStateFor } from "@/lib/leads/enquiry";
-import { useCreateProjectQuoteFromLead, useSellerState } from "@/lib/queries/leads";
+import { useCreateProjectQuoteFromLead, useSellerState, useCustomerForLead } from "@/lib/queries/leads";
 import type { Lead } from "@/lib/supabase/database.types";
 
 const GST_RATE = 18;
@@ -28,6 +28,8 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
   const router = useRouter();
   const create = useCreateProjectQuoteFromLead();
   const { data: sellerState } = useSellerState(!!lead);
+  /* The lead's company may already be a customer — its state is then known. */
+  const { data: matchedCustomer } = useCustomerForLead(lead?.company);
 
   const [title, setTitle] = React.useState("");
   const [scope, setScope] = React.useState("");
@@ -48,7 +50,11 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
   /* Place of supply from the lead's own state (or its GSTIN) against ours; asked only
      when either is unknown — a guessed CGST+SGST on an out-of-state client is a wrong
      tax head on the quotation and later on the invoice. */
-  const clientState = lead?.state_code || (lead?.gstin ? gstinState(lead.gstin)?.code ?? null : null);
+  const clientState = lead?.state_code
+    || (lead?.gstin ? gstinState(lead.gstin)?.code ?? null : null)
+    || matchedCustomer?.state_code
+    || (matchedCustomer?.gstin ? gstinState(matchedCustomer.gstin)?.code ?? null : null)
+    || null;
   const derived = interStateFor(sellerState, clientState);
   const interState = derived ?? (placeChoice === "" ? null : placeChoice === "inter");
 
@@ -109,7 +115,9 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
             {derived !== null ? (
               <p className="text-sm text-ink">
                 {derived ? "Inter-state — IGST" : "Intra-state — CGST + SGST"}
-                <span className="block text-2xs text-ink-3">client ka state {clientState} · aapka {sellerState}</span>
+                <span className="block text-2xs text-ink-3">
+                  client ka state {clientState}{matchedCustomer && !lead?.state_code && !lead?.gstin ? ` (customer "${matchedCustomer.name}" se)` : ""} · aapka {sellerState}
+                </span>
               </p>
             ) : (
               <>
