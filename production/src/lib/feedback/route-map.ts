@@ -114,6 +114,7 @@ export const APP_ROUTES: readonly AppRoute[] = [
   { route: "/marketing", file: "src/app/(app)/marketing/page.tsx" },
   { route: "/marketing/links", file: "src/app/(app)/marketing/links/page.tsx" },
   { route: "/marketing/reports", file: "src/app/(app)/marketing/reports/page.tsx" },
+  { route: "/marketing/reviews", file: "src/app/(app)/marketing/reviews/page.tsx" },
   { route: "/marketing/spend", file: "src/app/(app)/marketing/spend/page.tsx" },
   { route: "/marketing/templates", file: "src/app/(app)/marketing/templates/page.tsx" },
   { route: "/mobile", file: "src/app/(app)/mobile/page.tsx" },

@@ -82,8 +82,8 @@ export const MARKETING_TOOLS: readonly MarketingTool[] = [
     key: "google-business", name: "Google Business Profile", group: "listings", channel: "google-organic",
     why: "\"IT company near me\" par map mein dikhna — free. Reviews yahin aate hain, aur naya customer pehle yahi dekhta hai.",
     homeUrl: "https://business.google.com",
-    inApp: [{ href: "/marketing/links", label: "Website button ke liye tracking link" }],
-    setup: ["Profile verify karo (address + phone)", "Har project ke baad customer se review maango", "Website link Tracking links se banao"],
+    inApp: [{ href: "/marketing/reviews", label: "Customers se review maango" }, { href: "/marketing/links", label: "Website button ke liye tracking link" }],
+    setup: ["Profile verify karo (address + phone)", "\"Ask for reviews\" link Google reviews page par save karo", "Har project / setup ke baad customer se review maango", "Website link Tracking links se banao"],
   },
   {
     key: "indiamart", name: "IndiaMART", group: "listings", channel: "indiamart",

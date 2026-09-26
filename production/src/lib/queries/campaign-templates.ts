@@ -10,6 +10,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/lib/errors/toast-error";
 
 import { createClient } from "@/lib/supabase/client";
 import { requireTenantId } from "@/lib/queries/require-tenant";
@@ -79,7 +80,7 @@ export function useSaveTemplate() {
       qc.invalidateQueries({ queryKey: TEMPLATES_KEY });
       toast.success(v.id ? "Template updated" : "Template saved");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -91,7 +92,7 @@ export function useDeleteTemplate() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: TEMPLATES_KEY }); toast.success("Template deleted"); },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 

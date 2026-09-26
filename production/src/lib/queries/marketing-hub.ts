@@ -7,6 +7,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastError } from "@/lib/errors/toast-error";
 
 import { createClient } from "@/lib/supabase/client";
 import { requireTenantId } from "@/lib/queries/require-tenant";
@@ -52,7 +53,7 @@ export function useSaveMarketingTool() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: TOOLS_KEY }); toast.success("Saved"); },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -133,7 +134,7 @@ export function useCreateTrackingLink() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: LINKS_KEY }); toast.success("Link saved"); },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -145,7 +146,7 @@ export function useDeleteTrackingLink() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: LINKS_KEY }); toast.success("Link removed — leads already captured keep their source"); },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
   });
 }
 
@@ -174,6 +175,121 @@ export function useRemoveSuppression() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: SUPPRESS_KEY }); toast.success("Removed from opt-out list"); },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => toastError(err),
+  });
+}
+
+// ── Google review requests (migration 20260926220000) ────────────────────────
+
+const REVIEW_KEY = ["review-requests"] as const;
+
+/** The Google "ask for reviews" link, kept on the google-business tool row. */
+export function useReviewLink() {
+  return useQuery({
+    queryKey: [...TOOLS_KEY, "review-link"],
+    queryFn: async (): Promise<string> => {
+      const { data, error } = await db().from("marketing_tools").select("review_link").eq("tool_key", "google-business").maybeSingle();
+      if (error) throw error;
+      return (data?.review_link as string | null) ?? "";
+    },
+  });
+}
+
+export function useSaveReviewLink() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (link: string) => {
+      const supabase = createClient();
+      const tenantId = await requireTenantId(supabase);
+      /* Upsert only the link: an existing row keeps its status, owner and budget. */
+      const { error } = await db().from("marketing_tools").upsert(
+        { tenant_id: tenantId, tool_key: "google-business", name: "Google Business Profile", review_link: link.trim() || null, updated_at: new Date().toISOString() },
+        { onConflict: "tenant_id,tool_key" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: TOOLS_KEY }); toast.success("Review link saved"); },
+    onError: (err) => toastError(err),
+  });
+}
+
+export interface ReviewCustomer {
+  id: string; name: string; contact: string | null; email: string | null; phone: string | null;
+  lastAsked: string | null; asks: number;
+}
+
+export function useReviewCustomers() {
+  return useQuery({
+    queryKey: REVIEW_KEY,
+    queryFn: async (): Promise<ReviewCustomer[]> => {
+      const supabase = createClient();
+      const { data: cs, error } = await supabase.from("customers")
+        .select("id, name, display_name, contact_name, contact_first_name, contact_email, contact_phone, contact_mobile, is_active")
+        .order("name");
+      if (error) throw error;
+      const { data: asks, error: aErr } = await db().from("review_requests").select("customer_id, created_at");
+      if (aErr) throw aErr;
+      const by = new Map<string, { last: string; n: number }>();
+      for (const a of (asks ?? []) as { customer_id: string; created_at: string }[]) {
+        const c = by.get(a.customer_id) ?? { last: a.created_at, n: 0 };
+        c.n++; if (a.created_at > c.last) c.last = a.created_at;
+        by.set(a.customer_id, c);
+      }
+      return ((cs ?? []) as Record<string, any>[])  // eslint-disable-line @typescript-eslint/no-explicit-any
+        .filter((c) => c.is_active !== false)
+        .map((c) => ({
+          id: c.id, name: c.display_name || c.name,
+          contact: c.contact_first_name || c.contact_name || null,
+          email: c.contact_email || null, phone: c.contact_mobile || c.contact_phone || null,
+          lastAsked: by.get(c.id)?.last ?? null, asks: by.get(c.id)?.n ?? 0,
+        }));
+    },
+  });
+}
+
+export function useSendReviewEmail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { customerId: string; force?: boolean }) => {
+      const res = await fetch("/api/marketing/review-request", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw Object.assign(new Error(j.error ?? "Mail nahi gaya"), { code: j.code });
+      return j as { status: string; to: string };
+    },
+    onSuccess: (j) => {
+      qc.invalidateQueries({ queryKey: REVIEW_KEY });
+      toast.success(j.status === "stubbed" ? `Test mode — mail ${j.to} ko log hua, bheja nahi` : `Review request ${j.to} ko bheja`);
+    },
+  });
+}
+
+/** WhatsApp opens in a new tab with the message typed; the ask is logged as "opened". */
+export function useLogWhatsAppReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { customerId: string; phone: string }) => {
+      const supabase = createClient();
+      const tenantId = await requireTenantId(supabase);
+      const { data: auth } = await supabase.auth.getUser();
+      const { error } = await db().from("review_requests").insert({
+        tenant_id: tenantId, customer_id: v.customerId, channel: "whatsapp", sent_to: v.phone, status: "opened", created_by: auth?.user?.id ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: REVIEW_KEY }),
+  });
+}
+
+/** This company's name, for the sign-off in a prefilled WhatsApp message. RLS returns only its own row. */
+export function useCompanyName() {
+  return useQuery({
+    queryKey: ["company-name"],
+    staleTime: 10 * 60_000,
+    queryFn: async (): Promise<string> => {
+      const { data } = await createClient().from("tenants").select("name").limit(1).maybeSingle();
+      return (data?.name as string | undefined) ?? "";
+    },
   });
 }

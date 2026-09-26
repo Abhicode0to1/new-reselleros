@@ -116,13 +116,14 @@ const QUICK: { href: string; label: string; icon: string; hint: string }[] = [
   { href: "/campaigns",         label: "Email campaigns", icon: "mail",    hint: "Leads ko offer mail" },
   { href: "/coupons",           label: "Coupons",         icon: "ticket",  hint: "Offer ke discount code" },
   { href: "/online-promos",     label: "Website offer",   icon: "sparkles",hint: "Site par offer ka banner" },
+  { href: "/marketing/reviews", label: "Google reviews",  icon: "award",   hint: "Khush customers se review maango" },
   { href: "/marketing/spend",   label: "Spend",           icon: "wallet",  hint: "Marketing vs Advertising kharcha" },
   { href: "/marketing/reports", label: "ROAS & CAC",      icon: "chart",   hint: "Kaunsa channel faayde ka" },
 ];
 
 function QuickLinks() {
   return (
-    <div className="grid gap-2 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-2 grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
       {QUICK.map((q) => (
         <Link key={q.href} href={q.href as Route}
           className="rounded-lg border border-hairline bg-paper px-3 py-2.5 hover:border-amber/60 hover:bg-amber-soft/20 transition-colors">

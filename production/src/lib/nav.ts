@@ -254,6 +254,7 @@ export const APP_NAV: NavSection[] = [
          command palette or by URL (found 26 Sep 2026 while building the Hub). */
       { id: "campaigns",       href: "/campaigns",         label: "Email campaigns", icon: "mail",    roles: ["owner", "manager"] },
       { id: "email-templates", href: "/marketing/templates", label: "Email templates", icon: "file", roles: ["owner", "manager"] },
+      { id: "google-reviews",  href: "/marketing/reviews",   label: "Google reviews",  icon: "award", roles: ["owner", "manager"], hint: "Khush customers se Google review maango" },
       { id: "coupons",         href: "/coupons",           label: "Coupons",         icon: "ticket",  roles: ["owner", "manager"] },
       { id: "online-promos",   href: "/online-promos",     label: "Website offer banner", icon: "sparkles", roles: ["owner", "manager"] },
       { id: "lead-gen",        href: "/lead-gen",          label: "Lead sources",    icon: "target",  roles: ["owner", "manager"] },
@@ -436,6 +437,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/marketing":         ["Marketing & Advertising", "Marketing Hub"],
   "/marketing/links":   ["Marketing & Advertising", "Tracking links"],
   "/marketing/templates": ["Marketing & Advertising", "Email templates"],
+  "/marketing/reviews":   ["Marketing & Advertising", "Google reviews"],
   "/enquiries":       ["Sales", "Enquiries"],
   "/deals":           ["Sales", "Deal Pipeline"],
   "/tasks":           ["Sales", "Tasks"],
