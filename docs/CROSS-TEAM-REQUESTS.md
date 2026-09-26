@@ -222,6 +222,30 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
 - **Done when:** an invoice with a note shows the note and the net on its row; every row shows the
   invoice date; no bare "0" appears under a settled invoice's amount.
 
+### R-010 · Project invoices print "No line items" — no description of the service
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-26
+- **Why accounting needs it:** GST Rule 46 requires a tax invoice to carry the description of the service
+  (with SAC). Every project milestone invoice shows **"No line items recorded on the parent quote."** in the
+  invoice dialog and the PDF — e.g. `INV-FBB9-2026-27-0003`, ₹5,00,000 + CGST ₹45,000 + SGST ₹45,000, with
+  no line saying what it is for. The amounts are right; the invoice is not complete.
+- **Cause:** the dialog / PDF take lines only from the parent quote —
+  `production/src/app/(app)/invoices/page.tsx` ~line 1208 `const lineItems = quote?.line_items ?? []` — and a
+  project invoice has no quote. `raise_project_milestone_invoice` also never writes `invoices.line_items`
+  (NULL on all three local project invoices).
+- **What to change:**
+  1. `raise_project_milestone_invoice`: write one line into `invoices.line_items` —
+     `{ name: "<project title> — <milestone label>", description: <project description>, sac: <project sac_code, 998314>,
+     qty: 1, rate: <taxable>, amount: <taxable> }` (same shape as `QuoteLineItem`).
+  2. Invoice dialog (`components/features/quotes/tax-invoice-dialog.tsx`) and PDF (`lib/pdf/InvoicePDF.tsx`): when
+     there is no quote, use `invoice.line_items`; show the SAC in the HSN/SAC column.
+  3. Backfill existing project invoices from their milestone + project. The freeze trigger
+     `tg_invoices_freeze_issued` already allows it — it blocks `line_items` only when the old value is
+     **not null** — so filling an empty one is permitted and changes no amount.
+- **Done when:** a project milestone invoice shows "Complete Billing System — Doosri kist (advance) · SAC 998314 ·
+  ₹5,00,000" in the dialog and the PDF, for new and existing invoices.
+
 <!-- Template — copy for each new request:
 
 ### R-001 · <short title>
