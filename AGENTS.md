@@ -132,6 +132,13 @@ which becomes a lead here; staff quote it and change the plan once it is paid. G
 allow-list can create a Razorpay order again: refunds, webhooks for old orders, and the gated Tokens
 charger remain.
 
+**A trial started inside the DMS panel starts HERE** (owner, 26 Sep 2026: "Move it to ResellerOS").
+DMS calls `POST /api/dms/start-trial`, which runs the same `startHostingTrial` as the site cart, so
+there is one trial path for both apps and ResellerOS can remind, quote the conversion and bill it.
+The panel's "can I have a trial?" pre-check asks `POST /api/dms/trial-eligibility`, which runs the
+same `checkTrialEligibility` that `startHostingTrial` decides with; an unreadable history is never
+"eligible".
+
 Open items for the integration are tracked in `Todos.md`, not here.
 
 ---
@@ -303,10 +310,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **7,041 tests
-passing across 398 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 26 Sep 2026 after merging `pardeep-sir` (Pardeep's banking, P&L and project-quotation work). Earlier markers:
-6,884/378 the same day after the `/api/v1` literal email match, 6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **7,083 tests
+passing across 403 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 26 Sep 2026 after the second `pardeep-sir` merge (`9f904d2b`). Earlier markers:
+7,054/400 the same day after `/api/dms/trial-eligibility`, 7,047/399 the same day after `/api/dms/start-trial`, 7,041/398 the same day after merging `pardeep-sir` (Pardeep's banking, P&L and project-quotation work), 6,884/378 the same day after the `/api/v1` literal email match, 6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 
@@ -321,10 +328,12 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,497 passing across 444 files, zero failures**
-on 25 Sep 2026, after DMS stopped taking payments on its own keys (DMS `84b5ae33`). The count
-FELL, on purpose: tests were deleted along with the payment code they covered (guest checkout,
-autopay, create-order, verify). Earlier:
+`C:/xampp/htdocs/Domain-Management-Project`, **6,422 passing across 442 files, zero failures**
+on 26 Sep 2026, after round 5 (DMS `c1e52acd`: the trial pre-check asks ResellerOS, admin package
+edits create no Razorpay plans). Same day, 6,422 / 441 after round 4 (DMS `9bc63716`: dead payment code deleted, old renewal dunning
+switched off, reminders point to the ResellerOS quote, the panel trial starts in ResellerOS). The
+count FELL, on purpose: tests were deleted along with the code they covered. Earlier:
+6,497 / 444 on 25 Sep after DMS stopped taking payments on its own keys (DMS `84b5ae33`),
 6,783 / 453 the same day after billing moved to ResellerOS (DMS `abf8cb57`), about 180 deleted with the invoice and renewal code,
 6,886 / 453 the same day after trial mode for hosting.provision (DMS `05a2dce2`),
 6,860 / 451 the same day after hosting.renew (DMS `e80c7851`),
@@ -337,7 +346,11 @@ autopay, create-order, verify). Earlier:
 code) and the tokens recurring flow was gated off (DMS `8bf941e`). An earlier reading the same
 day, 6,594 passing with 23 failing in `recurring-charge-service.test.ts`, caught that gate
 mid-change, before those tests were opted in; it was not a real regression. Integration suite
-238 passing. Before that: **6,845 tests across 452 files**,
+(`npm run test:int`, in-memory Mongo, no external services): **194 passed / 1 skipped across 15
+files, zero failures**, measured 26 Sep 2026 after DMS `e4792ce1`. The skipped file makes a real
+Razorpay charge and is opt-in. (This line said 238 before; `npm run test:integration` is a
+different, older runner that needs a dev server on :3000 and live ResellerClub, and is not the
+suite.) Before that: **6,845 tests across 452 files**,
 typecheck clean (measured 23 Sep 2026 after the public-page link fixes; 6,773/448 earlier the
 same day after Phase 8 and the transfer clean-up, then 6,748/447 and 6,724/447, and 6,451/432
 on 21 Sep).
@@ -361,11 +374,11 @@ before calling anything done.
 - CI runs on **pull requests** and on pushes to `main`. It does **not** run on feature
   branches — on a long-lived branch the local gate is the only gate. This is exactly how
   4 unit tests sat broken for months.
-- The **63** SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change
-  means running them by hand, or it is not verified. (This line said 54 on 23 Sep, 28 before
-  that, and L7 said 38; counted 26 Sep 2026.) **Measured 26 Sep 2026 against the LOCAL
-  Supabase, after applying `20260925140000`..`20260926120000` from the `pardeep-sir` merge:
-  62 pass / 1 not-applicable** (`sandbox_tenant_isolation`, below). Four files still MENTION
+- The **65** SQL tests in `production/supabase/tests/` are **not** in CI. A DB/RPC change
+  means running them by hand, or it is not verified. (This line said 63 earlier on 26 Sep, 54 on 23 Sep,
+  28 before that, and L7 said 38.) **Measured 26 Sep 2026 against the LOCAL Supabase, after
+  applying `20260925140000`..`20260926140000` from the two `pardeep-sir` merges: 64 pass /
+  1 not-applicable** (`sandbox_tenant_isolation`, below). Four files still MENTION
   `TESTRESULT` in comments describing their old style; they are rollback tests now, so a
   runner that keys on the word misreads them.
 

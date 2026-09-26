@@ -20,32 +20,95 @@ conflict; each superseded entry is marked in place.
 Everything below needs an owner decision or an owner action. Nothing here is being worked on.
 
 **Decisions**
-- [ ] **Multi-year domain registration and a cart with two hosting plans** can no longer be bought
+- [ ] **Not now (owner, 26 Sep 2026).** Multi-year domain registration and a cart with two hosting plans can no longer be bought
       inside DMS. `/api/dms/panel-order` takes one year per domain and one hosting `domain`, and
       the DMS cart refuses both by name. Allowing them means widening that contract. Want them?
-- [ ] **Admin package price edits in DMS still create Razorpay PLANS on DMS's account**
-      (`app/api/admin/hosting/packages/route.ts:303,312`). Not a payment, but DMS writing to its own
-      Razorpay. Remove, or leave?
-- [ ] **DMS renewal reminders quote DMS's own price** (`process-service-expiry`, around L243,
-      `service.price`). ResellerOS sends the real renewal quote. Change the reminder to point at the
-      ResellerOS quote, or drop the DMS reminder?
-- [ ] **`cron/renewal-payment-dunning` in DMS still chases old DMS renewal orders** made before
-      25 Sep. Switch it off, or let it finish the old ones?
-- [ ] **A trial started inside the DMS panel has no ResellerOS renewal quote**, because ResellerOS
-      does not know about it, so its convert button says "contact support". Should DMS tell
-      ResellerOS about in-panel trials (like the site trial), or move the in-panel trial to ResellerOS?
-- [ ] **Dead code in DMS, kept for now:** `app/api/domains/renew` (nothing can reach it),
+- [x] **Admin package edits create no Razorpay plans** (owner, 26 Sep 2026; DMS `c1e52acd`).
+      `RazorpayService.createPlan` deleted; the DMS guard now refuses `plans.create` outside the one-off
+      operator script `scripts/razorpay-regenerate-plans-live.js`.
+- [x] **Round 6 (owner, 26 Sep 2026: "remove the unused ones"):** the packages page no longer shows
+      Razorpay plan ids (DMS `7fc271d7`); `scripts/razorpay-regenerate-plans-live.js` is deleted and the
+      DMS guard refuses `plans.create` everywhere, with no exception (DMS `9d812a37`).
+- [x] **Round 7 (owner, 26 Sep 2026: "Reword both"; DMS `a3eadfcc`):** the integration-health invoicing
+      hints now start "Historical:" and send the admin to ResellerOS (Invoices). The card is labelled
+      "Invoicing (historical — DMS issues no invoices)". The credit-note hint deliberately does not say
+      "cannot recur": a refund of an invoice DMS issued before 25 Sep 2026 still flags it
+      (`lib/services/orders.ts:644`).
+- [x] **Round 8 (owner, 26 Sep 2026: "those are only 'test orders' so no need for credit note"; DMS
+      `b4e7e95e`, `df026684`):** a refund of a DMS-invoiced order no longer flags `creditNotePending` (the
+      setter is deleted, and a scan fails if anything sets it again). Rows flagged before are shown as
+      historical: no credit note is needed, clear the flag.
+- [x] **Round 9 (DMS `81aff19e`):** the stranded-order hint says finish by provisioning, and any bill is
+      raised in ResellerOS; old DMS invoices read "DMS (historical)"; a scan of the admin pages fails on
+      any instruction to issue an invoice from DMS. The local `.env.docker` / `.env.local` still set
+      `COMPANY_STATE`; harmless, delete by hand.
+- [x] **DMS integration suite green again** (DMS `e4792ce1`): the one stale test (it relied on the deleted
+      INV pre-save hook; proven with the commit before `2598cc4f`) now sets its own number, plus a case that
+      a completed order gets none. The whole suite (`npm run test:int`) is 194 passed / 1 skipped, and
+      nothing else was stale. No app code changed.
+- [x] **DMS renewal reminders carry no DMS price** (DMS `812462ec`). They link to the one pending
+      ResellerOS quote, or to the Invoices page when there are several, or say the bill is being
+      prepared. A scan test fails if a price field returns.
+- [x] **`cron/renewal-payment-dunning` removed** (DMS `f16d44d2`). Old orders untouched. If a Cloud
+      Scheduler job by that name was ever created, it now calls a 404.
+- [x] **In-panel trial moves to ResellerOS** (owner, 26 Sep 2026). ResellerOS `POST /api/dms/start-trial`
+      (`f514758b`) runs the site's `startHostingTrial`; DMS `9bc63716` calls it and no longer creates
+      the trial locally.
+- [x] **Dead code in DMS:** `app/api/domains/renew` (nothing can reach it),
       `createCompletedOrder` in `lib/services/payment/order-creator.ts`, and `createCustomer` /
       `createRecurringTokenOrder` in `lib/razorpay.ts` (only the gated Tokens live harness uses them).
-      OK to delete?
+      **Deleted** (DMS `0d787076`), with `verification.ts` and two order-creator helpers whose only
+      callers went with them.
+- [x] **Found in round 4** (all settled; the last line is owner-declined):
+      - [x] DMS trial pre-check asks ResellerOS (owner, 26 Sep 2026): ResellerOS `acfc4512`
+        (`/api/dms/trial-eligibility`), DMS `4d824494`. `userHasPriorTrialOrder` deleted.
+      - [x] DMS `COMPANY_STATE` removed (DMS `22407836`): the unused `CompanyProfile.state` read, the
+        deploy-script requirement, the seed script, the env examples and the docs. What remains is notes
+        saying it was removed, and the matcher for old orders' failure text.
+      - Owner declined on 26 Sep 2026 (left as is): the `/checkout` trial banner wording, and the two
+        uncalled emails `sendServiceExpiryTodayEmail` / `sendServiceGracePeriodEmail`.
 - [ ] **Colleague (blocked folder):** `src/lib/renewals/create-renewal-quote.ts` writes
-      `extension_months: 12` for monthly subscriptions too. Prompt handed over 25 Sep. See §0A.
+      `extension_months: 12` for monthly subscriptions too, and guesses cost as 83% of price. Written up
+      for Abhishek as **R-012 in `docs/CROSS-TEAM-REQUESTS.md`** (26 Sep). See §0A.
+
+- [x] **End-to-end run, LOCAL, 26 Sep 2026 (browser + real Razorpay TEST payment + signed webhook):**
+      DMS test customer `e2e-customer@local.invalid` bought Starter yearly in the panel →
+      `/api/dms/panel-order` made `order_Tge6v4FukDjuce` / `Q-2222-2026-27-0019`, ₹708 → Razorpay test
+      checkout inside DMS, netbanking, `pay_Tge77FFcxHbzZ2` CAPTURED (confirmed on Razorpay's API, notes
+      carry `channel: dms-panel` + the DMS user id) → the real payment delivered as a signed webhook →
+      quote accepted/received, lead won, payment recorded, customer `C-00012`, subscription Starter
+      yearly active to 2027-09-26, provisioning row queued (and held: switch off + test-mode payment) →
+      DMS Invoices page lists `Q-2222-2026-27-0019 · ₹708 · Paid order · PDF`. Trial: eligibility refused
+      correctly on a phone reused from a 24 Sep test trial, then eligible on a fresh phone → trial started
+      in ResellerOS (`L-MUIB4H5O`), panel says "Check your email to confirm"; the signed confirm link
+      records the confirmation and holds (`HOSTING_TRIAL_LIVE` off). Upgrade request from inside DMS →
+      lead `L-MUIB5W2J`, a repeat returns the same lead. No email provider locally, so every send is
+      logged `failed` ("No email provider is configured") — nothing reached a real inbox.
+- [ ] **Found by the end-to-end run:**
+      - **The bill PDF link on the DMS Invoices page is built from the address DMS used to call
+        ResellerOS** (`/api/v1` makes `pdf_url` from the request host). Locally that is
+        `http://host.docker.internal:4320/...`, which the customer's browser cannot open (the same PDF
+        answers 200 on `localhost`). It works in production only if `RESELLEROS_SERVER_URL` is also the
+        public address. Fix: DMS should rewrite links to ResellerOS's PUBLIC origin
+        (`NEXT_PUBLIC_RESELLEROS_URL`), or ResellerOS should build them from its own public URL.
+      - The panel's "Payment received" message was not observed: the script's last screenshot was taken
+        while Razorpay was still showing its own "redirecting in 2 seconds". Unit-tested only.
+      - Renew and upgrade BUTTONS were not clicked: they need a DMS hosting account, and none exists while
+        provisioning is off. The upgrade ENDPOINT was exercised from inside DMS.
+      - Local owner alerts go to `pardeep@anutech.in` (the local tenant's owner). Harmless while no email
+        provider is configured locally; worth knowing before one is.
 
 **Actions only you can take — before anything is switched on**
 - [ ] **Keys.** ResellerOS: `DMS_PANEL_API_KEY`. DMS: the same `DMS_PANEL_API_KEY`,
       `RESELLEROS_SERVER_URL` (ResellerOS's `https://` origin) and `RESELLEROS_BILLING_API_KEY` (a
       tenant key from ResellerOS Settings → Integrations → Support platform API). Unset = DMS refuses
       purchases and bills with a clear message.
+      **LOCAL is done (26 Sep 2026):** both gitignored env files set; DMS reaches ResellerOS at
+      `http://host.docker.internal:4320`; the billing key is `api_keys` row `040f1519…` for the local
+      tenant `2222…`, labelled "DMS panel billing (LOCAL dev only)". Probed from inside the DMS
+      container: trial check 200 (wrong key 401), a bad panel order 400 "Nothing was charged", bills
+      lookup 404 for an unknown email and 200 for the list. Not yet exercised: a full panel purchase
+      through Razorpay test mode, in a browser.
 - [ ] **ResellerOS production migrations:** `20260921100000_provisioning_facts_are_immutable` and
       `20260924120000_provisioning_one_per_product` (details under "Waiting on Pardeep" below).
 - [ ] **Deploy both apps**, ResellerOS first (DMS's panel calls it).

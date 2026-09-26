@@ -48,10 +48,10 @@ const CHECKS_USER = /auth\.getUser\s*\(/;
 /* `dms/upgrade-request` bhi machine ka darwaza hai (25 Sep 2026): DMS ka server ise
    call karta hai, koi login nahi. Chaabi: `DMS_PANEL_API_KEY`, `checkPanelKey()` se —
    neeche ka test pakka karta hai ki wo jaanch sach me route me hai. */
-const MACHINE_DOORS = new Set(["attendance/punch/route.ts", "dms/upgrade-request/route.ts", "dms/start-trial/route.ts"]);
+const MACHINE_DOORS = new Set(["attendance/punch/route.ts", "dms/upgrade-request/route.ts", "dms/start-trial/route.ts", "dms/trial-eligibility/route.ts"]);
 
 describe("machine darwaze apni chaabi sach me jaanchte hain", () => {
-  it.each(["upgrade-request", "start-trial"])("dms/%s calls checkPanelKey before anything else", (name) => {
+  it.each(["upgrade-request", "start-trial", "trial-eligibility"])("dms/%s calls checkPanelKey before anything else", (name) => {
     const src = readFileSync(join(API_DIR, "dms", name, "route.ts"), "utf8");
     const post = src.slice(src.indexOf("export async function POST"));
     expect(post.indexOf("checkPanelKey(")).toBeGreaterThan(-1);
