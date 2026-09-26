@@ -26,9 +26,12 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
 - [x] **Admin package edits create no Razorpay plans** (owner, 26 Sep 2026; DMS `c1e52acd`).
       `RazorpayService.createPlan` deleted; the DMS guard now refuses `plans.create` outside the one-off
       operator script `scripts/razorpay-regenerate-plans-live.js`.
-- [ ] **Left by round 5:** the admin packages page (`app/admin/hosting/packages/page.tsx:224-235`) still
-      SHOWS each package's Razorpay plan ids, which no longer match a changed price. Hide the column?
-      And `scripts/razorpay-regenerate-plans-live.js` can still create live plans with `--apply`. Delete it?
+- [x] **Round 6 (owner, 26 Sep 2026: "remove the unused ones"):** the packages page no longer shows
+      Razorpay plan ids (DMS `7fc271d7`); `scripts/razorpay-regenerate-plans-live.js` is deleted and the
+      DMS guard refuses `plans.create` everywhere, with no exception (DMS `9d812a37`).
+- [ ] **Left by round 6:** DMS's integration-health "Invoicing" card still has two hints that assume DMS
+      issues invoices (the credit-note hint around L128, "press Re-sync" around L136). The local
+      `.env.docker` / `.env.local` still set `COMPANY_STATE`; it is now harmless and can be deleted by hand.
 - [x] **DMS renewal reminders carry no DMS price** (DMS `812462ec`). They link to the one pending
       ResellerOS quote, or to the Invoices page when there are several, or say the bill is being
       prepared. A scan test fails if a price field returns.
@@ -45,11 +48,9 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
 - [ ] **Found in round 4, not done:**
       - [x] DMS trial pre-check asks ResellerOS (owner, 26 Sep 2026): ResellerOS `acfc4512`
         (`/api/dms/trial-eligibility`), DMS `4d824494`. `userHasPriorTrialOrder` deleted.
-      - [ ] DMS `COMPANY_STATE`: the owner said drop the deploy-script requirement, but app code still
-        reads it at `lib/billing/companyProfile.ts:37` (`state: process.env.COMPANY_STATE || ""`), into a
-        field NOTHING uses (`lib/billing/pdf.ts` reads only `name` and `gstin`). Stopped for a go-ahead
-        to remove that dead read too, then `deploy-cloud-run.sh:367-384,389`, `seed-secrets.sh:154`, the
-        two env examples and the docs.
+      - [x] DMS `COMPANY_STATE` removed (DMS `22407836`): the unused `CompanyProfile.state` read, the
+        deploy-script requirement, the seed script, the env examples and the docs. What remains is notes
+        saying it was removed, and the matcher for old orders' failure text.
       - The `/checkout` trial banner says "we'll remind you to pay … from your dashboard" (true in
         effect, DMS-centric wording). `sendServiceExpiryTodayEmail` / `sendServiceGracePeriodEmail` have
         no callers (no price in them).
