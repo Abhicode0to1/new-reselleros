@@ -25,6 +25,11 @@ export const EXPENSE_CATEGORIES = [
   "Staff Welfare",
   "Travel",
   "Professional Services",
+  /* Commission paid to someone OUTSIDE the payroll — an agent, broker, referral partner or
+     dealer who brought a deal (TDS u/s 194H). An EMPLOYEE's commission / incentive is salary:
+     it goes through Payroll's incentive field (TDS u/s 192), not here. Tagged to a project, it
+     counts as that project's cost (the cost of winning it). */
+  "Commission / Incentive (agents)",
   "Bank Charges",
   "Internet & Phone",
   "Utilities",

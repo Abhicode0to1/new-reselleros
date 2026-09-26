@@ -96,6 +96,18 @@ describe("suggestCategory — PAKKE shabd lambe naam me bhi chalte hain", () => 
   });
 });
 
+describe("suggestCategory — commission to an outside agent", () => {
+  it.each(["Commission to Ramesh for Excel deal", "brokerage on office lease", "referral fee — Complete Billing System", "dealer incentive Q2"])(
+    "%s → Commission / Incentive (agents)", (note) => expect(suggestCategory(note)).toBe("Commission / Incentive (agents)"),
+  );
+  it("a director's commission stays Director's Remuneration", () => {
+    expect(suggestCategory("director commission")).toBe("Director's Remuneration");
+  });
+  it("a bare staff incentive is not guessed as an expense (it is salary, in Payroll)", () => {
+    expect(suggestCategory("incentive for July")).not.toBe("Commission / Incentive (agents)");
+  });
+});
+
 describe("suggestCategory — director's pay", () => {
   it.each(["Director remuneration July", "directors salary", "sitting fee for board meeting", "Managerial remuneration Q1"])(
     "%s → Director's Remuneration", (note) => expect(suggestCategory(note)).toBe("Director's Remuneration"),
