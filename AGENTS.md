@@ -303,10 +303,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **6,884 tests
-passing across 378 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 26 Sep 2026 after the `/api/v1` literal email match. Earlier markers:
-6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **7,041 tests
+passing across 398 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 26 Sep 2026 after merging `pardeep-sir` (Pardeep's banking, P&L and project-quotation work). Earlier markers:
+6,884/378 the same day after the `/api/v1` literal email match, 6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 
