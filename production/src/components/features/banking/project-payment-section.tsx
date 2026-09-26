@@ -84,6 +84,8 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
 
   const totalNum = Math.round(Number(total));
   const customerName = customers.find((c) => c.id === customerId)?.name ?? "";
+  /* Open projects of the customer picked under "Naya project" — see the warning below it. */
+  const customerProjects = customerId ? (projects ?? []).filter((p) => p.customerId === customerId) : [];
   const split = totalNum > 0 ? receiptMilestones(totalNum, settled) : [];
 
   const canSubmit = mode === "existing"
@@ -183,6 +185,24 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
             <option value={NEW_CUSTOMER}>＋ Naya customer banao</option>
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+          {/* This customer already has an open project — the usual case is an instalment on
+              it, not a new deal. Booking it as "Naya project" split a ₹50L contract into a
+              ₹5L duplicate (26 Sep 2026), so it is said before anything is created. */}
+          {customerProjects.length > 0 && (
+            <div className="rounded-md border border-amber/50 bg-amber-soft/30 p-2.5 text-2xs text-ink-2 space-y-1.5">
+              <p>
+                <b>{customerName}</b> ka project pehle se khula hai. Agar ye paisa usi ki kist hai to naya project mat banao —
+                existing project chuno.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {customerProjects.map((p) => (
+                  <Button key={p.id} type="button" size="sm" variant="default" onClick={() => { setMode("existing"); pickProject(p.id); }}>
+                    {p.title} · {rupee(p.total)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Project ka naam (e.g. Accounting software)" aria-label="Project name" />
           <label className="block text-3xs text-ink-3">
             Project ki total value ₹ (GST ke saath) — sirf ye payment hai to jaisa hai waisa chhod do
