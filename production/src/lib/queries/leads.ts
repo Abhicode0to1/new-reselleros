@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastError } from "@/lib/errors/toast-error";
 import { createClient } from "@/lib/supabase/client";
+import { requireTenantId } from "@/lib/queries/require-tenant";
 import type { Lead, Database } from "@/lib/supabase/database.types";
 import type { JunkReasonId } from "@/lib/leads/qualification";
 
@@ -243,52 +244,20 @@ export function useCreateLead() {
     mutationFn: async (lead: Omit<LeadInsert, "tenant_id">) => {
       const supabase = createClient();
 
-      let tenantId = "11111111-1111-1111-1111-111111111111"; // default dev/demo tenant
-      const { data: authData } = await supabase.auth.getUser();
-      if (authData?.user) {
-        const { data: me } = await supabase
-          .from("users")
-          .select("tenant_id")
-          .eq("id", authData.user.id)
-          .single();
-        if (me?.tenant_id) {
-          tenantId = me.tenant_id;
-        }
-      }
+      /* R-001 (raised by Abhishek back to Pardeep, 26 Sep 2026): this used to default to the
+         seed tenant when the operator could not be identified, and to hand back a fake
+         `L-<timestamp>` lead when the insert failed — so a lead could land in another
+         company, or not land at all while the toast said "Lead created". Refuse instead;
+         onError shows the reason. */
+      const tenantId = await requireTenantId(supabase);
 
-      // Insert lead with tenant_id
       const { data, error } = await supabase
         .from("leads")
         .insert({ ...lead, tenant_id: tenantId })
         .select()
         .single();
 
-      if (error) {
-        console.warn("Dev mode lead insert warning:", error.message);
-        // Dev fallback lead object so UI succeeds seamlessly
-        const lObj = lead as Record<string, unknown>;
-        const newLead: Lead = {
-          id: `L-${Date.now()}`,
-          tenant_id: tenantId,
-          company: lead.company ?? "New Prospect",
-          plan: lead.plan ?? "Google Workspace Std",
-          seats: lead.seats ?? 1,
-          value: lead.value ?? 0,
-          stage: lead.stage ?? "new",
-          source: lead.source ?? "manual",
-          contact_name: (lObj.contact_name as string) ?? null,
-          contact_email: (lObj.contact_email as string) ?? (lObj.email as string) ?? null,
-          contact_phone: (lObj.contact_phone as string) ?? (lObj.phone as string) ?? null,
-          city: (lObj.city as string) ?? null,
-          state: (lObj.state as string) ?? null,
-          is_junk: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } as unknown as Lead;
-
-        qc.setQueryData<Lead[]>(["leads"], (old) => [newLead, ...(old ?? [])]);
-        return newLead;
-      }
+      if (error) throw error;
       return data;
     },
     onSuccess: () => {
