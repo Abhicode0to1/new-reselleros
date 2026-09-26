@@ -252,10 +252,27 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
                               <Badge kind="info" size="sm">full &amp; final</Badge>
                             )}
                             {l.parsed.director && (
-                              <Badge kind="warning" size="sm" title="Director's remuneration is usually not employee payroll — left unticked; tick only if it is.">director — unticked</Badge>
+                              <Badge kind="warning" size="sm" title="Director's remuneration is usually not employee payroll — book it from Reconcile as an expense, category Director's Remuneration.">
+                                director
+                              </Badge>
                             )}
                           </div>
                           <p className={`mt-1 text-3xs ${plan.ok ? "text-ink-3" : "text-rose-ink"}`}>{plan.text}</p>
+                          {/* Said in words, not only in a badge that read "director — unticked" even
+                              after the operator had ticked it. Ticked, it warns what booking here does. */}
+                          {l.parsed.director && (
+                            isOn(l) ? (
+                              <p className="mt-1 text-3xs text-amber-ink leading-snug">
+                                Director ki payment payroll mein <b>staff salary</b> ki tarah jaayegi (Salaries, payslip, project salary ka pool).
+                                Agar ye Director&apos;s Remuneration hai to untick karo aur Reconcile se book karo — wahan category pehle se bhari aati hai.
+                              </p>
+                            ) : (
+                              <p className="mt-1 text-3xs text-ink-3 leading-snug">
+                                Director ki payment — isliye tick nahi hui. Ise line ke <b>Reconcile</b> se book karo (Expense → Director&apos;s Remuneration).
+                                Whole-time director ho aur payslip chahiye to hi yahan tick karo — aur saal bhar ek hi tareeka rakho.
+                              </p>
+                            )
+                          )}
                         </div>
                       </div>
                     </li>
