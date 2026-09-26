@@ -37,8 +37,11 @@ import {
   splitLinesByCategory,
   EXPENSE_CATEGORIES,
   PAYMENT_METHODS,
+  useCommissionToPayeeThisFy,
   type Expense,
 } from "@/lib/queries/expenses";
+import { COMMISSION_CATEGORY, TDS_194H_THRESHOLD, commissionTdsView } from "@/lib/accounting/commission-tds";
+import { localDateISO } from "@/lib/leads/outcomes";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useVendors, ensureVendor } from "@/lib/queries/vendors";
 import { useAddReimbursement } from "@/lib/queries/reimbursements";
@@ -425,6 +428,18 @@ export function AddExpenseDialog({
   const itemText = lines.map((l) => l.description).filter(Boolean).join(" ");
   const noteText = watch("description") ?? "";
   const vendorNameWatch = watch("vendor_name") ?? "";
+
+  /* Commission to an outside agent: the payee is required, and one person's commission for
+     the year decides s.194H (lib/accounting/commission-tds.ts). */
+  const isCommission = watch("category") === COMMISSION_CATEGORY;
+  const { data: commissionSoFar } = useCommissionToPayeeThisFy(
+    isCommission ? vendorNameWatch : "",
+    watch("expense_date") || localDateISO(new Date()),
+    expense?.id ?? null,
+  );
+  const commissionView = isCommission && commissionSoFar && vendorNameWatch.trim().length >= 2
+    ? commissionTdsView({ amount: Number(watch("amount")) || 0, earlier: commissionSoFar.earlier, earlierWithoutTds: commissionSoFar.earlierWithoutTds })
+    : null;
   // Category source = the note in simple mode, the item rows in itemised mode.
   const catText = showItems ? itemText : noteText;
   React.useEffect(() => {
@@ -498,6 +513,12 @@ export function AddExpenseDialog({
     }
 
     const payee = values.vendor_name?.trim() || "";
+    /* A commission with no payee cannot be totalled per person, so s.194H cannot be checked —
+       and the question "who did we pay commission to?" has no answer. */
+    if (values.category === COMMISSION_CATEGORY && !payee) {
+      toast.error("Commission kisko diya? — 'Kisko diya' mein us vyakti ka naam daalo.");
+      return;
+    }
     // Only GST-invoice suppliers belong in the Vendors master. So: an already-
     // picked vendor keeps its link; a NEW typed payee is added to Vendors only
     // when this is a GST bill (GST paid entered). Non-GST / one-off payees stay
@@ -871,6 +892,12 @@ export function AddExpenseDialog({
                       <Icon name="sparkles" size={10} /> Auto-chuni — galat ho to badal do.
                     </p>
                   )}
+                  {isCommission && (
+                    <p className="mt-1 text-3xs text-ink-3 leading-snug">
+                      Bahar ke agent / broker ka commission. Neeche <b>&quot;Kisko diya&quot;</b> mein naam zaroor bharo — us vyakti ka
+                      saal ka jod aur 194H TDS isi se tay hota hai. Apne employee ka incentive Payroll mein jaata hai.
+                    </p>
+                  )}
                 </FormField>
               )}
               <FormField label="Date" required htmlFor="expense_date">
@@ -1115,12 +1142,16 @@ export function AddExpenseDialog({
 
           {/* ── Who — vendor / payee (optional; lives at the end since it's the
               last thing you fill after the money details). GSTIN for GST bills. ── */}
-          <FormField label={isGstBill ? "Vendor (GST invoice)" : "Paid to (optional)"} htmlFor="vendor_name">
+          <FormField
+            label={isCommission ? "Kisko diya (commission paane wala)" : isGstBill ? "Vendor (GST invoice)" : "Paid to (optional)"}
+            required={isCommission}
+            htmlFor="vendor_name"
+          >
             <div className="relative">
               <Input
                 id="vendor_name"
                 autoComplete="off"
-                placeholder="e.g. Anthropic / Airtel / Office Landlord"
+                placeholder={isCommission ? "e.g. Ramesh Kumar" : "e.g. Anthropic / Airtel / Office Landlord"}
                 {...register("vendor_name", { onChange: () => { setVendorId(null); setVendorMatch(null); setVendorOpen(true); } })}
                 onFocus={() => setVendorOpen(true)}
                 onBlur={() => setTimeout(() => setVendorOpen(false), 130)}
@@ -1155,6 +1186,29 @@ export function AddExpenseDialog({
               ) : (
                 <p className="mt-1 text-2xs text-ink-3">Naya payee — kaccha/no-bill hone se Vendors master me add nahi hoga.</p>
               )
+            )}
+            {/* One person's commission for the year, and s.194H — lib/accounting/commission-tds.ts. */}
+            {isCommission && commissionView && (
+              <div className="mt-1.5 rounded-md border border-hairline bg-paper-2/40 px-2.5 py-2 text-2xs text-ink-2 space-y-1">
+                <p>
+                  Is FY mein <b>{vendorNameWatch.trim()}</b> ko ab tak <b>{rupee(commissionView.earlier)}</b> commission ·
+                  is entry ke saath <b>{rupee(commissionView.yearTotal)}</b>
+                  {" "}({commissionView.crosses ? "₹20,000 ki seema paar" : `₹20,000 ki seema tak ${rupee(Math.max(0, TDS_194H_THRESHOLD - commissionView.yearTotal))} baaki`}).
+                </p>
+                {commissionView.crosses && (watch("tds_section") || "") !== "194H" && (
+                  <div className="flex flex-wrap items-center gap-2 text-amber-ink">
+                    <span>194H TDS (2%) katna chahiye{commissionView.earlierUntaxed > 0 ? ` — pehle ke ${rupee(commissionView.earlierUntaxed)} par bhi` : ""}.</span>
+                    <button
+                      type="button"
+                      onClick={() => { setValue("tds_section", "194H"); setValue("tds_amount", commissionView.tdsOnThis); }}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      194H · {rupee(commissionView.tdsOnThis)} lagao
+                    </button>
+                  </div>
+                )}
+                <p className="text-3xs text-ink-3">Seema ek vyakti ko poore saal ke commission par lagti hai. Bhugtaan se pehle CA se confirm kar lena.</p>
+              </div>
             )}
           </FormField>
 
