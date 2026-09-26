@@ -104,8 +104,8 @@ export const MARKETING_TOOLS: readonly MarketingTool[] = [
     key: "whatsapp-business", name: "WhatsApp Business (API)", group: "messaging", channel: "whatsapp",
     why: "Lead se turant baat, quote bhejna, follow-up. App ka WhatsApp inbox isi se chalta hai.",
     homeUrl: "https://business.facebook.com/wa/manage",
-    inApp: [{ href: "/whatsapp", label: "WhatsApp inbox" }, { href: "/automation", label: "Auto follow-up" }],
-    setup: ["Meta par WhatsApp Business number verify karo", "App mein connect karo (Settings)", "Follow-up message templates approve karwao"],
+    inApp: [{ href: "/whatsapp", label: "WhatsApp inbox" }, { href: "/marketing/whatsapp", label: "Broadcast + templates" }, { href: "/automation", label: "Auto follow-up" }],
+    setup: ["Meta par WhatsApp Business number verify karo", "App mein connect karo (Settings) — Business Account ID bhi bharo", "Starter templates Meta par submit karo, approve hone par Sync from Meta", "Broadcast sirf un logon ko jo aapko jaante hain"],
   },
   // ── Email ────────────────────────────────────────────────────────────────
   {
