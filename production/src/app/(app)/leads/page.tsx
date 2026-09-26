@@ -26,8 +26,10 @@ import { TeamViewToggle } from "@/components/shared/team-view-toggle";
 import { HIERARCHY_ENFORCED_IN_DATABASE } from "@/lib/team/enforcement";
 import { idsForMode, type TeamViewMode } from "@/lib/team/visibility";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { ProjectQuoteFromLead } from "@/components/features/leads/project-quote-from-lead";
+import { pipelineSplit } from "@/lib/leads/enquiry";
 import { toast } from "sonner";
-import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead, useLeadQuotes, type LeadQuoteRef } from "@/lib/queries/leads";
+import { useLeads, useDeleteLead, useSetLeadJunk, useUpdateLead, useLeadQuotes, useLeadProject, type LeadQuoteRef } from "@/lib/queries/leads";
 import { StatusPill } from "@/components/ui/status-pill";
 import Link from "next/link";
 import { useChangeLeadStage } from "@/lib/leads/use-change-stage";
@@ -187,8 +189,15 @@ function LeadsPageInner() {
   const searchParams = useSearchParams();
   const pathname     = usePathname();
   const focusLeadId  = searchParams.get("lead");
+  /* ?projectQuote=<leadId> opens the project quotation sheet — the one route both the row
+     and the drawer use, since the drawer is a separate component. */
+  const projectQuoteId = searchParams.get("projectQuote");
 
   const { data: leads, isLoading, error, refetch } = useLeads();
+  const projectQuoteLead = React.useMemo(
+    () => (projectQuoteId ? (leads ?? []).find((l) => l.id === projectQuoteId) ?? null : null),
+    [projectQuoteId, leads],
+  );
   // Every stage change on this page goes through changeStage — it owns the
   // "why was this lost?" prompt so the seven call sites don't each grow their
   // own version. See lib/leads/use-change-stage.ts.
@@ -364,6 +373,12 @@ function LeadsPageInner() {
   // Quick "Send quote" from a list row — carries the lead's context into the
   // quote builder. Returning to /leads lands on the list (no auto-opened drawer).
   const goSendQuote = React.useCallback((lead: Lead) => {
+    /* A custom-software lead gets a PROJECT quotation, not a licence quote — and once it
+       has one, "Send quote" opens that quotation instead of making a second. */
+    if (lead.enquiry_type === "project") {
+      router.push((lead.project_id ? `/projects/${lead.project_id}` : `${pathname}?projectQuote=${lead.id}`) as never);
+      return;
+    }
     const params = new URLSearchParams();
     params.set("leadId",  lead.id);
     params.set("company", lead.company);
@@ -373,7 +388,7 @@ function LeadsPageInner() {
     if (lead.contact_email) params.set("email", lead.contact_email);
     if (lead.contact_phone) params.set("phone", lead.contact_phone);
     router.push(`/quotes/new?${params.toString()}` as never);
-  }, [router]);
+  }, [router, pathname]);
 
   // ── Leads vs Deals split ────────────────────────────────────────────────
   // Leads = raw inquiries, no plan picked yet (NULL or empty). Awaiting
@@ -701,6 +716,7 @@ function LeadsPageInner() {
     () => openDeals.reduce((s, l) => s + (l.value ?? 0), 0),
     [openDeals]
   );
+  const pipelineByType = React.useMemo(() => pipelineSplit(openDeals), [openDeals]);
   /* Kept when the metrics band went: the breakdown tiles read wonCount, decidedCount
      and conversion out of this. Only `lost` was band-only. */
   const rate = React.useMemo(() => winRate(dealUniverse), [dealUniverse]);
@@ -809,6 +825,13 @@ function LeadsPageInner() {
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
               <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Open Pipeline</p>
               <p className="font-serif text-base font-bold text-amber-ink tabular-nums mt-0.5">{rupee(totalValue, { compact: true })}</p>
+              {/* Licences and custom software are different businesses — a ₹5L project and
+                  ₹5L of annual seats are not the same pipeline, so the split is shown. */}
+              {pipelineByType.project > 0 && (
+                <p className="text-3xs text-ink-3 tabular-nums mt-0.5">
+                  Subscription {rupee(pipelineByType.subscription, { compact: true })} · Project {rupee(pipelineByType.project, { compact: true })}
+                </p>
+              )}
             </div>
             <div className="bg-paper-2/40 border border-hairline rounded-md p-2 text-left">
               <p className="text-3xs uppercase font-semibold text-ink-3 tracking-wider">Open deals</p>
@@ -1486,6 +1509,8 @@ function LeadsPageInner() {
         <MergeLeadsDialog cluster={mergeCluster} onClose={() => setMergeCluster(null)} />
       )}
 
+      <ProjectQuoteFromLead lead={projectQuoteLead} onClose={() => router.replace(pathname as never)} />
+
       {/* Add / Edit lead modal */}
       <AddLeadForm
         open={addOpen}
@@ -1585,8 +1610,11 @@ function LeadDetailSheet({
      never, and re-fetching per drawer open would be a request per click. */
   const { data: userNames } = useUserNames();
   const router      = useRouter();
+  const drawerPath  = usePathname();
   const { changeStage } = useChangeLeadStage();
   const deleteLead  = useDeleteLead();
+  /* The project quotation a custom-software lead was quoted on — accepted means Won. */
+  const { data: leadProject } = useLeadProject(lead?.enquiry_type === "project" ? lead?.project_id : null);
   const confirm     = useConfirm();
   const { data: currentUser } = useCurrentUser();
   const logActivity = useLogLeadActivity();
@@ -1783,6 +1811,12 @@ function LeadDetailSheet({
   };
 
   const handleSendQuote = () => {
+    /* Project lead → the project quotation (or the one it already has). See goSendQuote. */
+    if (lead.enquiry_type === "project") {
+      onClose();
+      router.push((lead.project_id ? `/projects/${lead.project_id}` : `${drawerPath}?projectQuote=${lead.id}`) as never);
+      return;
+    }
     // Pass lead context to QuoteBuilder via URL params
     const params = new URLSearchParams();
     params.set("leadId",  lead.id);
@@ -1857,6 +1891,25 @@ function LeadDetailSheet({
     help?: string;
   };
   const nextAction: NextAction | null = (() => {
+    // 0. Project lead: its quotation lives in Project Sales. Accepted there = Won here.
+    if (lead.enquiry_type === "project" && lead.project_id) {
+      if (leadProject && (leadProject.status === "active" || leadProject.status === "completed") && lead.stage !== "won") {
+        return {
+          label: "Project accepted · mark Won",
+          icon: "check",
+          tone: "emerald",
+          onClick: () => { void changeStage(lead, "won"); },
+          hint: `${leadProject.title} · ₹${(leadProject.total_amount ?? 0).toLocaleString("en-IN")}`,
+        };
+      }
+      return {
+        label: "Open project quotation",
+        icon: "file",
+        tone: "indigo",
+        onClick: () => { onClose(); router.push(`/projects/${lead.project_id}` as never); },
+        hint: leadProject ? `${leadProject.title} · ${leadProject.status === "quoted" ? "awaiting acceptance" : leadProject.status}` : undefined,
+      };
+    }
     // 1. Paid quote → issue invoice / view invoice / record remainder
     if (latestQuoteForAction?.payment_status === "received") {
       return {

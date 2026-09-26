@@ -442,3 +442,79 @@ export function useLeadsForPerson(args: {
     },
   });
 }
+
+// ============================================================
+// Project enquiries (migration 20260926110000)
+// ============================================================
+
+/** Our own GST state — the seller side of place of supply for a project quotation. */
+export function useSellerState(enabled: boolean) {
+  return useQuery({
+    queryKey: ["tenant", "state_code"],
+    enabled,
+    queryFn: async (): Promise<string | null> => {
+      const supabase = createClient();
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth?.user) throw new Error("Not signed in");
+      const { data: me, error } = await supabase.from("users").select("tenant_id").eq("id", auth.user.id).single();
+      if (error) throw error;
+      const { data: t } = await supabase.from("tenants").select("state_code").eq("id", me.tenant_id).single();
+      return t?.state_code ?? null;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+/** The project quotation linked to a lead — its status decides "accepted → mark Won". */
+export function useLeadProject(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["project_sales", "for-lead", projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("project_sales").select("id, title, status, total_amount, accepted_at").eq("id", projectId!).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/**
+ * Raise a project quotation for a lead — create_project_quote_from_lead links it on
+ * leads.project_id and moves the lead to Quote Sent.
+ */
+export function useCreateProjectQuoteFromLead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      leadId: string;
+      title: string;
+      description: string | null;
+      taxable: number;
+      gstRate: number;
+      interState: boolean;
+      milestones: { label: string; total_amount: number; due_date: string | null }[];
+    }) => {
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("create_project_quote_from_lead", {
+        p_lead_id: input.leadId,
+        p_title: input.title,
+        p_description: input.description,
+        p_line_items: [{ name: input.title, qty: 1, rate: input.taxable, amount: input.taxable }],
+        p_gst_rate: input.gstRate,
+        p_inter_state: input.interState,
+        p_milestones: input.milestones,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leads"] });
+      qc.invalidateQueries({ queryKey: ["project_sales"] });
+      qc.invalidateQueries({ queryKey: ["nav-badges"] });
+      toast.success("Project quotation bana — Project Sales mein customer link se bhejo");
+    },
+    onError: (err) => toastError(err, { fallback: "Could not create the project quotation" }),
+  });
+}
