@@ -26,18 +26,16 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
 - [ ] **Admin package price edits in DMS still create Razorpay PLANS on DMS's account**
       (`app/api/admin/hosting/packages/route.ts:303,312`). Not a payment, but DMS writing to its own
       Razorpay. Remove, or leave?
-- [ ] **DMS renewal reminders quote DMS's own price** (`process-service-expiry`, around L243,
-      `service.price`). ResellerOS sends the real renewal quote. Change the reminder to point at the
-      ResellerOS quote, or drop the DMS reminder?
-- [ ] **`cron/renewal-payment-dunning` in DMS still chases old DMS renewal orders** made before
-      25 Sep. Switch it off, or let it finish the old ones?
-- [ ] **A trial started inside the DMS panel has no ResellerOS renewal quote**, because ResellerOS
-      does not know about it, so its convert button says "contact support". Should DMS tell
-      ResellerOS about in-panel trials (like the site trial), or move the in-panel trial to ResellerOS?
+- [ ] **DMS renewal reminders quote DMS's own price.** Owner, 26 Sep 2026: point them to the ResellerOS
+      quote, with no DMS price. In progress in DMS (round 4).
+- [ ] **`cron/renewal-payment-dunning` in DMS.** Owner, 26 Sep 2026: switch it off. In progress in DMS
+      (round 4).
+- [x] **In-panel trial moves to ResellerOS** (owner, 26 Sep 2026). ResellerOS `POST /api/dms/start-trial`
+      (`f514758b`) runs the site's `startHostingTrial`. The DMS side is in progress (round 4).
 - [ ] **Dead code in DMS, kept for now:** `app/api/domains/renew` (nothing can reach it),
       `createCompletedOrder` in `lib/services/payment/order-creator.ts`, and `createCustomer` /
       `createRecurringTokenOrder` in `lib/razorpay.ts` (only the gated Tokens live harness uses them).
-      OK to delete?
+      Owner, 26 Sep 2026: delete. In progress in DMS (round 4).
 - [ ] **Colleague (blocked folder):** `src/lib/renewals/create-renewal-quote.ts` writes
       `extension_months: 12` for monthly subscriptions too. Prompt handed over 25 Sep. See §0A.
 
