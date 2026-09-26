@@ -247,6 +247,7 @@ export const APP_NAV: NavSection[] = [
          so the section header now shows and the report takes its real name, as the note
          that stood here asked. */
       { id: "marketing-hub",   href: "/marketing",         label: "Marketing Hub",  icon: "layout", roles: ["owner", "manager"], hint: "Kaunse tools chahiye, kaun sambhalta hai, budget vs kharcha" },
+      { id: "marketing-campaigns", href: "/marketing/campaigns", label: "Campaign budgets", icon: "target", roles: ["owner", "manager"], hint: "Har campaign ka budget, dates, target — kharcha aur leads ke saath" },
       { id: "marketing-spend", href: "/marketing/spend",   label: "Spend",          icon: "wallet", roles: ["owner", "manager"] },
       { id: "marketing-roas",  href: "/marketing/reports", label: "ROAS & CAC",     icon: "chart",  roles: ["owner", "manager"] },
       { id: "marketing-links", href: "/marketing/links",   label: "Tracking links", icon: "globe",  roles: ["owner", "manager"], hint: "Har ad / post ka link — lead ka source khud lagega" },
@@ -437,6 +438,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/marketing/spend":   ["Marketing & Advertising", "Spend"],
   "/marketing":         ["Marketing & Advertising", "Marketing Hub"],
   "/marketing/links":   ["Marketing & Advertising", "Tracking links"],
+  "/marketing/campaigns": ["Marketing & Advertising", "Campaign budgets"],
   "/marketing/templates": ["Marketing & Advertising", "Email templates"],
   "/marketing/reviews":   ["Marketing & Advertising", "Google reviews"],
   "/marketing/whatsapp":  ["Marketing & Advertising", "WhatsApp broadcast"],

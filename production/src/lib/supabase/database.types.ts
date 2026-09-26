@@ -2235,6 +2235,8 @@ export type ExpenseRow = {
    *  rows. Deliberately here and NOT in a separate ad-spend table, so CAC/ROAS read
    *  the same rows the accountant reconciles against the bank. */
   channel:          string | null;
+  /** Migration 20260926240000 — marketing campaign this spend belongs to. */
+  campaign_id?:     string | null;
   created_at:       string;
   updated_at:       string;
 };
@@ -2269,6 +2271,8 @@ type ExpenseInsert = {
   notes?:           string | null;
   /** Migration 0232 — marketing channel for ad spend. Set only on marketing rows. */
   channel?:         string | null;
+  /** Migration 20260926240000 — marketing campaign this spend belongs to. */
+  campaign_id?:     string | null;
   /**
    * Migration 0209 — the employee advance this expense was consumed from.
    *

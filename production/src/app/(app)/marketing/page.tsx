@@ -112,6 +112,7 @@ function Metric({ label, value, sub, warn }: { label: string; value: string; sub
 }
 
 const QUICK: { href: string; label: string; icon: string; hint: string }[] = [
+  { href: "/marketing/campaigns", label: "Campaign budgets", icon: "target", hint: "Budget, dates, target — kharcha vs leads" },
   { href: "/marketing/links",   label: "Tracking links",  icon: "globe",   hint: "Har ad / post ka link — lead ka source khud lagega" },
   { href: "/campaigns",         label: "Email campaigns", icon: "mail",    hint: "Leads ko offer mail" },
   { href: "/coupons",           label: "Coupons",         icon: "ticket",  hint: "Offer ke discount code" },

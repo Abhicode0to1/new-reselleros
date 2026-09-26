@@ -24,6 +24,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { LEAD_SOURCES, sourceLabel } from "@/lib/leads/lead-sources";
 import { DESTINATIONS, buildTrackingUrl, defaultMedium, slugCampaign } from "@/lib/marketing/tracking-link";
 import { useTrackingLinks, useCreateTrackingLink, useDeleteTrackingLink } from "@/lib/queries/marketing-hub";
+import { useCampaignOptions } from "@/lib/queries/marketing-campaigns";
 
 /* A link is for a real channel — not for "Added manually" or "CSV import". */
 const LINK_CHANNELS = LEAD_SOURCES.filter((s) => !["manual", "csv", "tele-calling", "walk-in", "email-inbound", "buy-workspace-v2", "enquiry-form"].includes(s.value));
@@ -51,6 +52,15 @@ export default function TrackingLinksPage() {
   const [campaign, setCampaign] = React.useState("");
   const [content, setContent] = React.useState("");
   const [medium, setMedium] = React.useState("");
+  const campaigns = useCampaignOptions();
+  /* Arriving from a campaign card (?campaign=<code>) fills its code, so the link's leads
+     count against that campaign. Read from location, not useSearchParams, to keep the page
+     statically renderable. */
+  React.useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("campaign");
+    if (c) setCampaign(c);
+  }, []);
+  const linkedCampaign = (campaigns.data ?? []).find((c) => c.code === slugCampaign(campaign));
 
   const origin = siteOrigin();
   const url = origin ? buildTrackingUrl({ origin, path, channel, campaign, content, medium }) : "";
@@ -99,7 +109,17 @@ export default function TrackingLinksPage() {
             </Select>
           </FormField>
           <FormField label="Campaign" htmlFor="tl_campaign">
+            {(campaigns.data ?? []).length > 0 && (
+              <Select value={linkedCampaign?.code ?? "free"} onValueChange={(v) => setCampaign(v === "free" ? "" : v)}>
+                <SelectTrigger className="mb-1.5" aria-label="Campaign chuno"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="free">Apna naam likho…</SelectItem>
+                  {(campaigns.data ?? []).filter((c) => !c.cancelled).map((c) => <SelectItem key={c.id} value={c.code}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
             <Input id="tl_campaign" placeholder="e.g. Diwali 2026" value={campaign} onChange={(e) => setCampaign(e.target.value)} />
+            {linkedCampaign && <p className="mt-1 text-2xs text-emerald">Is link ki leads &ldquo;{linkedCampaign.name}&rdquo; campaign mein ginengi.</p>}
             <p className="mt-1 text-2xs text-ink-3">Ek campaign ke saare ads mein same naam — tab uski saari leads ek saath ginti hain. Link mein: <code>{slugCampaign(campaign) || "general"}</code></p>
           </FormField>
           <FormField label="Kaunsa ad / post (optional)" htmlFor="tl_content">

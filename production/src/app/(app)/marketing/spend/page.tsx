@@ -31,6 +31,7 @@ import { AD_CHANNELS, isMarketingCategory } from "@/lib/marketing/ad-channels";
 import { summariseSpend, headOf, channelLabel, type SpendHead } from "@/lib/marketing/spend-summary";
 import { useMarketingSpend, type RangeKey } from "@/lib/queries/marketing";
 import { useUpdateExpense, type Expense } from "@/lib/queries/expenses";
+import { useCampaignOptions } from "@/lib/queries/marketing-campaigns";
 import { usePrepaidAdvances, type PrepaidAdvance } from "@/lib/queries/prepaid-advances";
 import Link from "next/link";
 
@@ -323,13 +324,17 @@ function EntriesTable({ rows, total, onlyUntagged, setOnlyUntagged, untaggedCoun
   const update = useUpdateExpense();
   const setChannel = (e: Expense, channel: string) =>
     update.mutate({ id: e.id, patch: { channel: channel === "none" ? null : channel } });
+  const campaigns = useCampaignOptions();
+  const campOpts = campaigns.data ?? [];
+  const setCampaign = (e: Expense, id: string) =>
+    update.mutate({ id: e.id, patch: { campaign_id: id === "none" ? null : id } });
 
   return (
     <Card flush>
       <div className="px-4 pt-4 pb-2 flex items-end justify-between gap-3 flex-wrap">
         <div>
           <p className="text-sm font-semibold text-ink">Saari entries</p>
-          <p className="text-xs text-ink-3 mt-0.5">Channel yahin se chuno — turant save hota hai. Baaki badlaav ke liye Edit.</p>
+          <p className="text-xs text-ink-3 mt-0.5">Channel{campOpts.length ? " aur campaign" : ""} yahin se chuno — turant save hota hai. Baaki badlaav ke liye Edit.</p>
         </div>
         {untaggedCount > 0 && (
           <Button variant={onlyUntagged ? "primary" : "outline"} size="sm" onClick={() => setOnlyUntagged(!onlyUntagged)}>
@@ -338,20 +343,21 @@ function EntriesTable({ rows, total, onlyUntagged, setOnlyUntagged, untaggedCoun
         )}
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px]">
+        <table className="w-full min-w-[900px]">
           <thead className="bg-paper-2 border-y border-hairline-strong">
             <tr>
               <th className={cn(th, "text-left")}>Date</th>
               <th className={cn(th, "text-left")}>Kisko / kis liye</th>
               <th className={cn(th, "text-left")}>Head</th>
               <th className={cn(th, "text-left")}>Channel</th>
+              {campOpts.length > 0 && <th className={cn(th, "text-left")}>Campaign</th>}
               <th className={cn(th, "text-right")}>Amount</th>
               <th className={th} />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={6} className="px-3 py-6 text-center text-sm text-ink-3">Koi entry nahi.</td></tr>
+              <tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-ink-3">Koi entry nahi.</td></tr>
             ) : rows.map((e) => {
               const h = headOf(e.category);
               return (
@@ -377,6 +383,19 @@ function EntriesTable({ rows, total, onlyUntagged, setOnlyUntagged, untaggedCoun
                       </SelectContent>
                     </Select>
                   </td>
+                  {campOpts.length > 0 && (
+                    <td className={td}>
+                      <Select value={e.campaign_id ?? "none"} onValueChange={(v) => setCampaign(e, v)}>
+                        <SelectTrigger className="h-8 w-[170px] text-xs" aria-label={`Campaign for ${e.vendor_name ?? "entry"}`}>
+                          <SelectValue>{campOpts.find((c) => c.id === e.campaign_id)?.name ?? "—"}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Kisi campaign ka nahi</SelectItem>
+                          {campOpts.filter((c) => !c.cancelled || c.id === e.campaign_id).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                  )}
                   <td className={cn(td, "text-right tabular-nums font-medium")}>{rupee(e.amount)}</td>
                   <td className={cn(td, "text-right")}>
                     <Button variant="ghost" size="sm" onClick={() => onEdit(e)}>Edit</Button>

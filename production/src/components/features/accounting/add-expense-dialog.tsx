@@ -42,6 +42,7 @@ import {
 } from "@/lib/queries/expenses";
 import { COMMISSION_CATEGORY, TDS_194H_THRESHOLD, commissionTdsView } from "@/lib/accounting/commission-tds";
 import { AD_CHANNELS, isMarketingCategory, suggestAdChannel } from "@/lib/marketing/ad-channels";
+import { useCampaignOptions } from "@/lib/queries/marketing-campaigns";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { useEmployees } from "@/lib/queries/payroll";
 import { compactName } from "@/lib/banking/salary-lines";
@@ -442,6 +443,9 @@ export function AddExpenseDialog({
   const isMarketing = isMarketingCategory(watch("category"));
   const [channel, setChannel] = React.useState<string>(expense?.channel ?? "");
   const [channelTouched, setChannelTouched] = React.useState<boolean>(Boolean(expense?.channel));
+  /* Marketing campaign (migration 20260926240000) — puts this spend against a budget. */
+  const campaignOptions = useCampaignOptions();
+  const [campaignId, setCampaignId] = React.useState<string>(expense?.campaign_id ?? "");
   React.useEffect(() => {
     if (!isMarketing || channelTouched) return;
     const s = suggestAdChannel(`${vendorNameWatch} ${noteText} ${itemText}`);
@@ -584,6 +588,7 @@ export function AddExpenseDialog({
     }
     // Marketing channel (0232) — only on marketing rows, NULL everywhere else.
     const channelFor = (cat: string) => (isMarketingCategory(cat) ? (channel || null) : null);
+    const campaignFor = (cat: string) => (isMarketingCategory(cat) ? (campaignId || null) : null);
     const shared = {
       /* Bill se naapa hua GST batwara. Iske bina GST report har kharche ko intra-state
          MAAN leti hai (aadha CGST, aadha SGST, IGST shunya) — aur Amazon jaise
@@ -653,6 +658,7 @@ export function AddExpenseDialog({
           ...shared,
           category:   g.category,
           channel:    channelFor(g.category),
+          campaign_id: campaignFor(g.category),
           line_items: g.items,
           amount:     inr(g.amount + (isGstBill ? g.gst : 0)),   // subtotal + its GST share
           gst_paid:   isGstBill ? inr(g.gst) : 0,
@@ -705,14 +711,14 @@ export function AddExpenseDialog({
     if (expense) {
       await update.mutateAsync({
         id: expense.id,
-        patch: { ...shared, category, channel: channelFor(category), line_items, amount: amountInr, gst_paid: gstAmt, description: derivedDescription },
+        patch: { ...shared, category, channel: channelFor(category), campaign_id: campaignFor(category), line_items, amount: amountInr, gst_paid: gstAmt, description: derivedDescription },
       });
       onClose();
       return;
     }
     await create.mutateAsync({
       ...shared,
-      category, channel: channelFor(category), line_items, amount: amountInr, gst_paid: gstAmt,
+      category, channel: channelFor(category), campaign_id: campaignFor(category), line_items, amount: amountInr, gst_paid: gstAmt,
       description: derivedDescription,
       pettyCashAccountId: pettyCash,
     });
@@ -947,6 +953,20 @@ export function AddExpenseDialog({
                       <p className="mt-1 text-3xs text-ink-3 leading-snug">
                         Marketing → ROAS &amp; CAC isi se ad kharch ko us channel ki leads ke saath milata hai. Bina channel ke ye kharch wahan nahi gina jaata.
                       </p>
+                      {(campaignOptions.data ?? []).length > 0 && (
+                        <div className="mt-2">
+                          <label htmlFor="ad-campaign" className="text-2xs font-medium text-ink-2">Campaign (optional)</label>
+                          <Select value={campaignId || "none"} onValueChange={(v) => setCampaignId(v === "none" ? "" : v)}>
+                            <SelectTrigger id="ad-campaign" className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Kisi campaign ka nahi</SelectItem>
+                              {(campaignOptions.data ?? []).filter((c) => !c.cancelled || c.id === campaignId).map((c) => (
+                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   )}
                   {isCommission && (
