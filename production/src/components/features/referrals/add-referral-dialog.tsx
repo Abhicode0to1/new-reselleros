@@ -172,7 +172,7 @@ export function AddReferralDialog({ open, onOpenChange, customerId, customerName
           {/* TDS */}
           <label className="flex items-center gap-2 text-sm text-ink cursor-pointer">
             <input type="checkbox" checked={deductTds} onChange={(e) => setDeductTds(e.target.checked)} className="h-4 w-4 rounded border-hairline text-amber focus:ring-amber/40" />
-            5% TDS (194H) deduct karo — commission ₹15,000/saal se upar ho to zaroori
+            2% TDS (194H) deduct karo — ek vyakti ko saal mein ₹20,000 se zyada commission ho to zaroori
           </label>
 
           <FormField label="Note (optional)" htmlFor="ref_label">
@@ -181,8 +181,8 @@ export function AddReferralDialog({ open, onOpenChange, customerId, customerName
 
           <div className="rounded-md bg-amber-soft/40 border border-amber/30 px-3 py-2 text-2xs text-amber-ink leading-relaxed">
             {basis === "percent"
-              ? <>Har {scope === "recurring" ? "payment" : "pehli payment"} par <b>{pctNum}%</b> commission banegi{deductTds ? " (− 5% TDS)" : ""}. Manually approve karke pay karoge.</>
-              : <>Har {scope === "recurring" ? "payment" : "pehli payment"} par <b>{rupee(fixedNum)}</b> commission banegi{deductTds ? " (− 5% TDS)" : ""}.</>}
+              ? <>Har {scope === "recurring" ? "payment" : "pehli payment"} par <b>{pctNum}%</b> commission banegi{deductTds ? " (− 2% TDS)" : ""}. Manually approve karke pay karoge.</>
+              : <>Har {scope === "recurring" ? "payment" : "pehli payment"} par <b>{rupee(fixedNum)}</b> commission banegi{deductTds ? " (− 2% TDS)" : ""}.</>}
           </div>
         </div>
 

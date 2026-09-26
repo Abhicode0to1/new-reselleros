@@ -114,6 +114,13 @@ export function matchEmployee(name: string | null, employees: Array<{ id: string
   if (exact.length === 1) return { kind: "match", id: exact[0].id };
   if (exact.length > 1) return { kind: "ambiguous", ids: exact.map((e) => e.id) };
 
+  /* The same letters with the spaces in different places — a PDF statement breaks names
+     where its column wraps ("HITES H BABU", "RANJE ET RAJ"). Letters decide, not spaces. */
+  const compact = compactName(name);
+  const sameLetters = employees.filter((e) => compactName(e.name) === compact);
+  if (sameLetters.length === 1) return { kind: "match", id: sameLetters[0].id };
+  if (sameLetters.length > 1) return { kind: "ambiguous", ids: sameLetters.map((e) => e.id) };
+
   const words = target.split(" ");
   const contains = employees.filter((e) => {
     const have = new Set(norm(e.name).split(" "));
@@ -127,4 +134,55 @@ export function matchEmployee(name: string | null, employees: Array<{ id: string
 /** "RANJEET RAJ" → "Ranjeet Raj", for a new employee created from a statement line. */
 export function titleCaseName(name: string): string {
   return name.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
+}
+
+/* ─── ONE PERSON, MANY SPELLINGS ─────────────────────────────────────────────
+   26 Sep 2026: one statement import created FIFTEEN employees for eight people —
+   "Hitesh Babu", "Hites H Babu", "Hitesh Ba Bu", "Hitesh Bab U"; "Abhi", "Abhis",
+   "Abhi Shek". The PDF broke names where its column wrapped (and cut some short), and
+   each spelling was taken for a new person. The narration also carried the one thing
+   that does not change: the payee's account number. */
+
+/** Letters only, upper-case — "Hites H Babu" and "HITESH BABU" are the same name. */
+export function compactName(name: string): string {
+  return name.toUpperCase().replace(/[^A-Z]/g, "");
+}
+
+/**
+ * A stable key for WHO was paid, from the narration — the same person on every line.
+ *   TPT (own-bank transfer): the payee account, "50100784857182-TPT-…"   → "acct:50100784857182"
+ *   IMPS: bank code + last 4 of the masked account, "IMPS-…-NAME-PUNB-XXXXXXXX X3174-…" → "imps:PUNB:3174"
+ *   NEFT / RTGS: the payee IFSC + the letters of the name   → "ifsc:BKID0006087:PRATIK"
+ * Null when none of these can be read — the caller falls back to the name.
+ */
+export function payeeKey(description: string): string | null {
+  const segs = description.toUpperCase().split("-").map((x) => x.trim());
+  if (/^\d{9,18}$/.test(segs[0] ?? "") && segs[1] === "TPT") return `acct:${segs[0]}`;
+  if (/^IMPS$/.test(segs[0] ?? "") && segs.length >= 5) {
+    const last4 = (segs[4] ?? "").replace(/\D/g, "").slice(-4);
+    if (/^[A-Z]{4}$/.test(segs[3] ?? "") && last4.length === 4) return `imps:${segs[3]}:${last4}`;
+  }
+  if (/^(NEFT|RTGS)(\s+(DR|CR))?$/.test(segs[0] ?? "") && /^[A-Z]{4}0[A-Z0-9]{6}$/.test(segs[1] ?? "") && segs[2]) {
+    return `ifsc:${segs[1]}:${compactName(segs[2])}`;
+  }
+  return null;
+}
+
+/**
+ * The best spelling among a payee's variants, for a NEW employee: the most letters (a cut
+ * "ABHI" loses to "ABHI SHEK"), then the fewest stray fragments ("HITESH BABU" beats
+ * "HITES H BABU" — longer average word). Title-cased. The operator can still edit it.
+ */
+export function bestNameVariant(names: readonly string[]): string {
+  const clean = names.map((n) => n.trim()).filter(Boolean);
+  if (clean.length === 0) return "";
+  const score = (n: string) => {
+    const words = n.split(/\s+/);
+    return [compactName(n).length, compactName(n).length / words.length];
+  };
+  const best = [...clean].sort((a, b) => {
+    const [la, aa] = score(a), [lb, ab] = score(b);
+    return lb - la || ab - aa;
+  })[0];
+  return titleCaseName(best.replace(/\s+/g, " "));
 }

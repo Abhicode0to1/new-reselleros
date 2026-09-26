@@ -92,7 +92,7 @@ export function useCreatePartner() {
           default_percent:      input.default_percent ?? 10,
           default_fixed_amount: input.default_fixed_amount ?? 0,
           deduct_tds:           input.deduct_tds ?? false,
-          tds_rate:             input.tds_rate ?? 5,
+          tds_rate:             input.tds_rate ?? 2,
           notes:                input.notes ?? null,
           created_by:           me.userId,
         })
@@ -129,7 +129,7 @@ export function useCreateAgreement() {
           fixed_amount: input.basis === "fixed" ? (input.fixed_amount ?? 0) : null,
           scope:        input.scope,
           deduct_tds:   input.deduct_tds ?? false,
-          tds_rate:     input.tds_rate ?? 5,
+          tds_rate:     input.tds_rate ?? 2,
           status:       "active",
           notes:        input.notes ?? null,
           created_by:   me.userId,

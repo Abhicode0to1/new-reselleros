@@ -117,10 +117,22 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
   3. **Portfolio strip (~line 429):** add "Project value" (active projects' contract total) next to
      Monthly / Yearly revenue, which are recurring-only and should stay so.
   4. Optional: a "Projects" column or badge with the count / contract value.
+  5. **"Received (this FY)" column** (added 2026-09-26): the list has Monthly / To collect / Unused credits but
+     nothing for money actually received, so a customer who has paid ₹11,80,000 reads as ₹0 everywhere. Sum per
+     customer, dated in the current FY: `payments` (status `received`) + `project_payments` (incl. method
+     `tds` — TDS the customer paid on our behalf settles the invoice; show it in the tooltip as "of which
+     TDS ₹…"). Excel Technologies should read **₹11,80,000** (₹10,80,000 bank + ₹1,00,000 TDS). Sortable, like
+     the other money columns.
+  6. **Portfolio strip — say what each tile counts** (added 2026-09-26). "Monthly revenue" / "Yearly revenue" are
+     subscription MRR / ARR only, but read as total income — a customer who paid ₹11.8L shows ₹0 in all four
+     tiles. (a) Rename them **"Recurring monthly (subscriptions)"** and **"Recurring yearly (subscriptions)"**;
+     (b) add a **"Received (this FY)"** tile — same sum as the column in point 5, TDS included (Excel
+     Technologies: ₹11.8L); (c) the "Project value" tile from point 3 sits beside them.
   `useCustomerProjects` / `useProjectReceivablesByCustomer` in `lib/queries/projects.ts` already
   return what is needed (the page already uses the latter for "To collect").
-- **Done when:** Excel Technologies shows as a project client with its project value, and appears
-  under a "With projects" filter.
+- **Done when:** Excel Technologies shows as a project client with its project value, appears
+  under a "With projects" filter, and its row shows ₹11,80,000 received this FY; the strip's tiles say
+  "Recurring … (subscriptions)" and a "Received (this FY)" tile shows ₹11.8L.
 
 ### R-006 · Project quotations don't appear under "Quotes"
 - **For:** Abhishek
@@ -189,6 +201,76 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
      (`update leads set project_id = …`), so a deal quoted from either side ends up connected.
 - **Done when:** accepting a lead's project quotation turns the lead Won without a click, and the project
   page shows the lead it came from.
+
+### R-009 · Invoice list: show credit / debit notes, the invoice date, and no stray "0"
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-26
+- **Why accounting needs it:** on 26 Sep an invoice of ₹23,60,000 carried a ₹17,70,000 credit note (net
+  ₹5,90,000). The list showed only "₹23,60,000 · paid", which read as ₹23.6L received — the owner called it
+  "bada confusing". The note was visible only inside the invoice. Two display bugs sat next to it.
+- **What to change** — `production/src/app/(app)/invoices/page.tsx`:
+  1. **Notes on the row.** When an invoice has credit / debit notes, show them under the amount, e.g.
+     `CN −₹17,70,000 · net ₹5,90,000` (debit: `DN +₹50,000`). The detail view already loads them
+     (`Credit & debit notes (n)`, ~line 1600) — the list needs the same totals per invoice.
+  2. **Mobile / narrow card date (~line 855):** it prints `inv.created_at`; it should print
+     `inv.invoice_date` like the desktop row (~line 954). An invoice dated 7 Aug showed "26 Sept 2026"
+     because it was created on 26 Sep.
+  3. **Stray "0" (~line 848):** `{inv.net_payable && inv.net_payable !== inv.amount && (…)}` renders a
+     literal `0` when `net_payable` is 0 (React prints the falsy number). Use
+     `inv.net_payable != null && inv.net_payable !== inv.amount` and show "Net: ₹0 · settled" or nothing.
+- **Done when:** an invoice with a note shows the note and the net on its row; every row shows the
+  invoice date; no bare "0" appears under a settled invoice's amount.
+
+### R-010 · Project invoices print "No line items" — no description of the service
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-26
+- **Why accounting needs it:** GST Rule 46 requires a tax invoice to carry the description of the service
+  (with SAC). Every project milestone invoice shows **"No line items recorded on the parent quote."** in the
+  invoice dialog and the PDF — e.g. `INV-FBB9-2026-27-0003`, ₹5,00,000 + CGST ₹45,000 + SGST ₹45,000, with
+  no line saying what it is for. The amounts are right; the invoice is not complete.
+- **Cause:** the dialog / PDF take lines only from the parent quote —
+  `production/src/app/(app)/invoices/page.tsx` ~line 1208 `const lineItems = quote?.line_items ?? []` — and a
+  project invoice has no quote. `raise_project_milestone_invoice` also never writes `invoices.line_items`
+  (NULL on all three local project invoices).
+- **What to change:**
+  1. `raise_project_milestone_invoice`: write one line into `invoices.line_items` —
+     `{ name: "<project title> — <milestone label>", description: <project description>, sac: <project sac_code, 998314>,
+     qty: 1, rate: <taxable>, amount: <taxable> }` (same shape as `QuoteLineItem`).
+  2. Invoice dialog (`components/features/quotes/tax-invoice-dialog.tsx`) and PDF (`lib/pdf/InvoicePDF.tsx`): when
+     there is no quote, use `invoice.line_items`; show the SAC in the HSN/SAC column.
+  3. Backfill existing project invoices from their milestone + project. The freeze trigger
+     `tg_invoices_freeze_issued` already allows it — it blocks `line_items` only when the old value is
+     **not null** — so filling an empty one is permitted and changes no amount.
+- **Done when:** a project milestone invoice shows "Complete Billing System — Doosri kist (advance) · SAC 998314 ·
+  ₹5,00,000" in the dialog and the PDF, for new and existing invoices.
+
+### R-011 · Project "Profit & Loss" card: an expandable breakdown, and "to date" that means to date
+- **For:** Abhishek
+- **Status:** Open
+- **Raised:** 2026-09-26
+- **Why accounting needs it:** on `/projects/[id]` the card shows five totals — Contract ₹50,00,000 · Costs ₹5,00,000
+  · Labour ₹20,74,840 · Expected profit ₹24,25,160 · 49% — and "Booked to date: ₹10,00,000 invoiced −
+  ₹25,74,840 costs = −157%". Nothing says which entries make up a number, and two readings are misleading:
+  - **Labour counts the whole allocation, future months included.** Four people at 100% for 20 Apr – 26 Dec 2026
+    = ₹20,74,840; "Booked to date" subtracts all of it on 26 Sep, although only ~₹14.5L of that period has passed —
+    hence −157%.
+  - The ₹5,00,000 "cost" was a commission to an employee (now moved to Payroll) — nobody could tell from the card.
+- **What to change** — the project detail page (P&L card):
+  1. A **"Details"** toggle on the card that expands:
+     - **Revenue:** contract (ex-GST) · invoiced · received (bank + TDS) · still to invoice.
+     - **External costs** grouped by category, each row → vendor / payee, date, amount (link to the expense).
+     - **Labour** one row per person: % · dates · monthly salary · **to date** · **planned (full stint)**.
+     - **Commission** (referral commissions on this project's payments) as its own line.
+     - **Margin:** to date and expected, side by side.
+  2. **"Booked to date"** must use labour **up to today** (overlap of each allocation with start…today), not the full
+     stint. The P&L already does this per period — `projectCostForPeriod` in `lib/accounting/project-cost.ts`
+     (Pardeep's) can be reused for "start → today" as-is.
+  3. When a person is allocated 100% on more than one active project at once, flag it (a salary cannot be 200%
+     spent).
+- **Done when:** the card expands to show which entries make each number; "Booked to date" on 26 Sep counts
+  labour only to 26 Sep.
 
 ### R-012 · Renewal quotes: monthly subscriptions renewed for a year, and cost guessed at 83% of price
 

@@ -28,6 +28,7 @@ export type Expense = ExpenseRow;
 // with GST paid = 0.
 export { EXPENSE_CATEGORIES } from "@/lib/accounting/expense-categories";
 import { EXPENSE_CATEGORIES } from "@/lib/accounting/expense-categories";
+import { COMMISSION_CATEGORY, fyStartOf } from "@/lib/accounting/commission-tds";
 
 /**
  * Guess an expense category from the free-text "what was this for?" note.
@@ -47,6 +48,10 @@ const CATEGORY_KEYWORDS: [RegExp, (typeof EXPENSE_CATEGORIES)[number]][] = [
   // A director's pay, as an operator writes it. Unlike "Salaries" this IS suggested:
   // it is not a Payroll entry when booked as an expense.
   [/\b(directors?'? ?(?:remuneration|salary|commission|fees?)|sitting ?fees?|managerial ?remuneration)\b/i, "Director's Remuneration"],
+  // Commission to an outside agent / broker / referral partner (TDS 194H). After the director
+  // rule, so "director commission" stays Director's Remuneration. Bare "incentive" is NOT a
+  // keyword: a staff incentive is salary and belongs in Payroll.
+  [/\b(commission|brokerage|referral ?(?:fee|payout|bonus|commission)|finder'?s? ?fee|agent ?fee|dealer ?incentive|channel ?partner ?(?:incentive|payout))\b/i, "Commission / Incentive (agents)"],
   [/\b(rent|lease|kiraya|kiraaya)\b/i, "Office Rent"],
   [/\b(cab|taxi|uber|ola|rapido|flight|air ?fare|train|irctc|hotel|stay|travel|petrol|diesel|fuel|toll|parking|mileage|conveyance|jaana|jaane|jana|jane|aana|aane|safar|yatra|gaadi|gadi|rickshaw|riksha|\bbus\b|\btel\b|luggage|suitcase|trolley|backpack|travel ?bag)\b/i, "Travel"],
   [/\b(internet|wi-?fi|broadband|phone|mobile|airtel|jio|vodafone|\bvi\b|bsnl|recharge|data ?pack|\bsim\b|net ?pack)\b/i, "Internet & Phone"],
@@ -632,5 +637,35 @@ export function useDeleteExpense() {
       toast.success("Expense deleted");
     },
     onError: (err) => toast.error((err as Error).message),
+  });
+}
+
+/**
+ * Commission already booked to one person this financial year — for the s.194H limit
+ * (lib/accounting/commission-tds.ts). Matches the payee name case-insensitively; the entry
+ * being edited is left out so it is not counted twice.
+ */
+export function useCommissionToPayeeThisFy(payee: string, onDate: string, excludeId?: string | null) {
+  const name = payee.trim();
+  return useQuery({
+    queryKey: ["expenses", "commission-fy", name.toLowerCase(), onDate.slice(0, 10), excludeId ?? null],
+    enabled: name.length >= 2,
+    queryFn: async (): Promise<{ earlier: number; earlierWithoutTds: number }> => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("id, amount, tds_amount")
+        .eq("category", COMMISSION_CATEGORY)
+        .ilike("vendor_name", name.replace(/[%_\\]/g, (c) => "\\" + c))
+        .gte("expense_date", fyStartOf(onDate))
+        .lte("expense_date", onDate.slice(0, 10));
+      if (error) throw error;
+      const rows = (data ?? []).filter((r) => r.id !== excludeId);
+      return {
+        earlier: rows.reduce((s, r) => s + (r.amount ?? 0), 0),
+        earlierWithoutTds: rows.filter((r) => !(r.tds_amount && r.tds_amount > 0)).reduce((s, r) => s + (r.amount ?? 0), 0),
+      };
+    },
+    staleTime: 30_000,
   });
 }

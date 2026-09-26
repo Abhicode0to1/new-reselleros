@@ -7,6 +7,8 @@
  *                                    born as a quotation (line item, public quote link) and
  *                                    accepted at once, so it has the same quote record as a
  *                                    project sold the normal way
+ *   split_project_milestone        — a part payment to be invoiced: carve it out first, so the
+ *                                    invoice is for the money received, not the whole milestone
  *   add_project_receipt_milestone  — a receipt on a project already paid in full (or an
  *                                    extra payment): one new milestone, project value grows
  *   record_project_payment         — writes project_payments AND reconciles the bank line
@@ -192,6 +194,27 @@ export function useBookBankCreditAsProjectPayment() {
       } else if (input.target.milestoneId) {
         projectId = input.target.projectId;
         milestoneId = input.target.milestoneId;
+        /* A part payment that is to be invoiced: split the milestone first, so the invoice is
+           for the money received — raise_project_milestone_invoice bills the WHOLE milestone,
+           which gave a ₹23,60,000 invoice for a ₹5,90,000 instalment (26 Sep 2026). */
+        if (input.raiseInvoice) {
+          const [{ data: ms, error: msErr }, { data: pays, error: pErr }] = await Promise.all([
+            supabase.from("project_milestones").select("label, total_amount, invoice_id").eq("id", milestoneId).single(),
+            supabase.from("project_payments").select("amount").eq("milestone_id", milestoneId),
+          ]);
+          if (msErr) throw msErr;
+          if (pErr) throw pErr;
+          const paid = (pays ?? []).reduce((s, p) => s + (p.amount ?? 0), 0);
+          if (!ms.invoice_id && paid === 0 && settled < ms.total_amount) {
+            const { data: part, error: splitErr } = await supabase.rpc("split_project_milestone", {
+              p_milestone_id: milestoneId,
+              p_amount: settled,
+              p_label: `${ms.label} — kist ${input.receivedAt}`,
+            });
+            if (splitErr) throw splitErr;
+            milestoneId = part as string;
+          }
+        }
       } else {
         projectId = input.target.projectId;
         const { data: mid, error: addErr } = await supabase.rpc("add_project_receipt_milestone", {

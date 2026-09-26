@@ -202,7 +202,7 @@ export default function ReferralsPage() {
                     <p className="font-medium text-ink">{p.name}</p>
                     {p.phone && <p className="text-[12px] text-ink-3">{p.phone}</p>}
                   </div>
-                  {p.deduct_tds && <span className="text-3xs px-1.5 py-0.5 rounded bg-paper-2 text-ink-3">TDS 5%</span>}
+                  {p.deduct_tds && <span className="text-3xs px-1.5 py-0.5 rounded bg-paper-2 text-ink-3">TDS {p.tds_rate ?? 2}%</span>}
                 </div>
                 <div className="mt-2 text-[12px] text-ink-2">
                   Default: {p.default_basis === "percent" ? `${p.default_percent ?? 0}% of deal` : rupee(p.default_fixed_amount ?? 0)}

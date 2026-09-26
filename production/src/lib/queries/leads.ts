@@ -518,3 +518,26 @@ export function useCreateProjectQuoteFromLead() {
     onError: (err) => toastError(err, { fallback: "Could not create the project quotation" }),
   });
 }
+
+/**
+ * The customer a lead's company already is, by name (case-insensitive) — the same match
+ * create_project_quote_from_lead makes. Its state decides place of supply, so the rep is
+ * not asked for something the app already knows.
+ */
+export function useCustomerForLead(company: string | null | undefined) {
+  const name = (company ?? "").trim();
+  return useQuery({
+    queryKey: ["customers", "for-lead", name.toLowerCase()],
+    enabled: name.length > 0,
+    queryFn: async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("customers").select("id, name, state_code, gstin")
+        /* Exact name, case-insensitive: % and _ in a company name are escaped, not wildcards. */
+        .ilike("name", name.replace(/[%_\\]/g, (c) => "\\" + c)).limit(1).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 60_000,
+  });
+}

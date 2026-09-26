@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { rupee } from "@/lib/utils";
 import { useOpenProjects, useBookBankCreditAsProjectPayment, receiptMilestones } from "@/lib/queries/project-receipts";
 import { TDS_SECTIONS, tdsSplitFromNet } from "@/lib/accounting/tds-split";
+import { amountInIndianWords } from "@/lib/accounting/amount-words";
 
 const NEW_CUSTOMER = "__new_customer__";
 /* Milestone picker value: add a new milestone for this receipt (project value grows). */
@@ -84,6 +85,8 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
 
   const totalNum = Math.round(Number(total));
   const customerName = customers.find((c) => c.id === customerId)?.name ?? "";
+  /* Open projects of the customer picked under "Naya project" — see the warning below it. */
+  const customerProjects = customerId ? (projects ?? []).filter((p) => p.customerId === customerId) : [];
   const split = totalNum > 0 ? receiptMilestones(totalNum, settled) : [];
 
   const canSubmit = mode === "existing"
@@ -162,7 +165,11 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
             {milestone && settled !== milestone.remaining && (
               <p className="text-3xs text-amber-ink">
                 Is milestone ka {rupee(milestone.remaining)} baaki hai, ye payment {rupee(settled)} chukata hai{tds ? " (bank + TDS)" : ""} —
-                {settled < milestone.remaining ? " ye part payment ki tarah record hoga." : " milestone se zyada hai, milestone check kar lo."}
+                {settled < milestone.remaining
+                  ? (raiseInvoice && milestone.paid === 0 && !milestone.invoiceId
+                      ? ` is payment ki alag milestone (${amountInIndianWords(settled)}) banegi aur invoice sirf utne ka; baaki ${amountInIndianWords(milestone.remaining - settled)} "${milestone.label}" mein rahega.`
+                      : " ye part payment ki tarah record hoga.")
+                  : " milestone se zyada hai, milestone check kar lo."}
                 {!tds && milestone.remaining > net && " Agar customer ne TDS kaata hai to neeche \"TDS kata hai?\" tick karo."}
               </p>
             )}
@@ -183,11 +190,42 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
             <option value={NEW_CUSTOMER}>＋ Naya customer banao</option>
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+          {/* This customer already has an open project — the usual case is an instalment on
+              it, not a new deal. Booking it as "Naya project" split a ₹50L contract into a
+              ₹5L duplicate (26 Sep 2026), so it is said before anything is created. */}
+          {customerProjects.length > 0 && (
+            <div className="rounded-md border border-amber/50 bg-amber-soft/30 p-2.5 text-2xs text-ink-2 space-y-1.5">
+              <p>
+                <b>{customerName}</b> ka project pehle se khula hai. Agar ye paisa usi ki kist hai to naya project mat banao —
+                existing project chuno.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {customerProjects.map((p) => (
+                  <Button key={p.id} type="button" size="sm" variant="default" onClick={() => { setMode("existing"); pickProject(p.id); }}>
+                    {p.title} · {rupee(p.total)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Project ka naam (e.g. Accounting software)" aria-label="Project name" />
           <label className="block text-3xs text-ink-3">
             Project ki total value ₹ (GST ke saath) — sirf ye payment hai to jaisa hai waisa chhod do
             <Input value={total} onChange={(e) => { setTotal(e.target.value); setTotalEdited(true); }} type="number" min={0} className="mt-1" aria-label="Project total value" />
           </label>
+          {totalNum > 0 && (
+            <p className="text-3xs text-ink-3">
+              = <b className="text-ink">{amountInIndianWords(totalNum)}</b> (GST ke saath)
+            </p>
+          )}
+          {/* The total defaults to this one payment — right for a one-payment job, wrong for the
+              first instalment of a bigger contract, which is how a ₹50L deal became a ₹5L project. */}
+          {totalNum === settled && (
+            <p className="text-3xs text-amber-ink">
+              Abhi poori deal ki value = sirf ye payment ({amountInIndianWords(settled)}). Agar ye badi deal ki pehli kist hai to
+              upar <b>poori value</b> daalo — baaki milestone apne-aap ban jaayegi.
+            </p>
+          )}
           {split.length > 0 && totalNum >= settled && (
             <p className="text-3xs text-ink-3">
               Milestones: {split.map((m) => `${m.label} ${rupee(m.total_amount)}`).join(" + ")} (GST 18% ke saath) — ye {rupee(settled)} pehli milestone mein jayega.

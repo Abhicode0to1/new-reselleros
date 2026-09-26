@@ -37,8 +37,14 @@ import {
   splitLinesByCategory,
   EXPENSE_CATEGORIES,
   PAYMENT_METHODS,
+  useCommissionToPayeeThisFy,
   type Expense,
 } from "@/lib/queries/expenses";
+import { COMMISSION_CATEGORY, TDS_194H_THRESHOLD, commissionTdsView } from "@/lib/accounting/commission-tds";
+import { localDateISO } from "@/lib/leads/outcomes";
+import { useEmployees } from "@/lib/queries/payroll";
+import { compactName } from "@/lib/banking/salary-lines";
+import { TDS_SECTION_RATES, defaultTds, tdsBase } from "@/lib/accounting/tds-rates";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useVendors, ensureVendor } from "@/lib/queries/vendors";
 import { useAddReimbursement } from "@/lib/queries/reimbursements";
@@ -425,6 +431,38 @@ export function AddExpenseDialog({
   const itemText = lines.map((l) => l.description).filter(Boolean).join(" ");
   const noteText = watch("description") ?? "";
   const vendorNameWatch = watch("vendor_name") ?? "";
+
+  /* Commission to an outside agent: the payee is required, and one person's commission for
+     the year decides s.194H (lib/accounting/commission-tds.ts). */
+  const isCommission = watch("category") === COMMISSION_CATEGORY;
+  const { data: commissionSoFar } = useCommissionToPayeeThisFy(
+    isCommission ? vendorNameWatch : "",
+    watch("expense_date") || localDateISO(new Date()),
+    expense?.id ?? null,
+  );
+  /* TDS fills itself from the section's default rate on the pre-GST value
+     (lib/accounting/tds-rates.ts) — until the operator types an amount; an existing entry's
+     recorded TDS is never overwritten on open. */
+  const [tdsEdited, setTdsEdited] = React.useState<boolean>(Boolean(expense && (expense.tds_amount ?? 0) > 0));
+  const tdsSectionNow = watch("tds_section") || "";
+  const tdsBaseNow = tdsBase(Number(watch("amount")) || 0, isGstBill ? Number(watch("gst_paid")) || 0 : 0);
+  const tdsRate = TDS_SECTION_RATES[tdsSectionNow] ?? null;
+  React.useEffect(() => {
+    if (tdsEdited || !tdsSectionNow) return;
+    const v = defaultTds(tdsSectionNow, tdsBaseNow);
+    if (v !== null) setValue("tds_amount", v);
+  }, [tdsEdited, tdsSectionNow, tdsBaseNow, setValue]);
+
+  /* Same letters as an employee's name ("abhishek" = "Abhishek", "Hites H Babu" = "Hitesh Babu"). */
+  const { data: employeeList } = useEmployees();
+  const payeeEmployee = React.useMemo(() => {
+    const key = compactName(vendorNameWatch);
+    if (!isCommission || key.length < 3) return null;
+    return (employeeList ?? []).find((e) => e.is_active !== false && compactName(e.name) === key) ?? null;
+  }, [isCommission, vendorNameWatch, employeeList]);
+  const commissionView = isCommission && commissionSoFar && vendorNameWatch.trim().length >= 2
+    ? commissionTdsView({ amount: Number(watch("amount")) || 0, earlier: commissionSoFar.earlier, earlierWithoutTds: commissionSoFar.earlierWithoutTds })
+    : null;
   // Category source = the note in simple mode, the item rows in itemised mode.
   const catText = showItems ? itemText : noteText;
   React.useEffect(() => {
@@ -498,6 +536,12 @@ export function AddExpenseDialog({
     }
 
     const payee = values.vendor_name?.trim() || "";
+    /* A commission with no payee cannot be totalled per person, so s.194H cannot be checked —
+       and the question "who did we pay commission to?" has no answer. */
+    if (values.category === COMMISSION_CATEGORY && !payee) {
+      toast.error("Commission kisko diya? — 'Kisko diya' mein us vyakti ka naam daalo.");
+      return;
+    }
     // Only GST-invoice suppliers belong in the Vendors master. So: an already-
     // picked vendor keeps its link; a NEW typed payee is added to Vendors only
     // when this is a GST bill (GST paid entered). Non-GST / one-off payees stay
@@ -871,6 +915,12 @@ export function AddExpenseDialog({
                       <Icon name="sparkles" size={10} /> Auto-chuni — galat ho to badal do.
                     </p>
                   )}
+                  {isCommission && (
+                    <p className="mt-1 text-3xs text-ink-3 leading-snug">
+                      Bahar ke agent / broker ka commission. Neeche <b>&quot;Kisko diya&quot;</b> mein naam zaroor bharo — us vyakti ka
+                      saal ka jod aur 194H TDS isi se tay hota hai. Apne employee ka incentive Payroll mein jaata hai.
+                    </p>
+                  )}
                 </FormField>
               )}
               <FormField label="Date" required htmlFor="expense_date">
@@ -1002,7 +1052,7 @@ export function AddExpenseDialog({
             {/* TDS deducted (26Q) — optional; for rent / professional / contractor payments. */}
             <div className="grid grid-cols-12 gap-3">
               <FormField label="TDS deducted?" htmlFor="tds_section" className="col-span-5 sm:col-span-5">
-                <Select value={watch("tds_section") || "none"} onValueChange={(v) => setValue("tds_section", v === "none" ? "" : v)}>
+                <Select value={watch("tds_section") || "none"} onValueChange={(v) => { setValue("tds_section", v === "none" ? "" : v); setTdsEdited(false); }}>
                   <SelectTrigger id="tds_section"><SelectValue placeholder="No TDS" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No TDS</SelectItem>
@@ -1017,12 +1067,17 @@ export function AddExpenseDialog({
               </FormField>
               {(watch("tds_section") || "") !== "" && (
                 <FormField label="TDS amount (₹)" htmlFor="tds_amount" className="col-span-7 sm:col-span-4">
-                  <Input id="tds_amount" type="number" min={0} step="any" {...register("tds_amount")} />
+                  <Input id="tds_amount" type="number" min={0} step="any" {...register("tds_amount", { onChange: () => setTdsEdited(true) })} />
                 </FormField>
               )}
             </div>
             {(watch("tds_section") || "") !== "" && (
-              <p className="text-3xs text-ink-3">Record the TDS you deducted while paying this vendor — it feeds your quarterly 26Q return.</p>
+              <p className="text-3xs text-ink-3">
+                {tdsRate && !tdsEdited
+                  ? <>{tdsRate.ratePct}% of {rupee(tdsBaseNow)}{isGstBill && (Number(watch("gst_paid")) || 0) > 0 ? " (GST ke bina)" : ""} — apne-aap bhara, badal sakte ho.{tdsRate.note ? ` ${tdsRate.note}` : ""} </>
+                  : null}
+                Record the TDS you deducted while paying this vendor — it feeds your quarterly 26Q return.
+              </p>
             )}
           </section>
 
@@ -1115,22 +1170,40 @@ export function AddExpenseDialog({
 
           {/* ── Who — vendor / payee (optional; lives at the end since it's the
               last thing you fill after the money details). GSTIN for GST bills. ── */}
-          <FormField label={isGstBill ? "Vendor (GST invoice)" : "Paid to (optional)"} htmlFor="vendor_name">
+          <FormField
+            label={isCommission ? "Kisko diya (commission paane wala)" : isGstBill ? "Vendor (GST invoice)" : "Paid to (optional)"}
+            required={isCommission}
+            htmlFor="vendor_name"
+          >
             <div className="relative">
               <Input
                 id="vendor_name"
                 autoComplete="off"
-                placeholder="e.g. Anthropic / Airtel / Office Landlord"
+                placeholder={isCommission ? "e.g. Ramesh Kumar" : "e.g. Anthropic / Airtel / Office Landlord"}
                 {...register("vendor_name", { onChange: () => { setVendorId(null); setVendorMatch(null); setVendorOpen(true); } })}
                 onFocus={() => setVendorOpen(true)}
                 onBlur={() => setTimeout(() => setVendorOpen(false), 130)}
               />
-              {vendorOpen && (vendors ?? []).length > 0 && (() => {
+              {vendorOpen && ((vendors ?? []).length > 0 || (isCommission && (employeeList ?? []).length > 0)) && (() => {
                 const query = (watch("vendor_name") || "").trim().toLowerCase();
                 const matches = (vendors ?? []).filter((v) => !query || v.name.toLowerCase().includes(query)).slice(0, 8);
-                if (matches.length === 0) return null;
+                /* For a commission, our own employees are offered too — tagged, so "abhish" already
+                   shows "Abhishek · Employee" and the warning below is one click away, not a
+                   fully-typed name away. */
+                const empMatches = isCommission
+                  ? (employeeList ?? []).filter((e) => e.is_active !== false && (!query || e.name.toLowerCase().includes(query))).slice(0, 6)
+                  : [];
+                if (matches.length === 0 && empMatches.length === 0) return null;
                 return (
                   <div className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-md border border-hairline bg-paper shadow-lg">
+                    {empMatches.map((e) => (
+                      <button key={`emp-${e.id}`} type="button"
+                        onMouseDown={(ev) => { ev.preventDefault(); setValue("vendor_name", e.name); setVendorId(null); setVendorMatch(null); setVendorOpen(false); }}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2">
+                        <span className="text-ink truncate">{e.name}</span>
+                        <span className="shrink-0 rounded bg-rose/10 px-1.5 py-0.5 text-3xs font-semibold text-rose">Employee · Payroll</span>
+                      </button>
+                    ))}
                     {matches.map((v) => (
                       <button key={v.id} type="button"
                         onMouseDown={(e) => { e.preventDefault(); setValue("vendor_name", v.name); setVendorId(v.id); setVendorMatch({ kind: "existing", name: v.name }); setVendorOpen(false); }}
@@ -1155,6 +1228,45 @@ export function AddExpenseDialog({
               ) : (
                 <p className="mt-1 text-2xs text-ink-3">Naya payee — kaccha/no-bill hone se Vendors master me add nahi hoga.</p>
               )
+            )}
+            {/* The payee is one of OUR employees: their commission is salary (incentive, TDS 192),
+                not an agent's commission (194H) — a ₹5L "commission to abhishek" was booked here
+                on 26 Sep 2026 and had to be moved to Payroll. */}
+            {isCommission && payeeEmployee && (
+              <div className="mt-1.5 rounded-md border border-rose/40 bg-rose/5 px-2.5 py-2 text-2xs text-ink-2 space-y-1">
+                <p>
+                  <b>{payeeEmployee.name}</b> aapka employee hai. Employee ka commission / incentive <b>salary</b> ka hissa hai —
+                  Payroll mein uski salary ke saath &quot;Incentive&quot; mein daalo (TDS 192, Form 16 mein aayega). Yahan agent ki tarah
+                  (194H) book karne se TDS aur Form 16 dono galat honge.
+                </p>
+                <button type="button" onClick={() => { onClose(); router.push("/accounting/payroll" as never); }}
+                  className="font-semibold text-rose underline underline-offset-2">
+                  Payroll mein incentive daalo →
+                </button>
+              </div>
+            )}
+            {/* One person's commission for the year, and s.194H — lib/accounting/commission-tds.ts. */}
+            {isCommission && commissionView && !payeeEmployee && (
+              <div className="mt-1.5 rounded-md border border-hairline bg-paper-2/40 px-2.5 py-2 text-2xs text-ink-2 space-y-1">
+                <p>
+                  Is FY mein <b>{vendorNameWatch.trim()}</b> ko ab tak <b>{rupee(commissionView.earlier)}</b> commission ·
+                  is entry ke saath <b>{rupee(commissionView.yearTotal)}</b>
+                  {" "}({commissionView.crosses ? "₹20,000 ki seema paar" : `₹20,000 ki seema tak ${rupee(Math.max(0, TDS_194H_THRESHOLD - commissionView.yearTotal))} baaki`}).
+                </p>
+                {commissionView.crosses && (watch("tds_section") || "") !== "194H" && (
+                  <div className="flex flex-wrap items-center gap-2 text-amber-ink">
+                    <span>194H TDS (2%) katna chahiye{commissionView.earlierUntaxed > 0 ? ` — pehle ke ${rupee(commissionView.earlierUntaxed)} par bhi` : ""}.</span>
+                    <button
+                      type="button"
+                      onClick={() => { setValue("tds_section", "194H"); setValue("tds_amount", commissionView.tdsOnThis); }}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      194H · {rupee(commissionView.tdsOnThis)} lagao
+                    </button>
+                  </div>
+                )}
+                <p className="text-3xs text-ink-3">Seema ek vyakti ko poore saal ke commission par lagti hai. Bhugtaan se pehle CA se confirm kar lena.</p>
+              </div>
             )}
           </FormField>
 
