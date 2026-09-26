@@ -8,6 +8,11 @@
  * becomes a new milestone and the project value grows by it (shown before booking). Either way the payment is recorded against the milestone,
  * the bank line is reconciled, and optionally the milestone's tax invoice is raised —
  * all through the project module's own RPCs (lib/queries/project-receipts.ts).
+ *
+ * "TDS kata hai?" — when the customer withheld TDS, the bank amount is not the invoice:
+ * ₹5,40,000 at 10% TDS settles a ₹5,90,000 invoice (₹5,00,000 + GST). The milestone, the new
+ * project's value and the invoice are sized on what the receipt SETTLES, and the TDS is
+ * recorded as a receivable to claim (lib/accounting/tds-split.ts).
  */
 "use client";
 
@@ -16,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { rupee } from "@/lib/utils";
 import { useOpenProjects, useBookBankCreditAsProjectPayment, receiptMilestones } from "@/lib/queries/project-receipts";
+import { TDS_SECTIONS, tdsSplitFromNet } from "@/lib/accounting/tds-split";
 
 const NEW_CUSTOMER = "__new_customer__";
 /* Milestone picker value: add a new milestone for this receipt (project value grows). */
@@ -44,6 +50,8 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
   const [total, setTotal] = React.useState(String(Math.round(amount)));
   const [raiseInvoice, setRaiseInvoice] = React.useState(true);
   const [newMsLabel, setNewMsLabel] = React.useState("Additional payment");
+  const [tdsOn, setTdsOn] = React.useState(false);
+  const [tdsKey, setTdsKey] = React.useState(TDS_SECTIONS[0].key);
 
   /* No open project at all → start on "Naya project" rather than an empty picker. */
   React.useEffect(() => {
@@ -54,27 +62,39 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
   const milestone = project?.milestones.find((m) => m.id === milestoneId) ?? null;
   const addingMilestone = !!project && milestoneId === NEW_MILESTONE;
 
+  const net = Math.round(amount);
+  const tdsSection = TDS_SECTIONS.find((t) => t.key === tdsKey) ?? TDS_SECTIONS[0];
+  const gstRate = mode === "existing" && project ? project.gstRate : 18;
+  const tds = tdsOn ? tdsSplitFromNet(net, gstRate, tdsSection.ratePct) : null;
+  /* What this receipt settles: the bank amount, plus the TDS the customer paid for us. */
+  const settled = tds ? tds.gross : net;
+
+  /* A new project's value follows what the receipt settles until the operator types one. */
+  const [totalEdited, setTotalEdited] = React.useState(false);
+  React.useEffect(() => { if (!totalEdited) setTotal(String(settled)); }, [settled, totalEdited]);
+
   function pickProject(id: string) {
     setProjectId(id);
     const p = (projects ?? []).find((x) => x.id === id);
     /* The milestone whose balance is exactly this receipt, else the first unpaid one. */
-    const exact = p?.milestones.find((m) => m.remaining === Math.round(amount));
+    const exact = p?.milestones.find((m) => m.remaining === settled);
     /* Paid in full → the only way in is a new milestone. */
     setMilestoneId(exact?.id ?? p?.milestones[0]?.id ?? NEW_MILESTONE);
   }
 
   const totalNum = Math.round(Number(total));
   const customerName = customers.find((c) => c.id === customerId)?.name ?? "";
-  const split = totalNum > 0 ? receiptMilestones(totalNum, Math.round(amount)) : [];
+  const split = totalNum > 0 ? receiptMilestones(totalNum, settled) : [];
 
   const canSubmit = mode === "existing"
     ? !!milestone || (addingMilestone && newMsLabel.trim().length > 0)
-    : !!customerId && title.trim().length > 0 && totalNum >= Math.round(amount);
+    : !!customerId && title.trim().length > 0 && totalNum >= settled;
 
   async function submit() {
     await book.mutateAsync({
       bankTxnId: txn.id,
-      amount: Math.round(amount),
+      amount: net,
+      tds: tds ? { amount: tds.tds, section: tdsSection.section, ratePct: tdsSection.ratePct, base: tds.taxable } : null,
       receivedAt: txn.txn_date,
       reference: txn.reference ?? txn.description,
       raiseInvoice,
@@ -126,7 +146,7 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
                     {m.seq}. {m.label} · baaki {rupee(m.remaining)}{m.invoiceId ? ` · invoice ${m.invoiceId}` : ""}
                   </option>
                 ))}
-                <option value={NEW_MILESTONE}>＋ Nayi milestone — ye {rupee(amount)} alag payment hai</option>
+                <option value={NEW_MILESTONE}>＋ Nayi milestone — ye {rupee(settled)} alag payment hai</option>
               </select>
             )}
             {addingMilestone && project && (
@@ -134,15 +154,16 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
                 <Input value={newMsLabel} onChange={(e) => setNewMsLabel(e.target.value)} placeholder="Milestone ka naam (e.g. Phase 2)" aria-label="New milestone name" />
                 <p className="text-3xs text-amber-ink">
                   {project.milestones.length === 0 && project.paid > 0 ? "Is project ka poora payment ho chuka hai. " : ""}
-                  Ye {rupee(amount)} ek nayi milestone ki tarah judega aur project ki value {rupee(project.total)} → {rupee(project.total + Math.round(amount))} ho jayegi.
+                  Ye {rupee(settled)} ek nayi milestone ki tarah judega aur project ki value {rupee(project.total)} → {rupee(project.total + settled)} ho jayegi.
                   Agar ye alag kaam hai to &quot;Naya project&quot; chuno.
                 </p>
               </>
             )}
-            {milestone && Math.round(amount) !== milestone.remaining && (
+            {milestone && settled !== milestone.remaining && (
               <p className="text-3xs text-amber-ink">
-                Is milestone ka {rupee(milestone.remaining)} baaki hai, bank mein {rupee(amount)} aaye —
-                {Math.round(amount) < milestone.remaining ? " ye part payment ki tarah record hoga." : " milestone se zyada paisa hai, milestone check kar lo."}
+                Is milestone ka {rupee(milestone.remaining)} baaki hai, ye payment {rupee(settled)} chukata hai{tds ? " (bank + TDS)" : ""} —
+                {settled < milestone.remaining ? " ye part payment ki tarah record hoga." : " milestone se zyada hai, milestone check kar lo."}
+                {!tds && milestone.remaining > net && " Agar customer ne TDS kaata hai to neeche \"TDS kata hai?\" tick karo."}
               </p>
             )}
           </>
@@ -165,19 +186,44 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Project ka naam (e.g. Accounting software)" aria-label="Project name" />
           <label className="block text-3xs text-ink-3">
             Project ki total value ₹ (GST ke saath) — sirf ye payment hai to jaisa hai waisa chhod do
-            <Input value={total} onChange={(e) => setTotal(e.target.value)} type="number" min={0} className="mt-1" aria-label="Project total value" />
+            <Input value={total} onChange={(e) => { setTotal(e.target.value); setTotalEdited(true); }} type="number" min={0} className="mt-1" aria-label="Project total value" />
           </label>
-          {split.length > 0 && totalNum >= Math.round(amount) && (
+          {split.length > 0 && totalNum >= settled && (
             <p className="text-3xs text-ink-3">
-              Milestones: {split.map((m) => `${m.label} ${rupee(m.total_amount)}`).join(" + ")} (GST 18% ke saath) — ye {rupee(amount)} pehli milestone mein jayega.
+              Milestones: {split.map((m) => `${m.label} ${rupee(m.total_amount)}`).join(" + ")} (GST 18% ke saath) — ye {rupee(settled)} pehli milestone mein jayega.
               Baad mein project page par milestones badal sakte ho.
             </p>
           )}
-          {totalNum > 0 && totalNum < Math.round(amount) && (
-            <p className="text-3xs text-rose">Total value bank mein aaye {rupee(amount)} se kam nahi ho sakti.</p>
+          {totalNum > 0 && totalNum < settled && (
+            <p className="text-3xs text-rose">Total value is payment ({rupee(settled)}) se kam nahi ho sakti.</p>
           )}
         </>
       )}
+
+      {/* TDS the customer withheld: the receipt then settles more than reached the bank. */}
+      <div className="rounded-md border border-hairline bg-paper p-2.5 space-y-2">
+        <label className="flex items-start gap-2 text-2xs text-ink-2">
+          <input type="checkbox" checked={tdsOn} onChange={(e) => setTdsOn(e.target.checked)} className="mt-0.5" />
+          <span><b>TDS kata hai?</b> Customer ne TDS kaat kar {rupee(net)} bheja</span>
+        </label>
+        {tdsOn && tds && (
+          <>
+            <select value={tdsKey} onChange={(e) => setTdsKey(e.target.value)} aria-label="TDS section" className={selectCls}>
+              {TDS_SECTIONS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-2xs tabular-nums">
+              <span className="text-ink-3">Kaam ki value (taxable)</span><span className="text-right text-ink">{rupee(tds.taxable)}</span>
+              <span className="text-ink-3">+ GST {gstRate}%</span><span className="text-right text-ink">{rupee(tds.gst)}</span>
+              <span className="text-ink-3 font-semibold">= Invoice</span><span className="text-right text-ink font-semibold">{rupee(tds.gross)}</span>
+              <span className="text-ink-3">− TDS {tdsSection.ratePct}% on {rupee(tds.taxable)}</span><span className="text-right text-rose">− {rupee(tds.tds)}</span>
+              <span className="text-ink-3">= Bank mein aaya</span><span className="text-right text-emerald">{rupee(tds.net)}</span>
+            </div>
+            <p className="text-3xs text-ink-3">
+              {rupee(tds.tds)} TDS Receivable mein jayega (Form 16A pending) — ITR mein claim hoga.
+            </p>
+          </>
+        )}
+      </div>
 
       <label className="flex items-start gap-2 text-2xs text-ink-2 pt-1">
         <input type="checkbox" checked={raiseInvoice} onChange={(e) => setRaiseInvoice(e.target.checked)} className="mt-0.5" />
