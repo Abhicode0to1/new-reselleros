@@ -346,7 +346,11 @@ count FELL, on purpose: tests were deleted along with the code they covered. Ear
 code) and the tokens recurring flow was gated off (DMS `8bf941e`). An earlier reading the same
 day, 6,594 passing with 23 failing in `recurring-charge-service.test.ts`, caught that gate
 mid-change, before those tests were opted in; it was not a real regression. Integration suite
-238 passing. Before that: **6,845 tests across 452 files**,
+(`npm run test:int`, in-memory Mongo, no external services): **194 passed / 1 skipped across 15
+files, zero failures**, measured 26 Sep 2026 after DMS `e4792ce1`. The skipped file makes a real
+Razorpay charge and is opt-in. (This line said 238 before; `npm run test:integration` is a
+different, older runner that needs a dev server on :3000 and live ResellerClub, and is not the
+suite.) Before that: **6,845 tests across 452 files**,
 typecheck clean (measured 23 Sep 2026 after the public-page link fixes; 6,773/448 earlier the
 same day after Phase 8 and the transfer clean-up, then 6,748/447 and 6,724/447, and 6,451/432
 on 21 Sep).

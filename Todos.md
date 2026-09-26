@@ -42,11 +42,10 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
       raised in ResellerOS; old DMS invoices read "DMS (historical)"; a scan of the admin pages fails on
       any instruction to issue an invoice from DMS. The local `.env.docker` / `.env.local` still set
       `COMPANY_STATE`; harmless, delete by hand.
-- [ ] **DMS integration test stale since `2598cc4f`** (not in the gate):
-      `tests/integration/services/orders.test.ts:1109` (`listInvoiceOrdersAdmin`) relied on the deleted
-      pre-save hook to mint an `invoiceNumber`. The function is right; the test is stale. Proposed fix:
-      give that order an explicit number. Other integration tests may be stale for the same reason; only
-      this one was checked.
+- [x] **DMS integration suite green again** (DMS `e4792ce1`): the one stale test (it relied on the deleted
+      INV pre-save hook; proven with the commit before `2598cc4f`) now sets its own number, plus a case that
+      a completed order gets none. The whole suite (`npm run test:int`) is 194 passed / 1 skipped, and
+      nothing else was stale. No app code changed.
 - [x] **DMS renewal reminders carry no DMS price** (DMS `812462ec`). They link to the one pending
       ResellerOS quote, or to the Invoices page when there are several, or say the bill is being
       prepared. A scan test fails if a price field returns.
