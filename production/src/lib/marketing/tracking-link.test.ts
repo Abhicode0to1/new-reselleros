@@ -41,8 +41,8 @@ describe("tracking links", () => {
     expect(u.searchParams.has("utm_content")).toBe(false);
   });
 
-  it("only form pages are destinations", () => {
-    for (const d of DESTINATIONS) expect(d.path.startsWith("/")).toBe(true);
-    expect(DESTINATIONS.map((d) => d.path)).toContain("/enquiry");
+  it("only pages that create a lead are destinations", () => {
+    // Each must be a public page whose API route stores UTM on the lead (captureFromRequest).
+    expect(DESTINATIONS.map((d) => d.path).sort()).toEqual(["/buy/workspace", "/enquiry"]);
   });
 });

@@ -16,11 +16,12 @@
 
 export interface Destination { path: string; label: string }
 
+/* Only pages whose form creates a lead through captureFromRequest. /project-quote/[id] and
+   /quote/… were listed first and removed the same day: they are views of a quote already
+   sent, they create no lead, and a link to them would lose the source entirely. */
 export const DESTINATIONS: readonly Destination[] = [
-  { path: "/enquiry",        label: "Enquiry form (sab ke liye)" },
+  { path: "/enquiry",        label: "Enquiry form (sab ke liye, custom software bhi)" },
   { path: "/buy/workspace",  label: "Google Workspace kharidne ka page" },
-  { path: "/project-quote",  label: "Custom software quote form" },
-  { path: "/quote",          label: "Quote request form" },
 ];
 
 /** utm_medium the channel implies: an ad is cpc, a listing is referral, a post is social. */
