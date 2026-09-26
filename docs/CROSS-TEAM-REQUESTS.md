@@ -117,10 +117,16 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
   3. **Portfolio strip (~line 429):** add "Project value" (active projects' contract total) next to
      Monthly / Yearly revenue, which are recurring-only and should stay so.
   4. Optional: a "Projects" column or badge with the count / contract value.
+  5. **"Received (this FY)" column** (added 2026-09-26): the list has Monthly / To collect / Unused credits but
+     nothing for money actually received, so a customer who has paid ₹11,80,000 reads as ₹0 everywhere. Sum per
+     customer, dated in the current FY: `payments` (status `received`) + `project_payments` (incl. method
+     `tds` — TDS the customer paid on our behalf settles the invoice; show it in the tooltip as "of which
+     TDS ₹…"). Excel Technologies should read **₹11,80,000** (₹10,80,000 bank + ₹1,00,000 TDS). Sortable, like
+     the other money columns.
   `useCustomerProjects` / `useProjectReceivablesByCustomer` in `lib/queries/projects.ts` already
   return what is needed (the page already uses the latter for "To collect").
-- **Done when:** Excel Technologies shows as a project client with its project value, and appears
-  under a "With projects" filter.
+- **Done when:** Excel Technologies shows as a project client with its project value, appears
+  under a "With projects" filter, and its row shows ₹11,80,000 received this FY.
 
 ### R-006 · Project quotations don't appear under "Quotes"
 - **For:** Abhishek
