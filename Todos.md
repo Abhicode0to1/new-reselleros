@@ -34,6 +34,10 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
       "Invoicing (historical — DMS issues no invoices)". The credit-note hint deliberately does not say
       "cannot recur": a refund of an invoice DMS issued before 25 Sep 2026 still flags it
       (`lib/services/orders.ts:644`).
+- [x] **Round 8 (owner, 26 Sep 2026: "those are only 'test orders' so no need for credit note"; DMS
+      `b4e7e95e`, `df026684`):** a refund of a DMS-invoiced order no longer flags `creditNotePending` (the
+      setter is deleted, and a scan fails if anything sets it again). Rows flagged before are shown as
+      historical: no credit note is needed, clear the flag.
 - [ ] **Left by round 7 (DMS):** the Razorpay card's stranded-order hint (~L162, entry text ~L775-776) still
       says "finish the order (provision + issue the invoice)"; `components/admin/invoice-diagnostics/ConflictsTable.tsx:82`
       shows a "GST engine" label; `app/admin/invoices/page.tsx:35` has a comment saying 'primary' = our GST
