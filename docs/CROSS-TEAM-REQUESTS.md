@@ -190,6 +190,150 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
 - **Done when:** accepting a lead's project quotation turns the lead Won without a click, and the project
   page shows the lead it came from.
 
+### R-009 · Renewal quotes: monthly subscriptions renewed for a year, and cost guessed at 83% of price
+- **For:** Abhishek
+- **From:** Pawan (checkout and renewals, `pawan-api-system`). Pardeep asked for it to be passed on.
+- **Status:** Open
+- **Raised:** 2026-09-25 (written up here 2026-09-26)
+- **Where:** `production/src/lib/renewals/create-renewal-quote.ts`. That one file only; it is in your
+  Billing folder, so nobody else edits it. Nothing else in the Billing folders should change unless
+  Pardeep agrees.
+- **Read first:** `AGENTS.md` at the repo root, especially:
+  - §1: money is stored in whole rupees, not paise;
+  - §2: never substitute a plausible-looking value, say it is unknown;
+  - §9: "done" means the full gate is green;
+  - L24 and L36: verify money changes in a rolled-back transaction, and run the WHOLE suite before
+    believing a money diagnosis.
+
+**How a renewal quote reaches a subscription.** `createOrGetRenewalQuote()` builds the renewal quote.
+Its three callers:
+- the renewals cron, `app/api/cron/renewals/route.ts` (around line 280);
+- `app/api/renewals/send-now/route.ts:155`;
+- `app/api/subscriptions/[id]/generate-renewal-quote/route.ts:93`.
+
+When the quote is paid, the Postgres function `record_payment` rolls the subscription forward using the
+quote's `extension_months` in three places:
+
+```sql
+-- the line after the subscription row is selected into v_renewal_sub
+v_extension_months := v_quote.extension_months;      -- only falls back to sub.term_months when NULL
+
+v_new_mrr := greatest(0, round(coalesce(v_quote.subtotal, v_expected)::numeric
+                               / greatest(v_extension_months, 1)))::int;
+update public.subscriptions
+   set renewal_state = case when v_extension_months >= coalesce(v_renewal_sub.term_months, 12)
+                            then 'renewed' else renewal_state end,
+       renewal_date  = (v_renewal_sub.renewal_date + (v_extension_months || ' months')::interval)::date,
+       mrr           = case when v_new_mrr > 0 then v_new_mrr else mrr end, ...
+```
+
+Live body: `select pg_get_functiondef(p.oid) from pg_proc p where p.proname = 'record_payment';`
+
+**Bug 1: every renewal quote says it extends 12 months, monthly subscriptions included.**
+Around line 221:
+
+```ts
+extension_months: 12,    // standard 1-year renewal; extensions use 24/36 via createExtensionQuote
+```
+
+The same file already prices the renewal for the subscription's own term. It calls
+`renewalTerm({ termMonths })` and writes `commitment: term.commitment` ("monthly" for a 1-month
+subscription). Only `extension_months` still says 12. When a MONTHLY subscription's renewal is paid:
+- the renewal date moves 12 months instead of 1: the customer gets a year for one month's money;
+- `mrr` becomes one month's subtotal ÷ 12, so MRR drops about twelvefold after the first renewal.
+
+Measured on a local database inside a rolled-back transaction. Standard hosting, monthly, ₹250/month,
+`term_months = 1`, renewal date 2026-10-25. Renewal quote as this helper writes it: subtotal 250,
+`extension_months` 12, line commitment "monthly", amount ₹295. Then `record_payment`:
+
+| field | before | after one ₹295 renewal | should be |
+|---|---|---|---|
+| `renewal_date` | 2026-10-25 | 2027-10-25 | 2026-11-25 |
+| `mrr` | 250 | 21 | 250 |
+| `term_months` | 1 | 1 | 1 |
+
+`record_payment`'s own result also reported `"extension_months": 12`.
+
+**Fix:** set `extension_months` from the term actually priced, e.g. `extension_months: term.termMonths`.
+`renewalTerm()` already returns `termMonths` (`lib/renewals/renewal-term.ts`): 1 for monthly, 12 for
+annual, anything in 1–60 passes through. The `existingQuoteId` path must not change a quote that already
+exists. Leave `create-extension-quote.ts` alone: it deliberately uses 24/36 for multi-year extensions.
+
+**Bug 2: cost is guessed as 83% of the price.** Around lines 185 and 217:
+
+```ts
+const perSeatCost  = Math.round((annualAmount * 0.83) / Math.max(1, input.seats));
+...
+total_cost: Math.round(annualAmount * 0.83),
+```
+
+A hardcoded 17% margin standing in for the real vendor cost. AGENTS.md §2 lists this exact pattern as a
+known bug. On Google Workspace Business Starter the real cost is ₹110 per seat per month; the guess said
+about ₹224, double. So the margin shown on every renewal quote is made up.
+
+**Fix:** take the cost from the catalogue. The helper already reads the catalogue item (by `itemId`,
+falling back to plan name) for `msrp`; read its wholesale cost column too (check `items` for the name,
+e.g. `wholesale`):
+- per seat: wholesale × the months in the term (the same months used for the price);
+- `total_cost`: that per-seat cost × seats.
+
+If the catalogue has no cost, do not guess. `quotes.total_cost` is nullable in the database, but the
+generated TypeScript type says `number` and the quote screens read it as a number. Either:
+- make those readers handle an unknown cost and show "cost unknown", or
+- store 0 and show "cost unknown" wherever 0 means not known.
+
+Pick one, and do not let 0 read as a 100% margin.
+
+**Do NOT change:**
+- `record_payment` or anything under `supabase/migrations`, unless you find it is wrong. Its use of
+  `extension_months` is correct once the quote carries the right value.
+- Domain renewals, `lib/domains/renewal.ts` (`createDomainRenewalQuote`): builds its own quotes at
+  ResellerClub's live price, and the cron uses it instead of this helper for `vendor = 'domain'`.
+  Not affected.
+- The hosting renewal worker, `app/api/cron/renew-hosting/route.ts`: it reads the term from the quote
+  line's `commitment`, not `extension_months`, so it is correct either way.
+
+**Tests: prove it, don't just assert it.**
+1. **Unit tests for the helper** (existing ones sit near `lib/renewals`, e.g. `renewal-term.test.ts`):
+   - a monthly subscription's quote gets `extension_months: 1`; an annual one's gets 12;
+   - an existing quote is returned unchanged;
+   - the cost is the catalogue's wholesale × months × seats;
+   - no catalogue cost is not a guess.
+
+   Red-check: put 12 and 0.83 back and confirm the new tests fail.
+2. **A SQL regression test** in `production/supabase/tests/`, rollback style (read two existing files
+   for the convention). Build your own fixture tenant, customer and monthly subscription; never use
+   live ids (AGENTS.md L11). Pay a renewal quote shaped like the fixed helper's output, and assert
+   `renewal_date` moved exactly 1 month and `mrr` did not change. Then flip an assertion and see it go
+   red (L23).
+3. **The full gate** in `production/`: `npm run typecheck && npm run test && npm run lint`. Baseline on
+   26 Sep 2026: 7,047 tests passing across 399 files. Run all 63 SQL tests too, not only yours; AGENTS.md
+   §9 explains how to run them without mis-reading the report-style ones.
+
+**Before shipping: check real data for damage.** Ask Pardeep before changing any data. Find renewals
+already paid with the bug. In production, run:
+
+```sql
+select q.id as quote_id, q.tenant_id, q.extension_months, s.id as subscription_id,
+       s.term_months, s.renewal_date, s.mrr, q.subtotal
+  from quotes q
+  join payments p on p.quote_id = q.id and p.status = 'received'
+  join subscriptions s on s.tenant_id = q.tenant_id
+ where q.is_renewal
+   and q.extension_months = 12
+   and exists (select 1 from jsonb_array_elements(q.line_items) li where li->>'commitment' = 'monthly')
+   and s.term_months = 1
+   and s.plan = (q.line_items->0->>'name');
+```
+
+Any rows are monthly subscriptions pushed a year ahead with a shrunken MRR. List them for Pardeep with
+the correct renewal date and MRR. Don't fix them yourself.
+
+- **Report back:** what changed, with `file:line`; the tests added and the red-check results; the gate
+  numbers; and what the production query returned.
+- **Done when:** a paid renewal of a monthly subscription moves `renewal_date` by exactly one month and
+  leaves `mrr` unchanged (SQL test green), and no renewal quote carries a cost the catalogue didn't give.
+
 <!-- Template — copy for each new request:
 
 ### R-001 · <short title>
