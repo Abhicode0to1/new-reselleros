@@ -33,6 +33,7 @@ import { TabBar, type TabBarItem } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/empty-state";
 import { rupee, cn } from "@/lib/utils";
 import { recommendationFor, type ChannelStat } from "@/lib/marketing/channel-economics";
+import { sourceLabel } from "@/lib/leads/lead-sources";
 import { useMarketingReport, channelsToCsv, type RangeKey } from "@/lib/queries/marketing";
 
 const RANGES: TabBarItem[] = [
@@ -237,27 +238,27 @@ function SpendVsRevenue({ monthly }: { monthly: { month: string; spend: number; 
       <div className="h-72 -ml-2">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={monthly}>
-            <CartesianGrid stroke="var(--hairline)" vertical={false} />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)" />
+            <CartesianGrid stroke="hsl(var(--hairline))" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--ink-3))" }} stroke="hsl(var(--hairline))" />
             {/* Two axes only when there IS spend: the two series differ by orders
                 of magnitude (₹4,000 against ₹69,55,963), so one shared scale
                 would flatten the bars to an invisible line. */}
             {hasSpend && (
-              <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)"
+              <YAxis yAxisId="spend" tick={{ fontSize: 11, fill: "hsl(var(--ink-3))" }} stroke="hsl(var(--hairline))"
                      tickFormatter={(v: number) => rupee(v, { compact: true })} />
             )}
             <YAxis yAxisId="rev" orientation={hasSpend ? "right" : "left"}
-                   tick={{ fontSize: 11, fill: "var(--ink-3)" }} stroke="var(--hairline)"
+                   tick={{ fontSize: 11, fill: "hsl(var(--ink-3))" }} stroke="hsl(var(--hairline))"
                    tickFormatter={(v: number) => rupee(v, { compact: true })} />
             <Tooltip
               formatter={(v: number, name: string) => [rupee(v), name]}
-              contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--hairline)", background: "var(--paper)" }}
+              contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--hairline))", background: "hsl(var(--paper))" }}
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Area yAxisId="rev" type="monotone" dataKey="revenue" name="Revenue collected"
-                  stroke="var(--emerald)" fill="var(--emerald-soft)" strokeWidth={2} />
+                  stroke="hsl(var(--emerald))" fill="hsl(var(--emerald-soft))" strokeWidth={2} />
             {hasSpend && (
-              <Bar yAxisId="spend" dataKey="spend" name="Ad spend" fill="var(--amber)" radius={[4, 4, 0, 0]} maxBarSize={48} />
+              <Bar yAxisId="spend" dataKey="spend" name="Ad spend" fill="hsl(var(--amber))" radius={[4, 4, 0, 0]} maxBarSize={48} />
             )}
           </ComposedChart>
         </ResponsiveContainer>
@@ -278,7 +279,7 @@ function ChannelRow({ c }: { c: ChannelStat }) {
   return (
     <tr className="border-b border-hairline last:border-0">
       <td className="px-3 py-2.5 align-top">
-        <div className="font-medium text-sm text-ink">{c.channel}</div>
+        <div className="font-medium text-sm text-ink">{sourceLabel(c.channel)}</div>
         {/* 12px, not 10px. These notes are the most important content in the
             table — they are the reason a figure is a dash instead of a number —
             and a first pass set them SMALLER than everything around them. The

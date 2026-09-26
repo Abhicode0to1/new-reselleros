@@ -175,7 +175,7 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
          government on our behalf, and it is ours as a 26AS credit. */
       const projQ = await supabase
         .from("project_payments")
-        .select("amount, received_at")
+        .select("amount, received_at, project_id")
         .gte("received_at", range.start)
         .lt("received_at", range.end);
       if (projQ.error) throw projQ.error;
@@ -220,9 +220,22 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
         .lt("created_at", range.end);
       if (quotesQ.error) throw quotesQ.error;
 
+      /* A project quotation lives on `project_sales`, not `quotes` — counting only the latter
+         showed a won ₹59L software deal as 0 quotes and 0 deals (Pardeep, 26 Sep 2026).
+         Anything past draft was sent to the customer, including one later cancelled. */
+      const projQuotesQ = await supabase
+        .from("project_sales")
+        .select("id, status, created_at")
+        .neq("status", "draft")
+        .gte("created_at", range.start)
+        .lt("created_at", range.end);
+      if (projQuotesQ.error) throw projQuotesQ.error;
+
       const leadCount = leads.length;
-      const quoteCount = (quotesQ.data ?? []).length;
-      const wonCount = (payQ.data ?? []).length;
+      const quoteCount = (quotesQ.data ?? []).length + (projQuotesQ.data ?? []).length;
+      /* A project paid in two instalments is one deal, so projects count once each. */
+      const paidProjects = new Set((projQ.data ?? []).map((p) => p.project_id).filter(Boolean));
+      const wonCount = (payQ.data ?? []).length + paidProjects.size;
 
       const l2q = leadCount > 0 ? quoteCount / leadCount : null;
       const q2w = quoteCount > 0 ? wonCount / quoteCount : null;
