@@ -46,6 +46,7 @@ import { PnlHeadline } from "@/components/features/accounting/pnl-headline";
 import { netProfitView } from "@/lib/accounting/pnl-bound";
 import { projectCostForPeriod, type ProjectCostResult } from "@/lib/accounting/project-cost";
 import { ProjectMarginCard } from "@/components/features/accounting/project-margin-card";
+import { ProjectCostDialog } from "@/components/features/accounting/project-cost-dialog";
 import { ExpenseReportCard } from "@/components/features/accounting/expense-report-card";
 
 // ────────────────────────────────────────────────────────────────
@@ -142,6 +143,8 @@ interface PnLNumbers {
   model: PnlPeriod;
   /** Salary on customer projects + project-tagged expenses — lib/accounting/project-cost.ts. */
   projectCost: ProjectCostResult;
+  /** employee id → name, for the project-cost drill-down. */
+  employeeNames: Map<string, string>;
 }
 
 function usePnL(range: DateRange, enabled = true) {
@@ -176,8 +179,8 @@ function usePnL(range: DateRange, enabled = true) {
       // Credit / debit notes net revenue + output GST for the period (a credit
       // note reduces recognised revenue, a debit note increases it).
       const [{ data: cnP }, { data: dnP }] = await Promise.all([
-        supabase.from("credit_notes").select("taxable_value, tax_amount, credit_date").gte("credit_date", range.from).lte("credit_date", range.to),
-        supabase.from("debit_notes").select("taxable_value, tax_amount, debit_date").gte("debit_date", range.from).lte("debit_date", range.to),
+        supabase.from("credit_notes").select("invoice_id, taxable_value, tax_amount, credit_date").gte("credit_date", range.from).lte("credit_date", range.to),
+        supabase.from("debit_notes").select("invoice_id, taxable_value, tax_amount, debit_date").gte("debit_date", range.from).lte("debit_date", range.to),
       ]);
       const cnTaxable = (cnP ?? []).reduce((s, n) => s + (n.taxable_value ?? 0), 0);
       const cnTax     = (cnP ?? []).reduce((s, n) => s + (n.tax_amount ?? 0), 0);
@@ -204,7 +207,7 @@ function usePnL(range: DateRange, enabled = true) {
       // ── Expenses: non-COGS ─────────────────────────────────────────
       const { data: expenses, error: eErr } = await supabase
         .from("expenses")
-        .select("amount, gst_paid, category, vendor_name, expense_date, project_id")
+        .select("amount, gst_paid, category, vendor_name, expense_date, project_id, description")
         .gte("expense_date", range.from)
         .lte("expense_date", range.to);
       if (eErr) throw eErr;
@@ -284,7 +287,7 @@ function usePnL(range: DateRange, enabled = true) {
         { data: milestones, error: msErr },
       ] = await Promise.all([
         supabase.from("project_labour").select("project_id, employee_id, percent, months, start_date, end_date"),
-        supabase.from("employees").select("id, monthly_gross"),
+        supabase.from("employees").select("id, name, monthly_gross"),
         supabase.from("project_sales").select("id, title, customer_name, start_date"),
         supabase.from("project_milestones").select("project_id, invoice_id").not("invoice_id", "is", null),
       ]);
@@ -298,6 +301,16 @@ function usePnL(range: DateRange, enabled = true) {
       for (const i of invoices ?? []) {
         const pid = projectByInvoice.get(String(i.id));
         if (pid) revenueByProjectMap.set(pid, (revenueByProjectMap.get(pid) ?? 0) + invTaxable(i));
+      }
+      /* A credit / debit note on a project invoice moves that project's revenue too — the
+         same notes already net the statement's Revenue above, so the two stay equal. */
+      for (const n of dnP ?? []) {
+        const pid = n.invoice_id ? projectByInvoice.get(String(n.invoice_id)) : undefined;
+        if (pid) revenueByProjectMap.set(pid, (revenueByProjectMap.get(pid) ?? 0) + (n.taxable_value ?? 0));
+      }
+      for (const n of cnP ?? []) {
+        const pid = n.invoice_id ? projectByInvoice.get(String(n.invoice_id)) : undefined;
+        if (pid) revenueByProjectMap.set(pid, (revenueByProjectMap.get(pid) ?? 0) - (n.taxable_value ?? 0));
       }
       const revenueByProject = [...revenueByProjectMap.entries()].map(([project_id, rev]) => ({ project_id, revenue: rev }));
       const projectRevenue = revenueByProject.reduce((s, r) => s + r.revenue, 0);
@@ -343,6 +356,7 @@ function usePnL(range: DateRange, enabled = true) {
         marginPct, profitPct,
         model,
         projectCost,
+        employeeNames: new Map((emps ?? []).map((e) => [e.id, e.name])),
       };
     },
   });
@@ -418,6 +432,7 @@ export default function PnLPage() {
   const { data, isLoading } = usePnL(range);
   const [drill, setDrill] = React.useState<PnLDrillKind | null>(null);
   const [drillExpenseCat, setDrillExpenseCat] = React.useState<string | null>(null);
+  const [projectCostOpen, setProjectCostOpen] = React.useState(false);
 
   /* ── Comparison ──────────────────────────────────────────────────────────
      Off by default. A second full aggregation on every page load, for a number the
@@ -582,6 +597,7 @@ export default function PnLPage() {
                        data.projectCost.direct > 0 ? `${rupee(data.projectCost.direct)} project expenses` : null,
                        data.projectCost.capped ? "capped to salary booked" : null,
                      ].filter(Boolean).join(" · ")}
+                     onHint={() => setProjectCostOpen(true)}
                      tone="rose" />
               )}
               {data.model.cogsBasis === "unknown" ? (
@@ -723,8 +739,13 @@ export default function PnLPage() {
               </li>
             ) : (
               <li className="text-rose">
-                Is period mein <b>{rupee(Math.abs(data.model.netProfit))} ka loss</b> hai. Licence cost ya
-                running costs zyada hain.
+                Is period mein <b>{rupee(Math.abs(data.model.netProfit))} ka loss</b> hai.{" "}
+                {/* Name the cost this business actually has — a project-only period has no licence cost. */}
+                {data.model.projectCost > 0 && data.model.licenceCogs === 0
+                  ? <>Projects par salary ({rupee(data.model.projectCost)}) aur running costs ({rupee(data.model.expenses)}) milkar revenue se zyada hain.</>
+                  : data.model.projectCost > 0
+                    ? <>Licence cost, projects par salary aur running costs milkar revenue se zyada hain.</>
+                    : <>Licence cost ya running costs zyada hain.</>}
               </li>
             )}
             {data.model.grossMarginPct !== null && data.model.grossMarginPct < 20 && data.model.revenue > 0 && (
@@ -813,7 +834,11 @@ export default function PnLPage() {
               });
               return split ? (
                 <div className="mb-4 border-b border-hairline pb-4">
-                  <HundredRupeeBar split={split} />
+                  <HundredRupeeBar
+                    split={split}
+                    costLabel={m.projectCost > 0 ? (m.licenceCogs > 0 ? "Licences + project salary" : "Project salary") : "Vendor licences"}
+                    costTo={m.projectCost > 0 ? (m.licenceCogs > 0 ? "licences and project salary" : "salary on projects") : "the vendor"}
+                  />
                 </div>
               ) : null;
             })()}
@@ -1059,6 +1084,15 @@ export default function PnLPage() {
         </Card>
       )}
 
+      {data && (
+        <ProjectCostDialog
+          open={projectCostOpen}
+          onClose={() => setProjectCostOpen(false)}
+          result={data.projectCost}
+          employeeNames={data.employeeNames}
+          periodLabel={`${range.from} to ${range.to}`}
+        />
+      )}
       <PnLDrilldownDialog
         open={drill !== null}
         onOpenChange={(o) => { if (!o) { setDrill(null); setDrillExpenseCat(null); } }}

@@ -131,3 +131,29 @@ describe("buildPnl with project cost", () => {
     expect(netProfitView(p)).toEqual({ kind: "loss-at-least", value: 50_000 });   // same as before the move
   });
 });
+
+describe("drill-down lines", () => {
+  it("one line per allocation, with the part of it inside the period, adding up to the labour total", () => {
+    const r = projectCostForPeriod({
+      ...Q,
+      allocations: [alloc({ start_date: "2026-05-01", end_date: "2026-07-31" }), alloc({ employee_id: "hitesh", percent: 50 })],
+      monthlyGross: gross, projects: [project], expenses: [salaries(300_000), { amount: 4_300, category: "Hosting", project_id: "p1", vendor_name: "AWS" }],
+    });
+    expect(r.labourLines).toHaveLength(2);
+    const ranjeet = r.labourLines.find((l) => l.employeeId === "ranjeet")!;
+    expect(ranjeet.from).toBe("2026-07-01");   // clipped to the period
+    expect(ranjeet.to).toBe("2026-07-31");
+    expect(r.labourLines.reduce((s, l) => s + l.cost, 0)).toBe(r.labour);
+    expect(r.directLines).toEqual([expect.objectContaining({ amount: 4_300, vendor: "AWS", projectTitle: "School ERP" })]);
+  });
+
+  it("when capped, each line is scaled and the lines still add up to exactly the pool", () => {
+    const r = projectCostForPeriod({
+      ...Q, allocations: [alloc(), alloc({ employee_id: "hitesh" })], monthlyGross: gross,
+      projects: [project], expenses: [salaries(99_999)],
+    });
+    expect(r.capped).toBe(true);
+    expect(r.labourLines.every((l) => l.cost < l.allocated)).toBe(true);
+    expect(r.labourLines.reduce((s, l) => s + l.cost, 0)).toBe(99_999);
+  });
+});

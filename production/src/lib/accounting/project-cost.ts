@@ -52,6 +52,37 @@ export interface CostExpense {
   amount: number | null;
   category: string | null;
   project_id: string | null;
+  /** For the drill-down list only. */
+  expense_date?: string | null;
+  vendor_name?: string | null;
+  description?: string | null;
+}
+
+/** One employee's allocation to one project, as it falls in the period — the drill-down row. */
+export interface LabourLine {
+  projectId: string;
+  projectTitle: string;
+  employeeId: string;
+  percent: number;
+  /** The part of the allocation inside the period (YYYY-MM-DD). */
+  from: string;
+  to: string;
+  months: number;
+  monthlyGross: number;
+  /** gross × percent × months, before the cap. */
+  allocated: number;
+  /** What was moved into cost of goods (after the cap). */
+  cost: number;
+}
+
+export interface DirectCostLine {
+  projectId: string;
+  projectTitle: string;
+  amount: number;
+  category: string | null;
+  date: string | null;
+  vendor: string | null;
+  description: string | null;
 }
 
 export interface ProjectRevenue {
@@ -89,6 +120,9 @@ export interface ProjectCostResult {
   /** Allocations with no date anywhere — cannot be placed in a period. */
   undated: number;
   byProject: ProjectCostLine[];
+  /** Every allocation that counted, biggest first — what "salary on projects" is made of. */
+  labourLines: LabourLine[];
+  directLines: DirectCostLine[];
 }
 
 /** YYYY-MM-DD + n months − 1 day: the last day of an allocation `months` long. */
@@ -119,13 +153,20 @@ export function projectCostForPeriod(input: {
     .filter((e) => !e.project_id && SALARY_CATEGORIES.has(e.category ?? ""))
     .reduce((s, e) => s + (e.amount ?? 0), 0);
 
+  const title = (id: string) => projectById.get(id)?.title ?? "Unknown project";
   const directBy = new Map<string, number>();
+  const directLines: DirectCostLine[] = [];
   for (const e of input.expenses) {
     if (!e.project_id) continue;
     directBy.set(e.project_id, (directBy.get(e.project_id) ?? 0) + (e.amount ?? 0));
+    directLines.push({
+      projectId: e.project_id, projectTitle: title(e.project_id), amount: e.amount ?? 0,
+      category: e.category, date: e.expense_date ?? null, vendor: e.vendor_name ?? null, description: e.description ?? null,
+    });
   }
+  directLines.sort((a, b) => b.amount - a.amount);
 
-  const rawLabourBy = new Map<string, number>();
+  const labourLines: LabourLine[] = [];
   let undated = 0;
   for (const a of input.allocations) {
     const start = a.start_date ?? projectById.get(a.project_id)?.start_date ?? null;
@@ -133,25 +174,31 @@ export function projectCostForPeriod(input: {
     const end = a.end_date ?? allocationEnd(start, a.months);
     const months = monthsActiveInPeriod({ startDate: start, renewalDate: end }, input.from, input.to);
     if (months <= 0) continue;
-    const cost = Math.round((input.monthlyGross.get(a.employee_id) ?? 0) * (a.percent / 100) * months);
-    if (cost > 0) rawLabourBy.set(a.project_id, (rawLabourBy.get(a.project_id) ?? 0) + cost);
+    const monthlyGross = input.monthlyGross.get(a.employee_id) ?? 0;
+    const allocated = Math.round(monthlyGross * (a.percent / 100) * months);
+    if (allocated <= 0) continue;
+    labourLines.push({
+      projectId: a.project_id, projectTitle: title(a.project_id), employeeId: a.employee_id, percent: a.percent,
+      from: start > input.from ? start.slice(0, 10) : input.from, to: end < input.to ? end.slice(0, 10) : input.to,
+      months, monthlyGross, allocated, cost: allocated,
+    });
   }
 
-  const labourAllocated = [...rawLabourBy.values()].reduce((s, v) => s + v, 0);
+  const labourAllocated = labourLines.reduce((s, l) => s + l.allocated, 0);
   const capped = labourAllocated > salaryPool;
   const scale = capped ? (labourAllocated > 0 ? salaryPool / labourAllocated : 0) : 1;
 
-  /* Scale each project, then give any rounding remainder to the largest, so the lines add
-     up to exactly the pool — a cost of goods that disagrees with its own breakdown by ₹1
-     is the kind of thing a CA circles. */
-  const labourBy = new Map<string, number>();
-  for (const [id, v] of rawLabourBy) labourBy.set(id, Math.round(v * scale));
+  /* Scale each allocation, then give any rounding remainder to the largest, so the lines
+     add up to exactly the pool — a cost of goods that disagrees with its own breakdown by
+     ₹1 is the kind of thing a CA circles. Projects are then summed from these lines, so
+     the drill-down, the project card and the statement are one set of numbers. */
+  labourLines.sort((a, b) => b.allocated - a.allocated);
   const labour = capped ? salaryPool : labourAllocated;
-  const drift = labour - [...labourBy.values()].reduce((s, v) => s + v, 0);
-  if (drift !== 0 && labourBy.size > 0) {
-    const [bigId] = [...labourBy.entries()].sort((x, y) => y[1] - x[1])[0];
-    labourBy.set(bigId, (labourBy.get(bigId) ?? 0) + drift);
-  }
+  for (const l of labourLines) l.cost = Math.round(l.allocated * scale);
+  const drift = labour - labourLines.reduce((s, l) => s + l.cost, 0);
+  if (drift !== 0 && labourLines.length > 0) labourLines[0].cost += drift;
+  const labourBy = new Map<string, number>();
+  for (const l of labourLines) labourBy.set(l.projectId, (labourBy.get(l.projectId) ?? 0) + l.cost);
 
   const revenueBy = new Map((input.revenueByProject ?? []).map((r) => [r.project_id, r.revenue]));
   const ids = new Set([...labourBy.keys(), ...directBy.keys(), ...revenueBy.keys()]);
@@ -173,6 +220,6 @@ export function projectCostForPeriod(input: {
   const direct = [...directBy.values()].reduce((s, v) => s + v, 0);
   return {
     labour, direct, total: labour + direct,
-    labourAllocated, capped, salaryPool, undated, byProject,
+    labourAllocated, capped, salaryPool, undated, byProject, labourLines, directLines,
   };
 }
