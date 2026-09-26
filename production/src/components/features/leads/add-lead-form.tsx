@@ -53,6 +53,7 @@ import { Icon } from "@/components/ui/icon";
 import { useCreateLead, useUpdateLead, useLeads } from "@/lib/queries/leads";
 import { normPhone, normCompany } from "@/lib/leads/duplicates";
 import { PROJECT_PLAN_LABEL } from "@/lib/leads/enquiry";
+import { amountInIndianWords } from "@/lib/accounting/amount-words";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -923,6 +924,9 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                     onBlur={() => setValueText((t) => commitMoney(t))}
                   />
                   <FieldPill check={checkMoney(valueText)} />
+                  {(parseMoney(valueText) ?? 0) > 0 && (
+                    <p className="mt-1 text-2xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
+                  )}
                 </FormField>
                 <FormField label="Kab tak chahiye?" htmlFor="project_timeline">
                   <Input id="project_timeline" placeholder="e.g. 3 months, Diwali se pehle" {...register("project_timeline")} />
@@ -996,6 +1000,9 @@ export function AddLeadForm({ open, onOpenChange, editingLead, defaultStage }: A
                 onBlur={() => setValueText((t) => commitMoney(t))}
               />
               <FieldPill check={checkMoney(valueText)} />
+              {(parseMoney(valueText) ?? 0) > 0 && (
+                <p className="mt-1 text-2xs text-ink-3">= <b className="text-ink">{amountInIndianWords(parseMoney(valueText) ?? 0)}</b></p>
+              )}
               {/* Auto-calc hint */}
               {PLAN_PRICE_PER_SEAT_PM[plan] && (watchedSeats ?? 0) >= 1 && (
                 <p className="mt-1 text-xs text-ink-3">

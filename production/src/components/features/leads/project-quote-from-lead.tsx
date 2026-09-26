@@ -18,6 +18,7 @@ import { FormField } from "@/components/ui/label";
 import { rupee } from "@/lib/utils";
 import { gstinState, liveMoney, commitMoney, parseMoney } from "@/lib/forms/poka-yoke";
 import { MILESTONE_SPLITS, milestonesFor, withGst, interStateFor } from "@/lib/leads/enquiry";
+import { amountInIndianWords, magnitudeWarning } from "@/lib/accounting/amount-words";
 import { useCreateProjectQuoteFromLead, useSellerState, useCustomerForLead } from "@/lib/queries/leads";
 import type { Lead } from "@/lib/supabase/database.types";
 
@@ -106,8 +107,13 @@ export function ProjectQuoteFromLead({ lead, onClose }: { lead: Lead | null; onC
             />
             {taxable > 0 && (
               <p className="mt-1 text-2xs text-ink-3 tabular-nums">
-                {rupee(priced.taxable)} + GST {GST_RATE}% {rupee(priced.gst)} = <b className="text-ink">{rupee(priced.total)}</b>
+                <b className="text-ink">{amountInIndianWords(taxable)}</b> · {rupee(priced.taxable)} + GST {GST_RATE}% {rupee(priced.gst)} = <b className="text-ink">{rupee(priced.total)}</b>
               </p>
+            )}
+            {/* Once accepted and invoiced a price can only be corrected with a credit / debit
+                note — a slipped zero against the lead's own budget is caught here instead. */}
+            {magnitudeWarning(taxable, lead?.value, "lead ka budget") && (
+              <p className="mt-1 text-2xs text-rose">{magnitudeWarning(taxable, lead?.value, "lead ka budget")}</p>
             )}
           </FormField>
 

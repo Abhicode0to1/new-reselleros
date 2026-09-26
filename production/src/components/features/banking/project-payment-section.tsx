@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { rupee } from "@/lib/utils";
 import { useOpenProjects, useBookBankCreditAsProjectPayment, receiptMilestones } from "@/lib/queries/project-receipts";
 import { TDS_SECTIONS, tdsSplitFromNet } from "@/lib/accounting/tds-split";
+import { amountInIndianWords } from "@/lib/accounting/amount-words";
 
 const NEW_CUSTOMER = "__new_customer__";
 /* Milestone picker value: add a new milestone for this receipt (project value grows). */
@@ -208,6 +209,19 @@ export function ProjectPaymentSection({ txn, amount, customers, customerId, onCu
             Project ki total value ₹ (GST ke saath) — sirf ye payment hai to jaisa hai waisa chhod do
             <Input value={total} onChange={(e) => { setTotal(e.target.value); setTotalEdited(true); }} type="number" min={0} className="mt-1" aria-label="Project total value" />
           </label>
+          {totalNum > 0 && (
+            <p className="text-3xs text-ink-3">
+              = <b className="text-ink">{amountInIndianWords(totalNum)}</b> (GST ke saath)
+            </p>
+          )}
+          {/* The total defaults to this one payment — right for a one-payment job, wrong for the
+              first instalment of a bigger contract, which is how a ₹50L deal became a ₹5L project. */}
+          {totalNum === settled && (
+            <p className="text-3xs text-amber-ink">
+              Abhi poori deal ki value = sirf ye payment ({amountInIndianWords(settled)}). Agar ye badi deal ki pehli kist hai to
+              upar <b>poori value</b> daalo — baaki milestone apne-aap ban jaayegi.
+            </p>
+          )}
           {split.length > 0 && totalNum >= settled && (
             <p className="text-3xs text-ink-3">
               Milestones: {split.map((m) => `${m.label} ${rupee(m.total_amount)}`).join(" + ")} (GST 18% ke saath) — ye {rupee(settled)} pehli milestone mein jayega.
