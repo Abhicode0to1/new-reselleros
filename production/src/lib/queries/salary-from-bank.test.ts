@@ -10,6 +10,7 @@ function fakeSupabase(opts: { existing?: Array<{ employee_id: string; period: st
   const employees: Array<{ id: string; name: string }> = [];
   const salaries = [...(opts.existing ?? [])];
   const reconciles: Array<{ txn: string; salary: string }> = [];
+  const paySalaryCalls: Array<Record<string, unknown>> = [];
   let n = 0;
 
   const from = (table: string) => {
@@ -41,6 +42,7 @@ function fakeSupabase(opts: { existing?: Array<{ employee_id: string; period: st
     from,
     rpc: async (fn: string, args: Record<string, unknown>) => {
       if (fn === "pay_salary") {
+        paySalaryCalls.push(args);
         salaries.push({ id: `sal-${++n}`, employee_id: args.p_employee_id as string, period: args.p_period as string, net: args.p_gross as number, paid_amount: 0, paid_status: "unpaid" });
       } else if (fn === "reconcile_bank_txn") {
         reconciles.push({ txn: args.p_txn_id as string, salary: args.p_matched_to_id as string });
@@ -48,7 +50,7 @@ function fakeSupabase(opts: { existing?: Array<{ employee_id: string; period: st
       return { error: null };
     },
   };
-  return { client: client as never, employees, salaries, reconciles };
+  return { client: client as never, employees, salaries, reconciles, paySalaryCalls };
 }
 
 const line = (txnId: string, amount: number) => ({ txnId, txnDate: "2026-05-12", amount, description: txnId });
@@ -80,6 +82,26 @@ describe("bookSalaryGroups", () => {
     expect(res.every((r) => r.ok)).toBe(true);
     expect(db.employees).toHaveLength(1);
     expect(db.salaries).toHaveLength(3);
+  });
+
+  it("a salary + commission transfer books the monthly salary as gross and the rest as incentive", async () => {
+    const db = fakeSupabase();
+    const res = await bookSalaryGroups(db.client, "acc", [
+      { employee: { createName: "Abhishek", monthlyGross: 35000 }, period: "2026-06", lines: [line("a6", 70000)], incentive: 35000 },
+    ]);
+    expect(res[0].ok).toBe(true);
+    expect(db.paySalaryCalls[0]).toMatchObject({ p_gross: 35000, p_incentive: 35000 });
+    expect(db.reconciles).toHaveLength(1);
+  });
+
+  it("an incentive as large as the transfer is refused — nothing is written", async () => {
+    const db = fakeSupabase();
+    const res = await bookSalaryGroups(db.client, "acc", [
+      { employee: { createName: "Abhishek", monthlyGross: 35000 }, period: "2026-06", lines: [line("a6", 70000)], incentive: 70000 },
+    ]);
+    expect(res[0].ok).toBe(false);
+    expect(db.employees).toHaveLength(0);
+    expect(db.paySalaryCalls).toHaveLength(0);
   });
 
   it("two lines of one month become one record, both reconciled to it", async () => {

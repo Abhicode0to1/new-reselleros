@@ -127,8 +127,34 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
     return newNames[key] ?? bestNameVariant(lines.filter((x) => createKeyOf(x) === key).map((x) => x.parsed.name ?? ""));
   };
 
+  /* ── Incentive / commission inside a salary transfer ────────────────────────
+     A June transfer of ₹70,000 to someone on ₹35,000 was ₹35,000 salary + ₹35,000 deal
+     commission. Booked as one ₹70,000 gross it made the monthly salary read double. The part
+     above the monthly salary can be marked incentive — payroll's own field, still salary
+     for TDS — and is offered (not assumed) when the transfer exceeds the monthly salary. */
+  const [incentive, setIncentive] = React.useState<Record<string, string>>({});
+  React.useEffect(() => { if (open) setIncentive({}); }, [open]);
+  const incentiveOf = (l: Line) => Math.max(0, Math.round(Number(incentive[l.txn.id] || 0)) || 0);
+  /** True when booking this line creates a NEW salary record (the only place an incentive applies). */
+  const createsRecord = (l: Line) => {
+    const c = choice[l.txn.id] ?? "";
+    if (c === "create") return true;
+    if (c === "") return false;
+    const per = period[l.txn.id] ?? l.parsed.period;
+    return !salaries.some((sp) => sp.employee_id === c && sp.period === per);
+  };
+  /** Transfer minus the employee's monthly salary, when it is clearly more (10%+). */
+  const suggestedIncentive = (l: Line) => {
+    const c = choice[l.txn.id] ?? "";
+    const monthly = employees.find((e) => e.id === c)?.monthly_gross ?? 0;
+    return monthly > 0 && l.txn.debit > monthly * 1.1 ? l.txn.debit - monthly : 0;
+  };
+
   /** What booking this line would do — or why it cannot. */
   const planFor = (l: Line): { ok: boolean; text: string } => {
+    const inc = createsRecord(l) ? incentiveOf(l) : 0;
+    if (inc >= l.txn.debit && inc > 0) return { ok: false, text: "Incentive must be less than the amount paid — the rest is the salary." };
+    const split = inc > 0 ? ` · ${rupee(l.txn.debit - inc)} salary + ${rupee(inc)} incentive` : "";
     const c = choice[l.txn.id] ?? "";
     const per = period[l.txn.id] ?? l.parsed.period;
     if (c === "") {
@@ -140,10 +166,10 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
          creates, the rest say they reuse it. */
       const who = `"${newNameFor(l)}"`;
       const emp = isFirstCreate(l) ? `New employee ${who}` : `Same new employee ${who} as above (not created again)`;
-      return { ok: true, text: `${emp} + new ${monthLabel(per)} salary record` };
+      return { ok: true, text: `${emp} + new ${monthLabel(per)} salary record${split}` };
     }
     const rec = salaries.find((s) => s.employee_id === c && s.period === per);
-    if (!rec) return { ok: true, text: `New ${monthLabel(per)} salary record for ${nameOf(c)}` };
+    if (!rec) return { ok: true, text: `New ${monthLabel(per)} salary record for ${nameOf(c)}${split}` };
     const remaining = rec.net - rec.paid_amount;
     if (rec.paid_status === "paid" || remaining <= 0) return { ok: false, text: `${monthLabel(per)} salary is already paid — will not be touched.` };
     if (l.txn.debit > remaining) return { ok: false, text: `${monthLabel(per)} record has only ${rupee(remaining)} left to pay.` };
@@ -167,12 +193,13 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
       const key = `${empKey}|${per}`;
       const g = groups.get(key) ?? {
         employee: c === "create"
-          ? { createName: newNameFor(l).trim() || titleCaseName(l.parsed.name ?? ""), monthlyGross: l.txn.debit }
+          ? { createName: newNameFor(l).trim() || titleCaseName(l.parsed.name ?? ""), monthlyGross: l.txn.debit - (createsRecord(l) ? incentiveOf(l) : 0) }
           : { id: c },
         period: per,
         lines: [],
       };
       g.lines.push({ txnId: l.txn.id, txnDate: l.txn.txn_date, amount: l.txn.debit, description: l.txn.description ?? "" });
+      if (createsRecord(l) && incentiveOf(l) > 0) g.incentive = (g.incentive ?? 0) + incentiveOf(l);
       groups.set(key, g);
     }
 
@@ -271,6 +298,29 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
                                 onChange={(e) => setNewNames((m) => ({ ...m, [createKeyOf(l)]: e.target.value }))}
                                 className="rounded border border-hairline bg-paper px-1.5 py-0.5 text-2xs text-ink w-[150px]"
                               />
+                            )}
+                            {createsRecord(l) && (
+                              <label className="inline-flex items-center gap-1 text-2xs text-ink-3">
+                                Incentive ₹
+                                <input
+                                  aria-label="Incentive / commission in this transfer"
+                                  type="number" min={0}
+                                  value={incentive[l.txn.id] ?? ""}
+                                  placeholder="0"
+                                  onChange={(e) => setIncentive((m) => ({ ...m, [l.txn.id]: e.target.value }))}
+                                  className="rounded border border-hairline bg-paper px-1.5 py-0.5 text-2xs text-ink w-[90px]"
+                                />
+                              </label>
+                            )}
+                            {createsRecord(l) && suggestedIncentive(l) > 0 && !incentive[l.txn.id] && (
+                              <button
+                                type="button"
+                                onClick={() => setIncentive((m) => ({ ...m, [l.txn.id]: String(suggestedIncentive(l)) }))}
+                                className="text-2xs text-amber-ink hover:underline"
+                                title="The transfer is more than this employee's monthly salary"
+                              >
+                                {rupee(suggestedIncentive(l))} monthly salary se zyada — incentive/commission hai?
+                              </button>
                             )}
                             <input
                               type="month"

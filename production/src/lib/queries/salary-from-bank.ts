@@ -29,6 +29,12 @@ export type SalaryGroupInput = {
   /** YYYY-MM */
   period: string;
   lines: Array<{ txnId: string; txnDate: string; amount: number; description: string }>;
+  /**
+   * The part of the transfer that is an incentive / commission, not the month's salary —
+   * booked as payroll's incentive (still salary for TDS / Form 16), so the gross reads as
+   * the real monthly salary. Only used when a NEW salary record is created.
+   */
+  incentive?: number;
 };
 
 export type SalaryGroupResult = {
@@ -57,7 +63,11 @@ async function bookGroup(
   createdIds: Map<string, string>,
 ): Promise<SalaryGroupResult> {
   const total = g.lines.reduce((s, l) => s + l.amount, 0);
+  const incentive = Math.max(0, Math.round(g.incentive ?? 0));
   let label = "createName" in g.employee ? g.employee.createName : "employee";
+  if (incentive >= total) {
+    return { period: g.period, label, ok: false, message: `Incentive (₹${incentive}) must be less than the amount paid (₹${total}) — the rest is the salary.` };
+  }
 
   /* 1. Employee */
   let employeeId: string;
@@ -108,10 +118,10 @@ async function bookGroup(
       p_employee_id: employeeId,
       p_period: g.period,
       p_pay_date: payDate,
-      p_gross: total,
+      p_gross: total - incentive,
       p_lop_days: 0,
       p_lop_amount: 0,
-      p_incentive: 0,
+      p_incentive: incentive,
       p_advance_recovered: 0,
       p_advance_loan_id: null,
       p_tds: 0,
