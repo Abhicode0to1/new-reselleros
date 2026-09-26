@@ -44,6 +44,7 @@ import { COMMISSION_CATEGORY, TDS_194H_THRESHOLD, commissionTdsView } from "@/li
 import { localDateISO } from "@/lib/leads/outcomes";
 import { useEmployees } from "@/lib/queries/payroll";
 import { compactName } from "@/lib/banking/salary-lines";
+import { TDS_SECTION_RATES, defaultTds, tdsBase } from "@/lib/accounting/tds-rates";
 import { useBankAccounts } from "@/lib/queries/bank";
 import { useVendors, ensureVendor } from "@/lib/queries/vendors";
 import { useAddReimbursement } from "@/lib/queries/reimbursements";
@@ -439,6 +440,19 @@ export function AddExpenseDialog({
     watch("expense_date") || localDateISO(new Date()),
     expense?.id ?? null,
   );
+  /* TDS fills itself from the section's default rate on the pre-GST value
+     (lib/accounting/tds-rates.ts) — until the operator types an amount; an existing entry's
+     recorded TDS is never overwritten on open. */
+  const [tdsEdited, setTdsEdited] = React.useState<boolean>(Boolean(expense && (expense.tds_amount ?? 0) > 0));
+  const tdsSectionNow = watch("tds_section") || "";
+  const tdsBaseNow = tdsBase(Number(watch("amount")) || 0, isGstBill ? Number(watch("gst_paid")) || 0 : 0);
+  const tdsRate = TDS_SECTION_RATES[tdsSectionNow] ?? null;
+  React.useEffect(() => {
+    if (tdsEdited || !tdsSectionNow) return;
+    const v = defaultTds(tdsSectionNow, tdsBaseNow);
+    if (v !== null) setValue("tds_amount", v);
+  }, [tdsEdited, tdsSectionNow, tdsBaseNow, setValue]);
+
   /* Same letters as an employee's name ("abhishek" = "Abhishek", "Hites H Babu" = "Hitesh Babu"). */
   const { data: employeeList } = useEmployees();
   const payeeEmployee = React.useMemo(() => {
@@ -1038,7 +1052,7 @@ export function AddExpenseDialog({
             {/* TDS deducted (26Q) — optional; for rent / professional / contractor payments. */}
             <div className="grid grid-cols-12 gap-3">
               <FormField label="TDS deducted?" htmlFor="tds_section" className="col-span-5 sm:col-span-5">
-                <Select value={watch("tds_section") || "none"} onValueChange={(v) => setValue("tds_section", v === "none" ? "" : v)}>
+                <Select value={watch("tds_section") || "none"} onValueChange={(v) => { setValue("tds_section", v === "none" ? "" : v); setTdsEdited(false); }}>
                   <SelectTrigger id="tds_section"><SelectValue placeholder="No TDS" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No TDS</SelectItem>
@@ -1053,12 +1067,17 @@ export function AddExpenseDialog({
               </FormField>
               {(watch("tds_section") || "") !== "" && (
                 <FormField label="TDS amount (₹)" htmlFor="tds_amount" className="col-span-7 sm:col-span-4">
-                  <Input id="tds_amount" type="number" min={0} step="any" {...register("tds_amount")} />
+                  <Input id="tds_amount" type="number" min={0} step="any" {...register("tds_amount", { onChange: () => setTdsEdited(true) })} />
                 </FormField>
               )}
             </div>
             {(watch("tds_section") || "") !== "" && (
-              <p className="text-3xs text-ink-3">Record the TDS you deducted while paying this vendor — it feeds your quarterly 26Q return.</p>
+              <p className="text-3xs text-ink-3">
+                {tdsRate && !tdsEdited
+                  ? <>{tdsRate.ratePct}% of {rupee(tdsBaseNow)}{isGstBill && (Number(watch("gst_paid")) || 0) > 0 ? " (GST ke bina)" : ""} — apne-aap bhara, badal sakte ho.{tdsRate.note ? ` ${tdsRate.note}` : ""} </>
+                  : null}
+                Record the TDS you deducted while paying this vendor — it feeds your quarterly 26Q return.
+              </p>
             )}
           </section>
 
@@ -1165,12 +1184,26 @@ export function AddExpenseDialog({
                 onFocus={() => setVendorOpen(true)}
                 onBlur={() => setTimeout(() => setVendorOpen(false), 130)}
               />
-              {vendorOpen && (vendors ?? []).length > 0 && (() => {
+              {vendorOpen && ((vendors ?? []).length > 0 || (isCommission && (employeeList ?? []).length > 0)) && (() => {
                 const query = (watch("vendor_name") || "").trim().toLowerCase();
                 const matches = (vendors ?? []).filter((v) => !query || v.name.toLowerCase().includes(query)).slice(0, 8);
-                if (matches.length === 0) return null;
+                /* For a commission, our own employees are offered too — tagged, so "abhish" already
+                   shows "Abhishek · Employee" and the warning below is one click away, not a
+                   fully-typed name away. */
+                const empMatches = isCommission
+                  ? (employeeList ?? []).filter((e) => e.is_active !== false && (!query || e.name.toLowerCase().includes(query))).slice(0, 6)
+                  : [];
+                if (matches.length === 0 && empMatches.length === 0) return null;
                 return (
                   <div className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-md border border-hairline bg-paper shadow-lg">
+                    {empMatches.map((e) => (
+                      <button key={`emp-${e.id}`} type="button"
+                        onMouseDown={(ev) => { ev.preventDefault(); setValue("vendor_name", e.name); setVendorId(null); setVendorMatch(null); setVendorOpen(false); }}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-paper-2">
+                        <span className="text-ink truncate">{e.name}</span>
+                        <span className="shrink-0 rounded bg-rose/10 px-1.5 py-0.5 text-3xs font-semibold text-rose">Employee · Payroll</span>
+                      </button>
+                    ))}
                     {matches.map((v) => (
                       <button key={v.id} type="button"
                         onMouseDown={(e) => { e.preventDefault(); setValue("vendor_name", v.name); setVendorId(v.id); setVendorMatch({ kind: "existing", name: v.name }); setVendorOpen(false); }}
