@@ -71,6 +71,33 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
       `extension_months: 12` for monthly subscriptions too, and guesses cost as 83% of price. Written up
       for Abhishek as **R-012 in `docs/CROSS-TEAM-REQUESTS.md`** (26 Sep). See §0A.
 
+- [x] **End-to-end run, LOCAL, 26 Sep 2026 (browser + real Razorpay TEST payment + signed webhook):**
+      DMS test customer `e2e-customer@local.invalid` bought Starter yearly in the panel →
+      `/api/dms/panel-order` made `order_Tge6v4FukDjuce` / `Q-2222-2026-27-0019`, ₹708 → Razorpay test
+      checkout inside DMS, netbanking, `pay_Tge77FFcxHbzZ2` CAPTURED (confirmed on Razorpay's API, notes
+      carry `channel: dms-panel` + the DMS user id) → the real payment delivered as a signed webhook →
+      quote accepted/received, lead won, payment recorded, customer `C-00012`, subscription Starter
+      yearly active to 2027-09-26, provisioning row queued (and held: switch off + test-mode payment) →
+      DMS Invoices page lists `Q-2222-2026-27-0019 · ₹708 · Paid order · PDF`. Trial: eligibility refused
+      correctly on a phone reused from a 24 Sep test trial, then eligible on a fresh phone → trial started
+      in ResellerOS (`L-MUIB4H5O`), panel says "Check your email to confirm"; the signed confirm link
+      records the confirmation and holds (`HOSTING_TRIAL_LIVE` off). Upgrade request from inside DMS →
+      lead `L-MUIB5W2J`, a repeat returns the same lead. No email provider locally, so every send is
+      logged `failed` ("No email provider is configured") — nothing reached a real inbox.
+- [ ] **Found by the end-to-end run:**
+      - **The bill PDF link on the DMS Invoices page is built from the address DMS used to call
+        ResellerOS** (`/api/v1` makes `pdf_url` from the request host). Locally that is
+        `http://host.docker.internal:4320/...`, which the customer's browser cannot open (the same PDF
+        answers 200 on `localhost`). It works in production only if `RESELLEROS_SERVER_URL` is also the
+        public address. Fix: DMS should rewrite links to ResellerOS's PUBLIC origin
+        (`NEXT_PUBLIC_RESELLEROS_URL`), or ResellerOS should build them from its own public URL.
+      - The panel's "Payment received" message was not observed: the script's last screenshot was taken
+        while Razorpay was still showing its own "redirecting in 2 seconds". Unit-tested only.
+      - Renew and upgrade BUTTONS were not clicked: they need a DMS hosting account, and none exists while
+        provisioning is off. The upgrade ENDPOINT was exercised from inside DMS.
+      - Local owner alerts go to `pardeep@anutech.in` (the local tenant's owner). Harmless while no email
+        provider is configured locally; worth knowing before one is.
+
 **Actions only you can take — before anything is switched on**
 - [ ] **Keys.** ResellerOS: `DMS_PANEL_API_KEY`. DMS: the same `DMS_PANEL_API_KEY`,
       `RESELLEROS_SERVER_URL` (ResellerOS's `https://` origin) and `RESELLEROS_BILLING_API_KEY` (a
