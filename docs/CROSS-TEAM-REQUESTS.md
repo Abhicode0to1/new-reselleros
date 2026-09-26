@@ -176,10 +176,12 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
   **project quotation** through a new RPC `create_project_quote_from_lead`, which calls your
   `create_project_quote` unchanged and stores the link on **`leads.project_id`** (no change to
   `project_sales`). Your code is not touched. Three things are left on the Project Sales side:
-  1. **Won when accepted.** Today the lead drawer shows "Project accepted · mark Won" and the rep clicks it.
-     It should happen by itself: in `accept_project_quote`, after the project turns `active`, add
-     `update public.leads set stage = 'won', updated_at = now() where project_id = p_project_id and stage not in ('won','lost');`
-     (the `trg_leads_stage_changed_at` trigger stamps `stage_changed_at`).
+  1. ~~**Won when accepted.**~~ **Done on Pardeep's side (2026-09-26)** — migration
+     `20260926120000_lead_won_on_project_accept.sql` adds trigger `trg_leads_won_on_project_accept`
+     **on `project_sales`** (AFTER UPDATE OF status): when a project becomes `active`/`completed`, its linked
+     lead turns Won with a timeline entry. It writes only to `leads` / `lead_activities`; no project function
+     changed. **Please do not add the same update to `accept_project_quote`** — and if you ever rename
+     `project_sales.status` values, tell Pardeep, since the trigger keys on `active` / `completed`.
   2. **Show the source on the project page** (`/projects/[id]`): "From lead: <company> · <contact>" linking to
      `/leads?lead=<id>` — `select id, company, contact_name from leads where project_id = <project id>`.
   3. **"New quotation" in Project Sales / Customer 360** (`create-project-quote-dialog.tsx`): optional —
