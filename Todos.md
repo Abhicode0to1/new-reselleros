@@ -20,12 +20,15 @@ conflict; each superseded entry is marked in place.
 Everything below needs an owner decision or an owner action. Nothing here is being worked on.
 
 **Decisions**
-- [ ] **Multi-year domain registration and a cart with two hosting plans** can no longer be bought
+- [ ] **Not now (owner, 26 Sep 2026).** Multi-year domain registration and a cart with two hosting plans can no longer be bought
       inside DMS. `/api/dms/panel-order` takes one year per domain and one hosting `domain`, and
       the DMS cart refuses both by name. Allowing them means widening that contract. Want them?
-- [ ] **Admin package price edits in DMS still create Razorpay PLANS on DMS's account**
-      (`app/api/admin/hosting/packages/route.ts:303,312`). Not a payment, but DMS writing to its own
-      Razorpay. Remove, or leave?
+- [x] **Admin package edits create no Razorpay plans** (owner, 26 Sep 2026; DMS `c1e52acd`).
+      `RazorpayService.createPlan` deleted; the DMS guard now refuses `plans.create` outside the one-off
+      operator script `scripts/razorpay-regenerate-plans-live.js`.
+- [ ] **Left by round 5:** the admin packages page (`app/admin/hosting/packages/page.tsx:224-235`) still
+      SHOWS each package's Razorpay plan ids, which no longer match a changed price. Hide the column?
+      And `scripts/razorpay-regenerate-plans-live.js` can still create live plans with `--apply`. Delete it?
 - [x] **DMS renewal reminders carry no DMS price** (DMS `812462ec`). They link to the one pending
       ResellerOS quote, or to the Invoices page when there are several, or say the bill is being
       prepared. A scan test fails if a price field returns.
@@ -40,11 +43,13 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
       **Deleted** (DMS `0d787076`), with `verification.ts` and two order-creator helpers whose only
       callers went with them.
 - [ ] **Found in round 4, not done:**
-      - DMS `api/user/hosting/trial-eligibility` still runs DMS's own prior-trial checks before the trial
-        goes into the cart. ResellerOS now decides; the two could disagree, and ResellerOS wins at
-        checkout. Keep the pre-check, or remove it?
-      - DMS `scripts/deploy-cloud-run.sh` (around L375) still requires `COMPANY_STATE`, which only the
-        deleted GST invoice engine needed.
+      - [x] DMS trial pre-check asks ResellerOS (owner, 26 Sep 2026): ResellerOS `acfc4512`
+        (`/api/dms/trial-eligibility`), DMS `4d824494`. `userHasPriorTrialOrder` deleted.
+      - [ ] DMS `COMPANY_STATE`: the owner said drop the deploy-script requirement, but app code still
+        reads it at `lib/billing/companyProfile.ts:37` (`state: process.env.COMPANY_STATE || ""`), into a
+        field NOTHING uses (`lib/billing/pdf.ts` reads only `name` and `gstin`). Stopped for a go-ahead
+        to remove that dead read too, then `deploy-cloud-run.sh:367-384,389`, `seed-secrets.sh:154`, the
+        two env examples and the docs.
       - The `/checkout` trial banner says "we'll remind you to pay … from your dashboard" (true in
         effect, DMS-centric wording). `sendServiceExpiryTodayEmail` / `sendServiceGracePeriodEmail` have
         no callers (no price in them).

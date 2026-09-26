@@ -135,6 +135,9 @@ charger remain.
 **A trial started inside the DMS panel starts HERE** (owner, 26 Sep 2026: "Move it to ResellerOS").
 DMS calls `POST /api/dms/start-trial`, which runs the same `startHostingTrial` as the site cart, so
 there is one trial path for both apps and ResellerOS can remind, quote the conversion and bill it.
+The panel's "can I have a trial?" pre-check asks `POST /api/dms/trial-eligibility`, which runs the
+same `checkTrialEligibility` that `startHostingTrial` decides with; an unreadable history is never
+"eligible".
 
 Open items for the integration are tracked in `Todos.md`, not here.
 
@@ -307,10 +310,10 @@ cd production
 npm run typecheck && npm run test && npm run lint
 ```
 
-Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **7,047 tests
-passing across 399 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
-with warnings only** — measured 26 Sep 2026 after `/api/dms/start-trial`. Earlier markers:
-7,041/398 the same day after merging `pardeep-sir` (Pardeep's banking, P&L and project-quotation work), 6,884/378 the same day after the `/api/v1` literal email match, 6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
+Lint **warnings** are acceptable; lint **errors** are not. Current baseline: **7,054 tests
+passing across 400 files** (plus 1 file / 4 tests skipped), typecheck clean, **lint exit 0
+with warnings only** — measured 26 Sep 2026 after `/api/dms/trial-eligibility`. Earlier markers:
+7,047/399 the same day after `/api/dms/start-trial`, 7,041/398 the same day after merging `pardeep-sir` (Pardeep's banking, P&L and project-quotation work), 6,884/378 the same day after the `/api/v1` literal email match, 6,880/377 on 25 Sep after the upgrade-request route and the `pardeep-sir` merge, 6,820/374 the same day after the DMS panel-order API, 6,812/373 the same day after the trial moved onto the DMS engine, 6,799/372 the same day after hosting renewals, 6,776/370 the same day after domain renewals, 6,743/367 the same day after the cart-hosting subscription fix, 6,737/367 on 24 Sep after the cross-app trial check, 6,733/367 the same day after one-trial-per-customer, 6,725/366 the same day after the trial moved into the cart, 6,718/366 the same day after the Starter-only trial, 6,713/365 the same day after hosting provisioning moved to the DMS engine, 6,668/362 the same day after enabling the site cart, 6,629/357 on 23 Sep after merging `abhishek-pre-merge`, 6,610/356 the same day, 6,609/356 on 21 Sep, then 4,371/233, 3,404/182 and 1,492,
 which is §12 happening to this very file four times. If your change drops the test count, it
 is not done.
 
@@ -325,8 +328,9 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,422 passing across 441 files, zero failures**
-on 26 Sep 2026, after round 4 (DMS `9bc63716`: dead payment code deleted, old renewal dunning
+`C:/xampp/htdocs/Domain-Management-Project`, **6,422 passing across 442 files, zero failures**
+on 26 Sep 2026, after round 5 (DMS `c1e52acd`: the trial pre-check asks ResellerOS, admin package
+edits create no Razorpay plans). Same day, 6,422 / 441 after round 4 (DMS `9bc63716`: dead payment code deleted, old renewal dunning
 switched off, reminders point to the ResellerOS quote, the panel trial starts in ResellerOS). The
 count FELL, on purpose: tests were deleted along with the code they covered. Earlier:
 6,497 / 444 on 25 Sep after DMS stopped taking payments on its own keys (DMS `84b5ae33`),
