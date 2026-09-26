@@ -25,10 +25,9 @@ import { useBankAccounts } from "@/lib/queries/bank";
 import { Icon } from "@/components/ui/icon";
 import { CashFlowMonthSheet } from "@/components/features/accounting/cash-flow-month-sheet";
 import type { CashFlowTxn } from "@/lib/accounting/cash-flow-lines";
+import { monthRows, runway as computeRunway, type MonthRow } from "@/lib/accounting/cash-flow-summary";
 
 type RangeKey = "month" | "fy" | "12m" | "all";
-
-interface MonthRow { ym: string; cashIn: number; cashOut: number; net: number; cumulative: number }
 
 function fyStart(d: Date): Date {
   const y = d.getUTCFullYear();
@@ -54,8 +53,22 @@ function useCashFlow(range: RangeKey) {
     queryKey: ["cash-flow", { from, to }],
     /* The whole line, not just amounts: the month drill-down lists these same rows,
        so its totals are the row's totals by construction. */
-    queryFn: async (): Promise<CashFlowTxn[]> => {
+    queryFn: async (): Promise<{ lines: CashFlowTxn[]; balanceBefore: number }> => {
       const supabase = createClient();
+      /* The balance the first month starts from: every account's opening balance plus
+         every line dated before the range — the same sum bank_account_current_balance()
+         makes, so the last month ends on the bank's own balance. */
+      const [{ data: accts, error: aErr }, { data: before, error: bErr }] = await Promise.all([
+        supabase.from("bank_accounts").select("opening_balance"),
+        from
+          ? supabase.from("bank_transactions").select("credit, debit").lt("txn_date", from)
+          : Promise.resolve({ data: [] as { credit: number | null; debit: number | null }[], error: null }),
+      ]);
+      if (aErr) throw aErr;
+      if (bErr) throw bErr;
+      const balanceBefore = (accts ?? []).reduce((s, a) => s + (a.opening_balance ?? 0), 0)
+        + (before ?? []).reduce((s, t) => s + (t.credit ?? 0) - (t.debit ?? 0), 0);
+
       let q = supabase
         .from("bank_transactions")
         .select("id, bank_account_id, txn_date, description, debit, credit, matched_to_type, category");
@@ -63,7 +76,7 @@ function useCashFlow(range: RangeKey) {
       if (to)   q = q.lte("txn_date", to);
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []).map((t) => ({
+      const lines = (data ?? []).map((t) => ({
         id: t.id,
         bank_account_id: t.bank_account_id,
         txn_date: t.txn_date,
@@ -73,13 +86,15 @@ function useCashFlow(range: RangeKey) {
         matched_to_type: t.matched_to_type ?? null,
         category: t.category ?? null,
       }));
+      return { lines, balanceBefore };
     },
   });
 }
 
 export default function CashFlowPage() {
   const [range, setRange] = React.useState<RangeKey>("12m");
-  const { data: lines, isLoading, error, refetch } = useCashFlow(range);
+  const { data: flow, isLoading, error, refetch } = useCashFlow(range);
+  const lines = flow?.lines;
   const { data: bsAuto } = useBalanceSheetAuto();      // current cash-in-bank
   const meta = rangeBounds(range);
 
@@ -97,37 +112,21 @@ export default function CashFlowPage() {
     [lines, openYm],
   );
 
-  const months = React.useMemo<MonthRow[]>(() => {
-    const m = new Map<string, { cashIn: number; cashOut: number }>();
-    for (const l of lines ?? []) {
-      const ym = l.txn_date.slice(0, 7);
-      const g = m.get(ym) ?? { cashIn: 0, cashOut: 0 };
-      g.cashIn += l.credit; g.cashOut += l.debit;
-      m.set(ym, g);
-    }
-    const sorted = Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-    let cum = 0;
-    return sorted.map(([ym, g]) => {
-      const net = g.cashIn - g.cashOut;
-      cum += net;
-      return { ym, cashIn: g.cashIn, cashOut: g.cashOut, net, cumulative: cum };
-    });
-  }, [lines]);
+  /* Each month ends on the statement balance (lib/accounting/cash-flow-summary.ts). */
+  const months = React.useMemo<MonthRow[]>(
+    () => monthRows(lines ?? [], flow?.balanceBefore ?? 0),
+    [lines, flow?.balanceBefore],
+  );
 
   const totals = React.useMemo(() => {
     const t = months.reduce((s, r) => ({ cashIn: s.cashIn + r.cashIn, cashOut: s.cashOut + r.cashOut }), { cashIn: 0, cashOut: 0 });
     return { ...t, net: t.cashIn - t.cashOut };
   }, [months]);
 
-  // Runway: if the business is net-burning cash, how many months does current
-  // cash last at the average monthly burn? Uses net-negative months only.
-  const runway = React.useMemo(() => {
-    const burnMonths = months.filter((r) => r.net < 0);
-    if (burnMonths.length === 0) return null;               // not burning
-    const avgBurn = burnMonths.reduce((s, r) => s + -r.net, 0) / burnMonths.length;
-    if (avgBurn <= 0) return null;
-    return currentCash > 0 ? currentCash / avgBurn : 0;
-  }, [months, currentCash]);
+  /* Runway, two ways, over every month in the span: if nothing comes in, and at the
+     span's trend. The old figure averaged loss months only and dropped the receipts. */
+  const runway = React.useMemo(() => computeRunway(months, currentCash), [months, currentCash]);
+  const fmtMonths = (n: number) => (n >= 99 ? "99+" : n.toFixed(1));
 
   const maxFlow = Math.max(1, ...months.map((r) => Math.max(r.cashIn, r.cashOut)));
   const empty = !isLoading && !error && months.length === 0;
@@ -135,10 +134,10 @@ export default function CashFlowPage() {
   const exportCsv = () => {
     downloadCSV(
       `cash-flow-${range}.csv`,
-      ["Month", "Cash in", "Cash out", "Net", "Cumulative net"],
+      ["Month", "Cash in", "Cash out", "Net", "Balance (month end)"],
       [
-        ...months.map((r): [string, number, number, number, number] => [monthLabel(r.ym), r.cashIn, r.cashOut, r.net, r.cumulative]),
-        ["Total", totals.cashIn, totals.cashOut, totals.net, totals.net],
+        ...months.map((r): [string, number, number, number, number] => [monthLabel(r.ym), r.cashIn, r.cashOut, r.net, r.balanceEnd]),
+        ["Total", totals.cashIn, totals.cashOut, totals.net, months.length ? months[months.length - 1].balanceEnd : 0],
       ],
     );
   };
@@ -178,17 +177,38 @@ export default function CashFlowPage() {
       )}
 
       {/* Runway callout */}
-      {!empty && !error && runway != null && (
-        <Card className={`mb-5 p-3.5 ${runway < 3 ? "border-rose/40 bg-rose/5" : "border-amber/30 bg-amber-soft/20"}`}>
-          <p className="text-sm text-ink-2 flex items-start gap-2">
-            <span className="text-lg leading-none">{runway < 3 ? "⚠️" : "🛟"}</span>
-            <span>
-              <b>Runway ≈ {runway >= 99 ? "99+" : runway.toFixed(1)} months</b> — at your average monthly cash burn, that&apos;s how long the current
-              <b> {rupee(currentCash)}</b> in bank lasts. {runway < 3 ? "Tight — chase receivables or slow non-essential spend." : "Keep an eye on it; collect dues on time."}
-            </span>
-          </p>
-        </Card>
-      )}
+      {!empty && !error && runway != null && (() => {
+        const tight = runway.atTrend !== null && runway.atTrend < 3;
+        const watch = runway.atTrend !== null && runway.atTrend < 6;
+        return (
+          <Card className={`mb-5 p-3.5 ${tight ? "border-rose/40 bg-rose/5" : watch ? "border-amber/30 bg-amber-soft/20" : ""}`}>
+            <p className="text-sm text-ink-2 mb-2">
+              <b>Bank mein {rupee(currentCash)}</b> — kitne din chalega? (pichhle {runway.months} mahine ke hisaab se)
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Agar ab koi paisa na aaye</div>
+                <div className="font-serif text-2xl text-ink tabular-nums">
+                  {runway.ifNoIncome === null ? "—" : <>≈ {fmtMonths(runway.ifNoIncome)} mahine</>}
+                </div>
+                <div className="text-2xs text-ink-3">average kharcha {rupee(runway.spendPerMonth)}/mahina</div>
+              </div>
+              <div>
+                <div className="text-3xs uppercase tracking-wider text-ink-3 font-semibold">Pichhle {runway.months} mahine jaisa chale</div>
+                <div className={`font-serif text-2xl tabular-nums ${tight ? "text-rose" : "text-ink"}`}>
+                  {runway.atTrend === null ? "Paisa badh raha hai" : <>≈ {fmtMonths(runway.atTrend)} mahine</>}
+                </div>
+                <div className="text-2xs text-ink-3">
+                  {runway.netPerMonth < 0
+                    ? <>income ke baad bhi average {rupee(-runway.netPerMonth)}/mahina ghat raha hai</>
+                    : <>average {rupee(runway.netPerMonth)}/mahina badh raha hai</>}
+                </div>
+              </div>
+            </div>
+            {tight && <p className="text-2xs text-rose mt-2">Tight — receivables jaldi collect karo ya non-essential kharcha roko.</p>}
+          </Card>
+        );
+      })()}
 
       {error && (
         <EmptyState icon="alert" title="Could not load cash flow" body={error.message}
@@ -211,7 +231,7 @@ export default function CashFlowPage() {
                   <th className="text-right px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Cash in</th>
                   <th className="text-right px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Cash out</th>
                   <th className="text-right px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Net</th>
-                  <th className="text-right px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider">Cumulative</th>
+                  <th className="text-right px-3 py-2.5 text-3xs font-semibold text-ink-3 uppercase tracking-wider" title="Opening balance + every line up to the month end — what the statement shows">Balance (month end)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline">
@@ -245,8 +265,8 @@ export default function CashFlowPage() {
                     <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${r.net < 0 ? "text-rose" : "text-emerald"}`}>
                       {r.net < 0 ? "−" : "+"}{rupee(Math.abs(r.net))}
                     </td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${r.cumulative < 0 ? "text-rose" : "text-ink"}`}>
-                      {r.cumulative < 0 ? "−" : ""}{rupee(Math.abs(r.cumulative))}
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${r.balanceEnd < 0 ? "text-rose" : "text-ink"}`}>
+                      {r.balanceEnd < 0 ? "−" : ""}{rupee(Math.abs(r.balanceEnd))}
                     </td>
                   </tr>
                 ))}
@@ -257,7 +277,7 @@ export default function CashFlowPage() {
                   <td className="px-3 py-2.5 text-right tabular-nums text-emerald">{rupee(totals.cashIn)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{rupee(totals.cashOut)}</td>
                   <td className={`px-3 py-2.5 text-right tabular-nums ${totals.net < 0 ? "text-rose" : "text-emerald"}`}>{totals.net < 0 ? "−" : "+"}{rupee(Math.abs(totals.net))}</td>
-                  <td></td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{months.length ? rupee(months[months.length - 1].balanceEnd) : ""}</td>
                 </tr>
               </tfoot>
             </table>
@@ -276,6 +296,7 @@ export default function CashFlowPage() {
       <p className="text-2xs text-ink-3 mt-3 leading-relaxed">
         Click a month to see the bank lines behind it.{" "}
         Cash flow = actual bank credits (in) minus debits (out) per month, from your imported/connected statements.
+        Balance (month end) = opening balance + every line up to that month — it should match your statement.
         This is different from Profit (P&amp;L), which counts invoices whether or not the cash has arrived.
       </p>
     </div>
