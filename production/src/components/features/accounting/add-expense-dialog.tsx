@@ -41,6 +41,7 @@ import {
   type Expense,
 } from "@/lib/queries/expenses";
 import { COMMISSION_CATEGORY, TDS_194H_THRESHOLD, commissionTdsView } from "@/lib/accounting/commission-tds";
+import { AD_CHANNELS, isMarketingCategory, suggestAdChannel } from "@/lib/marketing/ad-channels";
 import { localDateISO } from "@/lib/leads/outcomes";
 import { useEmployees } from "@/lib/queries/payroll";
 import { compactName } from "@/lib/banking/salary-lines";
@@ -84,8 +85,11 @@ export function AddExpenseDialog({
   expense,
   projectId,
   projectTitle,
+  defaultCategory,
 }: {
   onClose: () => void;
+  /** Category a NEW expense starts on — e.g. "Advertising" from /marketing/spend. */
+  defaultCategory?: string;
   expense?: Expense | null;
   /** When set, this expense is tagged as a cost of that project (per-project P&L). */
   projectId?: string | null;
@@ -248,7 +252,8 @@ export function AddExpenseDialog({
   // Category is auto-picked from the "what was this for?" text — until the
   // operator changes it manually (then we stop overriding). On edit we respect
   // the saved category from the start.
-  const [categoryTouched, setCategoryTouched] = React.useState<boolean>(isEdit);
+  // A caller-chosen category counts as chosen — the keyword auto-pick must not flip it.
+  const [categoryTouched, setCategoryTouched] = React.useState<boolean>(isEdit || Boolean(defaultCategory));
   const [categoryAuto, setCategoryAuto] = React.useState(false);
 
   // Open the just-uploaded bill (a local File, not yet stored) in a new tab.
@@ -416,7 +421,7 @@ export function AddExpenseDialog({
         }
       : {
           expense_date: today,
-          category: "Hosting",
+          category: defaultCategory ?? "Hosting",
           payment_method: "bank_transfer",
           amount: 0,
           gst_paid: 0,
@@ -431,6 +436,17 @@ export function AddExpenseDialog({
   const itemText = lines.map((l) => l.description).filter(Boolean).join(" ");
   const noteText = watch("description") ?? "";
   const vendorNameWatch = watch("vendor_name") ?? "";
+
+  /* Marketing spend carries its channel, so Marketing → ROAS & CAC can set it against the
+     leads that channel brought in. Offered from the vendor's name until the operator picks. */
+  const isMarketing = isMarketingCategory(watch("category"));
+  const [channel, setChannel] = React.useState<string>(expense?.channel ?? "");
+  const [channelTouched, setChannelTouched] = React.useState<boolean>(Boolean(expense?.channel));
+  React.useEffect(() => {
+    if (!isMarketing || channelTouched) return;
+    const s = suggestAdChannel(`${vendorNameWatch} ${noteText} ${itemText}`);
+    if (s) setChannel(s);
+  }, [isMarketing, channelTouched, vendorNameWatch, noteText, itemText]);
 
   /* Commission to an outside agent: the payee is required, and one person's commission for
      the year decides s.194H (lib/accounting/commission-tds.ts). */
@@ -566,6 +582,8 @@ export function AddExpenseDialog({
       try { attachment_url = await uploadBillAttachment(attachFile); }
       catch { /* keep saving the expense even if the file upload fails */ }
     }
+    // Marketing channel (0232) — only on marketing rows, NULL everywhere else.
+    const channelFor = (cat: string) => (isMarketingCategory(cat) ? (channel || null) : null);
     const shared = {
       /* Bill se naapa hua GST batwara. Iske bina GST report har kharche ko intra-state
          MAAN leti hai (aadha CGST, aadha SGST, IGST shunya) — aur Amazon jaise
@@ -634,6 +652,7 @@ export function AddExpenseDialog({
         await create.mutateAsync({
           ...shared,
           category:   g.category,
+          channel:    channelFor(g.category),
           line_items: g.items,
           amount:     inr(g.amount + (isGstBill ? g.gst : 0)),   // subtotal + its GST share
           gst_paid:   isGstBill ? inr(g.gst) : 0,
@@ -686,14 +705,14 @@ export function AddExpenseDialog({
     if (expense) {
       await update.mutateAsync({
         id: expense.id,
-        patch: { ...shared, category, line_items, amount: amountInr, gst_paid: gstAmt, description: derivedDescription },
+        patch: { ...shared, category, channel: channelFor(category), line_items, amount: amountInr, gst_paid: gstAmt, description: derivedDescription },
       });
       onClose();
       return;
     }
     await create.mutateAsync({
       ...shared,
-      category, line_items, amount: amountInr, gst_paid: gstAmt,
+      category, channel: channelFor(category), line_items, amount: amountInr, gst_paid: gstAmt,
       description: derivedDescription,
       pettyCashAccountId: pettyCash,
     });
@@ -914,6 +933,21 @@ export function AddExpenseDialog({
                     <p className="mt-1 flex items-center gap-1 text-3xs text-amber-ink">
                       <Icon name="sparkles" size={10} /> Auto-chuni — galat ho to badal do.
                     </p>
+                  )}
+                  {isMarketing && (
+                    <div className="mt-2">
+                      <label htmlFor="ad-channel" className="text-2xs font-medium text-ink-2">Channel (kis marketing ke liye)</label>
+                      <Select value={channel || "none"} onValueChange={(v) => { setChannel(v === "none" ? "" : v); setChannelTouched(true); }}>
+                        <SelectTrigger id="ad-channel" className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Pata nahi / general</SelectItem>
+                          {AD_CHANNELS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <p className="mt-1 text-3xs text-ink-3 leading-snug">
+                        Marketing → ROAS &amp; CAC isi se ad kharch ko us channel ki leads ke saath milata hai. Bina channel ke ye kharch wahan nahi gina jaata.
+                      </p>
+                    </div>
                   )}
                   {isCommission && (
                     <p className="mt-1 text-3xs text-ink-3 leading-snug">

@@ -110,6 +110,7 @@ export default function MarketingReportsPage() {
             spend={data.report.totals.spend}
             wonValue={data.report.totals.wonValue}
             collected={data.collected}
+            projectCollected={data.projectCollected}
             won={data.report.totals.won}
             blendedRoas={data.report.blendedRoas}
             blendedNote={data.report.blendedNote}
@@ -158,8 +159,8 @@ function Metric({ label, value, sub, withheld }: {
   );
 }
 
-function ExecutiveCards({ spend, wonValue, collected, won, blendedRoas, blendedNote }: {
-  spend: number; wonValue: number; collected: number; won: number;
+function ExecutiveCards({ spend, wonValue, collected, projectCollected, won, blendedRoas, blendedNote }: {
+  spend: number; wonValue: number; collected: number; projectCollected: number; won: number;
   blendedRoas: number | null; blendedNote: string | null;
 }) {
   // CAC is spend ÷ won deals — and it is only meaningful when the spend behind it
@@ -181,7 +182,7 @@ function ExecutiveCards({ spend, wonValue, collected, won, blendedRoas, blendedN
       <Metric
         label="Revenue collected"
         value={rupee(collected)}
-        sub={`Payments received. Won lead value ${rupee(wonValue)} across ${won} ${won === 1 ? "lead" : "leads"}.`}
+        sub={`Payments received${projectCollected > 0 ? ` (incl. ${rupee(projectCollected)} from projects)` : ""}. Won lead value ${rupee(wonValue)} across ${won} ${won === 1 ? "lead" : "leads"}.`}
       />
       <Metric
         label="Return on ad spend"
