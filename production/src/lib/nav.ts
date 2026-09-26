@@ -294,6 +294,10 @@ export const APP_NAV: NavSection[] = [
       { id: "bills",           href: "/accounting/bills",          label: "COGS Bills",           icon: "receipt" },
       { id: "bill-payments",   href: "/accounting/bill-payments",  label: "Payments Made",        icon: "rupee" },
       { id: "expenses",        href: "/accounting/expenses",       label: "Expenses",             icon: "rupee" },
+      /* Money paid to a vendor before the service (Facebook ad top-ups) and the month-end
+         invoices booked against it. Sits with Payments Made and Expenses because that is the
+         work it is; it had no menu entry at all before (Pardeep, 26 Sep 2026). */
+      { id: "prepaid",         href: "/accounting/prepaid",        label: "Prepaid / Advances",   icon: "wallet" },
     ],
   },
   {
@@ -461,7 +465,7 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/accounting/balance-sheet": ["Accounting", "Balance Sheet"],
   "/accounting/cash-flow":     ["Accounting", "Cash Flow"],
   "/accounting/assets":        ["Accounting", "Assets & EMIs"],
-  "/accounting/prepaid":       ["Accounting", "Prepaid / Advances"],
+  "/accounting/prepaid":       ["Purchases", "Prepaid / Advances"],
   "/accounting/profitability": ["Accounting", "Customer Margin"],
   "/accounting/aging":         ["Accounting", "Customer Aging"],
   "/accounting/esi-register":  ["Payroll", "ESI Register"],

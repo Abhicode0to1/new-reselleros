@@ -52,7 +52,7 @@ export default function PrepaidAdvancesPage() {
     <div className="p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto">
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
-          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Accounting</p>
+          <p className="text-xs uppercase tracking-wider text-ink-3 font-semibold mb-1">Purchases &amp; Vendors</p>
           <h1 className="font-serif text-3xl md:text-4xl tracking-tight">Prepaid / Advances</h1>
           <p className="text-sm text-ink-2 mt-1 max-w-2xl">
             Money paid to a vendor <b>before</b> the service is used — e.g. a Facebook ad top-up. Held as an
