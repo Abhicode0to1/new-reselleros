@@ -241,7 +241,8 @@ function LeadsPageInner() {
   // Smart view = saved filter combo (HubSpot/Close/Attio pattern). Each
   // chip in <LeadsSmartViews/> sets this. The `searched` memo below
   // applies the view as an additional filter cut.
-  const [smartView, setSmartView] = React.useState<SmartView>("all");
+  /* Opens on every lead (won and lost included) — see the "All leads" view. */
+  const [smartView, setSmartView] = React.useState<SmartView>("everything");
   // Collapsible "Lead intelligence" banner — remembers the choice so it doesn't
   // eat board space every visit.
   const [tipsOpen, setTipsOpen] = React.useState(true);
@@ -452,6 +453,7 @@ function LeadsPageInner() {
   // Junk (spam/fake) — a stored flag. junkCount drives the Junk chip; suspects
   // are non-junk leads the heuristic flags for review (surfaced in the Junk view).
   const junkCount = React.useMemo(() => workspaceLeads.filter((l) => l.is_junk).length, [workspaceLeads]);
+  const everythingCount = React.useMemo(() => workspaceLeads.filter((l) => !l.is_junk).length, [workspaceLeads]);
   const junkSuspectCount = React.useMemo(
     () => workspaceLeads.filter((l) => !l.is_junk && looksLikeJunk(l).suspect).length,
     [workspaceLeads],
@@ -491,7 +493,7 @@ function LeadsPageInner() {
     //    Hot / New / Won MTD / Mine). Each chip maps to exactly one bucket, so
     //    there's no overlap/duplication (the old separate due-bucket KPI row is
     //    gone). Sits on top of search + stage + priority.
-    if (smartView !== "all") {
+    if (smartView !== "all" && smartView !== "everything") {
       /* localDateISO, not toISOString(). IST is UTC+5:30, so before 05:30 the ISO string
          is YESTERDAY's date — "arrived today" showed nothing and "overdue" quietly
          swallowed leads due today, for anyone working early. Same trap documented in
@@ -609,6 +611,8 @@ function LeadsPageInner() {
   );
   const filtered = smartView === "junk"
     ? searched
+    : folder === "all" && smartView === "everything"
+    ? searched
     : folder === "all"
     ? openLeads
     : searched.filter((l) => inSalesFolder(l, folder, folderToday));
@@ -644,7 +648,7 @@ function LeadsPageInner() {
      dimension. */
   const selectFolder = React.useCallback((f: SalesFolder | "all") => {
     setFolder(f);
-    setSmartView("all");
+    setSmartView("everything");
   }, []);
   /* The Smart Views dropdown is the OTHER filter surface, and it used to stack on top of
      whatever chip was lit. Selecting from it now releases the folder, so exactly one of
@@ -905,6 +909,7 @@ function LeadsPageInner() {
 
           <LeadsSmartViews
             leads={leadsForTab}
+            everythingCount={everythingCount}
             currentUserId={currentUser?.userId}
             duplicateCount={duplicateCountForTab}
             junkCount={junkCount}
@@ -1235,7 +1240,7 @@ function LeadsPageInner() {
           hides all of them. Purpose-specific message per view (research
           finding: generic "no results" loses users; targeted copy with a
           relevant action recovers them). */}
-      {!isLoading && !error && leads && leads.length > 0 && filtered.length === 0 && smartView !== "all" && (
+      {!isLoading && !error && leads && leads.length > 0 && filtered.length === 0 && smartView !== "all" && smartView !== "everything" && (
         <EmptyState
           icon={
             smartView === "today"   ? "clock" :
