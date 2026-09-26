@@ -18,6 +18,7 @@
  * rolled back by hand from the browser, which could fail halfway itself.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { compactName } from "@/lib/banking/salary-lines";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { toastError } from "@/lib/errors/toast-error";
@@ -60,7 +61,8 @@ async function bookGroup(
 
   /* 1. Employee */
   let employeeId: string;
-  const createKey = "createName" in g.employee ? g.employee.createName.toUpperCase() : null;
+  /* Letters only: "Hitesh Babu" and "Hites H Babu" must not become two employees. */
+  const createKey = "createName" in g.employee ? compactName(g.employee.createName) : null;
   if ("createName" in g.employee && createKey && createdIds.has(createKey)) {
     employeeId = createdIds.get(createKey)!;
   } else if ("createName" in g.employee && createKey) {

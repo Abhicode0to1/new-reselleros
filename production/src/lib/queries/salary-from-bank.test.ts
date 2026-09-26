@@ -70,6 +70,18 @@ describe("bookSalaryGroups", () => {
     expect(db.reconciles).toHaveLength(3);
   });
 
+  it("a name the statement split differently is still one employee (26 Sep 2026: 15 for 8 people)", async () => {
+    const db = fakeSupabase();
+    const res = await bookSalaryGroups(db.client, "acc", [
+      { employee: { createName: "Hitesh Babu", monthlyGross: 52000 }, period: "2026-05", lines: [line("h1", 52000)] },
+      { employee: { createName: "Hitesh Ba Bu", monthlyGross: 52000 }, period: "2026-07", lines: [line("h2", 52000)] },
+      { employee: { createName: "Hites H Babu", monthlyGross: 52000 }, period: "2026-08", lines: [line("h3", 52000)] },
+    ]);
+    expect(res.every((r) => r.ok)).toBe(true);
+    expect(db.employees).toHaveLength(1);
+    expect(db.salaries).toHaveLength(3);
+  });
+
   it("two lines of one month become one record, both reconciled to it", async () => {
     const db = fakeSupabase();
     const res = await bookSalaryGroups(db.client, "acc", [

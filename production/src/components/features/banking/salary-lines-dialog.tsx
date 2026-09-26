@@ -33,7 +33,7 @@ import { rupee, formatDate } from "@/lib/utils";
 import type { BankTransactionRow } from "@/lib/queries/bank";
 import { useEmployees, useSalaryPayments } from "@/lib/queries/payroll";
 import { useBookSalaryLines, type SalaryGroupInput, type SalaryGroupResult } from "@/lib/queries/salary-from-bank";
-import { parseSalaryNarration, matchEmployee, titleCaseName, type SalaryNarration } from "@/lib/banking/salary-lines";
+import { parseSalaryNarration, matchEmployee, titleCaseName, compactName, payeeKey, bestNameVariant, type SalaryNarration } from "@/lib/banking/salary-lines";
 
 interface Props {
   open: boolean;
@@ -46,6 +46,11 @@ interface Props {
 type Choice = string;
 
 type Line = { txn: BankTransactionRow; parsed: SalaryNarration };
+
+/* Who a NEW employee is, across lines: the payee account on the narration when there is
+   one, else the letters of the name. "HITES H BABU" and "HITESH BA BU" from the same
+   account are one person — not two employees (26 Sep 2026: 15 created for 8 people). */
+const createKeyOf = (l: Line) => payeeKey(l.txn.description ?? "") ?? `name:${compactName(l.parsed.name ?? "")}`;
 
 /** Unmatched money-out lines that read as salary. */
 export function salaryLinesOf(transactions: BankTransactionRow[]): Line[] {
@@ -75,18 +80,29 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
   /* Defaults, once employees have loaded — recomputed when the dialog reopens. */
   React.useEffect(() => {
     if (!open || empLoading) return;
+    /* Payees already paid from this account before: their earlier salary lines were
+       reconciled to a salary record, which names the employee. Same account → same person,
+       whatever the statement did to the spelling this time. */
+    const known = new Map<string, string>();
+    for (const t of transactions) {
+      if (t.matched_to_type !== "salary" || !t.matched_to_id) continue;
+      const k = payeeKey(t.description ?? "");
+      const emp = salaries.find((sp) => sp.id === t.matched_to_id)?.employee_id;
+      if (k && emp && employees.some((e) => e.id === emp && e.is_active)) known.set(k, emp);
+    }
     const c: Record<string, Choice> = {};
     const p: Record<string, string> = {};
     for (const { txn, parsed } of lines) {
+      const k = payeeKey(txn.description ?? "");
       const m = matchEmployee(parsed.name, employees);
-      c[txn.id] = m.kind === "match" ? m.id : m.kind === "none" && parsed.name ? "create" : "";
+      c[txn.id] = (k && known.get(k)) || (m.kind === "match" ? m.id : m.kind === "none" && parsed.name ? "create" : "");
       p[txn.id] = parsed.period;
     }
     setChoice(c);
     setPeriod(p);
     setInclude({});
     setResults(null);
-  }, [open, empLoading, lines, employees]);
+  }, [open, empLoading, lines, employees, salaries, transactions]);
 
   const activeEmployees = employees.filter((e) => e.is_active);
   const nameOf = (id: string) => employees.find((e) => e.id === id)?.name ?? "employee";
@@ -96,12 +112,20 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
   const firstCreateByName = React.useMemo(() => {
     const m = new Map<string, string>();
     for (const x of lines) {
-      const key = (x.parsed.name ?? "").toUpperCase();
+      const key = createKeyOf(x);
       if (choice[x.txn.id] === "create" && (include[x.txn.id] ?? true) && !m.has(key)) m.set(key, x.txn.id);
     }
     return m;
   }, [lines, choice, include]);
-  const isFirstCreate = (l: Line) => firstCreateByName.get((l.parsed.name ?? "").toUpperCase()) === l.txn.id;
+  const isFirstCreate = (l: Line) => firstCreateByName.get(createKeyOf(l)) === l.txn.id;
+
+  /* The name a new employee gets: the best spelling among that payee's lines, editable. */
+  const [newNames, setNewNames] = React.useState<Record<string, string>>({});
+  React.useEffect(() => { if (open) setNewNames({}); }, [open]);
+  const newNameFor = (l: Line) => {
+    const key = createKeyOf(l);
+    return newNames[key] ?? bestNameVariant(lines.filter((x) => createKeyOf(x) === key).map((x) => x.parsed.name ?? ""));
+  };
 
   /** What booking this line would do — or why it cannot. */
   const planFor = (l: Line): { ok: boolean; text: string } => {
@@ -114,7 +138,7 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
     if (c === "create") {
       /* One employee per name, however many lines carry it: only the first line
          creates, the rest say they reuse it. */
-      const who = `"${titleCaseName(l.parsed.name ?? "")}"`;
+      const who = `"${newNameFor(l)}"`;
       const emp = isFirstCreate(l) ? `New employee ${who}` : `Same new employee ${who} as above (not created again)`;
       return { ok: true, text: `${emp} + new ${monthLabel(per)} salary record` };
     }
@@ -139,11 +163,11 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
     for (const l of selected) {
       const c = choice[l.txn.id];
       const per = period[l.txn.id] ?? l.parsed.period;
-      const empKey = c === "create" ? `create:${(l.parsed.name ?? "").toUpperCase()}` : c;
+      const empKey = c === "create" ? `create:${createKeyOf(l)}` : c;
       const key = `${empKey}|${per}`;
       const g = groups.get(key) ?? {
         employee: c === "create"
-          ? { createName: titleCaseName(l.parsed.name ?? ""), monthlyGross: l.txn.debit }
+          ? { createName: newNameFor(l).trim() || titleCaseName(l.parsed.name ?? ""), monthlyGross: l.txn.debit }
           : { id: c },
         period: per,
         lines: [],
@@ -232,12 +256,22 @@ export function SalaryLinesDialog({ open, onOpenChange, accountId, transactions 
                               {l.parsed.name && (
                                 <option value="create">
                                   {c === "create" && !isFirstCreate(l)
-                                    ? `${titleCaseName(l.parsed.name)} (new, created above)`
-                                    : `+ Create “${titleCaseName(l.parsed.name)}”`}
+                                    ? `${newNameFor(l)} (new, created above)`
+                                    : `+ Create “${newNameFor(l)}”`}
                                 </option>
                               )}
                               {activeEmployees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
                             </select>
+                            {/* The statement may have broken the name ("HITES H BABU") — the new
+                                employee's name is shown and can be corrected before it is created. */}
+                            {c === "create" && isFirstCreate(l) && (
+                              <input
+                                aria-label="New employee name"
+                                value={newNameFor(l)}
+                                onChange={(e) => setNewNames((m) => ({ ...m, [createKeyOf(l)]: e.target.value }))}
+                                className="rounded border border-hairline bg-paper px-1.5 py-0.5 text-2xs text-ink w-[150px]"
+                              />
+                            )}
                             <input
                               type="month"
                               aria-label="Salary month"
