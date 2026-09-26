@@ -123,10 +123,16 @@ Status values: **Open** → **Sent** (Pardeep told the owner) → **Done** (merg
      `tds` — TDS the customer paid on our behalf settles the invoice; show it in the tooltip as "of which
      TDS ₹…"). Excel Technologies should read **₹11,80,000** (₹10,80,000 bank + ₹1,00,000 TDS). Sortable, like
      the other money columns.
+  6. **Portfolio strip — say what each tile counts** (added 2026-09-26). "Monthly revenue" / "Yearly revenue" are
+     subscription MRR / ARR only, but read as total income — a customer who paid ₹11.8L shows ₹0 in all four
+     tiles. (a) Rename them **"Recurring monthly (subscriptions)"** and **"Recurring yearly (subscriptions)"**;
+     (b) add a **"Received (this FY)"** tile — same sum as the column in point 5, TDS included (Excel
+     Technologies: ₹11.8L); (c) the "Project value" tile from point 3 sits beside them.
   `useCustomerProjects` / `useProjectReceivablesByCustomer` in `lib/queries/projects.ts` already
   return what is needed (the page already uses the latter for "To collect").
 - **Done when:** Excel Technologies shows as a project client with its project value, appears
-  under a "With projects" filter, and its row shows ₹11,80,000 received this FY.
+  under a "With projects" filter, and its row shows ₹11,80,000 received this FY; the strip's tiles say
+  "Recurring … (subscriptions)" and a "Received (this FY)" tile shows ₹11.8L.
 
 ### R-006 · Project quotations don't appear under "Quotes"
 - **For:** Abhishek
