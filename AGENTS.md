@@ -325,10 +325,11 @@ restarted — and because DMS's front door redirects here, a stopped ResellerOS 
 dead too. Stop it, build, start it again.
 
 DMS has its own, separate gate — `npx vitest run` in
-`C:/xampp/htdocs/Domain-Management-Project`, **6,497 passing across 444 files, zero failures**
-on 25 Sep 2026, after DMS stopped taking payments on its own keys (DMS `84b5ae33`). The count
-FELL, on purpose: tests were deleted along with the payment code they covered (guest checkout,
-autopay, create-order, verify). Earlier:
+`C:/xampp/htdocs/Domain-Management-Project`, **6,422 passing across 441 files, zero failures**
+on 26 Sep 2026, after round 4 (DMS `9bc63716`: dead payment code deleted, old renewal dunning
+switched off, reminders point to the ResellerOS quote, the panel trial starts in ResellerOS). The
+count FELL, on purpose: tests were deleted along with the code they covered. Earlier:
+6,497 / 444 on 25 Sep after DMS stopped taking payments on its own keys (DMS `84b5ae33`),
 6,783 / 453 the same day after billing moved to ResellerOS (DMS `abf8cb57`), about 180 deleted with the invoice and renewal code,
 6,886 / 453 the same day after trial mode for hosting.provision (DMS `05a2dce2`),
 6,860 / 451 the same day after hosting.renew (DMS `e80c7851`),

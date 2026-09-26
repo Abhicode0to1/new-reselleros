@@ -26,16 +26,28 @@ Everything below needs an owner decision or an owner action. Nothing here is bei
 - [ ] **Admin package price edits in DMS still create Razorpay PLANS on DMS's account**
       (`app/api/admin/hosting/packages/route.ts:303,312`). Not a payment, but DMS writing to its own
       Razorpay. Remove, or leave?
-- [ ] **DMS renewal reminders quote DMS's own price.** Owner, 26 Sep 2026: point them to the ResellerOS
-      quote, with no DMS price. In progress in DMS (round 4).
-- [ ] **`cron/renewal-payment-dunning` in DMS.** Owner, 26 Sep 2026: switch it off. In progress in DMS
-      (round 4).
+- [x] **DMS renewal reminders carry no DMS price** (DMS `812462ec`). They link to the one pending
+      ResellerOS quote, or to the Invoices page when there are several, or say the bill is being
+      prepared. A scan test fails if a price field returns.
+- [x] **`cron/renewal-payment-dunning` removed** (DMS `f16d44d2`). Old orders untouched. If a Cloud
+      Scheduler job by that name was ever created, it now calls a 404.
 - [x] **In-panel trial moves to ResellerOS** (owner, 26 Sep 2026). ResellerOS `POST /api/dms/start-trial`
-      (`f514758b`) runs the site's `startHostingTrial`. The DMS side is in progress (round 4).
+      (`f514758b`) runs the site's `startHostingTrial`; DMS `9bc63716` calls it and no longer creates
+      the trial locally.
 - [ ] **Dead code in DMS, kept for now:** `app/api/domains/renew` (nothing can reach it),
       `createCompletedOrder` in `lib/services/payment/order-creator.ts`, and `createCustomer` /
       `createRecurringTokenOrder` in `lib/razorpay.ts` (only the gated Tokens live harness uses them).
-      Owner, 26 Sep 2026: delete. In progress in DMS (round 4).
+      **Deleted** (DMS `0d787076`), with `verification.ts` and two order-creator helpers whose only
+      callers went with them.
+- [ ] **Found in round 4, not done:**
+      - DMS `api/user/hosting/trial-eligibility` still runs DMS's own prior-trial checks before the trial
+        goes into the cart. ResellerOS now decides; the two could disagree, and ResellerOS wins at
+        checkout. Keep the pre-check, or remove it?
+      - DMS `scripts/deploy-cloud-run.sh` (around L375) still requires `COMPANY_STATE`, which only the
+        deleted GST invoice engine needed.
+      - The `/checkout` trial banner says "we'll remind you to pay … from your dashboard" (true in
+        effect, DMS-centric wording). `sendServiceExpiryTodayEmail` / `sendServiceGracePeriodEmail` have
+        no callers (no price in them).
 - [ ] **Colleague (blocked folder):** `src/lib/renewals/create-renewal-quote.ts` writes
       `extension_months: 12` for monthly subscriptions too. Prompt handed over 25 Sep. See §0A.
 
