@@ -233,7 +233,7 @@ export default function CampaignComposerDialog({ open, onOpenChange, recipients,
       toast.success(
         `${json.campaignId} sent · ${json.sentCount}/${json.recipientsCount} delivered${
           json.failedCount > 0 ? ` · ${json.failedCount} failed` : ""
-        }${modeNote}`
+        }${json.skippedOptOut > 0 ? ` · ${json.skippedOptOut} unsubscribed, skipped` : ""}${modeNote}`
       );
       onOpenChange(false);
     } catch (err) {
