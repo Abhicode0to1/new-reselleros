@@ -25,6 +25,8 @@ import { createClient } from "@/lib/supabase/client";
 import {
   channelReport, type ChannelReport, type ChannelLeadInput, type ChannelSpendInput,
 } from "@/lib/marketing/channel-economics";
+import { isMarketingCategory } from "@/lib/marketing/ad-channels";
+import type { Expense } from "@/lib/queries/expenses";
 
 export type RangeKey = "this_month" | "last_quarter" | "ytd" | "all";
 
@@ -91,6 +93,8 @@ export interface MarketingReport {
   monthly: MonthPoint[];
   /** Total revenue collected in the range (payments), not won-lead value. */
   collected: number;
+  /** Of `collected`, the part from project (custom software) receipts. */
+  projectCollected: number;
   /** Data gaps to render. Never swallowed. */
   gaps: string[];
 }
@@ -165,7 +169,23 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
         .lt("received_at", range.end);
       if (payQ.error) throw payQ.error;
 
-      const collected = (payQ.data ?? []).reduce((s, p) => s + (p.amount ?? 0), 0);
+      /* Project (custom software) receipts live in `project_payments`, not `payments` —
+         reading only the latter showed ₹0 collected while a ₹59L project was being paid
+         (Pardeep, 26 Sep 2026). TDS rows count: the customer paid that part to the
+         government on our behalf, and it is ours as a 26AS credit. */
+      const projQ = await supabase
+        .from("project_payments")
+        .select("amount, received_at")
+        .gte("received_at", range.start)
+        .lt("received_at", range.end);
+      if (projQ.error) throw projQ.error;
+
+      const receipts = [
+        ...(payQ.data ?? []).map((p) => ({ amount: p.amount ?? 0, received_at: p.received_at })),
+        ...(projQ.data ?? []).map((p) => ({ amount: p.amount ?? 0, received_at: p.received_at })),
+      ];
+      const collected = receipts.reduce((s, p) => s + p.amount, 0);
+      const projectCollected = (projQ.data ?? []).reduce((s, p) => s + (p.amount ?? 0), 0);
 
       const byMonth = new Map<string, MonthPoint>();
       const touch = (month: string): MonthPoint => {
@@ -173,9 +193,9 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
         if (!p) { p = { month, spend: 0, revenue: 0 }; byMonth.set(month, p); }
         return p;
       };
-      for (const p of payQ.data ?? []) {
+      for (const p of receipts) {
         const mth = (p.received_at ?? "").slice(0, 7);
-        if (mth) touch(mth).revenue += p.amount ?? 0;
+        if (mth) touch(mth).revenue += p.amount;
       }
       if (!spendQ.error) {
         for (const r of (spendQ.data ?? []) as { expense_date: string | null; amount: number | null; category: string | null }[]) {
@@ -238,6 +258,7 @@ export function useMarketingReport(rangeKey: RangeKey = "ytd") {
         funnel,
         monthly,
         collected,
+        projectCollected,
         gaps,
       };
     },
@@ -281,4 +302,33 @@ export function channelsToCsv(report: ChannelReport, range: DateRange): string {
   // separate the number from the reason it may be unusable.
   lines.push(`Blended ROAS,${report.blendedRoas === null ? "" : report.blendedRoas.toFixed(2)},${esc(report.blendedNote ?? "")}`);
   return lines.join("\n");
+}
+
+// ============================================================
+// Marketing & Advertising spend — /marketing/spend
+// ============================================================
+
+/** Every marketing-head expense in the range, newest first, for /marketing/spend. */
+export function useMarketingSpend(rangeKey: RangeKey = "ytd") {
+  const range = resolveRange(rangeKey);
+  return useQuery({
+    /* Under "expenses" so an expense added or edited anywhere refreshes this page too —
+       useCreateExpense / useUpdateExpense invalidate that key. */
+    queryKey: ["expenses", "marketing-spend", rangeKey],
+    queryFn: async (): Promise<{ range: DateRange; rows: Expense[] }> => {
+      const supabase = createClient();
+      /* Same test as the ROAS page (`isMarketingCategory`): market / advert / ads. Filtered
+         in the database so a year of rent and salaries is not shipped to the browser. */
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("*")
+        .or("category.ilike.*market*,category.ilike.*advert*,category.ilike.*ads*")
+        .gte("expense_date", range.start)
+        .lt("expense_date", range.end)
+        .order("expense_date", { ascending: false });
+      if (error) throw error;
+      return { range, rows: ((data ?? []) as Expense[]).filter((r) => isMarketingCategory(r.category)) };
+    },
+    staleTime: 30_000,
+  });
 }

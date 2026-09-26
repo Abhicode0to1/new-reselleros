@@ -26,11 +26,12 @@ import { Icon } from "@/components/ui/icon";
 import { toast } from "sonner";
 import {
   usePrepaidAdvances, useCreatePrepaidAdvance, useConsumePrepaidAdvance, useDeletePrepaidAdvance,
-  useAdvanceExpenses, useConsumePrepaidFifo,
+  useAdvanceExpenses, useConsumePrepaidFifo, useSetPrepaidAdvanceChannel,
   type PrepaidAdvance,
 } from "@/lib/queries/prepaid-advances";
 import { planFifo, openBalancesByVendor } from "@/lib/accounting/prepaid-fifo";
 import { localDateISO } from "@/lib/leads/outcomes";
+import { AD_CHANNELS, isMarketingCategory, suggestAdChannel } from "@/lib/marketing/ad-channels";
 
 const CATEGORIES = ["Marketing", "Advertising", "Software / SaaS", "Hosting", "Subscriptions", "Other"];
 const METHODS = ["bank_transfer", "upi", "card", "cheque", "cash"];
@@ -128,6 +129,7 @@ function AdvanceCard({ r, onConsume, onDelete }: { r: PrepaidAdvance; onConsume:
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-ink">{r.vendor_name}</span>
             <span className="text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-indigo/10 text-indigo">{r.category}</span>
+            {isMarketingCategory(r.category) && <AdvanceChannel id={r.id} channel={r.channel ?? null} />}
             {done && <span className="text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald/10 text-emerald">Fully used</span>}
             {r.bank_txn_id && (
               <span className="text-3xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper-2 text-ink-3" title="Created from a reconciled bank line — un-reconcile that line to remove it">
@@ -204,6 +206,23 @@ function AdvanceCard({ r, onConsume, onDelete }: { r: PrepaidAdvance; onConsume:
   );
 }
 
+/* The channel an ad advance pays for. Its invoices carry it onto Marketing → Spend and
+   ROAS & CAC; changing it here moves them too. */
+function AdvanceChannel({ id, channel }: { id: string; channel: string | null }) {
+  const set = useSetPrepaidAdvanceChannel();
+  return (
+    <Select value={channel ?? "none"} onValueChange={(v) => set.mutate({ id, channel: v === "none" ? null : v })}>
+      <SelectTrigger className={`h-6 w-auto gap-1 px-2 text-3xs ${channel ? "" : "border-amber/60 text-amber-ink"}`} aria-label="Channel">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">Channel nahi chuna</SelectItem>
+        {AD_CHANNELS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
   const create = useCreatePrepaidAdvance();
   const { data: accounts } = useBankAccounts();
@@ -214,6 +233,8 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
   const [vendorId, setVendorId] = React.useState<string | null>(null);
   const [vendorOpen, setVendorOpen] = React.useState(false);
   const [category, setCategory] = React.useState("Marketing");
+  const [channel, setChannel] = React.useState("");
+  const [channelTouched, setChannelTouched] = React.useState(false);
   const [amount, setAmount] = React.useState("");
   const [paidDate, setPaidDate] = React.useState(today);
   const [method, setMethod] = React.useState("bank_transfer");
@@ -230,6 +251,9 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
   const vName = vendor.trim();
   const vMatch = (vendors ?? []).find((v) => v.name.toLowerCase() === vName.toLowerCase());
   const isNewVendor = vName.length > 0 && !vMatch;
+  const isAd = isMarketingCategory(category);
+  // Offer the channel from the vendor's name until the operator picks one.
+  const shownChannel = channelTouched ? channel : (suggestAdChannel(vName) ?? "");
 
   async function submit() {
     const amt = Math.round(Number(amount) || 0);
@@ -240,6 +264,7 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
     await create.mutateAsync({
       vendor_name: vName, vendor_id: vId, category, total_amount: amt, paid_date: paidDate,
       payment_method: method, bank_account_id: bankId || null, notes: notes.trim() || null,
+      channel: isAd ? (shownChannel || null) : null,
     });
     onClose();
   }
@@ -294,6 +319,18 @@ function AddAdvanceDialog({ onClose }: { onClose: () => void }) {
               <Input id="pa_amt" type="number" min={1} prefix="₹" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </FormField>
           </div>
+          {isAd && (
+            <FormField label="Channel (kis marketing ke liye)" htmlFor="pa_channel">
+              <Select value={shownChannel || "none"} onValueChange={(v) => { setChannel(v === "none" ? "" : v); setChannelTouched(true); }}>
+                <SelectTrigger id="pa_channel"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Pata nahi / general</SelectItem>
+                  {AD_CHANNELS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-3xs text-ink-3 leading-snug">Mahine ke invoice se jo kharcha banega, wo isi channel mein ginega (Marketing → Spend, ROAS &amp; CAC).</p>
+            </FormField>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Paid on" htmlFor="pa_date">
               <Input id="pa_date" type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} />

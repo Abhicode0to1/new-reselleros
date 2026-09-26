@@ -3889,6 +3889,8 @@ export type PrepaidAdvanceRow = {
   updated_at:      string;
   /** The bank line that funded it (migration 20260925160000); null when entered by hand. */
   bank_txn_id?:    string | null;
+  /** Marketing channel it pays for, copied onto its invoices (migration 20260926180000). */
+  channel?:        string | null;
 };
 type PrepaidAdvanceInsert = {
   id?:              string;
@@ -3903,6 +3905,7 @@ type PrepaidAdvanceInsert = {
   bank_account_id?: string | null;
   notes?:           string | null;
   created_by?:      string | null;
+  channel?:         string | null;
 };
 type PrepaidAdvanceUpdate = Partial<PrepaidAdvanceInsert>;
 

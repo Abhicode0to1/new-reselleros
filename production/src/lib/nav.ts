@@ -239,17 +239,15 @@ export const APP_NAV: NavSection[] = [
     //
     // owner/manager only. It shows ad spend and CAC, which are the owner's
     // numbers, not something a rep needs to open their day on.
-    section: "Marketing",
+    section: "Marketing & Advertising",
     icon: "chart",
     roles: ["owner", "manager"],
     items: [
-      // Labelled "Marketing", not "ROAS & CAC", ON PURPOSE. The Sidebar renders
-      // a section holding exactly one item as a standalone row with no group
-      // header (see Sidebar.tsx), so the section NAME is invisible today — the
-      // user would see a lone "ROAS & CAC" link and never learn there is a
-      // Marketing area. Rename this to "ROAS & CAC" the moment a second
-      // marketing page lands and the real "Marketing" header appears.
-      { id: "marketing-roas", href: "/marketing/reports", label: "Marketing", icon: "chart", roles: ["owner", "manager"] },
+      /* 26 Sep 2026: the second marketing page landed (Spend — Marketing vs Advertising),
+         so the section header now shows and the report takes its real name, as the note
+         that stood here asked. */
+      { id: "marketing-spend", href: "/marketing/spend",   label: "Spend",      icon: "wallet", roles: ["owner", "manager"] },
+      { id: "marketing-roas",  href: "/marketing/reports", label: "ROAS & CAC", icon: "chart",  roles: ["owner", "manager"] },
     ],
   },
   {
@@ -420,7 +418,8 @@ export const SCREEN_TITLES: Record<string, string[]> = {
   "/vault":           ["Admin", "Password Vault"],
   "/admin/feedback":  ["Admin", "Feedback & AI Fixes"],
   "/vault/personal":  ["Admin", "Private Vault"],
-  "/marketing/reports": ["Marketing", "ROAS & CAC"],
+  "/marketing/reports": ["Marketing & Advertising", "ROAS & CAC"],
+  "/marketing/spend":   ["Marketing & Advertising", "Spend"],
   "/enquiries":       ["Sales", "Enquiries"],
   "/deals":           ["Sales", "Deal Pipeline"],
   "/tasks":           ["Sales", "Tasks"],
