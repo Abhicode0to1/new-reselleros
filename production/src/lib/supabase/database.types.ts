@@ -2790,6 +2790,8 @@ export type ReferralPartnerRow = {
   is_active:            boolean;
   created_at:           string;
   created_by:           string | null;
+  /** Share-link code (migration 20260926210000); set by trigger from the name. */
+  code?:                string | null;
 };
 type ReferralPartnerInsert = Partial<ReferralPartnerRow> & { tenant_id: string; name: string };
 type ReferralPartnerUpdate = Partial<ReferralPartnerInsert>;

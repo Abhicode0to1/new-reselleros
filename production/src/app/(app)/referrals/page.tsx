@@ -18,7 +18,9 @@ import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { rupee, formatDate } from "@/lib/utils";
-import { useReferralPartners } from "@/lib/queries/referral-partners";
+import { useReferralPartners, useReferralLeadCounts } from "@/lib/queries/referral-partners";
+import { buildTrackingUrl } from "@/lib/marketing/tracking-link";
+import { toast } from "sonner";
 import {
   useReferralCommissions, useCancelCommission, type CommissionWithPartner,
 } from "@/lib/queries/referral-commissions";
@@ -37,6 +39,7 @@ export default function ReferralsPage() {
   const { data: commissions, isLoading: cLoading, error: cErr } = useReferralCommissions();
   const { data: partners, isLoading: pLoading } = useReferralPartners();
   const cancel = useCancelCommission();
+  const leadCounts = useReferralLeadCounts((partners ?? []).map((p) => p.code).filter((c): c is string => !!c));
 
   const [payTarget, setPayTarget] = React.useState<CommissionWithPartner | null>(null);
 
@@ -208,6 +211,7 @@ export default function ReferralsPage() {
                   Default: {p.default_basis === "percent" ? `${p.default_percent ?? 0}% of deal` : rupee(p.default_fixed_amount ?? 0)}
                 </div>
                 {p.pan && <p className="mt-1 text-2xs font-mono text-ink-3">PAN {p.pan}</p>}
+                {p.code && <PartnerLink name={p.name} phone={p.phone} code={p.code} counts={leadCounts.data?.[p.code]} />}
               </Card>
             ))}
           </div>
@@ -215,6 +219,35 @@ export default function ReferralsPage() {
       )}
 
       <PayCommissionDialog open={!!payTarget} onOpenChange={(o) => !o && setPayTarget(null)} commission={payTarget} />
+    </div>
+  );
+}
+
+/**
+ * The partner's share link. Leads who fill the enquiry form from it arrive tagged with the
+ * partner's code, and are counted here (and under Referral in ROAS & CAC). The commission
+ * itself still starts from an agreement on the customer, once the lead becomes one.
+ */
+function PartnerLink({ name, phone, code, counts }: {
+  name: string; phone: string | null; code: string; counts?: { leads: number; won: number };
+}) {
+  const origin = (process.env.NEXT_PUBLIC_APP_URL?.trim() || (typeof window !== "undefined" ? window.location.origin : "")).replace(/\/+$/, "");
+  const url = origin ? buildTrackingUrl({ origin, path: "/enquiry", channel: "referral", medium: "partner", campaign: code }) : "";
+  const msg = `Namaste ${name.split(" ")[0]}, ye aapka referral link hai. Jise bhi business email / Google Workspace / Microsoft 365 ya software chahiye, unhe ye link bhejiye — enquiry aapke naam se aayegi: ${url}`;
+  const digits = (phone ?? "").replace(/\D/g, "");
+  const wa = digits ? `https://wa.me/${digits.length === 10 ? "91" + digits : digits}?text=${encodeURIComponent(msg)}` : null;
+  return (
+    <div className="mt-3 border-t border-hairline pt-2 space-y-1.5">
+      <div className="flex items-center justify-between text-[12px]">
+        <span className="text-ink-3">Referral link · <code className="text-ink-2">{code}</code></span>
+        <span className="text-ink-2">{counts?.leads ?? 0} leads · {counts?.won ?? 0} won</span>
+      </div>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" icon="copy" disabled={!url} onClick={async () => {
+          try { await navigator.clipboard.writeText(url); toast.success("Link copy ho gaya"); } catch { toast.error("Copy nahi hua"); }
+        }}>Copy link</Button>
+        {wa && <a href={wa} target="_blank" rel="noopener noreferrer"><Button variant="ghost" size="sm" icon="whatsapp">WhatsApp par bhejo</Button></a>}
+      </div>
     </div>
   );
 }
