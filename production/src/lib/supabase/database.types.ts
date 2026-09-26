@@ -910,6 +910,14 @@ type LeadRow = {
   id: string;
   tenant_id: string;
   company: string;
+  /** Migration 20260926110000 — what the enquiry is for. 'project' = custom software. */
+  enquiry_type: "subscription" | "project";
+  /** Project enquiry: what the client wants built. */
+  requirement: string | null;
+  /** Project enquiry: when they want it, free text. */
+  project_timeline: string | null;
+  /** The project quotation raised for this lead (project_sales.id). */
+  project_id: string | null;
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
@@ -1061,6 +1069,10 @@ type LeadInsert = {
   id: string;
   tenant_id: string;
   company: string;
+  enquiry_type?: "subscription" | "project";
+  requirement?: string | null;
+  project_timeline?: string | null;
+  project_id?: string | null;
   contact_name?: string | null;
   contact_email?: string | null;
   contact_phone?: string | null;
@@ -5216,6 +5228,18 @@ export type Database = {
       };
       add_project_receipt_milestone: {
         Args: { p_project_id: string; p_amount: number; p_label?: string | null };
+        Returns: string;
+      };
+      unreconcile_bank_receipt: {
+        Args: { p_txn_id: string; p_undo_sale?: boolean };
+        Returns: Json;
+      };
+      record_project_receipt_with_tds: {
+        Args: { p_milestone_id: string; p_net: number; p_tds: number; p_section: string; p_rate_pct: number; p_tds_base: number; p_received_at: string; p_bank_txn_id: string | null; p_reference: string | null; p_raise_invoice?: boolean };
+        Returns: Json;
+      };
+      create_project_quote_from_lead: {
+        Args: { p_lead_id: string; p_title: string; p_description: string | null; p_line_items: Json; p_gst_rate: number; p_inter_state: boolean; p_milestones: Json };
         Returns: string;
       };
       book_bank_txn_as_tax: {
